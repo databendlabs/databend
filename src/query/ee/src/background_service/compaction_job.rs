@@ -30,21 +30,26 @@ use common_exception::Result;
 use common_meta_api::BackgroundApi;
 use common_meta_app::background::BackgroundJobIdent;
 use common_meta_app::background::BackgroundJobInfo;
+use common_meta_app::background::BackgroundJobParams;
 use common_meta_app::background::BackgroundJobStatus;
 use common_meta_app::background::BackgroundJobType::ONESHOT;
 use common_meta_app::background::BackgroundTaskIdent;
 use common_meta_app::background::BackgroundTaskInfo;
 use common_meta_app::background::BackgroundTaskState;
+use common_meta_app::background::GetBackgroundJobReq;
+use common_meta_app::background::ManualTriggerParams;
+use common_meta_app::background::UpdateBackgroundJobParamsReq;
 use common_meta_app::background::UpdateBackgroundJobStatusReq;
 use common_meta_app::background::UpdateBackgroundTaskReq;
 use common_meta_app::schema::TableStatistics;
 use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
+use databend_query::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
+use databend_query::sessions::QueryContext;
+use databend_query::sessions::Session;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
-use databend_query::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
-use databend_query::sessions::{QueryContext, Session};
 
 use crate::background_service::job::Job;
 
@@ -59,8 +64,8 @@ pub struct CompactionJob {
     conf: InnerConfig,
     meta_api: Arc<MetaStore>,
     creator: BackgroundJobIdent,
-    info: Arc<parking_lot::Mutex<BackgroundJobInfo>>,
     session: Arc<Session>,
+
     finish_tx: Arc<Mutex<Sender<u64>>>,
 }
 
@@ -73,8 +78,14 @@ impl Job for CompactionJob {
             .expect("failed to do compaction job");
     }
 
-    fn get_info(&self) -> BackgroundJobInfo {
-        self.info.lock().clone()
+    async fn get_info(&self) -> Result<BackgroundJobInfo> {
+        let job = self
+            .meta_api
+            .get_background_job(GetBackgroundJobReq {
+                name: self.creator.clone(),
+            })
+            .await?;
+        Ok(job.info)
     }
 
     fn get_name(&self) -> BackgroundJobIdent {
@@ -87,7 +98,16 @@ impl Job for CompactionJob {
                 status: status.clone(),
             })
             .await?;
-        self.info.lock().job_status = Some(status);
+        Ok(())
+    }
+
+    async fn update_job_params(&mut self, param: BackgroundJobParams) -> Result<()> {
+        self.meta_api
+            .update_background_job_params(UpdateBackgroundJobParamsReq {
+                job_name: self.creator.clone(),
+                params: param.clone(),
+            })
+            .await?;
         Ok(())
     }
 }
@@ -107,7 +127,7 @@ pub fn should_continue_compaction(old: &TableStatistics, new: &TableStatistics) 
         new.number_of_blocks.unwrap() as f64 / new.number_of_segments.unwrap() as f64;
     let should_continue_seg_compact = new_segment_density != old_segment_density
         && new.number_of_blocks.unwrap() > BLOCK_COUNT
-        && new_segment_density < PER_SEGMENT_BLOCK as f64 ;
+        && new_segment_density < PER_SEGMENT_BLOCK as f64;
     let old_block_density = old.data_bytes as f64 / old.number_of_blocks.unwrap() as f64;
     let new_block_density = new.data_bytes as f64 / new.number_of_blocks.unwrap() as f64;
     let should_continue_blk_compact = new_block_density != old_block_density
@@ -123,19 +143,16 @@ impl CompactionJob {
     pub async fn create(
         config: &InnerConfig,
         name: String,
-        info: BackgroundJobInfo,
         session: Arc<Session>,
         finish_tx: Arc<Mutex<Sender<u64>>>,
     ) -> Self {
         let tenant = config.query.tenant_id.clone();
         let creator = BackgroundJobIdent { tenant, name };
         let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let info = Arc::new(parking_lot::Mutex::new(info));
         Self {
             conf: config.clone(),
             meta_api,
             creator,
-            info,
             session,
             finish_tx,
         }
@@ -170,7 +187,13 @@ impl CompactionJob {
                 let tb_name = String::from_utf8_lossy(tb_names.value(i)).to_string();
                 let tb_id = tb_ids.value(i);
                 match self
-                    .compact_table(self.session.clone(), db_name.clone(), tb_name.clone(), db_id, tb_id)
+                    .compact_table(
+                        self.session.clone(),
+                        db_name.clone(),
+                        tb_name.clone(),
+                        db_id,
+                        tb_id,
+                    )
                     .await
                 {
                     Ok(_) => {
@@ -215,9 +238,19 @@ impl CompactionJob {
         }
     }
 
-    async fn sync_compact_status(&self, id: String) -> Result<Option<BackgroundJobStatus>> {
-        let job_info = self.info.clone();
-        let job_info = job_info.lock();
+    async fn sync_compact_params(
+        job_info: &BackgroundJobInfo,
+    ) -> (BackgroundJobParams, Option<ManualTriggerParams>) {
+        let mut job_params = job_info.job_params.clone().unwrap();
+        let manual = job_params.manual_trigger_params.clone();
+        job_params.manual_trigger_params = None;
+        (job_params, manual)
+    }
+    async fn sync_compact_status(
+        &self,
+        id: String,
+        job_info: &BackgroundJobInfo,
+    ) -> Result<Option<BackgroundJobStatus>> {
         let mut job_status = job_info.job_status.clone().unwrap();
         job_status.last_task_id = Some(id);
         job_status.last_task_run_at = Some(Utc::now());
@@ -245,7 +278,7 @@ impl CompactionJob {
             PER_SEGMENT_BLOCK,
             PER_BLOCK_SIZE,
         )
-            .await?;
+        .await?;
         let (seg, blk, stats) = if !self.conf.background.compaction.has_target_tables() {
             if !seg && !blk {
                 info!(job = "compaction", background = true, database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "skip compact");
@@ -256,11 +289,20 @@ impl CompactionJob {
             (true, true, stats)
         };
 
+        if !seg && !blk {
+            info!(job = "compaction", background = true, database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "skip compact");
+            return Ok(());
+        }
+        let job_info = self.get_info().await?;
         let id = Uuid::new_v4().to_string();
-        let status = self.sync_compact_status(id.clone()).await?;
+
+        let (params, manual) = Self::sync_compact_params(&job_info).await;
+        let status = self.sync_compact_status(id.clone(), &job_info).await?;
         if status.is_none() {
             return Ok(());
         }
+        // guarantee at least once for maunal job
+        self.update_job_params(params).await?;
         self.update_job_status(status.clone().unwrap()).await?;
 
         info!(job = "compaction", background = true, id=id.clone(), database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "start compact");
@@ -273,6 +315,7 @@ impl CompactionJob {
             db_id,
             tb_id,
             stats,
+            manual,
             format!(
                 "need segment compaction: {}, need block compaction: {}",
                 seg, blk
@@ -352,8 +395,13 @@ impl CompactionJob {
         let mut old = stats;
         if seg {
             loop {
-                self.do_segment_compaction(session.clone(), database.clone(), table.clone(), self.conf.background.compaction.segment_limit)
-                    .await?;
+                self.do_segment_compaction(
+                    session.clone(),
+                    database.clone(),
+                    table.clone(),
+                    self.conf.background.compaction.segment_limit,
+                )
+                .await?;
                 let (_, _, new) = Self::do_check_table(
                     session.clone(),
                     database.clone(),
@@ -373,8 +421,13 @@ impl CompactionJob {
 
         if blk {
             loop {
-                self.do_block_compaction(session.clone(), database.clone(), table.clone(), self.conf.background.compaction.block_limit)
-                    .await?;
+                self.do_block_compaction(
+                    session.clone(),
+                    database.clone(),
+                    table.clone(),
+                    self.conf.background.compaction.block_limit,
+                )
+                .await?;
                 let (_, _, new) = Self::do_check_table(
                     session.clone(),
                     database.clone(),
@@ -394,10 +447,15 @@ impl CompactionJob {
         Ok(true)
     }
 
-    pub async fn do_get_target_tables_from_config(config: &InnerConfig, ctx: Arc<QueryContext>) -> Result<Vec<RecordBatch>> {
+    pub async fn do_get_target_tables_from_config(
+        config: &InnerConfig,
+        ctx: Arc<QueryContext>,
+    ) -> Result<Vec<RecordBatch>> {
         if !config.background.compaction.has_target_tables() {
-            let res =  SuggestedBackgroundTasksProcedure::do_get_all_suggested_compaction_tables(ctx).await;
-            return res
+            let res =
+                SuggestedBackgroundTasksProcedure::do_get_all_suggested_compaction_tables(ctx)
+                    .await;
+            return res;
         }
         Self::do_get_target_tables(config, ctx).await
     }
@@ -406,17 +464,12 @@ impl CompactionJob {
     // into
     // "('t1', 't2', 't3')"
     fn format_tables(tables: Vec<String>) -> String {
-        let formatted_tables: Vec<String> = tables
-            .iter()
-            .map(|table| format!("'{}'", table))
-            .collect();
+        let formatted_tables: Vec<String> =
+            tables.iter().map(|table| format!("'{}'", table)).collect();
 
         format!("({})", formatted_tables.join(", "))
     }
-    pub fn get_target_from_config_sql(
-        database: String,
-        tables: Vec<String>
-    ) -> String {
+    pub fn get_target_from_config_sql(database: String, tables: Vec<String>) -> String {
         format!(
          "
         SELECT t.database as database, d.database_id as database_id, t.name as table, t.table_id as table_id
@@ -446,7 +499,10 @@ impl CompactionJob {
                     1 => {
                         // Only table name provided, assuming no database
                         let table = parts[0].to_owned();
-                        result.entry("default".to_owned()).or_insert(Vec::new()).push(table);
+                        result
+                            .entry("default".to_owned())
+                            .or_insert(Vec::new())
+                            .push(table);
                     }
                     2 => {
                         // Both database and table names provided
@@ -470,24 +526,25 @@ impl CompactionJob {
     ) -> Result<Vec<RecordBatch>> {
         let all_target_tables = configs.background.compaction.target_tables.as_ref();
         let all_target_tables = Self::parse_all_target_tables(all_target_tables);
-        let future_res = all_target_tables.into_iter().map(|(k, v) | {
-            let sql = Self::get_target_from_config_sql(k, v);
-            info!(
-                job = "compaction",
-                background = true,
-                sql = sql.as_str(),
-                "get target tables"
+        let future_res = all_target_tables
+            .into_iter()
+            .map(|(k, v)| {
+                let sql = Self::get_target_from_config_sql(k, v);
+                info!(
+                    job = "compaction",
+                    background = true,
+                    sql = sql.as_str(),
+                    "get target tables"
                 );
-            SuggestedBackgroundTasksProcedure::do_execute_sql(ctx.clone(), sql)
-        }
-        ).collect::<Vec<_>>();
+                SuggestedBackgroundTasksProcedure::do_execute_sql(ctx.clone(), sql)
+            })
+            .collect::<Vec<_>>();
         let mut res = Vec::new();
         for f in future_res {
             res.push(f.await?);
         }
-        let res = res.into_iter().filter_map(|r| r).collect::<Vec<_>>();
+        let res = res.into_iter().flatten().collect::<Vec<_>>();
         Ok(res)
-
     }
 
     pub async fn do_check_table(
@@ -575,11 +632,7 @@ impl CompactionJob {
         table: String,
         limit: Option<u64>,
     ) -> Result<()> {
-        let sql = Self::get_segment_compaction_sql(
-            database,
-            table,
-            limit,
-        );
+        let sql = Self::get_segment_compaction_sql(database, table, limit);
         debug!(
             job = "compaction",
             background = true,
@@ -598,11 +651,7 @@ impl CompactionJob {
         table: String,
         limit: Option<u64>,
     ) -> Result<()> {
-        let sql = Self::get_block_compaction_sql(
-            database,
-            table,
-            limit,
-        );
+        let sql = Self::get_block_compaction_sql(database, table, limit);
         debug!(
             job = "compaction",
             background = true,

@@ -17,11 +17,18 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use common_base::base::GlobalInstance;
 use common_exception::Result;
+use common_meta_app::principal::UserIdentity;
 
 #[async_trait::async_trait]
 pub trait BackgroundServiceHandler: Sync + Send {
     async fn execute_sql(&self, sql: String) -> Result<Option<RecordBatch>>;
-    async fn execute_scheduled_job(&self, name: String) -> Result<()>;
+
+    async fn execute_scheduled_job(
+        &self,
+        tenant: String,
+        user: UserIdentity,
+        name: String,
+    ) -> Result<()>;
     async fn start(&self) -> Result<()>;
 }
 
@@ -44,8 +51,13 @@ impl BackgroundServiceHandlerWrapper {
         self.handler.start().await
     }
     #[async_backtrace::framed]
-    pub async fn execute_scheduled_job(&self, name: String) -> Result<()> {
-        self.handler.execute_scheduled_job(name).await
+    pub async fn execute_scheduled_job(
+        &self,
+        tenant: String,
+        user: UserIdentity,
+        name: String,
+    ) -> Result<()> {
+        self.handler.execute_scheduled_job(tenant, user, name).await
     }
 }
 

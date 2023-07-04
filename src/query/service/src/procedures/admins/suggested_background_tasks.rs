@@ -13,23 +13,35 @@
 // limitations under the License.
 
 use std::sync::Arc;
+
 use arrow_array::RecordBatch;
-use tracing::error;
-use common_exception::{ErrorCode, };
-use common_expression::{ DataBlock, DataField, DataSchema, DataSchemaRefExt, FromData, FromOptData, };
-use common_expression::types::{BooleanType, DataType, StringType, VariantType};
-use common_license::license::Feature;
-use common_sql::Planner;
+use background_service::Suggestion;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::BooleanType;
+use common_expression::types::DataType;
+use common_expression::types::StringType;
+use common_expression::types::VariantType;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRefExt;
+use common_expression::FromData;
+use common_expression::FromOptData;
+use common_license::license::Feature;
+use common_license::license_manager::get_license_manager;
+use common_sql::Planner;
+use tokio_stream::StreamExt;
+use tracing::error;
+use tracing::info;
+
 use crate::interpreters::InterpreterFactory;
 use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
+use crate::sessions::query_ctx::Origin;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use tokio_stream::StreamExt;
-use background_service::Suggestion;
-use common_license::license_manager::get_license_manager;
 
 pub struct SuggestedBackgroundTasksProcedure;
 
@@ -41,7 +53,10 @@ impl SuggestedBackgroundTasksProcedure {
 
 impl SuggestedBackgroundTasksProcedure {
     #[async_backtrace::framed]
-    pub async fn do_execute_sql(ctx: Arc<QueryContext>, sql: String) -> Result<Option<RecordBatch>> {
+    pub async fn do_execute_sql(
+        ctx: Arc<QueryContext>,
+        sql: String,
+    ) -> Result<Option<RecordBatch>> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, plan_extras) = planner.plan_sql(sql.as_str()).await?;
         ctx.attach_query_str(plan.to_string(), plan_extras.statement.to_mask_sql());
@@ -87,8 +102,13 @@ impl OneBlockProcedure for SuggestedBackgroundTasksProcedure {
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, _args: Vec<String>) -> Result<DataBlock> {
         let license_mgr = get_license_manager();
-        license_mgr.manager.check_enterprise_enabled(&ctx.get_settings(), ctx.get_tenant(), Feature::BackgroundService)?;
-        let suggestions = Self::get_suggested_compaction_tasks(ctx.clone()).await?;
+
+        license_mgr.manager.check_enterprise_enabled(
+            &ctx.get_settings(),
+            ctx.get_tenant(),
+            Feature::BackgroundService,
+        )?;
+        let suggestions = Self::all_suggestions(ctx).await?;
         self.to_block(suggestions)
     }
 
@@ -105,6 +125,18 @@ impl OneBlockProcedure for SuggestedBackgroundTasksProcedure {
 }
 
 impl SuggestedBackgroundTasksProcedure {
+    #[async_backtrace::framed]
+    pub async fn all_suggestions(ctx: Arc<QueryContext>) -> Result<Vec<Suggestion>> {
+        let ctx = ctx.clone();
+        ctx.set_origin(Origin::BuiltInProcedure);
+        info!(
+            background = true,
+            tenant = ctx.get_tenant(),
+            "list all lsuggestions"
+        );
+        Self::get_suggested_compaction_tasks(ctx).await
+    }
+
     fn to_block(&self, suggestions: Vec<Suggestion>) -> Result<DataBlock> {
         let mut suggestion_type = vec![];
         let mut should_do_segment_compact = vec![];
@@ -122,7 +154,7 @@ impl SuggestedBackgroundTasksProcedure {
                     table_stats,
                     ..
                 } => {
-                    suggestion_type.push( "compaction".to_string().into_bytes().to_vec());
+                    suggestion_type.push("compaction".to_string().into_bytes().to_vec());
                     should_do_segment_compact.push(Some(need_compact_segment));
                     should_do_compact.push(Some(need_compact_block));
                     database_name.push(db_name.into_bytes().to_vec());
@@ -131,15 +163,13 @@ impl SuggestedBackgroundTasksProcedure {
                 }
             }
         }
-        Ok(DataBlock::new_from_columns(
-            vec![
-                StringType::from_data(suggestion_type),
-                StringType::from_data(database_name),
-                StringType::from_data(table_names),
-                VariantType::from_data(table_statistics),
-                BooleanType::from_opt_data(should_do_segment_compact),
-                BooleanType::from_opt_data(should_do_compact),
-            ]
-        ))
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(suggestion_type),
+            StringType::from_data(database_name),
+            StringType::from_data(table_names),
+            VariantType::from_data(table_statistics),
+            BooleanType::from_opt_data(should_do_segment_compact),
+            BooleanType::from_opt_data(should_do_compact),
+        ]))
     }
 }

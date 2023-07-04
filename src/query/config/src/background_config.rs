@@ -111,7 +111,7 @@ pub struct InnerBackgroundConfig {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InnerBackgroundCompactionConfig {
     pub enable: bool,
-    pub target_tables : Option<Vec<String>>,
+    pub target_tables: Option<Vec<String>>,
     pub segment_limit: Option<u64>,
     pub block_limit: Option<u64>,
     pub params: BackgroundJobParams,

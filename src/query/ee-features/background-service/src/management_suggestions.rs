@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use serde::Serialize;
-pub use serde::Deserialize;
 use common_meta_app::schema::TableStatistics;
+pub use serde::Deserialize;
+pub use serde::Serialize;
 
 // external tagged
 // {"Compaction": {"need_compact_segment": false ...}}
 // details: https://serde.rs/enum-representations.html
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Suggestion {
     Compaction {
         need_compact_segment: bool,

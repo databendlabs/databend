@@ -13,12 +13,17 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use arrow_array::{BooleanArray, LargeBinaryArray, PrimitiveArray, RecordBatch};
+
 use arrow_array::types::UInt64Type;
-use tracing::{ info};
+use arrow_array::BooleanArray;
+use arrow_array::LargeBinaryArray;
+use arrow_array::PrimitiveArray;
+use arrow_array::RecordBatch;
 use background_service::Suggestion;
 use common_exception::Result;
 use common_meta_app::schema::TableStatistics;
+use tracing::info;
+
 use crate::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
 use crate::sessions::QueryContext;
 
@@ -71,9 +76,7 @@ WHERE t.database != 'system'
 
 impl SuggestedBackgroundTasksProcedure {
     pub async fn get_suggested_compaction_tasks(ctx: Arc<QueryContext>) -> Result<Vec<Suggestion>> {
-        let resps = Self::do_get_all_suggested_compaction_tables(
-            ctx,
-        ).await?;
+        let resps = Self::do_get_all_suggested_compaction_tables(ctx).await?;
         let mut suggestions = vec![];
         for records in resps {
             info!(?records, "target_tables");
@@ -138,9 +141,11 @@ impl SuggestedBackgroundTasksProcedure {
                 .downcast_ref::<PrimitiveArray<UInt64Type>>()
                 .unwrap();
             for i in 0..records.num_rows() {
-                let db_name : String = String::from_utf8_lossy(db_names.value(i).to_vec().as_slice()).to_string();
+                let db_name: String =
+                    String::from_utf8_lossy(db_names.value(i).to_vec().as_slice()).to_string();
                 let db_id = db_ids.value(i);
-                let table_name = String::from_utf8_lossy(tb_names.value(i).to_vec().as_slice()).to_string();
+                let table_name =
+                    String::from_utf8_lossy(tb_names.value(i).to_vec().as_slice()).to_string();
                 let table_id = tb_ids.value(i);
                 let need_compact_segment = segment_advice.value(i);
                 let need_compact_block = block_advice.value(i);
@@ -163,7 +168,7 @@ impl SuggestedBackgroundTasksProcedure {
                         compressed_data_bytes,
                         number_of_segments: Some(number_of_segments),
                         number_of_blocks: Some(number_of_blocks),
-                        index_data_bytes
+                        index_data_bytes,
                     },
                 };
                 suggestions.push(suggestion);
@@ -173,9 +178,13 @@ impl SuggestedBackgroundTasksProcedure {
     }
 
     pub async fn do_get_all_suggested_compaction_tables(
-        ctx: Arc<QueryContext>
+        ctx: Arc<QueryContext>,
     ) -> Result<Vec<RecordBatch>> {
-        let res = SuggestedBackgroundTasksProcedure::do_execute_sql(ctx, SUGGEST_TABLES_NEED_COMPACTION.to_string()).await?;
+        let res = SuggestedBackgroundTasksProcedure::do_execute_sql(
+            ctx,
+            SUGGEST_TABLES_NEED_COMPACTION.to_string(),
+        )
+        .await?;
         let num_of_tables = res.as_ref().map_or_else(|| 0, |r| r.num_rows());
         info!(
             job = "compaction",
@@ -184,8 +193,7 @@ impl SuggestedBackgroundTasksProcedure {
             sql = SUGGEST_TABLES_NEED_COMPACTION,
             "get all suggested tables"
         );
-        let res = res.map(|r| vec![r]).unwrap_or_else(|| vec![]);
+        let res = res.map(|r| vec![r]).unwrap_or_else(Vec::new);
         Ok(res)
     }
-
 }

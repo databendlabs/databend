@@ -4155,7 +4155,6 @@ dependencies = [
  "jsonb",
  "jwt-simple",
  "opendal",
- "parking_lot 0.12.1",
  "storages-common-cache",
  "storages-common-table-meta",
  "table-lock",
