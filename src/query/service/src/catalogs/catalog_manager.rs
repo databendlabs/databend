@@ -122,7 +122,7 @@ impl CatalogManagerHelper for CatalogManager {
             // when compiling without `hive` feature enabled
             // `address` will be seem as unused, which is not intentional
             #[allow(unused)]
-            CatalogOption::Hive(address) => {
+            CatalogOption::Hive(cfg) => {
                 #[cfg(not(feature = "hive"))]
                 {
                     Err(ErrorCode::CatalogNotSupported(
@@ -131,7 +131,7 @@ impl CatalogManagerHelper for CatalogManager {
                 }
                 #[cfg(feature = "hive")]
                 {
-                    let catalog: Arc<dyn Catalog> = Arc::new(HiveCatalog::try_create(address)?);
+                    let catalog: Arc<dyn Catalog> = Arc::new(HiveCatalog::try_create(cfg.address)?);
                     let ctl_name = &req.name_ident.catalog_name;
                     let if_not_exists = req.if_not_exists;
 
@@ -139,18 +139,12 @@ impl CatalogManagerHelper for CatalogManager {
                 }
             }
             CatalogOption::Iceberg(opt) => {
-                let IcebergCatalogOption {
-                    storage_params: sp,
-                    flatten,
-                } = opt;
+                let IcebergCatalogOption { storage_params: sp } = opt;
 
                 let data_operator = DataOperator::try_create(&sp).await?;
                 let ctl_name = &req.name_ident.catalog_name;
-                let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(
-                    ctl_name,
-                    flatten,
-                    data_operator,
-                )?);
+                let catalog: Arc<dyn Catalog> =
+                    Arc::new(IcebergCatalog::try_create(ctl_name, data_operator)?);
 
                 let if_not_exists = req.if_not_exists;
                 self.insert_catalog(ctl_name, catalog, if_not_exists)

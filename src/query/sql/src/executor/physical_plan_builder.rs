@@ -827,6 +827,7 @@ impl PhysicalPlanBuilder {
                     .collect(),
                 limit: sort.limit,
                 after_exchange: sort.after_exchange,
+                pre_projection: sort.pre_projection.clone(),
                 stat_info: Some(stat_info),
             })),
 
@@ -1287,6 +1288,7 @@ impl PhysicalPlanBuilder {
             WindowFuncType::Rank => WindowFunction::Rank,
             WindowFuncType::DenseRank => WindowFunction::DenseRank,
             WindowFuncType::PercentRank => WindowFunction::PercentRank,
+            WindowFuncType::CumeDist => WindowFunction::CumeDist,
         };
 
         Ok(PhysicalPlan::Window(Window {

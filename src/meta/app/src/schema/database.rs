@@ -289,8 +289,15 @@ impl GetDatabaseReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum DatabaseInfoFilter {
+    // include all dropped databases
+    IncludeDropped,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ListDatabaseReq {
     pub tenant: String,
+    pub filter: Option<DatabaseInfoFilter>,
 }
 
 mod kvapi_key_impl {

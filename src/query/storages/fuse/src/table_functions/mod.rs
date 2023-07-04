@@ -19,7 +19,6 @@ mod fuse_snapshots;
 mod fuse_statistics;
 mod table_args;
 
-pub use clustering_information::get_cluster_keys;
 pub use clustering_information::unwrap_tuple;
 pub use clustering_information::ClusteringInformation;
 pub use clustering_information::ClusteringInformationTable;

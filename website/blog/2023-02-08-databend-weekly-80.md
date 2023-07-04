@@ -2,7 +2,7 @@
 title: 'This Week in Databend #80'
 date: 2023-02-08
 slug: 2023-02-08-databend-weekly
-tags: [databend, weekly]
+tags: [weekly]
 authors:
 - name: PsiACE
   url: https://github.com/psiace

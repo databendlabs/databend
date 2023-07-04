@@ -142,6 +142,8 @@ build_exceptions! {
     VirtualColumnNotFound(1115),
     VirtualColumnAlreadyExists(1116),
     ColumnReferencedByComputedColumn(1117),
+    // The table is not a clustered table.
+    UnclusteredTable(1118),
 
     // Data Related Errors
 

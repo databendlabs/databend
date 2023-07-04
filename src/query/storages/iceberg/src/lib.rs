@@ -87,11 +87,14 @@
 //! SELECT * FROM icb_ctl.default.icbg_tbl_0;
 //! ```
 
+#![feature(lazy_cell)]
+
 mod catalog;
-mod converters;
+mod context;
 mod database;
 mod partition;
 mod table;
+mod table_source;
 
 pub use catalog::IcebergCatalog;
 pub use catalog::ICEBERG_CATALOG;

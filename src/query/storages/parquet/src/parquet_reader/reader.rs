@@ -99,7 +99,7 @@ pub struct ParquetReader {
     /// ```
     /// output_schema = DataSchema::from(projected_arrow_schema)
     /// ```
-    pub(crate) output_schema: DataSchemaRef,
+    pub output_schema: DataSchemaRef,
     /// The actual schema used to read parquet.
     ///
     /// The reason of using [`ArrowSchema`] to read parquet is that
@@ -115,8 +115,8 @@ pub struct ParquetReader {
 impl ParquetReader {
     pub fn create(
         operator: Operator,
-        schema: ArrowSchema,
-        schema_descr: SchemaDescriptor,
+        schema: &ArrowSchema,
+        schema_descr: &SchemaDescriptor,
         projection: Projection,
     ) -> Result<Arc<ParquetReader>> {
         let (
@@ -124,7 +124,7 @@ impl ParquetReader {
             projected_column_nodes,
             projected_column_descriptors,
             columns_to_read,
-        ) = Self::do_projection(&schema, schema_descr, &projection)?;
+        ) = Self::do_projection(schema, schema_descr, &projection)?;
 
         let t_schema = arrow_to_table_schema(projected_arrow_schema.clone());
         let output_schema = DataSchema::from(&t_schema);
@@ -143,7 +143,7 @@ impl ParquetReader {
     #[allow(clippy::type_complexity)]
     pub fn do_projection(
         schema: &ArrowSchema,
-        schema_descr: SchemaDescriptor,
+        schema_descr: &SchemaDescriptor,
         projection: &Projection,
     ) -> Result<(
         ArrowSchema,

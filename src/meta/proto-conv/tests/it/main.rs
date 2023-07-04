@@ -51,3 +51,4 @@ mod v043_table_statistics;
 mod v044_table_meta;
 mod v045_background;
 mod v046_index_meta;
+mod v047_catalog_meta;

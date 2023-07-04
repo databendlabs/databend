@@ -20,7 +20,7 @@ use common_expression::types::Number;
 use common_expression::Scalar;
 use common_sql::plans::WindowFuncFrameBound;
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum FrameBound<T: Number> {
     CurrentRow,
     Preceding(Option<T>),
