@@ -61,7 +61,7 @@ pub enum StageType {
     /// LegacyInternal will be deprecated.
     ///
     /// Please never use this variant except in `proto_conv`. We keep this
-    /// stage type for backword compatible.
+    /// stage type for backward compatible.
     ///
     /// TODO(xuanwo): remove this when we are releasing v0.9.
     LegacyInternal,
@@ -135,7 +135,7 @@ impl FromStr for StageFileCompression {
             "xz" => Ok(StageFileCompression::Xz),
             "none" => Ok(StageFileCompression::None),
             _ => Err("Unknown file compression type, must one of { auto | gzip | bz2 | brotli | zstd | deflate | raw_deflate | lzo | snappy | xz | none }"
-                         .to_string()),
+                .to_string()),
         }
     }
 }
