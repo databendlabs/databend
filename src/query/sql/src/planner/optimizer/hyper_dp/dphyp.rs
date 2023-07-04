@@ -147,14 +147,19 @@ impl DPhpy {
                 }
                 let mut left_is_subquery = false;
                 let mut right_is_subquery = false;
-                // Fixme: If join's child is EvalScalar, we think it is a subquery.
-                // Check join's child is filter or scan
                 let left_op = s_expr.child(0)?.plan.as_ref();
                 let right_op = s_expr.child(1)?.plan.as_ref();
-                if matches!(left_op, RelOperator::EvalScalar(_)) {
+                // Eager aggregate will be executed after dphyp, so if join's child is aggregate, we should treat it as subquery.
+                if matches!(
+                    left_op,
+                    RelOperator::EvalScalar(_) | RelOperator::Aggregate(_)
+                ) {
                     left_is_subquery = true;
                 }
-                if matches!(right_op, RelOperator::EvalScalar(_)) {
+                if matches!(
+                    right_op,
+                    RelOperator::EvalScalar(_) | RelOperator::Aggregate(_)
+                ) {
                     right_is_subquery = true;
                 }
                 // Add join conditions

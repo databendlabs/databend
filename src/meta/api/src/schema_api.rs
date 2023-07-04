@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
+use common_meta_app::schema::CreateCatalogReply;
+use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
@@ -63,6 +65,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -117,6 +121,8 @@ pub trait SchemaApi: Send + Sync {
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply, KVAppError>;
 
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply, KVAppError>;
+
+    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError>;
 
     async fn list_indexes(
         &self,
@@ -211,6 +217,9 @@ pub trait SchemaApi: Send + Sync {
     async fn extend_table_lock_rev(&self, req: ExtendTableLockRevReq) -> Result<(), KVAppError>;
 
     async fn delete_table_lock_rev(&self, req: DeleteTableLockRevReq) -> Result<(), KVAppError>;
+
+    async fn create_catalog(&self, req: CreateCatalogReq)
+    -> Result<CreateCatalogReply, KVAppError>;
 
     fn name(&self) -> String;
 }

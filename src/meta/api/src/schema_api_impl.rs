@@ -19,6 +19,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use common_meta_app::app_error::AppError;
+use common_meta_app::app_error::CatalogAlreadyExists;
 use common_meta_app::app_error::CreateDatabaseWithDropTime;
 use common_meta_app::app_error::CreateIndexWithDropTime;
 use common_meta_app::app_error::CreateTableWithDropTime;
@@ -45,9 +46,13 @@ use common_meta_app::app_error::UnknownTableId;
 use common_meta_app::app_error::VirtualColumnAlreadyExists;
 use common_meta_app::app_error::WrongShare;
 use common_meta_app::app_error::WrongShareObject;
+use common_meta_app::schema::CatalogId;
+use common_meta_app::schema::CatalogIdToName;
 use common_meta_app::schema::CountTablesKey;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
+use common_meta_app::schema::CreateCatalogReply;
+use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
@@ -116,6 +121,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -131,16 +138,19 @@ use common_meta_app::share::ShareNameIdent;
 use common_meta_app::share::ShareTableInfoMap;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::txn_op::Request;
 use common_meta_types::txn_op_response::Response;
 use common_meta_types::ConditionResult;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
 use common_meta_types::InvalidReply;
+use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::MetaNetworkError;
+use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnGetRequest;
@@ -893,7 +903,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
         let tenant_index = &req.name_ident;
 
-        if req.meta.drop_on.is_some() {
+        if req.meta.dropped_on.is_some() {
             return Err(KVAppError::AppError(AppError::CreateIndexWithDropTime(
                 CreateIndexWithDropTime::new(&tenant_index.index_name),
             )));
@@ -999,13 +1009,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             debug!(index_id, name_key = debug(&tenant_index), "drop_index");
 
             // drop an index with drop time
-            if index_meta.drop_on.is_some() {
+            if index_meta.dropped_on.is_some() {
                 return Err(KVAppError::AppError(AppError::DropIndexWithDropTime(
                     DropIndexWithDropTime::new(&tenant_index.index_name),
                 )));
             }
             // update drop on time
-            index_meta.drop_on = Some(Utc::now());
+            index_meta.dropped_on = Some(Utc::now());
 
             // Delete index by these operations:
             // del (tenant, index_name) -> index_id
@@ -1064,7 +1074,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         debug!(index_id, name_key = debug(&tenant_index), "drop_index");
 
         // get an index with drop time
-        if index_meta.drop_on.is_some() {
+        if index_meta.dropped_on.is_some() {
             return Err(KVAppError::AppError(AppError::GetIndexWithDropTIme(
                 GetIndexWithDropTime::new(&tenant_index.index_name),
             )));
@@ -1074,6 +1084,32 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             index_id,
             index_meta,
         })
+    }
+
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let index_id_key = IndexId {
+            index_id: req.index_id,
+        };
+
+        let reply = self
+            .upsert_kv(UpsertKVReq::new(
+                &index_id_key.to_string_key(),
+                MatchSeq::GE(1),
+                Operation::Update(serialize_struct(&req.index_meta)?),
+                None,
+            ))
+            .await?;
+
+        if !reply.is_changed() {
+            Err(KVAppError::AppError(AppError::UnknownIndex(
+                UnknownIndex::new(&req.index_name, "update_index"),
+            )))
+        } else {
+            Ok(UpdateIndexReply {})
+        }
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
@@ -1113,7 +1149,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                     // 1. index is not dropped.
                     // 2. table_id is not specified
                     //    or table_id is specified and equals to the given table_id.
-                    meta.drop_on.is_none()
+                    meta.dropped_on.is_none()
                         && req.table_id.filter(|id| *id != meta.table_id).is_none()
                 })
                 .collect::<Vec<_>>()
@@ -2069,26 +2105,22 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         }
 
         if let Some(filter) = req.filter {
-            let mut filter_tb_infos = Vec::with_capacity(tb_info_list.len());
-
-            for tb_info in tb_info_list {
-                let filter_out = match filter {
+            let filter_tb_infos = tb_info_list
+                .clone()
+                .into_iter()
+                .filter(|tb_info| match filter {
                     TableInfoFilter::Dropped(drop_on) => match tb_info.meta.drop_on {
                         Some(tb_drop_on) => {
                             if let Some(drop_on) = &drop_on {
-                                tb_drop_on.timestamp() > drop_on.timestamp()
+                                tb_drop_on.timestamp() <= drop_on.timestamp()
                             } else {
-                                false
+                                true
                             }
                         }
-                        None => true,
+                        None => false,
                     },
-                };
-
-                if !filter_out {
-                    filter_tb_infos.push(tb_info);
-                }
-            }
+                })
+                .collect::<Vec<_>>();
 
             return Ok(filter_tb_infos);
         }
@@ -2961,6 +2993,83 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         }
 
         Ok(())
+    }
+
+    async fn create_catalog(
+        &self,
+        req: CreateCatalogReq,
+    ) -> Result<CreateCatalogReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let name_key = &req.name_ident;
+
+        let ctx = &func_name!();
+
+        let mut trials = txn_trials(None, ctx);
+
+        let catalog_id = loop {
+            trials.next().unwrap()?;
+
+            // Get catalog by name to ensure absence
+            let (catalog_id_seq, catalog_id) = get_u64_value(self, name_key).await?;
+            debug!(catalog_id_seq, catalog_id, ?name_key, "get_catalog");
+
+            if catalog_id_seq > 0 {
+                return if req.if_not_exists {
+                    Ok(CreateCatalogReply { catalog_id })
+                } else {
+                    Err(KVAppError::AppError(AppError::CatalogAlreadyExists(
+                        CatalogAlreadyExists::new(
+                            &name_key.catalog_name,
+                            format!("create catalog: tenant: {}", name_key.tenant),
+                        ),
+                    )))
+                };
+            }
+
+            // Create catalog by inserting these record:
+            // (tenant, catalog_name) -> catalog_id
+            // (catalog_id) -> catalog_meta
+            // (catalog_id) -> (tenant, catalog_name)
+            let catalog_id = fetch_id(self, IdGenerator::catalog_id()).await?;
+            let id_key = CatalogId { catalog_id };
+            let id_to_name_key = CatalogIdToName { catalog_id };
+
+            debug!(catalog_id, name_key = debug(&name_key), "new catalog id");
+
+            {
+                let condition = vec![
+                    txn_cond_seq(name_key, Eq, 0),
+                    txn_cond_seq(&id_to_name_key, Eq, 0),
+                ];
+                let if_then = vec![
+                    txn_op_put(name_key, serialize_u64(catalog_id)?), /* (tenant, catalog_name) -> catalog_id */
+                    txn_op_put(&id_key, serialize_struct(&req.meta)?), /* (catalog_id) -> catalog_meta */
+                    txn_op_put(&id_to_name_key, serialize_struct(name_key)?), /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
+                ];
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
+                let (succ, _) = send_txn(self, txn_req).await?;
+
+                debug!(
+                    name = debug(&name_key),
+                    id = debug(&id_key),
+                    succ = display(succ),
+                    "create_catalog"
+                );
+
+                if succ {
+                    break catalog_id;
+                }
+            }
+        };
+
+        Ok(CreateCatalogReply { catalog_id })
     }
 
     fn name(&self) -> String {

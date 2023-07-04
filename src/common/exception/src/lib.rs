@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 pub mod exception;
+mod exception_backtrace;
 mod exception_code;
 mod exception_flight;
 mod exception_into;

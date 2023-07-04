@@ -356,6 +356,16 @@ impl TableContext for QueryContext {
         self.shared.cacheable.store(cacheable, Ordering::Release);
     }
 
+    fn get_can_scan_from_agg_index(&self) -> bool {
+        self.shared.can_scan_from_agg_index.load(Ordering::Acquire)
+    }
+
+    fn set_can_scan_from_agg_index(&self, enable: bool) {
+        self.shared
+            .can_scan_from_agg_index
+            .store(enable, Ordering::Release);
+    }
+
     fn attach_query_str(&self, kind: String, query: String) {
         self.shared.attach_query_str(kind, query);
     }

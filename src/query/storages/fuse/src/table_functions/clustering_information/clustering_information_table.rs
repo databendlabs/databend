@@ -27,7 +27,6 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
 use super::clustering_information::ClusteringInformation;
-use super::table_args::get_cluster_keys;
 use super::table_args::parse_func_table_args;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -47,8 +46,6 @@ pub struct ClusteringInformationTable {
     table_info: TableInfo,
     arg_database_name: String,
     arg_table_name: String,
-    // Todo(zhyass): support define cluster_keys.
-    arg_cluster_keys: String,
 }
 
 impl ClusteringInformationTable {
@@ -78,7 +75,6 @@ impl ClusteringInformationTable {
             table_info,
             arg_database_name,
             arg_table_name,
-            arg_cluster_keys: "".to_string(),
         }))
     }
 }
@@ -123,7 +119,6 @@ impl Table for ClusteringInformationTable {
                     output,
                     self.arg_database_name.to_owned(),
                     self.arg_table_name.to_owned(),
-                    self.arg_cluster_keys.to_owned(),
                 )
             },
             1,
@@ -138,7 +133,6 @@ struct ClusteringInformationSource {
     ctx: Arc<dyn TableContext>,
     arg_database_name: String,
     arg_table_name: String,
-    arg_cluster_keys: String,
 }
 
 impl ClusteringInformationSource {
@@ -147,14 +141,12 @@ impl ClusteringInformationSource {
         output: Arc<OutputPort>,
         arg_database_name: String,
         arg_table_name: String,
-        arg_cluster_keys: String,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, ClusteringInformationSource {
             ctx,
             finish: false,
             arg_table_name,
             arg_database_name,
-            arg_cluster_keys,
         })
     }
 }
@@ -183,18 +175,11 @@ impl AsyncSource for ClusteringInformationSource {
             .await?;
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-        let (cluster_keys, plain) =
-            get_cluster_keys(self.ctx.clone(), tbl, &self.arg_cluster_keys)?;
 
         Ok(Some(
-            ClusteringInformation::new(
-                self.ctx.clone(),
-                tbl,
-                plain.unwrap_or_default(),
-                cluster_keys,
-            )
-            .get_clustering_info()
-            .await?,
+            ClusteringInformation::new(self.ctx.clone(), tbl)
+                .get_clustering_info()
+                .await?,
         ))
     }
 }

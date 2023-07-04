@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -20,6 +19,7 @@ use std::time::SystemTime;
 
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::ProgressValues;
+use common_base::runtime::CatchUnwindFuture;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -27,7 +27,6 @@ use common_sql::plans::Plan;
 use common_sql::PlanExtras;
 use common_sql::Planner;
 use futures::StreamExt;
-use futures_util::FutureExt;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::error;
@@ -239,22 +238,18 @@ impl ExecuteState {
         let block_sender_closer = block_sender.closer();
 
         let res = execute(interpreter, ctx_clone, block_sender, executor_clone.clone());
-        match AssertUnwindSafe(res).catch_unwind().await {
+        match CatchUnwindFuture::create(res).await {
             Ok(Err(err)) => {
                 Executor::stop(&executor_clone, Err(err), false).await;
                 block_sender_closer.close();
             }
             Err(e) => {
-                Executor::stop(
-                    &executor_clone,
-                    Err(ErrorCode::PanicError(format!("interpreter panic: {e:?}"))),
-                    false,
-                )
-                .await;
+                Executor::stop(&executor_clone, Err(e), false).await;
                 block_sender_closer.close();
             }
             _ => {}
         }
+
         Ok(())
     }
 }

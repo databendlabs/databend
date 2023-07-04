@@ -7,10 +7,6 @@ on:
     branches:
       - main
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref }}-${{ github.event_name }}
-  cancel-in-progress: true
-
 permissions:
   id-token: write
   pull-requests: write
@@ -24,10 +20,6 @@ jobs:
   build:
     if: contains(github.event.pull_request.labels.*.name, 'ci-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
     runs-on: [self-hosted, X64, Linux, 16c32g]
-    outputs:
-      sha: ${{ steps.metadata.outputs.sha }}
-      run_id: ${{ steps.metadata.outputs.run_id }}
-      pr_number: ${{ steps.metadata.outputs.pr_number }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -39,12 +31,6 @@ jobs:
         with:
           target: x86_64-unknown-linux-gnu
           artifacts: meta,query
-      - name: Set Benchmark metadata
-        id: metadata
-        run: |
-          echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
-          echo "run_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
-          echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
 
   docker:
     needs: build
@@ -74,7 +60,8 @@ jobs:
         run: |
           mkdir -p ./distro/linux/amd64
           cp ./target/release/databend-query ./distro/linux/amd64/databend-query
-          echo "tag=pr-${{ needs.build.outputs.pr_number }}-${{ needs.build.outputs.sha }}" >> $GITHUB_OUTPUT
+          short_sha=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "tag=pr-${{ github.event.pull_request.number }}-${short_sha}" >> $GITHUB_OUTPUT
       - name: push service image
         uses: docker/build-push-action@v3
         with:
@@ -86,7 +73,7 @@ jobs:
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1
         with:
-          number: ${{ needs.build.outputs.pr_number }}
+          number: ${{ github.event.pull_request.number }}
           token: ${{ github.token }}
           body: |
             ## Docker Image for PR
@@ -104,5 +91,5 @@ jobs:
       sha: ${{ github.sha }}
       run_id: ${{ github.run_id }}
       source: pr
-      source_id: ${{ needs.build.outputs.pr_number }}
+      source_id: ${{ github.event.pull_request.number }}
       version: ${{ needs.docker.outputs.tag }}

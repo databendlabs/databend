@@ -18,12 +18,12 @@ use common_expression::FunctionContext;
 use common_hashtable::RowPtr;
 
 use super::desc::MARKER_KIND_FALSE;
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::sql::plans::JoinType;
 
 /// ProbeState used for probe phase of hash join.
 /// We may need some reusable state for probe phase.
 pub struct ProbeState {
+    pub(crate) max_block_size: usize,
     pub(crate) probe_indexes: Vec<(u32, u32)>,
     pub(crate) build_indexes: Vec<RowPtr>,
     pub(crate) valids: Option<Bitmap>,
@@ -44,41 +44,47 @@ impl ProbeState {
         self.valids = None;
     }
 
-    pub fn create(join_type: &JoinType, with_conjunct: bool, func_ctx: FunctionContext) -> Self {
+    pub fn create(
+        max_block_size: usize,
+        join_type: &JoinType,
+        with_conjunct: bool,
+        func_ctx: FunctionContext,
+    ) -> Self {
         let mut true_validity = MutableBitmap::new();
-        true_validity.extend_constant(JOIN_MAX_BLOCK_SIZE, true);
+        true_validity.extend_constant(max_block_size, true);
         let true_validity: Bitmap = true_validity.into();
         let (row_state, row_state_indexes, probe_unmatched_indexes) = match &join_type {
             JoinType::Left | JoinType::Single | JoinType::Full => {
                 if with_conjunct {
                     (
-                        Some(vec![0; JOIN_MAX_BLOCK_SIZE]),
-                        Some(vec![0; JOIN_MAX_BLOCK_SIZE]),
+                        Some(vec![0; max_block_size]),
+                        Some(vec![0; max_block_size]),
                         None,
                     )
                 } else {
                     (
-                        Some(vec![0; JOIN_MAX_BLOCK_SIZE]),
+                        Some(vec![0; max_block_size]),
                         None,
-                        Some(vec![(0, 0); JOIN_MAX_BLOCK_SIZE]),
+                        Some(vec![(0, 0); max_block_size]),
                     )
                 }
             }
             _ => (None, None, None),
         };
         let markers = if matches!(&join_type, JoinType::RightMark) {
-            Some(vec![MARKER_KIND_FALSE; JOIN_MAX_BLOCK_SIZE])
+            Some(vec![MARKER_KIND_FALSE; max_block_size])
         } else {
             None
         };
         ProbeState {
-            probe_indexes: vec![(0, 0); JOIN_MAX_BLOCK_SIZE],
+            max_block_size,
+            probe_indexes: vec![(0, 0); max_block_size],
             build_indexes: vec![
                 RowPtr {
                     chunk_index: 0,
                     row_index: 0,
                 };
-                JOIN_MAX_BLOCK_SIZE
+                max_block_size
             ],
             valids: None,
             true_validity,

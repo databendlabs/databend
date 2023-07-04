@@ -51,8 +51,11 @@ message IndexMeta {
   string created_on = 3;
 
   // The time index dropped.
-  optional string drop_on = 4;
+  optional string dropped_on = 4;
 
   // The index based query string
   string query = 5;
+
+  // The time index updated.
+  optional string updated_on = 6;
 }

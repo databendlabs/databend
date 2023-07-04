@@ -2,7 +2,7 @@
 title: 'This Week in Databend #71'
 date: 2022-12-07
 slug: 2022-12-07-databend-weekly
-tags: [databend, weekly]
+tags: [weekly]
 authors:
 - name: PsiACE
   url: https://github.com/psiace

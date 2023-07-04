@@ -60,6 +60,7 @@ fn test_agg() {
     test_agg_array_agg(file, eval_aggr);
     test_agg_string_agg(file, eval_aggr);
     test_agg_bitmap_count(file, eval_aggr);
+    test_agg_bitmap(file, eval_aggr);
 }
 
 #[test]
@@ -92,6 +93,7 @@ fn test_agg_group_by() {
     test_agg_array_agg(file, simulate_two_groups_group_by);
     test_agg_string_agg(file, simulate_two_groups_group_by);
     test_agg_bitmap_count(file, simulate_two_groups_group_by);
+    test_agg_bitmap(file, simulate_two_groups_group_by);
 }
 
 fn gen_bitmap_data() -> Column {
@@ -534,6 +536,27 @@ fn test_agg_bitmap_count(file: &mut impl Write, simulator: impl AggregationSimul
     run_agg_ast(
         file,
         "bitmap_xor_count(bm)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "bitmap_not_count(bm)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_bitmap(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "bitmap_union(bm)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "bitmap_intersect(bm)",
         get_example().as_slice(),
         simulator,
     );

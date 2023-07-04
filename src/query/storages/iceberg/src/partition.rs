@@ -18,6 +18,9 @@ use std::hash::Hash;
 use std::hash::Hasher;
 
 use common_catalog::plan::PartInfo;
+use common_catalog::plan::PartInfoPtr;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 /// # TODO
 ///
@@ -26,6 +29,17 @@ use common_catalog::plan::PartInfo;
 pub struct IcebergPartInfo {
     pub path: String,
     pub size: u64,
+}
+
+impl IcebergPartInfo {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&IcebergPartInfo> {
+        match info.as_any().downcast_ref::<IcebergPartInfo>() {
+            Some(part_ref) => Ok(part_ref),
+            None => Err(ErrorCode::Internal(
+                "Cannot downcast from PartInfo to IcebergPartInfo.",
+            )),
+        }
+    }
 }
 
 #[typetag::serde(name = "iceberg")]

@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
 
@@ -35,6 +34,7 @@ impl JoinHashTable {
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
+        let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         let mut occupied = 0;
         let local_build_indexes = &mut probe_state.build_indexes;
@@ -50,12 +50,13 @@ impl JoinHashTable {
                 i,
                 local_build_indexes_ptr,
                 occupied,
+                max_block_size,
             );
             if match_count == 0 {
                 continue;
             }
             occupied += match_count;
-            if occupied >= JOIN_MAX_BLOCK_SIZE {
+            if occupied >= max_block_size {
                 loop {
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -78,7 +79,7 @@ impl JoinHashTable {
                         incomplete_ptr,
                         local_build_indexes_ptr,
                         occupied,
-                        JOIN_MAX_BLOCK_SIZE,
+                        max_block_size,
                     );
                     if match_count == 0 {
                         break;
@@ -86,7 +87,7 @@ impl JoinHashTable {
 
                     occupied += match_count;
 
-                    if occupied < JOIN_MAX_BLOCK_SIZE {
+                    if occupied < max_block_size {
                         break;
                     }
                 }
@@ -111,6 +112,7 @@ impl JoinHashTable {
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
+        let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         // The right join will return multiple data blocks of similar size.
         let mut occupied = 0;
@@ -137,6 +139,7 @@ impl JoinHashTable {
                 i,
                 local_build_indexes_ptr,
                 occupied,
+                max_block_size,
             );
             if match_count == 0 {
                 continue;
@@ -144,7 +147,7 @@ impl JoinHashTable {
             occupied += match_count;
             local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
             probe_indexes_len += 1;
-            if occupied >= JOIN_MAX_BLOCK_SIZE {
+            if occupied >= max_block_size {
                 loop {
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -199,7 +202,7 @@ impl JoinHashTable {
                         incomplete_ptr,
                         local_build_indexes_ptr,
                         occupied,
-                        JOIN_MAX_BLOCK_SIZE,
+                        max_block_size,
                     );
                     if match_count == 0 {
                         break;
@@ -209,7 +212,7 @@ impl JoinHashTable {
                     local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
                     probe_indexes_len += 1;
 
-                    if occupied < JOIN_MAX_BLOCK_SIZE {
+                    if occupied < max_block_size {
                         break;
                     }
                 }

@@ -32,8 +32,6 @@ use crate::ScalarExpr;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SrfItem {
     pub scalar: ScalarExpr,
-    // pub srf_name: String,
-    // pub args: Vec<ScalarExpr>,
     pub index: IndexType,
 }
 
@@ -43,6 +41,7 @@ pub struct SrfItem {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ProjectSet {
     pub srfs: Vec<SrfItem>,
+    pub unused_columns: Option<Vec<IndexType>>,
 }
 
 impl Operator for ProjectSet {
