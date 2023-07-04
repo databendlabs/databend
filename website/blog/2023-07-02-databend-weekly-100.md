@@ -34,7 +34,7 @@ authors:
 
 [Databend](https://github.com/datafuselabs/databend) is a modern cloud data warehouse, serving your massive-scale analytics needs at low cost and complexity. Open source alternative to Snowflake. Also available in the cloud: <https://app.databend.com> .
 
-> Having trouble connecting your root user to Databend? Read [Docs | Configuring Admin Users](https://databend.rs/doc/sql-clients/admin-users) to learn how to set up correctly.
+> For security reasons, the Root user is no longer available out of the box. You must configure it before use. Learn more at <https://databend.rs/doc/sql-clients/admin-users> .
 
 ## What's On In Databend
 
@@ -69,6 +69,10 @@ Discover some fascinating code snippets or projects that showcase our work or le
 Databend's long run tests the correctness and performance of the system under heavy load and concurrency. This includes concurrent large-scale data ingestion, table maintenance (optimization, re-clustering, and vacuuming), as well as querying.
 
 The test will run a series of SQL and validation commands to verify the results. It will begin by executing the pre-test scripts (`_before.sh`), followed by repeatedly running concurrent test scripts, and finally executing post-test scripts (`_after.sh`). All event logs will be stored in a table on Databend for further analysis.
+
+Databend conducts long run tests to verify the correctness and performance of the system under heavy load and concurrency. These tests involve concurrent ingestion of large-scale data, table maintenance (optimization, re-clustering, and vacuuming), as well as querying.
+
+During the testing process, a series of SQL commands will be executed and validation checks will be performed to ensure accurate results. It will start by running pre-test scripts (`_before.sh`), followed by repeated execution of concurrent test scripts, and finally executing post-test scripts (`_after.sh`). All event logs will be stored in a Databend table for further analysis.
 
 ```lua
                       +-------------------+
