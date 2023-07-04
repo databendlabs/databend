@@ -46,8 +46,8 @@ use common_expression::FunctionSignature;
 use common_expression::ScalarRef;
 use common_expression::SimpleDomainCmp;
 use common_expression::ValueRef;
-use memchr::memmem;
 use memchr::memchr;
+use memchr::memmem;
 use regex::bytes::Regex;
 
 use crate::scalars::decimal::register_decimal_compare_op;
@@ -503,7 +503,9 @@ fn register_like(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                PatternType::SimplePattern(simple_pattern) => simple_like(str, simple_pattern.0, simple_pattern.1, &simple_pattern.2),
+                PatternType::SimplePattern(simple_pattern) => {
+                    simple_like(str, simple_pattern.0, simple_pattern.1, &simple_pattern.2)
+                }
                 PatternType::ComplexPattern => like(str, pat),
             }
         }),
@@ -818,10 +820,11 @@ fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
     }
     let mut idx = 0;
     loop {
-        if checksum == 0 && haystack[idx] == needle[0] {
-            if &haystack[idx..(idx + needle_len)] == needle {
-                return Some(offset + idx + needle_len);
-            }
+        if checksum == 0
+            && haystack[idx] == needle[0]
+            && &haystack[idx..(idx + needle_len)] == needle
+        {
+            return Some(offset + idx + needle_len);
         }
         if haystack_len - idx < needle_len {
             return None;
@@ -833,7 +836,12 @@ fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 #[inline]
-fn simple_like(haystack: &[u8], has_start_percent: bool, has_end_percent: bool, segments: &Vec<Vec<u8>>) -> bool {
+fn simple_like(
+    haystack: &[u8],
+    has_start_percent: bool,
+    has_end_percent: bool,
+    segments: &Vec<Vec<u8>>,
+) -> bool {
     let haystack_len = haystack.len();
     let mut haystack_start_idx = 0;
     let segments_len = segments.len();
@@ -859,12 +867,10 @@ fn simple_like(haystack: &[u8], has_start_percent: bool, has_end_percent: bool, 
             if &haystack[(haystack_len - segment.len())..] != segment {
                 return false;
             }
+        } else if let Some(offset) = find(&haystack[haystack_start_idx..], segment) {
+            haystack_start_idx += offset;
         } else {
-            if let Some(offset) = find(&haystack[haystack_start_idx..], &segment) {
-                haystack_start_idx += offset;
-            } else {
-                return false;
-            }
+            return false;
         }
         segment_idx += 1;
     }
