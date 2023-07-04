@@ -51,7 +51,10 @@ if __name__ == "__main__":
         now = datetime.utcnow()
 
         if now < issue_at or now > expire_at:
-            print("License is invalid")
+            print(
+                f"License is invalid: issuer: {issuer}, type: {type_}, "
+                f"org: {organization}, issue_at: {issue_at}, expire_at: {expire_at}"
+            )
             sys.exit(1)
 
         mycursor = mydb.cursor()
