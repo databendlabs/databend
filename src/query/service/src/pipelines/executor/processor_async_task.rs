@@ -91,7 +91,7 @@ impl ProcessorAsyncTask {
     #[inline(always)]
     pub fn set_pending_watcher(self: Arc<Self>, waker: Waker) -> Poll<()> {
         let mut expected = std::ptr::null_mut();
-        let desired = ManuallyDrop::new(waker).deref_mut() as *mut Waker;
+        let desired = Box::into_raw(Box::new(waker));
 
         loop {
             match self.pending_waker.compare_exchange_weak(
@@ -101,7 +101,7 @@ impl ProcessorAsyncTask {
                 Ordering::Relaxed,
             ) {
                 Err(new_expected) => unsafe {
-                    if (&*new_expected).will_wake(&*desired) {
+                    if !new_expected.is_null() && (&*new_expected).will_wake(&*desired) {
                         return Poll::Pending;
                     }
 
@@ -109,7 +109,7 @@ impl ProcessorAsyncTask {
                 },
                 Ok(old_value) => {
                     if !old_value.is_null() {
-                        unsafe { std::ptr::drop_in_place(old_value) };
+                        unsafe { drop(Box::from_raw(old_value)) };
                     }
 
                     self.queue.pending_async_task(&self);
