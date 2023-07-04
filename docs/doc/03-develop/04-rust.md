@@ -60,29 +60,29 @@ use tokio_stream::StreamExt;
 
 #[tokio::main]
 async fn main() {
-    let dsn = "databend://user1:abc123@localhost:8000/book_db?sslmode=disable";
+    let dsn = "databend://user1:abc123@localhost:8000/default?sslmode=disable";
     let conn = new_connection(dsn).unwrap();
 
     let sql_db_create = "CREATE DATABASE IF NOT EXISTS book_db;";
     conn.exec(sql_db_create).await.unwrap();
 
-    let sql_table_create = "CREATE TABLE books (
+    let sql_table_create = "CREATE TABLE book_db.books (
     title VARCHAR,
     author VARCHAR,
     date VARCHAR
 );";
 
     conn.exec(sql_table_create).await.unwrap();
-    let sql_insert = "INSERT INTO books VALUES ('mybook', 'author', '2022');";
+    let sql_insert = "INSERT INTO book_db.books VALUES ('mybook', 'author', '2022');";
     conn.exec(sql_insert).await.unwrap();
 
-    let mut rows = conn.query_iter("SELECT * FROM books;").await.unwrap();
+    let mut rows = conn.query_iter("SELECT * FROM book_db.books;").await.unwrap();
     while let Some(row) = rows.next().await {
         let (title, author, date): (String, String, String) = row.unwrap().try_into().unwrap();
         println!("{} {} {}", title, author, date);
     }
 
-    let sql_table_drop = "DROP TABLE books;";
+    let sql_table_drop = "DROP TABLE book_db.books;";
     conn.exec(sql_table_drop).await.unwrap();
 
     let sql_db_drop = "DROP DATABASE book_db;";
