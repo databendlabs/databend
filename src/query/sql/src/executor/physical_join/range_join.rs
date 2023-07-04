@@ -14,13 +14,13 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::common_super_type;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::type_check::common_super_type;
 use common_functions::BUILTIN_FUNCTIONS;
 
-use crate::binder::JoinPredicate;
 use crate::binder::wrap_cast;
+use crate::binder::JoinPredicate;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::executor::RangeJoin;
