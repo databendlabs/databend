@@ -35,13 +35,11 @@ use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 
-
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
-
 use crate::operations::mutation::MutationEnum;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
@@ -346,24 +344,26 @@ impl Processor for MutationSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(Some(part)) => {
                 let settings = ReadSettings::from_ctx(&self.ctx)?;
-                match MutationEnum::from_part(&part)?{
-                    MutationEnum:: MutationDeletedSegment(deleted_segment) =>{
-                    // it could be a deleted_segment info
-                    // we can make sure this is Mutation::Delete
-                    // only delete operation will have deleted segments, not for update.
-                    let progress_values = ProgressValues {
-                        rows: deleted_segment.deleted_segment.segment_info.1.row_count as usize,
-                        bytes: 0,
-                    };
-                    self.ctx.get_write_progress().incr(&progress_values);
-                    self.state = State::Output(
-                        self.ctx.get_partition(),
-                        DataBlock::empty_with_meta(SerializeDataMeta::create_with_deleted_segment(
-                            deleted_segment.clone(),
-                        )),
-                    )
-                    },
-                    MutationEnum::MutationPartInfo(part) =>{
+                match MutationEnum::from_part(&part)? {
+                    MutationEnum::MutationDeletedSegment(deleted_segment) => {
+                        // it could be a deleted_segment info
+                        // we can make sure this is Mutation::Delete
+                        // only delete operation will have deleted segments, not for update.
+                        let progress_values = ProgressValues {
+                            rows: deleted_segment.deleted_segment.segment_info.1.row_count as usize,
+                            bytes: 0,
+                        };
+                        self.ctx.get_write_progress().incr(&progress_values);
+                        self.state = State::Output(
+                            self.ctx.get_partition(),
+                            DataBlock::empty_with_meta(
+                                SerializeDataMeta::create_with_deleted_segment(
+                                    deleted_segment.clone(),
+                                ),
+                            ),
+                        )
+                    }
+                    MutationEnum::MutationPartInfo(part) => {
                         self.index = BlockMetaIndex {
                             segment_idx: part.index.segment_idx,
                             block_idx: part.index.block_idx,
@@ -372,11 +372,12 @@ impl Processor for MutationSource {
                             self.stats_type =
                                 ClusterStatsGenType::WithOrigin(part.cluster_stats.clone());
                         }
-    
+
                         let inner_part = part.inner_part.clone();
                         let fuse_part = FusePartInfo::from_part(&inner_part)?;
-    
-                        if part.whole_block_mutation && matches!(self.action, MutationAction::Deletion)
+
+                        if part.whole_block_mutation
+                            && matches!(self.action, MutationAction::Deletion)
                         {
                             // whole block deletion.
                             let progress_values = ProgressValues {
@@ -384,8 +385,10 @@ impl Processor for MutationSource {
                                 bytes: 0,
                             };
                             self.ctx.get_write_progress().incr(&progress_values);
-                            let meta =
-                                SerializeDataMeta::create(self.index.clone(), self.stats_type.clone());
+                            let meta = SerializeDataMeta::create(
+                                self.index.clone(),
+                                self.stats_type.clone(),
+                            );
                             self.state = State::Output(
                                 self.ctx.get_partition(),
                                 DataBlock::empty_with_meta(meta),

@@ -14,7 +14,6 @@
 
 use std::any::Any;
 
-
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
@@ -24,44 +23,38 @@ use storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::pruning::DeletedSegmentInfo;
 
-
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
-pub enum MutationEnum{
+pub enum MutationEnum {
     MutationDeletedSegment(MutationDeletedSegment),
-    MutationPartInfo(MutationPartInfo)
+    MutationPartInfo(MutationPartInfo),
 }
 
-
 #[typetag::serde(name = "mutation_enum")]
-impl PartInfo for MutationEnum{
+impl PartInfo for MutationEnum {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-       match self{
+        match self {
             Self::MutationDeletedSegment(mutation_deleted_segment) => {
                 mutation_deleted_segment.equals(info)
             }
-            Self::MutationPartInfo(mutation_part_info) => {
-                mutation_part_info.equals(info)
-            }
-       }
+            Self::MutationPartInfo(mutation_part_info) => mutation_part_info.equals(info),
+        }
     }
 
     fn hash(&self) -> u64 {
-        match self{
+        match self {
             Self::MutationDeletedSegment(mutation_deleted_segment) => {
                 mutation_deleted_segment.hash()
             }
-            Self::MutationPartInfo(mutation_part_info) => {
-                mutation_part_info.hash()
-            }
-       }
+            Self::MutationPartInfo(mutation_part_info) => mutation_part_info.hash(),
+        }
     }
 }
 
-impl MutationEnum{
+impl MutationEnum {
     pub fn from_part(info: &PartInfoPtr) -> Result<&MutationEnum> {
         match info.as_any().downcast_ref::<MutationEnum>() {
             Some(part_ref) => Ok(part_ref),
@@ -134,7 +127,7 @@ impl MutationPartInfo {
         inner_part: PartInfoPtr,
         whole_block_mutation: bool,
     ) -> Self {
-       MutationPartInfo {
+        MutationPartInfo {
             index,
             cluster_stats,
             inner_part,

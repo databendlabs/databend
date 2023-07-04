@@ -292,9 +292,10 @@ impl FusePruner {
                         // inverse prun
                         for (segment_location, compact_segment_info) in &pruned_segments {
                             // for delete_prun
-                            match inverse_range_index.as_ref(){
+                            match inverse_range_index.as_ref() {
                                 Some(range_index) => {
-                                    if !range_index.should_keep(&compact_segment_info.summary.col_stats, None)
+                                    if !range_index
+                                        .should_keep(&compact_segment_info.summary.col_stats, None)
                                     {
                                         deleted_segments.push(DeletedSegmentInfo {
                                             index: segment_location.segment_idx,
@@ -303,14 +304,17 @@ impl FusePruner {
                                                 compact_segment_info.summary.clone(),
                                             ),
                                         })
-                                    }else {
+                                    } else {
                                         res.extend(
                                             block_pruner
-                                                .pruning(segment_location.clone(), compact_segment_info)
+                                                .pruning(
+                                                    segment_location.clone(),
+                                                    compact_segment_info,
+                                                )
                                                 .await?,
                                         );
                                     }
-                                },
+                                }
                                 None => {
                                     res.extend(
                                         block_pruner
