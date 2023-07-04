@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use itertools::Itertools;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
@@ -206,11 +207,18 @@ impl UnusedColumnPruner {
                 ))
             }
             RelOperator::Sort(p) => {
+                let mut p = p.clone();
                 p.items.iter().for_each(|s| {
                     required.insert(s.index);
                 });
+
+                // If the query will be optimized by lazy reading, we don't need to do pre-projection.
+                if self.metadata.read().lazy_columns().is_empty() {
+                    p.pre_projection = Some(required.iter().sorted().copied().collect());
+                }
+
                 Ok(SExpr::create_unary(
-                    Arc::new(RelOperator::Sort(p.clone())),
+                    Arc::new(RelOperator::Sort(p)),
                     Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                 ))
             }

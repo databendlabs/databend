@@ -60,13 +60,13 @@ enum State {
     ReadRemain {
         part: PartInfoPtr,
         data_block: DataBlock,
-        filter: Value<BooleanType>,
+        filter: Option<Value<BooleanType>>,
     },
     MergeRemain {
         part: PartInfoPtr,
         merged_io_read_result: MergeIOReadResult,
         data_block: DataBlock,
-        filter: Value<BooleanType>,
+        filter: Option<Value<BooleanType>>,
     },
     PerformOperator(DataBlock),
     Output(Option<PartInfoPtr>, DataBlock),
@@ -260,23 +260,23 @@ impl Processor for MutationSource {
                                         self.state = State::ReadRemain {
                                             part,
                                             data_block,
-                                            filter: Value::Column(filter),
+                                            filter: Some(Value::Column(filter)),
                                         }
                                     }
                                 }
                             }
                             MutationAction::Update => {
+                                data_block.add_column(BlockEntry::new(
+                                    DataType::Boolean,
+                                    Value::upcast(predicates),
+                                ));
                                 if self.remain_reader.is_none() {
-                                    data_block.add_column(BlockEntry::new(
-                                        DataType::Boolean,
-                                        Value::upcast(predicates),
-                                    ));
                                     self.state = State::PerformOperator(data_block);
                                 } else {
                                     self.state = State::ReadRemain {
                                         part,
                                         data_block,
-                                        filter: predicates,
+                                        filter: None,
                                     };
                                 }
                             }
@@ -309,22 +309,15 @@ impl Processor for MutationSource {
                         &self.storage_format,
                     )?;
 
-                    match self.action {
-                        MutationAction::Deletion => {
-                            let remain_block = remain_block.filter_boolean_value(&filter)?;
-                            for col in remain_block.columns() {
-                                data_block.add_column(col.clone());
-                            }
-                        }
-                        MutationAction::Update => {
-                            for col in remain_block.columns() {
-                                data_block.add_column(col.clone());
-                            }
-                            data_block.add_column(BlockEntry::new(
-                                DataType::Boolean,
-                                Value::upcast(filter),
-                            ));
-                        }
+                    let remain_block = if let Some(filter) = filter {
+                        // for deletion.
+                        remain_block.filter_boolean_value(&filter)?
+                    } else {
+                        remain_block
+                    };
+
+                    for col in remain_block.columns() {
+                        data_block.add_column(col.clone());
                     }
                 } else {
                     return Err(ErrorCode::Internal("It's a bug. Need remain reader"));

@@ -396,6 +396,7 @@ pub struct Sort {
 
     // If the sort plan is after the exchange plan
     pub after_exchange: bool,
+    pub pre_projection: Option<Vec<IndexType>>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -403,7 +404,19 @@ pub struct Sort {
 
 impl Sort {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
+        let input_schema = self.input.output_schema()?;
+        if let Some(proj) = &self.pre_projection {
+            let fields = proj
+                .iter()
+                .filter_map(|index| input_schema.field_with_name(&index.to_string()).ok())
+                .cloned()
+                .collect::<Vec<_>>();
+            if fields.len() < input_schema.fields().len() {
+                // Only if the projection is not a full projection, we need to add a projection transform.
+                return Ok(DataSchemaRefExt::create(fields));
+            }
+        }
+        Ok(input_schema)
     }
 }
 
