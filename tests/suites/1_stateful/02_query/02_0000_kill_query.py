@@ -37,12 +37,28 @@ with NativeClient(name="client1>") as client1:
     res = mycursor.fetchone()
     kill_query = "kill query " + str(res[0]) + ";"
     mycursor.execute(kill_query)
-    time.sleep(0.1)
-    mycursor.execute(
-        "SELECT * FROM system.processes WHERE extra_info LIKE '%SELECT max(number)%' AND extra_info NOT LIKE '%system.processes%';"
-    )
-    res = mycursor.fetchone()
+    time.sleep(0.5)
 
     ## TODO NEW EXPRESSION
     ## assert res is None
     client1.expect(prompt)
+
+with NativeClient(name="client2>") as client2:
+    client2.expect(prompt)
+    client2.expect("")
+
+    client2.send("SELECT * FROM slow_async(5, 100);")
+    time.sleep(0.5)
+
+    mycursor = mydb.cursor()
+    mycursor.execute(
+        "SELECT mysql_connection_id FROM system.processes WHERE extra_info LIKE '%slow_async%' AND extra_info NOT LIKE '%system.processes%';"
+    )
+    res = mycursor.fetchone()
+    kill_query = "kill query " + str(res[0]) + ";"
+    mycursor.execute(kill_query)
+    time.sleep(0.5)
+
+    ## TODO NEW EXPRESSION
+    ## assert res is None
+    client2.expect(prompt)
