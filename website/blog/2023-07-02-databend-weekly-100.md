@@ -44,7 +44,6 @@ Stay connected with the latest news about Databend.
 
 Databend v1.2 was officially released on June 29, 2023! Thanks to all the community partners who participated and to everyone who contributed to making Databend better!
 
-The new version has many new features, including:
 
 - New Data Type: `BITMAP`
 - Direct Query of CSV/TSV/NDJSON Files Using Column Position
@@ -65,9 +64,9 @@ If you are interested in learning more, please check out the resources listed be
 
 Discover some fascinating code snippets or projects that showcase our work or learning journey.
 
-### Introduction to Databend Long Run Tests
+### Databend Long Run Tests
 
-Databend's long run tests aim to verify the correctness and performance of the system under heavy load and concurrency. These tests include concurrent large-scale data ingestion, table maintenance (optimization, re-clustering, and vacuuming), as well as querying.
+Databend's long run tests the correctness and performance of the system under heavy load and concurrency. This includes concurrent large-scale data ingestion, table maintenance (optimization, re-clustering, and vacuuming), as well as querying.
 
 The test will run a series of SQL and validation commands to verify the results. It will begin by executing the pre-test scripts (`_before.sh`), followed by repeatedly running concurrent test scripts, and finally executing post-test scripts (`_after.sh`). All event logs will be stored in a table on Databend for further analysis.
 
