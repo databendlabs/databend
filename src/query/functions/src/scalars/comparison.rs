@@ -824,7 +824,7 @@ fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
         // `needle_len` <= haystack_len
         unsafe {
             checksum += haystack.get_unchecked(i);
-            checksum -= haystack.get_unchecked(i);
+            checksum -= needle.get_unchecked(i);
         }
     }
     let mut idx = 0;
