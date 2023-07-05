@@ -71,14 +71,16 @@ impl Interpreter for VacuumDropTablesInterpreter {
         };
         let retention_time = chrono::Utc::now() - chrono::Duration::hours(hours);
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
+        // if database if empty, vacuum all tables
+        let filter = if self.plan.database.is_empty() {
+            Some(TableInfoFilter::AllDroppedTables(Some(retention_time)))
+        } else {
+            Some(TableInfoFilter::Dropped(Some(retention_time)))
+        };
 
         let tenant = self.ctx.get_tenant();
         let tables = catalog
-            .list_tables_history(
-                &tenant,
-                &self.plan.database,
-                Some(TableInfoFilter::Dropped(Some(retention_time))),
-            )
+            .list_tables_history(&tenant, &self.plan.database, filter)
             .await?;
 
         let handler = get_vacuum_handler();

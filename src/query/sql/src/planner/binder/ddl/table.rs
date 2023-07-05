@@ -959,7 +959,14 @@ impl Binder {
             option,
         } = stmt;
 
-        let (catalog, database) = self.normalize_object_identifier_double(catalog, database);
+        let catalog = catalog
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| "".to_string());
 
         let option = {
             let retain_hours = match option.retain_hours {

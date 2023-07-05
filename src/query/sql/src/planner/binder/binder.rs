@@ -588,23 +588,6 @@ impl<'a> Binder {
         (catalog_name, database_name, object_name)
     }
 
-    /// Normalize [[<catalog>].<database>]
-    pub fn normalize_object_identifier_double(
-        &self,
-        catalog: &Option<Identifier>,
-        database: &Option<Identifier>,
-    ) -> (String, String) {
-        let catalog_name = catalog
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database_name = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        (catalog_name, database_name)
-    }
-
     /// Normalize <identifier>
     pub fn normalize_object_identifier(&self, ident: &Identifier) -> String {
         normalize_identifier(ident, &self.name_resolution_ctx).name
