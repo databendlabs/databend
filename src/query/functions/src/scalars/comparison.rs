@@ -681,7 +681,7 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
     let has_start_percent = pattern[0] == b'%';
     let mut has_end_percent = false;
     let mut segments = Vec::new();
-    let mut can_fast_pattern = true;
+    let mut simple_pattern = true;
     if has_start_percent {
         if is_pruning {
             return PatternType::ComplexPattern;
@@ -705,7 +705,7 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
                 }
             }
             b'\\' => {
-                can_fast_pattern = false;
+                simple_pattern = false;
                 if index < len - 1 {
                     index += 1;
                     if !is_pruning && is_like_pattern_escape(pattern[index] as char) {
@@ -724,7 +724,7 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
         1 if has_end_percent => PatternType::EndOfPercent,
         2 if has_start_percent && has_end_percent => PatternType::SurroundByPercent,
         _ => {
-            if can_fast_pattern {
+            if simple_pattern {
                 if first_non_percent < len {
                     segments.push(pattern[first_non_percent..len].to_vec());
                 }
@@ -810,7 +810,9 @@ fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
         return None;
     }
     let offset = memchr(needle[0], haystack)?;
-    haystack = &haystack[offset..];
+    // # Safety
+    // The `offset` returned by `memchr` is less than `haystack_len`.
+    haystack = unsafe { haystack.get_unchecked(offset..) };
     let haystack_len = haystack.len();
     if needle_len > haystack_len {
         return None;
@@ -818,22 +820,34 @@ fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
     // Inspired by fast_strstr (https://github.com/RaphaelJ/fast_strstr).
     let mut checksum = 0;
     for i in 0..needle_len {
-        checksum += haystack[i];
-        checksum -= needle[i];
+        // # Safety
+        // `needle_len` <= haystack_len
+        unsafe {
+            checksum += haystack.get_unchecked(i);
+            checksum -= haystack.get_unchecked(i);
+        }
     }
     let mut idx = 0;
     loop {
-        if checksum == 0
-            && haystack[idx] == needle[0]
-            && &haystack[idx..(idx + needle_len)] == needle
-        {
-            return Some(offset + idx + needle_len);
+        // # Safety
+        // `idx` < `haystack_len` and `idx` + `needle_len` <= `haystack_len`.
+        unsafe {
+            if checksum == 0
+                && haystack[idx] == needle[0]
+                && haystack.get_unchecked(idx..(idx + needle_len)) == needle
+            {
+                return Some(offset + idx + needle_len);
+            }
         }
         if idx + needle_len >= haystack_len {
             return None;
         }
-        checksum -= haystack[idx];
-        checksum += haystack[idx + needle_len];
+        // # Safety
+        // `idx` < `haystack_len` and `idx` + `needle_len` < `haystack_len`.
+        unsafe {
+            checksum -= haystack.get_unchecked(idx);
+            checksum += haystack.get_unchecked(idx + needle_len);
+        }
         idx += 1;
     }
 }
@@ -846,31 +860,42 @@ fn simple_like(
     segments: &Vec<Vec<u8>>,
 ) -> bool {
     let haystack_len = haystack.len();
-    let mut haystack_start_idx = 0;
     let segments_len = segments.len();
+    debug_assert!(haystack_len > 0);
+    debug_assert!(segments_len > 1);
+    let mut haystack_start_idx = 0;
     let mut segment_idx = 0;
     if !has_start_percent {
         let segment = &segments[0];
-        let haystack_end_idx = haystack_start_idx + segment.len();
-        if haystack_end_idx > haystack_len {
+        let haystack_end = haystack_start_idx + segment.len();
+        if haystack_end > haystack_len {
             return false;
         }
-        if &haystack[haystack_start_idx..haystack_end_idx] != segment {
+        // # Safety
+        // `haystack_start_idx` = 0, `haystack_len` > 0, `haystack_end` <= `haystack_len`.
+        if unsafe { haystack.get_unchecked(haystack_start_idx..haystack_end) } != segment {
             return false;
         }
-        haystack_start_idx = haystack_end_idx;
+        haystack_start_idx = haystack_end;
         segment_idx += 1;
     }
     while segment_idx < segments_len {
+        if haystack_start_idx >= haystack_len {
+            return false;
+        }
         let segment = &segments[segment_idx];
         if segment_idx == segments_len - 1 && !has_end_percent {
             if haystack_len - haystack_start_idx < segment.len() {
                 return false;
             }
-            if &haystack[(haystack_len - segment.len())..] != segment {
+            // # Safety
+            // `haystack_start_idx` + `segment.len()` <= `haystack_len`.
+            if unsafe { haystack.get_unchecked((haystack_len - segment.len())..) } != segment {
                 return false;
             }
-        } else if let Some(offset) = find(&haystack[haystack_start_idx..], segment) {
+        } else if let Some(offset) =
+            unsafe { find(haystack.get_unchecked(haystack_start_idx..), segment) }
+        {
             haystack_start_idx += offset;
         } else {
             return false;
