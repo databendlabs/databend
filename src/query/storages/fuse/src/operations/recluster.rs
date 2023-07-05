@@ -53,9 +53,9 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         if self.cluster_key_meta.is_none() {
-            return Ok(());
+            return Ok(0);
         }
 
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -63,7 +63,7 @@ impl FuseTable {
             val
         } else {
             // no snapshot, no recluster.
-            return Ok(());
+            return Ok(0);
         };
 
         let schema = self.table_info.schema();
@@ -104,7 +104,7 @@ impl FuseTable {
 
         let need_recluster = mutator.target_select(blocks_map).await?;
         if !need_recluster {
-            return Ok(());
+            return Ok(0);
         }
 
         let block_metas: Vec<_> = mutator
@@ -112,6 +112,7 @@ impl FuseTable {
             .iter()
             .map(|meta| (None, meta.clone()))
             .collect();
+        let block_count = block_metas.len() as u64;
         let (statistics, parts) = self.read_partitions_with_metas(
             self.table_info.schema(),
             None,
@@ -223,6 +224,6 @@ impl FuseTable {
         pipeline.add_sink(|input| {
             CommitSink::try_create(self, ctx.clone(), None, snapshot_gen.clone(), input, None)
         })?;
-        Ok(())
+        Ok(block_count)
     }
 }

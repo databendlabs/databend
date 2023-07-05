@@ -10,6 +10,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'auth_string'                   | 'system'             | 'users'               | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'auth_type'                     | 'system'             | 'users'               | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'auto_increment'                | 'information_schema' | 'tables'              | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
+| 'block_count'                   | 'system'             | 'clustering_history'  | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'byte_size'                     | 'system'             | 'clustering_history'  | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'cardinality'                   | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'cargo_features'                | 'system'             | 'build_options'       | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                       | 'system'             | 'databases'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -216,8 +218,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'query_kind'                    | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'query_start_time'              | 'system'             | 'query_log'           | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'query_text'                    | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'reclustered_bytes'             | 'system'             | 'clustering_history'  | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
-| 'reclustered_rows'              | 'system'             | 'clustering_history'  | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'referenced_column_name'        | 'information_schema' | 'key_column_usage'    | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'referenced_table_name'         | 'information_schema' | 'key_column_usage'    | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'referenced_table_schema'       | 'information_schema' | 'key_column_usage'    | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
@@ -225,6 +225,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'result_bytes'                  | 'system'             | 'query_log'           | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'result_rows'                   | 'system'             | 'query_log'           | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'result_size'                   | 'system'             | 'query_cache'         | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'row_count'                     | 'system'             | 'clustering_history'  | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'scan_bytes'                    | 'system'             | 'query_log'           | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'scan_io_bytes'                 | 'system'             | 'query_log'           | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'scan_io_bytes_cost_ms'         | 'system'             | 'query_log'           | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
