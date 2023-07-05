@@ -476,8 +476,12 @@ pub struct VacuumDropTableStmt {
 impl Display for VacuumDropTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "VACUUM DROP TABLE ")?;
-        write_period_separated_list(f, self.catalog.iter().chain(&self.database))?;
-        write!(f, " {}", &self.option)?;
+        if self.catalog.is_some() || self.database.is_some() {
+            write!(f, "FROM ")?;
+            write_period_separated_list(f, self.catalog.iter().chain(&self.database))?;
+            write!(f, " ")?;
+        }
+        write!(f, "{}", &self.option)?;
 
         Ok(())
     }
@@ -585,10 +589,14 @@ pub struct VacuumTableOption {
 impl Display for VacuumTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if let Some(retain_hours) = &self.retain_hours {
-            write!(f, " RETAIN {} HOURS", retain_hours)?;
+            write!(f, "RETAIN {} HOURS", retain_hours)?;
         }
         if self.dry_run.is_some() {
-            write!(f, " DRY RUN")?;
+            if self.retain_hours.is_some() {
+                write!(f, " DRY RUN")?;
+            } else {
+                write!(f, "DRY RUN")?;
+            }
         }
         Ok(())
     }

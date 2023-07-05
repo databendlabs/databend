@@ -7453,7 +7453,7 @@ VacuumTable(
 ---------- Input ----------
 VACUUM TABLE t RETAIN 4 HOURS DRY RUN;
 ---------- Output ---------
-VACUUM TABLE t  RETAIN 4 HOURS DRY RUN
+VACUUM TABLE t RETAIN 4 HOURS DRY RUN
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -7488,7 +7488,7 @@ VacuumTable(
 ---------- Input ----------
 VACUUM TABLE t RETAIN 40 HOURS;
 ---------- Output ---------
-VACUUM TABLE t  RETAIN 40 HOURS
+VACUUM TABLE t RETAIN 40 HOURS
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -7506,6 +7506,94 @@ VacuumTable(
                 Literal {
                     span: Some(
                         22..24,
+                    ),
+                    lit: UInt64(
+                        40,
+                    ),
+                },
+            ),
+            dry_run: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE RETAIN 20 HOURS;
+---------- Output ---------
+VACUUM DROP TABLE RETAIN 20 HOURS
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: None,
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        25..27,
+                    ),
+                    lit: UInt64(
+                        20,
+                    ),
+                },
+            ),
+            dry_run: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN;
+---------- Output ---------
+VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: None,
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        25..27,
+                    ),
+                    lit: UInt64(
+                        30,
+                    ),
+                },
+            ),
+            dry_run: Some(
+                (),
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE FROM db RETAIN 40 HOURS;
+---------- Output ---------
+VACUUM DROP TABLE FROM db RETAIN 40 HOURS
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Some(
+                    23..25,
+                ),
+            },
+        ),
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        33..35,
                     ),
                     lit: UInt64(
                         40,
