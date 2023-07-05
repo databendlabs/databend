@@ -88,6 +88,10 @@ pip install notebook
 
 2. Install dependencies with pip:
 
+:::note
+To follow this tutorial, you'll need SQLAlchemy version 2.0.0 or below. Please note that in SQLAlchemy 2.0, the result.DataFrame() method has been removed. Instead, you can use the pandas library to directly create a DataFrame from query results and perform plotting.
+:::
+
 ```shell
 pip install ipython-sql databend-sqlalchemy
 pip install sqlalchemy
