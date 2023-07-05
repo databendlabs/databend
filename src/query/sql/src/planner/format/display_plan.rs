@@ -68,7 +68,6 @@ impl Plan {
 
             // Tables
             Plan::ShowCreateTable(show_create_table) => Ok(format!("{:?}", show_create_table)),
-            Plan::AttachTable(attach_table) => Ok(format!("{:?}", attach_table)),
             Plan::CreateTable(create_table) => Ok(format!("{:?}", create_table)),
             Plan::DropTable(drop_table) => Ok(format!("{:?}", drop_table)),
             Plan::UndropTable(undrop_table) => Ok(format!("{:?}", undrop_table)),

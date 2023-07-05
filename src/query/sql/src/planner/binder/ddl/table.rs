@@ -71,6 +71,7 @@ use common_storages_view::view_table::VIEW_ENGINE;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::debug;
 
@@ -89,7 +90,6 @@ use crate::planner::semantic::IdentifierNormalizer;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
-use crate::plans::AttachTablePlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
@@ -572,31 +572,51 @@ impl Binder {
         &mut self,
         stmt: &AttachTableStmt,
     ) -> Result<Plan> {
-        let catalog_name = self.ctx.get_current_catalog();
-        let database_name = stmt
+        let catalog = self.ctx.get_current_catalog();
+        let database = stmt
             .database
             .as_ref()
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let table_name = normalize_identifier(&stmt.table, &self.name_resolution_ctx).name;
-        let engine = Engine::Fuse;
-        if stmt.table_options.len() != 1 {
-            return Err(ErrorCode::BadArguments(
-                "Incorrect ATTACH query: required one table option",
-            ));
-        }
-        let table_option = stmt.table_options.clone();
+        let table = normalize_identifier(&stmt.table, &self.name_resolution_ctx).name;
+
         let mut uri = stmt.uri_location.clone();
-        let (sp, _) = parse_uri_location(&mut uri)?;
+        let (sp, path) = parse_uri_location(&mut uri)?;
+        let mut parts = path.split('/').collect::<Vec<_>>();
+        if parts.len() < 2 {
+            return Err(ErrorCode::BadArguments(format!(
+                "Invalid path: {}",
+                stmt.uri_location
+            )));
+        }
+        let storage_prefix = parts.split_off(parts.len() - 2).join("/");
+        let mut options = BTreeMap::new();
+        options.insert(OPT_KEY_STORAGE_PREFIX.to_string(), storage_prefix);
 
         // create a temporary op to check if params is correct
         DataOperator::try_create(&sp).await?;
-        Ok(Plan::AttachTable(Box::new(AttachTablePlan {
-            catalog: catalog_name,
-            database: database_name,
-            table: table_name,
-            options: table_option,
-            engine: engine,
+
+        // Path ends with "/" means it's a directory.
+        let part_prefix = if uri.path.ends_with('/') {
+            uri.part_prefix.clone()
+        } else {
+            "".to_string()
+        };
+
+        Ok(Plan::CreateTable(Box::new(CreateTablePlan {
+            if_not_exists: false,
+            tenant: self.ctx.get_tenant(),
+            catalog,
+            database,
+            table,
+            options: BTreeMap::new(),
+            engine: Engine::Fuse,
+            cluster_key: None,
+            as_select: None,
+            schema: Arc::new(TableSchema::default()),
+            field_comments: vec![],
+            storage_params: Some(sp),
+            part_prefix,
         })))
     }
 

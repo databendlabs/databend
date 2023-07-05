@@ -24,7 +24,6 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
 use super::data_mask::CreateDatamaskPolicyPlan;
-use super::AttachTablePlan;
 use super::CopyIntoTableMode;
 use super::CreateIndexPlan;
 use super::CreateShareEndpointPlan;
@@ -163,7 +162,6 @@ pub enum Plan {
     // Tables
     ShowCreateTable(Box<ShowCreateTablePlan>),
     DescribeTable(Box<DescribeTablePlan>),
-    AttachTable(Box<AttachTablePlan>),
     CreateTable(Box<CreateTablePlan>),
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
@@ -394,9 +392,6 @@ impl Display for Plan {
             }
             Plan::SetOptions(..) => {
                 write!(f, "SetOptions")
-            }
-            Plan::AttachTable(_) => {
-                write!(f, "AttachTable")
             }
         }
     }

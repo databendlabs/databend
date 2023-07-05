@@ -486,13 +486,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let attach_table = map(
         rule! {
-            ATTACH ~ TABLE ~ #period_separated_idents_1_to_2 ~ #uri_location ~ #table_option
+            ATTACH ~ TABLE ~ #period_separated_idents_1_to_2 ~ #uri_location
         },
-        |(_, _, (database, table), uri_location, table_options)| {
+        |(_, _, (database, table), uri_location)| {
             Statement::AttachTable(AttachTableStmt {
                 database,
                 table,
-                table_options,
                 uri_location,
             })
         },
@@ -1342,7 +1341,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
             | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
             | #show_drop_tables_status : "`SHOW DROP TABLES [FROM <database>]`"
-            | #attach_table : "`ATTACH TABLE [<database>.]<table> <uri> <table_options>`"
+            | #attach_table : "`ATTACH TABLE [<database>.]<table> <uri>`"
             | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
             | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
             | #undrop_table : "`UNDROP TABLE [<database>.]<table>`"

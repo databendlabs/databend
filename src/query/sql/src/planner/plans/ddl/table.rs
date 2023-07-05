@@ -59,21 +59,6 @@ impl CreateTablePlan {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct AttachTablePlan {
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    pub options: TableOptions,
-    pub engine: Engine,
-}
-
-impl AttachTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![])
-    }
-}
-
 /// Desc.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DescribeTablePlan {
