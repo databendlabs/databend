@@ -350,6 +350,7 @@ impl Catalog for MutableCatalog {
                 .meta
                 .get_table_history(ListTableReq::new_with_filter(tenant, db_name, filter))
                 .await?;
+
             let storage = ctx.storage_factory.clone();
             table_infos.iter().try_fold(vec![], |mut acc, item| {
                 let tbl = storage.get_table(item.as_ref())?;

@@ -32,6 +32,11 @@ async fn do_vacuum_drop_table(
     table: Arc<dyn Table>,
     dry_run_limit: Option<usize>,
 ) -> Result<Option<Vec<(String, String)>>> {
+    // storage_params is_some means it is an external table, ignore
+    if table.get_table_info().meta.storage_params.is_some() {
+        info!("ignore external table {}", table.get_table_info().name);
+        return Ok(None);
+    }
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
     let operator = fuse_table.get_operator_ref();

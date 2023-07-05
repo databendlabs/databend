@@ -65,3 +65,32 @@ echo "select * from test_vacuum_drop_3.a" | $MYSQL_CLIENT_CONNECT
 echo "drop database if exists test_vacuum_drop" | $MYSQL_CLIENT_CONNECT
 echo "drop database if exists test_vacuum_drop_2" | $MYSQL_CLIENT_CONNECT
 echo "drop database if exists test_vacuum_drop_3" | $MYSQL_CLIENT_CONNECT
+
+# test external table
+echo "drop table if exists table_drop_external_location;" | $MYSQL_CLIENT_CONNECT
+
+## Create table
+echo "create table table_drop_external_location(a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $MYSQL_CLIENT_CONNECT
+
+table_inserts=(
+  "insert into table_drop_external_location(a) values(888)"
+  "insert into table_drop_external_location(a) values(1024)"
+)
+
+for i in "${table_inserts[@]}"; do
+  echo "$i" | $MYSQL_CLIENT_CONNECT
+done
+
+## Select table
+echo "select * from table_drop_external_location order by a;" | $MYSQL_CLIENT_CONNECT
+
+drop table table_drop_external_location;
+
+echo "vacuum drop table retain 0 hours" | $MYSQL_CLIENT_CONNECT
+
+undrop table table_drop_external_location;
+
+echo "select * from table_drop_external_location order by a;" | $MYSQL_CLIENT_CONNECT
+
+## Drop table
+echo "drop table if exists table_drop_external_location;" | $MYSQL_CLIENT_CONNECT
