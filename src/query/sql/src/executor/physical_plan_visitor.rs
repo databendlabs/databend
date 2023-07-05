@@ -203,6 +203,7 @@ pub trait PhysicalPlanReplacer {
             order_by: plan.order_by.clone(),
             limit: plan.limit,
             after_exchange: plan.after_exchange,
+            pre_projection: plan.pre_projection.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -319,6 +320,7 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             srf_exprs: plan.srf_exprs.clone(),
+            unused_indices: plan.unused_indices.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }

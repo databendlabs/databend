@@ -33,7 +33,8 @@ use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 
-use crate::operations::common::AppendTransform;
+use crate::operations::common::TransformSerializeBlock;
+use crate::operations::common::TransformSerializeSegment;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
@@ -57,7 +58,6 @@ impl FuseTable {
                 })?;
             }
             AppendMode::Copy => {
-                let size = pipeline.output_len();
                 pipeline.try_resize(1)?;
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
                     Ok(ProcessorPtr::create(TransformCompact::try_create(
@@ -66,23 +66,28 @@ impl FuseTable {
                         BlockCompactorForCopy::new(block_thresholds),
                     )?))
                 })?;
-                pipeline.try_resize(size)?;
+                pipeline.try_resize(ctx.get_settings().get_max_threads()? as usize)?;
             }
         }
 
         let cluster_stats_gen =
             self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
         pipeline.add_transform(|input, output| {
-            let proc = AppendTransform::new(
+            let proc = TransformSerializeBlock::new(
                 ctx.clone(),
                 input,
                 output,
                 self,
                 cluster_stats_gen.clone(),
-                block_thresholds,
             );
             proc.into_processor()
         })?;
+
+        pipeline.add_transform(|input, output| {
+            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
+            proc.into_processor()
+        })?;
+
         Ok(())
     }
 

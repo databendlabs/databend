@@ -27,6 +27,7 @@ use common_arrow::parquet::page::CompressedPage;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
+use common_base::runtime::GLOBAL_MEM_STAT;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -277,6 +278,25 @@ fn try_next_block(
             "deserializer from row group: fail to get a chunk",
         )),
         Some(Err(cause)) => Err(ErrorCode::from(cause)),
-        Some(Ok(chunk)) => DataBlock::from_arrow_chunk(&chunk, schema),
+        Some(Ok(chunk)) => {
+            let (mem, peak_mem) = if tracing::enabled!(tracing::Level::DEBUG) {
+                (
+                    GLOBAL_MEM_STAT.get_memory_usage(),
+                    GLOBAL_MEM_STAT.get_peak_memory_usage(),
+                )
+            } else {
+                (0, 0)
+            };
+
+            let block = DataBlock::from_arrow_chunk(&chunk, schema);
+            if tracing::enabled!(tracing::Level::DEBUG) {
+                let mem_new = GLOBAL_MEM_STAT.get_memory_usage();
+                let peak_mem_new = GLOBAL_MEM_STAT.get_memory_usage();
+                tracing::debug!(
+                    "load new arrow chunk, mem: {mem}, peak_mem: {peak_mem}; to block, mem {mem_new},  peak_mem: {peak_mem_new}"
+                );
+            };
+            block
+        }
     }
 }

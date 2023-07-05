@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::backtrace::Backtrace;
 use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -24,6 +23,7 @@ use common_meta_types::MetaAPIError;
 use common_meta_types::MetaError;
 
 use crate::exception::ErrorCodeBacktrace;
+use crate::exception_backtrace::capture;
 use crate::ErrorCode;
 use crate::Span;
 
@@ -64,9 +64,10 @@ impl From<anyhow::Error> for ErrorCode {
     fn from(error: anyhow::Error) -> Self {
         ErrorCode::create(
             1002,
+            "anyhow",
             format!("{}, source: {:?}", error, error.source()),
             Some(Box::new(OtherErrors::AnyHow { error })),
-            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+            capture(),
         )
     }
 }
@@ -131,23 +132,13 @@ impl From<bincode::error::DecodeError> for ErrorCode {
 
 impl From<bincode::serde::EncodeError> for ErrorCode {
     fn from(error: bincode::serde::EncodeError) -> Self {
-        ErrorCode::create(
-            1002,
-            format!("{error:?}"),
-            None,
-            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
-        )
+        ErrorCode::create(1002, "EncodeError", format!("{error:?}"), None, capture())
     }
 }
 
 impl From<bincode::serde::DecodeError> for ErrorCode {
     fn from(error: bincode::serde::DecodeError) -> Self {
-        ErrorCode::create(
-            1002,
-            format!("{error:?}"),
-            None,
-            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
-        )
+        ErrorCode::create(1002, "DecodeError", format!("{error:?}"), None, capture())
     }
 }
 
@@ -218,6 +209,7 @@ impl From<prost::EncodeError> for ErrorCode {
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SerializedError {
     pub code: u16,
+    pub name: String,
     pub message: String,
     pub span: Span,
     pub backtrace: String,
@@ -233,6 +225,7 @@ impl From<ErrorCode> for SerializedError {
     fn from(e: ErrorCode) -> Self {
         SerializedError {
             code: e.code(),
+            name: e.name(),
             message: e.message(),
             span: e.span(),
             backtrace: e.backtrace_str(),
@@ -244,6 +237,7 @@ impl From<SerializedError> for ErrorCode {
     fn from(se: SerializedError) -> Self {
         ErrorCode::create(
             se.code,
+            se.name,
             se.message,
             None,
             Some(ErrorCodeBacktrace::Serialized(Arc::new(se.backtrace))),
@@ -269,6 +263,7 @@ impl From<tonic::Status> for ErrorCode {
                     Ok(serialized_error) => match serialized_error.backtrace.len() {
                         0 => ErrorCode::create(
                             serialized_error.code,
+                            serialized_error.name,
                             serialized_error.message,
                             None,
                             None,
@@ -276,6 +271,7 @@ impl From<tonic::Status> for ErrorCode {
                         .set_span(serialized_error.span),
                         _ => ErrorCode::create(
                             serialized_error.code,
+                            serialized_error.name,
                             serialized_error.message,
                             None,
                             Some(ErrorCodeBacktrace::Serialized(Arc::new(
@@ -313,6 +309,7 @@ impl From<ErrorCode> for tonic::Status {
     fn from(err: ErrorCode) -> Self {
         let error_json = serde_json::to_vec::<SerializedError>(&SerializedError {
             code: err.code(),
+            name: err.name(),
             message: err.message(),
             span: err.span(),
             backtrace: {

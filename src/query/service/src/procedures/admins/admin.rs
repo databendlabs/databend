@@ -14,6 +14,7 @@
 
 use super::tenant_quota::TenantQuotaProcedure;
 use crate::procedures::admins::license_info::LicenseInfoProcedure;
+use crate::procedures::admins::SuggestedBackgroundTasksProcedure;
 use crate::procedures::ProcedureFactory;
 
 pub struct AdminProcedure;
@@ -28,5 +29,9 @@ impl AdminProcedure {
             "admin$license_info",
             Box::new(LicenseInfoProcedure::try_create),
         );
+        factory.register(
+            "admin$suggested_background_tasks",
+            Box::new(SuggestedBackgroundTasksProcedure::try_create),
+        )
     }
 }

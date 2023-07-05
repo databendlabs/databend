@@ -16,7 +16,9 @@ use async_trait::async_trait;
 use common_exception::Result;
 use common_meta_app::background::BackgroundJobIdent;
 use common_meta_app::background::BackgroundJobInfo;
+use common_meta_app::background::BackgroundJobParams;
 use common_meta_app::background::BackgroundJobStatus;
+
 /// A trait for implementing a background job
 ///
 /// Example implementation:
@@ -41,10 +43,10 @@ use common_meta_app::background::BackgroundJobStatus;
 pub trait Job: JobClone {
     /// Runs the job
     async fn run(&mut self);
-    fn get_info(&self) -> BackgroundJobInfo;
-
     fn get_name(&self) -> BackgroundJobIdent;
+    async fn get_info(&self) -> Result<BackgroundJobInfo>;
     async fn update_job_status(&mut self, status: BackgroundJobStatus) -> Result<()>;
+    async fn update_job_params(&mut self, param: BackgroundJobParams) -> Result<()>;
 }
 
 pub trait JobClone {

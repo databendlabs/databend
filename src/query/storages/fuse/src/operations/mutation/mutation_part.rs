@@ -22,6 +22,46 @@ use common_exception::Result;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::ClusterStatistics;
 
+use crate::pruning::DeletedSegmentInfo;
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
+pub struct MutationDeletedSegment {
+    pub deleted_segment: DeletedSegmentInfo,
+}
+
+#[typetag::serde(name = "mutation_delete_segment")]
+impl PartInfo for MutationDeletedSegment {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match info.as_any().downcast_ref::<MutationDeletedSegment>() {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
+
+    fn hash(&self) -> u64 {
+        self.deleted_segment.hash()
+    }
+}
+
+impl MutationDeletedSegment {
+    pub fn create(deleted_segment: DeletedSegmentInfo) -> Self {
+        MutationDeletedSegment { deleted_segment }
+    }
+
+    pub fn from_part(info: &PartInfoPtr) -> Result<&MutationDeletedSegment> {
+        match info.as_any().downcast_ref::<MutationDeletedSegment>() {
+            Some(part_ref) => Ok(part_ref),
+            None => Err(ErrorCode::Internal(
+                "Cannot downcast from PartInfo to MutationDeletedSegment.",
+            )),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct MutationPartInfo {
     pub index: BlockMetaIndex,

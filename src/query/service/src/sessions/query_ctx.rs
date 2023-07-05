@@ -82,6 +82,13 @@ use crate::storages::Table;
 const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub enum Origin {
+    #[default]
+    Default,
+    HttpHandler,
+    BuiltInProcedure,
+}
 
 #[derive(Clone)]
 pub struct QueryContext {
@@ -92,6 +99,7 @@ pub struct QueryContext {
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
+    origin: Arc<RwLock<Origin>>,
 }
 
 impl QueryContext {
@@ -112,6 +120,7 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
+            origin: Arc::new(RwLock::new(Origin::Default)),
         })
     }
 
@@ -161,6 +170,14 @@ impl QueryContext {
         };
 
         Ok(())
+    }
+
+    pub fn set_origin(&self, origin: Origin) {
+        let mut o = self.origin.write();
+        *o = origin;
+    }
+    pub fn get_origin(&self) -> Origin {
+        self.origin.read().clone()
     }
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
@@ -337,6 +354,16 @@ impl TableContext for QueryContext {
 
     fn set_cacheable(&self, cacheable: bool) {
         self.shared.cacheable.store(cacheable, Ordering::Release);
+    }
+
+    fn get_can_scan_from_agg_index(&self) -> bool {
+        self.shared.can_scan_from_agg_index.load(Ordering::Acquire)
+    }
+
+    fn set_can_scan_from_agg_index(&self, enable: bool) {
+        self.shared
+            .can_scan_from_agg_index
+            .store(enable, Ordering::Release);
     }
 
     fn attach_query_str(&self, kind: String, query: String) {
