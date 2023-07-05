@@ -65,7 +65,7 @@ message BackgroundTaskInfo {
     string message = 6;
     optional CompactionStats compaction_task_stats = 7;
     optional VacuumStats vacuum_stats = 8;
-
+    optional ManualTriggerParams manual_trigger = 9;
     // Audit
     optional BackgroundJobIdent creator = 90;
     string created_at = 91;
@@ -81,6 +81,15 @@ message BackgroundJobIdent {
     string name = 2;
 }
 
+message ManualTriggerParams {
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+
+    string id = 1;
+    UserIdentity trigger = 2;
+    string triggered_at = 3;
+}
+
 message BackgroundJobParams {
     enum BackgroundJobType {
         BACKGROUND_JOB_TYPE_ONE_SHOT = 0;
@@ -94,6 +103,9 @@ message BackgroundJobParams {
     uint64 scheduled_job_interval_seconds = 2;
     string scheduled_job_cron = 3;
     optional string scheduled_job_timezone = 4;
+
+    // Manual trigger
+    optional ManualTriggerParams manual_trigger = 5;
 }
 
 // contain real-time job status
@@ -111,6 +123,7 @@ message BackgroundJobStatus {
     optional string last_task_run_at = 5;
 
     optional string next_task_scheduled_time = 6;
+
 }
 
 message BackgroundJobInfo {

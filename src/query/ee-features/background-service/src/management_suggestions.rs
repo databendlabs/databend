@@ -12,9 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod background_service;
-mod management_suggestions;
+use common_meta_app::schema::TableStatistics;
+pub use serde::Deserialize;
+pub use serde::Serialize;
 
-pub use background_service::get_background_service_handler;
-pub use background_service::BackgroundServiceHandler;
-pub use management_suggestions::Suggestion;
+// external tagged
+// {"Compaction": {"need_compact_segment": false ...}}
+// details: https://serde.rs/enum-representations.html
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Suggestion {
+    Compaction {
+        need_compact_segment: bool,
+        need_compact_block: bool,
+        db_id: u64,
+        db_name: String,
+        table_id: u64,
+        table_name: String,
+        table_stats: TableStatistics,
+    },
+}
