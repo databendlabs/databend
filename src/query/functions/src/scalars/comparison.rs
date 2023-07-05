@@ -812,6 +812,9 @@ fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
     let offset = memchr(needle[0], haystack)?;
     haystack = &haystack[offset..];
     let haystack_len = haystack.len();
+    if needle_len > haystack_len {
+        return None;
+    }
     // Inspired by fast_strstr (https://github.com/RaphaelJ/fast_strstr).
     let mut checksum = 0;
     for i in 0..needle_len {
