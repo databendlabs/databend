@@ -18,4 +18,3 @@ mod table_args;
 
 pub use fuse_segment::FuseSegment;
 pub use fuse_segment_table::FuseSegmentTable;
-pub use table_args::parse_func_history_args;

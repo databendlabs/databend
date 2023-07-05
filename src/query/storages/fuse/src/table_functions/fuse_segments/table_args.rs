@@ -12,15 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::table_functions::string_value;
 use crate::table_functions::TableArgs;
 
-pub fn parse_func_history_args(table_args: &TableArgs) -> Result<(String, String, String)> {
-    let args = table_args.expect_all_positioned("fuse_blocks", Some(3))?;
-    let db = string_value(&args[0])?;
-    let tbl = string_value(&args[1])?;
-    let snapshot_id = string_value(&args[2])?;
-    Ok((db, tbl, snapshot_id))
+pub(crate) fn parse_func_table_args(
+    table_args: &TableArgs,
+) -> Result<(String, String, Option<String>)> {
+    let args = table_args.expect_all_positioned("fuse_segments", None)?;
+    match args.len() {
+        3 => {
+            let db = string_value(&args[0])?;
+            let tbl = string_value(&args[1])?;
+            let snapshot_id = string_value(&args[2])?;
+            Ok((db, tbl, Some(snapshot_id)))
+        }
+        2 => {
+            let db = string_value(&args[0])?;
+            let tbl = string_value(&args[1])?;
+            Ok((db, tbl, None))
+        }
+        _ => Err(ErrorCode::BadArguments(format!(
+            "expecting <database>, <table_name> and <snapshot_id> (as string literals), but got {:?}",
+            args
+        ))),
+    }
 }

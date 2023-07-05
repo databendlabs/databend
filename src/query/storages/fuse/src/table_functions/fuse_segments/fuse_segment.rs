@@ -16,15 +16,19 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_exception::Result;
-use common_expression::types::number::UInt64Type;
+use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::DataType;
+use common_expression::types::NumberColumnBuilder;
 use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
+use common_expression::types::NumberScalar;
+use common_expression::BlockEntry;
+use common_expression::Column;
 use common_expression::DataBlock;
-use common_expression::FromData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
+use common_expression::Value;
 use futures_util::TryStreamExt;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -38,40 +42,51 @@ use crate::FuseTable;
 pub struct FuseSegment<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
-    pub snapshot_id: String,
+    pub snapshot_id: Option<String>,
+    pub limit: Option<usize>,
 }
 
 impl<'a> FuseSegment<'a> {
-    pub fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable, snapshot_id: String) -> Self {
+    pub fn new(
+        ctx: Arc<dyn TableContext>,
+        table: &'a FuseTable,
+        snapshot_id: Option<String>,
+        limit: Option<usize>,
+    ) -> Self {
         Self {
             ctx,
             table,
             snapshot_id,
+            limit,
         }
     }
 
     #[async_backtrace::framed]
     pub async fn get_segments(&self) -> Result<DataBlock> {
         let tbl = self.table;
+        let snapshot_id = self.snapshot_id.clone();
         let maybe_snapshot = tbl.read_table_snapshot().await?;
         if let Some(snapshot) = maybe_snapshot {
-            // prepare the stream of snapshot
-            let snapshot_version = tbl.snapshot_format_version(None).await?;
-            let snapshot_location = tbl
-                .meta_location_generator
-                .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
-            let reader = MetaReaders::table_snapshot_reader(tbl.get_operator());
-            let mut snapshot_stream = reader.snapshot_history(
-                snapshot_location,
-                snapshot_version,
-                tbl.meta_location_generator().clone(),
-            );
-
             // find the element by snapshot_id in stream
-            while let Some((snapshot, _)) = snapshot_stream.try_next().await? {
-                if snapshot.snapshot_id.simple().to_string() == self.snapshot_id {
-                    return self.to_block(&snapshot.segments).await;
+            if let Some(snapshot_id) = snapshot_id {
+                // prepare the stream of snapshot
+                let snapshot_version = tbl.snapshot_format_version(None).await?;
+                let snapshot_location = tbl
+                    .meta_location_generator
+                    .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
+                let reader = MetaReaders::table_snapshot_reader(tbl.get_operator());
+                let mut snapshot_stream = reader.snapshot_history(
+                    snapshot_location,
+                    snapshot_version,
+                    tbl.meta_location_generator().clone(),
+                );
+                while let Some((snapshot, _)) = snapshot_stream.try_next().await? {
+                    if snapshot.snapshot_id.simple().to_string() == snapshot_id {
+                        return self.to_block(&snapshot.segments).await;
+                    }
                 }
+            } else {
+                return self.to_block(&snapshot.segments).await;
             }
         }
 
@@ -82,39 +97,85 @@ impl<'a> FuseSegment<'a> {
 
     #[async_backtrace::framed]
     async fn to_block(&self, segment_locations: &[Location]) -> Result<DataBlock> {
-        let len = segment_locations.len();
-        let mut format_versions: Vec<u64> = Vec::with_capacity(len);
-        let mut block_count: Vec<u64> = Vec::with_capacity(len);
-        let mut row_count: Vec<u64> = Vec::with_capacity(len);
-        let mut compressed: Vec<u64> = Vec::with_capacity(len);
-        let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
-        let mut file_location: Vec<Vec<u8>> = Vec::with_capacity(len);
+        let limit = self.limit.unwrap_or(usize::MAX);
+        let len = std::cmp::min(segment_locations.len(), limit);
+
+        let mut format_versions = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut block_count = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut row_count = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut compressed = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut uncompressed = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut file_location = StringColumnBuilder::with_capacity(len, 0);
 
         let segments_io = SegmentsIO::create(
             self.ctx.clone(),
             self.table.operator.clone(),
             self.table.schema(),
         );
-        let segments = segments_io
-            .read_segments::<Arc<SegmentInfo>>(segment_locations, true)
-            .await?;
-        for (idx, segment) in segments.into_iter().enumerate() {
-            let segment = segment?;
-            format_versions.push(segment_locations[idx].1);
-            block_count.push(segment.summary.block_count);
-            row_count.push(segment.summary.row_count);
-            compressed.push(segment.summary.compressed_byte_size);
-            uncompressed.push(segment.summary.uncompressed_byte_size);
-            file_location.push(segment_locations[idx].0.clone().into_bytes());
+
+        let mut row_num = 0;
+        let mut end_flag = false;
+        let chunk_size = std::cmp::min(
+            self.ctx.get_settings().get_max_storage_io_requests()? as usize,
+            len,
+        );
+        for chunk in segment_locations.chunks(chunk_size) {
+            let segments = segments_io
+                .read_segments::<Arc<SegmentInfo>>(chunk, true)
+                .await?;
+
+            let take_num = if row_num + chunk_size >= len {
+                end_flag = true;
+                len - row_num
+            } else {
+                row_num += chunk_size;
+                chunk_size
+            };
+            for (idx, segment) in segments.into_iter().take(take_num).enumerate() {
+                let segment = segment?;
+                format_versions.push(NumberScalar::UInt64(segment_locations[idx].1));
+                block_count.push(NumberScalar::UInt64(segment.summary.block_count));
+                row_count.push(NumberScalar::UInt64(segment.summary.row_count));
+                compressed.push(NumberScalar::UInt64(segment.summary.compressed_byte_size));
+                uncompressed.push(NumberScalar::UInt64(segment.summary.uncompressed_byte_size));
+                file_location.put_slice(segment_locations[idx].0.as_bytes());
+                file_location.commit_row();
+            }
+
+            if end_flag {
+                break;
+            }
         }
-        Ok(DataBlock::new_from_columns(vec![
-            StringType::from_data(file_location),
-            UInt64Type::from_data(format_versions),
-            UInt64Type::from_data(block_count),
-            UInt64Type::from_data(row_count),
-            UInt64Type::from_data(uncompressed),
-            UInt64Type::from_data(compressed),
-        ]))
+
+        Ok(DataBlock::new(
+            vec![
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Column(Column::String(file_location.build())),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Column(Column::Number(format_versions.build())),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Column(Column::Number(block_count.build())),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Column(Column::Number(row_count.build())),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Column(Column::Number(uncompressed.build())),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Column(Column::Number(compressed.build())),
+                ),
+            ],
+            len,
+        ))
     }
 
     pub fn schema() -> Arc<TableSchema> {
