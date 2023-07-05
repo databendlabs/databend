@@ -1477,7 +1477,10 @@ impl SchemaApiTestSuite {
             let err_code = ErrorCode::from(status);
 
             assert_eq!(
-                format!("Code: 2302, Text = Table '{}' already exists.", tbl_name),
+                format!(
+                    "TableAlreadyExists. Code: 2302, Text = Table '{}' already exists.",
+                    tbl_name
+                ),
                 err_code.to_string()
             );
 
@@ -1550,7 +1553,10 @@ impl SchemaApiTestSuite {
                     let err_code = ErrorCode::from(status);
 
                     assert_eq!(
-                        format!("Code: 1025, Text = Unknown table '{:}'.", tbl_name),
+                        format!(
+                            "UnknownTable. Code: 1025, Text = Unknown table '{:}'.",
+                            tbl_name
+                        ),
                         err_code.to_string(),
                         "get dropped table {}",
                         tbl_name
@@ -4748,7 +4754,7 @@ impl SchemaApiTestSuite {
             assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
             assert_eq!("Unknown database 'nonexistent'", err.message());
             assert_eq!(
-                "Code: 1003, Text = Unknown database 'nonexistent'.",
+                "UnknownDatabase. Code: 1003, Text = Unknown database 'nonexistent'.",
                 err.to_string()
             );
         }
