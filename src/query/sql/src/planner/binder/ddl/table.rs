@@ -604,7 +604,7 @@ impl Binder {
             catalog,
             database,
             table,
-            options: BTreeMap::new(),
+            options,
             engine: Engine::Fuse,
             cluster_key: None,
             as_select: None,
