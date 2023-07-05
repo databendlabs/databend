@@ -807,7 +807,7 @@ where A: Allocator + Clone + Default
         self.len()
     }
 
-    fn bytes_len(&self) -> usize {
+    fn bytes_len(&self, without_arena: bool) -> usize {
         std::mem::size_of::<Self>()
             + self.arena.allocated_bytes()
             + self.table0.heap_bytes()

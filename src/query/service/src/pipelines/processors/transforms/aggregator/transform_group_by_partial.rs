@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::vec;
 
+use bumpalo::Bump;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -89,7 +90,8 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
-        let hashtable = method.create_hash_table()?;
+        let arena = Arc::new(Bump::new());
+        let hashtable = method.create_hash_table(arena)?;
         let _dropper = GroupByHashTableDropper::<Method>::create();
         let hash_table = HashTable::HashTable(HashTableCell::create(hashtable, _dropper));
 
@@ -171,8 +173,9 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                             }
                         }
 
+                        let arena = Arc::new(Bump::new());
                         let method = PartitionedHashMethod::<Method>::create(self.method.clone());
-                        let new_hashtable = method.create_hash_table()?;
+                        let new_hashtable = method.create_hash_table(arena)?;
                         self.hash_table = HashTable::PartitionedHashTable(HashTableCell::create(
                             new_hashtable,
                             _dropper.unwrap(),

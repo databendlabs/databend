@@ -15,7 +15,9 @@
 use std::ptr::NonNull;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
+use bumpalo::Bump;
 use common_hashtable::DictionaryKeys;
 use common_hashtable::DictionaryStringHashMap;
 use common_hashtable::HashMap;
@@ -140,7 +142,7 @@ fn test_unsized_hash_map() {
 
 #[test]
 fn test_dictionary_hash_map() {
-    let mut hashtable = DictionaryStringHashMap::<usize>::new(2);
+    let mut hashtable = DictionaryStringHashMap::<usize>::new(2, Arc::new(Bump::new()));
     unsafe {
         for index1 in 0..1000 {
             for index2 in 0..1000 {
