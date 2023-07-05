@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::native::write::NativeWriter;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -33,6 +34,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::table::TableCompression;
 
 use crate::fuse_table::FuseStorageFormat;
@@ -47,6 +49,7 @@ pub fn serialize_block(
     write_settings: &WriteSettings,
     schema: &TableSchemaRef,
     block: DataBlock,
+    stats: Option<&StatisticsOfColumns>,
     buf: &mut Vec<u8>,
 ) -> Result<(u64, HashMap<ColumnId, ColumnMeta>)> {
     let schema = Arc::new(schema.remove_virtual_computed_fields());
@@ -59,12 +62,17 @@ pub fn serialize_block(
         }
         FuseStorageFormat::Native => {
             let arrow_schema = schema.to_arrow();
+            let leaf_column_ids = schema.to_leaf_column_ids();
+            let column_compressions =
+                auto_column_compression(&block, &schema, &leaf_column_ids, stats);
+
             let mut writer = NativeWriter::new(
                 buf,
                 arrow_schema,
                 common_arrow::native::write::WriteOptions {
-                    compression: write_settings.table_compression.into(),
+                    default_compression: write_settings.table_compression.into(),
                     max_page_size: Some(write_settings.max_page_size),
+                    column_compressions,
                 },
             );
 
@@ -74,7 +82,6 @@ pub fn serialize_block(
             writer.write(&batch)?;
             writer.finish()?;
 
-            let leaf_column_ids = &schema.to_leaf_column_ids();
             let mut metas = HashMap::with_capacity(writer.metas.len());
             for (idx, meta) in writer.metas.iter().enumerate() {
                 // use column id as key instead of index
@@ -85,6 +92,42 @@ pub fn serialize_block(
             Ok((writer.total_size() as u64, metas))
         }
     }
+}
+
+/// Native format support DictionaryEncoding
+fn auto_column_compression(
+    block: &DataBlock,
+    table_schema: &TableSchemaRef,
+    leaf_column_ids: &[u32],
+    stats: Option<&StatisticsOfColumns>,
+) -> HashMap<usize, common_arrow::native::Compression> {
+    let mut column_compressions = HashMap::new();
+    let num_rows = block.num_rows();
+    let dict_compressor = common_arrow::native::Compression::Dict.create_compressor();
+    let leaf_fields = table_schema.leaf_fields();
+
+    for (idx, column_id) in leaf_column_ids.iter().enumerate() {
+        let field = leaf_fields.get(idx).unwrap();
+        let field_type = field.data_type();
+        let arrow_type = ArrowType::from(field_type);
+
+        if !matches!(arrow_type, ArrowType::Binary | ArrowType::LargeBinary) {
+            continue;
+        }
+        let distinct = stats
+            .and_then(|stats| stats.get(column_id))
+            .and_then(|s| s.distinct_of_values)
+            .unwrap_or(num_rows as u64);
+
+        if num_rows > 0 && distinct > 0 {
+            let ratio = distinct as f64 / num_rows as f64;
+            if ratio <= 0.01 {
+                println!("using dict encoding for {:?} ration {ratio}", field.name());
+                column_compressions.insert(idx, common_arrow::native::Compression::Dict);
+            }
+        }
+    }
+    column_compressions
 }
 
 /// Take ownership here to avoid extra copy.
@@ -182,6 +225,7 @@ impl BlockBuilder {
             &self.write_settings,
             &self.source_schema,
             data_block,
+            Some(&col_stats),
             &mut buffer,
         )?;
 

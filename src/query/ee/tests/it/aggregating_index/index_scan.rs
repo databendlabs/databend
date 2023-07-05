@@ -485,6 +485,7 @@ async fn refresh_index(ctx: Arc<QueryContext>, sql: &str, index_id: u64) -> Resu
             &WriteSettings::default(),
             &index_schema,
             index_block,
+            None,
             &mut buf,
         )?;
 

@@ -112,7 +112,13 @@ impl AsyncSink for AggIndexSink {
                 self.index_id,
             );
             let mut data = vec![];
-            io::serialize_block(&self.write_settings, &self.sink_schema, block, &mut data)?;
+            io::serialize_block(
+                &self.write_settings,
+                &self.sink_schema,
+                block,
+                None,
+                &mut data,
+            )?;
             self.data_accessor.write(&loc, data).await?;
         }
         Ok(())

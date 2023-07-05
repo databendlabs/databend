@@ -10083,12 +10083,18 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.2.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=a32c96e#a32c96e0564282842370e0660dede99318153097"
+source = "git+https://github.com/sundy-li/strawboat?rev=71acd52#71acd5250c664603b51767a5b89f5515cd49753a"
 dependencies = [
+ "ahash 0.8.3",
  "arrow2",
  "bytemuck",
+ "byteorder",
+ "bytes",
+ "hashbrown 0.13.2",
  "lz4",
+ "num",
  "parquet2",
+ "seq-macro",
  "serde",
  "serde_json",
  "snap",
