@@ -1463,7 +1463,10 @@ impl SchemaApiTestSuite {
             let err_code = ErrorCode::from(status);
 
             assert_eq!(
-                format!("Code: 2302, Text = Table '{}' already exists.", tbl_name),
+                format!(
+                    "TableAlreadyExists. Code: 2302, Text = Table '{}' already exists.",
+                    tbl_name
+                ),
                 err_code.to_string()
             );
 
@@ -1536,7 +1539,10 @@ impl SchemaApiTestSuite {
                     let err_code = ErrorCode::from(status);
 
                     assert_eq!(
-                        format!("Code: 1025, Text = Unknown table '{:}'.", tbl_name),
+                        format!(
+                            "UnknownTable. Code: 1025, Text = Unknown table '{:}'.",
+                            tbl_name
+                        ),
                         err_code.to_string(),
                         "get dropped table {}",
                         tbl_name
