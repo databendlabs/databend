@@ -12,16 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod data_mask;
-mod database;
-mod index;
-mod network_policy;
-mod role;
-mod share;
-mod stage;
-mod table;
-mod view;
-mod virtual_column;
+mod network_policy_api;
+mod network_policy_mgr;
+
+pub use network_policy_api::NetworkPolicyApi;
+pub use network_policy_mgr::NetworkPolicyMgr;

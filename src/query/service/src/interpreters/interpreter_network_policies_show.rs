@@ -1,0 +1,79 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::sync::Arc;
+
+use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::FromData;
+use common_sql::plans::ShowNetworkPoliciesPlan;
+use common_users::UserApiProvider;
+
+use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
+use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+
+#[derive(Debug)]
+pub struct ShowNetworkPoliciesInterpreter {
+    ctx: Arc<QueryContext>,
+    plan: ShowNetworkPoliciesPlan,
+}
+
+impl ShowNetworkPoliciesInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowNetworkPoliciesPlan) -> Result<Self> {
+        Ok(ShowNetworkPoliciesInterpreter { ctx, plan })
+    }
+}
+
+#[async_trait::async_trait]
+impl Interpreter for ShowNetworkPoliciesInterpreter {
+    fn name(&self) -> &str {
+        "ShowNetworkPoliciesInterpreter"
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
+    }
+
+    #[async_backtrace::framed]
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let tenant = self.ctx.get_tenant();
+        let user_mgr = UserApiProvider::instance();
+        let network_policies = user_mgr.get_network_policies(&tenant).await?;
+
+        let mut names = Vec::with_capacity(network_policies.len());
+        let mut allowed_ip_lists = Vec::with_capacity(network_policies.len());
+        let mut blocked_ip_lists = Vec::with_capacity(network_policies.len());
+        let mut comments = Vec::with_capacity(network_policies.len());
+        let mut create_ons = Vec::with_capacity(network_policies.len());
+        for network_policy in network_policies {
+            names.push(network_policy.name.as_bytes().to_vec());
+            allowed_ip_lists.push(network_policy.allowed_ip_list.join(",").as_bytes().to_vec());
+            blocked_ip_lists.push(network_policy.blocked_ip_list.join(",").as_bytes().to_vec());
+            comments.push(network_policy.comment.as_bytes().to_vec());
+            create_ons.push(network_policy.create_on.to_string().as_bytes().to_vec());
+        }
+
+        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+            StringType::from_data(names),
+            StringType::from_data(allowed_ip_lists),
+            StringType::from_data(blocked_ip_lists),
+            StringType::from_data(comments),
+            StringType::from_data(create_ons),
+        ])])
+    }
+}
