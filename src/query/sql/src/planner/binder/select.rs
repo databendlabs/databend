@@ -806,6 +806,15 @@ impl Binder {
             select_cols.extend(s.scalar.used_columns())
         }
 
+        // If there are derived columns, we can't use lazy materialization.
+        // (As the derived columns may come from a CTE, the rows fetcher can't know where to fetch the data.)
+        if select_cols
+            .iter()
+            .any(|col| matches!(metadata.column(*col), ColumnEntry::DerivedColumn(_)))
+        {
+            return Ok(());
+        }
+
         let mut order_by_cols = HashSet::with_capacity(order_by.len());
         for o in order_by {
             if let Some(scalar) = scalar_items.get(&o.index) {
