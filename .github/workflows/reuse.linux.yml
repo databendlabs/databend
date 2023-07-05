@@ -359,3 +359,21 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-stateful-standalone-linux
+
+  test_ee_standalone_background:
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    if: github.event_name == 'push' || !github.event.pull_request.head.repo.fork
+    needs: build
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup_bendsql
+      - uses: ./.github/actions/test_ee_standalone_background_linux
+        timeout-minutes: 10
+        env:
+          DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
+          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-standalone-linux
