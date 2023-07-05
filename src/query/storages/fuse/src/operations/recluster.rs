@@ -32,11 +32,12 @@ use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransfo
 use common_sql::evaluator::CompoundBlockOperator;
 use storages_common_table_meta::meta::BlockMeta;
 
-use crate::operations::common::AppendTransform;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
 use crate::operations::common::TableMutationAggregator;
+use crate::operations::common::TransformSerializeBlock;
+use crate::operations::common::TransformSerializeSegment;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
@@ -53,9 +54,9 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         if self.cluster_key_meta.is_none() {
-            return Ok(());
+            return Ok(0);
         }
 
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -63,7 +64,7 @@ impl FuseTable {
             val
         } else {
             // no snapshot, no recluster.
-            return Ok(());
+            return Ok(0);
         };
 
         let schema = self.table_info.schema();
@@ -104,7 +105,7 @@ impl FuseTable {
 
         let need_recluster = mutator.target_select(blocks_map).await?;
         if !need_recluster {
-            return Ok(());
+            return Ok(0);
         }
 
         let block_metas: Vec<_> = mutator
@@ -112,6 +113,7 @@ impl FuseTable {
             .iter()
             .map(|meta| (None, meta.clone()))
             .collect();
+        let block_count = block_metas.len() as u64;
         let (statistics, parts) = self.read_partitions_with_metas(
             self.table_info.schema(),
             None,
@@ -192,14 +194,18 @@ impl FuseTable {
         assert_eq!(pipeline.output_len(), 1);
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
-            let proc = AppendTransform::new(
+            let proc = TransformSerializeBlock::new(
                 ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 self,
                 cluster_stats_gen.clone(),
-                block_thresholds,
             );
+            proc.into_processor()
+        })?;
+
+        pipeline.add_transform(|input, output| {
+            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
             proc.into_processor()
         })?;
 
@@ -221,8 +227,16 @@ impl FuseTable {
 
         let snapshot_gen = MutationGenerator::new(snapshot);
         pipeline.add_sink(|input| {
-            CommitSink::try_create(self, ctx.clone(), None, snapshot_gen.clone(), input, None)
+            CommitSink::try_create(
+                self,
+                ctx.clone(),
+                None,
+                snapshot_gen.clone(),
+                input,
+                None,
+                true,
+            )
         })?;
-        Ok(())
+        Ok(block_count)
     }
 }

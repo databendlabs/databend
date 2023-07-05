@@ -50,7 +50,7 @@ impl Interpreter for DropIndexInterpreter {
         let license_manager = get_license_manager();
         license_manager.manager.check_enterprise_enabled(
             &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
+            tenant.clone(),
             Feature::AggregateIndex,
         )?;
 

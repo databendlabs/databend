@@ -35,6 +35,7 @@ macro_rules! build_exceptions {
                     let bt = capture();
                     ErrorCode::create(
                         $code,
+                        stringify!($body),
                         display_text.into(),
                         None,
                         bt,

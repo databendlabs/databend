@@ -89,6 +89,7 @@ impl From<Arc<Backtrace>> for ErrorCodeBacktrace {
 #[derive(Error)]
 pub struct ErrorCode {
     code: u16,
+    name: String,
     display_text: String,
     span: Span,
     // cause is only used to contain an `anyhow::Error`.
@@ -100,6 +101,10 @@ pub struct ErrorCode {
 impl ErrorCode {
     pub fn code(&self) -> u16 {
         self.code
+    }
+
+    pub fn name(&self) -> String {
+        self.name.clone()
     }
 
     pub fn message(&self) -> String {
@@ -170,7 +175,13 @@ pub type Result<T, E = ErrorCode> = std::result::Result<T, E>;
 
 impl Debug for ErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Code: {}, Text = {}.", self.code(), self.message(),)?;
+        write!(
+            f,
+            "{}. Code: {}, Text = {}.",
+            self.name,
+            self.code(),
+            self.message(),
+        )?;
 
         match self.backtrace.as_ref() {
             None => write!(
@@ -198,7 +209,13 @@ impl Debug for ErrorCode {
 
 impl Display for ErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Code: {}, Text = {}.", self.code(), self.message(),)
+        write!(
+            f,
+            "{}. Code: {}, Text = {}.",
+            self.name,
+            self.code(),
+            self.message(),
+        )
     }
 }
 
@@ -207,6 +224,7 @@ impl ErrorCode {
     pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
         ErrorCode {
             code: 1001,
+            name: String::from("FromStdError"),
             display_text: error.to_string(),
             span: None,
             cause: None,
@@ -217,6 +235,7 @@ impl ErrorCode {
     pub fn from_string(error: String) -> Self {
         ErrorCode {
             code: 1001,
+            name: String::from("Internal"),
             display_text: error,
             span: None,
             cause: None,
@@ -227,6 +246,7 @@ impl ErrorCode {
     pub fn from_string_no_backtrace(error: String) -> Self {
         ErrorCode {
             code: 1001,
+            name: String::from("Internal"),
             display_text: error,
             span: None,
             cause: None,
@@ -236,6 +256,7 @@ impl ErrorCode {
 
     pub fn create(
         code: u16,
+        name: impl ToString,
         display_text: String,
         cause: Option<Box<dyn std::error::Error + Sync + Send>>,
         backtrace: Option<ErrorCodeBacktrace>,
@@ -246,6 +267,7 @@ impl ErrorCode {
             span: None,
             cause,
             backtrace,
+            name: name.to_string(),
         }
     }
 }
@@ -297,6 +319,13 @@ where E: Display + Send + Sync + 'static
 
 impl Clone for ErrorCode {
     fn clone(&self) -> Self {
-        ErrorCode::create(self.code(), self.message(), None, self.backtrace()).set_span(self.span())
+        ErrorCode::create(
+            self.code(),
+            &self.name,
+            self.message(),
+            None,
+            self.backtrace(),
+        )
+        .set_span(self.span())
     }
 }

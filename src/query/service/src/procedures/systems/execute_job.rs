@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use background_service::get_background_service_handler;
+use common_catalog::table_context::TableContext;
 pub use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
@@ -46,10 +47,13 @@ impl OneBlockProcedure for ExecuteJobProcedure {
     }
 
     #[async_backtrace::framed]
-    async fn all_data(&self, _ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let name = args[0].clone();
         let background_handler = get_background_service_handler();
-        background_handler.execute_scheduled_job(name).await?;
+
+        background_handler
+            .execute_scheduled_job(ctx.get_tenant(), ctx.get_current_user()?.identity(), name)
+            .await?;
         Ok(DataBlock::empty())
     }
 
