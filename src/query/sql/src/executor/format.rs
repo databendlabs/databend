@@ -170,7 +170,11 @@ fn append_profile_info(
 ) {
     if let Some(prof) = prof_set.lock().unwrap().get(&plan_id) {
         children.push(FormatTreeNode::new(format!(
-            "total cpu time: {}ms",
+            "output rows: {}",
+            prof.output_rows,
+        )));
+        children.push(FormatTreeNode::new(format!(
+            "total cpu time: {:.3}ms",
             prof.cpu_time.as_secs_f64() * 1000.0
         )));
     }

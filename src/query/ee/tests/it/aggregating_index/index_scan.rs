@@ -744,6 +744,18 @@ fn get_test_suites() -> Vec<TestSuite> {
             refresh: "select a, _block_name from t",
             is_matched: false,
         },
+        TestSuite {
+            query: "select avg(a + 1) from t group by b",
+            index: "select a + 1, b from t",
+            refresh: "select b, a + 1, _block_name from t",
+            is_matched: true,
+        },
+        TestSuite {
+            query: "select avg(a + 1) from t",
+            index: "select a + 1, b from t",
+            refresh: "select b, a + 1, _block_name from t",
+            is_matched: true,
+        },
         // query: eval-agg-eval-filter-scan, index: eval-scan
         TestSuite {
             query: "select sum(a) from t where a > 1 group by b",
@@ -802,6 +814,12 @@ fn get_test_suites() -> Vec<TestSuite> {
             index: "select a from t where b > 1",
             refresh: "select a, _block_name from t where b > 1",
             is_matched: false,
+        },
+        TestSuite {
+            query: "select sum(a) from t where b > 1 group by b",
+            index: "select a, b from t where b > 1",
+            refresh: "select a, b, _block_name from t where b > 1",
+            is_matched: true,
         },
         // query: eval-scan, index: eval-agg-eval-scan
         TestSuite {

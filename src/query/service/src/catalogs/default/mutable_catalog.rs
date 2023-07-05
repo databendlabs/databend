@@ -191,6 +191,7 @@ impl Catalog for MutableCatalog {
             .meta
             .list_databases(ListDatabaseReq {
                 tenant: tenant.to_string(),
+                filter: None,
             })
             .await?;
 

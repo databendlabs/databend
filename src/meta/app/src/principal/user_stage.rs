@@ -135,7 +135,7 @@ impl FromStr for StageFileCompression {
             "xz" => Ok(StageFileCompression::Xz),
             "none" => Ok(StageFileCompression::None),
             _ => Err("Unknown file compression type, must one of { auto | gzip | bz2 | brotli | zstd | deflate | raw_deflate | lzo | snappy | xz | none }"
-                         .to_string()),
+                .to_string()),
         }
     }
 }

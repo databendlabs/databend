@@ -239,10 +239,11 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
+        limit: Option<usize>,
         keep_last_snapshot: bool,
-        dry_run_limit: Option<usize>,
+        dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        let (_, _, _, _) = (ctx, instant, keep_last_snapshot, dry_run_limit);
+        let (_, _, _, _, _) = (ctx, instant, limit, keep_last_snapshot, dry_run);
 
         Ok(None)
     }
@@ -354,13 +355,14 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    // return the selected block num.
     #[async_backtrace::framed]
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         let (_, _, _) = (ctx, pipeline, push_downs);
 
         Err(ErrorCode::Unimplemented(format!(

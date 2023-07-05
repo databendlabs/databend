@@ -26,6 +26,20 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
+  license:
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    outputs:
+      license: ${{ steps.license.outputs.license }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Get License from S3
+        id: license
+        run: |
+          aws s3 cp s3://databend-ci/misc/license.key license.key
+          aws s3 cp s3://databend-ci/misc/license.json license.json
+          echo "license=$(cat license.key | base64 -w 0)" >> $GITHUB_OUTPUT
+          cat license.json
+
   build:
     name: build_${{ matrix.arch }}_${{ matrix.libc }}
     runs-on: [self-hosted, X64, Linux, 16c32g]
@@ -192,8 +206,8 @@ jobs:
   sqllogic_standalone_ee:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
     runs-on: [ self-hosted, X64, Linux, 4c8g ]
-    if: github.event_name == 'push' || !github.event.pull_request.head.repo.fork
-    needs: build
+    if: needs.license.outputs.license
+    needs: [build, license]
     strategy:
       matrix:
         dirs:
@@ -204,10 +218,14 @@ jobs:
           - "mysql,http,clickhouse"
     steps:
       - uses: actions/checkout@v3
+      - name: Decode license
+        id: license
+        run: |
+          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_ee_sqllogic_standalone_linux
         timeout-minutes: 15
         env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
+          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
@@ -345,15 +363,41 @@ jobs:
         continue-on-error: true
 
   test_ee_standalone:
+    needs: [build, license]
     runs-on: [self-hosted, X64, Linux, 4c8g]
-    if: github.event_name == 'push' || !github.event.pull_request.head.repo.fork
-    needs: build
+    if: needs.license.outputs.license
     steps:
       - uses: actions/checkout@v3
+      - name: Decode license
+        id: license
+        run: |
+          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_ee_standalone_linux
         timeout-minutes: 10
         env:
-          DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
+          DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-standalone-linux
+
+  test_ee_standalone_background:
+    needs: [build, license]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    if: needs.license.outputs.license
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup_bendsql
+      - name: Decode license
+        id: license
+        run: |
+          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/test_ee_standalone_background_linux
+        timeout-minutes: 10
+        env:
+          DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
+          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure

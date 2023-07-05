@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
@@ -19,6 +20,8 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use common_arrow::native::ColumnMeta as NativeColumnMeta;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::ColumnId;
 use common_expression::TableField;
 use enum_as_inner::EnumAsInner;
@@ -124,6 +127,24 @@ impl BlockMeta {
         } else {
             self.row_count
         }
+    }
+}
+
+#[typetag::serde(name = "blockmeta")]
+impl BlockMetaInfo for BlockMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        match BlockMeta::downcast_ref_from(info) {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 }
 

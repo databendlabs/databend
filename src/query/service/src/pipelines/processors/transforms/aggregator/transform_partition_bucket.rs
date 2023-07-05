@@ -35,6 +35,8 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::profile_wrapper::ProcessorProfileWrapper;
+use common_pipeline_transforms::processors::profile_wrapper::ProfileStub;
+use common_pipeline_transforms::processors::transforms::Transformer;
 use common_profile::SharedProcessorProfiles;
 use common_storage::DataOperator;
 use petgraph::matrix_graph::Zero;
@@ -414,7 +416,7 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
     params: Arc<AggregatorParams>,
     enable_profiling: bool,
     prof_id: u32,
-    prof_set: SharedProcessorProfiles,
+    proc_profs: SharedProcessorProfiles,
 ) -> Result<()> {
     let input_nums = pipeline.output_len();
     let transform = TransformPartitionBucket::<Method, V>::create(method.clone(), input_nums)?;
@@ -455,10 +457,24 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
             Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                 transform,
                 prof_id,
-                prof_set.clone(),
+                proc_profs.clone(),
             )))
         } else {
             Ok(ProcessorPtr::create(transform))
         }
-    })
+    })?;
+    // Append a profile stub to record the output rows and bytes
+    if enable_profiling {
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(Transformer::create(
+                input,
+                output,
+                ProfileStub::new(prof_id, proc_profs.clone())
+                    .accumulate_output_rows()
+                    .accumulate_output_bytes(),
+            )))
+        })?;
+    }
+
+    Ok(())
 }

@@ -37,8 +37,17 @@ pub struct BackgroundConfig {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct BackgroundCompactionConfig {
+    // only wake up background job if it is enabled.
+    #[clap(long)]
+    pub enable_compaction: bool,
     #[clap(long, default_value = "one_shot")]
     pub compact_mode: String,
+
+    // Only compact tables in this list.
+    // if it is empty, compact job would discover target tables automatically
+    // otherwise, the job would only compact tables in this list
+    #[clap(long)]
+    pub target_tables: Option<Vec<String>>,
 
     // Compact segments if a table has too many small segments
     // `segment_limit` is the maximum number of segments that would be compacted in a batch
@@ -101,9 +110,17 @@ pub struct InnerBackgroundConfig {
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InnerBackgroundCompactionConfig {
+    pub enable: bool,
+    pub target_tables: Option<Vec<String>>,
     pub segment_limit: Option<u64>,
     pub block_limit: Option<u64>,
     pub params: BackgroundJobParams,
+}
+
+impl InnerBackgroundCompactionConfig {
+    pub fn has_target_tables(&self) -> bool {
+        self.target_tables.is_some() && !self.target_tables.as_ref().unwrap().is_empty()
+    }
 }
 
 impl TryInto<InnerBackgroundConfig> for BackgroundConfig {
@@ -133,6 +150,8 @@ impl TryInto<InnerBackgroundCompactionConfig> for BackgroundCompactionConfig {
         Ok(InnerBackgroundCompactionConfig {
             segment_limit: self.segment_limit,
             block_limit: self.block_limit,
+            enable: self.enable_compaction,
+            target_tables: self.target_tables,
             params: {
                 match self.compact_mode.as_str() {
                     "one_shot" => BackgroundJobParams::new_one_shot_job(),
@@ -172,10 +191,12 @@ impl TryInto<InnerBackgroundCompactionConfig> for BackgroundCompactionConfig {
 impl From<InnerBackgroundCompactionConfig> for BackgroundCompactionConfig {
     fn from(inner: InnerBackgroundCompactionConfig) -> Self {
         let mut cfg = Self {
-            compact_mode: "".to_string(),
+            enable_compaction: inner.enable,
+            compact_mode: "".to_string(), // it would be set later
+            target_tables: inner.target_tables,
             segment_limit: inner.segment_limit,
             block_limit: inner.block_limit,
-            scheduled_config: Default::default(),
+            scheduled_config: Default::default(), // it would be set later
         };
         match inner.params.job_type {
             BackgroundJobType::ONESHOT => {
@@ -212,7 +233,9 @@ impl From<BackgroundJobParams> for BackgroundScheduledConfig {
 impl Default for BackgroundCompactionConfig {
     fn default() -> Self {
         Self {
+            enable_compaction: false,
             compact_mode: "one_shot".to_string(),
+            target_tables: None,
             segment_limit: None,
             block_limit: None,
             scheduled_config: Default::default(),
@@ -254,6 +277,8 @@ impl Default for InnerBackgroundConfig {
         Self {
             enable: false,
             compaction: InnerBackgroundCompactionConfig {
+                enable: false,
+                target_tables: None,
                 segment_limit: None,
                 block_limit: None,
                 params: Default::default(),
