@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::min;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -30,8 +29,6 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-
-const DRY_RUN_LIMIT: usize = 1000;
 
 #[allow(dead_code)]
 pub struct VacuumTableInterpreter {
@@ -86,22 +83,16 @@ impl Interpreter for VacuumTableInterpreter {
                 fuse_table,
                 ctx,
                 retention_time,
-                if self.plan.option.dry_run.is_some() {
-                    Some(DRY_RUN_LIMIT)
-                } else {
-                    None
-                },
+                self.plan.option.dry_run.is_some(),
             )
             .await?;
 
         match purge_files_opt {
             None => return Ok(PipelineBuildResult::create()),
             Some(purge_files) => {
-                let len = min(purge_files.len(), DRY_RUN_LIMIT);
-                let mut files: Vec<Vec<u8>> = Vec::with_capacity(len);
-                let purge_files = &purge_files[0..len];
-                for file in purge_files.iter() {
-                    files.push(file.to_string().as_bytes().to_vec());
+                let mut files: Vec<Vec<u8>> = Vec::with_capacity(purge_files.len());
+                for file in purge_files.into_iter() {
+                    files.push(file.as_bytes().to_vec());
                 }
 
                 PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

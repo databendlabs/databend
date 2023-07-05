@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 
 import os
-import time
 import mysql.connector
 import sys
-import signal
-from multiprocessing import Process
 
 CURDIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(CURDIR, "../../../helpers"))
 
-from native_client import NativeClient
-from native_client import prompt
+from native_client import NativeClient  # NOQA
+from native_client import prompt  # NOQA
 
 log = None
 
@@ -38,7 +35,8 @@ if __name__ == "__main__":
 
         mycursor = mydb.cursor()
         mycursor.execute(
-            "CREATE MASKING POLICY mask AS (val STRING,num int) RETURN STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy';"
+            "CREATE MASKING POLICY mask AS (val STRING,num int) RETURN STRING -> CASE WHEN "
+            "current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy';"
         )
 
         mycursor = mydb.cursor()
@@ -65,11 +63,13 @@ if __name__ == "__main__":
 
         mycursor = mydb.cursor()
         mycursor.execute(
-            "CREATE MASKING POLICY maska AS (val int) RETURN int -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE 200 END comment = 'this is a masking policy';"
+            "CREATE MASKING POLICY maska AS (val int) RETURN int -> CASE WHEN "
+            "current_role() IN ('ANALYST') THEN VAL ELSE 200 END comment = 'this is a masking policy';"
         )
         mycursor = mydb.cursor()
         mycursor.execute(
-            "CREATE MASKING POLICY maskb AS (val STRING) RETURN STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy';"
+            "CREATE MASKING POLICY maskb AS (val STRING) RETURN STRING -> CASE WHEN "
+            "current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy';"
         )
 
         sql = " alter table data_mask_test modify column b set masking policy maskb"
