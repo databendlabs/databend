@@ -40,7 +40,7 @@ use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
-use crate::operations::mutation::MutationEnum;
+use crate::operations::mutation::Mutation;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -344,11 +344,8 @@ impl Processor for MutationSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(Some(part)) => {
                 let settings = ReadSettings::from_ctx(&self.ctx)?;
-                match MutationEnum::from_part(&part)? {
-                    MutationEnum::MutationDeletedSegment(deleted_segment) => {
-                        // it could be a deleted_segment info
-                        // we can make sure this is Mutation::Delete
-                        // only delete operation will have deleted segments, not for update.
+                match Mutation::from_part(&part)? {
+                    Mutation::MutationDeletedSegment(deleted_segment) => {
                         let progress_values = ProgressValues {
                             rows: deleted_segment.deleted_segment.segment_info.1.row_count as usize,
                             bytes: 0,
@@ -363,7 +360,7 @@ impl Processor for MutationSource {
                             ),
                         )
                     }
-                    MutationEnum::MutationPartInfo(part) => {
+                    Mutation::MutationPartInfo(part) => {
                         self.index = BlockMetaIndex {
                             segment_idx: part.index.segment_idx,
                             block_idx: part.index.block_idx,

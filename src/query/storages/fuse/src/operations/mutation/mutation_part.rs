@@ -24,13 +24,13 @@ use storages_common_table_meta::meta::ClusterStatistics;
 use crate::pruning::DeletedSegmentInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
-pub enum MutationEnum {
+pub enum Mutation {
     MutationDeletedSegment(MutationDeletedSegment),
     MutationPartInfo(MutationPartInfo),
 }
 
 #[typetag::serde(name = "mutation_enum")]
-impl PartInfo for MutationEnum {
+impl PartInfo for Mutation {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -54,12 +54,12 @@ impl PartInfo for MutationEnum {
     }
 }
 
-impl MutationEnum {
-    pub fn from_part(info: &PartInfoPtr) -> Result<&MutationEnum> {
-        match info.as_any().downcast_ref::<MutationEnum>() {
+impl Mutation {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&Mutation> {
+        match info.as_any().downcast_ref::<Mutation>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to MutationEnum.",
+                "Cannot downcast from PartInfo to Mutation.",
             )),
         }
     }

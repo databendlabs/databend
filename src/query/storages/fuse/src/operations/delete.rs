@@ -53,8 +53,8 @@ use super::mutation::MutationDeletedSegment;
 use crate::metrics::metrics_inc_deletion_block_range_pruned_nums;
 use crate::metrics::metrics_inc_deletion_block_range_pruned_whole_block_nums;
 use crate::metrics::metrics_inc_deletion_segment_range_purned_whole_segment_nums;
+use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationAction;
-use crate::operations::mutation::MutationEnum;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
 use crate::pipelines::Pipeline;
@@ -410,7 +410,7 @@ impl FuseTable {
                     let key = (block_meta_index.segment_idx, block_meta_index.block_idx);
                     let whole_block_deletion = whole_block_deletions.contains(&key);
                     let part_info_ptr: PartInfoPtr = Arc::new(Box::new(
-                        MutationEnum::MutationPartInfo(MutationPartInfo::create(
+                        Mutation::MutationPartInfo(MutationPartInfo::create(
                             block_meta_index,
                             cluster_stats,
                             c,
@@ -431,7 +431,7 @@ impl FuseTable {
             num_whole_block_mutation += deleted_segment.segment_info.1.block_count as usize;
             parts
                 .partitions
-                .push(Arc::new(Box::new(MutationEnum::MutationDeletedSegment(
+                .push(Arc::new(Box::new(Mutation::MutationDeletedSegment(
                     MutationDeletedSegment::create(deleted_segment),
                 ))));
         }

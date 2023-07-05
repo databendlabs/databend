@@ -291,7 +291,7 @@ impl FusePruner {
                     if delete_pruning {
                         // inverse prun
                         for (segment_location, compact_segment_info) in &pruned_segments {
-                            // for delete_prun
+                            // for delete_prune
                             match inverse_range_index.as_ref() {
                                 Some(range_index) => {
                                     if !range_index
