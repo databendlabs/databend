@@ -287,12 +287,16 @@ impl CreateTableInterpreter {
 
     async fn build_attach_request(&self, storage_prefix: &str) -> Result<CreateTableReq> {
         // Safe to unwrap in this function, as attach table must have storage params.
-        let operator = DataOperator::try_create(self.plan.storage_params.as_ref().unwrap()).await?;
+        let sp = self.plan.storage_params.as_ref().unwrap();
+        let operator = DataOperator::try_create(sp).await?;
         let operator = operator.operator();
         let reader = MetaReaders::table_snapshot_reader(operator.clone());
         let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
         let snapshot_loc = operator.read(&hint).await?;
         let snapshot_loc = String::from_utf8(snapshot_loc)?;
+        let info = operator.info();
+        let root = info.root();
+        let snapshot_loc = snapshot_loc[root.len()..].to_string();
         let mut options = self.plan.options.clone();
         options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc.clone());
         error!("load snapshot from {}", snapshot_loc);
