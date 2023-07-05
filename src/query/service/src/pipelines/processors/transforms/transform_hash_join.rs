@@ -84,13 +84,13 @@ impl TransformHashJoinProbe {
 
     fn add_data_to_buffer(&mut self, data_blocks: Vec<DataBlock>) -> Result<()> {
         for datablock in data_blocks.into_iter() {
-            if datablock.num_rows() >= self.block_size / 2 {
+            if datablock.num_rows() >= self.max_block_size / 2 {
                 self.output_data_blocks.push_back(datablock);
                 continue;
             }
             self.output_buffer_size += datablock.num_rows();
             self.output_buffer.push(datablock);
-            if self.output_buffer_size >= self.block_size {
+            if self.output_buffer_size >= self.max_block_size {
                 let data_block = DataBlock::concat(self.output_buffer.as_slice())?;
                 self.output_buffer_size = 0;
                 self.output_buffer.clear();
@@ -176,7 +176,8 @@ impl Processor for TransformHashJoinProbe {
                     let data_block = self.input_port.pull_data().unwrap()?;
                     if data_block.num_rows() > self.max_block_size {
                         // Split data to `block_size` rows per sub block.
-                        let (sub_blocks, remain_block) = data_block.split_by_rows(self.max_block_size);
+                        let (sub_blocks, remain_block) =
+                            data_block.split_by_rows(self.max_block_size);
                         self.input_data.extend(sub_blocks);
                         if let Some(remain) = remain_block {
                             self.input_data.push_back(remain);
