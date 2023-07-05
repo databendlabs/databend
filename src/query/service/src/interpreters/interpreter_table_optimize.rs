@@ -49,45 +49,26 @@ impl Interpreter for OptimizeTableInterpreter {
         let ctx = self.ctx.clone();
         let plan = self.plan.clone();
         match self.plan.action.clone() {
-            OptimizeTableAction::CompactBlocks(limit_opt) => {
-                self.build_compact_pipeline(CompactTarget::Blocks, limit_opt)
-                    .await
+            OptimizeTableAction::CompactBlocks => {
+                self.build_pipeline(CompactTarget::Blocks, false).await
             }
-            OptimizeTableAction::CompactSegments(limit_opt) => {
-                self.build_compact_pipeline(CompactTarget::Segments, limit_opt)
-                    .await
+            OptimizeTableAction::CompactSegments => {
+                self.build_pipeline(CompactTarget::Segments, false).await
             }
             OptimizeTableAction::Purge(point) => {
                 purge(ctx, plan, point).await?;
                 Ok(PipelineBuildResult::create())
             }
-            OptimizeTableAction::All => {
-                let mut build_res = self
-                    .build_compact_pipeline(CompactTarget::Blocks, None)
-                    .await?;
-
-                if build_res.main_pipeline.is_empty() {
-                    purge(ctx, plan, None).await?;
-                } else {
-                    build_res
-                        .main_pipeline
-                        .set_on_finished(move |may_error| match may_error {
-                            None => GlobalIORuntime::instance()
-                                .block_on(async move { purge(ctx, plan, None).await }),
-                            Some(error_code) => Err(error_code.clone()),
-                        });
-                }
-                Ok(build_res)
-            }
+            OptimizeTableAction::All => self.build_pipeline(CompactTarget::Blocks, true).await,
         }
     }
 }
 
 impl OptimizeTableInterpreter {
-    async fn build_compact_pipeline(
+    async fn build_pipeline(
         &self,
         target: CompactTarget,
-        limit: Option<usize>,
+        need_purge: bool,
     ) -> Result<PipelineBuildResult> {
         let mut build_res = PipelineBuildResult::create();
         let table = self
@@ -111,10 +92,32 @@ impl OptimizeTableInterpreter {
             .compact(
                 self.ctx.clone(),
                 target,
-                limit,
+                self.plan.limit,
                 &mut build_res.main_pipeline,
             )
             .await?;
+
+        let ctx = self.ctx.clone();
+        let plan = self.plan.clone();
+        if build_res.main_pipeline.is_empty() {
+            if need_purge {
+                purge(ctx, plan, None).await?;
+            }
+        } else {
+            build_res
+                .main_pipeline
+                .set_on_finished(move |may_error| match may_error {
+                    None => {
+                        if need_purge {
+                            GlobalIORuntime::instance()
+                                .block_on(async move { purge(ctx, plan, None).await })?;
+                        }
+                        Ok(())
+                    }
+                    Some(error_code) => Err(error_code.clone()),
+                });
+        }
+
         Ok(build_res)
     }
 }
@@ -132,7 +135,9 @@ async fn purge(
         .await?;
 
     let keep_latest = true;
-    let res = table.purge(ctx, instant, keep_latest, None).await?;
+    let res = table
+        .purge(ctx, instant, plan.limit, keep_latest, false)
+        .await?;
     assert!(res.is_none());
     Ok(())
 }

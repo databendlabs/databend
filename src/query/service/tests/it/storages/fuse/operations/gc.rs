@@ -50,7 +50,7 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
     let keep_last_snapshot = true;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     fuse_table
-        .do_purge(&table_ctx, snapshot_files, keep_last_snapshot, None)
+        .do_purge(&table_ctx, snapshot_files, None, keep_last_snapshot, false)
         .await?;
 
     let expected_num_of_snapshot = 1;
@@ -102,7 +102,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     let snapshot_files = fuse_table.list_snapshot_files().await?;
     fuse_table
-        .do_purge(&table_ctx, snapshot_files, keep_last_snapshot, None)
+        .do_purge(&table_ctx, snapshot_files, None, keep_last_snapshot, false)
         .await?;
 
     // expects two snapshot there
@@ -222,7 +222,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     let snapshot_files = fuse_table.list_snapshot_files().await?;
     fuse_table
-        .do_purge(&table_ctx, snapshot_files, keep_last_snapshot, None)
+        .do_purge(&table_ctx, snapshot_files, None, keep_last_snapshot, false)
         .await?;
 
     let expected_num_of_snapshot = 2;
@@ -265,7 +265,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
             .await?;
         let keep_last_snapshot = true;
         table
-            .do_purge(&table_ctx, snapshot_files, keep_last_snapshot, None)
+            .do_purge(&table_ctx, snapshot_files, None, keep_last_snapshot, false)
             .await?;
 
         let expected_num_of_snapshot = 2;
@@ -302,7 +302,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
     {
         let snapshot_files = fuse_table.list_snapshot_files().await?;
         fuse_table
-            .do_purge(&table_ctx, snapshot_files, true, None)
+            .do_purge(&table_ctx, snapshot_files, None, true, false)
             .await?;
 
         let expected_num_of_snapshot = 1;
@@ -327,7 +327,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
     {
         let snapshot_files = fuse_table.list_snapshot_files().await?;
         fuse_table
-            .do_purge(&table_ctx, snapshot_files, false, None)
+            .do_purge(&table_ctx, snapshot_files, None, false, false)
             .await?;
         let expected_num_of_snapshot = 0;
         let expected_num_of_segment = 0;
