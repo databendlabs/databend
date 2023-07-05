@@ -23,6 +23,8 @@ use common_meta_app::schema::DropIndexReply;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 
 #[async_trait::async_trait]
 pub trait AggregatingIndexHandler: Sync + Send {
@@ -43,6 +45,12 @@ pub trait AggregatingIndexHandler: Sync + Send {
         catalog: Arc<dyn Catalog>,
         req: GetIndexReq,
     ) -> Result<GetIndexReply>;
+
+    async fn do_update_index(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        req: UpdateIndexReq,
+    ) -> Result<UpdateIndexReply>;
 }
 
 pub struct AggregatingIndexHandlerWrapper {
@@ -79,6 +87,15 @@ impl AggregatingIndexHandlerWrapper {
         req: GetIndexReq,
     ) -> Result<GetIndexReply> {
         self.handler.do_get_index(catalog, req).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn do_update_index(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        req: UpdateIndexReq,
+    ) -> Result<UpdateIndexReply> {
+        self.handler.do_update_index(catalog, req).await
     }
 }
 
