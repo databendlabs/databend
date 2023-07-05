@@ -36,9 +36,9 @@ impl VacuumHandler for RealVacuumHandler {
         fuse_table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         retention_time: DateTime<Utc>,
-        dry_run_limit: Option<usize>,
+        dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        do_vacuum(fuse_table, ctx, retention_time, dry_run_limit).await
+        do_vacuum(fuse_table, ctx, retention_time, dry_run).await
     }
 
     async fn do_vacuum_drop_tables(

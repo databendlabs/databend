@@ -291,7 +291,13 @@ where F: SnapshotGenerator + Send + 'static
                             let keep_last_snapshot = true;
                             let snapshot_files = tbl.list_snapshot_files().await?;
                             if let Err(e) = tbl
-                                .do_purge(&self.ctx, snapshot_files, keep_last_snapshot, None)
+                                .do_purge(
+                                    &self.ctx,
+                                    snapshot_files,
+                                    None,
+                                    keep_last_snapshot,
+                                    false,
+                                )
                                 .await
                             {
                                 // Errors of GC, if any, are ignored, since GC task can be picked up
