@@ -4754,7 +4754,7 @@ impl SchemaApiTestSuite {
             assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
             assert_eq!("Unknown database 'nonexistent'", err.message());
             assert_eq!(
-                "Code: 1003, Text = Unknown database 'nonexistent'.",
+                "UnknownDatabase. Code: 1003, Text = Unknown database 'nonexistent'.",
                 err.to_string()
             );
         }
