@@ -84,11 +84,11 @@ done
 ## Select table
 echo "select * from table_drop_external_location order by a;" | $MYSQL_CLIENT_CONNECT
 
-drop table table_drop_external_location;
+echo "drop table table_drop_external_location;" | $MYSQL_CLIENT_CONNECT
 
 echo "vacuum drop table retain 0 hours" | $MYSQL_CLIENT_CONNECT
 
-undrop table table_drop_external_location;
+echo "undrop table table_drop_external_location;" | $MYSQL_CLIENT_CONNECT
 
 echo "select * from table_drop_external_location order by a;" | $MYSQL_CLIENT_CONNECT
 
