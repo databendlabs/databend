@@ -119,7 +119,7 @@ fn test_unsized_hash_map() {
             standard.insert(s, 1);
         }
     }
-    let mut hashtable = ShortStringHashMap::<[u8], U64>::new();
+    let mut hashtable = ShortStringHashMap::<[u8], U64>::new(Arc::new(Bump::new()));
     for s in sequence.iter() {
         match unsafe { hashtable.insert_and_entry(s) } {
             Ok(mut e) => {

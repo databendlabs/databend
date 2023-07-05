@@ -32,6 +32,16 @@ pub struct PartitionedHashtable<Impl, const BUCKETS_LG2: u32, const HIGH_BIT: bo
     arena: Arc<Bump>,
 }
 
+unsafe impl<Impl: Send, const BUCKETS_LG2: u32, const HIGH_BIT: bool> Send
+    for PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
+{
+}
+
+unsafe impl<Impl: Sync, const BUCKETS_LG2: u32, const HIGH_BIT: bool> Sync
+    for PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
+{
+}
+
 impl<Impl, const BUCKETS_LG2: u32, const HIGH_BIT: bool>
     PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
 {
