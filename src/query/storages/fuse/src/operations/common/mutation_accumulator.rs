@@ -41,6 +41,7 @@ use crate::operations::common::MutationLogEntry;
 use crate::operations::common::Replacement;
 use crate::operations::common::ReplacementLogEntry;
 use crate::operations::mutation::BlockIndex;
+use crate::operations::mutation::MutationDeletedSegment;
 use crate::operations::mutation::SegmentIndex;
 use crate::statistics::reducers::deduct_statistics_mut;
 use crate::statistics::reducers::merge_statistics_mut;
@@ -84,6 +85,7 @@ pub struct MutationAccumulator {
     thresholds: BlockThresholds,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
+    deleted_segments: Vec<MutationDeletedSegment>,
     // (path, segment_info)
     appended_segments: Vec<(String, Arc<SegmentInfo>, FormatVersion)>,
     base_segments: Vec<Location>,
@@ -113,6 +115,7 @@ impl MutationAccumulator {
             base_segments,
             abort_operation: AbortOperation::default(),
             summary,
+            deleted_segments: vec![],
         }
     }
 
@@ -136,10 +139,14 @@ impl MutationAccumulator {
                 self.abort_operation.add_block(block_meta);
             }
             Replacement::Deleted => {
-                self.mutations
-                    .entry(meta.index.segment_idx)
-                    .and_modify(|v| v.push_deleted(meta.index.block_idx))
-                    .or_insert(BlockMutations::new_deletion(meta.index.block_idx));
+                if let Some(deleted_segment) = &meta.deleted_segment {
+                    self.deleted_segments.push(deleted_segment.clone())
+                } else {
+                    self.mutations
+                        .entry(meta.index.segment_idx)
+                        .and_modify(|v| v.push_deleted(meta.index.block_idx))
+                        .or_insert(BlockMutations::new_deletion(meta.index.block_idx));
+                }
             }
             Replacement::DoNothing => (),
         }
@@ -164,17 +171,24 @@ impl MutationAccumulator {
 impl MutationAccumulator {
     pub async fn apply(&mut self) -> Result<CommitMeta> {
         let mut recalc_stats = false;
-        if self.mutations.len() == self.base_segments.len() {
+        let segment_locations = self.base_segments.clone();
+        let mut segments_editor =
+            BTreeMap::<_, _>::from_iter(segment_locations.into_iter().enumerate());
+        // clean deleted segments' summary
+        for mutation_deleted_segment in &self.deleted_segments {
+            deduct_statistics_mut(
+                &mut self.summary,
+                &mutation_deleted_segment.deleted_segment.segment_info.1,
+            );
+            segments_editor.remove(&mutation_deleted_segment.deleted_segment.index);
+        }
+        if self.mutations.len() == self.base_segments.len() - self.deleted_segments.len() {
             self.summary = Statistics::default();
             recalc_stats = true;
         }
 
         let start = Instant::now();
         let mut count = 0;
-
-        let segment_locations = self.base_segments.clone();
-        let mut segments_editor =
-            BTreeMap::<_, _>::from_iter(segment_locations.into_iter().enumerate());
 
         let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
         let segment_indices = self.mutations.keys().cloned().collect::<Vec<_>>();

@@ -618,8 +618,9 @@ impl Table for HiveTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _instant: Option<NavigationPoint>,
+        _limit: Option<usize>,
         _keep_last_snapshot: bool,
-        _dry_run_limit: Option<usize>,
+        _dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         Ok(None)
     }

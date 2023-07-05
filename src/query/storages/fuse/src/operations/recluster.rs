@@ -69,8 +69,8 @@ impl FuseTable {
         let schema = self.table_info.schema();
         let segment_locations = snapshot.segments.clone();
         let segment_locations = create_segment_location_vector(segment_locations, None);
-        let pruner = FusePruner::create(&ctx, self.operator.clone(), schema, &push_downs)?;
-        let block_metas = pruner.pruning(segment_locations).await?;
+        let mut pruner = FusePruner::create(&ctx, self.operator.clone(), schema, &push_downs)?;
+        let block_metas = pruner.read_pruning(segment_locations).await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
         let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> = BTreeMap::new();

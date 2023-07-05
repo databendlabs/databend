@@ -600,14 +600,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let optimize_table = map(
         rule! {
-            OPTIMIZE ~ TABLE ~ #period_separated_idents_1_to_3 ~ #optimize_table_action
+            OPTIMIZE ~ TABLE ~ #period_separated_idents_1_to_3 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
         },
-        |(_, _, (catalog, database, table), action)| {
+        |(_, _, (catalog, database, table), action, opt_limit)| {
             Statement::OptimizeTable(OptimizeTableStmt {
                 catalog,
                 database,
                 table,
                 action,
+                limit: opt_limit.map(|(_, limit)| limit),
             })
         },
     );
@@ -1567,15 +1568,15 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         ),
         map(
             rule! {
-                AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ VIRTUAL
+                (GENERATED ~ ALWAYS)? ~ AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ VIRTUAL
             },
-            |(_, _, virtual_expr, _, _)| ColumnConstraint::VirtualExpr(Box::new(virtual_expr)),
+            |(_, _, _, virtual_expr, _, _)| ColumnConstraint::VirtualExpr(Box::new(virtual_expr)),
         ),
         map(
             rule! {
-                AS ~ "(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ STORED
+                (GENERATED ~ ALWAYS)? ~ AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ STORED
             },
-            |(_, _, stored_expr, _, _)| ColumnConstraint::StoredExpr(Box::new(stored_expr)),
+            |(_, _, _, stored_expr, _, _)| ColumnConstraint::StoredExpr(Box::new(stored_expr)),
         ),
     ));
 
@@ -1860,6 +1861,15 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             action: ModifyColumnAction::SetMaskingPolicy(mask_name.to_string()),
         },
     );
+    let convert_stored_computed_column = map(
+        rule! {
+            MODIFY ~ COLUMN ~ #ident ~ DROP ~ STORED
+        },
+        |(_, _, column, _, _)| AlterTableAction::ModifyColumn {
+            column,
+            action: ModifyColumnAction::ConvertStoredComputedColumn,
+        },
+    );
     let drop_column = map(
         rule! {
             DROP ~ COLUMN ~ #ident
@@ -1910,6 +1920,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #add_column
         | #drop_column
         | #modify_column
+        | #convert_stored_computed_column
         | #alter_table_cluster_key
         | #drop_table_cluster_key
         | #recluster_table
@@ -1927,13 +1938,11 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
                 before: opt_travel_point.map(|(_, p)| p),
             },
         ),
-        map(
-            rule! { COMPACT ~ (SEGMENT)? ~ ( LIMIT ~ ^#expr )?},
-            |(_, opt_segment, opt_limit)| OptimizeTableAction::Compact {
+        map(rule! { COMPACT ~ (SEGMENT)?}, |(_, opt_segment)| {
+            OptimizeTableAction::Compact {
                 target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
-                limit: opt_limit.map(|(_, limit)| limit),
-            },
-        ),
+            }
+        }),
     ))(i)
 }
 
