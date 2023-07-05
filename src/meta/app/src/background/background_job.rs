@@ -71,11 +71,30 @@ impl Display for BackgroundJobType {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ManualTriggerParams {
+    pub id: String,
+    pub trigger: UserIdentity,
+    pub triggered_at: DateTime<Utc>,
+}
+
+impl ManualTriggerParams {
+    pub fn new(id: String, trigger: UserIdentity) -> Self {
+        Self {
+            id,
+            trigger,
+            triggered_at: Utc::now(),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundJobParams {
     pub job_type: BackgroundJobType,
     pub scheduled_job_interval: std::time::Duration,
     pub scheduled_job_cron: String,
     pub scheduled_job_timezone: Option<chrono_tz::Tz>,
+
+    pub manual_trigger_params: Option<ManualTriggerParams>,
 }
 
 impl BackgroundJobParams {

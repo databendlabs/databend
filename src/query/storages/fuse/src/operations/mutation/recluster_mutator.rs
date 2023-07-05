@@ -27,8 +27,6 @@ use storages_common_table_meta::meta::BlockMeta;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
-use crate::operations::common::Replacement;
-use crate::operations::common::ReplacementLogEntry;
 
 static MAX_BLOCK_COUNT: usize = 50;
 
@@ -100,14 +98,9 @@ impl ReclusterMutator {
                 self.selected_blocks = block_metas
                     .into_iter()
                     .map(|(block_idx, block_meta)| {
-                        let entry = ReplacementLogEntry {
-                            index: block_idx,
-                            op: Replacement::Deleted,
-                            deleted_segment: None,
-                        };
                         self.mutation_logs
                             .entries
-                            .push(MutationLogEntry::Replacement(entry));
+                            .push(MutationLogEntry::DeletedBlock { index: block_idx });
                         block_meta
                     })
                     .collect();
@@ -181,14 +174,9 @@ impl ReclusterMutator {
                 .take(MAX_BLOCK_COUNT)
                 .map(|idx| {
                     let (block_idx, block_meta) = block_metas[*idx].clone();
-                    let entry = ReplacementLogEntry {
-                        index: block_idx,
-                        op: Replacement::Deleted,
-                        deleted_segment: None,
-                    };
                     self.mutation_logs
                         .entries
-                        .push(MutationLogEntry::Replacement(entry));
+                        .push(MutationLogEntry::DeletedBlock { index: block_idx });
                     block_meta
                 })
                 .collect::<Vec<_>>();
