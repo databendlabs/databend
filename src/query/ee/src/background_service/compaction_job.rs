@@ -159,6 +159,12 @@ impl CompactionJob {
     }
     async fn do_compaction_job(&mut self) -> Result<()> {
         let ctx = self.session.create_query_context().await?;
+        let job_info = self.get_info().await?;
+
+        let (params, manual) = Self::sync_compact_params(&job_info).await;
+        // guarantee at least once for maunal job
+        self.update_job_params(params).await?;
+
         for records in Self::do_get_target_tables_from_config(&self.conf, ctx.clone()).await? {
             debug!(?records, "target_tables");
             let db_names = records
@@ -193,6 +199,7 @@ impl CompactionJob {
                         tb_name.clone(),
                         db_id,
                         tb_id,
+                        manual.clone(),
                     )
                     .await
                 {
@@ -269,6 +276,7 @@ impl CompactionJob {
         table: String,
         db_id: u64,
         tb_id: u64,
+        manual: Option<ManualTriggerParams>,
     ) -> Result<()> {
         let (seg, blk, stats) = Self::do_check_table(
             session.clone(),
@@ -296,13 +304,10 @@ impl CompactionJob {
         let job_info = self.get_info().await?;
         let id = Uuid::new_v4().to_string();
 
-        let (params, manual) = Self::sync_compact_params(&job_info).await;
         let status = self.sync_compact_status(id.clone(), &job_info).await?;
         if status.is_none() {
             return Ok(());
         }
-        // guarantee at least once for maunal job
-        self.update_job_params(params).await?;
         self.update_job_status(status.clone().unwrap()).await?;
 
         info!(job = "compaction", background = true, id=id.clone(), database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "start compact");
