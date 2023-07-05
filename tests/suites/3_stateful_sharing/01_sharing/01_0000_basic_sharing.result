@@ -19,7 +19,7 @@ INBOUND test_share test_database shared_tenant to_tenant
 5
 6
 cannot grant a database which create from share
-ERROR 1105 (HY000) at line 1: Code: 2718, Text = Cannot share database 'shared_db' which created from share.
+ERROR 1105 (HY000) at line 1: CannotShareDatabaseCreatedFromShare. Code: 2718, Text = Cannot share database 'shared_db' which created from share.
 alter table add column and query table data again
 1,1
 2,1
@@ -35,14 +35,14 @@ alter table drop column and query table data again
 1
 1
 drop shared table and query data from share
-ERROR 1105 (HY000) at line 1: Code: 1025, Text = error: 
+ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = error:
   --> SQL:1:15
   |
 1 | SELECT * FROM shared_db.t1
   |               ^^^^^^^^^^^^ Unknown table 't1'
 
 .
-ERROR 1105 (HY000) at line 1: Code: 1025, Text = error: 
+ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = error:
   --> SQL:1:15
   |
 1 | SELECT * FROM shared_db.t1
@@ -56,14 +56,14 @@ drop shared database and query data from share
 4
 5
 6
-ERROR 1105 (HY000) at line 1: Code: 1025, Text = error: 
+ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = error:
   --> SQL:1:15
   |
 1 | SELECT * FROM shared_db.t2
   |               ^^^^^^^^^^^^ Unknown table 't2'
 
 .
-ERROR 1105 (HY000) at line 1: Code: 1025, Text = error: 
+ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = error:
   --> SQL:1:15
   |
 1 | SELECT * FROM shared_db.t2
