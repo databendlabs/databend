@@ -74,6 +74,7 @@ use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::debug;
+use tracing::error;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
@@ -575,8 +576,10 @@ impl Binder {
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
 
-        let mut uri = stmt.uri_location.clone();
-        let (sp, path) = parse_uri_location(&mut uri)?;
+        let mut path = stmt.uri_location.path.clone();
+        if path.ends_with('/') {
+            path.pop();
+        }
         let mut parts = path.split('/').collect::<Vec<_>>();
         if parts.len() < 2 {
             return Err(ErrorCode::BadArguments(format!(
@@ -584,9 +587,17 @@ impl Binder {
                 stmt.uri_location
             )));
         }
+        error!("parts: {:?}", parts);
         let storage_prefix = parts.split_off(parts.len() - 2).join("/");
+        let root = parts.join("/");
+        let root = format!("{}/", root);
+        error!("storage_prefix: {}", storage_prefix);
         let mut options = BTreeMap::new();
         options.insert(OPT_KEY_STORAGE_PREFIX.to_string(), storage_prefix);
+
+        let mut uri = stmt.uri_location.clone();
+        uri.path = root;
+        let (sp, _) = parse_uri_location(&mut uri)?;
 
         // create a temporary op to check if params is correct
         DataOperator::try_create(&sp).await?;

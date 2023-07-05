@@ -30,6 +30,7 @@ use common_meta_types::MatchSeq;
 use common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use common_sql::field_default_value;
 use common_sql::plans::CreateTablePlan;
+use common_storage::DataOperator;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
@@ -209,6 +210,7 @@ impl CreateTableInterpreter {
             }
         }
         let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
+            error!("storage prefix: {}", storage_prefix);
             self.build_attach_request(storage_prefix).await
         } else {
             self.build_request(stat)
@@ -284,9 +286,16 @@ impl CreateTableInterpreter {
     }
 
     async fn build_attach_request(&self, storage_prefix: &str) -> Result<CreateTableReq> {
-        let operator = self.ctx.get_data_operator()?.operator();
-        let reader = MetaReaders::table_snapshot_reader(operator);
-        let snapshot_loc = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
+        // Safe to unwrap in this function, as attach table must have storage params.
+        let operator = DataOperator::try_create(self.plan.storage_params.as_ref().unwrap()).await?;
+        let operator = operator.operator();
+        let reader = MetaReaders::table_snapshot_reader(operator.clone());
+        let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
+        let snapshot_loc = operator.read(&hint).await?;
+        let snapshot_loc = String::from_utf8(snapshot_loc)?;
+        let mut options = self.plan.options.clone();
+        options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc.clone());
+        error!("load snapshot from {}", snapshot_loc);
 
         let params = LoadParams {
             location: snapshot_loc.clone(),
@@ -309,7 +318,7 @@ impl CreateTableInterpreter {
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
             part_prefix: self.plan.part_prefix.clone(),
-            options: self.plan.options.clone(),
+            options,
             default_cluster_key: None,
             field_comments: self.plan.field_comments.clone(),
             drop_on: None,
