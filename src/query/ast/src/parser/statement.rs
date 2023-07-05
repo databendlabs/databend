@@ -486,10 +486,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let attach_table = map(
         rule! {
-            ATTACH ~ TABLE ~ #period_separated_idents_1_to_2 ~ #uri_location
+            ATTACH ~ TABLE ~ #period_separated_idents_1_to_3 ~ #uri_location
         },
-        |(_, _, (database, table), uri_location)| {
+        |(_, _, (catalog, database, table), uri_location)| {
             Statement::AttachTable(AttachTableStmt {
+                catalog,
                 database,
                 table,
                 uri_location,

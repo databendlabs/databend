@@ -572,13 +572,8 @@ impl Binder {
         &mut self,
         stmt: &AttachTableStmt,
     ) -> Result<Plan> {
-        let catalog = self.ctx.get_current_catalog();
-        let database = stmt
-            .database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(&stmt.table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
 
         let mut uri = stmt.uri_location.clone();
         let (sp, path) = parse_uri_location(&mut uri)?;
