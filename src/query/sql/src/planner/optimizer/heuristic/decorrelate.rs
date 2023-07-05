@@ -439,7 +439,7 @@ impl SubqueryRewriter {
                             column_position: None,
                             table_index: Some(table_index),
                             column_name: "".to_string(),
-                            index: column_index.clone(),
+                            index: column_index,
                             data_type: Box::new(data_types[index].clone()),
                             visibility: Visibility::Visible,
                             virtual_computed_expr: None,
@@ -461,7 +461,7 @@ impl SubqueryRewriter {
                     }
                     .into(),
                 ),
-                Arc::new(logical_get.clone()),
+                Arc::new(logical_get),
             );
             let cross_join = Join {
                 left_conditions: vec![],
