@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -35,11 +36,10 @@ use tracing::info;
 use crate::io::SegmentsIO;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::CompactPartInfo;
+use crate::operations::mutation::MAX_BLOCK_COUNT;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::deduct_statistics_mut;
 use crate::TableContext;
-
-static MAX_BLOCK_COUNT: usize = 1000_1000;
 
 #[derive(Clone)]
 pub struct BlockCompactMutator {
@@ -141,7 +141,7 @@ impl BlockCompactMutator {
                 }
                 checked_end_at += 1;
                 if compacted_segment_cnt + checker.segments.len() >= limit
-                    || compacted_block_cnt > MAX_BLOCK_COUNT
+                    || compacted_block_cnt >= MAX_BLOCK_COUNT
                 {
                     is_end = true;
                     break;
@@ -209,23 +209,52 @@ impl BlockCompactMutator {
         // Used to identify whether the latest block is unchanged or needs to be compacted.
         let mut latest_flag = true;
         let mut unchanged_blocks: BTreeMap<usize, Arc<BlockMeta>> = BTreeMap::new();
+
+        let mut blocks = Vec::new();
         // The order of the compact is from old to new.
-        for segment in segments.iter().rev() {
-            deduct_statistics_mut(&mut self.unchanged_segment_statistics, &segment.summary);
-            for block in segment.blocks.iter() {
-                let (unchanged, need_take) = builder.add(block, self.thresholds);
-                if need_take {
-                    let blocks = builder.take_blocks();
-                    latest_flag =
-                        builder.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
-                    block_idx += 1;
+        segments.into_iter().rev().for_each(|s| {
+            deduct_statistics_mut(&mut self.unchanged_segment_statistics, &s.summary);
+            blocks.extend(s.blocks.clone());
+        });
+
+        if let Some(default_cluster_key) = self.cluster_key_id {
+            blocks.sort_by(|a, b| {
+                if a.cluster_stats.is_none() {
+                    Ordering::Less
+                } else if b.cluster_stats.is_none() {
+                    Ordering::Greater
+                } else {
+                    let a = a.cluster_stats.clone().unwrap();
+                    let b = b.cluster_stats.clone().unwrap();
+                    if a.cluster_key_id != default_cluster_key {
+                        Ordering::Less
+                    } else if b.cluster_key_id != default_cluster_key {
+                        Ordering::Greater
+                    } else {
+                        let ord = a.min.cmp(&b.min);
+                        if ord == Ordering::Equal {
+                            a.max.cmp(&b.max)
+                        } else {
+                            ord
+                        }
+                    }
                 }
-                if unchanged {
-                    let blocks = vec![block.clone()];
-                    latest_flag =
-                        builder.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
-                    block_idx += 1;
-                }
+            });
+        }
+
+        for block in blocks.iter() {
+            let (unchanged, need_take) = builder.add(block, self.thresholds);
+            if need_take {
+                let blocks = builder.take_blocks();
+                latest_flag =
+                    builder.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
+                block_idx += 1;
+            }
+            if unchanged {
+                let blocks = vec![block.clone()];
+                latest_flag =
+                    builder.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
+                block_idx += 1;
             }
         }
 
