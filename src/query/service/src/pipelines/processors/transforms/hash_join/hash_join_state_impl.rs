@@ -44,7 +44,6 @@ use ethnum::U256;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::JoinState;
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
@@ -63,7 +62,7 @@ impl HashJoinState for JoinHashTable {
         let mut buffer = self.row_space.buffer.write();
         buffer.push(input);
         let buffer_row_size = buffer.iter().fold(0, |acc, x| acc + x.num_rows());
-        if buffer_row_size < *self.data_block_size_limit {
+        if buffer_row_size < *self.build_side_block_size_limit {
             Ok(())
         } else {
             let data_block = DataBlock::concat(buffer.as_slice())?;
@@ -525,6 +524,7 @@ impl HashJoinState for JoinHashTable {
         task: usize,
         state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
+        let max_block_size = state.max_block_size;
         let true_validity = &state.true_validity;
         let build_indexes = &mut state.build_indexes;
         let mut build_indexes_occupied = 0;
@@ -551,7 +551,7 @@ impl HashJoinState for JoinHashTable {
         let outer_map_len = outer_map.len();
         let mut row_index = 0;
         while row_index < outer_map_len {
-            while row_index < outer_map_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
+            while row_index < outer_map_len && build_indexes_occupied < max_block_size {
                 if !outer_map[row_index] {
                     build_indexes[build_indexes_occupied].chunk_index = chunk_index as u32;
                     build_indexes[build_indexes_occupied].row_index = row_index as u32;
@@ -567,7 +567,7 @@ impl HashJoinState for JoinHashTable {
 
             if self.hash_join_desc.join_type == JoinType::Full {
                 let num_rows = unmatched_build_block.num_rows();
-                let nullable_unmatched_build_columns = if num_rows == JOIN_MAX_BLOCK_SIZE {
+                let nullable_unmatched_build_columns = if num_rows == max_block_size {
                     unmatched_build_block
                         .columns()
                         .iter()
@@ -601,6 +601,7 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn right_semi_outer_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>> {
+        let max_block_size = state.max_block_size;
         let build_indexes = &mut state.build_indexes;
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
@@ -626,7 +627,7 @@ impl HashJoinState for JoinHashTable {
         let outer_map_len = outer_map.len();
         let mut row_index = 0;
         while row_index < outer_map_len {
-            while row_index < outer_map_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
+            while row_index < outer_map_len && build_indexes_occupied < max_block_size {
                 if outer_map[row_index] {
                     build_indexes[build_indexes_occupied].chunk_index = chunk_index as u32;
                     build_indexes[build_indexes_occupied].row_index = row_index as u32;
@@ -645,6 +646,7 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn right_anti_outer_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>> {
+        let max_block_size = state.max_block_size;
         let build_indexes = &mut state.build_indexes;
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
@@ -670,7 +672,7 @@ impl HashJoinState for JoinHashTable {
         let outer_map_len = outer_map.len();
         let mut row_index = 0;
         while row_index < outer_map_len {
-            while row_index < outer_map_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
+            while row_index < outer_map_len && build_indexes_occupied < max_block_size {
                 if !outer_map[row_index] {
                     build_indexes[build_indexes_occupied].chunk_index = chunk_index as u32;
                     build_indexes[build_indexes_occupied].row_index = row_index as u32;
@@ -693,6 +695,7 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn left_mark_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>> {
+        let max_block_size = state.max_block_size;
         let build_indexes = &mut state.build_indexes;
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
@@ -720,7 +723,7 @@ impl HashJoinState for JoinHashTable {
         let markers_len = markers.len();
         let mut row_index = 0;
         while row_index < markers_len {
-            let block_size = std::cmp::min(markers_len - row_index, JOIN_MAX_BLOCK_SIZE);
+            let block_size = std::cmp::min(markers_len - row_index, max_block_size);
             let mut validity = MutableBitmap::with_capacity(block_size);
             let mut boolean_bit_map = MutableBitmap::with_capacity(block_size);
             while build_indexes_occupied < block_size {

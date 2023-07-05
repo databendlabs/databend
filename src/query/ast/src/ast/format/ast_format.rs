@@ -1366,10 +1366,21 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
-            AlterTableAction::ModifyColumn { column, action: _ } => {
+            AlterTableAction::ModifyColumn { column, action } => {
+                let child_name = match action {
+                    ModifyColumnAction::SetMaskingPolicy(mask_name) => {
+                        format!("Action SetMaskingPolicy {}", mask_name)
+                    }
+                    ModifyColumnAction::ConvertStoredComputedColumn => {
+                        "Action ConvertStoredComputedColumn".to_string()
+                    }
+                };
+                let child_format_ctx = AstFormatContext::new(child_name);
+                let child = FormatTreeNode::new(child_format_ctx);
+
                 let action_name = format!("Action ModifyColumn column {}", column);
-                let action_format_ctx = AstFormatContext::new(action_name);
-                FormatTreeNode::new(action_format_ctx)
+                let action_format_ctx = AstFormatContext::with_children(action_name, 1);
+                FormatTreeNode::with_children(action_format_ctx, vec![child])
             }
             AlterTableAction::DropColumn { column } => {
                 let action_name = format!("Action Drop column {}", column);

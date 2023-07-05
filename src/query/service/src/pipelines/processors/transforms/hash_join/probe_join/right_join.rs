@@ -22,7 +22,6 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
 
@@ -38,6 +37,7 @@ impl JoinHashTable {
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
+        let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         let true_validity = &probe_state.true_validity;
         let local_probe_indexes = &mut probe_state.probe_indexes;
@@ -66,6 +66,7 @@ impl JoinHashTable {
                 i,
                 local_build_indexes_ptr,
                 matched_num,
+                max_block_size,
             );
             if match_count == 0 {
                 continue;
@@ -73,10 +74,10 @@ impl JoinHashTable {
             matched_num += match_count;
             local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
             probe_indexes_len += 1;
-            if matched_num >= JOIN_MAX_BLOCK_SIZE {
+            if matched_num >= max_block_size {
                 loop {
-                    // The matched_num must be equal to JOIN_MAX_BLOCK_SIZE.
-                    debug_assert_eq!(matched_num, JOIN_MAX_BLOCK_SIZE);
+                    // The matched_num must be equal to max_block_size.
+                    debug_assert_eq!(matched_num, max_block_size);
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
@@ -91,16 +92,16 @@ impl JoinHashTable {
                     let mut probe_block = DataBlock::take_compacted_indices(
                         input,
                         &local_probe_indexes[0..probe_indexes_len],
-                        JOIN_MAX_BLOCK_SIZE,
+                        max_block_size,
                     )?;
 
                     // The join type is right join, we need to wrap nullable for probe side.
                     let nullable_columns = probe_block
                         .columns()
                         .iter()
-                        .map(|c| Self::set_validity(c, JOIN_MAX_BLOCK_SIZE, true_validity))
+                        .map(|c| Self::set_validity(c, max_block_size, true_validity))
                         .collect::<Vec<_>>();
-                    probe_block = DataBlock::new(nullable_columns, JOIN_MAX_BLOCK_SIZE);
+                    probe_block = DataBlock::new(nullable_columns, max_block_size);
 
                     if !probe_block.is_empty() {
                         let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
@@ -126,7 +127,7 @@ impl JoinHashTable {
                                 // Safe to unwrap.
                                 let validity = bm.unwrap();
                                 let mut idx = 0;
-                                while idx < JOIN_MAX_BLOCK_SIZE {
+                                while idx < max_block_size {
                                     let valid = unsafe { validity.get_bit_unchecked(idx) };
                                     if valid {
                                         outer_scan_map
@@ -153,7 +154,7 @@ impl JoinHashTable {
                         incomplete_ptr,
                         local_build_indexes_ptr,
                         matched_num,
-                        JOIN_MAX_BLOCK_SIZE,
+                        max_block_size,
                     );
                     if match_count == 0 {
                         break;
@@ -163,7 +164,7 @@ impl JoinHashTable {
                     local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
                     probe_indexes_len += 1;
 
-                    if matched_num < JOIN_MAX_BLOCK_SIZE {
+                    if matched_num < max_block_size {
                         break;
                     }
                 }
