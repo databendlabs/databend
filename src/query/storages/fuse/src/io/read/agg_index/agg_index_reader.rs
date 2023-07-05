@@ -34,7 +34,7 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use opendal::Operator;
-use tracing::warn;
+use tracing::debug;
 
 #[derive(Clone)]
 pub struct AggIndexReader {
@@ -87,9 +87,9 @@ impl AggIndexReader {
             Ok(data) => Some(data),
             Err(e) => {
                 if e.kind() == opendal::ErrorKind::NotFound {
-                    warn!("Aggregating index `{loc}` not found.")
+                    debug!("Aggregating index `{loc}` not found.")
                 } else {
-                    warn!("Read aggregating index `{loc}` failed: {e}");
+                    debug!("Read aggregating index `{loc}` failed: {e}");
                 }
                 None
             }
@@ -101,9 +101,9 @@ impl AggIndexReader {
             Ok(data) => Some(data),
             Err(e) => {
                 if e.kind() == opendal::ErrorKind::NotFound {
-                    warn!("Aggregating index `{loc}` not found.")
+                    debug!("Aggregating index `{loc}` not found.")
                 } else {
-                    warn!("Read aggregating index `{loc}` failed: {e}");
+                    debug!("Read aggregating index `{loc}` failed: {e}");
                 }
                 None
             }
