@@ -367,6 +367,7 @@ impl AggregationContext {
                     block_idx: block_index,
                 },
                 op: Replacement::Deleted,
+                deleted_segment: None,
             };
 
             return Ok(Some(mutation));
@@ -437,6 +438,7 @@ impl AggregationContext {
                 block_idx: block_index,
             },
             op: Replacement::Replaced(Arc::new(new_block_meta)),
+            deleted_segment: None,
         };
 
         Ok(Some(mutation))

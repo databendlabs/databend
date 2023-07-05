@@ -26,6 +26,7 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 
 use crate::operations::common::AbortOperation;
+use crate::operations::mutation::MutationDeletedSegment;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct MutationLogs {
@@ -42,6 +43,8 @@ pub enum MutationLogEntry {
 pub struct ReplacementLogEntry {
     pub index: BlockMetaIndex,
     pub op: Replacement,
+    // for delete operation, delete whole segment
+    pub deleted_segment: Option<MutationDeletedSegment>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

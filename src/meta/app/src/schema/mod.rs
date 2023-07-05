@@ -27,6 +27,7 @@ pub use database::DatabaseId;
 pub use database::DatabaseIdToName;
 pub use database::DatabaseIdent;
 pub use database::DatabaseInfo;
+pub use database::DatabaseInfoFilter;
 pub use database::DatabaseMeta;
 pub use database::DatabaseNameIdent;
 pub use database::DbIdList;
