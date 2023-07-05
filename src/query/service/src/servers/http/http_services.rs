@@ -97,7 +97,7 @@ impl HttpHandler {
             .nest("/query", query_route())
             .at("/streaming_load", put(streaming_load))
             .at("/upload_to_stage", put(upload_to_stage))
-            .at("/suggestions", get(list_suggestions));
+            .at("/suggested_background_tasks", get(list_suggestions));
         let ep_v1 = self.wrap_auth(ep_v1);
 
         let ep_clickhouse = Route::new().nest("/", clickhouse_router());
