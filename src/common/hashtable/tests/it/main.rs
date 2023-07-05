@@ -142,7 +142,7 @@ fn test_unsized_hash_map() {
 
 #[test]
 fn test_dictionary_hash_map() {
-    let mut hashtable = DictionaryStringHashMap::<usize>::new(2, Arc::new(Bump::new()));
+    let mut hashtable = DictionaryStringHashMap::<usize>::new(Arc::new(Bump::new()), 2);
     unsafe {
         for index1 in 0..1000 {
             for index2 in 0..1000 {
