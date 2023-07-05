@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,8 +20,6 @@ use arrow_array::BooleanArray;
 use arrow_array::LargeBinaryArray;
 use arrow_array::RecordBatch;
 use arrow_array::UInt64Array;
-use background_service::background_service::BackgroundServiceHandlerWrapper;
-use background_service::get_background_service_handler;
 use chrono::Utc;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::Mutex;
@@ -31,48 +30,31 @@ use common_exception::Result;
 use common_meta_api::BackgroundApi;
 use common_meta_app::background::BackgroundJobIdent;
 use common_meta_app::background::BackgroundJobInfo;
+use common_meta_app::background::BackgroundJobParams;
 use common_meta_app::background::BackgroundJobStatus;
 use common_meta_app::background::BackgroundJobType::ONESHOT;
 use common_meta_app::background::BackgroundTaskIdent;
 use common_meta_app::background::BackgroundTaskInfo;
 use common_meta_app::background::BackgroundTaskState;
+use common_meta_app::background::GetBackgroundJobReq;
+use common_meta_app::background::ManualTriggerParams;
+use common_meta_app::background::UpdateBackgroundJobParamsReq;
 use common_meta_app::background::UpdateBackgroundJobStatusReq;
 use common_meta_app::background::UpdateBackgroundTaskReq;
 use common_meta_app::schema::TableStatistics;
 use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
+use databend_query::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
+use databend_query::sessions::QueryContext;
+use databend_query::sessions::Session;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 
 use crate::background_service::job::Job;
 
-// TODO(zhihanz) add more configs to filter out tables need to be compacted
-const GET_ALL_TARGET_TABLES: &str = "
-SELECT t.database as database, d.database_id as database_id, t.name as table, t.table_id as table_id
-FROM system.tables as t
-JOIN system.databases as d
-ON t.database = d.name
-WHERE t.database != 'system'
-    AND t.database != 'information_schema'
-    AND t.engine = 'FUSE'
-    AND t.num_rows > 1 * 1000 * 100
-    AND t.table_id NOT IN (
-        SELECT
-          table_id
-        FROM
-          system.background_tasks
-        WHERE
-          state = 'DONE'
-          AND table_id = t.table_id
-          AND type = 'COMPACTION'
-          AND updated_on > t.updated_on
-    )
-    ;
-";
-
-const SEGMENT_SIZE: u64 = 1;
-const PER_SEGMENT_BLOCK: u64 = 100;
+const BLOCK_COUNT: u64 = 500;
+const PER_SEGMENT_BLOCK: u64 = 500;
 const PER_BLOCK_SIZE: u64 = 50; // MB
 
 const EXPIRE_SEC: u64 = 60 * 60 * 24 * 7; // 7 days
@@ -82,7 +64,7 @@ pub struct CompactionJob {
     conf: InnerConfig,
     meta_api: Arc<MetaStore>,
     creator: BackgroundJobIdent,
-    info: Arc<parking_lot::Mutex<BackgroundJobInfo>>,
+    session: Arc<Session>,
 
     finish_tx: Arc<Mutex<Sender<u64>>>,
 }
@@ -96,8 +78,14 @@ impl Job for CompactionJob {
             .expect("failed to do compaction job");
     }
 
-    fn get_info(&self) -> BackgroundJobInfo {
-        self.info.lock().clone()
+    async fn get_info(&self) -> Result<BackgroundJobInfo> {
+        let job = self
+            .meta_api
+            .get_background_job(GetBackgroundJobReq {
+                name: self.creator.clone(),
+            })
+            .await?;
+        Ok(job.info)
     }
 
     fn get_name(&self) -> BackgroundJobIdent {
@@ -110,7 +98,16 @@ impl Job for CompactionJob {
                 status: status.clone(),
             })
             .await?;
-        self.info.lock().job_status = Some(status);
+        Ok(())
+    }
+
+    async fn update_job_params(&mut self, param: BackgroundJobParams) -> Result<()> {
+        self.meta_api
+            .update_background_job_params(UpdateBackgroundJobParamsReq {
+                job_name: self.creator.clone(),
+                params: param.clone(),
+            })
+            .await?;
         Ok(())
     }
 }
@@ -129,10 +126,12 @@ pub fn should_continue_compaction(old: &TableStatistics, new: &TableStatistics) 
     let new_segment_density =
         new.number_of_blocks.unwrap() as f64 / new.number_of_segments.unwrap() as f64;
     let should_continue_seg_compact = new_segment_density != old_segment_density
+        && new.number_of_blocks.unwrap() > BLOCK_COUNT
         && new_segment_density < PER_SEGMENT_BLOCK as f64;
     let old_block_density = old.data_bytes as f64 / old.number_of_blocks.unwrap() as f64;
     let new_block_density = new.data_bytes as f64 / new.number_of_blocks.unwrap() as f64;
     let should_continue_blk_compact = new_block_density != old_block_density
+        && new.number_of_blocks.unwrap() > BLOCK_COUNT
         && new_block_density < PER_BLOCK_SIZE as f64 * 1024.0 * 1024.0;
     (should_continue_seg_compact, should_continue_blk_compact)
 }
@@ -144,24 +143,29 @@ impl CompactionJob {
     pub async fn create(
         config: &InnerConfig,
         name: String,
-        info: BackgroundJobInfo,
+        session: Arc<Session>,
         finish_tx: Arc<Mutex<Sender<u64>>>,
     ) -> Self {
         let tenant = config.query.tenant_id.clone();
         let creator = BackgroundJobIdent { tenant, name };
         let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let info = Arc::new(parking_lot::Mutex::new(info));
         Self {
             conf: config.clone(),
             meta_api,
             creator,
-            info,
+            session,
             finish_tx,
         }
     }
     async fn do_compaction_job(&mut self) -> Result<()> {
-        let svc = get_background_service_handler();
-        if let Some(records) = Self::do_get_all_target_tables(&svc).await? {
+        let ctx = self.session.create_query_context().await?;
+        let job_info = self.get_info().await?;
+
+        let (params, manual) = Self::sync_compact_params(&job_info).await;
+        // guarantee at least once for maunal job
+        self.update_job_params(params).await?;
+
+        for records in Self::do_get_target_tables_from_config(&self.conf, ctx.clone()).await? {
             debug!(?records, "target_tables");
             let db_names = records
                 .column(0)
@@ -189,7 +193,14 @@ impl CompactionJob {
                 let tb_name = String::from_utf8_lossy(tb_names.value(i)).to_string();
                 let tb_id = tb_ids.value(i);
                 match self
-                    .compact_table(&svc, db_name.clone(), tb_name.clone(), db_id, tb_id)
+                    .compact_table(
+                        self.session.clone(),
+                        db_name.clone(),
+                        tb_name.clone(),
+                        db_id,
+                        tb_id,
+                        manual.clone(),
+                    )
                     .await
                 {
                     Ok(_) => {
@@ -234,9 +245,19 @@ impl CompactionJob {
         }
     }
 
-    async fn sync_compact_status(&self, id: String) -> Result<Option<BackgroundJobStatus>> {
-        let job_info = self.info.clone();
-        let job_info = job_info.lock();
+    async fn sync_compact_params(
+        job_info: &BackgroundJobInfo,
+    ) -> (BackgroundJobParams, Option<ManualTriggerParams>) {
+        let mut job_params = job_info.job_params.clone().unwrap();
+        let manual = job_params.manual_trigger_params.clone();
+        job_params.manual_trigger_params = None;
+        (job_params, manual)
+    }
+    async fn sync_compact_status(
+        &self,
+        id: String,
+        job_info: &BackgroundJobInfo,
+    ) -> Result<Option<BackgroundJobStatus>> {
         let mut job_status = job_info.job_status.clone().unwrap();
         job_status.last_task_id = Some(id);
         job_status.last_task_run_at = Some(Utc::now());
@@ -250,27 +271,40 @@ impl CompactionJob {
 
     async fn compact_table(
         &mut self,
-        svc: &Arc<BackgroundServiceHandlerWrapper>,
+        session: Arc<Session>,
         database: String,
         table: String,
         db_id: u64,
         tb_id: u64,
+        manual: Option<ManualTriggerParams>,
     ) -> Result<()> {
         let (seg, blk, stats) = Self::do_check_table(
-            svc,
+            session.clone(),
             database.clone(),
             table.clone(),
-            SEGMENT_SIZE,
+            BLOCK_COUNT,
             PER_SEGMENT_BLOCK,
             PER_BLOCK_SIZE,
         )
         .await?;
+        let (seg, blk, stats) = if !self.conf.background.compaction.has_target_tables() {
+            if !seg && !blk {
+                info!(job = "compaction", background = true, database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "skip compact");
+                return Ok(());
+            }
+            (seg, blk, stats)
+        } else {
+            (true, true, stats)
+        };
+
         if !seg && !blk {
             info!(job = "compaction", background = true, database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "skip compact");
             return Ok(());
         }
+        let job_info = self.get_info().await?;
         let id = Uuid::new_v4().to_string();
-        let status = self.sync_compact_status(id.clone()).await?;
+
+        let status = self.sync_compact_status(id.clone(), &job_info).await?;
         if status.is_none() {
             return Ok(());
         }
@@ -286,6 +320,7 @@ impl CompactionJob {
             db_id,
             tb_id,
             stats,
+            manual,
             format!(
                 "need segment compaction: {}, need block compaction: {}",
                 seg, blk
@@ -302,15 +337,15 @@ impl CompactionJob {
         let start = Instant::now();
 
         match self
-            .do_compact_table(svc, database.clone(), table.clone())
+            .do_compact_table(session.clone(), database.clone(), table.clone())
             .await
         {
             Ok(_) => {
                 let (_, _, new_stats) = Self::do_check_table(
-                    svc,
+                    session.clone(),
                     database.clone(),
                     table.clone(),
-                    SEGMENT_SIZE,
+                    BLOCK_COUNT,
                     PER_SEGMENT_BLOCK,
                     PER_BLOCK_SIZE,
                 )
@@ -345,15 +380,15 @@ impl CompactionJob {
     // return true if actually compacted
     async fn do_compact_table(
         &self,
-        svc: &Arc<BackgroundServiceHandlerWrapper>,
+        session: Arc<Session>,
         database: String,
         table: String,
     ) -> Result<bool> {
         let (seg, blk, stats) = Self::do_check_table(
-            svc,
+            session.clone(),
             database.clone(),
             table.clone(),
-            SEGMENT_SIZE,
+            BLOCK_COUNT,
             PER_SEGMENT_BLOCK,
             PER_BLOCK_SIZE,
         )
@@ -365,13 +400,18 @@ impl CompactionJob {
         let mut old = stats;
         if seg {
             loop {
-                self.do_segment_compaction(svc, database.clone(), table.clone())
-                    .await?;
-                let (_, _, new) = Self::do_check_table(
-                    svc,
+                self.do_segment_compaction(
+                    session.clone(),
                     database.clone(),
                     table.clone(),
-                    SEGMENT_SIZE,
+                    self.conf.background.compaction.segment_limit,
+                )
+                .await?;
+                let (_, _, new) = Self::do_check_table(
+                    session.clone(),
+                    database.clone(),
+                    table.clone(),
+                    BLOCK_COUNT,
                     PER_SEGMENT_BLOCK,
                     PER_BLOCK_SIZE,
                 )
@@ -386,13 +426,18 @@ impl CompactionJob {
 
         if blk {
             loop {
-                self.do_block_compaction(svc, database.clone(), table.clone())
-                    .await?;
-                let (_, _, new) = Self::do_check_table(
-                    svc,
+                self.do_block_compaction(
+                    session.clone(),
                     database.clone(),
                     table.clone(),
-                    SEGMENT_SIZE,
+                    self.conf.background.compaction.block_limit,
+                )
+                .await?;
+                let (_, _, new) = Self::do_check_table(
+                    session.clone(),
+                    database.clone(),
+                    table.clone(),
+                    BLOCK_COUNT,
                     PER_SEGMENT_BLOCK,
                     PER_BLOCK_SIZE,
                 )
@@ -407,36 +452,123 @@ impl CompactionJob {
         Ok(true)
     }
 
-    pub async fn do_get_all_target_tables(
-        svc: &Arc<BackgroundServiceHandlerWrapper>,
-    ) -> Result<Option<RecordBatch>> {
-        let res = svc.execute_sql(GET_ALL_TARGET_TABLES).await?;
-        let num_of_tables = res.as_ref().map_or_else(|| 0, |r| r.num_rows());
-        info!(
-            job = "compaction",
-            background = true,
-            tables = num_of_tables,
-            "get all target tables"
-        );
+    pub async fn do_get_target_tables_from_config(
+        config: &InnerConfig,
+        ctx: Arc<QueryContext>,
+    ) -> Result<Vec<RecordBatch>> {
+        if !config.background.compaction.has_target_tables() {
+            let res =
+                SuggestedBackgroundTasksProcedure::do_get_all_suggested_compaction_tables(ctx)
+                    .await;
+            return res;
+        }
+        Self::do_get_target_tables(config, ctx).await
+    }
+    // format a vec of tables into a sql string
+    // vec!("t1", "t2", "t3")
+    // into
+    // "('t1', 't2', 't3')"
+    fn format_tables(tables: Vec<String>) -> String {
+        let formatted_tables: Vec<String> =
+            tables.iter().map(|table| format!("'{}'", table)).collect();
+
+        format!("({})", formatted_tables.join(", "))
+    }
+    pub fn get_target_from_config_sql(database: String, tables: Vec<String>) -> String {
+        format!(
+         "
+        SELECT t.database as database, d.database_id as database_id, t.name as table, t.table_id as table_id
+        FROM system.tables as t
+        JOIN system.databases as d
+        ON t.database = d.name
+        WHERE t.database != 'system'
+            AND t.database != 'information_schema'
+            AND t.engine = 'FUSE'
+            AND t.database = '{}'
+            AND t.name IN {}
+            ;
+        ",
+        database,
+        Self::format_tables(tables)
+        )
+    }
+
+    pub fn parse_all_target_tables(original: Option<&Vec<String>>) -> HashMap<String, Vec<String>> {
+        let mut result: HashMap<String, Vec<String>> = HashMap::new();
+
+        if let Some(original_vec) = original {
+            for entry in original_vec {
+                let parts: Vec<&str> = entry.split('.').collect();
+
+                match parts.len() {
+                    1 => {
+                        // Only table name provided, assuming no database
+                        let table = parts[0].to_owned();
+                        result
+                            .entry("default".to_owned())
+                            .or_insert(Vec::new())
+                            .push(table);
+                    }
+                    2 => {
+                        // Both database and table names provided
+                        let db = parts[0].to_owned();
+                        let table = parts[1].to_owned();
+                        result.entry(db).or_insert(Vec::new()).push(table);
+                    }
+                    _ => {
+                        // Invalid input, skipping entry
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    pub async fn do_get_target_tables(
+        configs: &InnerConfig,
+        ctx: Arc<QueryContext>,
+    ) -> Result<Vec<RecordBatch>> {
+        let all_target_tables = configs.background.compaction.target_tables.as_ref();
+        let all_target_tables = Self::parse_all_target_tables(all_target_tables);
+        let future_res = all_target_tables
+            .into_iter()
+            .map(|(k, v)| {
+                let sql = Self::get_target_from_config_sql(k, v);
+                info!(
+                    job = "compaction",
+                    background = true,
+                    sql = sql.as_str(),
+                    "get target tables"
+                );
+                SuggestedBackgroundTasksProcedure::do_execute_sql(ctx.clone(), sql)
+            })
+            .collect::<Vec<_>>();
+        let mut res = Vec::new();
+        for f in future_res {
+            res.push(f.await?);
+        }
+        let res = res.into_iter().flatten().collect::<Vec<_>>();
         Ok(res)
     }
 
     pub async fn do_check_table(
-        svc: &Arc<BackgroundServiceHandlerWrapper>,
+        session: Arc<Session>,
         database: String,
         table: String,
-        seg_size: u64,
+        blk_cnt: u64,
         avg_seg: u64,
         avg_blk: u64,
     ) -> Result<(bool, bool, TableStatistics)> {
-        let sql = Self::get_compaction_advice_sql(database, table, seg_size, avg_seg, avg_blk);
+        let sql = Self::get_compaction_advice_sql(database, table, blk_cnt, avg_seg, avg_blk);
         debug!(
             job = "compaction",
             background = true,
             sql = sql.as_str(),
             "check target_table"
         );
-        let res = svc.execute_sql(sql.as_str()).await?;
+        let ctx = session.create_query_context().await?;
+        let res = SuggestedBackgroundTasksProcedure::do_execute_sql(ctx, sql).await?;
         if res.is_none() {
             return Ok((false, false, TableStatistics::default()));
         }
@@ -500,64 +632,60 @@ impl CompactionJob {
 
     async fn do_segment_compaction(
         &self,
-        svc: &Arc<BackgroundServiceHandlerWrapper>,
+        session: Arc<Session>,
         database: String,
         table: String,
+        limit: Option<u64>,
     ) -> Result<()> {
-        let sql = Self::get_segment_compaction_sql(
-            database,
-            table,
-            self.conf.background.compaction.segment_limit,
-        );
+        let sql = Self::get_segment_compaction_sql(database, table, limit);
         debug!(
             job = "compaction",
             background = true,
             sql = sql.as_str(),
             "segment_compactor"
         );
-        svc.execute_sql(sql.as_str()).await?;
+        let ctx = session.create_query_context().await?;
+        SuggestedBackgroundTasksProcedure::do_execute_sql(ctx, sql).await?;
         Ok(())
     }
 
     async fn do_block_compaction(
         &self,
-        svc: &Arc<BackgroundServiceHandlerWrapper>,
+        session: Arc<Session>,
         database: String,
         table: String,
+        limit: Option<u64>,
     ) -> Result<()> {
-        let sql = Self::get_block_compaction_sql(
-            database,
-            table,
-            self.conf.background.compaction.block_limit,
-        );
+        let sql = Self::get_block_compaction_sql(database, table, limit);
         debug!(
             job = "compaction",
             background = true,
             sql = sql.as_str(),
             "block_compaction"
         );
-        svc.execute_sql(sql.as_str()).await?;
+        let ctx = session.create_query_context().await?;
+        SuggestedBackgroundTasksProcedure::do_execute_sql(ctx, sql).await?;
         Ok(())
     }
 
     pub fn get_compaction_advice_sql(
         database: String,
         table: String,
-        seg_size: u64,
+        blk_count: u64,
         avg_seg: u64,
         avg_blk: u64,
     ) -> String {
         format!(
             "
         select
-        IF(segment_count > {} and block_count / segment_count < {}, TRUE, FALSE) AS segment_advice,
-        IF(bytes_uncompressed / block_count / 1024 / 1024 < {} and bytes_uncompressed / 1024 / 1024 > 1000, TRUE, FALSE) AS block_advice,
+        IF(block_count > {} and block_count / segment_count < {}, TRUE, FALSE) AS segment_advice,
+        IF(row_count > 100000 AND block_count > {} AND bytes_uncompressed / block_count / 1024 / 1024  < {}, TRUE, FALSE) AS block_advice,
         row_count, bytes_uncompressed, bytes_compressed, index_size,
         segment_count, block_count,
         block_count/segment_count
         from fuse_snapshot('{}', '{}') order by timestamp ASC LIMIT 1;
         ",
-            seg_size, avg_seg, avg_blk, database, table
+            blk_count, avg_seg, blk_count, avg_blk, database, table
         )
     }
     pub fn get_segment_compaction_sql(
