@@ -210,7 +210,6 @@ impl CreateTableInterpreter {
             }
         }
         let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
-            error!("storage prefix: {}", storage_prefix);
             self.build_attach_request(storage_prefix).await
         } else {
             self.build_request(stat)
@@ -299,7 +298,6 @@ impl CreateTableInterpreter {
         let snapshot_loc = snapshot_loc[root.len()..].to_string();
         let mut options = self.plan.options.clone();
         options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc.clone());
-        error!("load snapshot from {}", snapshot_loc);
 
         let params = LoadParams {
             location: snapshot_loc.clone(),

@@ -74,7 +74,6 @@ use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::debug;
-use tracing::error;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
@@ -587,11 +586,9 @@ impl Binder {
                 stmt.uri_location
             )));
         }
-        error!("parts: {:?}", parts);
         let storage_prefix = parts.split_off(parts.len() - 2).join("/");
         let root = parts.join("/");
         let root = format!("{}/", root);
-        error!("storage_prefix: {}", storage_prefix);
         let mut options = BTreeMap::new();
         options.insert(OPT_KEY_STORAGE_PREFIX.to_string(), storage_prefix);
 
