@@ -50,6 +50,8 @@ pub struct AggIndexReader {
 
     /// The size of the output fields of a table scan plan without the index.
     pub actual_table_field_len: usize,
+    // If the index is the result of an aggregation query.
+    is_agg: bool,
 }
 
 impl AggIndexReader {
@@ -74,6 +76,7 @@ impl AggIndexReader {
             selection,
             filter,
             actual_table_field_len: agg.actual_table_field_len,
+            is_agg: agg.is_agg,
         })
     }
 
@@ -158,7 +161,7 @@ impl AggIndexReader {
         Ok(DataBlock::new_with_meta(
             output_columns,
             block.num_rows(),
-            Some(AggIndexMeta::create()),
+            Some(AggIndexMeta::create(self.is_agg)),
         ))
     }
 }

@@ -747,13 +747,13 @@ fn get_test_suites() -> Vec<TestSuite> {
         TestSuite {
             query: "select avg(a + 1) from t group by b",
             index: "select a + 1, b from t",
-            refresh: "select a + 1, b, _block_name from t",
+            refresh: "select b, a + 1, _block_name from t",
             is_matched: true,
         },
         TestSuite {
             query: "select avg(a + 1) from t",
             index: "select a + 1, b from t",
-            refresh: "select a + 1, b, _block_name from t",
+            refresh: "select b, a + 1, _block_name from t",
             is_matched: true,
         },
         // query: eval-agg-eval-filter-scan, index: eval-scan

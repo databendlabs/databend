@@ -475,6 +475,7 @@ impl PhysicalPlanBuilder {
             selection,
             schema: agg.schema.clone(),
             actual_table_field_len: output_fields.len(),
+            is_agg: agg.is_agg,
         };
         push_down.agg_index = Some(agg_info);
 

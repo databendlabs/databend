@@ -83,9 +83,11 @@ pub fn try_rewrite(
 
         let mut new_selection = Vec::with_capacity(query_info.selection.items.len());
         let mut flag = true;
+        let mut is_agg = false;
 
         match (&query_info.aggregation, &index_info.aggregation) {
             (Some((query_agg, _)), Some(_)) => {
+                is_agg = true;
                 // Check if group items are the same.
                 let index_group_items = index_info.formatted_group_items();
                 if query_group_items != index_group_items {
@@ -251,6 +253,7 @@ pub fn try_rewrite(
             selection: new_selection,
             predicates: new_predicates,
             schema: DataSchema::new(index_fields),
+            is_agg,
         })?;
 
         info!("Use aggregating index: {sql}");
