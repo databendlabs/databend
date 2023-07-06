@@ -28,7 +28,13 @@ pub async fn read_parquet_schema_async(operator: &Operator, path: &str) -> Resul
     let meta = pread::read_metadata_async(&mut reader).await.map_err(|e| {
         ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
     })?;
+
+    infer_schema_with_extension(&meta)
+}
+
+pub fn infer_schema_with_extension(meta: &FileMetaData) -> Result<ArrowSchema> {
     let arrow_schema = pread::infer_schema(&meta)?;
+
     if let Some(metas) = meta.key_value_metadata() {
         let mut new_fields = arrow_schema.fields.clone();
         for (i, field) in arrow_schema.fields.iter().enumerate() {

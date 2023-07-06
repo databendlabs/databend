@@ -22,6 +22,7 @@ use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::StageInfo;
+use common_storage::infer_schema_with_extension;
 use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
@@ -82,8 +83,7 @@ impl ParquetTable {
         let first_meta = pread::read_metadata_async(&mut reader).await.map_err(|e| {
             ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
         })?;
-
-        let arrow_schema = pread::infer_schema(&first_meta)?;
+        let arrow_schema = infer_schema_with_extension(&first_meta)?;
         let schema_descr = first_meta.schema_descr;
         Ok((arrow_schema, schema_descr))
     }
