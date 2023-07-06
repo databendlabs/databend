@@ -75,7 +75,9 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (43, "2023-06-05: Add fields `number_of_segments` and `number_of_blocks` to TableStatistics", ),
     (44, "2023-06-07: Add: metadata.proto/ComputedExpr", ),
     (45, "2023-06-06: Add: background_tasks.proto and background_jobs.proto", ),
-    (46, "2023-06-28: Add: index.proto/IndexMeta::updated_on", )
+    (46, "2023-06-28: Add: index.proto/IndexMeta::updated_on", ),
+    (47, "2023-07-03: Add: catalog.proto/CatalogMeta",),
+    (48, "2023-07-04: Add: ManualTriggerParams on background_job", )
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

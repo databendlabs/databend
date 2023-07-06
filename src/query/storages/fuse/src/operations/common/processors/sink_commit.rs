@@ -82,6 +82,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     abort_operation: AbortOperation,
     heartbeat: TableLockHeartbeat,
+    need_lock: bool,
 }
 
 impl<F> CommitSink<F>
@@ -94,6 +95,7 @@ where F: SnapshotGenerator + Send + 'static
         snapshot_gen: F,
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,
+        need_lock: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
@@ -110,6 +112,7 @@ where F: SnapshotGenerator + Send + 'static
             retries: 0,
             max_retry_elapsed,
             input,
+            need_lock,
         })))
     }
 
@@ -139,8 +142,7 @@ where F: SnapshotGenerator + Send + 'static
 
         self.snapshot_gen
             .set_conflict_resolve_context(meta.conflict_resolve_context.clone());
-
-        if meta.need_lock {
+        if self.need_lock {
             self.state = State::TryLock;
         } else {
             self.state = State::FillDefault;
@@ -292,7 +294,13 @@ where F: SnapshotGenerator + Send + 'static
                             let keep_last_snapshot = true;
                             let snapshot_files = tbl.list_snapshot_files().await?;
                             if let Err(e) = tbl
-                                .do_purge(&self.ctx, snapshot_files, keep_last_snapshot, None)
+                                .do_purge(
+                                    &self.ctx,
+                                    snapshot_files,
+                                    None,
+                                    keep_last_snapshot,
+                                    false,
+                                )
                                 .await
                             {
                                 // Errors of GC, if any, are ignored, since GC task can be picked up

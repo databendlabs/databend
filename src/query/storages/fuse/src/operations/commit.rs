@@ -103,6 +103,7 @@ impl FuseTable {
                 snapshot_gen.clone(),
                 input,
                 None,
+                false,
             )
         })?;
 

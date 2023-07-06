@@ -143,6 +143,21 @@ SELECT ntile(5) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn
 5
 5
 
+# cume_dist
+query I
+SELECT CAST(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as INT) FROM tenk1 WHERE unique2 < 10 order by four, ten
+----
+6
+6
+10
+5
+5
+7
+10
+10
+5
+10
+
 # lead/lag
 query I
 SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt nulls first

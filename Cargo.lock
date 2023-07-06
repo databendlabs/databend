@@ -841,6 +841,8 @@ dependencies = [
  "async-trait",
  "common-base",
  "common-exception",
+ "common-meta-app",
+ "serde",
 ]
 
 [[package]]
@@ -2748,9 +2750,13 @@ dependencies = [
 name = "common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
+ "arrow-array",
+ "arrow-schema",
  "async-backtrace",
  "async-trait",
  "chrono",
+ "common-arrow",
+ "common-base",
  "common-catalog",
  "common-exception",
  "common-expression",
@@ -2758,10 +2764,11 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-storage",
+ "dashmap",
  "futures",
  "icelake",
- "itertools",
  "opendal",
+ "parquet",
  "serde",
  "tracing",
  "typetag",
@@ -4154,7 +4161,6 @@ dependencies = [
  "jsonb",
  "jwt-simple",
  "opendal",
- "parking_lot 0.12.1",
  "storages-common-cache",
  "storages-common-table-meta",
  "table-lock",
@@ -6133,14 +6139,19 @@ dependencies = [
 
 [[package]]
 name = "icelake"
-version = "0.0.3"
+version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc9337eeb3d4c7f1d37a521e6962a539ce66eb835beca2b604adbeea54f5d764"
+checksum = "6a2da7532c19b2f1ee486ba65c06cd4e54bafa18ca709359e812115a6d059794"
 dependencies = [
  "anyhow",
  "apache-avro",
+ "arrow-array",
+ "arrow-schema",
+ "async-trait",
+ "bytes",
  "futures",
  "opendal",
+ "parquet",
  "serde",
  "serde_json",
  "serde_with",
@@ -7525,7 +7536,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-semantic-conventions",
  "thiserror",
- "thrift",
+ "thrift 0.16.0",
  "tokio",
 ]
 
@@ -7741,6 +7752,39 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "windows-sys 0.45.0",
+]
+
+[[package]]
+name = "parquet"
+version = "40.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6a656fcc17e641657c955742c689732684e096f790ff30865d9f8dcc39f7c4a"
+dependencies = [
+ "ahash 0.8.3",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-cast",
+ "arrow-data",
+ "arrow-ipc",
+ "arrow-schema",
+ "arrow-select",
+ "base64 0.21.0",
+ "brotli",
+ "bytes",
+ "chrono",
+ "flate2",
+ "futures",
+ "hashbrown 0.13.2",
+ "lz4",
+ "num",
+ "num-bigint",
+ "paste",
+ "seq-macro",
+ "snap",
+ "thrift 0.17.0",
+ "tokio",
+ "twox-hash",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -10028,6 +10072,7 @@ dependencies = [
  "serde",
  "serde_json",
  "snap",
+ "typetag",
  "zstd 0.12.3+zstd.1.5.2",
 ]
 
@@ -10368,6 +10413,17 @@ dependencies = [
  "log",
  "ordered-float 1.1.1",
  "threadpool",
+]
+
+[[package]]
+name = "thrift"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e54bc85fc7faa8bc175c4bab5b92ba8d9a3ce893d0e9f42cc455c8ab16a9e09"
+dependencies = [
+ "byteorder",
+ "integer-encoding",
+ "ordered-float 2.10.0",
 ]
 
 [[package]]
@@ -10930,9 +10986,9 @@ checksum = "497961ef93d974e23eb6f433eb5fe1b7930b659f06d12dec6fc44a8f554c0bba"
 
 [[package]]
 name = "typetag"
-version = "0.2.8"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a6898cc6f6a32698cc3e14d5632a14d2b23ed9f7b11e6b8e05ce685990acc22"
+checksum = "69bf9bd14fed1815295233a0eee76a963283b53ebcbd674d463f697d3bfcae0c"
 dependencies = [
  "erased-serde",
  "inventory",
@@ -10943,13 +10999,13 @@ dependencies = [
 
 [[package]]
 name = "typetag-impl"
-version = "0.2.8"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c3e1c30cedd24fc597f7d37a721efdbdc2b1acae012c1ef1218f4c7c2c0f3e7"
+checksum = "bf9f5f225956dc2254c6c27500deac9390a066b2e8a1a571300627a7c4400a33"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.15",
+ "syn 1.0.109",
 ]
 
 [[package]]

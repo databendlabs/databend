@@ -1024,7 +1024,7 @@ CreateTable(
 
 
 ---------- Input ----------
-create table if not exists a.b (a int, b int, c int as (a + b) virtual );
+create table if not exists a.b (a int, b int, c int generated always as (a + b) virtual );
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (a Int32 NOT NULL, b Int32 NOT NULL, c Int32 NOT NULL AS ((a + b)) VIRTUAL)
 ---------- AST ------------
@@ -1088,12 +1088,12 @@ CreateTable(
                             Virtual(
                                 BinaryOp {
                                     span: Some(
-                                        58..59,
+                                        75..76,
                                     ),
                                     op: Plus,
                                     left: ColumnRef {
                                         span: Some(
-                                            56..57,
+                                            73..74,
                                         ),
                                         database: None,
                                         table: None,
@@ -1102,14 +1102,14 @@ CreateTable(
                                                 name: "a",
                                                 quote: None,
                                                 span: Some(
-                                                    56..57,
+                                                    73..74,
                                                 ),
                                             },
                                         ),
                                     },
                                     right: ColumnRef {
                                         span: Some(
-                                            60..61,
+                                            77..78,
                                         ),
                                         database: None,
                                         table: None,
@@ -1118,7 +1118,7 @@ CreateTable(
                                                 name: "b",
                                                 quote: None,
                                                 span: Some(
-                                                    60..61,
+                                                    77..78,
                                                 ),
                                             },
                                         ),
@@ -6955,6 +6955,132 @@ DropRole {
     if_exists: true,
     role_name: "test",
 }
+
+
+---------- Input ----------
+OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Compact {
+            target: Segment,
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t COMPACT LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t COMPACT BLOCK LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Compact {
+            target: Block,
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t PURGE BEFORE  (SNAPSHOT => 9828b23f74664ff3806f44bbc1925ea5) LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Purge {
+            before: Some(
+                Snapshot(
+                    "9828b23f74664ff3806f44bbc1925ea5",
+                ),
+            ),
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t PURGE BEFORE  (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Purge {
+            before: Some(
+                Timestamp(
+                    Cast {
+                        span: Some(
+                            72..83,
+                        ),
+                        expr: Literal {
+                            span: Some(
+                                44..72,
+                            ),
+                            lit: String(
+                                "2023-06-26 09:49:02.038483",
+                            ),
+                        },
+                        target_type: Timestamp,
+                        pg_style: true,
+                    },
+                ),
+            ),
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
 
 
 ---------- Input ----------

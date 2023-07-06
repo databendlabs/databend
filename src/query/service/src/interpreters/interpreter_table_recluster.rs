@@ -75,6 +75,8 @@ impl Interpreter for ReclusterTableInterpreter {
             tracing::info!(status);
         }
         let mut times = 0;
+        let mut block_count = 0;
+        let max_threads = settings.get_max_threads()?;
         loop {
             let table = self
                 .ctx
@@ -83,14 +85,16 @@ impl Interpreter for ReclusterTableInterpreter {
                 .await?;
 
             let mut pipeline = Pipeline::create();
-            table
+            let reclustered_block_count = table
                 .recluster(ctx.clone(), &mut pipeline, extras.clone())
                 .await?;
             if pipeline.is_empty() {
                 break;
             };
 
-            pipeline.set_max_threads(settings.get_max_threads()? as usize);
+            block_count += reclustered_block_count;
+            let max_threads = std::cmp::min(max_threads, reclustered_block_count) as usize;
+            pipeline.set_max_threads(max_threads);
 
             let query_id = ctx.get_id();
             let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
@@ -116,7 +120,15 @@ impl Interpreter for ReclusterTableInterpreter {
             }
         }
 
-        InterpreterClusteringHistory::write_log(&ctx, start, &plan.database, &plan.table)?;
+        if block_count != 0 {
+            InterpreterClusteringHistory::write_log(
+                &ctx,
+                start,
+                &plan.database,
+                &plan.table,
+                block_count,
+            )?;
+        }
 
         Ok(PipelineBuildResult::create())
     }

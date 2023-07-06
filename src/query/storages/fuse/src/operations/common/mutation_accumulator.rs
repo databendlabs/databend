@@ -38,12 +38,10 @@ use crate::io::SegmentsIO;
 use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::AbortOperation;
-use crate::operations::common::AppendOperationLogEntry;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::MutationLogEntry;
-use crate::operations::common::Replacement;
-use crate::operations::common::ReplacementLogEntry;
 use crate::operations::mutation::BlockIndex;
+use crate::operations::mutation::MutationDeletedSegment;
 use crate::operations::mutation::SegmentIndex;
 use crate::statistics::reducers::deduct_statistics_mut;
 use crate::statistics::reducers::merge_statistics_mut;
@@ -97,6 +95,7 @@ pub struct MutationAccumulator {
     thresholds: BlockThresholds,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
+    deleted_segments: Vec<MutationDeletedSegment>,
     // (path, segment_info)
     appended_segments: Vec<(String, Arc<SegmentInfo>, FormatVersion)>,
     base_segments: Vec<Location>,
@@ -129,52 +128,48 @@ impl MutationAccumulator {
             base_segments,
             abort_operation: AbortOperation::default(),
             summary,
+            deleted_segments: vec![],
             kind,
         }
     }
 
-    pub fn accumulate_log_entry(&mut self, log_entry: &MutationLogEntry) {
+    pub fn accumulate_log_entry(&mut self, log_entry: MutationLogEntry) {
         match log_entry {
-            MutationLogEntry::Replacement(mutation) => self.accumulate_mutation(mutation),
-            MutationLogEntry::Append(append) => self.accumulate_append(append),
-        }
-    }
-
-    fn accumulate_mutation(&mut self, meta: &ReplacementLogEntry) {
-        match &meta.op {
-            Replacement::Replaced(block_meta) => {
+            MutationLogEntry::Replaced { index, block_meta } => {
                 self.mutations
-                    .entry(meta.index.segment_idx)
-                    .and_modify(|v| v.push_replaced(meta.index.block_idx, block_meta.clone()))
+                    .entry(index.segment_idx)
+                    .and_modify(|v| v.push_replaced(index.block_idx, block_meta.clone()))
                     .or_insert(BlockMutations::new_replacement(
-                        meta.index.block_idx,
+                        index.block_idx,
                         block_meta.clone(),
                     ));
-                self.abort_operation.add_block(block_meta);
+                self.abort_operation.add_block(&block_meta);
             }
-            Replacement::Deleted => {
+            MutationLogEntry::DeletedBlock { index } => {
                 self.mutations
-                    .entry(meta.index.segment_idx)
-                    .and_modify(|v| v.push_deleted(meta.index.block_idx))
-                    .or_insert(BlockMutations::new_deletion(meta.index.block_idx));
+                    .entry(index.segment_idx)
+                    .and_modify(|v| v.push_deleted(index.block_idx))
+                    .or_insert(BlockMutations::new_deletion(index.block_idx));
             }
-            Replacement::DoNothing => (),
-        }
-    }
+            MutationLogEntry::DeletedSegment { deleted_segment } => {
+                self.deleted_segments.push(deleted_segment)
+            }
+            MutationLogEntry::DoNothing => (),
+            MutationLogEntry::AppendSegment {
+                segment_location,
+                segment_info,
+                format_version,
+            } => {
+                for block_meta in &segment_info.blocks {
+                    self.abort_operation.add_block(block_meta);
+                }
+                // TODO can we avoid this clone?
+                self.abort_operation.add_segment(segment_location.clone());
 
-    fn accumulate_append(&mut self, append_log_entry: &AppendOperationLogEntry) {
-        for block_meta in &append_log_entry.segment_info.blocks {
-            self.abort_operation.add_block(block_meta);
+                self.appended_segments
+                    .push((segment_location, segment_info, format_version))
+            }
         }
-        // TODO can we avoid this clone?
-        self.abort_operation
-            .add_segment(append_log_entry.segment_location.clone());
-
-        self.appended_segments.push((
-            append_log_entry.segment_location.clone(),
-            append_log_entry.segment_info.clone(),
-            append_log_entry.format_version,
-        ))
     }
 }
 
@@ -261,7 +256,6 @@ impl MutationAccumulator {
         let meta = CommitMeta::new(
             conflict_resolve_context,
             self.abort_operation.clone(),
-            false,
         );
         Ok(meta)
     }

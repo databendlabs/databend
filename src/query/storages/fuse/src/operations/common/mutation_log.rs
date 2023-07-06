@@ -25,6 +25,7 @@ use storages_common_table_meta::meta::SegmentInfo;
 
 use super::ConflictResolveContext;
 use crate::operations::common::AbortOperation;
+use crate::operations::mutation::MutationDeletedSegment;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct MutationLogs {
@@ -33,20 +34,21 @@ pub struct MutationLogs {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum MutationLogEntry {
-    Replacement(ReplacementLogEntry),
-    Append(AppendOperationLogEntry),
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct ReplacementLogEntry {
-    pub index: BlockMetaIndex,
-    pub op: Replacement,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum Replacement {
-    Replaced(Arc<BlockMeta>),
-    Deleted, // replace something with nothing
+    AppendSegment {
+        segment_location: String,
+        segment_info: Arc<SegmentInfo>,
+        format_version: FormatVersion,
+    },
+    DeletedBlock {
+        index: BlockMetaIndex,
+    },
+    DeletedSegment {
+        deleted_segment: MutationDeletedSegment,
+    },
+    Replaced {
+        index: BlockMetaIndex,
+        block_meta: Arc<BlockMeta>,
+    },
     DoNothing,
 }
 
@@ -56,27 +58,6 @@ pub struct BlockMetaIndex {
     pub block_idx: usize,
     // range is unused for now.
     // pub range: Option<Range<usize>>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AppendOperationLogEntry {
-    pub segment_location: String,
-    pub segment_info: Arc<SegmentInfo>,
-    pub format_version: FormatVersion,
-}
-
-impl AppendOperationLogEntry {
-    pub fn new(
-        segment_location: String,
-        segment_info: Arc<SegmentInfo>,
-        format_version: FormatVersion,
-    ) -> Self {
-        Self {
-            segment_location,
-            segment_info,
-            format_version,
-        }
-    }
 }
 
 #[typetag::serde(name = "mutation_logs_meta")]
@@ -94,12 +75,6 @@ impl BlockMetaInfo for MutationLogs {
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
-    }
-}
-
-impl MutationLogs {
-    pub fn push_append(&mut self, log_entry: AppendOperationLogEntry) {
-        self.entries.push(MutationLogEntry::Append(log_entry))
     }
 }
 
@@ -128,19 +103,16 @@ impl TryFrom<DataBlock> for MutationLogs {
 pub struct CommitMeta {
     pub conflict_resolve_context: ConflictResolveContext,
     pub abort_operation: AbortOperation,
-    pub need_lock: bool,
 }
 
 impl CommitMeta {
     pub fn new(
         conflict_resolve_context: ConflictResolveContext,
         abort_operation: AbortOperation,
-        need_lock: bool,
     ) -> Self {
         CommitMeta {
             conflict_resolve_context,
             abort_operation,
-            need_lock,
         }
     }
 }

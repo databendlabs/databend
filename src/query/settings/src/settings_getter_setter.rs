@@ -370,4 +370,12 @@ impl Settings {
     pub fn set_enable_distributed_copy(&self, val: bool) -> Result<()> {
         self.try_set_u64("enable_distributed_copy_into", u64::from(val))
     }
+
+    pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
+    }
+
+    pub fn set_enable_aggregating_index_scan(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_aggregating_index_scan", u64::from(val))
+    }
 }

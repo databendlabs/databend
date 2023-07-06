@@ -82,6 +82,7 @@ pub struct QueryContextShared {
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
+    pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
     /// Query profile manager
@@ -117,6 +118,7 @@ impl QueryContextShared {
             on_error_mode: Arc::new(RwLock::new(None)),
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
+            can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
             profile_mgr: QueryProfileManager::instance(),
         }))

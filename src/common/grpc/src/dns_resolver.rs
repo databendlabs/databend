@@ -61,6 +61,7 @@ impl DNSResolver {
             Ok(resolver) => Ok(resolver.clone()),
             Err(error) => Err(ErrorCode::create(
                 error.code(),
+                error.name(),
                 error.message(),
                 None,
                 error.backtrace(),

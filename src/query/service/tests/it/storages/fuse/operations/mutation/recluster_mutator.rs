@@ -128,7 +128,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let segment_locations = base_snapshot.segments.clone();
     let segment_locations = create_segment_location_vector(segment_locations, None);
     let block_metas = FusePruner::create(&ctx, data_accessor.clone(), schema, &None)?
-        .pruning(segment_locations)
+        .read_pruning(segment_locations)
         .await?;
     let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> = BTreeMap::new();
     block_metas.iter().for_each(|(idx, b)| {

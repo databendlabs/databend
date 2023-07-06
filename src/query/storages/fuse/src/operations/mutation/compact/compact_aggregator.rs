@@ -41,7 +41,6 @@ use crate::operations::common::CommitMeta;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
-use crate::operations::common::Replacement;
 use crate::operations::common::SnapshotMerged;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::statistics::reducers::merge_statistics_mut;
@@ -93,36 +92,28 @@ impl AsyncAccumulatingTransform for CompactAggregator {
     #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         // gather the input data.
-        if let Some(meta) = data.get_meta().and_then(MutationLogs::downcast_ref_from) {
-            for entry in &meta.entries {
+        if let Some(meta) = data.get_owned_meta().and_then(MutationLogs::downcast_from) {
+            for entry in meta.entries.into_iter() {
                 match entry {
-                    MutationLogEntry::Replacement(entry) => {
-                        match &entry.op {
-                            Replacement::Replaced(meta) => {
-                                self.abort_operation.add_block(meta);
-                                self.merge_blocks
-                                    .entry(entry.index.segment_idx)
-                                    .and_modify(|v| {
-                                        v.insert(entry.index.block_idx, meta.clone());
-                                    })
-                                    .or_insert(BTreeMap::from([(
-                                        entry.index.block_idx,
-                                        meta.clone(),
-                                    )]));
+                    MutationLogEntry::Replaced { index, block_meta } => {
+                        self.abort_operation.add_block(&block_meta);
+                        self.merge_blocks
+                            .entry(index.segment_idx)
+                            .and_modify(|v| {
+                                v.insert(index.block_idx, block_meta.clone());
+                            })
+                            .or_insert(BTreeMap::from([(index.block_idx, block_meta)]));
 
-                                // Refresh status
-                                {
-                                    let status = format!(
-                                        "compact: run compact tasks:{}/{}, cost:{} sec",
-                                        self.abort_operation.blocks.len(),
-                                        self.total_tasks,
-                                        self.start_time.elapsed().as_secs()
-                                    );
-                                    self.ctx.set_status_info(&status);
-                                    info!(status);
-                                }
-                            }
-                            _ => return Err(ErrorCode::Internal("It's a bug.")),
+                        // Refresh status
+                        {
+                            let status = format!(
+                                "compact: run compact tasks:{}/{}, cost:{} sec",
+                                self.abort_operation.blocks.len(),
+                                self.total_tasks,
+                                self.start_time.elapsed().as_secs()
+                            );
+                            self.ctx.set_status_info(&status);
+                            info!(status);
                         }
                     }
                     _ => return Err(ErrorCode::Internal("It's a bug.")),
@@ -187,7 +178,10 @@ impl AsyncAccumulatingTransform for CompactAggregator {
             merged_segments,
             merged_statistics: std::mem::take(&mut self.merged_statistics),
         });
-        let meta = CommitMeta::new(ctx, std::mem::take(&mut self.abort_operation), true);
+        let meta = CommitMeta::new(
+            ctx,
+            std::mem::take(&mut self.abort_operation),
+        );
         Ok(Some(DataBlock::empty_with_meta(Box::new(meta))))
     }
 }
