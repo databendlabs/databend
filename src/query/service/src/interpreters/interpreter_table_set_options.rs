@@ -21,6 +21,7 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MatchSeq;
 use common_sql::plans::SetOptionsPlan;
 use common_storages_fuse::TableContext;
+use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use tracing::error;
 
@@ -60,6 +61,13 @@ impl Interpreter for SetOptionsInterpreter {
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "can't change {} for alter table statement",
                 OPT_KEY_STORAGE_FORMAT
+            )));
+        }
+        if self.plan.set_options.get(OPT_KEY_DATABASE_ID).is_some() {
+            error!(error_str);
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "can't change {} for alter table statement",
+                OPT_KEY_DATABASE_ID
             )));
         }
         for table_option in self.plan.set_options.iter() {
