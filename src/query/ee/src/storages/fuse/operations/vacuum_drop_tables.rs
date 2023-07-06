@@ -31,7 +31,7 @@ async fn do_vacuum_drop_table(
     // only operate fuse table
     if table.engine() != "FUSE" {
         info!(
-            "ignore table {} not of engine {}",
+            "ignore table {} not of FUSE engine, table engine {}",
             table.get_table_info().name,
             table.engine()
         );
