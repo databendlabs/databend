@@ -33,7 +33,7 @@ use super::fuse_statistic::FuseStatistic;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
-use crate::table_functions::fuse_snapshots::parse_func_history_args;
+use crate::table_functions::parse_db_tb_args;
 use crate::table_functions::string_literal;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
@@ -56,7 +56,7 @@ impl FuseStatisticTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let (arg_database_name, arg_table_name) =
-            parse_func_history_args(&table_args, FUSE_FUNC_STATISTICS)?;
+            parse_db_tb_args(&table_args, FUSE_FUNC_STATISTICS)?;
 
         let engine = FUSE_FUNC_STATISTICS.to_owned();
 
