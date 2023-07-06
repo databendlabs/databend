@@ -181,12 +181,11 @@ fn serialize_spill_file<Method: HashMethodBounds>(
     method: &Method,
     params: &Arc<AggregatorParams>,
     payload: HashTablePayload<Method, usize>,
-) -> Result<(isize, usize, Vec<Vec<u8>>)> {
+) -> Result<(isize, Vec<Vec<u8>>)> {
     let bucket = payload.bucket;
     let data_block = serialize_aggregate(method, params, payload)?;
     let columns = get_columns(data_block);
 
-    let mut total_size = 0;
     let mut columns_data = Vec::with_capacity(columns.len());
     for column in columns.into_iter() {
         let column = column.value.as_column().unwrap();
@@ -195,7 +194,7 @@ fn serialize_spill_file<Method: HashMethodBounds>(
         columns_data.push(column_data);
     }
 
-    Ok((bucket, total_size, columns_data))
+    Ok((bucket, columns_data))
 }
 
 pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
@@ -205,7 +204,7 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
     params: &Arc<AggregatorParams>,
     payload: HashTablePayload<Method, usize>,
 ) -> Result<(DataBlock, BoxFuture<'static, Result<()>>)> {
-    let (bucket, total_size, data) = serialize_spill_file(method, params, payload)?;
+    let (bucket, data) = serialize_spill_file(method, params, payload)?;
 
     let unique_name = GlobalUniqName::unique();
     let location = format!("{}/{}", location_prefix, unique_name);
