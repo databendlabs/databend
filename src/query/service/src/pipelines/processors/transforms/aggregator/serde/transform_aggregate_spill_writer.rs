@@ -218,11 +218,13 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
             let instant = Instant::now();
 
             let mut write_bytes = 0;
-            let mut appender = operator.appender(&location).await?;
+            let mut writer = operator.writer(&location).await?;
             for data in data.into_iter() {
                 write_bytes += data.len();
-                appender.append(data).await?;
+                writer.write(data).await?;
             }
+
+            writer.close().await?;
 
             // perf
             {
