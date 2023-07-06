@@ -468,6 +468,9 @@ impl Binder {
                 "Incorrect CREATE query: required list of column descriptions or AS section or SELECT..",
             ))?,
         };
+
+        // for fuse engine, we will insert database_id, so if we check it in execute phase,
+        // we can't distinct user key and our internal key.
         if options.contains_key(&OPT_KEY_DATABASE_ID.to_lowercase().to_string()) {
             error!("invalid opt for fuse table in create table statement");
             return Err(ErrorCode::TableOptionInvalid(format!(
