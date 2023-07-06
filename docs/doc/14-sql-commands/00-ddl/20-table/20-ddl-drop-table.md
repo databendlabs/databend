@@ -7,6 +7,7 @@ Deletes the table.
 **See also:**
 - [CREATE TABLE](./10-ddl-create-table.md)
 - [UNDROP TABLE](./21-ddl-undrop-table.md)
+- [TRUNCATE TABLE](40-ddl-truncate-table.md)
 
 ## Syntax
 
