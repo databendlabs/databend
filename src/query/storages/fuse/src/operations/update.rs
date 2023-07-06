@@ -31,10 +31,10 @@ use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
+use crate::operations::common::TransformSerializeBlock;
 use crate::operations::delete::MutationTaskInfo;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationSource;
-use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 
@@ -100,13 +100,14 @@ impl FuseTable {
             self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
 
         pipeline.add_transform(|input, output| {
-            SerializeDataTransform::try_create(
+            let proc = TransformSerializeBlock::new(
                 ctx.clone(),
                 input,
                 output,
                 self,
                 cluster_stats_gen.clone(),
-            )
+            );
+            proc.into_processor()
         })?;
 
         self.chain_mutation_pipes(&ctx, pipeline, snapshot)
@@ -152,6 +153,9 @@ impl FuseTable {
                 .map(|index| schema.fields()[*index].clone())
                 .collect();
 
+            fields.push(TableField::new("_predicate", TableDataType::Boolean));
+            pos += 1;
+
             let remain_col_indices: Vec<FieldIndex> = all_column_indices
                 .into_iter()
                 .filter(|index| !col_indices.contains(index))
@@ -171,9 +175,6 @@ impl FuseTable {
                 remain_reader = Some((*reader).clone());
             }
 
-            fields.push(TableField::new("_predicate", TableDataType::Boolean));
-            pos += 1;
-
             (
                 Projection::Columns(col_indices.clone()),
                 Arc::new(TableSchema::new(fields)),
@@ -185,9 +186,8 @@ impl FuseTable {
             cap += 1;
         }
         let mut ops = Vec::with_capacity(cap);
-        let mut exprs = Vec::with_capacity(update_list.len());
-        let mut computed_exprs = Vec::with_capacity(computed_list.len());
 
+        let mut exprs = Vec::with_capacity(update_list.len());
         for (id, remote_expr) in update_list.into_iter() {
             let expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
@@ -196,6 +196,11 @@ impl FuseTable {
             offset_map.insert(id, pos);
             pos += 1;
         }
+        if !exprs.is_empty() {
+            ops.push(BlockOperator::Map { exprs });
+        }
+
+        let mut computed_exprs = Vec::with_capacity(computed_list.len());
         for (id, remote_expr) in computed_list.into_iter() {
             let expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
@@ -208,15 +213,13 @@ impl FuseTable {
             offset_map.insert(id, pos);
             pos += 1;
         }
-        if !exprs.is_empty() {
-            ops.push(BlockOperator::Map { exprs });
-        }
         // regenerate related stored computed columns.
         if !computed_exprs.is_empty() {
             ops.push(BlockOperator::Map {
                 exprs: computed_exprs,
             });
         }
+
         ops.push(BlockOperator::Project {
             projection: offset_map.values().cloned().collect(),
         });

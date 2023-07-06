@@ -23,20 +23,20 @@ fn test_format_with_error_codes() {
 
     assert_eq!(
         ErrorCode::Ok("test message 1").to_string(),
-        "Code: 0, Text = test message 1."
+        "Ok. Code: 0, Text = test message 1."
     );
 
     assert_eq!(
         ErrorCode::Ok("test message 2").to_string(),
-        "Code: 0, Text = test message 2."
+        "Ok. Code: 0, Text = test message 2."
     );
     assert_eq!(
         ErrorCode::UnknownException("test message 1").to_string(),
-        "Code: 1067, Text = test message 1."
+        "UnknownException. Code: 1067, Text = test message 1."
     );
     assert_eq!(
         ErrorCode::UnknownException("test message 2").to_string(),
-        "Code: 1067, Text = test message 2."
+        "UnknownException. Code: 1067, Text = test message 2."
     );
 }
 
@@ -60,7 +60,7 @@ fn test_derive_from_std_error() {
         fmt_rst.map_err_to_code(ErrorCode::UnknownException, || 123);
 
     assert_eq!(
-        "Code: 1067, Text = 123, cause: an error occurred when formatting an argument.",
+        "UnknownException. Code: 1067, Text = 123, cause: an error occurred when formatting an argument.",
         rst1.as_ref().unwrap_err().to_string()
     );
 
@@ -68,7 +68,7 @@ fn test_derive_from_std_error() {
         rst1.map_err_to_code(ErrorCode::Ok, || "wrapper");
 
     assert_eq!(
-        "Code: 0, Text = wrapper, cause: Code: 1067, Text = 123, cause: an error occurred when formatting an argument..",
+        "Ok. Code: 0, Text = wrapper, cause: UnknownException. Code: 1067, Text = 123, cause: an error occurred when formatting an argument..",
         rst2.as_ref().unwrap_err().to_string()
     );
 }
@@ -84,7 +84,7 @@ fn test_derive_from_display() {
         rst.map_err_to_code(ErrorCode::UnknownException, || 123);
 
     assert_eq!(
-        "Code: 1067, Text = 123, cause: 3.",
+        "UnknownException. Code: 1067, Text = 123, cause: 3.",
         rst1.as_ref().unwrap_err().to_string()
     );
 }
@@ -110,8 +110,8 @@ fn test_from_and_to_status() -> anyhow::Result<()> {
 
     // Only compare the code and message. Discard backtrace.
     assert_eq!(
-        r#"{"code":1007,"message":"foo","#.as_bytes(),
-        &status.details()[..29]
+        r#"{"code":1007,"name":"IllegalDataType","message":"foo""#.as_bytes(),
+        &status.details()[..53]
     );
 
     {

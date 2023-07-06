@@ -1,0 +1,6 @@
+call  system$execute_background_job('test_tenant-compactor-job');
+target1	COMPACTION	'root'@'%'
+call  system$execute_background_job('test_tenant-compactor-job');
+target1	COMPACTION	'root'@'%'
+target1	COMPACTION	'root'@'%'
+target2	COMPACTION	'root'@'%'

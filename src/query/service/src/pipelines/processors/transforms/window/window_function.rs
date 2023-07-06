@@ -41,6 +41,7 @@ pub enum WindowFunctionInfo {
     LagLead(WindowFuncLagLeadImpl),
     NthValue(WindowFuncNthValueImpl),
     Ntile(WindowFuncNtileImpl),
+    CumeDist,
 }
 
 pub struct WindowFuncAggImpl {
@@ -174,6 +175,7 @@ pub enum WindowFunctionImpl {
     LagLead(WindowFuncLagLeadImpl),
     NthValue(WindowFuncNthValueImpl),
     Ntile(WindowFuncNtileImpl),
+    CumeDist,
 }
 
 impl WindowFunctionInfo {
@@ -226,6 +228,7 @@ impl WindowFunctionInfo {
                 n: func.n as usize,
                 return_type: func.return_type.clone(),
             }),
+            WindowFunction::CumeDist => Self::CumeDist,
         })
     }
 }
@@ -255,6 +258,7 @@ impl WindowFunctionImpl {
             WindowFunctionInfo::LagLead(ll) => Self::LagLead(ll),
             WindowFunctionInfo::NthValue(func) => Self::NthValue(func),
             WindowFunctionInfo::Ntile(func) => Self::Ntile(func),
+            WindowFunctionInfo::CumeDist => Self::CumeDist,
         })
     }
 
@@ -264,7 +268,7 @@ impl WindowFunctionImpl {
             Self::RowNumber | Self::Rank | Self::DenseRank => {
                 DataType::Number(NumberDataType::UInt64)
             }
-            Self::PercentRank => DataType::Number(NumberDataType::Float64),
+            Self::PercentRank | Self::CumeDist => DataType::Number(NumberDataType::Float64),
             Self::LagLead(f) => f.return_type.clone(),
             Self::NthValue(f) => f.return_type.clone(),
             Self::Ntile(f) => f.return_type.clone(),
