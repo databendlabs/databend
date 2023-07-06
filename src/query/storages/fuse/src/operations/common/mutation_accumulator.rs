@@ -184,6 +184,10 @@ impl MutationAccumulator {
         let mut added_segments = vec![];
         let mut removed_statistics = Statistics::default();
         let mut added_statistics = Statistics::default();
+        for s in &self.deleted_segments {
+            removed_segment_indexes.push(s.deleted_segment.index);
+            merge_statistics_mut(&mut removed_statistics, &s.deleted_segment.segment_info.1);
+        }
         for chunk in segment_indices.chunks(chunk_size) {
             let results = self.partial_apply(chunk.to_vec()).await?;
             for result in results {
