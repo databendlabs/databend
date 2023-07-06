@@ -45,41 +45,10 @@ async fn do_vacuum_drop_table(
     info!("vacuum drop table {:?} dir {:?}", table.name(), dir);
     let start = Instant::now();
 
-    match dry_run_limit {
+    let ret = match dry_run_limit {
         None => {
             let _ = operator.remove_all(&dir).await;
-            // write an empty snapshot as last snapshot
-            if let Ok(Some(snapshot_loc)) = fuse_table.snapshot_loc().await {
-                if let Ok(Some(prev)) = fuse_table.read_table_snapshot().await {
-                    let uuid = Uuid::new_v4();
-                    let current = TableSnapshot::new(
-                        uuid,
-                        &None,
-                        prev.prev_snapshot_id,
-                        prev.schema.clone(),
-                        Default::default(),
-                        vec![],
-                        None,
-                        None,
-                    );
 
-                    if let Ok(bytes) = current.to_bytes() {
-                        let _ = operator.write(&snapshot_loc, bytes).await;
-                    }
-
-                    if let Some(snapshot_cache) =
-                        CacheManager::instance().get_table_snapshot_cache()
-                    {
-                        snapshot_cache.evict(&snapshot_loc);
-                    }
-                }
-            }
-            info!(
-                "vacuum drop table {:?} dir {:?}, cost:{} sec",
-                table.name(),
-                dir,
-                start.elapsed().as_secs()
-            );
             Ok(None)
         }
         Some(dry_run_limit) => {
@@ -95,15 +64,17 @@ async fn do_vacuum_drop_table(
                 }
             }
 
-            info!(
-                "vacuum table {:?} dir {:?}, cost:{} sec",
-                table.name(),
-                dir,
-                start.elapsed().as_secs()
-            );
             Ok(Some(list_files))
         }
-    }
+    };
+
+    info!(
+        "vacuum drop table {:?} dir {:?}, cost:{} sec",
+        table.name(),
+        dir,
+        start.elapsed().as_secs()
+    );
+    ret
 }
 
 #[async_backtrace::framed]

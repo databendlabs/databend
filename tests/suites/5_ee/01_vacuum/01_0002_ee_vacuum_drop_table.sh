@@ -19,11 +19,6 @@ echo "drop table test_vacuum_drop.a" | $MYSQL_CLIENT_CONNECT
 
 echo "vacuum drop table from test_vacuum_drop retain 0 hours" | $MYSQL_CLIENT_CONNECT
 
-echo "undrop table test_vacuum_drop.a" | $MYSQL_CLIENT_CONNECT
-
-# test_vacuum_drop.a has been vacuum, MUST return empty set
-echo "select * from test_vacuum_drop.a" | $MYSQL_CLIENT_CONNECT
-
 echo "create table test_vacuum_drop.b(c int)" | $MYSQL_CLIENT_CONNECT
 
 echo "INSERT INTO test_vacuum_drop.b VALUES (2)" | $MYSQL_CLIENT_CONNECT
@@ -56,12 +51,6 @@ echo "drop table test_vacuum_drop_3.a" | $MYSQL_CLIENT_CONNECT
 # vacuum without [from db] will vacuum all tables, including tables in drop db
 echo "vacuum drop table retain 0 hours" | $MYSQL_CLIENT_CONNECT
 
-# test_vacuum_drop_2 and table test_vacuum_drop_3.a has been vacuum, MUST return empty set
-echo "undrop database test_vacuum_drop_2" | $MYSQL_CLIENT_CONNECT
-echo "select * from test_vacuum_drop_2.a" | $MYSQL_CLIENT_CONNECT
-echo "undrop table test_vacuum_drop_3.a" | $MYSQL_CLIENT_CONNECT
-echo "select * from test_vacuum_drop_3.a" | $MYSQL_CLIENT_CONNECT
-
 echo "drop database if exists test_vacuum_drop" | $MYSQL_CLIENT_CONNECT
 echo "drop database if exists test_vacuum_drop_2" | $MYSQL_CLIENT_CONNECT
 echo "drop database if exists test_vacuum_drop_3" | $MYSQL_CLIENT_CONNECT
@@ -87,10 +76,6 @@ echo "select * from table_drop_external_location order by a;" | $MYSQL_CLIENT_CO
 echo "drop table table_drop_external_location;" | $MYSQL_CLIENT_CONNECT
 
 echo "vacuum drop table retain 0 hours" | $MYSQL_CLIENT_CONNECT
-
-echo "undrop table table_drop_external_location;" | $MYSQL_CLIENT_CONNECT
-
-echo "select * from table_drop_external_location order by a;" | $MYSQL_CLIENT_CONNECT
 
 ## Drop table
 echo "drop table if exists table_drop_external_location;" | $MYSQL_CLIENT_CONNECT
