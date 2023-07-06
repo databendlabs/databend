@@ -70,6 +70,9 @@ until bendsql --query="SHOW WAREHOUSES LIKE '${CLOUD_WAREHOUSE}'" | grep -q "Run
     sleep 10
 done
 
+echo "Checking session settings..."
+bendsql --query="select * from system.settings where value != default;" -o table
+
 echo "Running queries..."
 
 # analyze table
