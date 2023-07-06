@@ -14,3 +14,13 @@ ERROR 1105 (HY000) at line 1: SemanticError. Code: 1065, Text = can not select *
 1	
 2	b
 3	c
+---mysql_text(select)
+a\nb	a\nb
+a\t	a\t
+a\\\t	a\\\t
+a\\	a\\
+---mysql_text(copy)
+a\nb	a\nb
+a\t	a\t
+a\\\t	a\\\t
+a\\	a\\

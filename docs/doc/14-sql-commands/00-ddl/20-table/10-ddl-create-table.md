@@ -219,11 +219,20 @@ Computed columns are columns that are generated from other columns in a table us
 
 Databend supports two types of computed columns: stored and virtual. Stored computed columns are physically stored in the database and occupy storage space, while virtual computed columns are not physically stored and their values are calculated on the fly when accessed.
 
+Databend supports two syntax options for creating computed columns: one using `AS (<expr>)` and the other using `GENERATED ALWAYS AS (<expr>)`. Both syntaxes allow specifying whether the computed column is stored or virtual.
+
 ```sql
-CREATE [TRANSIENT] TABLE [IF NOT EXISTS] [db.]table_name
+CREATE TABLE [IF NOT EXISTS] [db.]table_name
 (
-    <column_name> <data_type> [ NOT NULL | NULL] [AS (<expr>) STORED | VIRTUAL],
-    <column_name> <data_type> [ NOT NULL | NULL] [AS (<expr>) STORED | VIRTUAL],
+    <column_name> <data_type> [ NOT NULL | NULL] AS (<expr>) STORED | VIRTUAL,
+    <column_name> <data_type> [ NOT NULL | NULL] AS (<expr>) STORED | VIRTUAL,
+    ...
+)
+
+CREATE TABLE [IF NOT EXISTS] [db.]table_name
+(
+    <column_name> <data_type> [NOT NULL | NULL] GENERATED ALWAYS AS (<expr>) STORED | VIRTUAL,
+    <column_name> <data_type> [NOT NULL | NULL] GENERATED ALWAYS AS (<expr>) STORED | VIRTUAL,
     ...
 )
 ```

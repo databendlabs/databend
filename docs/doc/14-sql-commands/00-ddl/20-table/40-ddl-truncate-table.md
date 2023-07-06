@@ -2,29 +2,58 @@
 title: TRUNCATE TABLE
 ---
 
-Empties the table completely.
+Removes all data from a table while preserving the table's schema. It deletes all rows in the table, making it an empty table with the same columns and constraints. Please note that, it does not release the disk space allocated to the table. To release the disk space, include the PURGE option, which is used to release the disk space allocated to the table when the truncate operation is performed.
+
+See also: [DROP TABLE](20-ddl-drop-table.md)
 
 ## Syntax
 
 ```sql
-TRUNCATE TABLE [db.]name
+TRUNCATE TABLE [db.]table_name [PURGE]
 ```
 
 ## Examples
 
 ```sql
-CREATE TABLE test(a BIGINT UNSIGNED, b VARCHAR) Engine = Fuse;
+root@localhost> CREATE TABLE test_truncate(a BIGINT UNSIGNED, b VARCHAR);
+Processed in (0.027 sec)
 
-INSERT INTO test(a,b) VALUES(888, 'stars');
+root@localhost> INSERT INTO test_truncate(a,b) VALUES(1234, 'databend');
+1 rows affected in (0.060 sec)
 
-SELECT * FROM test;
-+------+---------+
-| a    | b       |
-+------+---------+
-|  888 |  stars  |
-+------+---------+
+root@localhost> SELECT * FROM test_truncate;
 
-TRUNCATE TABLE test;
+SELECT
+  *
+FROM
+  test_truncate
 
-SELECT * FROM test;
+┌───────────────────┐
+│    a   │     b    │
+│ UInt64 │  String  │
+├────────┼──────────┤
+│   1234 │ databend │
+└───────────────────┘
+1 row in 0.019 sec. Processed 1 rows, 1B (53.26 rows/s, 17.06 KiB/s)
+
+root@localhost> TRUNCATE TABLE test_truncate;
+
+TRUNCATE TABLE test_truncate
+
+0 row in 0.047 sec. Processed 0 rows, 0B (0 rows/s, 0B/s)
+
+root@localhost> SELECT * FROM test_truncate;
+
+SELECT
+  *
+FROM
+  test_truncate
+
+0 row in 0.017 sec. Processed 0 rows, 0B (0 rows/s, 0B/s)
+
+root@localhost> TRUNCATE TABLE test_truncate PURGE;
+
+TRUNCATE TABLE test_truncate PURGE
+
+0 row in 0.118 sec. Processed 0 rows, 0B (0 rows/s, 0B/s)
 ```
