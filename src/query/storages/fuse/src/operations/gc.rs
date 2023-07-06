@@ -275,8 +275,9 @@ impl FuseTable {
             Ok(v) => v,
         };
 
+        // root snapshot cannot ignore storage not find error.
         let referenced_locations = self
-            .get_block_locations(ctx.clone(), &root_snapshot.segments, put_cache)
+            .get_block_locations(ctx.clone(), &root_snapshot.segments, put_cache, false)
             .await?;
         let snapshot_lite = Arc::new(SnapshotLiteExtended {
             format_version: ver,
@@ -305,7 +306,9 @@ impl FuseTable {
         // Purge segments&blocks by chunk size
         let segment_locations = Vec::from_iter(segments_to_be_purged);
         for chunk in segment_locations.chunks(chunk_size) {
-            let locations = self.get_block_locations(ctx.clone(), chunk, false).await?;
+            let locations = self
+                .get_block_locations(ctx.clone(), chunk, false, true)
+                .await?;
 
             for loc in &locations.block_location {
                 if locations_referenced_by_root.block_location.contains(loc) {
@@ -343,7 +346,9 @@ impl FuseTable {
         let mut count = 0;
         let segment_locations = Vec::from_iter(segments_to_be_purged);
         for chunk in segment_locations.chunks(chunk_size) {
-            let locations = self.get_block_locations(ctx.clone(), chunk, false).await?;
+            let locations = self
+                .get_block_locations(ctx.clone(), chunk, false, true)
+                .await?;
 
             let mut blocks_to_be_purged = HashSet::new();
             for loc in &locations.block_location {
@@ -557,30 +562,34 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         segment_locations: &[Location],
         put_cache: bool,
+        ignore_err: bool,
     ) -> Result<LocationTuple> {
         let mut blocks = HashSet::new();
         let mut blooms = HashSet::new();
 
         let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
-        let results = fuse_segments
-            .read_segments::<LocationTuple>(segment_locations, put_cache)
-            .await?;
-        for (idx, location_tuple) in results.into_iter().enumerate() {
-            let location_tuple = match location_tuple {
-                Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
-                    let location = &segment_locations[idx];
-                    // concurrent gc: someone else has already collected this segment, ignore it
-                    warn!(
-                        "concurrent gc: segment of location {} already collected. table: {}, ident {}",
-                        location.0, self.table_info.desc, self.table_info.ident,
-                    );
-                    continue;
-                }
-                Err(e) => return Err(e),
-                Ok(v) => v,
-            };
-            blocks.extend(location_tuple.block_location.into_iter());
-            blooms.extend(location_tuple.bloom_location.into_iter());
+        let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        for chunk in segment_locations.chunks(chunk_size) {
+            let results = fuse_segments
+                .read_segments::<LocationTuple>(chunk, put_cache)
+                .await?;
+            for (idx, location_tuple) in results.into_iter().enumerate() {
+                let location_tuple = match location_tuple {
+                    Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND && ignore_err => {
+                        let location = &segment_locations[idx];
+                        // concurrent gc: someone else has already collected this segment, ignore it
+                        warn!(
+                            "concurrent gc: segment of location {} already collected. table: {}, ident {}",
+                            location.0, self.table_info.desc, self.table_info.ident,
+                        );
+                        continue;
+                    }
+                    Err(e) => return Err(e),
+                    Ok(v) => v,
+                };
+                blocks.extend(location_tuple.block_location.into_iter());
+                blooms.extend(location_tuple.bloom_location.into_iter());
+            }
         }
 
         Ok(LocationTuple {
