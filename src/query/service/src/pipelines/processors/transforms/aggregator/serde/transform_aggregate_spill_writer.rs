@@ -190,7 +190,6 @@ fn serialize_spill_file<Method: HashMethodBounds>(
     for column in columns.into_iter() {
         let column = column.value.as_column().unwrap();
         let column_data = serialize_column(column);
-        total_size += column_data.len();
         columns_data.push(column_data);
     }
 
