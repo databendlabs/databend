@@ -38,6 +38,9 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Aggreg
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_partial_hashtable_allocated_bytes;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_partial_spill_cell_count;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_partial_spill_count;
 use crate::pipelines::processors::transforms::HashTableCell;
 use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
 use crate::pipelines::processors::AggregatorParams;
@@ -304,8 +307,21 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             if matches!(&self.hash_table, HashTable::PartitionedHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc)
             {
                 if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table) {
+                    // perf
+                    {
+                        metrics_inc_aggregate_partial_spill_count();
+                        metrics_inc_aggregate_partial_hashtable_allocated_bytes(
+                            v.allocated_bytes() as u64,
+                        );
+                    }
+
                     let _dropper = v._dropper.clone();
                     let cells = PartitionedHashTableDropper::split_cell(v);
+                    // perf
+                    {
+                        metrics_inc_aggregate_partial_spill_cell_count(cells.len() as u64);
+                    }
+
                     let mut blocks = Vec::with_capacity(cells.len());
                     for (bucket, cell) in cells.into_iter().enumerate() {
                         if cell.hashtable.len() != 0 {
