@@ -37,6 +37,9 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Aggreg
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SpilledPayload;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_read_bytes;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_read_count;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_read_milliseconds;
 
 type DeserializingMeta<Method, V> = (AggregateMeta<Method, V>, VecDeque<Vec<u8>>);
 
@@ -204,10 +207,23 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                                     let instant = Instant::now();
                                     let data = operator.read(&location).await?;
 
+                                    // perf
+                                    {
+                                        metrics_inc_aggregate_spill_read_count();
+                                        metrics_inc_aggregate_spill_read_bytes(data.len() as u64);
+                                    }
+
                                     if let Err(cause) = operator.delete(&location).await {
                                         error!(
                                             "Cannot delete spill file {}, cause: {:?}",
                                             location, cause
+                                        );
+                                    }
+
+                                    // perf
+                                    {
+                                        metrics_inc_aggregate_spill_read_milliseconds(
+                                            instant.elapsed().as_millis() as u64,
                                         );
                                     }
 

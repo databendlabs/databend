@@ -35,6 +35,9 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Aggreg
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::serialize_group_by;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_bytes;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_count;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_milliseconds;
 
 pub struct TransformGroupBySpillWriter<Method: HashMethodBounds> {
     method: Method,
@@ -218,7 +221,18 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
                 write_data.extend(data);
             }
 
+            // perf
+            {
+                metrics_inc_group_by_spill_write_count();
+                metrics_inc_group_by_spill_write_bytes(write_data.len() as u64);
+            }
+
             operator.write(&location, write_data).await?;
+
+            // perf
+            {
+                metrics_inc_group_by_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+            }
 
             info!(
                 "Write aggregate spill {} successfully, elapsed: {:?}",
