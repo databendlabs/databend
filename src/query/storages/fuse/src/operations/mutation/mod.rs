@@ -27,6 +27,7 @@ pub use compact::SegmentCompactionState;
 pub use compact::SegmentCompactor;
 pub use mutation_meta::ClusterStatsGenType;
 pub use mutation_meta::SerializeDataMeta;
+pub use mutation_part::Mutation;
 pub use mutation_part::MutationDeletedSegment;
 pub use mutation_part::MutationPartInfo;
 pub use mutation_source::MutationAction;
