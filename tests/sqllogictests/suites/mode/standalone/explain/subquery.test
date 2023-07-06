@@ -157,37 +157,38 @@ explain select t.number from numbers(1) as t where number = (select * from numbe
 EvalScalar
 ├── expressions: [t.number (#0)]
 ├── estimated rows: 0.20
-└── Filter
-    ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = scalar_subquery_1 (#1))]
+└── HashJoin
+    ├── join type: INNER
+    ├── build keys: [subquery_1 (#1)]
+    ├── probe keys: [t.number (#0)]
+    ├── filters: []
     ├── estimated rows: 0.20
-    └── HashJoin
-        ├── join type: LEFT SINGLE
-        ├── build keys: []
-        ├── probe keys: []
-        ├── filters: []
-        ├── estimated rows: 1.00
-        ├── EvalScalar(Build)
-        │   ├── expressions: [numbers.number (#1)]
-        │   ├── estimated rows: 0.20
-        │   └── Filter
-        │       ├── filters: [numbers.number (#1) = 0]
-        │       ├── estimated rows: 0.20
-        │       └── TableScan
-        │           ├── table: default.system.numbers
-        │           ├── read rows: 1
-        │           ├── read bytes: 8
-        │           ├── partitions total: 1
-        │           ├── partitions scanned: 1
-        │           ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
-        │           └── estimated rows: 1.00
-        └── TableScan(Probe)
-            ├── table: default.system.numbers
-            ├── read rows: 1
-            ├── read bytes: 8
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 1.00
+    ├── EvalScalar(Build)
+    │   ├── expressions: [numbers.number (#1)]
+    │   ├── estimated rows: 0.20
+    │   └── Limit
+    │       ├── limit: 1
+    │       ├── offset: 0
+    │       ├── estimated rows: 0.20
+    │       └── Filter
+    │           ├── filters: [numbers.number (#1) = 0]
+    │           ├── estimated rows: 0.20
+    │           └── TableScan
+    │               ├── table: default.system.numbers
+    │               ├── read rows: 1
+    │               ├── read bytes: 8
+    │               ├── partitions total: 1
+    │               ├── partitions scanned: 1
+    │               ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
+    │               └── estimated rows: 1.00
+    └── TableScan(Probe)
+        ├── table: default.system.numbers
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 1.00
 
 query T
 explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number)

@@ -121,69 +121,71 @@ explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1
 ----
 EvalScalar
 ├── expressions: [t1.a (#1)]
-├── estimated rows: 0.20
-└── Filter
-    ├── filters: [is_true(CAST(t1.a (#1) AS UInt64 NULL) = scalar_subquery_13 (#13))]
-    ├── estimated rows: 0.20
-    └── HashJoin
-        ├── join type: LEFT SINGLE
-        ├── build keys: []
-        ├── probe keys: []
-        ├── filters: []
+├── estimated rows: 1.00
+└── HashJoin
+    ├── join type: INNER
+    ├── build keys: [subquery_13 (#13)]
+    ├── probe keys: [t1.a (#1)]
+    ├── filters: []
+    ├── estimated rows: 1.00
+    ├── EvalScalar(Build)
+    │   ├── expressions: [COUNT(*) (#12)]
+    │   ├── estimated rows: 1.00
+    │   └── Limit
+    │       ├── limit: 1
+    │       ├── offset: 0
+    │       ├── estimated rows: 1.00
+    │       └── AggregateFinal
+    │           ├── group by: []
+    │           ├── aggregate functions: [count()]
+    │           ├── limit: 1
+    │           ├── estimated rows: 1.00
+    │           └── AggregatePartial
+    │               ├── group by: []
+    │               ├── aggregate functions: [count()]
+    │               ├── estimated rows: 1.00
+    │               └── HashJoin
+    │                   ├── join type: INNER
+    │                   ├── build keys: [t2.b (#5)]
+    │                   ├── probe keys: [t3.b (#10)]
+    │                   ├── filters: []
+    │                   ├── estimated rows: 0.20
+    │                   ├── EvalScalar(Build)
+    │                   │   ├── expressions: [numbers.number (#3) + 1]
+    │                   │   ├── estimated rows: 0.20
+    │                   │   └── Filter
+    │                   │       ├── filters: [numbers.number (#3) + 1 = 1]
+    │                   │       ├── estimated rows: 0.20
+    │                   │       └── TableScan
+    │                   │           ├── table: default.system.numbers
+    │                   │           ├── read rows: 1
+    │                   │           ├── read bytes: 8
+    │                   │           ├── partitions total: 1
+    │                   │           ├── partitions scanned: 1
+    │                   │           ├── push downs: [filters: [numbers.number (#3) + 1 = 1], limit: NONE]
+    │                   │           └── estimated rows: 1.00
+    │                   └── EvalScalar(Probe)
+    │                       ├── expressions: [numbers.number (#8) + 1]
+    │                       ├── estimated rows: 1.00
+    │                       └── TableScan
+    │                           ├── table: default.system.numbers
+    │                           ├── read rows: 1
+    │                           ├── read bytes: 8
+    │                           ├── partitions total: 1
+    │                           ├── partitions scanned: 1
+    │                           ├── push downs: [filters: [], limit: NONE]
+    │                           └── estimated rows: 1.00
+    └── EvalScalar(Probe)
+        ├── expressions: [numbers.number (#0) + 1]
         ├── estimated rows: 1.00
-        ├── EvalScalar(Build)
-        │   ├── expressions: [COUNT(*) (#12)]
-        │   ├── estimated rows: 1.00
-        │   └── AggregateFinal
-        │       ├── group by: []
-        │       ├── aggregate functions: [count()]
-        │       ├── estimated rows: 1.00
-        │       └── AggregatePartial
-        │           ├── group by: []
-        │           ├── aggregate functions: [count()]
-        │           ├── estimated rows: 1.00
-        │           └── HashJoin
-        │               ├── join type: INNER
-        │               ├── build keys: [t2.b (#5)]
-        │               ├── probe keys: [t3.b (#10)]
-        │               ├── filters: []
-        │               ├── estimated rows: 0.20
-        │               ├── EvalScalar(Build)
-        │               │   ├── expressions: [numbers.number (#3) + 1]
-        │               │   ├── estimated rows: 0.20
-        │               │   └── Filter
-        │               │       ├── filters: [numbers.number (#3) + 1 = 1]
-        │               │       ├── estimated rows: 0.20
-        │               │       └── TableScan
-        │               │           ├── table: default.system.numbers
-        │               │           ├── read rows: 1
-        │               │           ├── read bytes: 8
-        │               │           ├── partitions total: 1
-        │               │           ├── partitions scanned: 1
-        │               │           ├── push downs: [filters: [numbers.number (#3) + 1 = 1], limit: NONE]
-        │               │           └── estimated rows: 1.00
-        │               └── EvalScalar(Probe)
-        │                   ├── expressions: [numbers.number (#8) + 1]
-        │                   ├── estimated rows: 1.00
-        │                   └── TableScan
-        │                       ├── table: default.system.numbers
-        │                       ├── read rows: 1
-        │                       ├── read bytes: 8
-        │                       ├── partitions total: 1
-        │                       ├── partitions scanned: 1
-        │                       ├── push downs: [filters: [], limit: NONE]
-        │                       └── estimated rows: 1.00
-        └── EvalScalar(Probe)
-            ├── expressions: [numbers.number (#0) + 1]
-            ├── estimated rows: 1.00
-            └── TableScan
-                ├── table: default.system.numbers
-                ├── read rows: 1
-                ├── read bytes: 8
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 1.00
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── read rows: 1
+            ├── read bytes: 8
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 1.00
 
 query T
 explain select name from system.functions order by example
