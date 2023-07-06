@@ -35,6 +35,9 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Aggreg
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_serializer::serialize_aggregate;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_write_bytes;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_write_count;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_write_milliseconds;
 use crate::pipelines::processors::AggregatorParams;
 
 pub struct TransformAggregateSpillWriter<Method: HashMethodBounds> {
@@ -223,7 +226,18 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
                 write_data.extend(data);
             }
 
+            // perf
+            {
+                metrics_inc_aggregate_spill_write_count();
+                metrics_inc_aggregate_spill_write_bytes(write_data.len() as u64);
+            }
+
             operator.write(&location, write_data).await?;
+
+            // perf
+            {
+                metrics_inc_aggregate_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+            }
 
             info!(
                 "Write aggregate spill {} successfully, elapsed: {:?}",
