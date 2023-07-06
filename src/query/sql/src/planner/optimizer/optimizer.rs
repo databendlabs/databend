@@ -140,8 +140,6 @@ pub fn optimize(
                     into_table.enable_distributed = opt_ctx.config.enable_distributed_optimization
                         && ctx.get_settings().get_enable_distributed_copy()?;
                     match into_table.query {
-                        // Todo:(JackTna25):for now, we just support copy into table from raw stage, copy from query
-                        // will be given later.
                         Some(_) => CopyPlan::IntoTable(into_table),
                         None => {
                             info!(
