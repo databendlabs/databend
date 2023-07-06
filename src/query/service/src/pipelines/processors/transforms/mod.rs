@@ -21,6 +21,7 @@ mod transform_hash_join;
 mod transform_limit;
 mod window;
 
+mod metrics;
 mod range_join;
 mod runtime_filter;
 mod transform_add_computed_columns;
