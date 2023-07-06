@@ -82,7 +82,6 @@ use common_storages_factory::Table;
 use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
 use common_storages_fuse::operations::MutationKind;
-use common_storages_fuse::operations::SerializeDataTransform;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use common_storages_stage::StageTable;

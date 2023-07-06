@@ -253,10 +253,7 @@ impl MutationAccumulator {
             }
         };
 
-        let meta = CommitMeta::new(
-            conflict_resolve_context,
-            self.abort_operation.clone(),
-        );
+        let meta = CommitMeta::new(conflict_resolve_context, self.abort_operation.clone());
         Ok(meta)
     }
 

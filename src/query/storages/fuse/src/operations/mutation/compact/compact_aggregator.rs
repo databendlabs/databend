@@ -178,10 +178,7 @@ impl AsyncAccumulatingTransform for CompactAggregator {
             merged_segments,
             merged_statistics: std::mem::take(&mut self.merged_statistics),
         });
-        let meta = CommitMeta::new(
-            ctx,
-            std::mem::take(&mut self.abort_operation),
-        );
+        let meta = CommitMeta::new(ctx, std::mem::take(&mut self.abort_operation));
         Ok(Some(DataBlock::empty_with_meta(Box::new(meta))))
     }
 }

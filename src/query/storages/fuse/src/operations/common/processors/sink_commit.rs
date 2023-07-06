@@ -141,7 +141,7 @@ where F: SnapshotGenerator + Send + 'static
         self.backoff = FuseTable::set_backoff(self.max_retry_elapsed);
 
         self.snapshot_gen
-            .set_conflict_resolve_context(meta.conflict_resolve_context.clone());
+            .set_conflict_resolve_context(meta.conflict_resolve_context);
         if self.need_lock {
             self.state = State::TryLock;
         } else {
