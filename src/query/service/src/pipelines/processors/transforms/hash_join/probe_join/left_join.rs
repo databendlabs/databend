@@ -90,7 +90,8 @@ impl JoinHashTable {
             let mut total_probe_matched = 0;
             if probe_matched > 0 {
                 total_probe_matched += probe_matched;
-                if self.hash_join_desc.join_type == JoinType::Single && total_probe_matched > 1 {
+                if self.hash_join_desc.join_type == JoinType::LeftSingle && total_probe_matched > 1
+                {
                     return Err(ErrorCode::Internal(
                         "Scalar subquery can't return more than one row",
                     ));
@@ -215,7 +216,7 @@ impl JoinHashTable {
 
                     if probe_matched > 0 {
                         total_probe_matched += probe_matched;
-                        if self.hash_join_desc.join_type == JoinType::Single
+                        if self.hash_join_desc.join_type == JoinType::LeftSingle
                             && total_probe_matched > 1
                         {
                             return Err(ErrorCode::Internal(
@@ -312,7 +313,8 @@ impl JoinHashTable {
             let mut total_probe_matched = 0;
             if probe_matched > 0 {
                 total_probe_matched += probe_matched;
-                if self.hash_join_desc.join_type == JoinType::Single && total_probe_matched > 1 {
+                if self.hash_join_desc.join_type == JoinType::LeftSingle && total_probe_matched > 1
+                {
                     return Err(ErrorCode::Internal(
                         "Scalar subquery can't return more than one row",
                     ));
@@ -473,7 +475,7 @@ impl JoinHashTable {
 
                     if probe_matched > 0 {
                         total_probe_matched += probe_matched;
-                        if self.hash_join_desc.join_type == JoinType::Single
+                        if self.hash_join_desc.join_type == JoinType::LeftSingle
                             && total_probe_matched > 1
                         {
                             return Err(ErrorCode::Internal(

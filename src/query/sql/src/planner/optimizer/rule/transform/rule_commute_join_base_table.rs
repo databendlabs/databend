@@ -78,8 +78,10 @@ impl Rule for RuleCommuteJoinBaseTable {
             | JoinType::LeftSemi
             | JoinType::RightSemi
             | JoinType::LeftAnti
-            | JoinType::LeftMark
-            | JoinType::RightAnti => {
+            | JoinType::RightAnti
+            | JoinType::LeftSingle
+            | JoinType::RightSingle
+            | JoinType::LeftMark => {
                 // Swap the join conditions side
                 (join.left_conditions, join.right_conditions) =
                     (join.right_conditions, join.left_conditions);
