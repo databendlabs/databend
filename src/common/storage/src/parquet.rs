@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::parquet::metadata::FileMetaData;
@@ -26,9 +28,28 @@ pub async fn read_parquet_schema_async(operator: &Operator, path: &str) -> Resul
     let meta = pread::read_metadata_async(&mut reader).await.map_err(|e| {
         ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
     })?;
-
     let arrow_schema = pread::infer_schema(&meta)?;
-    Ok(arrow_schema)
+    if let Some(metas) = meta.key_value_metadata() {
+        let mut new_fields = arrow_schema.fields.clone();
+        for (i, field) in arrow_schema.fields.iter().enumerate() {
+            for meta in metas {
+                if field.name == meta.key {
+                    let data_type = ArrowType::Extension(
+                        meta.value.clone().unwrap(),
+                        Box::new(field.data_type.clone()),
+                        None,
+                    );
+                    let new_field =
+                        ArrowField::new(field.name.clone(), data_type, field.is_nullable);
+                    new_fields[i] = new_field;
+                    break;
+                }
+            }
+        }
+        Ok(new_fields.into())
+    } else {
+        Ok(arrow_schema)
+    }
 }
 
 async fn read_parquet_metas_batch(
