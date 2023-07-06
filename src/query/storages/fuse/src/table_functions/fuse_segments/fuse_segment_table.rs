@@ -33,7 +33,7 @@ use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
-use crate::table_functions::fuse_segments::table_args::parse_func_table_args;
+use crate::table_functions::fuse_blocks::parse_func_table_args;
 use crate::table_functions::string_literal;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
@@ -57,7 +57,7 @@ impl FuseSegmentTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let (arg_database_name, arg_table_name, arg_snapshot_id) =
-            parse_func_table_args(&table_args)?;
+            parse_func_table_args(&table_args, FUSE_FUNC_SEGMENT)?;
 
         let engine = FUSE_FUNC_SEGMENT.to_owned();
 

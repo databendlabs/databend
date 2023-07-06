@@ -14,7 +14,6 @@
 
 mod fuse_segment;
 mod fuse_segment_table;
-mod table_args;
 
 pub use fuse_segment::FuseSegment;
 pub use fuse_segment_table::FuseSegmentTable;

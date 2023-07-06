@@ -57,7 +57,7 @@ impl FuseBlockTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let (arg_database_name, arg_table_name, arg_snapshot_id) =
-            parse_func_table_args(&table_args)?;
+            parse_func_table_args(&table_args, FUSE_FUNC_BLOCK)?;
 
         let engine = FUSE_FUNC_BLOCK.to_owned();
 

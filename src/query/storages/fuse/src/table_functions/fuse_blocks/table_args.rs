@@ -18,10 +18,11 @@ use common_exception::Result;
 use crate::table_functions::string_value;
 use crate::table_functions::TableArgs;
 
-pub(crate) fn parse_func_table_args(
+pub fn parse_func_table_args(
     table_args: &TableArgs,
+    func_name: &str,
 ) -> Result<(String, String, Option<String>)> {
-    let args = table_args.expect_all_positioned("fuse_blocks", None)?;
+    let args = table_args.expect_all_positioned(func_name, None)?;
     match args.len() {
         3 => {
             let db = string_value(&args[0])?;

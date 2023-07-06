@@ -55,7 +55,8 @@ impl FuseStatisticTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (arg_database_name, arg_table_name) = parse_func_history_args(&table_args)?;
+        let (arg_database_name, arg_table_name) =
+            parse_func_history_args(&table_args, FUSE_FUNC_STATISTICS)?;
 
         let engine = FUSE_FUNC_STATISTICS.to_owned();
 
