@@ -904,3 +904,76 @@ fn simple_like(
     }
     true
 }
+
+#[test]
+fn test_check_pattern_type() {
+    // OrdinalStr
+    let pattern = "databend".as_bytes();
+    assert_eq!(PatternType::OrdinalStr, check_pattern_type(pattern, false));
+
+    // StartOfPercent
+    let pattern = "%databend".as_bytes();
+    assert_eq!(
+        PatternType::StartOfPercent,
+        check_pattern_type(pattern, false)
+    );
+
+    // EndOfPercent
+    let pattern = "databend%".as_bytes();
+    assert_eq!(
+        PatternType::EndOfPercent,
+        check_pattern_type(pattern, false)
+    );
+
+    // SurroundByPercent
+    let pattern = "%databend%".as_bytes();
+    assert_eq!(
+        PatternType::SurroundByPercent,
+        check_pattern_type(pattern, false)
+    );
+
+    // SimplePattern
+    let segments = vec![
+        "databend".as_bytes().to_vec(),
+        "cloud".as_bytes().to_vec(),
+        "data".as_bytes().to_vec(),
+        "warehouse".as_bytes().to_vec(),
+    ];
+    let pattern = "databend%cloud%data%warehouse".as_bytes();
+    assert_eq!(
+        PatternType::SimplePattern((false, false, segments.clone())),
+        check_pattern_type(pattern, false)
+    );
+    let pattern = "%databend%cloud%data%warehouse".as_bytes();
+    assert_eq!(
+        PatternType::SimplePattern((true, false, segments.clone())),
+        check_pattern_type(pattern, false)
+    );
+    let pattern = "databend%cloud%data%warehouse%".as_bytes();
+    assert_eq!(
+        PatternType::SimplePattern((false, true, segments.clone())),
+        check_pattern_type(pattern, false)
+    );
+    let pattern = "%databend%cloud%data%warehouse%".as_bytes();
+    assert_eq!(
+        PatternType::SimplePattern((true, true, segments)),
+        check_pattern_type(pattern, false)
+    );
+
+    // ComplexPattern
+    let pattern = "databend_cloud%data%warehouse".as_bytes();
+    assert_eq!(
+        PatternType::ComplexPattern,
+        check_pattern_type(pattern, false)
+    );
+    let pattern = "databend\\%cloud%data%warehouse".as_bytes();
+    assert_eq!(
+        PatternType::ComplexPattern,
+        check_pattern_type(pattern, false)
+    );
+    let pattern = "databend%cloud_data%warehouse".as_bytes();
+    assert_eq!(
+        PatternType::ComplexPattern,
+        check_pattern_type(pattern, false)
+    );
+}
