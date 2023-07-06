@@ -178,6 +178,12 @@ impl StringColumn {
         self.offsets.len() - 1
     }
 
+    pub fn memory_size(&self) -> usize {
+        let offsets = self.offsets.as_slice();
+        let len = offsets.len();
+        len * 8 + (offsets[len - 1] - offsets[0]) as usize
+    }
+
     pub fn index(&self, index: usize) -> Option<&[u8]> {
         if index + 1 < self.offsets.len() {
             Some(&self.data[(self.offsets[index] as usize)..(self.offsets[index + 1] as usize)])

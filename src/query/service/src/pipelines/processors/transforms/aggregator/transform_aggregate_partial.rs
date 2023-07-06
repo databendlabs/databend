@@ -181,7 +181,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
 
     #[inline(always)]
     #[allow(clippy::ptr_arg)] // &[StateAddr] slower than &StateAddrs ~20%
-    fn execute_index_block(&self, block: &DataBlock, places: &StateAddrs) -> Result<()> {
+    fn execute_agg_index_block(&self, block: &DataBlock, places: &StateAddrs) -> Result<()> {
         let aggregate_functions = &self.params.aggregate_functions;
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
@@ -212,7 +212,8 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         let is_agg_index_block = block
             .get_meta()
             .and_then(AggIndexMeta::downcast_ref_from)
-            .is_some();
+            .map(|index| index.is_agg)
+            .unwrap_or_default();
 
         let block = block.convert_to_full();
 
@@ -248,7 +249,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                         if self.temp_place.addr() == 0 {
                             self.temp_place = self.params.alloc_layout(&mut hashtable.arena);
                         }
-                        self.execute_index_block(&block, &places)
+                        self.execute_agg_index_block(&block, &places)
                     } else {
                         Self::execute(&self.params, &block, &places)
                     }
@@ -271,7 +272,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                         if self.temp_place.addr() == 0 {
                             self.temp_place = self.params.alloc_layout(&mut hashtable.arena);
                         }
-                        self.execute_index_block(&block, &places)
+                        self.execute_agg_index_block(&block, &places)
                     } else {
                         Self::execute(&self.params, &block, &places)
                     }
