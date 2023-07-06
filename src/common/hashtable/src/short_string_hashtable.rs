@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 use std::ptr::NonNull;
+use std::sync::Arc;
 
 use bumpalo::Bump;
 use common_base::mem_allocator::MmapAllocator;
@@ -43,7 +44,7 @@ where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone,
 {
-    pub(crate) arena: Bump,
+    pub(crate) arena: Arc<Bump>,
     pub(crate) key_size: usize,
     pub(crate) table0: TableEmpty<V, A>,
     pub(crate) table1: Table0<InlineKey<0>, V, HeapContainer<Entry<InlineKey<0>, V>, A>, A>,
@@ -68,18 +69,8 @@ where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone + Default,
 {
-    pub fn new() -> Self {
-        Self::with_capacity(128)
-    }
-}
-
-impl<K, V, A> Default for ShortStringHashtable<K, V, A>
-where
-    K: UnsizedKeyable + ?Sized,
-    A: Allocator + Clone + Default,
-{
-    fn default() -> Self {
-        Self::new()
+    pub fn new(arena: Arc<Bump>) -> Self {
+        Self::with_capacity(128, arena)
     }
 }
 
@@ -113,10 +104,10 @@ where
     A: Allocator + Clone + Default,
 {
     /// The bump for strings doesn't allocate memory by `A`.
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize, arena: Arc<Bump>) -> Self {
         let allocator = A::default();
         Self {
-            arena: Bump::new(),
+            arena,
             key_size: 0,
             table0: TableEmpty::new_in(allocator.clone()),
             table1: Table0::with_capacity_in(capacity, allocator.clone()),
@@ -807,14 +798,26 @@ where A: Allocator + Clone + Default
         self.len()
     }
 
-    fn bytes_len(&self) -> usize {
-        std::mem::size_of::<Self>()
-            + self.arena.allocated_bytes()
-            + self.table0.heap_bytes()
-            + self.table1.heap_bytes()
-            + self.table2.heap_bytes()
-            + self.table3.heap_bytes()
-            + self.table4.heap_bytes()
+    fn bytes_len(&self, without_arena: bool) -> usize {
+        match without_arena {
+            true => {
+                std::mem::size_of::<Self>()
+                    + self.table0.heap_bytes()
+                    + self.table1.heap_bytes()
+                    + self.table2.heap_bytes()
+                    + self.table3.heap_bytes()
+                    + self.table4.heap_bytes()
+            }
+            false => {
+                std::mem::size_of::<Self>()
+                    + self.arena.allocated_bytes()
+                    + self.table0.heap_bytes()
+                    + self.table1.heap_bytes()
+                    + self.table2.heap_bytes()
+                    + self.table3.heap_bytes()
+                    + self.table4.heap_bytes()
+            }
+        }
     }
 
     fn unsize_key_size(&self) -> Option<usize> {

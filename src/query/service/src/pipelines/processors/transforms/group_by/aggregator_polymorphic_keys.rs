@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::time::Instant;
 
+use bumpalo::Bump;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::*;
@@ -106,7 +108,10 @@ pub trait PolymorphicKeysHelper<Method: HashMethod>: Send + Sync + 'static {
         + Send
         + Sync
         + 'static;
-    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>>;
+    fn create_hash_table<T: Send + Sync + 'static>(
+        &self,
+        _bump: Arc<Bump>,
+    ) -> Result<Self::HashTable<T>>;
 
     type ColumnBuilder<'a>: KeysColumnBuilder<T = &'a Method::HashKey>
     where
@@ -143,7 +148,10 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> 
 
     type HashTable<T: Send + Sync + 'static> = LookupHashMap<u8, 256, T>;
 
-    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
+    fn create_hash_table<T: Send + Sync + 'static>(
+        &self,
+        _bump: Arc<Bump>,
+    ) -> Result<Self::HashTable<T>> {
         Ok(LookupHashMap::create(Default::default()))
     }
 
@@ -180,7 +188,10 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16
 
     type HashTable<T: Send + Sync + 'static> = LookupHashMap<u16, 65536, T>;
 
-    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
+    fn create_hash_table<T: Send + Sync + 'static>(
+        &self,
+        _bump: Arc<Bump>,
+    ) -> Result<Self::HashTable<T>> {
         Ok(LookupHashMap::create(Default::default()))
     }
 
@@ -217,7 +228,10 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32
 
     type HashTable<T: Send + Sync + 'static> = HashMap<u32, T>;
 
-    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
+    fn create_hash_table<T: Send + Sync + 'static>(
+        &self,
+        _bump: Arc<Bump>,
+    ) -> Result<Self::HashTable<T>> {
         Ok(HashMap::new())
     }
 
@@ -254,7 +268,10 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64
 
     type HashTable<T: Send + Sync + 'static> = HashMap<u64, T>;
 
-    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
+    fn create_hash_table<T: Send + Sync + 'static>(
+        &self,
+        _bump: Arc<Bump>,
+    ) -> Result<Self::HashTable<T>> {
         Ok(HashMap::new())
     }
 
@@ -291,7 +308,10 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
 
     type HashTable<T: Send + Sync + 'static> = HashMap<u128, T>;
 
-    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
+    fn create_hash_table<T: Send + Sync + 'static>(
+        &self,
+        _bump: Arc<Bump>,
+    ) -> Result<Self::HashTable<T>> {
         Ok(HashMap::new())
     }
 
@@ -337,7 +357,10 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
 
     type HashTable<T: Send + Sync + 'static> = HashMap<U256, T>;
 
-    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
+    fn create_hash_table<T: Send + Sync + 'static>(
+        &self,
+        _bump: Arc<Bump>,
+    ) -> Result<Self::HashTable<T>> {
         Ok(HashMap::new())
     }
 
@@ -384,8 +407,11 @@ impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
 
     type HashTable<T: Send + Sync + 'static> = ShortStringHashMap<[u8], T>;
 
-    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
-        Ok(ShortStringHashMap::new())
+    fn create_hash_table<T: Send + Sync + 'static>(
+        &self,
+        bump: Arc<Bump>,
+    ) -> Result<Self::HashTable<T>> {
+        Ok(ShortStringHashMap::new(bump))
     }
 
     type ColumnBuilder<'a> = StringKeysColumnBuilder<'a>;
@@ -424,8 +450,11 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 
     type HashTable<T: Send + Sync + 'static> = StringHashMap<[u8], T>;
 
-    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
-        Ok(StringHashMap::new())
+    fn create_hash_table<T: Send + Sync + 'static>(
+        &self,
+        bump: Arc<Bump>,
+    ) -> Result<Self::HashTable<T>> {
+        Ok(StringHashMap::new(bump))
     }
 
     type ColumnBuilder<'a> = StringKeysColumnBuilder<'a>;
@@ -464,8 +493,11 @@ impl PolymorphicKeysHelper<HashMethodDictionarySerializer> for HashMethodDiction
 
     type HashTable<T: Send + Sync + 'static> = DictionaryStringHashMap<T>;
 
-    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
-        Ok(DictionaryStringHashMap::new(self.dict_keys))
+    fn create_hash_table<T: Send + Sync + 'static>(
+        &self,
+        bump: Arc<Bump>,
+    ) -> Result<Self::HashTable<T>> {
+        Ok(DictionaryStringHashMap::new(bump, self.dict_keys))
     }
 
     type ColumnBuilder<'a> = DictionaryStringKeysColumnBuilder<'a>;
@@ -526,8 +558,9 @@ impl<Method: HashMethodBounds> PartitionedHashMethod<Method> {
         Self: PolymorphicKeysHelper<PartitionedHashMethod<Method>>,
     {
         let instant = Instant::now();
+        let arena = Arc::new(Bump::new());
         let partitioned_method = Self::create(method.clone());
-        let mut partitioned_hashtable = partitioned_method.create_hash_table()?;
+        let mut partitioned_hashtable = partitioned_method.create_hash_table(arena)?;
 
         unsafe {
             for item in cell.hashtable.iter() {
@@ -599,15 +632,18 @@ where
     type HashTable<T: Send + Sync + 'static> =
         PartitionedHashMap<Method::HashTable<T>, BUCKETS_LG2>;
 
-    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
+    fn create_hash_table<T: Send + Sync + 'static>(
+        &self,
+        arena: Arc<Bump>,
+    ) -> Result<Self::HashTable<T>> {
         let buckets = (1 << BUCKETS_LG2) as usize;
         let mut tables = Vec::with_capacity(buckets);
 
         for _index in 0..buckets {
-            tables.push(self.method.create_hash_table()?);
+            tables.push(self.method.create_hash_table(arena.clone())?);
         }
 
-        Ok(PartitionedHashMap::<_, BUCKETS_LG2>::create(tables))
+        Ok(PartitionedHashMap::<_, BUCKETS_LG2>::create(arena, tables))
     }
 
     type ColumnBuilder<'a> = Method::ColumnBuilder<'a> where Self: 'a, PartitionedHashMethod<Method>: 'a;
