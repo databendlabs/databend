@@ -15,16 +15,12 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::base::uuid::Uuid;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
 use opendal::EntryMode;
 use opendal::Metakey;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache_manager::CacheManager;
-use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
 #[async_backtrace::framed]
