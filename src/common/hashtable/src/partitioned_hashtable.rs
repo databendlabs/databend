@@ -16,7 +16,10 @@ use std::collections::VecDeque;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::slice::IterMut;
+use std::sync::Arc;
 use std::vec::IntoIter;
+
+use bumpalo::Bump;
 
 use crate::FastHash;
 use crate::HashSet;
@@ -26,14 +29,25 @@ use crate::PartitionedHashSet;
 
 pub struct PartitionedHashtable<Impl, const BUCKETS_LG2: u32, const HIGH_BIT: bool = true> {
     tables: Vec<Impl>,
+    arena: Arc<Bump>,
+}
+
+unsafe impl<Impl: Send, const BUCKETS_LG2: u32, const HIGH_BIT: bool> Send
+    for PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
+{
+}
+
+unsafe impl<Impl: Sync, const BUCKETS_LG2: u32, const HIGH_BIT: bool> Sync
+    for PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
+{
 }
 
 impl<Impl, const BUCKETS_LG2: u32, const HIGH_BIT: bool>
     PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
 {
-    pub fn create(tables: Vec<Impl>) -> Self {
+    pub fn create(arena: Arc<Bump>, tables: Vec<Impl>) -> Self {
         assert_eq!(tables.len(), 1 << BUCKETS_LG2);
-        PartitionedHashtable::<Impl, BUCKETS_LG2, HIGH_BIT> { tables }
+        PartitionedHashtable::<Impl, BUCKETS_LG2, HIGH_BIT> { arena, tables }
     }
 }
 
@@ -114,13 +128,16 @@ impl<
         self.tables.iter().map(|x| x.len()).sum::<usize>()
     }
 
-    fn bytes_len(&self) -> usize {
+    fn bytes_len(&self, without_arena: bool) -> usize {
         let mut impl_bytes = 0;
         for table in &self.tables {
-            impl_bytes += table.bytes_len();
+            impl_bytes += table.bytes_len(true);
         }
 
-        std::mem::size_of::<Self>() + impl_bytes
+        match without_arena {
+            true => std::mem::size_of::<Self>() + impl_bytes,
+            false => self.arena.allocated_bytes() + std::mem::size_of::<Self>() + impl_bytes,
+        }
     }
 
     fn unsize_key_size(&self) -> Option<usize> {
