@@ -872,6 +872,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         });
     }
 
+    registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
+        "json_to_string",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            let s = to_string(val);
+            output.put_slice(s.as_bytes());
+            output.commit_row();
+        }),
+    );
+
     registry.register_function_factory("json_object", |_, args_type| {
         Some(Arc::new(Function {
             signature: FunctionSignature {

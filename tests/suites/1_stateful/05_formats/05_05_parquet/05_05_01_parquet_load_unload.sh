@@ -9,12 +9,13 @@ echo "CREATE TABLE test_load_unload
 (
     a VARCHAR NULL,
     b float,
-    e timestamp
+    e timestamp,
+    f variant
 );" | $MYSQL_CLIENT_CONNECT
 
 insert_data() {
 	echo "insert into test_load_unload values
-	('a\"b', 1, '2044-05-06T03:25:02.868894-07:00')
+	('a\"b', 1, '2044-05-06T03:25:02.868894-07:00', '{\"k1\":\"v\",\"k2\":[1,2]}')
 	" | $MYSQL_CLIENT_CONNECT
 }
 
