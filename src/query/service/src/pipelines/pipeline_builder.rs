@@ -862,7 +862,7 @@ impl PipelineBuilder {
         if params.group_columns.is_empty() {
             self.build_pipeline(&aggregate.input)?;
             self.main_pipeline.try_resize(1)?;
-            return self.main_pipeline.add_transform(|input, output| {
+            self.main_pipeline.add_transform(|input, output| {
                 let transform = FinalSingleStateAggregator::try_create(input, output, &params)?;
 
                 if self.enable_profiling {
@@ -874,20 +874,22 @@ impl PipelineBuilder {
                 } else {
                     Ok(ProcessorPtr::create(transform))
                 }
-            });
-        }
-
-        // Append a profile stub to record the output rows and bytes
-        if self.enable_profiling {
-            self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(Transformer::create(
-                    input,
-                    output,
-                    ProfileStub::new(aggregate.plan_id, self.proc_profs.clone())
-                        .accumulate_output_rows()
-                        .accumulate_output_bytes(),
-                )))
             })?;
+
+            // Append a profile stub to record the output rows and bytes
+            if self.enable_profiling {
+                self.main_pipeline.add_transform(|input, output| {
+                    Ok(ProcessorPtr::create(Transformer::create(
+                        input,
+                        output,
+                        ProfileStub::new(aggregate.plan_id, self.proc_profs.clone())
+                            .accumulate_output_rows()
+                            .accumulate_output_bytes(),
+                    )))
+                })?;
+            }
+
+            return Ok(());
         }
 
         let settings = self.ctx.get_settings();
