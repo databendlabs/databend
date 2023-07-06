@@ -282,7 +282,7 @@ The procedure below creates an R2 API token that includes an Access Key ID and a
 
 1. Click **Manage R2 API Tokens** on **R2** > **Overview**.
 2. Click **Create API token** to create an API token. 
-3. When configuring the API token, select the **Edit** permission and set **TTL** to **Forever**.
+3. When configuring the API token, select the necessary permission and set the **TTL** as needed.
 4. Click **Create API Token** to obtain the Access Key ID and Secret Access Key. Copy and save them to a safe place.
 
 #### Step 3: Create External Stage
