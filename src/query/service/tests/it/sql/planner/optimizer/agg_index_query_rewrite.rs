@@ -91,7 +91,7 @@ fn create_table_plan(fixture: &TestFixture) -> CreateTablePlan {
 /// ```
 fn get_test_suites() -> Vec<TestSuite> {
     vec![
-        //  query: eval-scan, index: eval-scan
+        // query: eval-scan, index: eval-scan
         TestSuite {
             query: "select to_string(c + 1) from t",
             index: "select c + 1 from t",
@@ -166,6 +166,20 @@ fn get_test_suites() -> Vec<TestSuite> {
             query: "select sum(a) from t group by b",
             index: "select a from t",
             is_matched: false,
+            ..Default::default()
+        },
+        TestSuite {
+            query: "select avg(a + 1) from t group by b",
+            index: "select a + 1, b from t",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            ..Default::default()
+        },
+        TestSuite {
+            query: "select avg(a + 1) from t",
+            index: "select a + 1, b from t",
+            is_matched: true,
+            index_selection: vec!["index_col_1 (#1)"],
             ..Default::default()
         },
         // query: eval-agg-eval-filter-scan, index: eval-scan
@@ -249,6 +263,13 @@ fn get_test_suites() -> Vec<TestSuite> {
             index: "select a from t where b > 1",
             is_matched: false,
             ..Default::default()
+        },
+        TestSuite {
+            query: "select sum(a) from t where b > 1 group by b",
+            index: "select a, b from t where b > 1",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
         },
         // query: eval-scan, index: eval-agg-eval-scan
         TestSuite {

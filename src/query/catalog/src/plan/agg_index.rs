@@ -41,15 +41,20 @@ pub struct AggIndexInfo {
 
     /// The size of the output fields of a table scan plan without the index.
     pub actual_table_field_len: usize,
+
+    // If the index is the result of an aggregation query.
+    pub is_agg: bool,
 }
 
 /// This meta just indicate the block is from aggregating index.
 #[derive(Debug, Clone)]
-pub struct AggIndexMeta {}
+pub struct AggIndexMeta {
+    pub is_agg: bool,
+}
 
 impl AggIndexMeta {
-    pub fn create() -> BlockMetaInfoPtr {
-        Box::new(Self {})
+    pub fn create(is_agg: bool) -> BlockMetaInfoPtr {
+        Box::new(Self { is_agg })
     }
 }
 
