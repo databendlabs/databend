@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod metasrv_connection_error;
 pub mod metasrv_grpc_api;
 mod metasrv_grpc_export;
 pub mod metasrv_grpc_get_client_info;
