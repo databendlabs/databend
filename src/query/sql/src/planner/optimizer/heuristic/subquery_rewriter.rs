@@ -242,7 +242,7 @@ impl SubqueryRewriter {
                 }
                 let (index, name) = if let UnnestResult::MarkJoin { marker_index } = result {
                     (marker_index, marker_index.to_string())
-                } else if let UnnestResult::SingleJoin = result {
+                } else if let UnnestResult::SingleJoin = result && !prop.outer_columns.is_empty() {
                     let mut output_column = subquery.output_column;
                     if let Some(index) = self.derived_columns.get(&output_column.index) {
                         output_column.index = *index;
@@ -339,16 +339,30 @@ impl SubqueryRewriter {
                     left_conditions: vec![],
                     right_conditions: vec![],
                     non_equi_conditions: vec![],
-                    join_type: JoinType::LeftSingle,
+                    join_type: JoinType::Cross,
                     marker_index: None,
                     from_correlated_subquery: false,
                     contain_runtime_filter: false,
                 }
                 .into();
+                // Directly add limit 1 for uncorrelated scalar join
+                // Then we can use cross join which brings chance to push down filter under cross join.
+                // Such as `SELECT * FROM c WHERE c_id=(SELECT max(c_id) FROM o WHERE ship='WA');`
+                // We can push down `c_id = max(c_id)` to cross join then make it as inner join.
+                let limit = SExpr::create_unary(
+                    Arc::new(
+                        Limit {
+                            limit: Some(1),
+                            offset: 0,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(*subquery.subquery.clone()),
+                );
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan),
                     Arc::new(left.clone()),
-                    Arc::new(*subquery.subquery.clone()),
+                    Arc::new(limit),
                 );
                 Ok((s_expr, UnnestResult::SingleJoin))
             }
