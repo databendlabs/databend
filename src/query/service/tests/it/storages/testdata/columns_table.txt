@@ -287,6 +287,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'tenant_id'                     | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'time'                          | 'system'             | 'processes'           | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'total_partitions'              | 'system'             | 'query_log'           | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'trigger'                       | 'system'             | 'background_tasks'    | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'type'                          | 'system'             | 'background_tasks'    | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'type'                          | 'system'             | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'type'                          | 'system'             | 'indexes'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |

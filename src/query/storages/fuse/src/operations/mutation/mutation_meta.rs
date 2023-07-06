@@ -19,8 +19,8 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use storages_common_table_meta::meta::ClusterStatistics;
 
-use super::MutationDeletedSegment;
 use crate::operations::common::BlockMetaIndex;
+use crate::operations::mutation::MutationDeletedSegment;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ClusterStatsGenType {

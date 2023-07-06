@@ -54,6 +54,7 @@ fn test_decode_v44_background_task() -> anyhow::Result<()> {
         message: "1123".to_string(),
         compaction_task_stats: None,
         vacuum_stats: None,
+        manual_trigger: None,
         creator: None,
 
         created_at: Default::default(),
@@ -104,6 +105,7 @@ fn test_decode_v40_background_task_case_2() -> anyhow::Result<()> {
             total_compaction_time: Some(Duration::from_secs(100)),
         }),
         vacuum_stats: Some(VacuumStats {}),
+        manual_trigger: None,
         creator: Some(BackgroundJobIdent {
             tenant: "test1".to_string(),
             name: "compactor_job".to_string(),
@@ -133,6 +135,7 @@ fn test_decode_v44_background_job() -> anyhow::Result<()> {
             scheduled_job_interval: std::time::Duration::from_secs(100),
             scheduled_job_cron: "".to_string(),
             scheduled_job_timezone: Some(chrono_tz::America::Los_Angeles),
+            manual_trigger_params: None,
         }),
         last_updated: Some(Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap()),
         task_type: BackgroundTaskType::COMPACTION,

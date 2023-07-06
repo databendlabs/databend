@@ -71,9 +71,9 @@ impl TableMutationAggregator {
     }
 
     pub fn accumulate_log_entry(&mut self, mutation_logs: MutationLogs) {
-        for entry in &mutation_logs.entries {
+        mutation_logs.entries.into_iter().for_each(|entry| {
             self.mutation_accumulator.accumulate_log_entry(entry);
-        }
+        })
     }
 }
 

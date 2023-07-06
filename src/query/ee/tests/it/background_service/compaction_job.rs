@@ -31,7 +31,7 @@ async fn test_get_compaction_advice_sql() -> Result<()> {
     );
     assert_eq!(
         sql.trim(),
-        "select\n        IF(segment_count > 10 and block_count / segment_count < 100, TRUE, FALSE) AS segment_advice,\n        IF(bytes_uncompressed / block_count / 1024 / 1024 < 50 and bytes_uncompressed / 1024 / 1024 > 1000, TRUE, FALSE) AS block_advice,\n        row_count, bytes_uncompressed, bytes_compressed, index_size,\n        segment_count, block_count,\n        block_count/segment_count\n        from fuse_snapshot('db1', 'tbl1') order by timestamp ASC LIMIT 1;"
+        "select\n        IF(block_count > 10 and block_count / segment_count < 100, TRUE, FALSE) AS segment_advice,\n        IF(row_count > 100000 AND block_count > 10 AND bytes_uncompressed / block_count / 1024 / 1024  < 50, TRUE, FALSE) AS block_advice,\n        row_count, bytes_uncompressed, bytes_compressed, index_size,\n        segment_count, block_count,\n        block_count/segment_count\n        from fuse_snapshot('db1', 'tbl1') order by timestamp ASC LIMIT 1;",
     );
     Ok(())
 }
@@ -67,6 +67,54 @@ async fn test_get_block_compaction_sql() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_parse_target_tables() -> Result<()> {
+    let tables = CompactionJob::parse_all_target_tables(Some(&vec![
+        "db1.table1".to_string(),
+        "db1.table2".to_string(),
+    ]));
+    assert_eq!(tables.len(), 1);
+    assert_eq!(tables.get("db1").unwrap().len(), 2);
+    assert_eq!(tables.get("db1").unwrap().get(0).unwrap(), "table1");
+    assert_eq!(tables.get("db1").unwrap().get(1).unwrap(), "table2");
+    let tables = CompactionJob::parse_all_target_tables(Some(&vec![
+        "db1.table1".to_string(),
+        "tb2".to_string(),
+    ]));
+    assert_eq!(tables.len(), 2);
+    assert_eq!(tables.get("db1").unwrap().len(), 1);
+    assert_eq!(tables.get("db1").unwrap().get(0).unwrap(), "table1");
+    assert_eq!(tables.get("default").unwrap().get(0).unwrap(), "tb2");
+    let tables = CompactionJob::parse_all_target_tables(Some(&vec![
+        "iceberg.db1.table1".to_string(),
+        "tb2".to_string(),
+    ]));
+    assert_eq!(tables.len(), 1);
+
+    assert_eq!(tables.get("default").unwrap().get(0).unwrap(), "tb2");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_target_table_from_configs() -> Result<()> {
+    let sql = CompactionJob::get_target_from_config_sql("db1".to_string(), vec![
+        "table1".to_string(),
+        "table2".to_string(),
+    ]);
+    assert_eq!(
+        sql.trim(),
+        "SELECT t.database as database, d.database_id as database_id, t.name as table, t.table_id as table_id\n        FROM system.tables as t\n        JOIN system.databases as d\n        ON t.database = d.name\n        WHERE t.database != 'system'\n            AND t.database != 'information_schema'\n            AND t.engine = 'FUSE'\n            AND t.database = 'db1'\n            AND t.name IN ('table1', 'table2')\n            ;"
+    );
+    let sql =
+        CompactionJob::get_target_from_config_sql("db1".to_string(), vec!["table1".to_string()]);
+    assert_eq!(
+        sql.trim(),
+        "SELECT t.database as database, d.database_id as database_id, t.name as table, t.table_id as table_id\n        FROM system.tables as t\n        JOIN system.databases as d\n        ON t.database = d.name\n        WHERE t.database != 'system'\n            AND t.database != 'information_schema'\n            AND t.engine = 'FUSE'\n            AND t.database = 'db1'\n            AND t.name IN ('table1')\n            ;"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_should_continue_compaction() -> Result<()> {
     let old = TableStatistics {
         number_of_blocks: None,
@@ -89,12 +137,12 @@ async fn test_should_continue_compaction() -> Result<()> {
     };
     assert_eq!(should_continue_compaction(&old, &new), (false, false));
     let old = TableStatistics {
-        number_of_blocks: Some(100),
+        number_of_blocks: Some(1002),
         number_of_segments: Some(100),
         ..Default::default()
     };
     let new = TableStatistics {
-        number_of_blocks: Some(100),
+        number_of_blocks: Some(1001),
         number_of_segments: Some(90),
         ..Default::default()
     };
@@ -113,15 +161,15 @@ async fn test_should_continue_compaction() -> Result<()> {
     };
     assert_eq!(should_continue_compaction(&old, &new), (true, true));
     let old = TableStatistics {
-        number_of_blocks: Some(1000),
+        number_of_blocks: Some(10000),
         number_of_segments: Some(10),
         data_bytes: 50 * 1001 * 1024 * 1024,
         ..Default::default()
     };
     let new = TableStatistics {
-        number_of_blocks: Some(901),
+        number_of_blocks: Some(9010),
         number_of_segments: Some(9),
-        data_bytes: 50 * 1001 * 1024 * 1024,
+        data_bytes: 50 * 100 * 1001 * 1024 * 1024,
         ..Default::default()
     };
     assert_eq!(should_continue_compaction(&old, &new), (false, false));
