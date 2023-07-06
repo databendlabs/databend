@@ -471,7 +471,7 @@ impl Binder {
 
         // for fuse engine, we will insert database_id, so if we check it in execute phase,
         // we can't distinct user key and our internal key.
-        if options.contains_key(&OPT_KEY_DATABASE_ID.to_lowercase().to_string()) {
+        if options.contains_key(&OPT_KEY_DATABASE_ID.to_lowercase()) {
             error!("invalid opt for fuse table in create table statement");
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "table option {} is invalid for create table statement",
