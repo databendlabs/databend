@@ -219,23 +219,17 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
         Box::pin(async move {
             let instant = Instant::now();
 
-            // temp code: waiting https://github.com/datafuselabs/opendal/pull/1431
-            let mut write_data = Vec::with_capacity(total_size);
-
+            let mut write_bytes = 0;
+            let mut appender = operator.appender(&location).await?;
             for data in data.into_iter() {
-                write_data.extend(data);
+                write_bytes += data.len();
+                appender.append(data).await?;
             }
 
             // perf
             {
                 metrics_inc_aggregate_spill_write_count();
-                metrics_inc_aggregate_spill_write_bytes(write_data.len() as u64);
-            }
-
-            operator.write(&location, write_data).await?;
-
-            // perf
-            {
+                metrics_inc_aggregate_spill_write_bytes(write_bytes as u64);
                 metrics_inc_aggregate_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
             }
 
