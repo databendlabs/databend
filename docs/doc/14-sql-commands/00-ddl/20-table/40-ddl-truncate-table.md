@@ -9,11 +9,7 @@ See also: [DROP TABLE](20-ddl-drop-table.md)
 ## Syntax
 
 ```sql
--- Remove all data
-TRUNCATE TABLE [db.]table_name
-
--- Remove all data and release disk space
-TRUNCATE TABLE [db.]table_name PURGE
+TRUNCATE TABLE [db.]table_name [PURGE]
 ```
 
 ## Examples
