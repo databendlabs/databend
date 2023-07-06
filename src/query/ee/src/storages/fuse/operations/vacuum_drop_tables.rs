@@ -37,8 +37,9 @@ async fn do_vacuum_drop_table(
         );
         return Ok(None);
     }
+    let table_info = table.get_table_info();
     // storage_params is_some means it is an external table, ignore
-    if table.get_table_info().meta.storage_params.is_some() {
+    if table_info.meta.storage_params.is_some() {
         info!("ignore external table {}", table.get_table_info().name);
         return Ok(None);
     }
@@ -46,7 +47,7 @@ async fn do_vacuum_drop_table(
 
     let operator = fuse_table.get_operator_ref();
 
-    let dir = format!("{}/", fuse_table.meta_location_generator().prefix(),);
+    let dir = format!("{}/", FuseTable::parse_storage_prefix(table_info)?);
     info!("vacuum drop table {:?} dir {:?}", table.name(), dir);
     let start = Instant::now();
 
