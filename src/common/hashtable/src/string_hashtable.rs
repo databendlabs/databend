@@ -70,16 +70,6 @@ where
     }
 }
 
-// impl<K, V, A> Default for StringHashtable<K, V, A>
-// where
-//     K: UnsizedKeyable + ?Sized,
-//     A: Allocator + Clone + Default,
-// {
-//     fn default() -> Self {
-//         Self::new()
-//     }
-// }
-
 impl<K, A> StringHashtable<K, (), A>
 where
     K: UnsizedKeyable + ?Sized,
