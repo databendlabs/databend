@@ -30,11 +30,12 @@ use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
+use croaring::treemap::NativeSerializer;
+use croaring::Treemap;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
-use roaring::RoaringTreemap;
 use serde::de::Visitor;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -533,11 +534,6 @@ impl PartialOrd for Scalar {
             (Scalar::Date(d1), Scalar::Date(d2)) => d1.partial_cmp(d2),
             (Scalar::Array(a1), Scalar::Array(a2)) => a1.partial_cmp(a2),
             (Scalar::Map(m1), Scalar::Map(m2)) => m1.partial_cmp(m2),
-            (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => {
-                let rb1 = RoaringTreemap::deserialize_from(b1.as_slice()).unwrap();
-                let rb2 = RoaringTreemap::deserialize_from(b2.as_slice()).unwrap();
-                rb1.len().partial_cmp(&rb2.len())
-            }
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
                 jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
@@ -573,11 +569,6 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Date(d1), ScalarRef::Date(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
-            (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => {
-                let rb1 = RoaringTreemap::deserialize_from(*b1).unwrap();
-                let rb2 = RoaringTreemap::deserialize_from(*b2).unwrap();
-                rb1.len().partial_cmp(&rb2.len())
-            }
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
             _ => None,
@@ -658,13 +649,6 @@ impl PartialOrd for Column {
             (Column::Date(col1), Column::Date(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Array(col1), Column::Array(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Map(col1), Column::Map(col2)) => col1.iter().partial_cmp(col2.iter()),
-            (Column::Bitmap(col1), Column::Bitmap(col2)) => col1
-                .iter()
-                .map(|c1| RoaringTreemap::deserialize_from(c1).unwrap().len())
-                .partial_cmp(
-                    col2.iter()
-                        .map(|c2| RoaringTreemap::deserialize_from(c2).unwrap().len()),
-                ),
             (Column::Nullable(col1), Column::Nullable(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
             }
@@ -1051,7 +1035,7 @@ impl Column {
                         values,
                         None,
                     )
-                    .unwrap()
+                        .unwrap()
                 )
             }
             Column::Boolean(col) => Box::new(
@@ -1692,10 +1676,8 @@ impl Column {
             }
             DataType::Bitmap => BitmapType::from_data((0..len).map(|_| {
                 let data: [u64; 4] = SmallRng::from_entropy().gen();
-                let rb = RoaringTreemap::from_iter(data.iter());
-                let mut buf = vec![];
-                rb.serialize_into(&mut buf)
-                    .expect("failed serialize roaring treemap");
+                let rb = Treemap::from_iter(data);
+                let buf = rb.serialize().expect("failed serialize roaring treemap");
                 buf
             })),
             DataType::Tuple(fields) => {
@@ -1911,11 +1893,8 @@ impl ColumnBuilder {
             }
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
             ScalarRef::Bitmap(b) => {
-                let rb =
-                    RoaringTreemap::deserialize_from(*b).expect("failed to deserialize bitmap");
-                let mut buf = vec![];
-                rb.serialize_into(&mut buf)
-                    .expect("failed to serialize bitmap");
+                let rb = Treemap::deserialize(*b).expect("failed to deserialize bitmap");
+                let buf = rb.serialize().expect("failed to serialize bitmap");
                 ColumnBuilder::Bitmap(StringColumnBuilder::repeat(&buf, n))
             }
             ScalarRef::Tuple(fields) => {
