@@ -82,7 +82,7 @@ macro_rules! lookup_impl {
                 self.len
             }
 
-            fn bytes_len(&self) -> usize {
+            fn bytes_len(&self, _without_arena: bool) -> usize {
                 mem::size_of::<MaybeUninit<[bool; $capacity]>>() +
                 mem::size_of::<MaybeUninit<[Entry<$ty, V>; $capacity]>>() +
                 mem::size_of::<Self>()

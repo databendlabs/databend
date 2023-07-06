@@ -15,7 +15,9 @@
 use std::ptr::NonNull;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
+use bumpalo::Bump;
 use common_hashtable::DictionaryKeys;
 use common_hashtable::DictionaryStringHashMap;
 use common_hashtable::HashMap;
@@ -117,7 +119,7 @@ fn test_unsized_hash_map() {
             standard.insert(s, 1);
         }
     }
-    let mut hashtable = ShortStringHashMap::<[u8], U64>::new();
+    let mut hashtable = ShortStringHashMap::<[u8], U64>::new(Arc::new(Bump::new()));
     for s in sequence.iter() {
         match unsafe { hashtable.insert_and_entry(s) } {
             Ok(mut e) => {
@@ -140,7 +142,7 @@ fn test_unsized_hash_map() {
 
 #[test]
 fn test_dictionary_hash_map() {
-    let mut hashtable = DictionaryStringHashMap::<usize>::new(2);
+    let mut hashtable = DictionaryStringHashMap::<usize>::new(Arc::new(Bump::new()), 2);
     unsafe {
         for index1 in 0..1000 {
             for index2 in 0..1000 {

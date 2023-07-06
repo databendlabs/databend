@@ -391,7 +391,7 @@ pub trait HashtableLike {
 
     fn len(&self) -> usize;
 
-    fn bytes_len(&self) -> usize;
+    fn bytes_len(&self, without_arena: bool) -> usize;
 
     fn unsize_key_size(&self) -> Option<usize> {
         None

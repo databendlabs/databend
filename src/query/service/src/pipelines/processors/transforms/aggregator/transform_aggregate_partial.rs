@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::vec;
 
+use bumpalo::Bump;
 use common_catalog::plan::AggIndexMeta;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -99,7 +100,8 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
-        let hashtable = method.create_hash_table()?;
+        let arena = Arc::new(Bump::new());
+        let hashtable = method.create_hash_table(arena)?;
         let _dropper = AggregateHashTableDropper::create(params.clone());
         let hashtable = HashTableCell::create(hashtable, _dropper);
 
@@ -316,8 +318,9 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                         }
                     }
 
+                    let arena = Arc::new(Bump::new());
                     let method = PartitionedHashMethod::<Method>::create(self.method.clone());
-                    let new_hashtable = method.create_hash_table()?;
+                    let new_hashtable = method.create_hash_table(arena)?;
                     self.hash_table = HashTable::PartitionedHashTable(HashTableCell::create(
                         new_hashtable,
                         _dropper.unwrap(),
