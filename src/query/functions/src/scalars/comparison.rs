@@ -860,6 +860,9 @@ fn simple_like(
     segments: &Vec<Vec<u8>>,
 ) -> bool {
     let haystack_len = haystack.len();
+    if haystack_len == 0 {
+        return false;
+    }
     let segments_len = segments.len();
     debug_assert!(haystack_len > 0);
     debug_assert!(segments_len > 1);

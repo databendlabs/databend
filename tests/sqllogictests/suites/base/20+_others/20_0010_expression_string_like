@@ -5,7 +5,7 @@ statement ok
 CREATE TABLE t_string_like(URL TEXT NOT NULL)
 
 statement ok
-insert into t_string_like values('Arrow'), (''), ('Nicolas')
+insert into t_string_like values('Arrow'), (''), ('Nicolas'), ('Databend'), ('modern data warehouse')
 
 query B
 select count(*)=1 from t_string_like where URL like 'Arrow'
@@ -57,9 +57,83 @@ select count(*)=0 from t_string_like where URL like '%not_exist%'
 ----
 1
 
+query B
+select count(*)=1 from t_string_like where URL like 'Data%bend'
+----
+1
+
+query B
+select count(*)=1 from t_string_like where URL like '%Data%bend'
+----
+1
+
+query B
+select count(*)=1 from t_string_like where URL like 'Data%bend%'
+----
+1
+
+query B
+select count(*)=1 from t_string_like where URL like '%Data%bend%'
+----
+1
+
+query B
+select count(*)=0 from t_string_like where URL like 'Datx%bend'
+----
+1
+
+query B
+select count(*)=0 from t_string_like where URL like '%Datx%bend'
+----
+1
+
+query B
+select count(*)=0 from t_string_like where URL like 'Datx%bend%'
+----
+1
+
+query B
+select count(*)=0 from t_string_like where URL like '%Datx%bend%'
+----
+1
+
+query B
+select count(*)=1 from t_string_like where URL like '%%D%%%a%%t%a%%%b%e%n%%d%%'
+----
+1
+
+query B
+select count(*)=0 from t_string_like where URL like '%%D%%%a%%t%a%%%x%e%n%%d%%'
+----
+1
+
+query B
+select count(*)=0 from t_string_like where URL like '%%D%%%a%%t%a%%%x%e%n%%d%%'
+----
+1
+
+query B
+select count(*)=1 from t_string_like where URL like 'modern%data%warehouse'
+----
+1
+
+query B
+select count(*)=1 from t_string_like where URL like 'modern%warehouse'
+----
+1
+
+query B
+select count(*)=0 from t_string_like where URL like 'modern%warehouse%data'
+----
+1
+
+query B
+select count(*)=1 from t_string_like where URL like '%%modern %%%dat%a%war%e%h%%ou%s%e%%'
+----
+1
 
 # test for empty string like '%%', we follow mysql/pg returns 1, but clickhouse returns 0
 query B
-select count(*)=3 from t_string_like where URL like '%%'
+select count(*)=5 from t_string_like where URL like '%%'
 ----
 1
