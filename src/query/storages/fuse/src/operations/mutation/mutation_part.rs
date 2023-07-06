@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
@@ -23,6 +22,48 @@ use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::pruning::DeletedSegmentInfo;
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+pub enum Mutation {
+    MutationDeletedSegment(MutationDeletedSegment),
+    MutationPartInfo(MutationPartInfo),
+}
+
+#[typetag::serde(name = "mutation_enum")]
+impl PartInfo for Mutation {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match self {
+            Self::MutationDeletedSegment(mutation_deleted_segment) => {
+                mutation_deleted_segment.equals(info)
+            }
+            Self::MutationPartInfo(mutation_part_info) => mutation_part_info.equals(info),
+        }
+    }
+
+    fn hash(&self) -> u64 {
+        match self {
+            Self::MutationDeletedSegment(mutation_deleted_segment) => {
+                mutation_deleted_segment.hash()
+            }
+            Self::MutationPartInfo(mutation_part_info) => mutation_part_info.hash(),
+        }
+    }
+}
+
+impl Mutation {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&Mutation> {
+        match info.as_any().downcast_ref::<Mutation>() {
+            Some(part_ref) => Ok(part_ref),
+            None => Err(ErrorCode::Internal(
+                "Cannot downcast from PartInfo to Mutation.",
+            )),
+        }
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
 pub struct MutationDeletedSegment {
@@ -50,15 +91,6 @@ impl PartInfo for MutationDeletedSegment {
 impl MutationDeletedSegment {
     pub fn create(deleted_segment: DeletedSegmentInfo) -> Self {
         MutationDeletedSegment { deleted_segment }
-    }
-
-    pub fn from_part(info: &PartInfoPtr) -> Result<&MutationDeletedSegment> {
-        match info.as_any().downcast_ref::<MutationDeletedSegment>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to MutationDeletedSegment.",
-            )),
-        }
     }
 }
 
@@ -94,21 +126,12 @@ impl MutationPartInfo {
         cluster_stats: Option<ClusterStatistics>,
         inner_part: PartInfoPtr,
         whole_block_mutation: bool,
-    ) -> PartInfoPtr {
-        Arc::new(Box::new(MutationPartInfo {
+    ) -> Self {
+        MutationPartInfo {
             index,
             cluster_stats,
             inner_part,
             whole_block_mutation,
-        }))
-    }
-
-    pub fn from_part(info: &PartInfoPtr) -> Result<&MutationPartInfo> {
-        match info.as_any().downcast_ref::<MutationPartInfo>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to MutationPartInfo.",
-            )),
         }
     }
 }
