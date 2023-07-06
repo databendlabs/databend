@@ -381,3 +381,25 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-stateful-standalone-linux
+
+  test_ee_standalone_background:
+    needs: [build, license]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    if: needs.license.outputs.license
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup_bendsql
+      - name: Decode license
+        id: license
+        run: |
+          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/test_ee_standalone_background_linux
+        timeout-minutes: 10
+        env:
+          DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
+          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-standalone-linux

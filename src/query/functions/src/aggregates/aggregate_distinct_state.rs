@@ -17,7 +17,9 @@ use std::collections::HashSet;
 use std::hash::Hasher;
 use std::marker::Send;
 use std::marker::Sync;
+use std::sync::Arc;
 
+use bumpalo::Bump;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
@@ -153,7 +155,7 @@ impl DistinctStateFunc for AggregateDistinctState {
 impl DistinctStateFunc for AggregateDistinctStringState {
     fn new() -> Self {
         AggregateDistinctStringState {
-            set: ShortStringHashSet::<[u8]>::with_capacity(4),
+            set: ShortStringHashSet::<[u8]>::with_capacity(4, Arc::new(Bump::new())),
         }
     }
 
@@ -167,7 +169,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         let size = reader.read_uvarint()?;
-        self.set = ShortStringHashSet::<[u8]>::with_capacity(size as usize);
+        self.set = ShortStringHashSet::<[u8]>::with_capacity(size as usize, Arc::new(Bump::new()));
         for _ in 0..size {
             let s = reader.read_uvarint()? as usize;
             let _ = self.set.set_insert(&reader[..s]);

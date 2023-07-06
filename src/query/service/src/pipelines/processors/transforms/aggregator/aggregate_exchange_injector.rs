@@ -15,6 +15,7 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use bumpalo::Bump;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -97,7 +98,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> HashTableHashSca
         let mut buckets = Vec::with_capacity(self.buckets);
 
         for _ in 0..self.buckets {
-            buckets.push(self.method.create_hash_table()?);
+            buckets.push(self.method.create_hash_table(Arc::new(Bump::new()))?);
         }
 
         for item in payload.cell.hashtable.iter() {

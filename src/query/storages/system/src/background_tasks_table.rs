@@ -71,6 +71,7 @@ impl AsyncSystemTable for BackgroundTaskTable {
         let mut vacuum_stats = Vec::with_capacity(tasks.len());
         let mut task_run_secs = Vec::with_capacity(tasks.len());
         let mut creators = Vec::with_capacity(tasks.len());
+        let mut trigger = Vec::with_capacity(tasks.len());
         let mut create_timestamps = Vec::with_capacity(tasks.len());
         let mut update_timestamps = Vec::with_capacity(tasks.len());
         for (_, name, task) in tasks {
@@ -94,6 +95,10 @@ impl AsyncSystemTable for BackgroundTaskTable {
                 task_run_secs.push(None);
             }
             creators.push(task.creator.map(|s| s.to_string().as_bytes().to_vec()));
+            trigger.push(
+                task.manual_trigger
+                    .map(|s| s.trigger.to_string().as_bytes().to_vec()),
+            );
             create_timestamps.push(task.created_at.timestamp_micros());
             update_timestamps.push(task.last_updated.unwrap_or_default().timestamp_micros());
         }
@@ -108,6 +113,7 @@ impl AsyncSystemTable for BackgroundTaskTable {
             StringType::from_opt_data(vacuum_stats),
             NumberType::from_opt_data(task_run_secs),
             StringType::from_opt_data(creators),
+            StringType::from_opt_data(trigger),
             TimestampType::from_data(create_timestamps),
             TimestampType::from_data(update_timestamps),
         ]))
@@ -130,6 +136,7 @@ impl BackgroundTaskTable {
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new("creator", TableDataType::String),
+            TableField::new("trigger", TableDataType::String),
             TableField::new("created_on", TableDataType::Timestamp),
             TableField::new("updated_on", TableDataType::Timestamp),
         ]);

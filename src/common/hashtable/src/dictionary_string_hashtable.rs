@@ -17,6 +17,7 @@ use std::intrinsics::unlikely;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::ptr::NonNull;
+use std::sync::Arc;
 
 use bumpalo::Bump;
 use common_base::mem_allocator::MmapAllocator;
@@ -88,7 +89,7 @@ impl<V> DictionaryEntry<V> {
 }
 
 pub struct DictionaryStringHashTable<V> {
-    arena: Bump,
+    arena: Arc<Bump>,
     dict_keys: usize,
     entries_len: usize,
     pub(crate) entries: HeapContainer<DictionaryEntry<V>, MmapAllocator>,
@@ -100,13 +101,13 @@ unsafe impl<V> Send for DictionaryStringHashTable<V> {}
 unsafe impl<V> Sync for DictionaryStringHashTable<V> {}
 
 impl<V> DictionaryStringHashTable<V> {
-    pub fn new(dict_keys: usize) -> DictionaryStringHashMap<V> {
+    pub fn new(bump: Arc<Bump>, dict_keys: usize) -> DictionaryStringHashMap<V> {
         DictionaryStringHashTable::<V> {
-            arena: Bump::new(),
+            arena: bump.clone(),
             dict_keys,
             entries_len: 0,
             entries: unsafe { HeapContainer::new_zeroed(256, MmapAllocator::default()) },
-            dictionary_hashset: StringHashSet::new(),
+            dictionary_hashset: StringHashSet::new(bump),
         }
     }
 
@@ -281,10 +282,15 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
         self.entries_len
     }
 
-    fn bytes_len(&self) -> usize {
-        self.dictionary_hashset.bytes_len()
-            + self.entries.heap_bytes()
-            + self.arena.allocated_bytes()
+    fn bytes_len(&self, without_arena: bool) -> usize {
+        match without_arena {
+            true => self.dictionary_hashset.bytes_len(true) + self.entries.heap_bytes(),
+            false => {
+                self.dictionary_hashset.bytes_len(false)
+                    + self.entries.heap_bytes()
+                    + self.arena.allocated_bytes()
+            }
+        }
     }
 
     fn entry(&self, key: &Self::Key) -> Option<Self::EntryRef<'_>> {

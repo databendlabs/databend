@@ -105,7 +105,7 @@ impl InputFormatTextBase for InputFormatNDJson {
         ctx: &Arc<InputContext>,
         split_info: &Arc<SplitInfo>,
     ) -> Result<Self::AligningState> {
-        AligningStateRowDelimiter::try_create(ctx, split_info, b'\n', 0)
+        AligningStateRowDelimiter::try_create(ctx, split_info, b'\n', true, 0)
     }
 
     fn create_field_decoder(
