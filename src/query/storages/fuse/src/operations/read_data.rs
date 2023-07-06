@@ -239,6 +239,7 @@ impl FuseTable {
                 plan,
                 top_k,
                 max_io_requests,
+                index_reader,
             ),
             FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
                 ctx,

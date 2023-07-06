@@ -107,11 +107,7 @@ async fn test_index_refresh() -> Result<()> {
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
 
     // Create table
-    execute_sql(
-        fixture.ctx(),
-        "CREATE TABLE t0 (a int, b int, c int) storage_format = 'parquet'",
-    )
-    .await?;
+    execute_sql(fixture.ctx(), "CREATE TABLE t0 (a int, b int, c int)").await?;
 
     // Insert data
     execute_sql(
@@ -237,11 +233,7 @@ async fn test_index_refresh_with_limit() -> Result<()> {
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
 
     // Create table
-    execute_sql(
-        fixture.ctx(),
-        "CREATE TABLE t1 (a int, b int, c int) storage_format = 'parquet'",
-    )
-    .await?;
+    execute_sql(fixture.ctx(), "CREATE TABLE t1 (a int, b int, c int)").await?;
 
     // Insert data
     execute_sql(

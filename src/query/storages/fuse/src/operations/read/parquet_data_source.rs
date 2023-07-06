@@ -31,20 +31,20 @@ pub enum DataSource {
 }
 
 pub struct DataSourceMeta {
-    pub part: Vec<PartInfoPtr>,
+    pub parts: Vec<PartInfoPtr>,
     pub data: Vec<DataSource>,
 }
 
 impl DataSourceMeta {
     pub fn create(part: Vec<PartInfoPtr>, data: Vec<DataSource>) -> BlockMetaInfoPtr {
-        Box::new(DataSourceMeta { part, data })
+        Box::new(DataSourceMeta { parts: part, data })
     }
 }
 
 impl Debug for DataSourceMeta {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DataSourceMeta")
-            .field("parts", &self.part)
+            .field("parts", &self.parts)
             .finish()
     }
 }
