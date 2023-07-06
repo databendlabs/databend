@@ -43,7 +43,7 @@ use crate::pipelines::processors::transforms::aggregator::serde::TransformScatte
 use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterGroupBySerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterGroupBySpillWriter;
-use crate::pipelines::processors::transforms::group_by::Area;
+use crate::pipelines::processors::transforms::group_by::{Area, PartitionedHashMethod, PolymorphicKeysHelper};
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::HashTableCell;
@@ -93,12 +93,13 @@ struct HashTableHashScatter<Method: HashMethodBounds, V: Copy + Send + Sync + 's
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> HashTableHashScatter<Method, V> {
     fn scatter(
         &self,
-        mut payload: HashTablePayload<Method, V>,
-    ) -> Result<Vec<HashTableCell<Method, V>>> {
+        mut payload: HashTablePayload<PartitionedHashMethod<Method>, V>,
+    ) -> Result<Vec<HashTableCell<PartitionedHashMethod<Method>, V>>> {
         let mut buckets = Vec::with_capacity(self.buckets);
 
+        let method = PartitionedHashMethod::create(self.method.clone());
         for _ in 0..self.buckets {
-            buckets.push(self.method.create_hash_table(Arc::new(Bump::new()))?);
+            buckets.push(method.create_hash_table(Arc::new(Bump::new()))?);
         }
 
         for item in payload.cell.hashtable.iter() {
@@ -126,7 +127,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> HashTableHashSca
             .push(ArenaHolder::create(Some(arena)));
         for bucket_table in buckets {
             let mut cell =
-                HashTableCell::<Method, V>::create(bucket_table, dropper.clone().unwrap());
+                HashTableCell::<PartitionedHashMethod<Method>, V>::create(bucket_table, dropper.clone().unwrap());
             cell.arena_holders
                 .extend(payload.cell.arena_holders.clone());
             res.push(cell);

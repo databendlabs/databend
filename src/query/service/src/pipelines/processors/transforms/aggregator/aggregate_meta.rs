@@ -21,7 +21,7 @@ use common_expression::BlockMetaInfoPtr;
 use common_expression::Column;
 use common_expression::DataBlock;
 
-use crate::pipelines::processors::transforms::group_by::ArenaHolder;
+use crate::pipelines::processors::transforms::group_by::{ArenaHolder, PartitionedHashMethod};
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::HashTableCell;
 
@@ -52,7 +52,7 @@ pub struct SpilledPayload {
 pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
     Serialized(SerializedPayload),
     HashTable(HashTablePayload<Method, V>),
-    Spilling(HashTablePayload<Method, V>),
+    Spilling(HashTablePayload<PartitionedHashMethod<Method>, V>),
     Spilled(SpilledPayload),
 
     Partitioned { bucket: isize, data: Vec<Self> },
@@ -74,7 +74,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
         }))
     }
 
-    pub fn create_spilling(bucket: isize, cell: HashTableCell<Method, V>) -> BlockMetaInfoPtr {
+    pub fn create_spilling(bucket: isize, cell: HashTableCell<PartitionedHashMethod<Method>, V>) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::<Method, V>::Spilling(HashTablePayload {
             cell,
             bucket,
