@@ -4161,7 +4161,6 @@ dependencies = [
  "opendal",
  "parking_lot 0.12.1",
  "storages-common-cache",
- "storages-common-cache-manager",
  "storages-common-table-meta",
  "table-lock",
  "tempfile",
