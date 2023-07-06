@@ -288,7 +288,6 @@ pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 
     r.insert(OPT_KEY_TABLE_COMPRESSION);
     r.insert(OPT_KEY_STORAGE_FORMAT);
-    r.insert(OPT_KEY_DATABASE_ID);
 
     r.insert(OPT_KEY_COMMENT);
 

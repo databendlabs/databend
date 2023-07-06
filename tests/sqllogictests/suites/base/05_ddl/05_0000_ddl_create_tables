@@ -272,6 +272,9 @@ create table t(a int) snapshot_loc='xxx'
 statement error 1301
 create table t(a int) snapshot_location='xxx'
 
+statement error 1301
+create table t(a int) database_id='xxx'
+
 statement ok
 drop table if exists t_without_engine_desc;
 
