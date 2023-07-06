@@ -28,6 +28,7 @@ use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
@@ -229,11 +230,17 @@ impl SnapshotGenerator for MutationGenerator {
                 {
                     tracing::info!("resolvable conflicts detected");
                     metrics_inc_commit_mutation_resolvable_conflict();
+                    error!("positions: {:?}", positions);
+                    error!("added_segments: {:?}", ctx.added_segments);
+                    error!("previous.segments: {:?}", previous.segments);
+                    error!("previous.segments.len(): {}", previous.segments.len());
                     let new_segments = ConflictResolveContext::merge_segments(
                         previous.segments.clone(),
                         ctx.added_segments.clone(),
                         positions,
                     );
+                    error!("new_segments: {:?}", new_segments);
+                    error!("len: {}", new_segments.len());
                     let new_summary = merge_statistics(&ctx.added_statistics, &previous.summary);
                     let new_summary = deduct_statistics(&new_summary, &ctx.removed_statistics);
                     let new_snapshot = TableSnapshot::new(

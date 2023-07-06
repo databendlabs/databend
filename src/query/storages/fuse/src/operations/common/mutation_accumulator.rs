@@ -29,6 +29,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
+use tracing::error;
 use tracing::info;
 
 use super::ConflictResolveContext;
@@ -186,6 +187,7 @@ impl MutationAccumulator {
         let mut added_statistics = Statistics::default();
         for s in &self.deleted_segments {
             removed_segment_indexes.push(s.deleted_segment.index);
+            added_segments.push(None);
             merge_statistics_mut(&mut removed_statistics, &s.deleted_segment.segment_info.1);
         }
         for chunk in segment_indices.chunks(chunk_size) {
@@ -223,6 +225,7 @@ impl MutationAccumulator {
 
         let conflict_resolve_context = match self.kind {
             MutationKind::Delete => {
+                error!("removed_segment_indexes:{:?}", removed_segment_indexes);
                 ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
                     removed_segment_indexes,
                     added_segments,
