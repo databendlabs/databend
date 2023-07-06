@@ -988,7 +988,7 @@ impl MetaNode {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, req), fields(target=%req.forward_to_leader))]
+    #[tracing::instrument(level = "debug", skip_all, fields(target=%req.forward_to_leader))]
     pub async fn handle_forwardable_request(
         &self,
         req: ForwardRequest,
@@ -997,46 +997,77 @@ impl MetaNode {
 
         let forward = req.forward_to_leader;
 
-        let assume_leader_res = self.assume_leader().await;
-        debug!("assume_leader: is_err: {}", assume_leader_res.is_err());
+        let mut n_retry = 17;
+        let mut slp = Duration::from_millis(200);
 
-        // Handle the request locally or return a ForwardToLeader error
-        let op_err = match assume_leader_res {
-            Ok(leader) => {
-                let res = leader.handle_request(req.clone()).await;
-                match res {
-                    Ok(x) => return Ok(x),
-                    Err(e) => e,
+        loop {
+            let assume_leader_res = self.assume_leader().await;
+            debug!("assume_leader: is_err: {}", assume_leader_res.is_err());
+
+            // Handle the request locally or return a ForwardToLeader error
+            let op_err = match assume_leader_res {
+                Ok(leader) => {
+                    let res = leader.handle_request(req.clone()).await;
+                    match res {
+                        Ok(x) => return Ok(x),
+                        Err(e) => e,
+                    }
+                }
+                Err(e) => MetaOperationError::ForwardToLeader(e),
+            };
+
+            // If needs to forward, deal with it. Otherwise return the unhandlable error.
+            let to_leader = match op_err {
+                MetaOperationError::ForwardToLeader(err) => err,
+                MetaOperationError::DataError(d_err) => {
+                    return Err(d_err.into());
+                }
+            };
+
+            if forward == 0 {
+                return Err(MetaAPIError::CanNotForward(AnyError::error(
+                    "max number of forward reached",
+                )));
+            }
+
+            let leader_id = to_leader.leader_id.ok_or_else(|| {
+                MetaAPIError::CanNotForward(AnyError::error("need to forward but no known leader"))
+            })?;
+
+            let mut req_cloned = req.clone();
+            // Avoid infinite forward
+            req_cloned.decr_forward();
+
+            let res = self.forward_to(&leader_id, req_cloned).await;
+            let forward_err = match res {
+                Ok(x) => {
+                    return Ok(x);
+                }
+                Err(forward_err) => forward_err,
+            };
+
+            match forward_err {
+                ForwardRPCError::NetworkError(ref net_err) => {
+                    warn!(
+                        "{} retries left, sleep time: {:?}; forward_to {} failed: {}",
+                        n_retry, slp, leader_id, net_err
+                    );
+
+                    n_retry -= 1;
+                    if n_retry == 0 {
+                        error!("no more retry for forward_to {}", leader_id);
+                        return Err(MetaAPIError::from(forward_err));
+                    } else {
+                        tokio::time::sleep(slp).await;
+                        slp = std::cmp::min(slp * 2, Duration::from_secs(1));
+                        continue;
+                    }
+                }
+                ForwardRPCError::RemoteError(_) => {
+                    return Err(MetaAPIError::from(forward_err));
                 }
             }
-            Err(e) => MetaOperationError::ForwardToLeader(e),
-        };
-
-        // If needs to forward, deal with it. Otherwise return the unhandlable error.
-        let to_leader = match op_err {
-            MetaOperationError::ForwardToLeader(err) => err,
-            MetaOperationError::DataError(d_err) => {
-                return Err(d_err.into());
-            }
-        };
-
-        if forward == 0 {
-            return Err(MetaAPIError::CanNotForward(AnyError::error(
-                "max number of forward reached",
-            )));
         }
-
-        let leader_id = to_leader.leader_id.ok_or_else(|| {
-            MetaAPIError::CanNotForward(AnyError::error("need to forward but no known leader"))
-        })?;
-
-        let mut r2 = req.clone();
-        // Avoid infinite forward
-        r2.decr_forward();
-
-        let res: ForwardResponse = self.forward_to(&leader_id, r2).await?;
-
-        Ok(res)
     }
 
     /// Return a MetaLeader if `self` believes it is the leader.
