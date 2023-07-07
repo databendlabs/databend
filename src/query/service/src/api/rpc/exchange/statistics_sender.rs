@@ -111,7 +111,8 @@ impl StatisticsSender {
                     "Cannot send data via flight exchange, cause: {:?}",
                     error_code
                 );
-                tracing::error!("send a error!")
+                tracing::error!("send a error!");
+                println!("send a error")
             }
 
             shutdown_flag_sender.close();
