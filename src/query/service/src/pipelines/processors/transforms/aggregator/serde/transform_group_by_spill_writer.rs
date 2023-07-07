@@ -34,7 +34,7 @@ use tracing::info;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::serialize_group_by;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::group_by::{HashMethodBounds, PartitionedHashMethod};
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_bytes;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_count;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_milliseconds;
@@ -196,12 +196,17 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
     operator: Operator,
     method: &Method,
     location_prefix: &str,
-    payload: HashTablePayload<Method, ()>,
+    payload: HashTablePayload<PartitionedHashMethod<Method>, ()>,
 ) -> Result<(DataBlock, BoxFuture<'static, Result<()>>)> {
     let (bucket, data) = serialize_spill_file(method, payload)?;
 
     let unique_name = GlobalUniqName::unique();
     let location = format!("{}/{}", location_prefix, unique_name);
+
+    for inner_table in payload.cell.hashtable.into_iter_tables() {
+
+    }
+    let ss = payload.cell.hashtable;
     let columns_layout = data.iter().map(Vec::len).collect::<Vec<_>>();
     let output_data_block = DataBlock::empty_with_meta(
         AggregateMeta::<Method, ()>::create_spilled(bucket, location.clone(), columns_layout),

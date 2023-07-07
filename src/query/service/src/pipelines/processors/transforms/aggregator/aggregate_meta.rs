@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::ops::Range;
 
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
@@ -46,6 +47,7 @@ impl SerializedPayload {
 pub struct SpilledPayload {
     pub bucket: isize,
     pub location: String,
+    pub data_range: Range<usize>,
     pub columns_layout: Vec<usize>,
 }
 
@@ -85,11 +87,13 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
     pub fn create_spilled(
         bucket: isize,
         location: String,
+        data_range: Range<usize>,
         columns_layout: Vec<usize>,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::<Method, V>::Spilled(SpilledPayload {
             bucket,
             location,
+            data_range,
             columns_layout,
         }))
     }

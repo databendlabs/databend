@@ -135,7 +135,7 @@ impl<Method: HashMethodBounds> Processor for TransformScatterAggregateSpillWrite
                             .take_meta()
                             .and_then(AggregateMeta::<Method, usize>::downcast_from)
                         {
-                            let (output_block, spilling_future) = spilling_aggregate_payload(
+                            let (spilled_blocks, spilling_future) = spilling_aggregate_payload(
                                 self.operator.clone(),
                                 &self.method,
                                 &self.location_prefix,
@@ -143,7 +143,7 @@ impl<Method: HashMethodBounds> Processor for TransformScatterAggregateSpillWrite
                                 payload,
                             )?;
 
-                            new_blocks.push(output_block);
+                            new_blocks.extend(spilled_blocks);
                             self.spilling_futures.push(Box::pin(spilling_future));
                             continue;
                         }

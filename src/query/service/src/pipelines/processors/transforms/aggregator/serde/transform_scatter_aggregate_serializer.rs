@@ -246,9 +246,9 @@ where Method: HashMethodBounds
                     }
                     AggregateMeta::HashTable(payload) => {
                         let bucket = payload.bucket;
-                        let data_block = serialize_aggregate(&self.method, &self.params, payload)?;
-                        let data_block =
-                            data_block.add_meta(Some(AggregateSerdeMeta::create(bucket)))?;
+                        let data_block = serialize_aggregate(&self.method, &self.params, &payload.cell.hashtable)?;
+                        drop(payload);
+                        let data_block = data_block.add_meta(Some(AggregateSerdeMeta::create(bucket)))?;
                         serialize_block(bucket, data_block, &self.ipc_fields, &self.options)?
                     }
                 });

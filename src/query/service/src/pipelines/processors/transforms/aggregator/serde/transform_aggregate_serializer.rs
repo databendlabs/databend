@@ -163,10 +163,10 @@ impl<Method: HashMethodBounds> TransformAggregateSerializer<Method> {
 pub fn serialize_aggregate<Method: HashMethodBounds>(
     method: &Method,
     params: &Arc<AggregatorParams>,
-    payload: HashTablePayload<Method, usize>,
+    hashtable:&Method::HashTable<usize>,
 ) -> Result<DataBlock> {
-    let keys_len = payload.cell.hashtable.len();
-    let value_size = estimated_key_size(&payload.cell.hashtable);
+    let keys_len = hashtable.len();
+    let value_size = estimated_key_size(hashtable);
 
     let funcs = &params.aggregate_functions;
     let offsets_aggregate_states = &params.offsets_aggregate_states;
@@ -178,7 +178,7 @@ pub fn serialize_aggregate<Method: HashMethodBounds>(
 
     let mut group_key_builder = method.keys_column_builder(keys_len, value_size);
 
-    for group_entity in payload.cell.hashtable.iter() {
+    for group_entity in hashtable.iter() {
         let place = Into::<StateAddr>::into(*group_entity.get());
 
         for (idx, func) in funcs.iter().enumerate() {

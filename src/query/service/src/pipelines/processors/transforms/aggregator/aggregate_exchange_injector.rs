@@ -149,13 +149,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Spilling(payload) => {
-                        let bucket = payload.bucket;
                         for hashtable_cell in self.scatter(payload)? {
                             blocks.push(match hashtable_cell.hashtable.len() == 0 {
                                 true => DataBlock::empty(),
                                 false => DataBlock::empty_with_meta(
                                     AggregateMeta::<Method, V>::create_spilling(
-                                        bucket,
+                                        0,
                                         hashtable_cell,
                                     ),
                                 ),
