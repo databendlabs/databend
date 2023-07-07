@@ -205,7 +205,7 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
 
         write_data.push(columns_data);
         spilled_blocks.push_back(DataBlock::empty_with_meta(
-            AggregateMeta::<Method, usize>::create_spilled(
+            AggregateMeta::<Method, ()>::create_spilled(
                 bucket as isize,
                 location.clone(),
                 begin..write_size,

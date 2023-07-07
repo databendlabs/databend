@@ -30,7 +30,6 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use itertools::Itertools;
 use opendal::Operator;
-use tracing::error;
 use tracing::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
@@ -184,13 +183,6 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                         .range_read(&payload.location, payload.data_range.clone())
                         .await?;
 
-                    if let Err(cause) = self.operator.delete(&payload.location).await {
-                        error!(
-                            "Cannot delete spill file {}, cause: {:?}",
-                            &payload.location, cause
-                        );
-                    }
-
                     info!(
                         "Read aggregate spill {} successfully, elapsed: {:?}",
                         &payload.location,
@@ -215,17 +207,6 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                                     {
                                         metrics_inc_aggregate_spill_read_count();
                                         metrics_inc_aggregate_spill_read_bytes(data.len() as u64);
-                                    }
-
-                                    if let Err(cause) = operator.delete(&location).await {
-                                        error!(
-                                            "Cannot delete spill file {}, cause: {:?}",
-                                            location, cause
-                                        );
-                                    }
-
-                                    // perf
-                                    {
                                         metrics_inc_aggregate_spill_read_milliseconds(
                                             instant.elapsed().as_millis() as u64,
                                         );

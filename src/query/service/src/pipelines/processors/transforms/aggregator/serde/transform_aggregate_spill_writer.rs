@@ -104,7 +104,7 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
             return Ok(Event::Async);
         }
 
-        if let Some(spilled_block) = self.spilled_blocks.pop_back() {
+        if let Some(spilled_block) = self.spilled_blocks.pop_front() {
             self.output.push_data(Ok(spilled_block));
             return Ok(Event::NeedConsume);
         }
@@ -168,7 +168,10 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let Some(spilling_future) = self.spilling_future.take() {
-            return spilling_future.await;
+            info!("wait future");
+            spilling_future.await?;
+            info!("awaited future");
+            return Ok(());
         }
 
         Ok(())
