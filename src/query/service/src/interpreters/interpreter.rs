@@ -97,8 +97,13 @@ pub trait Interpreter: Sync + Send {
             let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
             ctx.set_executor(complete_executor.get_inner())?;
-            complete_executor.execute()?;
-            Ok(Box::pin(DataBlockStream::create(None, vec![])))
+            match complete_executor.execute() {
+                Err(error) => {
+                    println!("read two fileds at node:{}", ctx.get_cluster().local_id);
+                    return Err(error);
+                }
+                Ok(_) => return Ok(Box::pin(DataBlockStream::create(None, vec![]))),
+            }
         } else {
             let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
 

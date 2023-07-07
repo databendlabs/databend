@@ -712,12 +712,20 @@ impl QueryCoordinator {
         }
 
         let ctx = query_ctx.clone();
+        let ctx_clone = ctx.clone();
         let (_, request_server_exchange) = request_server_exchanges.into_iter().next().unwrap();
         let mut statistics_sender =
             StatisticsSender::spawn_sender(&query_id, ctx, request_server_exchange);
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
-            statistics_sender.shutdown(executor.execute().err());
+            let res = executor.execute();
+            if res.is_err() {
+                println!(
+                    "read two fileds at node:{}",
+                    ctx_clone.get_cluster().local_id
+                );
+            }
+            statistics_sender.shutdown(res.err());
             query_ctx
                 .get_exchange_manager()
                 .on_finished_query(&query_id);

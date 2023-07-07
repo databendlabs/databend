@@ -98,7 +98,10 @@ pub async fn build_distributed_pipeline(
     enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
     let fragmenter = Fragmenter::try_create(ctx.clone())?;
-
+    println!(
+        "Build distributed pipeline at: {}",
+        ctx.get_cluster().local_id
+    );
     let root_fragment = fragmenter.build_fragment(plan)?;
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone(), enable_profiling);
     root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
