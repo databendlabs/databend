@@ -84,7 +84,7 @@ impl TransformHashJoinProbe {
 
     fn add_data_to_buffer(&mut self, data_blocks: Vec<DataBlock>) -> Result<()> {
         for datablock in data_blocks.into_iter() {
-            if datablock.num_rows() >= self.max_block_size / 2 {
+            if datablock.num_rows() >= self.max_block_size / 256 {
                 self.output_data_blocks.push_back(datablock);
                 continue;
             }
