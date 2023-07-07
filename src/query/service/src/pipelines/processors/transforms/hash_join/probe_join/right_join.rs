@@ -308,10 +308,8 @@ impl JoinHashTable {
             None => (false, &dummy_bitmap),
         };
         for (idx, row_ptr) in build_indexes.iter().enumerate() {
-            if has_bitmap {
-                if unsafe { !validity.get_bit_unchecked(idx) } {
-                    continue;
-                }
+            if has_bitmap && unsafe { !validity.get_bit_unchecked(idx) } {
+                continue;
             }
             let old = unsafe {
                 (*right_single_scan_map[row_ptr.chunk_index as usize]
