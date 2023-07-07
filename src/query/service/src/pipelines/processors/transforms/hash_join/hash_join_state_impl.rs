@@ -305,7 +305,7 @@ impl HashJoinState for JoinHashTable {
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let space_size = match &keys_state {
-                    KeysState::Column(Column::String(col)) => col.offsets.last(),
+                    KeysState::Column(Column::String(col)) => col.offsets().last(),
                     // The function `build_keys_state` of both HashMethodSerializer and HashMethodSingleString
                     // must return `KeysState::Column(Column::String)`.
                     _ => unreachable!(),

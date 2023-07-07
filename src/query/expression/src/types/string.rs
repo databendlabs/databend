@@ -146,7 +146,7 @@ impl ValueType for StringType {
     }
 
     fn column_memory_size(col: &Self::Column) -> usize {
-        col.data.len() + col.offsets.len() * 8
+        col.data().len() + col.offsets().len() * 8
     }
 }
 
@@ -169,13 +169,29 @@ impl ArgType for StringType {
 
 #[derive(Clone, PartialEq)]
 pub struct StringColumn {
-    pub data: Buffer<u8>,
-    pub offsets: Buffer<u64>,
+    data: Buffer<u8>,
+    offsets: Buffer<u64>,
 }
 
 impl StringColumn {
+    pub fn new(data: Buffer<u8>, offsets: Buffer<u64>) -> Self {
+        debug_assert!({
+            let offsets = offsets.as_slice();
+            offsets.len() > 1 && offsets.windows(2).all(|w| w[0] <= w[1])
+        });
+        StringColumn { data, offsets }
+    }
+
     pub fn len(&self) -> usize {
         self.offsets.len() - 1
+    }
+
+    pub fn data(&self) -> &Buffer<u8> {
+        &self.data
+    }
+
+    pub fn offsets(&self) -> &Buffer<u64> {
+        &self.offsets
     }
 
     pub fn memory_size(&self) -> usize {
@@ -364,10 +380,7 @@ impl StringColumnBuilder {
     }
 
     pub fn build(self) -> StringColumn {
-        StringColumn {
-            data: self.data.into(),
-            offsets: self.offsets.into(),
-        }
+        StringColumn::new(self.data.into(), self.offsets.into())
     }
 
     pub fn build_scalar(self) -> Vec<u8> {
