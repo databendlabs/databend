@@ -1732,15 +1732,15 @@ impl Column {
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Boolean(c) => c.as_slice().0.len(),
-            Column::String(col) => col.data.len() + col.offsets.len() * 8,
+            Column::String(col) => col.memory_size(),
             Column::Timestamp(col) => col.len() * 8,
             Column::Date(col) => col.len() * 4,
             Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
             Column::Map(col) => col.values.memory_size() + col.offsets.len() * 8,
-            Column::Bitmap(col) => col.data.len() + col.offsets.len() * 8,
+            Column::Bitmap(col) => col.memory_size(),
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
-            Column::Variant(col) => col.data.len() + col.offsets.len() * 8,
+            Column::Variant(col) => col.memory_size(),
         }
     }
 
