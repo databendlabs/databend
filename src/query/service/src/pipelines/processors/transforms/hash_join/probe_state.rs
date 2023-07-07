@@ -54,7 +54,7 @@ impl ProbeState {
         true_validity.extend_constant(max_block_size, true);
         let true_validity: Bitmap = true_validity.into();
         let (row_state, row_state_indexes, probe_unmatched_indexes) = match &join_type {
-            JoinType::Left | JoinType::Single | JoinType::Full => {
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
                 if with_conjunct {
                     (
                         Some(vec![0; max_block_size]),

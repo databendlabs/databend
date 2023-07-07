@@ -104,7 +104,7 @@ impl PhysicalPlanBuilder {
         };
 
         let probe_schema = match join.join_type {
-            JoinType::Right | JoinType::Full => {
+            JoinType::Right | JoinType::RightSingle | JoinType::Full => {
                 let probe_schema = probe_side.output_schema()?;
                 // Wrap nullable type for columns in probe side.
                 let probe_schema = DataSchemaRefExt::create(
