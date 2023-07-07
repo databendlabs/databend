@@ -49,7 +49,7 @@ pub struct DeserializeDataTransform {
     parts: Vec<PartInfoPtr>,
     chunks: Vec<DataSource>,
     uncompressed_buffer: Arc<UncompressedBuffer>,
-    block_size: usize,
+    max_block_size: usize,
 
     index_reader: Arc<Option<AggIndexReader>>,
 }
@@ -66,7 +66,7 @@ impl DeserializeDataTransform {
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
         let buffer_size = settings.get_parquet_uncompressed_buffer_size()? as usize;
-        let block_size = settings.get_max_block_size()? as usize;
+        let max_block_size = settings.get_max_block_size()? as usize;
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             scan_progress,
@@ -77,7 +77,7 @@ impl DeserializeDataTransform {
             parts: vec![],
             chunks: vec![],
             uncompressed_buffer: UncompressedBuffer::new(buffer_size),
-            block_size,
+            max_block_size,
             index_reader,
         })))
     }
@@ -150,8 +150,8 @@ impl Processor for DeserializeDataTransform {
                 DataSource::AggIndex(data) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
                     let data_block = agg_index_reader.deserialize(&data)?;
-                    if data_block.num_rows() > self.block_size {
-                        let (sub_blocks, remain_block) = data_block.split_by_rows(self.block_size);
+                    if data_block.num_rows() > self.max_block_size {
+                        let (sub_blocks, remain_block) = data_block.split_by_rows(self.max_block_size);
                         self.output_data_blocks.extend(sub_blocks);
                         if let Some(remain) = remain_block {
                             self.output_data_blocks.push_back(remain);
@@ -194,8 +194,8 @@ impl Processor for DeserializeDataTransform {
                     } else {
                         data_block
                     };
-                    if data_block.num_rows() > self.block_size {
-                        let (sub_blocks, remain_block) = data_block.split_by_rows(self.block_size);
+                    if data_block.num_rows() > self.max_block_size {
+                        let (sub_blocks, remain_block) = data_block.split_by_rows(self.max_block_size);
                         self.output_data_blocks.extend(sub_blocks);
                         if let Some(remain) = remain_block {
                             self.output_data_blocks.push_back(remain);

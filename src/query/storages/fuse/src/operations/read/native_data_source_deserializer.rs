@@ -105,8 +105,8 @@ pub struct NativeDeserializeDataTransform {
     array_iters: BTreeMap<usize, ArrayIter<'static>>,
     // The Page numbers of each ArrayIter can skip.
     array_skip_pages: BTreeMap<usize, usize>,
-    // The default block size.
-    block_size: usize,
+    // The max block size.
+    max_block_size: usize,
 }
 
 impl NativeDeserializeDataTransform {
@@ -119,7 +119,7 @@ impl NativeDeserializeDataTransform {
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let block_size = ctx.get_settings().get_max_block_size()? as usize;
+        let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
 
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
 
@@ -233,7 +233,7 @@ impl NativeDeserializeDataTransform {
                 array_iters: BTreeMap::new(),
                 array_skip_pages: BTreeMap::new(),
                 offset_in_part: 0,
-                block_size,
+                max_block_size,
             },
         )))
     }
@@ -267,8 +267,8 @@ impl NativeDeserializeDataTransform {
         };
         self.scan_progress.incr(&progress_values);
 
-        if data_block.num_rows() > self.block_size {
-            let (sub_blocks, remain_block) = data_block.split_by_rows(self.block_size);
+        if data_block.num_rows() > self.max_block_size {
+            let (sub_blocks, remain_block) = data_block.split_by_rows(self.max_block_size);
             self.output_data_blocks.extend(sub_blocks);
             if let Some(remain) = remain_block {
                 self.output_data_blocks.push_back(remain);
