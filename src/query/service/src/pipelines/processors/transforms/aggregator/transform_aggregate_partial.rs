@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::vec;
 
+use bumpalo::Bump;
 use common_catalog::plan::AggIndexMeta;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -37,6 +38,9 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Aggreg
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_partial_hashtable_allocated_bytes;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_partial_spill_cell_count;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_partial_spill_count;
 use crate::pipelines::processors::transforms::HashTableCell;
 use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
 use crate::pipelines::processors::AggregatorParams;
@@ -99,7 +103,8 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
-        let hashtable = method.create_hash_table()?;
+        let arena = Arc::new(Bump::new());
+        let hashtable = method.create_hash_table(arena)?;
         let _dropper = AggregateHashTableDropper::create(params.clone());
         let hashtable = HashTableCell::create(hashtable, _dropper);
 
@@ -179,7 +184,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
 
     #[inline(always)]
     #[allow(clippy::ptr_arg)] // &[StateAddr] slower than &StateAddrs ~20%
-    fn execute_index_block(&self, block: &DataBlock, places: &StateAddrs) -> Result<()> {
+    fn execute_agg_index_block(&self, block: &DataBlock, places: &StateAddrs) -> Result<()> {
         let aggregate_functions = &self.params.aggregate_functions;
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
@@ -210,7 +215,8 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         let is_agg_index_block = block
             .get_meta()
             .and_then(AggIndexMeta::downcast_ref_from)
-            .is_some();
+            .map(|index| index.is_agg)
+            .unwrap_or_default();
 
         let block = block.convert_to_full();
 
@@ -246,7 +252,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                         if self.temp_place.addr() == 0 {
                             self.temp_place = self.params.alloc_layout(&mut hashtable.arena);
                         }
-                        self.execute_index_block(&block, &places)
+                        self.execute_agg_index_block(&block, &places)
                     } else {
                         Self::execute(&self.params, &block, &places)
                     }
@@ -269,7 +275,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                         if self.temp_place.addr() == 0 {
                             self.temp_place = self.params.alloc_layout(&mut hashtable.arena);
                         }
-                        self.execute_index_block(&block, &places)
+                        self.execute_agg_index_block(&block, &places)
                     } else {
                         Self::execute(&self.params, &block, &places)
                     }
@@ -301,8 +307,21 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             if matches!(&self.hash_table, HashTable::PartitionedHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc)
             {
                 if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table) {
+                    // perf
+                    {
+                        metrics_inc_aggregate_partial_spill_count();
+                        metrics_inc_aggregate_partial_hashtable_allocated_bytes(
+                            v.allocated_bytes() as u64,
+                        );
+                    }
+
                     let _dropper = v._dropper.clone();
                     let cells = PartitionedHashTableDropper::split_cell(v);
+                    // perf
+                    {
+                        metrics_inc_aggregate_partial_spill_cell_count(cells.len() as u64);
+                    }
+
                     let mut blocks = Vec::with_capacity(cells.len());
                     for (bucket, cell) in cells.into_iter().enumerate() {
                         if cell.hashtable.len() != 0 {
@@ -315,8 +334,9 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                         }
                     }
 
+                    let arena = Arc::new(Bump::new());
                     let method = PartitionedHashMethod::<Method>::create(self.method.clone());
-                    let new_hashtable = method.create_hash_table()?;
+                    let new_hashtable = method.create_hash_table(arena)?;
                     self.hash_table = HashTable::PartitionedHashTable(HashTableCell::create(
                         new_hashtable,
                         _dropper.unwrap(),

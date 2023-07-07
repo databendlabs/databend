@@ -72,6 +72,7 @@ use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::debug;
+use tracing::error;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
@@ -467,6 +468,16 @@ impl Binder {
                 "Incorrect CREATE query: required list of column descriptions or AS section or SELECT..",
             ))?,
         };
+
+        // for fuse engine, we will insert database_id, so if we check it in execute phase,
+        // we can't distinct user key and our internal key.
+        if options.contains_key(&OPT_KEY_DATABASE_ID.to_lowercase()) {
+            error!("invalid opt for fuse table in create table statement");
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "table option {} is invalid for create table statement",
+                OPT_KEY_DATABASE_ID
+            )));
+        }
 
         if engine == Engine::Fuse {
             // Currently, [Table] can not accesses its database id yet, thus
