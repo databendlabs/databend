@@ -78,6 +78,7 @@ impl Display for FormatContext {
                 RelOperator::ProjectSet(_) => write!(f, "ProjectSet"),
                 RelOperator::CteScan(_) => write!(f, "CteScan"),
                 RelOperator::MaterializedCte(_) => write!(f, "MaterializedCte"),
+                RelOperator::Lambda(_) => write!(f, "Lambda"),
             },
             Self::Text(text) => write!(f, "{}", text),
         }
@@ -102,6 +103,7 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
         ScalarExpr::ConstantExpr(constant) => constant.value.to_string(),
         ScalarExpr::WindowFunction(win) => win.display_name.clone(),
         ScalarExpr::AggregateFunction(agg) => agg.display_name.clone(),
+        ScalarExpr::LambdaFunction(lambda) => lambda.display_name.clone(),
         ScalarExpr::FunctionCall(func) => {
             format!(
                 "{}({})",

@@ -1005,6 +1005,7 @@ CreateTable(
                                     ],
                                     params: [],
                                     window: None,
+                                    lambda: None,
                                 },
                             ),
                         ),
@@ -6766,6 +6767,7 @@ Query(
                                     ],
                                     params: [],
                                     window: None,
+                                    lambda: None,
                                 },
                                 accessor: Period {
                                     key: Identifier {
@@ -11575,6 +11577,7 @@ CreateDatamaskPolicy(
                             args: [],
                             params: [],
                             window: None,
+                            lambda: None,
                         },
                         list: [
                             Literal {

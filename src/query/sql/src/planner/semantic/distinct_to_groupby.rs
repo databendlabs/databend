@@ -89,6 +89,7 @@ impl VisitorMut for DistinctToGroupBy {
                                 args: vec![],
                                 params: vec![],
                                 window: None,
+                                lambda: None,
                             }),
                             alias: alias.clone(),
                         }],

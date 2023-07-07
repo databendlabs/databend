@@ -29,6 +29,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -304,6 +305,24 @@ impl<'a> WindowRewriter<'a> {
                 let scalar = self.replace_window_function(window)?;
                 self.in_window = false;
                 Ok(scalar)
+            }
+
+            ScalarExpr::LambdaFunction(lambda_func) => {
+                let new_args = lambda_func
+                    .args
+                    .iter()
+                    .map(|arg| self.visit(arg))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(LambdaFunc {
+                    span: lambda_func.span,
+                    func_name: lambda_func.func_name.clone(),
+                    display_name: lambda_func.display_name.clone(),
+                    args: new_args,
+                    params: lambda_func.params.clone(),
+                    lambda_expr: lambda_func.lambda_expr.clone(),
+                    return_type: lambda_func.return_type.clone(),
+                }
+                .into())
             }
         }
     }

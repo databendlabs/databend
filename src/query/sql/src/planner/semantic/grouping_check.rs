@@ -21,6 +21,7 @@ use crate::binder::Visibility;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
+use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
 
@@ -96,6 +97,24 @@ impl<'a> GroupingChecker<'a> {
                     params: func.params.clone(),
                     arguments: args,
                     func_name: func.func_name.clone(),
+                }
+                .into())
+            }
+
+            ScalarExpr::LambdaFunction(lambda_func) => {
+                let args = lambda_func
+                    .args
+                    .iter()
+                    .map(|arg| self.resolve(arg, span))
+                    .collect::<Result<Vec<ScalarExpr>>>()?;
+                Ok(LambdaFunc {
+                    span: lambda_func.span,
+                    func_name: lambda_func.func_name.clone(),
+                    display_name: lambda_func.display_name.clone(),
+                    args,
+                    params: lambda_func.params.clone(),
+                    lambda_expr: lambda_func.lambda_expr.clone(),
+                    return_type: lambda_func.return_type.clone(),
                 }
                 .into())
             }
