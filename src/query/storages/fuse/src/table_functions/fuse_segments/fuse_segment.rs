@@ -16,19 +16,15 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_exception::Result;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
-use common_expression::types::NumberColumnBuilder;
 use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::BlockEntry;
-use common_expression::Column;
+use common_expression::types::StringType;
+use common_expression::types::UInt64Type;
 use common_expression::DataBlock;
+use common_expression::FromData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use futures_util::TryStreamExt;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -100,12 +96,12 @@ impl<'a> FuseSegment<'a> {
         let limit = self.limit.unwrap_or(usize::MAX);
         let len = std::cmp::min(segment_locations.len(), limit);
 
-        let mut format_versions = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
-        let mut block_count = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
-        let mut row_count = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
-        let mut compressed = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
-        let mut uncompressed = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
-        let mut file_location = StringColumnBuilder::with_capacity(len, 0);
+        let mut format_versions: Vec<u64> = Vec::with_capacity(len);
+        let mut block_count: Vec<u64> = Vec::with_capacity(len);
+        let mut row_count: Vec<u64> = Vec::with_capacity(len);
+        let mut compressed: Vec<u64> = Vec::with_capacity(len);
+        let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
+        let mut file_location: Vec<Vec<u8>> = Vec::with_capacity(len);
 
         let segments_io = SegmentsIO::create(
             self.ctx.clone(),
@@ -133,13 +129,12 @@ impl<'a> FuseSegment<'a> {
             };
             for (idx, segment) in segments.into_iter().take(take_num).enumerate() {
                 let segment = segment?;
-                format_versions.push(NumberScalar::UInt64(segment_locations[idx].1));
-                block_count.push(NumberScalar::UInt64(segment.summary.block_count));
-                row_count.push(NumberScalar::UInt64(segment.summary.row_count));
-                compressed.push(NumberScalar::UInt64(segment.summary.compressed_byte_size));
-                uncompressed.push(NumberScalar::UInt64(segment.summary.uncompressed_byte_size));
-                file_location.put_slice(segment_locations[idx].0.as_bytes());
-                file_location.commit_row();
+                format_versions.push(segment_locations[idx].1);
+                block_count.push(segment.summary.block_count);
+                row_count.push(segment.summary.row_count);
+                compressed.push(segment.summary.compressed_byte_size);
+                uncompressed.push(segment.summary.uncompressed_byte_size);
+                file_location.push(segment_locations[idx].0.clone().into_bytes());
             }
 
             if end_flag {
@@ -147,35 +142,14 @@ impl<'a> FuseSegment<'a> {
             }
         }
 
-        Ok(DataBlock::new(
-            vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Column(Column::String(file_location.build())),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(Column::Number(format_versions.build())),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(Column::Number(block_count.build())),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(Column::Number(row_count.build())),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(Column::Number(uncompressed.build())),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(Column::Number(compressed.build())),
-                ),
-            ],
-            len,
-        ))
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(file_location),
+            UInt64Type::from_data(format_versions),
+            UInt64Type::from_data(block_count),
+            UInt64Type::from_data(row_count),
+            UInt64Type::from_data(uncompressed),
+            UInt64Type::from_data(compressed),
+        ]))
     }
 
     pub fn schema() -> Arc<TableSchema> {

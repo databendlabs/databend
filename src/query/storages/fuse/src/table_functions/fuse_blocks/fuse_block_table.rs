@@ -106,10 +106,8 @@ impl Table for FuseBlockTable {
         let mut args = Vec::new();
         args.push(string_literal(self.arg_database_name.as_str()));
         args.push(string_literal(self.arg_table_name.as_str()));
-        if self.arg_snapshot_id.is_some() {
-            args.push(string_literal(
-                self.arg_snapshot_id.clone().unwrap().as_str(),
-            ));
+        if let Some(arg_snapshot_id) = &self.arg_snapshot_id {
+            args.push(string_literal(arg_snapshot_id));
         }
         Some(TableArgs::new_positioned(args))
     }
