@@ -40,16 +40,28 @@ test_format() {
 
 	echo "truncate table test_load_unload" | $MYSQL_CLIENT_CONNECT
 
-	# copy into
-	echo "copy into test_load_unload from 'fs:///tmp/test_load_unload.parquet' file_format = (type = parquet);" | $MYSQL_CLIENT_CONNECT
+	# copy into table
+	echo "copy into test_load_unload from 'fs:///tmp/test_load_unload.parquet' file_format = (type = ${1});" | $MYSQL_CLIENT_CONNECT
 
 	# unload clickhouse again
 	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
 	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload3.parquet
 
+	# copy into stage
+	rm -rf /tmp/test_load_unload_fs
+	echo "drop stage if exists data_fs;" | $MYSQL_CLIENT_CONNECT
+	echo "create stage data_fs url = 'fs:///tmp/test_load_unload_fs/' FILE_FORMAT = (type = ${1});"  | $MYSQL_CLIENT_CONNECT
+	echo "copy into @data_fs from test_load_unload file_format = (type = ${1});" | $MYSQL_CLIENT_CONNECT
+
+	# unload clickhouse again from stage
+	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
+	-d "select * from @data_fs FORMAT ${1}" > /tmp/test_load_unload4.parquet
+
 	diff /tmp/test_load_unload2.parquet /tmp/test_load_unload.parquet
 	diff /tmp/test_load_unload3.parquet /tmp/test_load_unload.parquet
-	rm /tmp/test_load_unload3.parquet /tmp/test_load_unload2.parquet /tmp/test_load_unload.parquet
+	diff /tmp/test_load_unload4.parquet /tmp/test_load_unload.parquet
+	rm /tmp/test_load_unload2.parquet /tmp/test_load_unload.parquet
+	rm /tmp/test_load_unload4.parquet /tmp/test_load_unload3.parquet
 	echo "truncate table test_load_unload" | $MYSQL_CLIENT_CONNECT
 }
 
