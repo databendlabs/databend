@@ -196,7 +196,14 @@ impl FuseTable {
             plan.push_downs
                 .as_ref()
                 .and_then(|p| p.agg_index.as_ref())
-                .map(|agg| AggIndexReader::try_create(ctx.clone(), self.operator.clone(), agg))
+                .map(|agg| {
+                    AggIndexReader::try_create(
+                        ctx.clone(),
+                        self.operator.clone(),
+                        agg,
+                        self.storage_format,
+                    )
+                })
                 .transpose()?,
         );
 

@@ -582,7 +582,7 @@ impl Processor for NativeDeserializeDataTransform {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
                     let block = agg_index_reader.deserialize(data)?;
                     self.output_data = Some(block);
-                    return Ok(());
+                    return self.finish_process();
                 }
                 DataSource::Normal(data) => data,
             };
