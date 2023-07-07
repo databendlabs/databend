@@ -584,7 +584,7 @@ impl Binder {
         // Then, split the path into two parts, the first part is the root, and the second part is the storage_prefix
         // For example, path = "/testbucket/admin/data/1/2", then root = "/testbucket/admin/data/", storage_prefix = "1/2"
         // root is used by OpenDAL operator, storage_prefix is used to specify the storage location of the table
-        // Note that the root must end with "/", and the storage_prefix must not start and end with "/"
+        // Note that the root must end with "/", and the storage_prefix must not start or end with "/"
         let mut parts = path.split('/').collect::<Vec<_>>();
         if parts.len() < 2 {
             return Err(ErrorCode::BadArguments(format!(
