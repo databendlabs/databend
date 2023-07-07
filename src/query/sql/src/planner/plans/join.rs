@@ -59,7 +59,8 @@ pub enum JoinType {
     /// Right Mark Join use subquery as build side, it's executed by streaming.
     RightMark,
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
-    Single,
+    LeftSingle,
+    RightSingle,
 }
 
 impl JoinType {
@@ -67,6 +68,8 @@ impl JoinType {
         match self {
             JoinType::Left => JoinType::Right,
             JoinType::Right => JoinType::Left,
+            JoinType::LeftSingle => JoinType::RightSingle,
+            JoinType::RightSingle => JoinType::LeftSingle,
             JoinType::LeftSemi => JoinType::RightSemi,
             JoinType::RightSemi => JoinType::LeftSemi,
             JoinType::LeftAnti => JoinType::RightAnti,
@@ -122,8 +125,11 @@ impl Display for JoinType {
             JoinType::RightMark => {
                 write!(f, "RIGHT MARK")
             }
-            JoinType::Single => {
-                write!(f, "SINGLE")
+            JoinType::LeftSingle => {
+                write!(f, "LEFT SINGLE")
+            }
+            JoinType::RightSingle => {
+                write!(f, "RIGHT SINGLE")
             }
         }
     }
@@ -437,10 +443,13 @@ impl Operator for Join {
                     + f64::max(right_cardinality, inner_join_cardinality)
                     - inner_join_cardinality
             }
-            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::Single => {
+            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::LeftSingle => {
                 left_cardinality
             }
-            JoinType::RightSemi | JoinType::RightAnti | JoinType::RightMark => right_cardinality,
+            JoinType::RightSemi
+            | JoinType::RightAnti
+            | JoinType::RightMark
+            | JoinType::RightSingle => right_cardinality,
         };
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {

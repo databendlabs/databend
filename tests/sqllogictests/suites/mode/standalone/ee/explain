@@ -168,7 +168,7 @@ EvalScalar
     ├── filters: [is_true(SUM(a) (#16) = scalar_subquery_15 (#15))]
     ├── estimated rows: 0.00
     └── HashJoin
-        ├── join type: SINGLE
+        ├── join type: LEFT SINGLE
         ├── build keys: [b (#13)]
         ├── probe keys: [b (#5)]
         ├── filters: []

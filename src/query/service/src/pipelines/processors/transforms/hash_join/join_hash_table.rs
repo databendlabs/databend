@@ -147,12 +147,16 @@ impl JoinHashTable {
         hash_join_desc: HashJoinDesc,
         method: HashMethodKind,
     ) -> Result<Self> {
-        if hash_join_desc.join_type == JoinType::Left
-            || hash_join_desc.join_type == JoinType::Single
-        {
+        if matches!(
+            hash_join_desc.join_type,
+            JoinType::Left | JoinType::LeftSingle
+        ) {
             build_data_schema = build_schema_wrap_nullable(&build_data_schema);
         };
-        if hash_join_desc.join_type == JoinType::Right {
+        if matches!(
+            hash_join_desc.join_type,
+            JoinType::Right | JoinType::RightSingle
+        ) {
             probe_data_schema = probe_schema_wrap_nullable(&probe_data_schema);
         }
         if hash_join_desc.join_type == JoinType::Full {
@@ -199,7 +203,7 @@ impl JoinHashTable {
         let mut input = (*input).clone();
         if matches!(
             self.hash_join_desc.join_type,
-            JoinType::Right | JoinType::Full
+            JoinType::Right | JoinType::RightSingle | JoinType::Full
         ) {
             let nullable_columns = input
                 .columns()
@@ -265,7 +269,7 @@ impl JoinHashTable {
         if self.fast_return()?
             && matches!(
                 self.hash_join_desc.join_type,
-                JoinType::Left | JoinType::Single | JoinType::Full | JoinType::LeftAnti
+                JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
             )
         {
             return self.left_fast_return(&input);
