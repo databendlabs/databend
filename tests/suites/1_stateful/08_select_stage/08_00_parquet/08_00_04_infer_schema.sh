@@ -38,3 +38,8 @@ echo "--- complex:"
 cp "$CURDIR"/../../../../data/complex.parquet ${DATADIR_PATH}/data/complex.parquet
 echo "select * from infer_schema(location => '@s2/data/', pattern => 'complex.*');" | $MYSQL_CLIENT_CONNECT
 
+cp "$CURDIR"/../../../../data/variant.parquet ${DATADIR_PATH}/data
+
+echo "--- variant file:"
+echo "select * from infer_schema(location => '@s2/data/variant.parquet');" | $MYSQL_CLIENT_CONNECT
+

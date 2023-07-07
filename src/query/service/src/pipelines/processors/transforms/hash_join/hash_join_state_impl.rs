@@ -82,7 +82,8 @@ impl HashJoinState for JoinHashTable {
             | JoinType::Left
             | JoinType::LeftMark
             | JoinType::RightMark
-            | JoinType::Single
+            | JoinType::LeftSingle
+            | JoinType::RightSingle
             | JoinType::Right
             | JoinType::Full => self.probe_join(input, probe_state),
             JoinType::Cross => self.probe_cross_join(input, probe_state),
@@ -504,7 +505,9 @@ impl HashJoinState for JoinHashTable {
 
     fn final_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match &self.hash_join_desc.join_type {
-            JoinType::Right | JoinType::Full => self.right_and_full_outer_scan(task, state),
+            JoinType::Right | JoinType::RightSingle | JoinType::Full => {
+                self.right_and_full_outer_scan(task, state)
+            }
             JoinType::RightSemi => self.right_semi_outer_scan(task, state),
             JoinType::RightAnti => self.right_anti_outer_scan(task, state),
             JoinType::LeftMark => self.left_mark_scan(task, state),
@@ -515,7 +518,11 @@ impl HashJoinState for JoinHashTable {
     fn need_outer_scan(&self) -> bool {
         matches!(
             self.hash_join_desc.join_type,
-            JoinType::Full | JoinType::Right | JoinType::RightSemi | JoinType::RightAnti
+            JoinType::Full
+                | JoinType::Right
+                | JoinType::RightSingle
+                | JoinType::RightSemi
+                | JoinType::RightAnti
         )
     }
 

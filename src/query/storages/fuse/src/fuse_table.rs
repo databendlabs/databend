@@ -64,6 +64,7 @@ use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::error;
 use tracing::warn;
@@ -200,6 +201,13 @@ impl FuseTable {
     }
 
     pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
+        // if OPT_KE_STORAGE_PREFIX is specified, use it as storage prefix
+        if let Some(prefix) = table_info.options().get(OPT_KEY_STORAGE_PREFIX) {
+            return Ok(prefix.clone());
+        }
+
+        // otherwise, use database id and table id as storage prefix
+
         let table_id = table_info.ident.table_id;
         let db_id = table_info
             .options()

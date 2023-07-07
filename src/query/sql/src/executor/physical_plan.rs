@@ -500,7 +500,7 @@ impl HashJoin {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = self.probe.output_schema()?.fields().clone();
         match self.join_type {
-            JoinType::Left | JoinType::Single => {
+            JoinType::Left | JoinType::LeftSingle => {
                 for field in self.build.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
@@ -508,7 +508,7 @@ impl HashJoin {
                     ));
                 }
             }
-            JoinType::Right => {
+            JoinType::Right | JoinType::RightSingle => {
                 fields.clear();
                 for field in self.probe.output_schema()?.fields() {
                     fields.push(DataField::new(

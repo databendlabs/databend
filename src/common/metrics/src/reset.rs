@@ -13,14 +13,19 @@
 // limitations under the License.
 
 use common_exception::Result;
+use metrics::gauge;
+use metrics_exporter_prometheus::PrometheusHandle;
 
-use crate::table_functions::string_value;
-use crate::table_functions::TableArgs;
+use crate::dump_metric_samples;
+use crate::MetricValue;
 
-pub fn parse_func_history_args(table_args: &TableArgs) -> Result<(String, String, String)> {
-    let args = table_args.expect_all_positioned("fuse_blocks", Some(3))?;
-    let db = string_value(&args[0])?;
-    let tbl = string_value(&args[1])?;
-    let snapshot_id = string_value(&args[2])?;
-    Ok((db, tbl, snapshot_id))
+/// Reset gauge metrics to 0.
+pub fn reset_metrics(handle: PrometheusHandle) -> Result<()> {
+    let samples = dump_metric_samples(handle)?;
+    for sample in samples {
+        if let MetricValue::Gauge(_) = sample.value {
+            gauge!(sample.name, 0_f64);
+        }
+    }
+    Ok(())
 }
