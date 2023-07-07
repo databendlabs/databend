@@ -490,16 +490,13 @@ async fn fuzz(params: FuzzParams) -> Result<()> {
         )
         .await?;
     }
-    execute_sql(fixture.ctx(), &format!("REFRESH AGGREGATING INDEX index")).await?;
+    execute_sql(fixture.ctx(), "REFRESH AGGREGATING INDEX index").await?;
 
     // Generate data without index
     for _ in 0..num_blocks - num_index_blocks {
         execute_sql(
             ctx.clone(),
-            &format!(
-                "INSERT INTO t SELECT * FROM rt LIMIT {}",
-                num_rows_per_block
-            ),
+            &format!("INSERT INTO t SELECT * FROM rt LIMIT {num_rows_per_block}",),
         )
         .await?;
     }
