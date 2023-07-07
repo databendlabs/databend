@@ -302,54 +302,37 @@ impl JoinHashTable {
         right_single_scan_map: &[*mut AtomicBool],
         bitmap: Option<&Bitmap>,
     ) -> Result<()> {
-        if let Some(validity) = bitmap {
-            for (idx, row_ptr) in build_indexes.iter().enumerate() {
-                let valid = unsafe { validity.get_bit_unchecked(idx) };
-                if valid {
-                    let old = unsafe {
-                        (*right_single_scan_map[row_ptr.chunk_index as usize]
-                            .add(row_ptr.row_index as usize))
-                        .load(Ordering::SeqCst)
-                    };
-                    if old {
-                        return Err(ErrorCode::Internal(
-                            "Scalar subquery can't return more than one row",
-                        ));
-                    }
-                    let res = unsafe {
-                        (*right_single_scan_map[row_ptr.chunk_index as usize]
-                            .add(row_ptr.row_index as usize))
-                        .compare_exchange_weak(old, true, Ordering::SeqCst, Ordering::SeqCst)
-                    };
-                    if res.is_err() {
-                        return Err(ErrorCode::Internal(
-                            "Scalar subquery can't return more than one row",
-                        ));
-                    }
+        let has_bitmap = bitmap.is_some();
+        let dummy_bitmap = Bitmap::new();
+        let (has_bitmap, validity) = match bitmap {
+            Some(validity) => (true, validity),
+            None => (false, &dummy_bitmap),
+        };
+        for (idx, row_ptr) in build_indexes.iter().enumerate() {
+            if has_bitmap {
+                if unsafe { !validity.get_bit_unchecked(idx) } {
+                    continue;
                 }
             }
-        } else {
-            for row_ptr in build_indexes.iter() {
-                let old = unsafe {
-                    (*right_single_scan_map[row_ptr.chunk_index as usize]
-                        .add(row_ptr.row_index as usize))
-                    .load(Ordering::SeqCst)
-                };
-                if old {
-                    return Err(ErrorCode::Internal(
-                        "Scalar subquery can't return more than one row",
-                    ));
-                }
-                let res = unsafe {
-                    (*right_single_scan_map[row_ptr.chunk_index as usize]
-                        .add(row_ptr.row_index as usize))
-                    .compare_exchange_weak(old, true, Ordering::SeqCst, Ordering::SeqCst)
-                };
-                if res.is_err() {
-                    return Err(ErrorCode::Internal(
-                        "Scalar subquery can't return more than one row",
-                    ));
-                }
+            let old = unsafe {
+                (*right_single_scan_map[row_ptr.chunk_index as usize]
+                    .add(row_ptr.row_index as usize))
+                .load(Ordering::SeqCst)
+            };
+            if old {
+                return Err(ErrorCode::Internal(
+                    "Scalar subquery can't return more than one row",
+                ));
+            }
+            let res = unsafe {
+                (*right_single_scan_map[row_ptr.chunk_index as usize]
+                    .add(row_ptr.row_index as usize))
+                .compare_exchange_weak(old, true, Ordering::SeqCst, Ordering::SeqCst)
+            };
+            if res.is_err() {
+                return Err(ErrorCode::Internal(
+                    "Scalar subquery can't return more than one row",
+                ));
             }
         }
         Ok(())
