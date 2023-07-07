@@ -25,7 +25,7 @@ use crate::pipelines::processors::transforms::range_join::ie_join_util::filter_b
 use crate::pipelines::processors::transforms::RangeJoinState;
 
 impl RangeJoinState {
-    pub fn merge_join(&self, task_id: usize) -> Result<DataBlock> {
+    pub fn merge_join(&self, task_id: usize) -> Result<Vec<DataBlock>> {
         let tasks = self.tasks.read();
         let (left_idx, right_idx) = tasks[task_id];
         let left_sorted_blocks = self.left_sorted_blocks.read();
@@ -134,10 +134,7 @@ impl RangeJoinState {
                 j += 1;
             }
         }
-        if result_blocks.is_empty() {
-            return Ok(DataBlock::empty());
-        }
-        DataBlock::concat(&result_blocks)
+        Ok(result_blocks)
     }
 
     // Used by merge join

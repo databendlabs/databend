@@ -139,7 +139,7 @@ impl Processor for TransformRangeJoinLeft {
                         None => self.state.merge_join(task_id)?,
                     };
                     if !res.is_empty() {
-                        self.output_data_blocks.push_back(res);
+                        self.output_data_blocks.extend(res);
                     }
                 } else {
                     self.execute_finished = true;
