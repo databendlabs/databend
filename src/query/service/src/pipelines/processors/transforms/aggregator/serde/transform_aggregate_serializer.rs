@@ -163,7 +163,7 @@ impl<Method: HashMethodBounds> TransformAggregateSerializer<Method> {
 pub fn serialize_aggregate<Method: HashMethodBounds>(
     method: &Method,
     params: &Arc<AggregatorParams>,
-    hashtable:&Method::HashTable<usize>,
+    hashtable: &Method::HashTable<usize>,
 ) -> Result<DataBlock> {
     let keys_len = hashtable.len();
     let value_size = estimated_key_size(hashtable);

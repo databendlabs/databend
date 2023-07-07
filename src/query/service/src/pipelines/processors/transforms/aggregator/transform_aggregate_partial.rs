@@ -321,7 +321,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                     // }
 
                     let blocks = vec![DataBlock::empty_with_meta(
-                        AggregateMeta::<Method, usize>::create_spilling(0, v)
+                        AggregateMeta::<Method, usize>::create_spilling(0, v),
                     )];
 
                     let arena = Arc::new(Bump::new());

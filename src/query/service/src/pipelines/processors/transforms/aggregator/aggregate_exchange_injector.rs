@@ -43,9 +43,11 @@ use crate::pipelines::processors::transforms::aggregator::serde::TransformScatte
 use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterGroupBySerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterGroupBySpillWriter;
-use crate::pipelines::processors::transforms::group_by::{Area, PartitionedHashMethod, PolymorphicKeysHelper};
+use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
+use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::HashTableCell;
 use crate::pipelines::processors::transforms::TransformAggregateDeserializer;
 use crate::pipelines::processors::transforms::TransformAggregateSerializer;
@@ -126,8 +128,10 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> HashTableHashSca
             .arena_holders
             .push(ArenaHolder::create(Some(arena)));
         for bucket_table in buckets {
-            let mut cell =
-                HashTableCell::<PartitionedHashMethod<Method>, V>::create(bucket_table, dropper.clone().unwrap());
+            let mut cell = HashTableCell::<PartitionedHashMethod<Method>, V>::create(
+                bucket_table,
+                dropper.clone().unwrap(),
+            );
             cell.arena_holders
                 .extend(payload.cell.arena_holders.clone());
             res.push(cell);
@@ -153,10 +157,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                             blocks.push(match hashtable_cell.hashtable.len() == 0 {
                                 true => DataBlock::empty(),
                                 false => DataBlock::empty_with_meta(
-                                    AggregateMeta::<Method, V>::create_spilling(
-                                        0,
-                                        hashtable_cell,
-                                    ),
+                                    AggregateMeta::<Method, V>::create_spilling(0, hashtable_cell),
                                 ),
                             });
                         }

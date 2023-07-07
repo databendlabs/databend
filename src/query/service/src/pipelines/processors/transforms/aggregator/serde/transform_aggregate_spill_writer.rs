@@ -35,7 +35,8 @@ use tracing::info;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_serializer::serialize_aggregate;
-use crate::pipelines::processors::transforms::group_by::{HashMethodBounds, PartitionedHashMethod};
+use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_write_bytes;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_write_count;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_write_milliseconds;
@@ -213,8 +214,8 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
                 bucket as isize,
                 location.clone(),
                 begin..write_size,
-                columns_layout
-            )
+                columns_layout,
+            ),
         ));
     }
 
