@@ -1329,10 +1329,7 @@ impl Column {
                 let offsets = arrow_col.offsets().clone().into_inner();
 
                 let offsets = unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                Column::String(StringColumn::new(
-                    arrow_col.values().clone(),
-                    offsets.into(),
-                ))
+                Column::String(StringColumn::new(arrow_col.values().clone(), offsets))
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::Binary => {

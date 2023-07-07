@@ -175,10 +175,7 @@ pub struct StringColumn {
 
 impl StringColumn {
     pub fn new(data: Buffer<u8>, offsets: Buffer<u64>) -> Self {
-        debug_assert!({
-            let offsets = offsets.as_slice();
-            offsets.len() > 1 && offsets.windows(2).all(|w| w[0] <= w[1])
-        });
+        debug_assert!({ offsets.windows(2).all(|w| w[0] <= w[1]) });
         StringColumn { data, offsets }
     }
 
