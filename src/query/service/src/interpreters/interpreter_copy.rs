@@ -610,7 +610,7 @@ pub fn append_data_and_set_finish(
         main_pipeline.set_on_finished(move |may_error| {
             match may_error {
                 None => {
-                    println!("main node recieve success");
+                    error!("main node recieve success");
                     GlobalIORuntime::instance().block_on(async move {
                         {
                             let status =
@@ -652,7 +652,7 @@ pub fn append_data_and_set_finish(
                     })?;
                 }
                 Some(error) => {
-                    println!("main node recieve error");
+                    error!("main node recieve error");
                     error!(
                         "copy failed, elapsed:{}, reason: {}",
                         start.elapsed().as_secs(),

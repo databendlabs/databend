@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_profile::SharedProcessorProfiles;
+use tracing::error;
 
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
@@ -98,7 +99,7 @@ pub async fn build_distributed_pipeline(
     enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
     let fragmenter = Fragmenter::try_create(ctx.clone())?;
-    println!(
+    error!(
         "Build distributed pipeline at: {}",
         ctx.get_cluster().local_id
     );

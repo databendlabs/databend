@@ -44,6 +44,7 @@ use common_storage::StageFileInfo;
 use dashmap::DashMap;
 use opendal::Operator;
 use parking_lot::Mutex;
+use tracing::error;
 
 use crate::stage_table_sink::StageTableSink;
 /// TODO: we need to track the data metrics in stage table.
@@ -175,7 +176,7 @@ impl Table for StageTable {
             file_names.push_str(&file.file.path);
             file_names.push_str(",");
         }
-        println!(
+        error!(
             "read files at node id {}: {}",
             ctx.get_cluster().local_id,
             file_names
