@@ -44,6 +44,7 @@ use common_ast::ast::TableReference;
 use common_ast::ast::TruncateTableStmt;
 use common_ast::ast::UndropTableStmt;
 use common_ast::ast::UriLocation;
+use common_ast::ast::VacuumDropTableStmt;
 use common_ast::ast::VacuumTableStmt;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
@@ -108,6 +109,7 @@ use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::BindContext;
@@ -942,6 +944,51 @@ impl Binder {
             catalog,
             database,
             table,
+            option,
+        })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_drop_table(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &VacuumDropTableStmt,
+    ) -> Result<Plan> {
+        let VacuumDropTableStmt {
+            catalog,
+            database,
+            option,
+        } = stmt;
+
+        let catalog = catalog
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| "".to_string());
+
+        let option = {
+            let retain_hours = match option.retain_hours {
+                Some(Expr::Literal {
+                    lit: Literal::UInt64(uint),
+                    ..
+                }) => Some(uint as usize),
+                Some(_) => {
+                    return Err(ErrorCode::IllegalDataType("Unsupported hour type"));
+                }
+                _ => None,
+            };
+
+            VacuumTableOption {
+                retain_hours,
+                dry_run: option.dry_run,
+            }
+        };
+        Ok(Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
+            catalog,
+            database,
             option,
         })))
     }
