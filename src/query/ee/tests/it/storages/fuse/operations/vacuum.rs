@@ -22,12 +22,14 @@ use common_exception::Result;
 use common_storages_fuse::FuseTable;
 use databend_query::test_kits::table_test_fixture::append_sample_data;
 use databend_query::test_kits::table_test_fixture::check_data_dir;
+use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use databend_query::test_kits::utils::generate_orphan_files;
 use databend_query::test_kits::utils::generate_snapshot_with_segments;
 use databend_query::test_kits::utils::query_count;
 use enterprise_query::storages::fuse::do_vacuum;
+use enterprise_query::storages::fuse::do_vacuum_drop_tables;
 use enterprise_query::storages::fuse::operations::vacuum::get_snapshot_referenced_files;
 use enterprise_query::storages::fuse::operations::vacuum::SnapshotReferencedFiles;
 
@@ -455,5 +457,75 @@ async fn test_fuse_do_vacuum() -> Result<()> {
         query_count(stream).await? as usize
     });
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_do_vacuum_drop_table() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    table_ctx.get_settings().set_retention_period(0)?;
+    fixture.create_default_table().await?;
+
+    let number_of_block = 1;
+    append_sample_data(number_of_block, &fixture).await?;
+
+    let table = fixture.latest_default_table().await?;
+
+    check_data_dir(
+        &fixture,
+        "test_fuse_do_vacuum_drop_table: verify generate files",
+        1,
+        0,
+        1,
+        1,
+        1,
+        None,
+        None,
+    )
+    .await?;
+
+    // do gc.
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+    let qry = format!("drop table {}.{}", db, tbl);
+    let ctx = fixture.ctx();
+    execute_command(ctx, &qry).await?;
+
+    // verify dry run never delete files
+    {
+        do_vacuum_drop_tables(vec![table.clone()], Some(100)).await?;
+        check_data_dir(
+            &fixture,
+            "test_fuse_do_vacuum_drop_table: verify generate files",
+            1,
+            0,
+            1,
+            1,
+            1,
+            None,
+            None,
+        )
+        .await?;
+    }
+
+    {
+        do_vacuum_drop_tables(vec![table], None).await?;
+
+        // after vacuum drop tables, verify the files number
+        check_data_dir(
+            &fixture,
+            "test_fuse_do_vacuum_drop_table: verify generate retention files",
+            0,
+            0,
+            0,
+            0,
+            0,
+            None,
+            None,
+        )
+        .await?;
+    }
     Ok(())
 }
