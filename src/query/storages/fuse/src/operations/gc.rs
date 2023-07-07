@@ -347,6 +347,7 @@ impl FuseTable {
         let mut count = 0;
         let segment_locations = Vec::from_iter(segments_to_be_purged);
         for chunk in segment_locations.chunks(chunk_size) {
+            // since we are purging files, the ErrorCode::STORAGE_NOT_FOUND error can be safely ignored.
             let locations = self
                 .get_block_locations(ctx.clone(), chunk, false, true)
                 .await?;
