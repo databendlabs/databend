@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod build_state;
 mod common;
 mod desc;
 mod hash_join_state;
@@ -24,7 +23,6 @@ mod result_blocks;
 pub(crate) mod row;
 mod util;
 
-pub use build_state::BuildState;
 pub use desc::HashJoinDesc;
 pub use hash_join_state::HashJoinState;
 pub use join_hash_table::FixedKeyHashJoinHashTable;

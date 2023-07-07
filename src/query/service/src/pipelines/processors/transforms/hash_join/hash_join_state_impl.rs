@@ -50,7 +50,6 @@ use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
 use crate::pipelines::processors::transforms::hash_join::join_hash_table::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::join_hash_table::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::join_hash_table::SingleStringHashJoinHashTable;
-use crate::pipelines::processors::transforms::hash_join::BuildState;
 use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::JoinHashTable;
@@ -59,15 +58,19 @@ use crate::sql::planner::plans::JoinType;
 
 #[async_trait::async_trait]
 impl HashJoinState for JoinHashTable {
-    fn build(&self, input: DataBlock, build_state: &mut BuildState) -> Result<()> {
-        build_state.buffer_row_size += input.num_rows();
-        build_state.buffer.push(input);
-        if build_state.buffer_row_size < *self.build_side_block_size_limit {
+    fn build(&self, input: DataBlock) -> Result<()> {
+        let mut buffer = self.row_space.buffer.write();
+        let mut buffer_row_size = self.row_space.buffer_row_size.write();
+        *buffer_row_size += input.num_rows();
+        buffer.push(input);
+        if *buffer_row_size < *self.build_side_block_size_limit {
             Ok(())
         } else {
-            let data_block = DataBlock::concat(build_state.buffer.as_slice())?;
-            build_state.buffer.clear();
-            build_state.buffer_row_size = 0;
+            let data_block = DataBlock::concat(buffer.as_slice())?;
+            buffer.clear();
+            *buffer_row_size = 0;
+            drop(buffer);
+            drop(buffer_row_size);
             self.add_build_block(data_block)
         }
     }
@@ -107,24 +110,9 @@ impl HashJoinState for JoinHashTable {
         Ok(())
     }
 
-    fn build_done(&self, build_state: BuildState) -> Result<()> {
+    fn build_done(&self) -> Result<()> {
         let mut count = self.build_count.lock();
         *count -= 1;
-
-        let mut buffer = self.row_space.buffer.write();
-        let mut buffer_row_size = self.row_space.buffer_row_size.write();
-        for block in build_state.buffer.into_iter() {
-            *buffer_row_size += block.num_rows();
-            buffer.push(block);
-            if *buffer_row_size >= *self.build_side_block_size_limit {
-                let data_block = DataBlock::concat(buffer.as_slice())?;
-                buffer.clear();
-                self.add_build_block(data_block)?;
-                *buffer_row_size = 0;
-            }
-        }
-        drop(buffer);
-
         if *count == 0 {
             // Divide the finalize phase into multiple tasks.
             self.generate_finalize_task()?;
@@ -242,7 +230,6 @@ impl HashJoinState for JoinHashTable {
                 let data_block = DataBlock::concat(&buffer)?;
                 self.add_build_block(data_block)?;
                 buffer.clear();
-                drop(buffer);
             }
         }
 

@@ -17,7 +17,6 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_sql::plans::JoinType;
 
-use super::BuildState;
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::JoinState;
 
@@ -25,7 +24,7 @@ use crate::pipelines::processors::transforms::hash_join::desc::JoinState;
 /// Concurrent hash table for hash join.
 pub trait HashJoinState: Send + Sync {
     /// Add input `DataBlock` to `row_space`.
-    fn build(&self, input: DataBlock, build_state: &mut BuildState) -> Result<()>;
+    fn build(&self, input: DataBlock) -> Result<()>;
 
     /// Probe the hash table and retrieve matched rows as DataBlocks.
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>>;
@@ -38,7 +37,7 @@ pub trait HashJoinState: Send + Sync {
     fn build_attach(&self) -> Result<()>;
 
     /// Detach to state: `build_count`, create finalize task and initialize the hash table.
-    fn build_done(&self, build_state: BuildState) -> Result<()>;
+    fn build_done(&self) -> Result<()>;
 
     /// Divide the finalize phase into multiple tasks.
     fn generate_finalize_task(&self) -> Result<()>;
