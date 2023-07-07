@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod metasrv_connection_error;
-pub mod metasrv_grpc_api;
-mod metasrv_grpc_export;
-pub mod metasrv_grpc_get_client_info;
-pub mod metasrv_grpc_handshake;
-pub mod metasrv_grpc_kv_api;
-pub mod metasrv_grpc_kv_api_restart_cluster;
-pub mod metasrv_grpc_schema_api;
-pub mod metasrv_grpc_schema_api_follower_follower;
-pub mod metasrv_grpc_schema_api_leader_follower;
-pub mod metasrv_grpc_tls;
-pub mod metasrv_grpc_watch;
+use common_exception::Result;
+use metrics::gauge;
+use metrics_exporter_prometheus::PrometheusHandle;
+
+use crate::dump_metric_samples;
+use crate::MetricValue;
+
+/// Reset gauge metrics to 0.
+pub fn reset_metrics(handle: PrometheusHandle) -> Result<()> {
+    let samples = dump_metric_samples(handle)?;
+    for sample in samples {
+        if let MetricValue::Gauge(_) = sample.value {
+            gauge!(sample.name, 0_f64);
+        }
+    }
+    Ok(())
+}

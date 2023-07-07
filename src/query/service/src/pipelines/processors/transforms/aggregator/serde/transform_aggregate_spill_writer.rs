@@ -35,6 +35,9 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Aggreg
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_serializer::serialize_aggregate;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_write_bytes;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_write_count;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_write_milliseconds;
 use crate::pipelines::processors::AggregatorParams;
 
 pub struct TransformAggregateSpillWriter<Method: HashMethodBounds> {
@@ -178,21 +181,19 @@ fn serialize_spill_file<Method: HashMethodBounds>(
     method: &Method,
     params: &Arc<AggregatorParams>,
     payload: HashTablePayload<Method, usize>,
-) -> Result<(isize, usize, Vec<Vec<u8>>)> {
+) -> Result<(isize, Vec<Vec<u8>>)> {
     let bucket = payload.bucket;
     let data_block = serialize_aggregate(method, params, payload)?;
     let columns = get_columns(data_block);
 
-    let mut total_size = 0;
     let mut columns_data = Vec::with_capacity(columns.len());
     for column in columns.into_iter() {
         let column = column.value.as_column().unwrap();
         let column_data = serialize_column(column);
-        total_size += column_data.len();
         columns_data.push(column_data);
     }
 
-    Ok((bucket, total_size, columns_data))
+    Ok((bucket, columns_data))
 }
 
 pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
@@ -202,7 +203,7 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
     params: &Arc<AggregatorParams>,
     payload: HashTablePayload<Method, usize>,
 ) -> Result<(DataBlock, BoxFuture<'static, Result<()>>)> {
-    let (bucket, total_size, data) = serialize_spill_file(method, params, payload)?;
+    let (bucket, data) = serialize_spill_file(method, params, payload)?;
 
     let unique_name = GlobalUniqName::unique();
     let location = format!("{}/{}", location_prefix, unique_name);
@@ -216,14 +217,21 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
         Box::pin(async move {
             let instant = Instant::now();
 
-            // temp code: waiting https://github.com/datafuselabs/opendal/pull/1431
-            let mut write_data = Vec::with_capacity(total_size);
-
+            let mut write_bytes = 0;
+            let mut writer = operator.writer(&location).await?;
             for data in data.into_iter() {
-                write_data.extend(data);
+                write_bytes += data.len();
+                writer.write(data).await?;
             }
 
-            operator.write(&location, write_data).await?;
+            writer.close().await?;
+
+            // perf
+            {
+                metrics_inc_aggregate_spill_write_count();
+                metrics_inc_aggregate_spill_write_bytes(write_bytes as u64);
+                metrics_inc_aggregate_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+            }
 
             info!(
                 "Write aggregate spill {} successfully, elapsed: {:?}",

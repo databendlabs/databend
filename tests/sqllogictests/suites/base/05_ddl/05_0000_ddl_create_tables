@@ -263,6 +263,24 @@ create table tt_v2 (id int) engine=fuse SNAPSHOT_LOCATION='xx'
 statement error 1301
 create table t(a int) x=x
 
+statement error 1301
+create table t(a int) external_location='xxx'
+
+statement error 1301
+create table t(a int) snapshot_loc='xxx'
+
+statement error 3001
+create table t(a int) snapshot_location='xxx'
+
+statement error 1301
+create table t(a int) database_id='xxx'
+
+statement ok
+create table t(a int)
+
+statement error 1301
+alter table t set options(database_id = "22");
+
 statement ok
 drop table if exists t_without_engine_desc;
 

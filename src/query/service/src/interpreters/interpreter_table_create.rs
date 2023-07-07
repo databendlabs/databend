@@ -44,8 +44,6 @@ use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_COMMENT;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_ENGINE;
-use storages_common_table_meta::table::OPT_KEY_EXTERNAL_LOCATION;
-use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
@@ -286,14 +284,11 @@ pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
 
-    r.insert(OPT_KEY_SNAPSHOT_LOCATION);
-    r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_TABLE_COMPRESSION);
     r.insert(OPT_KEY_STORAGE_FORMAT);
     r.insert(OPT_KEY_DATABASE_ID);
-
     r.insert(OPT_KEY_COMMENT);
-    r.insert(OPT_KEY_EXTERNAL_LOCATION);
+
     r.insert(OPT_KEY_ENGINE);
 
     r.insert("transient");
