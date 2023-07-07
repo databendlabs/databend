@@ -529,6 +529,8 @@ impl MetaGrpcClient {
             endpoints
         };
 
+        debug!("healthy endpoints: {:?}", &endpoints);
+
         let endpoints = if endpoints.is_empty() {
             warn!(
                 "meta-service has no healthy endpoints, force using all(healthy or not) endpoints: {:?}",
@@ -545,6 +547,7 @@ impl MetaGrpcClient {
             .enumerate()
             .map(|(i, a)| (a, i == endpoints.len() - 1))
         {
+            debug!("make_channel to {}", addr);
             let channel = self.make_channel(Some(addr)).await;
             match channel {
                 Ok(c) => {
@@ -587,10 +590,13 @@ impl MetaGrpcClient {
                 }
 
                 Err(net_err) => {
+                    warn!("{} when make_channel to {}", net_err, addr);
+
                     {
                         let mut ue = self.unhealthy_endpoints.lock();
                         ue.insert(addr.to_string(), ());
                     }
+
                     if is_last {
                         let cli_err = MetaClientError::NetworkError(net_err);
                         return Err(cli_err);

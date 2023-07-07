@@ -263,7 +263,7 @@ impl SubqueryRewriter {
                     left_conditions,
                     right_conditions,
                     non_equi_conditions: vec![],
-                    join_type: JoinType::Single,
+                    join_type: JoinType::LeftSingle,
                     marker_index: None,
                     from_correlated_subquery: true,
                     contain_runtime_filter: false,
