@@ -472,5 +472,6 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::CreateDatamaskPolicy(stmt) => visitor.visit_create_data_mask_policy(stmt),
         Statement::DropDatamaskPolicy(stmt) => visitor.visit_drop_data_mask_policy(stmt),
         Statement::DescDatamaskPolicy(stmt) => visitor.visit_desc_data_mask_policy(stmt),
+        Statement::AttachTable(_) => {}
     }
 }
