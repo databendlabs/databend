@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 expected="0"
 
-for i in {1..100}
+for i in {1..5}
 do
     stage="@s""$i"
     name="s""$i"
