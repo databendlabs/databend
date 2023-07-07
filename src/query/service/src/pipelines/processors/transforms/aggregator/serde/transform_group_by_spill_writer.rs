@@ -24,6 +24,7 @@ use common_expression::arrow::serialize_column;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
+use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -100,9 +101,11 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
             return Ok(Event::Async);
         }
 
-        if let Some(spilled_meta) = self.spilled_blocks.pop_front() {
-            self.output.push_data(Ok(spilled_meta));
-            return Ok(Event::NeedConsume);
+        while let Some(spilled_meta) = self.spilled_blocks.pop_front() {
+            if !spilled_meta.is_empty() || spilled_meta.get_meta().is_some() {
+                self.output.push_data(Ok(spilled_meta));
+                return Ok(Event::NeedConsume);
+            }
         }
 
         if self.spilling_meta.is_some() {
@@ -189,6 +192,11 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
     let mut write_data = Vec::with_capacity(256);
     let mut spilled_blocks = VecDeque::with_capacity(256);
     for (bucket, inner_table) in payload.cell.hashtable.iter_tables_mut().enumerate() {
+        if inner_table.len() == 0 {
+            spilled_blocks.push_back(DataBlock::empty());
+            continue;
+        }
+
         let data_block = serialize_group_by(method, inner_table)?;
 
         let begin = write_size;
@@ -220,15 +228,17 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
             let instant = Instant::now();
 
             let mut write_bytes = 0;
-            let mut writer = operator.writer(&location).await?;
-            for write_bucket_data in write_data.into_iter() {
-                for data in write_bucket_data.into_iter() {
-                    write_bytes += data.len();
-                    writer.write(data).await?;
+            if !write_data.is_empty() {
+                let mut writer = operator.writer(&location).await?;
+                for write_bucket_data in write_data.into_iter() {
+                    for data in write_bucket_data.into_iter() {
+                        write_bytes += data.len();
+                        writer.write(data).await?;
+                    }
                 }
-            }
 
-            writer.close().await?;
+                writer.close().await?;
+            }
 
             // perf
             {
