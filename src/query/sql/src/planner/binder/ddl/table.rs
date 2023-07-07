@@ -576,9 +576,15 @@ impl Binder {
             self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
 
         let mut path = stmt.uri_location.path.clone();
+        // First, to make it easy for users to use, path = "/testbucket/admin/data/1/2" and path = "/testbucket/admin/data/1/2/" are both legal
+        // So we need to remove the last "/"
         if path.ends_with('/') {
             path.pop();
         }
+        // Then, split the path into two parts, the first part is the root, and the second part is the storage_prefix
+        // For example, path = "/testbucket/admin/data/1/2", then root = "/testbucket/admin/data/", storage_prefix = "1/2"
+        // root is used by OpenDAL operator, storage_prefix is used to specify the storage location of the table
+        // Note that the root must end with "/", and the storage_prefix must not start and end with "/"
         let mut parts = path.split('/').collect::<Vec<_>>();
         if parts.len() < 2 {
             return Err(ErrorCode::BadArguments(format!(
@@ -587,8 +593,7 @@ impl Binder {
             )));
         }
         let storage_prefix = parts.split_off(parts.len() - 2).join("/");
-        let root = parts.join("/");
-        let root = format!("{}/", root);
+        let root = format!("{}/", parts.join("/"));
         let mut options = BTreeMap::new();
         options.insert(OPT_KEY_STORAGE_PREFIX.to_string(), storage_prefix);
 
