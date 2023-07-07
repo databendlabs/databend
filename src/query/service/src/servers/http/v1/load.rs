@@ -40,9 +40,11 @@ use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::mpsc::Sender;
+use tracing::info;
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;
+use crate::servers::http::middleware::sanitize_request_headers;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
@@ -89,6 +91,10 @@ pub async fn streaming_load(
     req: &Request,
     mut multipart: Multipart,
 ) -> PoemResult<Json<LoadResponse>> {
+    info!(
+        "new streaming load request:, headers={:?}",
+        sanitize_request_headers(req.headers()),
+    );
     let session = ctx.get_session(SessionType::HTTPStreamingLoad);
     let context = session
         .create_query_context()
