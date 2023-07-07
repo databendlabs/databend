@@ -517,7 +517,7 @@ async fn test_fuse_do_vacuum_drop_table() -> Result<()> {
         check_data_dir(
             &fixture,
             "test_fuse_do_vacuum_drop_table: verify generate retention files",
-            1,
+            0,
             0,
             0,
             0,
