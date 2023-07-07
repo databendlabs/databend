@@ -302,7 +302,6 @@ impl JoinHashTable {
         right_single_scan_map: &[*mut AtomicBool],
         bitmap: Option<&Bitmap>,
     ) -> Result<()> {
-        let has_bitmap = bitmap.is_some();
         let dummy_bitmap = Bitmap::new();
         let (has_bitmap, validity) = match bitmap {
             Some(validity) => (true, validity),
