@@ -12,22 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod build_state;
-mod common;
-mod desc;
-mod hash_join_state;
-mod hash_join_state_impl;
-mod join_hash_table;
-mod probe_join;
-mod probe_state;
-mod result_blocks;
-pub(crate) mod row;
-mod util;
+use common_expression::DataBlock;
 
-pub use build_state::BuildState;
-pub use desc::HashJoinDesc;
-pub use hash_join_state::HashJoinState;
-pub use join_hash_table::FixedKeyHashJoinHashTable;
-pub use join_hash_table::JoinHashTable;
-pub use probe_state::ProbeState;
-pub use result_blocks::*;
+/// BuildState used for build phase of hash join.
+#[derive(Default)]
+pub struct BuildState {
+    pub(crate) buffer: Vec<DataBlock>,
+    pub(crate) buffer_row_size: usize,
+}
+
+impl BuildState {
+    pub fn create() -> Self {
+        BuildState {
+            buffer: vec![],
+            buffer_row_size: 0,
+        }
+    }
+}

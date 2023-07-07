@@ -26,6 +26,7 @@ use super::hash_join::ProbeState;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::transforms::hash_join::BuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinState;
 use crate::pipelines::processors::Processor;
 
@@ -263,6 +264,7 @@ pub struct TransformHashJoinBuild {
 
     step: HashJoinStep,
     join_state: Arc<dyn HashJoinState>,
+    build_state: BuildState,
     finalize_finished: bool,
 }
 
@@ -276,6 +278,7 @@ impl TransformHashJoinBuild {
             input_data: None,
             step: HashJoinStep::Build,
             join_state,
+            build_state: BuildState::create(),
             finalize_finished: false,
         })
     }
@@ -304,7 +307,8 @@ impl Processor for TransformHashJoinBuild {
                 }
 
                 if self.input_port.is_finished() {
-                    self.join_state.build_done()?;
+                    self.join_state
+                        .build_done(std::mem::take(&mut self.build_state))?;
                     return Ok(Event::Async);
                 }
 
@@ -337,7 +341,7 @@ impl Processor for TransformHashJoinBuild {
         match self.step {
             HashJoinStep::Build => {
                 if let Some(data_block) = self.input_data.take() {
-                    self.join_state.build(data_block)?;
+                    self.join_state.build(data_block, &mut self.build_state)?;
                 }
                 Ok(())
             }
