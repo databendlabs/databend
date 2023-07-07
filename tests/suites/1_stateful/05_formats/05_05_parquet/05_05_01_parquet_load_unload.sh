@@ -25,21 +25,31 @@ test_format() {
 
 	# unload clickhouse
 	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
-	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload.txt
+	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload.parquet
 
 	echo "truncate table test_load_unload" | $MYSQL_CLIENT_CONNECT
 
 	# load streaming
 	curl -sH "insert_sql:insert into test_load_unload file_format = (type = ${1})" \
-	-F "upload=@/tmp/test_load_unload.txt" \
+	-F "upload=@/tmp/test_load_unload.parquet" \
 	-u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
 
 	# unload clickhouse again
 	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
-	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload2.txt
+	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload2.parquet
 
-	diff /tmp/test_load_unload2.txt /tmp/test_load_unload.txt
-	rm  /tmp/test_load_unload2.txt /tmp/test_load_unload.txt
+	echo "truncate table test_load_unload" | $MYSQL_CLIENT_CONNECT
+
+	# copy into
+	echo "copy into test_load_unload from 'fs:///tmp/test_load_unload.parquet' file_format = (type = parquet);" | $MYSQL_CLIENT_CONNECT
+
+	# unload clickhouse again
+	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
+	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload3.parquet
+
+	diff /tmp/test_load_unload2.parquet /tmp/test_load_unload.parquet
+	diff /tmp/test_load_unload3.parquet /tmp/test_load_unload.parquet
+	rm /tmp/test_load_unload3.parquet /tmp/test_load_unload2.parquet /tmp/test_load_unload.parquet
 	echo "truncate table test_load_unload" | $MYSQL_CLIENT_CONNECT
 }
 
