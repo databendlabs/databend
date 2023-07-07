@@ -249,6 +249,7 @@ impl<'a> Binder {
             Statement::ShowDropTables(stmt) => {
                 self.bind_show_drop_tables(bind_context, stmt).await?
             }
+            Statement::AttachTable(stmt) => self.bind_attach_table(stmt).await?,
             Statement::CreateTable(stmt) => self.bind_create_table(stmt).await?,
             Statement::DropTable(stmt) => self.bind_drop_table(stmt).await?,
             Statement::UndropTable(stmt) => self.bind_undrop_table(stmt).await?,

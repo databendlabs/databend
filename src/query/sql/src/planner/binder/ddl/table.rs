@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::AnalyzeTableStmt;
+use common_ast::ast::AttachTableStmt;
 use common_ast::ast::ColumnDefinition;
 use common_ast::ast::ColumnExpr;
 use common_ast::ast::CompactTarget;
@@ -71,6 +72,7 @@ use common_storages_view::view_table::VIEW_ENGINE;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::debug;
 use tracing::error;
@@ -576,6 +578,67 @@ impl Binder {
             },
         };
         Ok(Plan::CreateTable(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_attach_table(
+        &mut self,
+        stmt: &AttachTableStmt,
+    ) -> Result<Plan> {
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
+
+        let mut path = stmt.uri_location.path.clone();
+        // First, to make it easy for users to use, path = "/testbucket/admin/data/1/2" and path = "/testbucket/admin/data/1/2/" are both legal
+        // So we need to remove the last "/"
+        if path.ends_with('/') {
+            path.pop();
+        }
+        // Then, split the path into two parts, the first part is the root, and the second part is the storage_prefix
+        // For example, path = "/testbucket/admin/data/1/2", then root = "/testbucket/admin/data/", storage_prefix = "1/2"
+        // root is used by OpenDAL operator, storage_prefix is used to specify the storage location of the table
+        // Note that the root must end with "/", and the storage_prefix must not start or end with "/"
+        let mut parts = path.split('/').collect::<Vec<_>>();
+        if parts.len() < 2 {
+            return Err(ErrorCode::BadArguments(format!(
+                "Invalid path: {}",
+                stmt.uri_location
+            )));
+        }
+        let storage_prefix = parts.split_off(parts.len() - 2).join("/");
+        let root = format!("{}/", parts.join("/"));
+        let mut options = BTreeMap::new();
+        options.insert(OPT_KEY_STORAGE_PREFIX.to_string(), storage_prefix);
+
+        let mut uri = stmt.uri_location.clone();
+        uri.path = root;
+        let (sp, _) = parse_uri_location(&mut uri)?;
+
+        // create a temporary op to check if params is correct
+        DataOperator::try_create(&sp).await?;
+
+        // Path ends with "/" means it's a directory.
+        let part_prefix = if uri.path.ends_with('/') {
+            uri.part_prefix.clone()
+        } else {
+            "".to_string()
+        };
+
+        Ok(Plan::CreateTable(Box::new(CreateTablePlan {
+            if_not_exists: false,
+            tenant: self.ctx.get_tenant(),
+            catalog,
+            database,
+            table,
+            options,
+            engine: Engine::Fuse,
+            cluster_key: None,
+            as_select: None,
+            schema: Arc::new(TableSchema::default()),
+            field_comments: vec![],
+            storage_params: Some(sp),
+            part_prefix,
+        })))
     }
 
     #[async_backtrace::framed]
