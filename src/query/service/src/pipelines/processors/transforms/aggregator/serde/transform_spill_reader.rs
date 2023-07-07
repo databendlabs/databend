@@ -179,7 +179,10 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::Spilled(payload) => {
                     let instant = Instant::now();
-                    let data = self.operator.read(&payload.location).await?;
+                    let data = self
+                        .operator
+                        .range_read(&payload.location, payload.data_range.clone())
+                        .await?;
 
                     if let Err(cause) = self.operator.delete(&payload.location).await {
                         error!(
@@ -202,10 +205,11 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                         if let AggregateMeta::Spilled(payload) = meta {
                             let location = payload.location.clone();
                             let operator = self.operator.clone();
+                            let data_range = payload.data_range.clone();
                             read_data.push(common_base::base::tokio::spawn(
                                 async_backtrace::frame!(async move {
                                     let instant = Instant::now();
-                                    let data = operator.read(&location).await?;
+                                    let data = operator.range_read(&location, data_range).await?;
 
                                     // perf
                                     {

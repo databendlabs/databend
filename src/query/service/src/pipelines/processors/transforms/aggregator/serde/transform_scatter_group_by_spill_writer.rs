@@ -138,7 +138,7 @@ impl<Method: HashMethodBounds> Processor for TransformScatterGroupBySpillWriter<
                                 payload,
                             )?;
 
-                            new_blocks.push(output_block);
+                            new_blocks.extend(output_block);
                             self.spilling_futures.push(spilling_future);
                             continue;
                         }

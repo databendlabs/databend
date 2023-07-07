@@ -310,18 +310,15 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                     // perf
                     {
                         metrics_inc_aggregate_partial_spill_count();
+                        metrics_inc_aggregate_partial_spill_cell_count(1);
                         metrics_inc_aggregate_partial_hashtable_allocated_bytes(
                             v.allocated_bytes() as u64,
                         );
                     }
 
-                    // // perf
-                    // {
-                    //     metrics_inc_aggregate_partial_spill_cell_count(cells.len() as u64);
-                    // }
-
+                    let _dropper = v._dropper.clone();
                     let blocks = vec![DataBlock::empty_with_meta(
-                        AggregateMeta::<Method, usize>::create_spilling(0, v),
+                        AggregateMeta::<Method, usize>::create_spilling(v),
                     )];
 
                     let arena = Arc::new(Bump::new());

@@ -159,8 +159,9 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 {
                     if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table)
                     {
+                        let _dropper = v._dropper.clone();
                         let blocks = vec![DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, ()>::create_spilling(0, v),
+                            AggregateMeta::<Method, ()>::create_spilling(v),
                         )];
 
                         let arena = Arc::new(Bump::new());

@@ -48,7 +48,7 @@ impl SerializedPayload {
 pub struct SpilledPayload {
     pub bucket: isize,
     pub location: String,
-    pub data_range: Range<usize>,
+    pub data_range: Range<u64>,
     pub columns_layout: Vec<usize>,
 }
 
@@ -78,12 +78,11 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
     }
 
     pub fn create_spilling(
-        bucket: isize,
         cell: HashTableCell<PartitionedHashMethod<Method>, V>,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::<Method, V>::Spilling(HashTablePayload {
             cell,
-            bucket,
+            bucket: 0,
             arena_holder: ArenaHolder::create(None),
         }))
     }
@@ -91,7 +90,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
     pub fn create_spilled(
         bucket: isize,
         location: String,
-        data_range: Range<usize>,
+        data_range: Range<u64>,
         columns_layout: Vec<usize>,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::<Method, V>::Spilled(SpilledPayload {

@@ -180,7 +180,7 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
     operator: Operator,
     method: &Method,
     location_prefix: &str,
-    payload: HashTablePayload<PartitionedHashMethod<Method>, ()>,
+    mut payload: HashTablePayload<PartitionedHashMethod<Method>, ()>,
 ) -> Result<(VecDeque<DataBlock>, BoxFuture<'static, Result<()>>)> {
     let unique_name = GlobalUniqName::unique();
     let location = format!("{}/{}", location_prefix, unique_name);
@@ -188,8 +188,8 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
     let mut write_size = 0;
     let mut write_data = Vec::with_capacity(256);
     let mut spilled_blocks = VecDeque::with_capacity(256);
-    for (bucket, inner_table) in payload.cell.hashtable.into_iter_tables().enumerate() {
-        let data_block = serialize_group_by(method, &inner_table)?;
+    for (bucket, inner_table) in payload.cell.hashtable.iter_tables_mut().enumerate() {
+        let data_block = serialize_group_by(method, inner_table)?;
 
         let begin = write_size;
         let columns = get_columns(data_block);
@@ -198,13 +198,13 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
         for column in columns.into_iter() {
             let column = column.value.as_column().unwrap();
             let column_data = serialize_column(column);
-            write_size += column_data.len();
+            write_size += column_data.len() as u64;
             columns_layout.push(column_data.len());
             columns_data.push(column_data);
         }
 
         write_data.push(columns_data);
-        spilled_blocks.push(DataBlock::empty_with_meta(
+        spilled_blocks.push_back(DataBlock::empty_with_meta(
             AggregateMeta::<Method, usize>::create_spilled(
                 bucket as isize,
                 location.clone(),

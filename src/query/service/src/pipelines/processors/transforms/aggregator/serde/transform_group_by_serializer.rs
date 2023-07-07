@@ -129,6 +129,7 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
                             AggregateSerdeMeta::create_spilled(
                                 payload.bucket,
                                 payload.location,
+                                payload.data_range,
                                 payload.columns_layout,
                             ),
                         )));

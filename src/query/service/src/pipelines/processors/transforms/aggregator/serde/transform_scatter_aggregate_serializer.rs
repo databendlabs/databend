@@ -136,6 +136,7 @@ impl<Method: HashMethodBounds> Processor for TransformScatterAggregateSerializer
                                         AggregateSerdeMeta::create_spilled(
                                             bucket,
                                             payload.location,
+                                            payload.data_range,
                                             payload.columns_layout,
                                         ),
                                     );
@@ -239,6 +240,7 @@ where Method: HashMethodBounds
                             DataBlock::empty_with_meta(AggregateSerdeMeta::create_spilled(
                                 bucket,
                                 payload.location,
+                                payload.data_range,
                                 payload.columns_layout,
                             ));
 
