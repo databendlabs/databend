@@ -441,48 +441,46 @@ async fn fuzz(params: FuzzParams) -> Result<()> {
 
     let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
-    let ctx = fixture.ctx();
 
     // Prepare table and data
     // Create random engine table
     execute_sql(
-        ctx.clone(),
+        fixture.ctx(),
         "CREATE TABLE rt (a int, b int, c int) ENGINE = RANDOM",
     )
     .await?;
     execute_sql(
-        ctx.clone(),
+        fixture.ctx(),
         &format!("CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"),
     )
     .await?;
     execute_sql(
-        ctx.clone(),
+        fixture.ctx(),
         &format!("CREATE TABLE temp_t (a int, b int, c int) storage_format = '{format}'"),
     )
     .await?;
     execute_sql(
-        ctx.clone(),
+        fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX index AS {index_sql}"),
     )
     .await?;
 
-    let plan = plan_sql(ctx.clone(), &query_sql).await?;
+    let plan = plan_sql(fixture.ctx(), &query_sql).await?;
     if !is_index_scan_plan(&plan) {
         assert!(!is_index_scan, "{}", fuzz_info);
         // Clear
-        drop_index(ctx.clone(), "index").await?;
-        execute_sql(ctx.clone(), "DROP TABLE rt ALL").await?;
-        execute_sql(ctx.clone(), "DROP TABLE t ALL").await?;
-        execute_sql(ctx, "DROP TABLE temp_t ALL").await?;
+        drop_index(fixture.ctx(), "index").await?;
+        execute_sql(fixture.ctx(), "DROP TABLE rt ALL").await?;
+        execute_sql(fixture.ctx(), "DROP TABLE t ALL").await?;
+        execute_sql(fixture.ctx(), "DROP TABLE temp_t ALL").await?;
         return Ok(());
     }
     assert!(is_index_scan, "{}", fuzz_info);
 
     // Generate data with index
-    let num_index_blocks = (num_blocks as f64 * index_block_ratio) as usize;
-    for _ in 0..num_index_blocks {
+    for _ in 0..num_blocks {
         execute_sql(
-            ctx.clone(),
+            fixture.ctx(),
             &format!(
                 "INSERT INTO t SELECT * FROM rt LIMIT {}",
                 num_rows_per_block
@@ -490,29 +488,28 @@ async fn fuzz(params: FuzzParams) -> Result<()> {
         )
         .await?;
     }
-    execute_sql(fixture.ctx(), "REFRESH AGGREGATING INDEX index").await?;
 
-    // Generate data without index
-    for _ in 0..num_blocks - num_index_blocks {
+    let num_index_blocks = (num_blocks as f64 * index_block_ratio) as usize;
+    if num_index_blocks > 0 {
         execute_sql(
-            ctx.clone(),
-            &format!("INSERT INTO t SELECT * FROM rt LIMIT {num_rows_per_block}",),
+            fixture.ctx(),
+            &format!("REFRESH AGGREGATING INDEX index LIMIT {num_index_blocks}"),
         )
         .await?;
     }
 
     // Copy data into temp table
-    execute_sql(ctx.clone(), "INSERT INTO temp_t SELECT * FROM t").await?;
+    execute_sql(fixture.ctx(), "INSERT INTO temp_t SELECT * FROM t").await?;
 
     // Get query result
     let expect: Vec<DataBlock> =
-        execute_sql(ctx.clone(), &query_sql.replace("from t", "from temp_t"))
+        execute_sql(fixture.ctx(), &query_sql.replace("from t", "from temp_t"))
             .await?
             .try_collect()
             .await?;
 
     // Get index scan query result
-    let actual: Vec<DataBlock> = execute_sql(ctx.clone(), &query_sql)
+    let actual: Vec<DataBlock> = execute_sql(fixture.ctx(), &query_sql)
         .await?
         .try_collect()
         .await?;
@@ -531,10 +528,10 @@ async fn fuzz(params: FuzzParams) -> Result<()> {
     if expect.is_empty() {
         assert!(actual.is_empty());
         // Clear
-        drop_index(ctx.clone(), "index").await?;
-        execute_sql(ctx.clone(), "DROP TABLE rt ALL").await?;
-        execute_sql(ctx.clone(), "DROP TABLE t ALL").await?;
-        execute_sql(ctx, "DROP TABLE temp_t ALL").await?;
+        drop_index(fixture.ctx(), "index").await?;
+        execute_sql(fixture.ctx(), "DROP TABLE rt ALL").await?;
+        execute_sql(fixture.ctx(), "DROP TABLE t ALL").await?;
+        execute_sql(fixture.ctx(), "DROP TABLE temp_t ALL").await?;
         return Ok(());
     }
 
@@ -574,10 +571,10 @@ async fn fuzz(params: FuzzParams) -> Result<()> {
     );
 
     // Clear
-    drop_index(ctx.clone(), "index").await?;
-    execute_sql(ctx.clone(), "DROP TABLE rt ALL").await?;
-    execute_sql(ctx.clone(), "DROP TABLE t ALL").await?;
-    execute_sql(ctx, "DROP TABLE temp_t ALL").await?;
+    drop_index(fixture.ctx(), "index").await?;
+    execute_sql(fixture.ctx(), "DROP TABLE rt ALL").await?;
+    execute_sql(fixture.ctx(), "DROP TABLE t ALL").await?;
+    execute_sql(fixture.ctx(), "DROP TABLE temp_t ALL").await?;
 
     Ok(())
 }
