@@ -151,7 +151,8 @@ impl Processor for DeserializeDataTransform {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
                     let data_block = agg_index_reader.deserialize(&data)?;
                     if data_block.num_rows() > self.max_block_size {
-                        let (sub_blocks, remain_block) = data_block.split_by_rows(self.max_block_size);
+                        let (sub_blocks, remain_block) =
+                            data_block.split_by_rows(self.max_block_size);
                         self.output_data_blocks.extend(sub_blocks);
                         if let Some(remain) = remain_block {
                             self.output_data_blocks.push_back(remain);
@@ -195,7 +196,8 @@ impl Processor for DeserializeDataTransform {
                         data_block
                     };
                     if data_block.num_rows() > self.max_block_size {
-                        let (sub_blocks, remain_block) = data_block.split_by_rows(self.max_block_size);
+                        let (sub_blocks, remain_block) =
+                            data_block.split_by_rows(self.max_block_size);
                         self.output_data_blocks.extend(sub_blocks);
                         if let Some(remain) = remain_block {
                             self.output_data_blocks.push_back(remain);
