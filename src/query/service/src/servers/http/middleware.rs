@@ -34,6 +34,7 @@ use poem::Middleware;
 use poem::Request;
 use poem::Response;
 use tracing::error;
+use tracing::warn;
 
 use super::v1::HttpQueryContext;
 use crate::auth::AuthMgr;
@@ -198,18 +199,33 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                 req.extensions_mut().insert(ctx);
                 self.ep.call(req).await
             }
-            Err(err) => Err(PoemError::from_string(
-                err.message(),
-                StatusCode::UNAUTHORIZED,
-            )),
+            Err(err) => match err.code() {
+                ErrorCode::AUTHENTICATE_FAILURE => {
+                    warn!(
+                        "http auth failure: {method} {uri}, headers={:?}, error={}",
+                        sanitize_request_headers(&headers),
+                        err
+                    );
+                    Err(PoemError::from_string(
+                        err.message(),
+                        StatusCode::UNAUTHORIZED,
+                    ))
+                }
+                _ => {
+                    error!(
+                        "http request err: {method} {uri}, headers={:?}, error={}",
+                        sanitize_request_headers(&headers),
+                        err
+                    );
+                    Err(PoemError::from_string(
+                        err.message(),
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    ))
+                }
+            },
         };
         match res {
             Err(err) => {
-                error!(
-                    "http request err: {method} {uri}, headers={:?}, error={}",
-                    sanitize_request_headers(&headers),
-                    err
-                );
                 let body = Body::from_json(serde_json::json!({
                     "error": {
                         "code": err.status().as_str(),
