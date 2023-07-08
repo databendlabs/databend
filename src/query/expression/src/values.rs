@@ -1429,10 +1429,7 @@ impl Column {
                         let offsets =
                             unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
 
-                        Column::Variant(StringColumn::new(
-                            arrow_col.values().clone(),
-                            offsets.into(),
-                        ))
+                        Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
                     }
                     ArrowDataType::Binary => {
                         let arrow_col = arrow_col
@@ -1585,10 +1582,10 @@ impl Column {
                             .iter()
                             .map(|x| *x as u64)
                             .collect::<Vec<_>>();
-                        Column::Bitmap(StringColumn {
-                            data: arrow_col.values().clone(),
-                            offsets: offsets.into(),
-                        })
+                        Column::Bitmap(StringColumn::new(
+                            arrow_col.values().clone(),
+                            offsets.into(),
+                        ))
                     }
                     _ => unreachable!(
                         "fail to read from arrow: array should be `BinaryArray<i32>` or `BinaryArray<i64>`"
