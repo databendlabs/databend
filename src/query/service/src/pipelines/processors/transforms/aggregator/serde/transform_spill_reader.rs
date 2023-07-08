@@ -30,7 +30,6 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use itertools::Itertools;
 use opendal::Operator;
-use tracing::error;
 use tracing::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
@@ -180,14 +179,10 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::Spilled(payload) => {
                     let instant = Instant::now();
-                    let data = self.operator.read(&payload.location).await?;
-
-                    if let Err(cause) = self.operator.delete(&payload.location).await {
-                        error!(
-                            "Cannot delete spill file {}, cause: {:?}",
-                            &payload.location, cause
-                        );
-                    }
+                    let data = self
+                        .operator
+                        .range_read(&payload.location, payload.data_range.clone())
+                        .await?;
 
                     info!(
                         "Read aggregate spill {} successfully, elapsed: {:?}",
@@ -203,26 +198,16 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                         if let AggregateMeta::Spilled(payload) = meta {
                             let location = payload.location.clone();
                             let operator = self.operator.clone();
+                            let data_range = payload.data_range.clone();
                             read_data.push(common_base::base::tokio::spawn(
                                 async_backtrace::frame!(async move {
                                     let instant = Instant::now();
-                                    let data = operator.read(&location).await?;
+                                    let data = operator.range_read(&location, data_range).await?;
 
                                     // perf
                                     {
                                         metrics_inc_aggregate_spill_read_count();
                                         metrics_inc_aggregate_spill_read_bytes(data.len() as u64);
-                                    }
-
-                                    if let Err(cause) = operator.delete(&location).await {
-                                        error!(
-                                            "Cannot delete spill file {}, cause: {:?}",
-                                            location, cause
-                                        );
-                                    }
-
-                                    // perf
-                                    {
                                         metrics_inc_aggregate_spill_read_milliseconds(
                                             instant.elapsed().as_millis() as u64,
                                         );
