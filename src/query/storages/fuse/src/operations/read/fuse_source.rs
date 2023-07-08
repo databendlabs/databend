@@ -37,6 +37,7 @@ use crate::operations::read::native_data_source_reader::ReadNativeDataSource;
 use crate::operations::read::parquet_data_source_deserializer::DeserializeDataTransform;
 use crate::operations::read::parquet_data_source_reader::ReadParquetDataSource;
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_fuse_native_source_pipeline(
     ctx: Arc<dyn TableContext>,
     pipeline: &mut Pipeline,
@@ -45,6 +46,7 @@ pub fn build_fuse_native_source_pipeline(
     plan: &DataSourcePlan,
     topk: Option<TopK>,
     mut max_io_requests: usize,
+    index_reader: Arc<Option<AggIndexReader>>,
 ) -> Result<()> {
     (max_threads, max_io_requests) =
         adjust_threads_and_request(true, max_threads, max_io_requests, plan);
@@ -75,6 +77,7 @@ pub fn build_fuse_native_source_pipeline(
                         output,
                         block_reader.clone(),
                         partitions.clone(),
+                        index_reader.clone(),
                     )?,
                 );
             }
@@ -98,6 +101,7 @@ pub fn build_fuse_native_source_pipeline(
                         output,
                         block_reader.clone(),
                         partitions.clone(),
+                        index_reader.clone(),
                     )?,
                 );
             }
@@ -114,6 +118,7 @@ pub fn build_fuse_native_source_pipeline(
             topk.clone(),
             transform_input,
             transform_output,
+            index_reader.clone(),
         )
     })?;
 
