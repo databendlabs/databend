@@ -19,6 +19,7 @@ use common_base::base::tokio;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::StealablePartitions;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
@@ -28,9 +29,12 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 
+use super::native_data_source::DataSource;
+use crate::io::AggIndexReader;
 use crate::io::BlockReader;
-use crate::operations::read::native_data_source::DataChunks;
+use crate::io::TableMetaLocationGenerator;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
+use crate::FusePartInfo;
 
 pub struct ReadNativeDataSource<const BLOCKING_IO: bool> {
     id: usize,
@@ -39,8 +43,10 @@ pub struct ReadNativeDataSource<const BLOCKING_IO: bool> {
     block_reader: Arc<BlockReader>,
 
     output: Arc<OutputPort>,
-    output_data: Option<(Vec<PartInfoPtr>, Vec<DataChunks>)>,
+    output_data: Option<(Vec<PartInfoPtr>, Vec<DataSource>)>,
     partitions: StealablePartitions,
+
+    index_reader: Arc<Option<AggIndexReader>>,
 }
 
 impl ReadNativeDataSource<true> {
@@ -50,6 +56,7 @@ impl ReadNativeDataSource<true> {
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
         partitions: StealablePartitions,
+        index_reader: Arc<Option<AggIndexReader>>,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         SyncSourcer::create(ctx.clone(), output.clone(), ReadNativeDataSource::<true> {
@@ -60,6 +67,7 @@ impl ReadNativeDataSource<true> {
             finished: false,
             output_data: None,
             partitions,
+            index_reader,
         })
     }
 }
@@ -71,6 +79,7 @@ impl ReadNativeDataSource<false> {
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
         partitions: StealablePartitions,
+        index_reader: Arc<Option<AggIndexReader>>,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         Ok(ProcessorPtr::create(Box::new(ReadNativeDataSource::<
@@ -83,6 +92,7 @@ impl ReadNativeDataSource<false> {
             finished: false,
             output_data: None,
             partitions,
+            index_reader,
         })))
     }
 }
@@ -93,11 +103,30 @@ impl SyncSource for ReadNativeDataSource<true> {
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
-            Some(part) => Ok(Some(DataBlock::empty_with_meta(
-                NativeDataSourceMeta::create(vec![part.clone()], vec![
-                    self.block_reader.sync_read_native_columns_data(part)?,
-                ]),
-            ))),
+            Some(part) => {
+                if let Some(index_reader) = self.index_reader.as_ref() {
+                    let fuse_part = FusePartInfo::from_part(&part)?;
+                    let loc =
+                        TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
+                            &fuse_part.location,
+                            index_reader.index_id(),
+                        );
+                    if let Some(data) = index_reader.sync_read_data(&loc) {
+                        // Read from aggregating index.
+                        return Ok(Some(DataBlock::empty_with_meta(
+                            NativeDataSourceMeta::create(vec![part.clone()], vec![
+                                DataSource::AggIndex(data),
+                            ]),
+                        )));
+                    }
+                }
+
+                Ok(Some(DataBlock::empty_with_meta(
+                    NativeDataSourceMeta::create(vec![part.clone()], vec![DataSource::Normal(
+                        self.block_reader.sync_read_native_columns_data(part)?,
+                    )]),
+                )))
+            }
         }
     }
 }
@@ -144,10 +173,26 @@ impl Processor for ReadNativeDataSource<false> {
             for part in &parts {
                 let part = part.clone();
                 let block_reader = self.block_reader.clone();
+                let index_reader = self.index_reader.clone();
 
                 chunks.push(async move {
                     let handler = tokio::spawn(async_backtrace::location!().frame(async move {
-                        block_reader.async_read_native_columns_data(part).await
+                        let fuse_part = FusePartInfo::from_part(&part)?;
+                        if let Some(index_reader) = index_reader.as_ref() {
+                            let loc =
+                        TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
+                            &fuse_part.location,
+                            index_reader.index_id(),
+                        );
+                            if let Some(data) = index_reader.read_data(&loc).await {
+                                // Read from aggregating index.
+                                return Ok::<_, ErrorCode>(DataSource::AggIndex(data));
+                            }
+                        }
+
+                        Ok(DataSource::Normal(
+                            block_reader.async_read_native_columns_data(part).await?,
+                        ))
                     }));
                     handler.await.unwrap()
                 });
