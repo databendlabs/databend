@@ -152,6 +152,7 @@ impl<Method: HashMethodBounds> Processor for TransformScatterAggregateSpillWrite
                         }
                     }
 
+                    max_size = std::cmp::max(max_size, 1);
                     new_blocks.push(VecDeque::from(vec![block]));
                 }
 
