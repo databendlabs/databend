@@ -54,6 +54,7 @@ pub struct ParquetTable {
     pub(super) arrow_schema: ArrowSchema,
     pub(super) schema_descr: SchemaDescriptor,
     pub(super) files_to_read: Option<Vec<StageFileInfo>>,
+    pub(super) schema_from: String,
 }
 
 impl ParquetTable {
@@ -69,6 +70,7 @@ impl ParquetTable {
             files_info: info.files_info.clone(),
             files_to_read: info.files_to_read.clone(),
             schema_descr: info.schema_descr.clone(),
+            schema_from: info.schema_from.clone(),
         }))
     }
 }
@@ -108,6 +110,7 @@ impl Table for ParquetTable {
             schema_descr: self.schema_descr.clone(),
             files_info: self.files_info.clone(),
             files_to_read: self.files_to_read.clone(),
+            schema_from: self.schema_from.clone(),
         })
     }
 
