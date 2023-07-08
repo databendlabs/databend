@@ -12,7 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod copy;
+mod stage;
 mod table;
+
+pub use copy::build_upsert_copied_files_to_meta_req;
+pub use copy::copy_append_data_and_set_finish;
+pub use copy::fill_const_columns;
+pub use copy::CopyPlanParam;
+pub use stage::try_purge_files;
 pub use table::append2table;
 pub use table::append2table_without_commit;
 pub use table::check_referenced_computed_columns;

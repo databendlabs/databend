@@ -13,8 +13,6 @@
 // limitations under the License.
 
 mod grant;
-mod stage;
 mod util;
 pub use grant::validate_grant_object_exists;
-pub use stage::try_purge_files;
 pub use util::check_deduplicate_label;
