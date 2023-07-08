@@ -169,16 +169,17 @@ pub fn optimize_query(
     let heuristic =
         HeuristicOptimizer::new(ctx.get_function_context()?, &bind_context, metadata.clone());
     let mut result = heuristic.optimize(s_expr, &DEFAULT_REWRITE_RULES)?;
+    let mut dphyp_optimized = false;
     if ctx.get_settings().get_enable_dphyp()? {
-        let (dp_res, _) = DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result))?;
-        result = (*dp_res).clone();
-        result = heuristic.optimize(result, &COMMUTE_JOIN_RULES)?;
-        let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, true)?;
-        result = cascades.optimize(result)?;
-    } else {
-        let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, false)?;
-        result = cascades.optimize(result)?;
+        let (dp_res, optimized) =
+            DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result.clone()))?;
+        if optimized {
+            dphyp_optimized = true;
+            result = heuristic.optimize((*dp_res).clone(), &COMMUTE_JOIN_RULES)?;
+        }
     }
+    let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, dphyp_optimized)?;
+    result = cascades.optimize(result)?;
     // So far, we don't have ability to execute distributed query
     // with reading data from local tales(e.g. system tables).
     let enable_distributed_query =
