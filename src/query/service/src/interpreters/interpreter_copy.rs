@@ -41,9 +41,9 @@ use tracing::info;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
-use crate::pipelines::common::append2table;
+use crate::pipelines::common::build_append2table_pipeline;
+use crate::pipelines::common::build_append_data_with_finish_pipeline;
 use crate::pipelines::common::build_upsert_copied_files_to_meta_req;
-use crate::pipelines::common::copy_append_data_and_set_finish;
 use crate::pipelines::common::try_purge_files;
 use crate::pipelines::common::CopyPlanParam;
 use crate::pipelines::PipelineBuildResult;
@@ -126,7 +126,7 @@ impl CopyInterpreter {
             is_select: false,
         };
         let table = StageTable::try_create(stage_table_info)?;
-        append2table(
+        build_append2table_pipeline(
             self.ctx.clone(),
             &mut build_res.main_pipeline,
             table,
@@ -300,7 +300,7 @@ impl CopyInterpreter {
             (build_res, plan.required_source_schema.clone(), files)
         };
 
-        copy_append_data_and_set_finish(
+        build_append_data_with_finish_pipeline(
             ctx,
             &mut build_res.main_pipeline,
             source_schema,

@@ -31,7 +31,7 @@ use crate::interpreters::interpreter_insert::ValueSource;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
-use crate::pipelines::common::fill_missing_columns;
+use crate::pipelines::common::build_fill_missing_columns_pipeline;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -76,7 +76,7 @@ impl Interpreter for ReplaceInterpreter {
             return Ok(pipeline);
         }
 
-        fill_missing_columns(
+        build_fill_missing_columns_pipeline(
             self.ctx.clone(),
             &mut pipeline.main_pipeline,
             table.clone(),

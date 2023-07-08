@@ -16,11 +16,11 @@ mod copy;
 mod stage;
 mod table;
 
+pub use copy::build_append_data_with_finish_pipeline;
 pub use copy::build_upsert_copied_files_to_meta_req;
-pub use copy::copy_append_data_and_set_finish;
 pub use copy::fill_const_columns;
 pub use copy::CopyPlanParam;
 pub use stage::try_purge_files;
-pub use table::append2table;
-pub use table::append2table_without_commit;
-pub use table::fill_missing_columns;
+pub use table::build_append2table_pipeline;
+pub use table::build_append2table_without_commit_pipeline;
+pub use table::build_fill_missing_columns_pipeline;

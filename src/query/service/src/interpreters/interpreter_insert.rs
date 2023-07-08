@@ -52,7 +52,7 @@ use parking_lot::RwLock;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::common::append2table;
+use crate::pipelines::common::build_append2table_pipeline;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
@@ -270,7 +270,7 @@ impl Interpreter for InsertInterpreter {
             _ => AppendMode::Normal,
         };
 
-        append2table(
+        build_append2table_pipeline(
             self.ctx.clone(),
             &mut build_res.main_pipeline,
             table.clone(),

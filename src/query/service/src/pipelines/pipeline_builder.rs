@@ -91,8 +91,8 @@ use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::pipelines::common::copy_append_data_and_set_finish;
-use crate::pipelines::common::fill_missing_columns;
+use crate::pipelines::common::build_append_data_with_finish_pipeline;
+use crate::pipelines::common::build_fill_missing_columns_pipeline;
 use crate::pipelines::common::CopyPlanParam;
 use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
@@ -225,7 +225,7 @@ impl PipelineBuilder {
         let start = Instant::now();
         stage_table.read_data(table_ctx, &distributed_plan.source, &mut self.main_pipeline)?;
         // append data
-        copy_append_data_and_set_finish(
+        build_append_data_with_finish_pipeline(
             ctx,
             &mut self.main_pipeline,
             distributed_plan.required_source_schema.clone(),
@@ -1384,7 +1384,7 @@ impl PipelineBuilder {
             .get_table_by_info(&insert_select.table_info)?;
 
         let source_schema = insert_schema;
-        fill_missing_columns(
+        build_fill_missing_columns_pipeline(
             self.ctx.clone(),
             &mut self.main_pipeline,
             table.clone(),

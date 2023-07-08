@@ -38,8 +38,8 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
-use crate::pipelines::common::append2table;
-use crate::pipelines::common::append2table_without_commit;
+use crate::pipelines::common::build_append2table_pipeline;
+use crate::pipelines::common::build_append2table_without_commit_pipeline;
 use crate::pipelines::common::try_purge_files;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
@@ -51,7 +51,7 @@ pub enum CopyPlanParam {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn copy_append_data_and_set_finish(
+pub fn build_append_data_with_finish_pipeline(
     ctx: Arc<QueryContext>,
     main_pipeline: &mut Pipeline,
     source_schema: Arc<DataSchema>,
@@ -123,7 +123,7 @@ pub fn copy_append_data_and_set_finish(
     match write_mode {
         CopyIntoTableMode::Insert { overwrite } => {
             if use_commit {
-                append2table(
+                build_append2table_pipeline(
                     ctx.clone(),
                     main_pipeline,
                     to_table,
@@ -133,7 +133,7 @@ pub fn copy_append_data_and_set_finish(
                     AppendMode::Copy,
                 )?;
             } else {
-                append2table_without_commit(
+                build_append2table_without_commit_pipeline(
                     ctx.clone(),
                     main_pipeline,
                     to_table,
@@ -155,7 +155,7 @@ pub fn copy_append_data_and_set_finish(
                     files.clone(),
                     plan_force,
                 )?;
-                append2table(
+                build_append2table_pipeline(
                     ctx.clone(),
                     main_pipeline,
                     to_table,
@@ -165,7 +165,7 @@ pub fn copy_append_data_and_set_finish(
                     AppendMode::Copy,
                 )?;
             } else {
-                append2table_without_commit(
+                build_append2table_without_commit_pipeline(
                     ctx.clone(),
                     main_pipeline,
                     to_table,
