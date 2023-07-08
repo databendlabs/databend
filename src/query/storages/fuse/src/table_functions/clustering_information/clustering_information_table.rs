@@ -27,13 +27,13 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
 use super::clustering_information::ClusteringInformation;
-use super::table_args::parse_func_table_args;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
+use crate::table_functions::parse_db_tb_args;
 use crate::table_functions::string_literal;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
@@ -55,7 +55,8 @@ impl ClusteringInformationTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (arg_database_name, arg_table_name) = parse_func_table_args(&table_args)?;
+        let (arg_database_name, arg_table_name) =
+            parse_db_tb_args(&table_args, FUSE_FUNC_CLUSTERING)?;
 
         let engine = FUSE_FUNC_CLUSTERING.to_owned();
 

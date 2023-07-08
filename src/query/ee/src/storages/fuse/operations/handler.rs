@@ -17,6 +17,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::GlobalInstance;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_storages_fuse::FuseTable;
@@ -24,6 +25,7 @@ use vacuum_handler::VacuumHandler;
 use vacuum_handler::VacuumHandlerWrapper;
 
 use crate::storages::fuse::do_vacuum;
+use crate::storages::fuse::do_vacuum_drop_tables;
 
 pub struct RealVacuumHandler {}
 
@@ -37,6 +39,14 @@ impl VacuumHandler for RealVacuumHandler {
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         do_vacuum(fuse_table, ctx, retention_time, dry_run).await
+    }
+
+    async fn do_vacuum_drop_tables(
+        &self,
+        tables: Vec<Arc<dyn Table>>,
+        dry_run_limit: Option<usize>,
+    ) -> Result<Option<Vec<(String, String)>>> {
+        do_vacuum_drop_tables(tables, dry_run_limit).await
     }
 }
 

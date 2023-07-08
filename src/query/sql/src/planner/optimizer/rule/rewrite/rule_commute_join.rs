@@ -77,6 +77,8 @@ impl Rule for RuleCommuteJoin {
                     | JoinType::Cross
                     | JoinType::Left
                     | JoinType::Right
+                    | JoinType::LeftSingle
+                    | JoinType::RightSingle
                     | JoinType::LeftSemi
                     | JoinType::RightSemi
                     | JoinType::LeftAnti
@@ -86,7 +88,7 @@ impl Rule for RuleCommuteJoin {
         } else if left_card == right_card {
             matches!(
                 join.join_type,
-                JoinType::Right | JoinType::RightSemi | JoinType::RightAnti
+                JoinType::Right | JoinType::RightSingle | JoinType::RightSemi | JoinType::RightAnti
             )
         } else {
             false

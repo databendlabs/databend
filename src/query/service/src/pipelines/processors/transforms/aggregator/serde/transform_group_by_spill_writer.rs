@@ -38,6 +38,7 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTa
 use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::serialize_group_by;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_data_serialize_milliseconds;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_bytes;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_count;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_milliseconds;
@@ -197,6 +198,7 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
             continue;
         }
 
+        let now = Instant::now();
         let data_block = serialize_group_by(method, inner_table)?;
 
         let begin = write_size;
@@ -209,6 +211,13 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len());
             columns_data.push(column_data);
+        }
+
+        // perf
+        {
+            metrics_inc_aggregate_spill_data_serialize_milliseconds(
+                now.elapsed().as_millis() as u64
+            );
         }
 
         write_data.push(columns_data);

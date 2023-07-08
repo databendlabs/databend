@@ -175,6 +175,31 @@ impl Display for CreateTableStmt {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub uri_location: UriLocation,
+}
+
+impl Display for AttachTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "ATTACH TABLE ")?;
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+
+        write!(f, " FROM {0}", self.uri_location)?;
+
+        Ok(())
+    }
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum CreateTableSource {
@@ -467,6 +492,27 @@ impl Display for VacuumTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct VacuumDropTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub option: VacuumTableOption,
+}
+
+impl Display for VacuumDropTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM DROP TABLE ")?;
+        if self.catalog.is_some() || self.database.is_some() {
+            write!(f, "FROM ")?;
+            write_period_separated_list(f, self.catalog.iter().chain(&self.database))?;
+            write!(f, " ")?;
+        }
+        write!(f, "{}", &self.option)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct OptimizeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -572,10 +618,14 @@ pub struct VacuumTableOption {
 impl Display for VacuumTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if let Some(retain_hours) = &self.retain_hours {
-            write!(f, " RETAIN {} HOURS", retain_hours)?;
+            write!(f, "RETAIN {} HOURS", retain_hours)?;
         }
         if self.dry_run.is_some() {
-            write!(f, " DRY RUN")?;
+            if self.retain_hours.is_some() {
+                write!(f, " DRY RUN")?;
+            } else {
+                write!(f, "DRY RUN")?;
+            }
         }
         Ok(())
     }

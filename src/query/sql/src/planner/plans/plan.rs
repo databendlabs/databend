@@ -34,6 +34,7 @@ use super::DropShareEndpointPlan;
 use super::ModifyTableColumnPlan;
 use super::RenameTableColumnPlan;
 use super::SetOptionsPlan;
+use super::VacuumDropTablePlan;
 use super::VacuumTablePlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy::CopyPlan;
@@ -177,6 +178,7 @@ pub enum Plan {
     TruncateTable(Box<TruncateTablePlan>),
     OptimizeTable(Box<OptimizeTablePlan>),
     VacuumTable(Box<VacuumTablePlan>),
+    VacuumDropTable(Box<VacuumDropTablePlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
     SetOptions(Box<SetOptionsPlan>),
@@ -324,6 +326,7 @@ impl Display for Plan {
             Plan::TruncateTable(_) => write!(f, "TruncateTable"),
             Plan::OptimizeTable(_) => write!(f, "OptimizeTable"),
             Plan::VacuumTable(_) => write!(f, "VacuumTable"),
+            Plan::VacuumDropTable(_) => write!(f, "VacuumDropTable"),
             Plan::AnalyzeTable(_) => write!(f, "AnalyzeTable"),
             Plan::ExistsTable(_) => write!(f, "ExistsTable"),
             Plan::CreateView(_) => write!(f, "CreateView"),
@@ -419,6 +422,7 @@ impl Plan {
             Plan::ShowCreateTable(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
+            Plan::VacuumDropTable(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
@@ -465,6 +469,7 @@ impl Plan {
                 | Plan::ShowGrants(_)
                 | Plan::Presign(_)
                 | Plan::VacuumTable(_)
+                | Plan::VacuumDropTable(_)
                 | Plan::DescDatamaskPolicy(_)
         )
     }

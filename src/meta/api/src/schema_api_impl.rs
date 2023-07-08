@@ -2009,6 +2009,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let mut ret_table_infos = vec![];
 
             for db_info in db_infos {
+                // ignore db create from share
+                if db_info.meta.from_share.is_some() {
+                    continue;
+                }
                 let table_infos = match db_info.meta.drop_on {
                     Some(db_drop_on) => {
                         if let Some(filter_drop_on) = filter_drop_on {
@@ -2070,6 +2074,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 return Err(e);
             }
         };
+
+        // ignore db create from share
+        if db_meta.from_share.is_some() && req.filter.is_some() {
+            return Ok(vec![]);
+        }
 
         do_get_table_history(&self, req, db_id, &db_meta).await
     }
