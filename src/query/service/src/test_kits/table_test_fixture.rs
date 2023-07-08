@@ -63,11 +63,11 @@ use tempfile::TempDir;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-use crate::interpreters::fill_missing_columns;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
+use crate::pipelines::common::fill_missing_columns;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;

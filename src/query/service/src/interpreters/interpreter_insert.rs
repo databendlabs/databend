@@ -49,10 +49,10 @@ use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::interpreters::common::append2table;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::common::append2table;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;

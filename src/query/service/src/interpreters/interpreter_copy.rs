@@ -48,12 +48,12 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
-use crate::interpreters::common::append2table;
-use crate::interpreters::common::append2table_without_commit;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::try_purge_files;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::pipelines::common::append2table;
+use crate::pipelines::common::append2table_without_commit;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::PipelineBuildResult;

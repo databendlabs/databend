@@ -12,19 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod common;
-pub mod executor;
-pub mod processors;
-
-use common_pipeline_core::pipe;
-use common_pipeline_core::pipeline;
-
-mod pipeline_build_res;
-mod pipeline_builder;
-
-pub use pipe::SinkPipeBuilder;
-pub use pipe::SourcePipeBuilder;
-pub use pipe::TransformPipeBuilder;
-pub use pipeline::Pipeline;
-pub use pipeline_build_res::PipelineBuildResult;
-pub use pipeline_builder::PipelineBuilder;
+mod table;
+pub use table::append2table;
+pub use table::append2table_without_commit;
+pub use table::check_referenced_computed_columns;
+pub use table::fill_missing_columns;

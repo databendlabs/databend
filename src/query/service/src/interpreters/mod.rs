@@ -108,10 +108,6 @@ mod interpreter_virtual_columns_drop;
 mod interpreter_virtual_columns_generate;
 
 pub use access::ManagementModeAccess;
-pub use common::append2table;
-pub use common::append2table_without_commit;
-pub use common::check_referenced_computed_columns;
-pub use common::fill_missing_columns;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_call::CallInterpreter;

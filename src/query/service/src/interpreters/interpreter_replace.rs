@@ -26,12 +26,12 @@ use common_sql::plans::Replace;
 use common_sql::NameResolutionContext;
 
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::fill_missing_columns;
 use crate::interpreters::interpreter_copy::CopyInterpreter;
 use crate::interpreters::interpreter_insert::ValueSource;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
+use crate::pipelines::common::fill_missing_columns;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
