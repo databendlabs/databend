@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-
-mod parquet_file;
-mod row_based_file;
-mod stage_table;
-
-pub use stage_table::StageTable;
+mod buffers;
+pub(crate) mod limit_file_size_processor;
+mod pipeline;
+mod serialize_processor;
+pub(crate) mod sink_processor;
+pub(crate) use pipeline::append_data_to_row_based_files;
