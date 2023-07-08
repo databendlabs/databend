@@ -232,8 +232,12 @@ impl Session {
                 TokenKind::Comment => {
                     in_comment = true;
                 }
-                TokenKind::Newline | TokenKind::EOI => {
+                TokenKind::EOI => {
                     in_comment = false;
+                }
+                TokenKind::Newline => {
+                    in_comment = false;
+                    self.query.push(' ');
                 }
                 TokenKind::CommentBlockStart | TokenKind::CommentBlockEnd => {
                     unreachable!("Comment block should be handled before")
