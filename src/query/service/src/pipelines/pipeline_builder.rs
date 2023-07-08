@@ -91,7 +91,7 @@ use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::interpreters::append_data_and_set_finish;
+use crate::interpreters::copy_commit_data_and_set_finish;
 use crate::interpreters::fill_missing_columns;
 use crate::interpreters::PlanParam;
 use crate::pipelines::processors::transforms::build_partition_bucket;
@@ -225,11 +225,11 @@ impl PipelineBuilder {
         let start = Instant::now();
         stage_table.read_data(table_ctx, &distributed_plan.source, &mut self.main_pipeline)?;
         // append data
-        append_data_and_set_finish(
+        copy_commit_data_and_set_finish(
+            ctx,
             &mut self.main_pipeline,
             distributed_plan.required_source_schema.clone(),
             PlanParam::DistributedCopyIntoTable(distributed_plan.clone()),
-            ctx,
             to_table,
             distributed_plan.files.clone(),
             start,

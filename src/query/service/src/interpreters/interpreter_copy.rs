@@ -315,11 +315,11 @@ impl CopyInterpreter {
             (build_res, plan.required_source_schema.clone(), files)
         };
 
-        append_data_and_set_finish(
+        copy_commit_data_and_set_finish(
+            ctx,
             &mut build_res.main_pipeline,
             source_schema,
             PlanParam::CopyIntoTablePlanOption(plan.clone()),
-            ctx,
             to_table,
             files,
             start,
@@ -481,11 +481,11 @@ fn fill_const_columns(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn append_data_and_set_finish(
+pub fn copy_commit_data_and_set_finish(
+    ctx: Arc<QueryContext>,
     main_pipeline: &mut Pipeline,
     source_schema: Arc<DataSchema>,
     plan_option: PlanParam,
-    ctx: Arc<QueryContext>,
     to_table: Arc<dyn Table>,
     files: Vec<StageFileInfo>,
     start: Instant,
