@@ -67,7 +67,7 @@ use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
-use crate::pipelines::common::build_fill_missing_columns_pipeline;
+use crate::pipelines::builders::build_fill_missing_columns_pipeline;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;

@@ -38,9 +38,9 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
-use crate::pipelines::common::build_append2table_pipeline;
-use crate::pipelines::common::build_append2table_without_commit_pipeline;
-use crate::pipelines::common::try_purge_files;
+use crate::pipelines::builders::build_append2table_pipeline;
+use crate::pipelines::builders::build_append2table_without_commit_pipeline;
+use crate::pipelines::builders::try_purge_files;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::sessions::QueryContext;
