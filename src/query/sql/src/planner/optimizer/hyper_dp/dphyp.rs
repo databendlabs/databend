@@ -118,11 +118,13 @@ impl DPhpy {
             // If it's a subquery, start a new dphyp
             let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
             let (new_s_expr, optimized) = dphyp.optimize(s_expr)?;
-            let relation_idx = self.join_relations.len() as IndexType;
-            for table_index in dphyp.table_index_map.keys() {
-                self.table_index_map.insert(*table_index, relation_idx);
+            if optimized {
+                let relation_idx = self.join_relations.len() as IndexType;
+                for table_index in dphyp.table_index_map.keys() {
+                    self.table_index_map.insert(*table_index, relation_idx);
+                }
+                self.join_relations.push(JoinRelation::new(&new_s_expr));
             }
-            self.join_relations.push(JoinRelation::new(&new_s_expr));
             return Ok((new_s_expr, optimized));
         }
 
@@ -153,10 +155,10 @@ impl DPhpy {
                 let left_op = s_expr.child(0)?.plan.as_ref();
                 let right_op = s_expr.child(1)?.plan.as_ref();
                 // If left or right child is not a scan, it's a subquery
-                if !matches!(left_op, RelOperator::Scan(_)) {
+                if matches!(left_op, RelOperator::EvalScalar(_)) {
                     left_is_subquery = true;
                 }
-                if !matches!(right_op, RelOperator::Scan(_)) {
+                if matches!(right_op, RelOperator::EvalScalar(_)) {
                     right_is_subquery = true;
                 }
                 // Add join conditions

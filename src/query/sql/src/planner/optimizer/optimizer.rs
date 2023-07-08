@@ -31,8 +31,8 @@ use crate::optimizer::runtime_filter::try_add_runtime_filter_nodes;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::HeuristicOptimizer;
 use crate::optimizer::SExpr;
-use crate::optimizer::COMMUTE_JOIN_RULES;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
+use crate::optimizer::RESIDUAL_RULES;
 use crate::plans::CopyPlan;
 use crate::plans::Plan;
 use crate::BindContext;
@@ -175,7 +175,7 @@ pub fn optimize_query(
             DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result.clone()))?;
         if optimized {
             dphyp_optimized = true;
-            result = heuristic.optimize((*dp_res).clone(), &COMMUTE_JOIN_RULES)?;
+            result = heuristic.optimize((*dp_res).clone(), &RESIDUAL_RULES)?;
         }
     }
     let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, dphyp_optimized)?;
