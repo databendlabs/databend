@@ -16,16 +16,10 @@ use std::sync::Arc;
 
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ComputedExpr;
 use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::TableSchemaRef;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
-use common_sql::parse_computed_expr;
 
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::TransformResortAddOn;
@@ -33,9 +27,9 @@ use crate::sessions::QueryContext;
 
 pub fn fill_missing_columns(
     ctx: Arc<QueryContext>,
+    pipeline: &mut Pipeline,
     table: Arc<dyn Table>,
     source_schema: DataSchemaRef,
-    pipeline: &mut Pipeline,
 ) -> Result<()> {
     let table_default_schema = &table.schema().remove_computed_fields();
     let table_computed_schema = &table.schema().remove_virtual_computed_fields();
@@ -74,14 +68,14 @@ pub fn fill_missing_columns(
 
 pub fn append2table(
     ctx: Arc<QueryContext>,
+    main_pipeline: &mut Pipeline,
     table: Arc<dyn Table>,
     source_schema: DataSchemaRef,
-    main_pipeline: &mut Pipeline,
     copied_files: Option<UpsertTableCopiedFileReq>,
     overwrite: bool,
     append_mode: AppendMode,
 ) -> Result<()> {
-    fill_missing_columns(ctx.clone(), table.clone(), source_schema, main_pipeline)?;
+    fill_missing_columns(ctx.clone(), main_pipeline, table.clone(), source_schema)?;
 
     table.append_data(ctx.clone(), main_pipeline, append_mode)?;
 
@@ -92,45 +86,14 @@ pub fn append2table(
 
 pub fn append2table_without_commit(
     ctx: Arc<QueryContext>,
+    main_pipeline: &mut Pipeline,
     table: Arc<dyn Table>,
     source_schema: DataSchemaRef,
-    main_pipeline: &mut Pipeline,
     append_mode: AppendMode,
 ) -> Result<()> {
-    fill_missing_columns(ctx.clone(), table.clone(), source_schema, main_pipeline)?;
+    fill_missing_columns(ctx.clone(), main_pipeline, table.clone(), source_schema)?;
 
     table.append_data(ctx, main_pipeline, append_mode)?;
 
-    Ok(())
-}
-
-pub fn check_referenced_computed_columns(
-    ctx: Arc<dyn TableContext>,
-    table_schema: TableSchemaRef,
-    column: &str,
-) -> Result<()> {
-    let fields = table_schema
-        .fields()
-        .iter()
-        .filter(|f| f.name != column)
-        .map(|f| f.into())
-        .collect::<Vec<_>>();
-    let schema = DataSchemaRefExt::create(fields);
-
-    for f in schema.fields() {
-        if let Some(computed_expr) = f.computed_expr() {
-            let expr = match computed_expr {
-                ComputedExpr::Stored(expr) => expr.clone(),
-                ComputedExpr::Virtual(expr) => expr.clone(),
-            };
-            if parse_computed_expr(ctx.clone(), schema.clone(), &expr).is_err() {
-                return Err(ErrorCode::ColumnReferencedByComputedColumn(format!(
-                    "column `{}` is referenced by computed column `{}`",
-                    column,
-                    &f.name()
-                )));
-            }
-        }
-    }
     Ok(())
 }

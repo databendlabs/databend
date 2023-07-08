@@ -23,5 +23,4 @@ pub use copy::CopyPlanParam;
 pub use stage::try_purge_files;
 pub use table::append2table;
 pub use table::append2table_without_commit;
-pub use table::check_referenced_computed_columns;
 pub use table::fill_missing_columns;

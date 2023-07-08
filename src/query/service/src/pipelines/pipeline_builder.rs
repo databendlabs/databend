@@ -1386,9 +1386,9 @@ impl PipelineBuilder {
         let source_schema = insert_schema;
         fill_missing_columns(
             self.ctx.clone(),
+            &mut self.main_pipeline,
             table.clone(),
             source_schema.clone(),
-            &mut self.main_pipeline,
         )?;
 
         table.append_data(

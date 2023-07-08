@@ -534,9 +534,9 @@ impl TestFixture {
         let data_schema: DataSchemaRef = Arc::new(source_schema.into());
         fill_missing_columns(
             self.ctx.clone(),
+            &mut build_res.main_pipeline,
             table.clone(),
             data_schema,
-            &mut build_res.main_pipeline,
         )?;
 
         table.append_data(

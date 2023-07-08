@@ -78,9 +78,9 @@ impl Interpreter for ReplaceInterpreter {
 
         fill_missing_columns(
             self.ctx.clone(),
+            &mut pipeline.main_pipeline,
             table.clone(),
             self.plan.schema(),
-            &mut pipeline.main_pipeline,
         )?;
 
         let on_conflict_fields = plan.on_conflict_fields.clone();

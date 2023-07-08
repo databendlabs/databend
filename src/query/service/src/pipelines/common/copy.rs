@@ -125,9 +125,9 @@ pub fn copy_append_data_and_set_finish(
             if use_commit {
                 append2table(
                     ctx.clone(),
+                    main_pipeline,
                     to_table,
                     plan_required_values_schema,
-                    main_pipeline,
                     None,
                     overwrite,
                     AppendMode::Copy,
@@ -135,9 +135,9 @@ pub fn copy_append_data_and_set_finish(
             } else {
                 append2table_without_commit(
                     ctx.clone(),
+                    main_pipeline,
                     to_table,
                     plan_required_values_schema,
-                    main_pipeline,
                     AppendMode::Copy,
                 )?
             }
@@ -157,9 +157,9 @@ pub fn copy_append_data_and_set_finish(
                 )?;
                 append2table(
                     ctx.clone(),
+                    main_pipeline,
                     to_table,
                     plan_required_values_schema,
-                    main_pipeline,
                     copied_files,
                     false,
                     AppendMode::Copy,
@@ -167,9 +167,9 @@ pub fn copy_append_data_and_set_finish(
             } else {
                 append2table_without_commit(
                     ctx.clone(),
+                    main_pipeline,
                     to_table,
                     plan_required_values_schema,
-                    main_pipeline,
                     AppendMode::Copy,
                 )?
             }

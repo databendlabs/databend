@@ -13,6 +13,9 @@
 // limitations under the License.
 
 mod grant;
+mod table;
 mod util;
+
 pub use grant::validate_grant_object_exists;
+pub use table::check_referenced_computed_columns;
 pub use util::check_deduplicate_label;

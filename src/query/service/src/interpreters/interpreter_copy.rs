@@ -128,9 +128,9 @@ impl CopyInterpreter {
         let table = StageTable::try_create(stage_table_info)?;
         append2table(
             self.ctx.clone(),
+            &mut build_res.main_pipeline,
             table,
             data_schema,
-            &mut build_res.main_pipeline,
             None,
             false,
             AppendMode::Normal,
