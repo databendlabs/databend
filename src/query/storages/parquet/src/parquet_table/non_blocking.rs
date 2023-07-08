@@ -68,6 +68,7 @@ impl ParquetTable {
             stage_info,
             files_info,
             files_to_read,
+            schema_from: first_file,
         }))
     }
 
