@@ -35,6 +35,7 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Aggreg
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::serialize_group_by;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_data_serialize_milliseconds;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_bytes;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_count;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_milliseconds;
@@ -182,11 +183,17 @@ fn serialize_spill_file<Method: HashMethodBounds>(
     let data_block = serialize_group_by(method, payload)?;
     let columns = get_columns(data_block);
 
+    let now = Instant::now();
     let mut columns_data = Vec::with_capacity(columns.len());
     for column in columns.into_iter() {
         let column = column.value.as_column().unwrap();
         let column_data = serialize_column(column);
         columns_data.push(column_data);
+    }
+
+    // perf
+    {
+        metrics_inc_aggregate_spill_data_serialize_milliseconds(now.elapsed().as_millis() as u64);
     }
 
     Ok((bucket, columns_data))

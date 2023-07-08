@@ -37,6 +37,7 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Aggreg
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SpilledPayload;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_data_deserialize_milliseconds;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_read_bytes;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_read_count;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_read_milliseconds;
@@ -280,9 +281,18 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
     fn deserialize(payload: SpilledPayload, data: Vec<u8>) -> AggregateMeta<Method, V> {
         let mut begin = 0;
         let mut columns = Vec::with_capacity(payload.columns_layout.len());
+
+        let now = Instant::now();
         for column_layout in payload.columns_layout {
             columns.push(deserialize_column(&data[begin..begin + column_layout]).unwrap());
             begin += column_layout;
+        }
+
+        // perf
+        {
+            metrics_inc_aggregate_spill_data_deserialize_milliseconds(
+                now.elapsed().as_millis() as u64
+            );
         }
 
         AggregateMeta::<Method, V>::Serialized(SerializedPayload {
