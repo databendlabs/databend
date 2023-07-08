@@ -23,7 +23,7 @@ use common_sql::plans::DropTableColumnPlan;
 use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
 
-use crate::interpreters::check_referenced_computed_columns;
+use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;

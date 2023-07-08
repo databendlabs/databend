@@ -108,18 +108,12 @@ mod interpreter_virtual_columns_drop;
 mod interpreter_virtual_columns_generate;
 
 pub use access::ManagementModeAccess;
-pub use common::append2table;
-pub use common::append2table_without_commit;
-pub use common::check_referenced_computed_columns;
-pub use common::fill_missing_columns;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_call::CallInterpreter;
 pub use interpreter_cluster_key_alter::AlterTableClusterKeyInterpreter;
 pub use interpreter_cluster_key_drop::DropTableClusterKeyInterpreter;
 pub use interpreter_clustering_history::InterpreterClusteringHistory;
-pub use interpreter_copy::append_data_and_set_finish;
-pub use interpreter_copy::PlanParam;
 pub use interpreter_data_mask_create::CreateDataMaskInterpreter;
 pub use interpreter_data_mask_desc::DescDataMaskInterpreter;
 pub use interpreter_data_mask_drop::DropDataMaskInterpreter;

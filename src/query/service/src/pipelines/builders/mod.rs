@@ -12,19 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod builders;
-pub mod executor;
-pub mod processors;
+mod copy;
+mod stage;
+mod table;
 
-use common_pipeline_core::pipe;
-use common_pipeline_core::pipeline;
-
-mod pipeline_build_res;
-mod pipeline_builder;
-
-pub use pipe::SinkPipeBuilder;
-pub use pipe::SourcePipeBuilder;
-pub use pipe::TransformPipeBuilder;
-pub use pipeline::Pipeline;
-pub use pipeline_build_res::PipelineBuildResult;
-pub use pipeline_builder::PipelineBuilder;
+pub use copy::build_append_data_with_finish_pipeline;
+pub use copy::build_upsert_copied_files_to_meta_req;
+pub use copy::fill_const_columns;
+pub use copy::CopyPlanParam;
+pub use stage::try_purge_files;
+pub use table::build_append2table_pipeline;
+pub use table::build_append2table_without_commit_pipeline;
+pub use table::build_fill_missing_columns_pipeline;
