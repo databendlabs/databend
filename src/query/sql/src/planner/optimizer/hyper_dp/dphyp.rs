@@ -154,11 +154,26 @@ impl DPhpy {
                 let mut right_is_subquery = false;
                 let left_op = s_expr.child(0)?.plan.as_ref();
                 let right_op = s_expr.child(1)?.plan.as_ref();
-                // If left or right child is not a scan, it's a subquery
-                if matches!(left_op, RelOperator::EvalScalar(_)) {
+                if matches!(
+                    left_op,
+                    RelOperator::EvalScalar(_)
+                        | RelOperator::Aggregate(_)
+                        | RelOperator::Sort(_)
+                        | RelOperator::Limit(_)
+                        | RelOperator::ProjectSet(_)
+                        | RelOperator::Window(_)
+                ) {
                     left_is_subquery = true;
                 }
-                if matches!(right_op, RelOperator::EvalScalar(_)) {
+                if matches!(
+                    right_op,
+                    RelOperator::EvalScalar(_)
+                        | RelOperator::Aggregate(_)
+                        | RelOperator::Sort(_)
+                        | RelOperator::Limit(_)
+                        | RelOperator::ProjectSet(_)
+                        | RelOperator::Window(_)
+                ) {
                     right_is_subquery = true;
                 }
                 // Add join conditions
@@ -201,9 +216,10 @@ impl DPhpy {
             | RelOperator::Sort(_)
             | RelOperator::Limit(_)
             | RelOperator::EvalScalar(_)
+            | RelOperator::Window(_)
             | RelOperator::Filter(_) => {
                 if join_child {
-                    // If plan in filter, save it
+                    // If plan is filter, save it
                     if let RelOperator::Filter(op) = s_expr.plan.as_ref() {
                         self.filters.insert(op.clone());
                     }
@@ -236,7 +252,7 @@ impl DPhpy {
             RelOperator::Exchange(_)
             | RelOperator::Pattern(_)
             | RelOperator::RuntimeFilterSource(_) => unreachable!(),
-            RelOperator::DummyTableScan(_) | RelOperator::Window(_) => Ok((s_expr, false)),
+            RelOperator::DummyTableScan(_) => Ok((s_expr, true)),
         }
     }
 
