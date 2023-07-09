@@ -22,6 +22,7 @@ use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_storages_system::BackgroundJobTable;
 use common_storages_system::BackgroundTaskTable;
+use common_storages_system::BacktraceTable;
 use common_storages_system::BuildOptionsTable;
 use common_storages_system::CachesTable;
 use common_storages_system::CatalogsTable;
@@ -109,6 +110,7 @@ impl SystemDatabase {
             QueryProfileTable::create(sys_db_meta.next_table_id()),
             BackgroundTaskTable::create(sys_db_meta.next_table_id()),
             BackgroundJobTable::create(sys_db_meta.next_table_id()),
+            BacktraceTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

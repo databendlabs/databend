@@ -85,8 +85,8 @@ impl RowConverter {
         }
 
         let rows = builder.build();
-        debug_assert_eq!(*rows.offsets.last().unwrap(), rows.data.len() as u64);
-        debug_assert!(rows.offsets.windows(2).all(|w| w[0] <= w[1]));
+        debug_assert_eq!(*rows.offsets().last().unwrap(), rows.data().len() as u64);
+        debug_assert!(rows.offsets().windows(2).all(|w| w[0] <= w[1]));
         rows
     }
 

@@ -32,5 +32,6 @@ pub mod mem_allocator;
 pub mod rangemap;
 pub mod runtime;
 
+pub use runtime::dump_backtrace;
 pub use runtime::match_join_handle;
 pub use runtime::set_alloc_error_hook;

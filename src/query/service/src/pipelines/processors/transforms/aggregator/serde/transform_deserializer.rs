@@ -91,6 +91,7 @@ where
                             false => AggregateMeta::<Method, V>::create_spilled(
                                 meta.bucket,
                                 meta.location.unwrap(),
+                                meta.data_range.unwrap(),
                                 meta.columns_layout,
                             ),
                         },

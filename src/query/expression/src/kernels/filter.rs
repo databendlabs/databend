@@ -178,7 +178,7 @@ impl Column {
                 Column::Tuple(fields)
             }
             Column::Variant(column) => {
-                let bytes_per_row = column.data.len() / filter.len().max(1);
+                let bytes_per_row = column.data().len() / filter.len().max(1);
                 let data_capacity = (filter.len() - filter.unset_bits()) * bytes_per_row;
 
                 Self::filter_scalar_types::<VariantType>(
@@ -324,8 +324,8 @@ impl Column {
         if selected == values.len() {
             return values.clone();
         }
-        let data = values.data.as_slice();
-        let offsets = values.offsets.as_slice();
+        let data = values.data().as_slice();
+        let offsets = values.offsets().as_slice();
 
         let mut res_offsets = Vec::with_capacity(selected + 1);
         res_offsets.push(0);
@@ -394,9 +394,6 @@ impl Column {
             pos += 1;
         }
 
-        StringColumn {
-            data: res_data.into(),
-            offsets: res_offsets.into(),
-        }
+        StringColumn::new(res_data.into(), res_offsets.into())
     }
 }
