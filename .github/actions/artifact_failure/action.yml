@@ -22,7 +22,6 @@ runs:
         tar -zcf target/failure-${{ inputs.name }}.tar.gz \
            nohup.out                                          \
            .databend/                                         \
-           ./**/.databend                               \
     - uses: actions/upload-artifact@v3
       with:
         name: ${{ inputs.name }}
