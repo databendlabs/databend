@@ -14,7 +14,6 @@
 
 use std::convert::TryFrom;
 use std::sync::Arc;
-use std::time::Instant;
 
 use async_channel::Receiver;
 use common_catalog::table::AppendMode;
@@ -222,7 +221,6 @@ impl PipelineBuilder {
         stage_table.set_block_thresholds(distributed_plan.thresholds);
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
-        let start = Instant::now();
         stage_table.read_data(table_ctx, &distributed_plan.source, &mut self.main_pipeline)?;
         // append data
         build_append_data_with_finish_pipeline(
@@ -232,7 +230,6 @@ impl PipelineBuilder {
             CopyPlanParam::DistributedCopyIntoTable(distributed_plan.clone()),
             to_table,
             distributed_plan.files.clone(),
-            start,
             false,
         )?;
         Ok(())

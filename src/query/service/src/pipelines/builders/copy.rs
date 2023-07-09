@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Instant;
 
 use chrono::Utc;
 use common_base::runtime::GlobalIORuntime;
@@ -34,13 +33,14 @@ use common_sql::executor::DistributedCopyIntoTable;
 use common_sql::plans::CopyIntoTableMode;
 use common_sql::plans::CopyIntoTablePlan;
 use common_storage::StageFileInfo;
+use common_storages_fuse::io::Files;
+use common_storages_stage::StageTable;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 
 use crate::pipelines::builders::build_append2table_pipeline;
 use crate::pipelines::builders::build_append2table_without_commit_pipeline;
-use crate::pipelines::builders::try_purge_files;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::sessions::QueryContext;
@@ -58,7 +58,6 @@ pub fn build_append_data_with_finish_pipeline(
     plan_option: CopyPlanParam,
     to_table: Arc<dyn Table>,
     files: Vec<StageFileInfo>,
-    start: Instant,
     use_commit: bool,
 ) -> Result<()> {
     let plan_required_source_schema: DataSchemaRef;
@@ -88,10 +87,6 @@ pub fn build_append_data_with_finish_pipeline(
             local_id = plan.local_node_id;
         }
     }
-
-    debug!("source schema:{:?}", source_schema);
-    debug!("required source schema:{:?}", plan_required_source_schema);
-    debug!("required values schema:{:?}", plan_required_values_schema);
 
     if source_schema != plan_required_source_schema {
         // only parquet need cast
@@ -208,20 +203,11 @@ pub fn build_append_data_with_finish_pipeline(
                             try_purge_files(ctx.clone(), &stage_info_clone, &files).await;
                         }
 
-                        // Status.
-                        {
-                            info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
-                        }
-
                         Ok(())
                     })?;
                 }
                 Some(error) => {
-                    error!(
-                        "copy failed, elapsed:{}, reason: {}",
-                        start.elapsed().as_secs(),
-                        error
-                    );
+                    error!("copy failed, reason: {}", error);
                 }
             }
             Ok(())
@@ -283,7 +269,7 @@ pub fn build_upsert_copied_files_to_meta_req(
     Ok(upsert_copied_files_request)
 }
 
-pub fn fill_const_columns(
+fn fill_const_columns(
     ctx: Arc<QueryContext>,
     pipeline: &mut Pipeline,
     input_schema: DataSchemaRef,
@@ -301,4 +287,29 @@ pub fn fill_const_columns(
         )
     })?;
     Ok(())
+}
+
+#[async_backtrace::framed]
+async fn try_purge_files(
+    ctx: Arc<QueryContext>,
+    stage_info: &StageInfo,
+    stage_files: &[StageFileInfo],
+) {
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    let op = StageTable::get_op(stage_info);
+    match op {
+        Ok(op) => {
+            let file_op = Files::create(table_ctx, op);
+            let files = stage_files
+                .iter()
+                .map(|v| v.path.clone())
+                .collect::<Vec<_>>();
+            if let Err(e) = file_op.remove_file_in_batch(&files).await {
+                error!("Failed to delete file: {:?}, error: {}", files, e);
+            }
+        }
+        Err(e) => {
+            error!("Failed to get stage table op, error: {}", e);
+        }
+    }
 }

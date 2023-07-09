@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Instant;
 
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
@@ -44,7 +43,6 @@ use crate::interpreters::SelectInterpreter;
 use crate::pipelines::builders::build_append2table_pipeline;
 use crate::pipelines::builders::build_append_data_with_finish_pipeline;
 use crate::pipelines::builders::build_upsert_copied_files_to_meta_req;
-use crate::pipelines::builders::try_purge_files;
 use crate::pipelines::builders::CopyPlanParam;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_distributed_pipeline;
@@ -136,32 +134,6 @@ impl CopyInterpreter {
             AppendMode::Normal,
         )?;
         Ok(build_res)
-    }
-
-    #[async_backtrace::framed]
-    async fn try_purge_files(
-        ctx: Arc<QueryContext>,
-        stage_info: &StageInfo,
-        stage_file_infos: &[StageFileInfo],
-    ) {
-        let purge_start = Instant::now();
-        let num_copied_files = stage_file_infos.len();
-
-        // Status.
-        {
-            let status = format!("begin to purge files:{}", num_copied_files);
-            ctx.set_status_info(&status);
-            info!(status);
-        }
-
-        try_purge_files(ctx.clone(), stage_info, stage_file_infos).await;
-
-        // Status.
-        info!(
-            "end to purge files:{}, elapsed:{}",
-            num_copied_files,
-            purge_start.elapsed().as_secs()
-        );
     }
 
     fn set_status(&self, status: &str) {
@@ -267,7 +239,6 @@ impl CopyInterpreter {
         &self,
         plan: &CopyIntoTablePlan,
     ) -> Result<PipelineBuildResult> {
-        let start = Instant::now();
         let ctx = self.ctx.clone();
         let to_table = ctx
             .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
@@ -307,7 +278,6 @@ impl CopyInterpreter {
             CopyPlanParam::CopyIntoTablePlanOption(plan.clone()),
             to_table,
             files,
-            start,
             true,
         )?;
         Ok(build_res)
