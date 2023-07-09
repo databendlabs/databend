@@ -99,51 +99,51 @@ Exchange
     ├── estimated rows: 6.00
     └── HashJoin
         ├── join type: INNER
-        ├── build keys: [t.b (#1)]
-        ├── probe keys: [t2.number (#3)]
+        ├── build keys: [t1.number (#2)]
+        ├── probe keys: [t.a (#0)]
         ├── filters: []
         ├── estimated rows: 6.00
         ├── Exchange(Build)
-        │   ├── exchange type: Hash(t.b (#1))
-        │   └── HashJoin
-        │       ├── join type: INNER
-        │       ├── build keys: [t.a (#0)]
-        │       ├── probe keys: [t1.number (#2)]
-        │       ├── filters: []
-        │       ├── estimated rows: 2.00
-        │       ├── Exchange(Build)
-        │       │   ├── exchange type: Hash(t.a (#0))
-        │       │   └── EvalScalar
-        │       │       ├── expressions: [numbers.number (#0), numbers.number (#0) + 1]
-        │       │       ├── estimated rows: 1.00
-        │       │       └── TableScan
-        │       │           ├── table: default.system.numbers
-        │       │           ├── read rows: 1
-        │       │           ├── read bytes: 8
-        │       │           ├── partitions total: 1
-        │       │           ├── partitions scanned: 1
-        │       │           ├── push downs: [filters: [], limit: NONE]
-        │       │           └── estimated rows: 1.00
-        │       └── Exchange(Probe)
-        │           ├── exchange type: Hash(t1.number (#2))
-        │           └── TableScan
-        │               ├── table: default.system.numbers
-        │               ├── read rows: 2
-        │               ├── read bytes: 16
-        │               ├── partitions total: 1
-        │               ├── partitions scanned: 1
-        │               ├── push downs: [filters: [], limit: NONE]
-        │               └── estimated rows: 2.00
+        │   ├── exchange type: Hash(t1.number (#2))
+        │   └── TableScan
+        │       ├── table: default.system.numbers
+        │       ├── read rows: 2
+        │       ├── read bytes: 16
+        │       ├── partitions total: 1
+        │       ├── partitions scanned: 1
+        │       ├── push downs: [filters: [], limit: NONE]
+        │       └── estimated rows: 2.00
         └── Exchange(Probe)
-            ├── exchange type: Hash(t2.number (#3))
-            └── TableScan
-                ├── table: default.system.numbers
-                ├── read rows: 3
-                ├── read bytes: 24
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 3.00
+            ├── exchange type: Hash(t.a (#0))
+            └── HashJoin
+                ├── join type: INNER
+                ├── build keys: [t.b (#1)]
+                ├── probe keys: [t2.number (#3)]
+                ├── filters: []
+                ├── estimated rows: 3.00
+                ├── Exchange(Build)
+                │   ├── exchange type: Hash(t.b (#1))
+                │   └── EvalScalar
+                │       ├── expressions: [numbers.number (#0), numbers.number (#0) + 1]
+                │       ├── estimated rows: 1.00
+                │       └── TableScan
+                │           ├── table: default.system.numbers
+                │           ├── read rows: 1
+                │           ├── read bytes: 8
+                │           ├── partitions total: 1
+                │           ├── partitions scanned: 1
+                │           ├── push downs: [filters: [], limit: NONE]
+                │           └── estimated rows: 1.00
+                └── Exchange(Probe)
+                    ├── exchange type: Hash(t2.number (#3))
+                    └── TableScan
+                        ├── table: default.system.numbers
+                        ├── read rows: 3
+                        ├── read bytes: 24
+                        ├── partitions total: 1
+                        ├── partitions scanned: 1
+                        ├── push downs: [filters: [], limit: NONE]
+                        └── estimated rows: 3.00
 
 query T
 explain select * from (select sum(number) as number from numbers(1) group by number) t, numbers(2) t1 where t.number = t1.number
