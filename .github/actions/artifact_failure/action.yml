@@ -19,7 +19,7 @@ runs:
             docker logs "$line" > .databend/docker/"$line".log
         done
 
-        tar -zcf target/failure-${{ inputs.name }}.tar.gz .databend/                                         
+        tar -zcf target/failure-${{ inputs.name }}.tar.gz .databend                                         
     - uses: actions/upload-artifact@v3
       with:
         name: ${{ inputs.name }}
