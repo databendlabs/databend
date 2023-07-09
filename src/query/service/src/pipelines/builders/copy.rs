@@ -89,7 +89,7 @@ pub fn build_local_append_data_pipeline(
 
     let stage_info = plan_stage_table_info.stage_info;
     let write_mode = plan_write_mode;
-    let mut purge = true;
+    let mut purge = false;
     match write_mode {
         CopyIntoTableMode::Insert { overwrite } => {
             build_append2table_pipeline(
@@ -103,8 +103,8 @@ pub fn build_local_append_data_pipeline(
             )?;
         }
         CopyIntoTableMode::Copy => {
-            if !stage_info.copy_options.purge {
-                purge = false;
+            if stage_info.copy_options.purge {
+                purge = true;
             }
 
             let copied_files = build_upsert_copied_files_to_meta_req(
@@ -147,6 +147,7 @@ pub fn build_distributed_append_data_pipeline(
     plan: DistributedCopyIntoTable,
     source_schema: Arc<DataSchema>,
     to_table: Arc<dyn Table>,
+    files: Vec<StageFileInfo>,
 ) -> Result<()> {
     let plan_required_source_schema = plan.required_source_schema;
     let plan_required_values_schema = plan.required_values_schema;
@@ -182,6 +183,7 @@ pub fn build_distributed_append_data_pipeline(
     let stage_info = plan_stage_table_info.stage_info;
     // Only append to table, not commit.
     let write_mode = plan_write_mode;
+    let mut purge = false;
     match write_mode {
         CopyIntoTableMode::Insert { overwrite: _ } => build_append2table_without_commit_pipeline(
             ctx.clone(),
@@ -190,13 +192,19 @@ pub fn build_distributed_append_data_pipeline(
             plan_required_values_schema,
             AppendMode::Copy,
         )?,
-        CopyIntoTableMode::Copy => build_append2table_without_commit_pipeline(
-            ctx.clone(),
-            main_pipeline,
-            to_table,
-            plan_required_values_schema,
-            AppendMode::Copy,
-        )?,
+        CopyIntoTableMode::Copy => {
+            if stage_info.copy_options.purge {
+                purge = true;
+            }
+
+            build_append2table_without_commit_pipeline(
+                ctx.clone(),
+                main_pipeline,
+                to_table,
+                plan_required_values_schema,
+                AppendMode::Copy,
+            )?
+        }
         CopyIntoTableMode::Replace => {}
     }
 
@@ -206,8 +214,8 @@ pub fn build_distributed_append_data_pipeline(
         main_pipeline,
         coordinator_node_id,
         stage_info,
-        vec![],
-        false,
+        files,
+        purge,
     )
 }
 

@@ -228,6 +228,7 @@ impl PipelineBuilder {
             distributed_plan.clone(),
             distributed_plan.required_source_schema.clone(),
             to_table,
+            distributed_plan.files.clone(),
         )?;
 
         Ok(())
