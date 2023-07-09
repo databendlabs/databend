@@ -160,9 +160,9 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("max_execute_time", DefaultSettingValue {
+                ("max_execute_time_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum query execution time in milliseconds. Setting it to 0 means no limit.",
+                    desc: "Sets the maximum query execution time in seconds. Setting it to 0 means no limit.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
