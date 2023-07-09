@@ -87,14 +87,11 @@ pub fn build_local_append_data_pipeline(
         )?;
     }
 
+    let mut purge = true;
     let stage_info = plan_stage_table_info.stage_info;
     let write_mode = plan_write_mode;
-    let mut purge = false;
     match write_mode {
         CopyIntoTableMode::Insert { overwrite } => {
-            // Purge by default.
-            purge = true;
-
             build_append2table_pipeline(
                 ctx.clone(),
                 main_pipeline,
@@ -105,9 +102,10 @@ pub fn build_local_append_data_pipeline(
                 AppendMode::Copy,
             )?;
         }
+        CopyIntoTableMode::Replace => {}
         CopyIntoTableMode::Copy => {
-            if stage_info.copy_options.purge {
-                purge = true;
+            if !stage_info.copy_options.purge {
+                purge = false;
             }
 
             let copied_files = build_upsert_copied_files_to_meta_req(
@@ -127,7 +125,6 @@ pub fn build_local_append_data_pipeline(
                 AppendMode::Copy,
             )?;
         }
-        CopyIntoTableMode::Replace => {}
     }
 
     // set finished callback to pipeline.
@@ -176,26 +173,22 @@ pub fn build_distributed_append_data_pipeline(
         )?;
     }
 
+    let mut purge = true;
     let stage_info = plan_stage_table_info.stage_info;
     // Only append to table, not commit.
     let write_mode = plan_write_mode;
-    let mut purge = false;
     match write_mode {
-        CopyIntoTableMode::Insert { overwrite: _ } => {
-            // Purge by default.
-            purge = true;
-
-            build_append2table_without_commit_pipeline(
-                ctx.clone(),
-                main_pipeline,
-                to_table,
-                plan_required_values_schema,
-                AppendMode::Copy,
-            )?
-        }
+        CopyIntoTableMode::Insert { overwrite: _ } => build_append2table_without_commit_pipeline(
+            ctx.clone(),
+            main_pipeline,
+            to_table,
+            plan_required_values_schema,
+            AppendMode::Copy,
+        )?,
+        CopyIntoTableMode::Replace => {}
         CopyIntoTableMode::Copy => {
-            if stage_info.copy_options.purge {
-                purge = true;
+            if !stage_info.copy_options.purge {
+                purge = false;
             }
 
             build_append2table_without_commit_pipeline(
@@ -206,7 +199,6 @@ pub fn build_distributed_append_data_pipeline(
                 AppendMode::Copy,
             )?
         }
-        CopyIntoTableMode::Replace => {}
     }
 
     // set finished callback to pipeline.
