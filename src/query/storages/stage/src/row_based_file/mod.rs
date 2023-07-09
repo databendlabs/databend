@@ -12,14 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-
-use crate::table_functions::string_value;
-use crate::table_functions::TableArgs;
-
-pub fn parse_func_history_args(table_args: &TableArgs) -> Result<(String, String)> {
-    let args = table_args.expect_all_positioned("fuse_blocks", Some(2))?;
-    let db = string_value(&args[0])?;
-    let tbl = string_value(&args[1])?;
-    Ok((db, tbl))
-}
+mod buffers;
+pub(crate) mod limit_file_size_processor;
+mod pipeline;
+mod serialize_processor;
+pub(crate) mod sink_processor;
+pub(crate) use pipeline::append_data_to_row_based_files;

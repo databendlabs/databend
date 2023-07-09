@@ -712,6 +712,10 @@ fn collect_information_impl<'a>(
             collect_information_impl(s_expr.child(0)?, info)
         }
         RelOperator::Scan(scan) => {
+            if let Some(prewhere) = &scan.prewhere {
+                debug_assert!(info.predicates.is_none());
+                info.predicates.replace(&prewhere.predicates);
+            }
             info.table_index = scan.table_index;
             // Finish the recursion.
             Ok(())

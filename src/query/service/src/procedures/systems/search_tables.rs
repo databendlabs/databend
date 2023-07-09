@@ -52,6 +52,7 @@ impl OneBlockProcedure for SearchTablesProcedure {
 
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+        assert_eq!(args.len(), 1);
         let query = format!(
             "SELECT * FROM system.tables WHERE name like '%{}%' ORDER BY database, name",
             args[0]

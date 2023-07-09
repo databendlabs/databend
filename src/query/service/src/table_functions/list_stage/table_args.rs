@@ -26,7 +26,7 @@ pub(crate) struct ListStageArgsParsed {
 
 impl ListStageArgsParsed {
     pub fn parse(table_args: &TableArgs) -> Result<Self> {
-        let args = table_args.expect_all_named("infer_schema")?;
+        let args = table_args.expect_all_named("list_stage")?;
 
         let mut location = None;
         let mut files_info = StageFilesInfo {

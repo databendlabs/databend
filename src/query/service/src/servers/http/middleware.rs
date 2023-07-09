@@ -34,7 +34,7 @@ use poem::Middleware;
 use poem::Request;
 use poem::Response;
 use tracing::error;
-use tracing::info;
+use tracing::warn;
 
 use super::v1::HttpQueryContext;
 use crate::auth::AuthMgr;
@@ -190,26 +190,42 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 
     #[async_backtrace::framed]
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
-        // method, url, version, header
-        info!(
-            "http session endpoint: got new request: {} {} {:?}",
-            req.method(),
-            req.uri(),
-            sanitize_request_headers(req.headers()),
-        );
+        let method = req.method().clone();
+        let uri = req.uri().clone();
+        let headers = req.headers().clone();
+
         let res = match self.auth(&req).await {
             Ok(ctx) => {
                 req.extensions_mut().insert(ctx);
                 self.ep.call(req).await
             }
-            Err(err) => Err(PoemError::from_string(
-                err.message(),
-                StatusCode::UNAUTHORIZED,
-            )),
+            Err(err) => match err.code() {
+                ErrorCode::AUTHENTICATE_FAILURE => {
+                    warn!(
+                        "http auth failure: {method} {uri}, headers={:?}, error={}",
+                        sanitize_request_headers(&headers),
+                        err
+                    );
+                    Err(PoemError::from_string(
+                        err.message(),
+                        StatusCode::UNAUTHORIZED,
+                    ))
+                }
+                _ => {
+                    error!(
+                        "http request err: {method} {uri}, headers={:?}, error={}",
+                        sanitize_request_headers(&headers),
+                        err
+                    );
+                    Err(PoemError::from_string(
+                        err.message(),
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    ))
+                }
+            },
         };
         match res {
             Err(err) => {
-                error!("http request error: {}", err);
                 let body = Body::from_json(serde_json::json!({
                     "error": {
                         "code": err.status().as_str(),
@@ -224,7 +240,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     }
 }
 
-fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<String, String> {
+pub fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<String, String> {
     let sensitive_headers = vec!["authorization", "x-clickhouse-key", "cookie"];
     headers
         .iter()

@@ -13,24 +13,19 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::Expr;
+use metrics::gauge;
+use metrics_exporter_prometheus::PrometheusHandle;
 
-// use common_sql::ExpressionParser;
-use crate::table_functions::string_value;
-use crate::table_functions::TableArgs;
+use crate::dump_metric_samples;
+use crate::MetricValue;
 
-pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)> {
-    let args = table_args.expect_all_positioned("clustering_information", Some(2))?;
-    let db = string_value(&args[0])?;
-    let tbl = string_value(&args[1])?;
-    Ok((db, tbl))
-}
-
-pub fn unwrap_tuple(expr: &Expr) -> Option<Vec<Expr>> {
-    match expr {
-        Expr::FunctionCall { function, args, .. } if function.signature.name == "tuple" => {
-            Some(args.clone())
+/// Reset gauge metrics to 0.
+pub fn reset_metrics(handle: PrometheusHandle) -> Result<()> {
+    let samples = dump_metric_samples(handle)?;
+    for sample in samples {
+        if let MetricValue::Gauge(_) = sample.value {
+            gauge!(sample.name, 0_f64);
         }
-        _ => None,
     }
+    Ok(())
 }

@@ -26,16 +26,21 @@ use serde::Serializer;
 
 use crate::io::NativeReaderExt;
 
+pub enum DataSource {
+    AggIndex(Vec<u8>),
+    Normal(DataChunks),
+}
+
 pub type DataChunks = BTreeMap<usize, Vec<NativeReader<Box<dyn NativeReaderExt>>>>;
 
 pub struct NativeDataSourceMeta {
     pub part: Vec<PartInfoPtr>,
-    pub chunks: Vec<DataChunks>,
+    pub data: Vec<DataSource>,
 }
 
 impl NativeDataSourceMeta {
-    pub fn create(part: Vec<PartInfoPtr>, chunks: Vec<DataChunks>) -> BlockMetaInfoPtr {
-        Box::new(NativeDataSourceMeta { part, chunks })
+    pub fn create(part: Vec<PartInfoPtr>, data: Vec<DataSource>) -> BlockMetaInfoPtr {
+        Box::new(NativeDataSourceMeta { part, data })
     }
 }
 

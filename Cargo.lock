@@ -2927,11 +2927,14 @@ dependencies = [
  "common-meta-app",
  "common-pipeline-core",
  "common-pipeline-sources",
+ "common-pipeline-transforms",
  "common-storage",
  "dashmap",
  "opendal",
  "parking_lot 0.12.1",
+ "serde",
  "tracing",
+ "typetag",
  "uuid",
 ]
 

@@ -249,6 +249,7 @@ impl<'a> Binder {
             Statement::ShowDropTables(stmt) => {
                 self.bind_show_drop_tables(bind_context, stmt).await?
             }
+            Statement::AttachTable(stmt) => self.bind_attach_table(stmt).await?,
             Statement::CreateTable(stmt) => self.bind_create_table(stmt).await?,
             Statement::DropTable(stmt) => self.bind_drop_table(stmt).await?,
             Statement::UndropTable(stmt) => self.bind_undrop_table(stmt).await?,
@@ -257,6 +258,7 @@ impl<'a> Binder {
             Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(bind_context, stmt).await?,
             Statement::VacuumTable(stmt) => self.bind_vacuum_table(bind_context, stmt).await?,
+            Statement::VacuumDropTable(stmt) => self.bind_vacuum_drop_table(bind_context, stmt).await?,
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 

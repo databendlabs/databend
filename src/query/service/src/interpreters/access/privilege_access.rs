@@ -364,6 +364,14 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
+            Plan::VacuumDropTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
+                        vec![UserPrivilegeType::Super],
+                    )
+                    .await?;
+            }
             Plan::AnalyzeTable(plan) => {
                 session
                     .validate_privilege(

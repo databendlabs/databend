@@ -22,6 +22,7 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
+use tracing::debug;
 use tracing::info;
 
 use crate::servers::http::v1::json_block::block_to_json_value;
@@ -163,7 +164,7 @@ impl PageManager {
                     let d = *t - now;
                     match tokio::time::timeout(d, self.block_receiver.recv()).await {
                         Ok(Some(block)) => {
-                            info!(
+                            debug!(
                                 "http query {} got new block with {} rows",
                                 &self.query_id,
                                 block.num_rows()

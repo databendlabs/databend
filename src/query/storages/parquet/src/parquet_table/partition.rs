@@ -114,6 +114,8 @@ impl ParquetTable {
 
         Ok(PartitionPruner {
             schema,
+            schema_descr: self.schema_descr.clone(),
+            schema_from: self.schema_from.clone(),
             row_group_pruner,
             page_pruners,
             columns_to_read,
