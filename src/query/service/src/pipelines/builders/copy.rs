@@ -61,7 +61,7 @@ pub fn build_local_append_data_pipeline(
     let plan_stage_table_info = plan.stage_table_info;
     let plan_force = plan.force;
     let plan_write_mode = plan.write_mode;
-    let coordinate_node_id = ctx.get_cluster().local_id.clone();
+    let source_node_id = ctx.get_cluster().local_id.clone();
 
     if source_schema != plan_required_source_schema {
         // only parquet need cast
@@ -131,14 +131,7 @@ pub fn build_local_append_data_pipeline(
     }
 
     // set finished callback to pipeline.
-    set_pipeline_finish_callback(
-        ctx,
-        main_pipeline,
-        coordinate_node_id,
-        stage_info,
-        files,
-        purge,
-    )
+    set_pipeline_finish_callback(ctx, main_pipeline, source_node_id, stage_info, files, purge)
 }
 
 /// Build a pipeline for append data for distributed mode.
@@ -157,7 +150,7 @@ pub fn build_distributed_append_data_pipeline(
     let plan_values_consts = plan.values_consts;
     let plan_stage_table_info = plan.stage_table_info;
     let plan_write_mode = plan.write_mode;
-    let coordinator_node_id = plan.local_node_id;
+    let source_node_id = plan.local_node_id;
 
     if source_schema != plan_required_source_schema {
         // only parquet need cast
@@ -217,14 +210,7 @@ pub fn build_distributed_append_data_pipeline(
     }
 
     // set finished callback to pipeline.
-    set_pipeline_finish_callback(
-        ctx,
-        main_pipeline,
-        coordinator_node_id,
-        stage_info,
-        files,
-        purge,
-    )
+    set_pipeline_finish_callback(ctx, main_pipeline, source_node_id, stage_info, files, purge)
 }
 
 /// Set finish callback.
@@ -232,13 +218,13 @@ pub fn build_distributed_append_data_pipeline(
 fn set_pipeline_finish_callback(
     ctx: Arc<QueryContext>,
     main_pipeline: &mut Pipeline,
-    coordinator_node_id: String,
+    source_node_id: String,
     stage_info: StageInfo,
     copied_files: Vec<StageFileInfo>,
     purge: bool,
 ) -> Result<()> {
     // Coordinator node will do the purge job.
-    if coordinator_node_id == ctx.get_cluster().local_id {
+    if source_node_id == ctx.get_cluster().local_id {
         main_pipeline.set_on_finished(move |may_error| {
             match may_error {
                 None => {
