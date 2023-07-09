@@ -92,6 +92,9 @@ pub fn build_local_append_data_pipeline(
     let mut purge = false;
     match write_mode {
         CopyIntoTableMode::Insert { overwrite } => {
+            // Purge by default.
+            purge = true;
+
             build_append2table_pipeline(
                 ctx.clone(),
                 main_pipeline,
@@ -185,13 +188,18 @@ pub fn build_distributed_append_data_pipeline(
     let write_mode = plan_write_mode;
     let mut purge = false;
     match write_mode {
-        CopyIntoTableMode::Insert { overwrite: _ } => build_append2table_without_commit_pipeline(
-            ctx.clone(),
-            main_pipeline,
-            to_table,
-            plan_required_values_schema,
-            AppendMode::Copy,
-        )?,
+        CopyIntoTableMode::Insert { overwrite: _ } => {
+            // Purge by default.
+            purge = true;
+
+            build_append2table_without_commit_pipeline(
+                ctx.clone(),
+                main_pipeline,
+                to_table,
+                plan_required_values_schema,
+                AppendMode::Copy,
+            )?
+        }
         CopyIntoTableMode::Copy => {
             if stage_info.copy_options.purge {
                 purge = true;
