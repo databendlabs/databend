@@ -9,12 +9,13 @@ echo "CREATE TABLE test_load_unload
 (
     a VARCHAR NULL,
     b float,
-    e timestamp
+    e timestamp,
+    f variant
 );" | $MYSQL_CLIENT_CONNECT
 
 insert_data() {
 	echo "insert into test_load_unload values
-	('a\"b', 1, '2044-05-06T03:25:02.868894-07:00')
+	('a\"b', 1, '2044-05-06T03:25:02.868894-07:00', '{\"k1\":\"v\",\"k2\":[1,2]}')
 	" | $MYSQL_CLIENT_CONNECT
 }
 
@@ -24,24 +25,43 @@ test_format() {
 
 	# unload clickhouse
 	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
-	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload.txt
+	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload.parquet
 
 	echo "truncate table test_load_unload" | $MYSQL_CLIENT_CONNECT
 
-	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
-	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload.txt
-
 	# load streaming
 	curl -sH "insert_sql:insert into test_load_unload file_format = (type = ${1})" \
-	-F "upload=@/tmp/test_load_unload.txt" \
+	-F "upload=@/tmp/test_load_unload.parquet" \
 	-u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
 
 	# unload clickhouse again
 	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
-	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload2.txt
+	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload2.parquet
 
-	diff /tmp/test_load_unload2.txt /tmp/test_load_unload.txt
-	rm  /tmp/test_load_unload2.txt /tmp/test_load_unload.txt
+	echo "truncate table test_load_unload" | $MYSQL_CLIENT_CONNECT
+
+	# copy into table
+	echo "copy into test_load_unload from 'fs:///tmp/test_load_unload.parquet' file_format = (type = ${1});" | $MYSQL_CLIENT_CONNECT
+
+	# unload clickhouse again
+	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
+	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload3.parquet
+
+	# copy into stage
+	rm -rf /tmp/test_load_unload_fs
+	echo "drop stage if exists data_fs;" | $MYSQL_CLIENT_CONNECT
+	echo "create stage data_fs url = 'fs:///tmp/test_load_unload_fs/' FILE_FORMAT = (type = ${1});"  | $MYSQL_CLIENT_CONNECT
+	echo "copy into @data_fs from test_load_unload file_format = (type = ${1});" | $MYSQL_CLIENT_CONNECT
+
+	# unload clickhouse again from stage
+	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
+	-d "select * from @data_fs FORMAT ${1}" > /tmp/test_load_unload4.parquet
+
+	diff /tmp/test_load_unload2.parquet /tmp/test_load_unload.parquet
+	diff /tmp/test_load_unload3.parquet /tmp/test_load_unload.parquet
+	diff /tmp/test_load_unload4.parquet /tmp/test_load_unload.parquet
+	rm /tmp/test_load_unload2.parquet /tmp/test_load_unload.parquet
+	rm /tmp/test_load_unload4.parquet /tmp/test_load_unload3.parquet
 	echo "truncate table test_load_unload" | $MYSQL_CLIENT_CONNECT
 }
 

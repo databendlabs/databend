@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::ops::Range;
 
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
@@ -27,6 +28,7 @@ pub struct AggregateSerdeMeta {
     pub typ: usize,
     pub bucket: isize,
     pub location: Option<String>,
+    pub data_range: Option<Range<u64>>,
     pub columns_layout: Vec<usize>,
 }
 
@@ -36,6 +38,7 @@ impl AggregateSerdeMeta {
             typ: BUCKET_TYPE,
             bucket,
             location: None,
+            data_range: None,
             columns_layout: vec![],
         })
     }
@@ -43,6 +46,7 @@ impl AggregateSerdeMeta {
     pub fn create_spilled(
         bucket: isize,
         location: String,
+        data_range: Range<u64>,
         columns_layout: Vec<usize>,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateSerdeMeta {
@@ -50,6 +54,7 @@ impl AggregateSerdeMeta {
             bucket,
             columns_layout,
             location: Some(location),
+            data_range: Some(data_range),
         })
     }
 }

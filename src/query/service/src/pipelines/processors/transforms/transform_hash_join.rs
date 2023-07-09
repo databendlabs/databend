@@ -221,14 +221,18 @@ impl Processor for TransformHashJoinProbe {
                 if self.join_state.fast_return()? {
                     match self.join_state.join_type() {
                         JoinType::Inner
-                        | JoinType::Right
                         | JoinType::Cross
+                        | JoinType::Right
+                        | JoinType::RightSingle
                         | JoinType::RightAnti
                         | JoinType::RightSemi
                         | JoinType::LeftSemi => {
                             self.step = HashJoinStep::Finished;
                         }
-                        JoinType::Left | JoinType::Full | JoinType::Single | JoinType::LeftAnti => {
+                        JoinType::Left
+                        | JoinType::Full
+                        | JoinType::LeftSingle
+                        | JoinType::LeftAnti => {
                             self.step = HashJoinStep::Probe;
                         }
                         _ => {

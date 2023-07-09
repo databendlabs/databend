@@ -71,7 +71,7 @@ impl JoinHashTable {
                 }
             }
             // Single join is similar to left join, but the result is a single row.
-            JoinType::Left | JoinType::Single | JoinType::Full => {
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
                 if self.hash_join_desc.other_predicate.is_none() {
                     self.probe_left_join::<_, _>(hash_table, probe_state, keys_iter, input)
                 } else {
@@ -83,7 +83,7 @@ impl JoinHashTable {
                     )
                 }
             }
-            JoinType::Right => {
+            JoinType::Right | JoinType::RightSingle => {
                 self.probe_right_join::<_, _>(hash_table, probe_state, keys_iter, input)
             }
             // Three cases will produce Mark join:

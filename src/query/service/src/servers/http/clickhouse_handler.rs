@@ -54,6 +54,7 @@ use tracing::info;
 
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
+use crate::servers::http::middleware::sanitize_request_headers;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::short_sql;
 use crate::sessions::QueryContext;
@@ -61,7 +62,7 @@ use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
 // accept all clickhouse params, so they do not go to settings.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct StatementHandlerParams {
     query: Option<String>,
     #[allow(unused)]
@@ -267,6 +268,11 @@ pub async fn clickhouse_handler_post(
     Query(params): Query<StatementHandlerParams>,
     headers: &HeaderMap,
 ) -> PoemResult<impl IntoResponse> {
+    info!(
+        "new clickhouse handler request: headers={:?}, params={:?}",
+        sanitize_request_headers(headers),
+        params,
+    );
     let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
     if let Some(db) = &params.database {
         session.set_current_database(db.clone());

@@ -44,6 +44,7 @@ use databend_query::interpreters::Interpreter;
 use databend_query::test_kits::TestFixture;
 use parking_lot::RwLock;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 
 #[derive(Default)]
 struct TestSuite {
@@ -56,7 +57,7 @@ struct TestSuite {
     rewritten_predicates: Vec<&'static str>,
 }
 
-fn create_table_plan(fixture: &TestFixture) -> CreateTablePlan {
+fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
     CreateTablePlan {
         if_not_exists: false,
         tenant: fixture.default_tenant(),
@@ -74,6 +75,7 @@ fn create_table_plan(fixture: &TestFixture) -> CreateTablePlan {
         options: [
             // database id is required for FUSE
             (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+            (OPT_KEY_STORAGE_FORMAT.to_owned(), format.to_owned()),
         ]
         .into(),
         field_comments: vec![],
@@ -374,9 +376,14 @@ fn get_test_suites() -> Vec<TestSuite> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_query_rewrite() -> Result<()> {
+    test_query_rewrite_impl("parquet").await?;
+    test_query_rewrite_impl("native").await
+}
+
+async fn test_query_rewrite_impl(format: &str) -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
-    let create_table_plan = create_table_plan(&fixture);
+    let create_table_plan = create_table_plan(&fixture, format);
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute(ctx.clone()).await?;
 

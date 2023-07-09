@@ -27,6 +27,7 @@ use common_arrow::arrow::io::parquet::read::indexes::FieldPageStatistics;
 use common_arrow::parquet::indexes::Interval;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
+use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::read_pages_locations;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -55,6 +56,8 @@ use crate::statistics::BatchStatistics;
 pub struct PartitionPruner {
     /// Table schema.
     pub schema: TableSchemaRef,
+    pub schema_descr: SchemaDescriptor,
+    pub schema_from: String,
     /// Pruner to prune row groups.
     pub row_group_pruner: Option<Arc<dyn RangePruner + Send + Sync>>,
     /// Pruners to prune pages.
@@ -73,6 +76,21 @@ pub struct PartitionPruner {
     pub parquet_fast_read_bytes: usize,
 }
 
+fn check_parquet_schema(
+    expect: &SchemaDescriptor,
+    actual: &SchemaDescriptor,
+    path: &str,
+    schema_from: &str,
+) -> Result<()> {
+    if expect.fields() != actual.fields() || expect.columns() != actual.columns() {
+        return Err(ErrorCode::BadBytes(format!(
+            "infer schema from '{}', but get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
+            schema_from, path, expect, actual
+        )));
+    }
+    Ok(())
+}
+
 impl PartitionPruner {
     #[async_backtrace::framed]
     pub fn read_and_prune_file_meta(
@@ -81,6 +99,12 @@ impl PartitionPruner {
         file_meta: FileMetaData,
         operator: Operator,
     ) -> Result<(PartStatistics, Vec<ParquetRowGroupPart>)> {
+        check_parquet_schema(
+            &self.schema_descr,
+            file_meta.schema(),
+            path,
+            &self.schema_from,
+        )?;
         let mut stats = PartStatistics::default();
         let mut partitions = vec![];
 
