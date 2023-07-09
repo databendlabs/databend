@@ -41,9 +41,8 @@ use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::builders::build_append2table_pipeline;
-use crate::pipelines::builders::build_append_data_with_finish_pipeline;
+use crate::pipelines::builders::build_local_append_data_pipeline;
 use crate::pipelines::builders::build_upsert_copied_files_to_meta_req;
-use crate::pipelines::builders::CopyPlanParam;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_distributed_pipeline;
 use crate::sessions::QueryContext;
@@ -271,15 +270,15 @@ impl CopyInterpreter {
             (build_res, plan.required_source_schema.clone(), files)
         };
 
-        build_append_data_with_finish_pipeline(
+        build_local_append_data_pipeline(
             ctx,
             &mut build_res.main_pipeline,
+            plan.clone(),
             source_schema,
-            CopyPlanParam::CopyIntoTablePlanOption(plan.clone()),
             to_table,
             files,
-            true,
         )?;
+
         Ok(build_res)
     }
 
