@@ -65,7 +65,7 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
         let settings = ctx.get_settings();
         let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
         let value = settings.get_spilling_bytes_threshold_per_proc()?;
-        let max_memory_usage = settings.get_max_memory_usage()?;
+        let max_memory_usage = settings.get_max_memory_usage()? as f64;
 
         Ok(GroupBySettings {
             convert_threshold,
