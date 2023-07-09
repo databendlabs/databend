@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -38,30 +39,54 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
-use crate::pipelines::builders::build_append2table_pipeline;
 use crate::pipelines::builders::build_append2table_without_commit_pipeline;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::sessions::QueryContext;
 
-/// Build a pipeline for append data in local mode.
-/// 1. commit append data
-/// 2. purge files if PURGE = true
-pub fn build_local_append_data_pipeline(
+pub enum CopyPlanType {
+    CopyIntoTablePlanOption(CopyIntoTablePlan),
+    DistributedCopyIntoTable(DistributedCopyIntoTable),
+}
+
+pub fn build_append_data_pipeline(
     ctx: Arc<QueryContext>,
     main_pipeline: &mut Pipeline,
-    plan: CopyIntoTablePlan,
+    plan: CopyPlanType,
     source_schema: Arc<DataSchema>,
     to_table: Arc<dyn Table>,
     files: Vec<StageFileInfo>,
 ) -> Result<()> {
-    let plan_required_source_schema = plan.required_source_schema;
-    let plan_required_values_schema = plan.required_values_schema;
-    let plan_values_consts = plan.values_consts;
-    let plan_stage_table_info = plan.stage_table_info;
-    let plan_force = plan.force;
-    let plan_write_mode = plan.write_mode;
-    let source_node_id = ctx.get_cluster().local_id.clone();
+    let plan_required_source_schema: DataSchemaRef;
+    let plan_required_values_schema: DataSchemaRef;
+    let plan_values_consts: Vec<Scalar>;
+    let plan_stage_table_info: StageTableInfo;
+    let copy_force_option: bool;
+    let mut copy_purge_option = true;
+    let mut insert_overwrite_option: bool = false;
+    let plan_write_mode: CopyIntoTableMode;
+    let source_node_id;
+
+    match plan {
+        CopyPlanType::CopyIntoTablePlanOption(plan) => {
+            plan_required_source_schema = plan.required_source_schema;
+            plan_required_values_schema = plan.required_values_schema;
+            plan_values_consts = plan.values_consts;
+            plan_stage_table_info = plan.stage_table_info;
+            copy_force_option = plan.force;
+            plan_write_mode = plan.write_mode;
+            source_node_id = ctx.get_cluster().local_id.clone();
+        }
+        CopyPlanType::DistributedCopyIntoTable(plan) => {
+            plan_required_source_schema = plan.required_source_schema;
+            plan_required_values_schema = plan.required_values_schema;
+            plan_values_consts = plan.values_consts;
+            plan_stage_table_info = plan.stage_table_info;
+            copy_force_option = plan.force;
+            plan_write_mode = plan.write_mode;
+            source_node_id = plan.local_node_id;
+        }
+    }
 
     if source_schema != plan_required_source_schema {
         // only parquet need cast
@@ -87,145 +112,89 @@ pub fn build_local_append_data_pipeline(
         )?;
     }
 
-    let mut purge = true;
+    // append data without commit.
     let stage_info = plan_stage_table_info.stage_info;
     let write_mode = plan_write_mode;
     match write_mode {
         CopyIntoTableMode::Insert { overwrite } => {
-            build_append2table_pipeline(
+            insert_overwrite_option = overwrite;
+            build_append2table_without_commit_pipeline(
                 ctx.clone(),
                 main_pipeline,
-                to_table,
-                plan_required_values_schema,
-                None,
-                overwrite,
-                AppendMode::Copy,
-            )?;
-        }
-        CopyIntoTableMode::Replace => {}
-        CopyIntoTableMode::Copy => {
-            if !stage_info.copy_options.purge {
-                purge = false;
-            }
-
-            let copied_files = build_upsert_copied_files_to_meta_req(
-                ctx.clone(),
                 to_table.clone(),
-                stage_info.clone(),
-                files.clone(),
-                plan_force,
-            )?;
-            build_append2table_pipeline(
-                ctx.clone(),
-                main_pipeline,
-                to_table,
                 plan_required_values_schema,
-                copied_files,
-                false,
                 AppendMode::Copy,
-            )?;
+            )?
         }
-    }
-
-    // set finished callback to pipeline.
-    set_pipeline_finish_callback(ctx, main_pipeline, source_node_id, stage_info, files, purge)
-}
-
-/// Build a pipeline for append data for distributed mode.
-/// 1. only append data to table not commit
-/// 2. not purge files
-pub fn build_distributed_append_data_pipeline(
-    ctx: Arc<QueryContext>,
-    main_pipeline: &mut Pipeline,
-    plan: DistributedCopyIntoTable,
-    source_schema: Arc<DataSchema>,
-    to_table: Arc<dyn Table>,
-    files: Vec<StageFileInfo>,
-) -> Result<()> {
-    let plan_required_source_schema = plan.required_source_schema;
-    let plan_required_values_schema = plan.required_values_schema;
-    let plan_values_consts = plan.values_consts;
-    let plan_stage_table_info = plan.stage_table_info;
-    let plan_write_mode = plan.write_mode;
-    let source_node_id = plan.local_node_id;
-
-    if source_schema != plan_required_source_schema {
-        // only parquet need cast
-        let func_ctx = ctx.get_function_context()?;
-        main_pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformCastSchema::try_create(
-                transform_input_port,
-                transform_output_port,
-                source_schema.clone(),
-                plan_required_source_schema.clone(),
-                func_ctx.clone(),
-            )
-        })?;
-    }
-
-    if !plan_values_consts.is_empty() {
-        fill_const_columns(
-            ctx.clone(),
-            main_pipeline,
-            source_schema,
-            plan_required_values_schema.clone(),
-            plan_values_consts,
-        )?;
-    }
-
-    let mut purge = true;
-    let stage_info = plan_stage_table_info.stage_info;
-    // Only append to table, not commit.
-    let write_mode = plan_write_mode;
-    match write_mode {
-        CopyIntoTableMode::Insert { overwrite: _ } => build_append2table_without_commit_pipeline(
-            ctx.clone(),
-            main_pipeline,
-            to_table,
-            plan_required_values_schema,
-            AppendMode::Copy,
-        )?,
-        CopyIntoTableMode::Replace => {}
         CopyIntoTableMode::Copy => {
             if !stage_info.copy_options.purge {
-                purge = false;
+                copy_purge_option = false;
             }
 
             build_append2table_without_commit_pipeline(
                 ctx.clone(),
                 main_pipeline,
-                to_table,
+                to_table.clone(),
                 plan_required_values_schema,
                 AppendMode::Copy,
             )?
         }
+        CopyIntoTableMode::Replace => {}
     }
 
-    // set finished callback to pipeline.
-    set_pipeline_finish_callback(ctx, main_pipeline, source_node_id, stage_info, files, purge)
+    // commit.
+    build_commit_data_pipeline(
+        ctx,
+        main_pipeline,
+        source_node_id,
+        stage_info,
+        to_table,
+        files,
+        copy_force_option,
+        copy_purge_option,
+        insert_overwrite_option,
+    )
 }
 
-/// Set finish callback.
-/// If coordinator node, do purge job.
-fn set_pipeline_finish_callback(
+#[allow(clippy::too_many_arguments)]
+fn build_commit_data_pipeline(
     ctx: Arc<QueryContext>,
     main_pipeline: &mut Pipeline,
     source_node_id: String,
     stage_info: StageInfo,
-    copied_files: Vec<StageFileInfo>,
-    purge: bool,
+    to_table: Arc<dyn Table>,
+    files: Vec<StageFileInfo>,
+    copy_force_option: bool,
+    copy_purge_option: bool,
+    insert_overwrite_option: bool,
 ) -> Result<()> {
-    // Coordinator node will do the purge job.
+    // Source node will do:
+    // 1. commit
+    // 2. purge
     if source_node_id == ctx.get_cluster().local_id {
+        // commit
+        let copied_files_meta_req = build_upsert_copied_files_to_meta_req(
+            ctx.clone(),
+            to_table.clone(),
+            stage_info.clone(),
+            files.clone(),
+            copy_force_option,
+        )?;
+        to_table.commit_insertion(
+            ctx.clone(),
+            main_pipeline,
+            copied_files_meta_req,
+            insert_overwrite_option,
+        )?;
+
+        // set on_finished callback.
         main_pipeline.set_on_finished(move |may_error| {
             match may_error {
                 None => {
                     GlobalIORuntime::instance().block_on(async move {
                         {
-                            let status = format!(
-                                "end of commit, number of copied files:{}",
-                                copied_files.len()
-                            );
+                            let status =
+                                format!("end of commit, number of copied files:{}", files.len());
                             ctx.set_status_info(&status);
                             info!(status);
                         }
@@ -245,8 +214,8 @@ fn set_pipeline_finish_callback(
 
                         // 2. Try to purge copied files if purge option is true, if error will skip.
                         // If a file is already copied(status with AlreadyCopied) we will try to purge them.
-                        if purge {
-                            try_purge_files(ctx.clone(), &stage_info, &copied_files).await;
+                        if copy_purge_option {
+                            try_purge_files(ctx.clone(), &stage_info, &files).await;
                         }
 
                         Ok(())

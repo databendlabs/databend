@@ -15,9 +15,9 @@
 mod copy;
 mod table;
 
-pub use copy::build_distributed_append_data_pipeline;
-pub use copy::build_local_append_data_pipeline;
+pub use copy::build_append_data_pipeline;
 pub use copy::build_upsert_copied_files_to_meta_req;
-pub use table::build_append2table_pipeline;
+pub use copy::CopyPlanType;
+pub use table::build_append2table_with_commit_pipeline;
 pub use table::build_append2table_without_commit_pipeline;
 pub use table::build_fill_missing_columns_pipeline;

@@ -30,7 +30,6 @@ use common_sql::executor::DistributedCopyIntoTable;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
 use common_sql::executor::PhysicalPlan;
-use common_sql::plans::CopyIntoTableMode;
 use common_sql::plans::CopyIntoTablePlan;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
@@ -40,9 +39,9 @@ use tracing::info;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
-use crate::pipelines::builders::build_append2table_pipeline;
-use crate::pipelines::builders::build_local_append_data_pipeline;
-use crate::pipelines::builders::build_upsert_copied_files_to_meta_req;
+use crate::pipelines::builders::build_append2table_with_commit_pipeline;
+use crate::pipelines::builders::build_append_data_pipeline;
+use crate::pipelines::builders::CopyPlanType;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_distributed_pipeline;
 use crate::sessions::QueryContext;
@@ -123,7 +122,7 @@ impl CopyInterpreter {
             is_select: false,
         };
         let table = StageTable::try_create(stage_table_info)?;
-        build_append2table_pipeline(
+        build_append2table_with_commit_pipeline(
             self.ctx.clone(),
             &mut build_res.main_pipeline,
             table,
@@ -270,10 +269,10 @@ impl CopyInterpreter {
             (build_res, plan.required_source_schema.clone(), files)
         };
 
-        build_local_append_data_pipeline(
+        build_append_data_pipeline(
             ctx,
             &mut build_res.main_pipeline,
-            plan.clone(),
+            CopyPlanType::CopyIntoTablePlanOption(plan.clone()),
             source_schema,
             to_table,
             files,
@@ -282,7 +281,7 @@ impl CopyInterpreter {
         Ok(build_res)
     }
 
-    /// Build a pipeline to copy data into table for distributed.
+    /// Build a distributed pipeline from source node id.
     #[async_backtrace::framed]
     async fn build_distributed_copy_into_table_pipeline(
         &self,
@@ -299,27 +298,7 @@ impl CopyInterpreter {
             kind: FragmentKind::Merge,
             keys: Vec::new(),
         });
-        let mut build_res = build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?;
-
-        let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
-        let to_table = catalog.get_table_by_info(&distributed_plan.table_info)?;
-        let copied_files = build_upsert_copied_files_to_meta_req(
-            self.ctx.clone(),
-            to_table.clone(),
-            distributed_plan.stage_table_info.stage_info.clone(),
-            distributed_plan.files.clone(),
-            distributed_plan.force,
-        )?;
-        let mut overwrite_ = false;
-        if let CopyIntoTableMode::Insert { overwrite } = distributed_plan.write_mode {
-            overwrite_ = overwrite;
-        }
-        to_table.commit_insertion(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            copied_files,
-            overwrite_,
-        )?;
+        let build_res = build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?;
 
         Ok(build_res)
     }
