@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::vec;
 
 use bumpalo::Bump;
+use common_base::runtime::GLOBAL_MEM_STAT;
 use common_catalog::plan::AggIndexMeta;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -61,6 +62,7 @@ impl<Method: HashMethodBounds> Default for HashTable<Method> {
 
 struct AggregateSettings {
     convert_threshold: usize,
+    max_memory_usage: usize,
     spilling_bytes_threshold_per_proc: usize,
 }
 
@@ -71,9 +73,14 @@ impl TryFrom<Arc<QueryContext>> for AggregateSettings {
         let settings = ctx.get_settings();
         let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
         let value = settings.get_spilling_bytes_threshold_per_proc()?;
+        let max_memory_usage = settings.get_max_memory_usage()?;
 
         Ok(AggregateSettings {
             convert_threshold,
+            max_memory_usage: match max_memory_usage == 0 {
+                true => usize::MAX,
+                false => (max_memory_usage * 0.6) as usize,
+            },
             spilling_bytes_threshold_per_proc: match value == 0 {
                 true => usize::MAX,
                 false => value,
@@ -305,6 +312,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             }
 
             if matches!(&self.hash_table, HashTable::PartitionedHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc)
+                || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
             {
                 if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table) {
                     // perf
