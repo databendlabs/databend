@@ -632,7 +632,7 @@ pub fn append_data_and_set_finish(
                             }
                         }
 
-                        // 2. Try to purge copied files if purge option is true, if error will skip.
+                        // 2. Try to purge copied files if purge option is true, if error will  skip.
                         // If a file is already copied(status with AlreadyCopied) we will try to purge them.
                         if purge {
                             CopyInterpreter::try_purge_files(
