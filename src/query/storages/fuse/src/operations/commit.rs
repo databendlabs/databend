@@ -51,7 +51,7 @@ use super::common::MutationKind;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
+use crate::metrics::metrics_inc_commit_mutation_latest_snapshot_append_only;
 use crate::metrics::metrics_inc_commit_mutation_retry;
 use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
@@ -361,7 +361,7 @@ impl FuseTable {
                                 )
                             {
                                 info!("resolvable conflicts detected");
-                                metrics_inc_commit_mutation_resolvable_conflict();
+                                metrics_inc_commit_mutation_latest_snapshot_append_only();
                                 concurrently_appended_segment_locations =
                                     &latest_snapshot.segments[range_of_newly_append];
                             } else {

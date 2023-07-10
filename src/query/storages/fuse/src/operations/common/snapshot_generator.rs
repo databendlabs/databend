@@ -31,7 +31,8 @@ use storages_common_table_meta::meta::TableSnapshot;
 use tracing::error;
 use uuid::Uuid;
 
-use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
+use crate::metrics::metrics_inc_commit_mutation_latest_snapshot_append_only;
+use crate::metrics::metrics_inc_commit_mutation_modified_segment_exists_in_latest;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
@@ -196,7 +197,7 @@ impl SnapshotGenerator for MutationGenerator {
                     )
                 {
                     tracing::info!("resolvable conflicts detected");
-                    metrics_inc_commit_mutation_resolvable_conflict();
+                    metrics_inc_commit_mutation_latest_snapshot_append_only();
                     let append_segments = &previous.segments[range_of_newly_append];
                     let append_statistics =
                         deduct_statistics(&previous.summary, &self.base_snapshot.summary);
@@ -229,7 +230,7 @@ impl SnapshotGenerator for MutationGenerator {
                     )
                 {
                     tracing::info!("resolvable conflicts detected");
-                    metrics_inc_commit_mutation_resolvable_conflict();
+                    metrics_inc_commit_mutation_modified_segment_exists_in_latest();
                     error!("positions: {:?}", positions);
                     error!("added_segments: {:?}", ctx.added_segments);
                     error!("previous.segments: {:?}", previous.segments);
