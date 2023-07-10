@@ -171,6 +171,7 @@ impl CopyInterpreter {
         if read_source_plan.parts.len() <= 1 {
             return Ok(None);
         }
+
         Ok(Some(DistributedCopyIntoTable {
             // TODO(leiysky): we reuse the id of exchange here,
             // which is not correct. We should generate a new id for insert.
@@ -231,7 +232,7 @@ impl CopyInterpreter {
         Ok(())
     }
 
-    /// Build a pipeline to copy data from local.
+    /// Build a COPY pipeline in standalone mode.
     #[async_backtrace::framed]
     async fn build_local_copy_into_table_pipeline(
         &self,
@@ -281,9 +282,9 @@ impl CopyInterpreter {
         Ok(build_res)
     }
 
-    /// Build a distributed pipeline from source node id.
+    /// Build distributed pipeline from source node id.
     #[async_backtrace::framed]
-    async fn build_distributed_copy_into_table_pipeline(
+    async fn build_cluster_copy_into_table_pipeline(
         &self,
         distributed_plan: &DistributedCopyIntoTable,
     ) -> Result<PipelineBuildResult> {
@@ -324,7 +325,7 @@ impl Interpreter for CopyInterpreter {
                         .try_transform_copy_plan_from_local_to_distributed(plan)
                         .await?;
                     if let Some(distributed_plan) = distributed_plan_op {
-                        self.build_distributed_copy_into_table_pipeline(&distributed_plan)
+                        self.build_cluster_copy_into_table_pipeline(&distributed_plan)
                             .await
                     } else {
                         self.build_local_copy_into_table_pipeline(plan).await
