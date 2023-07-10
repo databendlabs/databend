@@ -126,6 +126,7 @@ pub fn build_append_data_pipeline(
                 AppendMode::Copy,
             )?
         }
+        CopyIntoTableMode::Replace => {}
         CopyIntoTableMode::Copy => {
             if !stage_info.copy_options.purge {
                 copy_purge_option = false;
@@ -139,7 +140,6 @@ pub fn build_append_data_pipeline(
                 AppendMode::Copy,
             )?
         }
-        CopyIntoTableMode::Replace => {}
     }
 
     // commit.
