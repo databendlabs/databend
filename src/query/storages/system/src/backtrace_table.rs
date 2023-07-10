@@ -18,10 +18,9 @@ use common_base::dump_backtrace;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ColumnBuilder;
+use common_expression::types::StringType;
 use common_expression::DataBlock;
-use common_expression::Scalar;
+use common_expression::FromData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -48,18 +47,18 @@ impl SyncSystemTable for BacktraceTable {
     }
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let node_id = ctx.get_cluster().local_id.clone();
+        let local_node = ctx.get_cluster().local_id.clone();
         let stack = dump_backtrace(false);
 
-        let mut nodes = ColumnBuilder::with_capacity(&DataType::String, 1);
-        nodes.push(Scalar::String(node_id.as_bytes().to_vec()).as_ref());
+        let mut nodes: Vec<Vec<u8>> = Vec::with_capacity(1);
+        let mut stacks: Vec<Vec<u8>> = Vec::with_capacity(1);
 
-        let mut stacks = ColumnBuilder::with_capacity(&DataType::String, 1);
-        stacks.push(Scalar::String(stack.as_bytes().to_vec()).as_ref());
+        nodes.push(local_node.into_bytes());
+        stacks.push(stack.into_bytes());
 
         Ok(DataBlock::new_from_columns(vec![
-            nodes.build(),
-            stacks.build(),
+            StringType::from_data(nodes),
+            StringType::from_data(stacks),
         ]))
     }
 }
