@@ -29,6 +29,7 @@ jobs:
       - uses: ./.github/actions/build_linux
         timeout-minutes: 30
         with:
+          sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
           features: hive
           artifacts: meta,query
