@@ -149,10 +149,11 @@ Databend's rich ecosystem offers a range of powerful tools and integrations, all
 <Tabs>
 <TabItem value="Visualizations" label="Visualizations" default>
 
-* [Jupyter Notebook](../13-integrations/00-jupyter.md)
-* [Grafana](../13-integrations/02-grafana.md)
-* [Metabase](../13-integrations/03-metabase.md)
-* [Redash](../13-integrations/04-redash.md)
+* [Deepnote](../13-integrations/deepnote.md)
+* [Jupyter Notebook](../13-integrations/jupyter.md)
+* [Grafana](../13-integrations/grafana.md)
+* [Metabase](../13-integrations/metabase.md)
+* [Redash](../13-integrations/redash.md)
 
 </TabItem>
 
