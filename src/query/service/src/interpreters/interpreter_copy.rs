@@ -278,18 +278,24 @@ impl CopyInterpreter {
             source_schema,
             to_table.clone(),
         )?;
+        // if it's replace mode, don't commit
+        match plan.write_mode {
+            CopyIntoTableMode::Replace => {}
+            _ => {
+                // commit.
+                build_commit_data_pipeline(
+                    ctx.clone(),
+                    &mut build_res.main_pipeline,
+                    plan.stage_table_info.stage_info.clone(),
+                    to_table,
+                    files,
+                    plan.force,
+                    plan.stage_table_info.stage_info.copy_options.purge,
+                    insert_overwrite_option,
+                )?;
+            }
+        }
 
-        // commit.
-        build_commit_data_pipeline(
-            ctx.clone(),
-            &mut build_res.main_pipeline,
-            plan.stage_table_info.stage_info.clone(),
-            to_table,
-            files,
-            plan.force,
-            plan.stage_table_info.stage_info.copy_options.purge,
-            insert_overwrite_option,
-        )?;
         Ok(build_res)
     }
 
