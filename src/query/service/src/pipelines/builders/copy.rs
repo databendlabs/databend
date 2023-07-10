@@ -54,11 +54,10 @@ pub fn build_append_data_pipeline(
     plan: CopyPlanType,
     source_schema: Arc<DataSchema>,
     to_table: Arc<dyn Table>,
-) -> Result<bool> {
+) -> Result<()> {
     let plan_required_source_schema: DataSchemaRef;
     let plan_required_values_schema: DataSchemaRef;
     let plan_values_consts: Vec<Scalar>;
-    let mut insert_overwrite_option: bool = false;
     let plan_write_mode: CopyIntoTableMode;
 
     match plan {
@@ -101,18 +100,14 @@ pub fn build_append_data_pipeline(
     }
 
     // append data without commit.
-    let write_mode = plan_write_mode;
-    match write_mode {
-        CopyIntoTableMode::Insert { overwrite } => {
-            insert_overwrite_option = overwrite;
-            build_append2table_without_commit_pipeline(
-                ctx,
-                main_pipeline,
-                to_table.clone(),
-                plan_required_values_schema,
-                AppendMode::Copy,
-            )?
-        }
+    match plan_write_mode {
+        CopyIntoTableMode::Insert { overwrite: _ } => build_append2table_without_commit_pipeline(
+            ctx,
+            main_pipeline,
+            to_table.clone(),
+            plan_required_values_schema,
+            AppendMode::Copy,
+        )?,
         CopyIntoTableMode::Replace => {}
         CopyIntoTableMode::Copy => build_append2table_without_commit_pipeline(
             ctx,
@@ -122,7 +117,7 @@ pub fn build_append_data_pipeline(
             AppendMode::Copy,
         )?,
     }
-    Ok(insert_overwrite_option)
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]

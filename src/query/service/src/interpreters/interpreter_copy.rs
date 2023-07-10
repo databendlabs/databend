@@ -124,11 +124,11 @@ impl CopyInterpreter {
             files_to_copy: None,
             is_select: false,
         };
-        let table = StageTable::try_create(stage_table_info)?;
+        let to_table = StageTable::try_create(stage_table_info)?;
         build_append2table_with_commit_pipeline(
             self.ctx.clone(),
             &mut build_res.main_pipeline,
-            table,
+            to_table,
             data_schema,
             None,
             false,
@@ -272,14 +272,15 @@ impl CopyInterpreter {
             (build_res, plan.required_source_schema.clone(), files)
         };
 
-        let insert_overwrite_option = build_append_data_pipeline(
+        build_append_data_pipeline(
             ctx.clone(),
             &mut build_res.main_pipeline,
             CopyPlanType::CopyIntoTablePlanOption(plan.clone()),
             source_schema,
             to_table.clone(),
         )?;
-        // if it's replace mode, don't commit
+
+        // if it's replace mode, don't commit, because COPY is the source of replace.
         match plan.write_mode {
             CopyIntoTableMode::Replace => set_copy_on_finished(
                 ctx,
@@ -298,7 +299,7 @@ impl CopyInterpreter {
                     files,
                     plan.force,
                     plan.stage_table_info.stage_info.copy_options.purge,
-                    insert_overwrite_option,
+                    plan.write_mode.is_overwrite(),
                 )?
             }
         }
@@ -360,11 +361,7 @@ impl Interpreter for CopyInterpreter {
                                 &distributed_plan.table_name,
                             )
                             .await?;
-                        let mut insert_overwrite_option = false;
-                        if let CopyIntoTableMode::Insert { overwrite } = distributed_plan.write_mode
-                        {
-                            insert_overwrite_option = overwrite
-                        }
+
                         // commit.
                         build_commit_data_pipeline(
                             self.ctx.clone(),
@@ -378,7 +375,7 @@ impl Interpreter for CopyInterpreter {
                                 .stage_info
                                 .copy_options
                                 .purge,
-                            insert_overwrite_option,
+                            distributed_plan.write_mode.is_overwrite(),
                         )?;
                         Ok(build_res)
                     } else {
