@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
@@ -40,6 +41,8 @@ use tracing::info;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::metrics::metrics_inc_copy_read_file_cost_milliseconds;
+use crate::metrics::metrics_inc_copy_read_file_counter;
 use crate::pipelines::builders::build_append2table_with_commit_pipeline;
 use crate::pipelines::builders::build_append_data_pipeline;
 use crate::pipelines::builders::build_commit_data_pipeline;
@@ -230,7 +233,15 @@ impl CopyInterpreter {
         ));
 
         stage_table.set_block_thresholds(block_thresholds);
+
+        let start = Instant::now();
         stage_table.read_data(table_ctx, &read_source_plan, pipeline)?;
+
+        // Perf
+        {
+            metrics_inc_copy_read_file_counter(files.len() as u32);
+            metrics_inc_copy_read_file_cost_milliseconds(start.elapsed().as_millis() as u32);
+        }
         Ok(())
     }
 
