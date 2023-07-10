@@ -28,8 +28,9 @@ use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::Value;
 use jsonb::array_values;
-use jsonb::get_by_path;
 use jsonb::jsonpath::parse_json_path;
+use jsonb::jsonpath::Mode as SelectorMode;
+use jsonb::jsonpath::Selector;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.properties.insert(
@@ -87,15 +88,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                     match path_arg {
                         Value::Scalar(Scalar::String(path)) => match parse_json_path(&path) {
                             Ok(json_path) => {
+                                let selector =
+                                    Selector::new_with_mode(json_path, SelectorMode::All);
                                 for row in 0..ctx.num_rows {
                                     let val = unsafe { val_arg.index_unchecked(row) };
                                     let mut builder = StringColumnBuilder::with_capacity(0, 0);
                                     if let ScalarRef::Variant(val) = val {
-                                        let vals = get_by_path(val, json_path.clone());
-                                        for val in vals {
-                                            builder.put(&val);
-                                            builder.commit_row();
-                                        }
+                                        selector.nselect(
+                                            val,
+                                            &mut builder.data,
+                                            &mut builder.offsets,
+                                        );
                                     }
                                     let array =
                                         Column::Variant(builder.build()).wrap_nullable(None);
@@ -125,11 +128,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     match parse_json_path(path) {
                                         Ok(json_path) => {
                                             if let ScalarRef::Variant(val) = val {
-                                                let vals = get_by_path(val, json_path);
-                                                for val in vals {
-                                                    builder.put(&val);
-                                                    builder.commit_row();
-                                                }
+                                                let selector = Selector::new_with_mode(
+                                                    json_path,
+                                                    SelectorMode::All,
+                                                );
+                                                selector.nselect(
+                                                    val,
+                                                    &mut builder.data,
+                                                    &mut builder.offsets,
+                                                );
                                             }
                                         }
                                         Err(_) => {
