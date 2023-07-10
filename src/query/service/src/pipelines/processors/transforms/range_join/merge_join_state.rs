@@ -74,7 +74,7 @@ impl RangeJoinState {
         let row_offset = self.row_offset.read();
         let (left_offset, right_offset) = row_offset[task_id];
 
-        let mut result_blocks = vec![];
+        let mut result_blocks = Vec::with_capacity(left_len);
         let left_table = self.left_table.read();
         let right_table = self.right_table.read();
 
@@ -94,7 +94,7 @@ impl RangeJoinState {
                 self.conditions[0].operator.as_str(),
             ) {
                 let mut left_result_block = DataBlock::empty();
-                let mut right_buffer = vec![];
+                let mut right_buffer = Vec::with_capacity(right_len - j);
                 if let ScalarRef::Number(NumberScalar::Int64(left)) =
                     unsafe { left_idx_col.index_unchecked(i) }
                 {

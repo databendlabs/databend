@@ -84,9 +84,9 @@ impl DPhpy {
             (dphyp.optimize(right_expr), dphyp.table_index_map)
         });
         let left_res = left_res.join()?;
-        let (left_expr, left_optimized) = left_res.0?;
+        let (left_expr, _) = left_res.0?;
         let right_res = right_res.join()?;
-        let (right_expr, right_optimized) = right_res.0?;
+        let (right_expr, _) = right_res.0?;
         let relation_idx = self.join_relations.len() as IndexType;
         for table_index in left_res.1.keys() {
             self.table_index_map.insert(*table_index, relation_idx);
@@ -96,7 +96,7 @@ impl DPhpy {
         }
         Ok((
             Arc::new(s_expr.replace_children([left_expr, right_expr])),
-            left_optimized && right_optimized,
+            true,
         ))
     }
 
