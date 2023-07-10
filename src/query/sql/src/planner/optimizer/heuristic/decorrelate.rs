@@ -273,7 +273,7 @@ impl SubqueryRewriter {
                     Arc::new(left.clone()),
                     Arc::new(flatten_plan),
                 );
-                Ok((s_expr, UnnestResult::SingleJoin {output_index: None}))
+                Ok((s_expr, UnnestResult::SingleJoin { output_index: None }))
             }
             SubqueryType::Exists | SubqueryType::NotExists => {
                 if is_conjunctive_predicate {

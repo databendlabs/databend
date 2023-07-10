@@ -190,7 +190,7 @@ impl RangeJoinState {
             None,
         )?;
         if !ie_join_state.intersection(&l1_sorted_block, &right_block) {
-            return Ok(vec![]);
+            return Ok(vec![DataBlock::empty()]);
         }
         let mut left_sorted_blocks = vec![l1_sorted_block, right_block];
 

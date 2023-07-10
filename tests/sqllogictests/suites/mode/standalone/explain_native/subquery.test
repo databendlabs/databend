@@ -156,31 +156,43 @@ explain select t.number from numbers(1) as t where number = (select * from numbe
 ----
 EvalScalar
 ├── expressions: [t.number (#0)]
-├── estimated rows: 0.20
+├── estimated rows: 1.00
 └── HashJoin
     ├── join type: INNER
-    ├── build keys: [subquery_1 (#1)]
-    ├── probe keys: [t.number (#0)]
+    ├── build keys: [_if_scalar_subquery (#4)]
+    ├── probe keys: [CAST(t.number (#0) AS UInt64 NULL)]
     ├── filters: []
-    ├── estimated rows: 0.20
+    ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── expressions: [numbers.number (#1)]
-    │   ├── estimated rows: 0.20
+    │   ├── expressions: [if(CAST(_count_scalar_subquery (#2) = 0 AS Boolean NULL), NULL, _any_scalar_subquery (#3))]
+    │   ├── estimated rows: 1.00
     │   └── Limit
     │       ├── limit: 1
     │       ├── offset: 0
-    │       ├── estimated rows: 0.20
-    │       └── Filter
-    │           ├── filters: [numbers.number (#1) = 0]
-    │           ├── estimated rows: 0.20
-    │           └── TableScan
-    │               ├── table: default.system.numbers
-    │               ├── read rows: 1
-    │               ├── read bytes: 8
-    │               ├── partitions total: 1
-    │               ├── partitions scanned: 1
-    │               ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
-    │               └── estimated rows: 1.00
+    │       ├── estimated rows: 1.00
+    │       └── AggregateFinal
+    │           ├── group by: []
+    │           ├── aggregate functions: [count(number), any(number)]
+    │           ├── limit: 1
+    │           ├── estimated rows: 1.00
+    │           └── AggregatePartial
+    │               ├── group by: []
+    │               ├── aggregate functions: [count(number), any(number)]
+    │               ├── estimated rows: 1.00
+    │               └── EvalScalar
+    │                   ├── expressions: [numbers.number (#1)]
+    │                   ├── estimated rows: 0.20
+    │                   └── Filter
+    │                       ├── filters: [numbers.number (#1) = 0]
+    │                       ├── estimated rows: 0.20
+    │                       └── TableScan
+    │                           ├── table: default.system.numbers
+    │                           ├── read rows: 1
+    │                           ├── read bytes: 8
+    │                           ├── partitions total: 1
+    │                           ├── partitions scanned: 1
+    │                           ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
+    │                           └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
         ├── read rows: 1
