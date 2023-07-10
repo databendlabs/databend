@@ -100,13 +100,13 @@ impl FuseTable {
             self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
 
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeBlock::new(
+            let proc = TransformSerializeBlock::try_create(
                 ctx.clone(),
                 input,
                 output,
                 self,
                 cluster_stats_gen.clone(),
-            );
+            )?;
             proc.into_processor()
         })?;
 

@@ -304,6 +304,7 @@ impl FuseTable {
             self.operator.clone(),
             self.table_info.schema(),
             &push_down,
+            self.bloom_index_cols(),
         )?;
 
         let segment_locations = create_segment_location_vector(segment_locations, None);
