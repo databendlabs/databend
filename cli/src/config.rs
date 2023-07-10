@@ -56,7 +56,7 @@ pub struct Settings {
     pub max_display_rows: usize,
     /// limit display render each column max width, smaller than 3 means disable the limit
     pub max_col_width: usize,
-    /// limit display render box max width, 0 means disable the limit
+    /// limit display render box max width, 0 means default to the size of the terminal
     pub max_width: usize,
     /// Output format is set by the flag.
     pub output_format: OutputFormat,
