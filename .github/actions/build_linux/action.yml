@@ -1,6 +1,9 @@
 name: "Build Linux"
 description: "Build with profile"
 inputs:
+  sha:
+    description: "Git commit sha"
+    required: true
   target:
     description: ""
     required: true
@@ -109,6 +112,6 @@ runs:
       if: inputs.upload == 'true'
       uses: ./.github/actions/artifact_upload
       with:
-        sha: ${{ github.sha }}
+        sha: ${{ inputs.sha }}
         target: ${{ inputs.target }}
         category: ${{ inputs.features }}
