@@ -41,8 +41,8 @@ use tracing::info;
 
 use crate::metrics::metrics_inc_copy_commit_data_cost_milliseconds;
 use crate::metrics::metrics_inc_copy_commit_data_counter;
-use crate::metrics::metrics_inc_copy_purged_files_cost_milliseconds;
-use crate::metrics::metrics_inc_copy_purged_files_counter;
+use crate::metrics::metrics_inc_copy_purge_files_cost_milliseconds;
+use crate::metrics::metrics_inc_copy_purge_files_counter;
 use crate::pipelines::builders::build_append2table_without_commit_pipeline;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
@@ -207,8 +207,8 @@ pub fn set_copy_on_finished(
 
                         // Perf.
                         {
-                            metrics_inc_copy_purged_files_counter(files.len() as u32);
-                            metrics_inc_copy_purged_files_cost_milliseconds(
+                            metrics_inc_copy_purge_files_counter(files.len() as u32);
+                            metrics_inc_copy_purge_files_cost_milliseconds(
                                 start.elapsed().as_millis() as u32,
                             );
                         }

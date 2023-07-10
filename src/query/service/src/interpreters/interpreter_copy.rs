@@ -43,6 +43,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::metrics::metrics_inc_copy_read_file_cost_milliseconds;
 use crate::metrics::metrics_inc_copy_read_file_counter;
+use crate::metrics::metrics_inc_copy_read_file_size_bytes;
 use crate::pipelines::builders::build_append2table_with_commit_pipeline;
 use crate::pipelines::builders::build_append_data_pipeline;
 use crate::pipelines::builders::build_commit_data_pipeline;
@@ -239,6 +240,8 @@ impl CopyInterpreter {
 
         // Perf
         {
+            let sizes: u64 = files.iter().map(|f| f.size).sum();
+            metrics_inc_copy_read_file_size_bytes(sizes as u32);
             metrics_inc_copy_read_file_counter(files.len() as u32);
             metrics_inc_copy_read_file_cost_milliseconds(start.elapsed().as_millis() as u32);
         }
