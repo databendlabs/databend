@@ -278,7 +278,14 @@ impl RangeJoinState {
 
         drop(left_sorted_blocks);
 
-        Ok(vec![self.ie_join_finalize(l1, l2, l1_index_column, &p_array, bit_array, task_id)?])
+        Ok(vec![self.ie_join_finalize(
+            l1,
+            l2,
+            l1_index_column,
+            &p_array,
+            bit_array,
+            task_id,
+        )?])
     }
 
     pub fn ie_join_finalize(
