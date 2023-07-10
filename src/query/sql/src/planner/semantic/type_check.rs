@@ -2681,14 +2681,10 @@ impl<'a> TypeChecker<'a> {
         column: ColumnBinding,
         paths: &mut VecDeque<(Span, Literal)>,
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        let table_index = self
-            .metadata
-            .read()
-            .get_table_index(
-                column.database_name.as_deref(),
-                column.table_name.as_deref().unwrap(),
-            )
-            .unwrap();
+        let table_index = self.metadata.read().get_table_index(
+            column.database_name.as_deref(),
+            column.table_name.as_deref().unwrap(),
+        )?;
 
         if !self
             .metadata
