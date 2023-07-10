@@ -14,11 +14,9 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Instant;
 
 use chrono::Utc;
 use common_base::runtime::GlobalIORuntime;
-use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -34,64 +32,36 @@ use common_sql::executor::DistributedCopyIntoTable;
 use common_sql::plans::CopyIntoTableMode;
 use common_sql::plans::CopyIntoTablePlan;
 use common_storage::StageFileInfo;
+use common_storages_fuse::io::Files;
+use common_storages_stage::StageTable;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 
 use crate::pipelines::builders::build_append2table_pipeline;
 use crate::pipelines::builders::build_append2table_without_commit_pipeline;
-use crate::pipelines::builders::try_purge_files;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::sessions::QueryContext;
 
-pub enum CopyPlanParam {
-    CopyIntoTablePlanOption(CopyIntoTablePlan),
-    DistributedCopyIntoTable(DistributedCopyIntoTable),
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn build_append_data_with_finish_pipeline(
+/// Build a pipeline for append data in local mode.
+/// 1. commit append data
+/// 2. purge files if PURGE = true
+pub fn build_local_append_data_pipeline(
     ctx: Arc<QueryContext>,
     main_pipeline: &mut Pipeline,
+    plan: CopyIntoTablePlan,
     source_schema: Arc<DataSchema>,
-    plan_option: CopyPlanParam,
     to_table: Arc<dyn Table>,
     files: Vec<StageFileInfo>,
-    start: Instant,
-    use_commit: bool,
 ) -> Result<()> {
-    let plan_required_source_schema: DataSchemaRef;
-    let plan_required_values_schema: DataSchemaRef;
-    let plan_values_consts: Vec<Scalar>;
-    let plan_stage_table_info: StageTableInfo;
-    let plan_force: bool;
-    let plan_write_mode: CopyIntoTableMode;
-    let local_id;
-    match plan_option {
-        CopyPlanParam::CopyIntoTablePlanOption(plan) => {
-            plan_required_source_schema = plan.required_source_schema;
-            plan_required_values_schema = plan.required_values_schema;
-            plan_values_consts = plan.values_consts;
-            plan_stage_table_info = plan.stage_table_info;
-            plan_force = plan.force;
-            plan_write_mode = plan.write_mode;
-            local_id = ctx.get_cluster().local_id.clone();
-        }
-        CopyPlanParam::DistributedCopyIntoTable(plan) => {
-            plan_required_source_schema = plan.required_source_schema;
-            plan_required_values_schema = plan.required_values_schema;
-            plan_values_consts = plan.values_consts;
-            plan_stage_table_info = plan.stage_table_info;
-            plan_force = plan.force;
-            plan_write_mode = plan.write_mode;
-            local_id = plan.local_node_id;
-        }
-    }
-
-    debug!("source schema:{:?}", source_schema);
-    debug!("required source schema:{:?}", plan_required_source_schema);
-    debug!("required values schema:{:?}", plan_required_values_schema);
+    let plan_required_source_schema = plan.required_source_schema;
+    let plan_required_values_schema = plan.required_values_schema;
+    let plan_values_consts = plan.values_consts;
+    let plan_stage_table_info = plan.stage_table_info;
+    let plan_force = plan.force;
+    let plan_write_mode = plan.write_mode;
+    let source_node_id = ctx.get_cluster().local_id.clone();
 
     if source_schema != plan_required_source_schema {
         // only parquet need cast
@@ -117,74 +87,145 @@ pub fn build_append_data_with_finish_pipeline(
         )?;
     }
 
-    let stage_info_clone = plan_stage_table_info.stage_info;
-    let write_mode = plan_write_mode;
     let mut purge = true;
+    let stage_info = plan_stage_table_info.stage_info;
+    let write_mode = plan_write_mode;
     match write_mode {
         CopyIntoTableMode::Insert { overwrite } => {
-            if use_commit {
-                build_append2table_pipeline(
-                    ctx.clone(),
-                    main_pipeline,
-                    to_table,
-                    plan_required_values_schema,
-                    None,
-                    overwrite,
-                    AppendMode::Copy,
-                )?;
-            } else {
-                build_append2table_without_commit_pipeline(
-                    ctx.clone(),
-                    main_pipeline,
-                    to_table,
-                    plan_required_values_schema,
-                    AppendMode::Copy,
-                )?
-            }
+            build_append2table_pipeline(
+                ctx.clone(),
+                main_pipeline,
+                to_table,
+                plan_required_values_schema,
+                None,
+                overwrite,
+                AppendMode::Copy,
+            )?;
         }
+        CopyIntoTableMode::Replace => {}
         CopyIntoTableMode::Copy => {
-            if !stage_info_clone.copy_options.purge {
+            if !stage_info.copy_options.purge {
                 purge = false;
             }
 
-            if use_commit {
-                let copied_files = build_upsert_copied_files_to_meta_req(
-                    ctx.clone(),
-                    to_table.clone(),
-                    stage_info_clone.clone(),
-                    files.clone(),
-                    plan_force,
-                )?;
-                build_append2table_pipeline(
-                    ctx.clone(),
-                    main_pipeline,
-                    to_table,
-                    plan_required_values_schema,
-                    copied_files,
-                    false,
-                    AppendMode::Copy,
-                )?;
-            } else {
-                build_append2table_without_commit_pipeline(
-                    ctx.clone(),
-                    main_pipeline,
-                    to_table,
-                    plan_required_values_schema,
-                    AppendMode::Copy,
-                )?
-            }
+            let copied_files = build_upsert_copied_files_to_meta_req(
+                ctx.clone(),
+                to_table.clone(),
+                stage_info.clone(),
+                files.clone(),
+                plan_force,
+            )?;
+            build_append2table_pipeline(
+                ctx.clone(),
+                main_pipeline,
+                to_table,
+                plan_required_values_schema,
+                copied_files,
+                false,
+                AppendMode::Copy,
+            )?;
         }
-        CopyIntoTableMode::Replace => {}
     }
 
-    if local_id == ctx.get_cluster().local_id {
+    // set finished callback to pipeline.
+    set_pipeline_finish_callback(ctx, main_pipeline, source_node_id, stage_info, files, purge)
+}
+
+/// Build a pipeline for append data for distributed mode.
+/// 1. only append data to table not commit
+/// 2. not purge files
+pub fn build_distributed_append_data_pipeline(
+    ctx: Arc<QueryContext>,
+    main_pipeline: &mut Pipeline,
+    plan: DistributedCopyIntoTable,
+    source_schema: Arc<DataSchema>,
+    to_table: Arc<dyn Table>,
+    files: Vec<StageFileInfo>,
+) -> Result<()> {
+    let plan_required_source_schema = plan.required_source_schema;
+    let plan_required_values_schema = plan.required_values_schema;
+    let plan_values_consts = plan.values_consts;
+    let plan_stage_table_info = plan.stage_table_info;
+    let plan_write_mode = plan.write_mode;
+    let source_node_id = plan.local_node_id;
+
+    if source_schema != plan_required_source_schema {
+        // only parquet need cast
+        let func_ctx = ctx.get_function_context()?;
+        main_pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformCastSchema::try_create(
+                transform_input_port,
+                transform_output_port,
+                source_schema.clone(),
+                plan_required_source_schema.clone(),
+                func_ctx.clone(),
+            )
+        })?;
+    }
+
+    if !plan_values_consts.is_empty() {
+        fill_const_columns(
+            ctx.clone(),
+            main_pipeline,
+            source_schema,
+            plan_required_values_schema.clone(),
+            plan_values_consts,
+        )?;
+    }
+
+    let mut purge = true;
+    let stage_info = plan_stage_table_info.stage_info;
+    // Only append to table, not commit.
+    let write_mode = plan_write_mode;
+    match write_mode {
+        CopyIntoTableMode::Insert { overwrite: _ } => build_append2table_without_commit_pipeline(
+            ctx.clone(),
+            main_pipeline,
+            to_table,
+            plan_required_values_schema,
+            AppendMode::Copy,
+        )?,
+        CopyIntoTableMode::Replace => {}
+        CopyIntoTableMode::Copy => {
+            if !stage_info.copy_options.purge {
+                purge = false;
+            }
+
+            build_append2table_without_commit_pipeline(
+                ctx.clone(),
+                main_pipeline,
+                to_table,
+                plan_required_values_schema,
+                AppendMode::Copy,
+            )?
+        }
+    }
+
+    // set finished callback to pipeline.
+    set_pipeline_finish_callback(ctx, main_pipeline, source_node_id, stage_info, files, purge)
+}
+
+/// Set finish callback.
+/// If coordinator node, do purge job.
+fn set_pipeline_finish_callback(
+    ctx: Arc<QueryContext>,
+    main_pipeline: &mut Pipeline,
+    source_node_id: String,
+    stage_info: StageInfo,
+    copied_files: Vec<StageFileInfo>,
+    purge: bool,
+) -> Result<()> {
+    // Coordinator node will do the purge job.
+    if source_node_id == ctx.get_cluster().local_id {
         main_pipeline.set_on_finished(move |may_error| {
             match may_error {
                 None => {
                     GlobalIORuntime::instance().block_on(async move {
                         {
-                            let status =
-                                format!("end of commit, number of copied files:{}", files.len());
+                            let status = format!(
+                                "end of commit, number of copied files:{}",
+                                copied_files.len()
+                            );
                             ctx.set_status_info(&status);
                             info!(status);
                         }
@@ -195,7 +236,7 @@ pub fn build_append_data_with_finish_pipeline(
                             for (file_name, e) in error_map {
                                 error!(
                                     "copy(on_error={}): file {} encounter error {},",
-                                    stage_info_clone.copy_options.on_error,
+                                    stage_info.copy_options.on_error,
                                     file_name,
                                     e.to_string()
                                 );
@@ -205,23 +246,14 @@ pub fn build_append_data_with_finish_pipeline(
                         // 2. Try to purge copied files if purge option is true, if error will skip.
                         // If a file is already copied(status with AlreadyCopied) we will try to purge them.
                         if purge {
-                            try_purge_files(ctx.clone(), &stage_info_clone, &files).await;
-                        }
-
-                        // Status.
-                        {
-                            info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+                            try_purge_files(ctx.clone(), &stage_info, &copied_files).await;
                         }
 
                         Ok(())
                     })?;
                 }
                 Some(error) => {
-                    error!(
-                        "copy failed, elapsed:{}, reason: {}",
-                        start.elapsed().as_secs(),
-                        error
-                    );
+                    error!("copy failed, reason: {}", error);
                 }
             }
             Ok(())
@@ -283,7 +315,7 @@ pub fn build_upsert_copied_files_to_meta_req(
     Ok(upsert_copied_files_request)
 }
 
-pub fn fill_const_columns(
+fn fill_const_columns(
     ctx: Arc<QueryContext>,
     pipeline: &mut Pipeline,
     input_schema: DataSchemaRef,
@@ -301,4 +333,29 @@ pub fn fill_const_columns(
         )
     })?;
     Ok(())
+}
+
+#[async_backtrace::framed]
+async fn try_purge_files(
+    ctx: Arc<QueryContext>,
+    stage_info: &StageInfo,
+    stage_files: &[StageFileInfo],
+) {
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    let op = StageTable::get_op(stage_info);
+    match op {
+        Ok(op) => {
+            let file_op = Files::create(table_ctx, op);
+            let files = stage_files
+                .iter()
+                .map(|v| v.path.clone())
+                .collect::<Vec<_>>();
+            if let Err(e) = file_op.remove_file_in_batch(&files).await {
+                error!("Failed to delete file: {:?}, error: {}", files, e);
+            }
+        }
+        Err(e) => {
+            error!("Failed to get stage table op, error: {}", e);
+        }
+    }
 }
