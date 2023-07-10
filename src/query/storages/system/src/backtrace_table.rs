@@ -40,26 +40,36 @@ pub struct BacktraceTable {
 impl SyncSystemTable for BacktraceTable {
     const NAME: &'static str = "system.backtrace";
 
+    // Allow distributed query.
     const IS_LOCAL: bool = false;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
-    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+        let node_id = ctx.get_cluster().local_id.clone();
         let stack = dump_backtrace(false);
+
+        let mut nodes = ColumnBuilder::with_capacity(&DataType::String, 1);
+        nodes.push(Scalar::String(node_id.as_bytes().to_vec()).as_ref());
 
         let mut stacks = ColumnBuilder::with_capacity(&DataType::String, 1);
         stacks.push(Scalar::String(stack.as_bytes().to_vec()).as_ref());
 
-        Ok(DataBlock::new_from_columns(vec![stacks.build()]))
+        Ok(DataBlock::new_from_columns(vec![
+            nodes.build(),
+            stacks.build(),
+        ]))
     }
 }
 
 impl BacktraceTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema =
-            TableSchemaRefExt::create(vec![TableField::new("stack", TableDataType::String)]);
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("node", TableDataType::String),
+            TableField::new("stack", TableDataType::String),
+        ]);
 
         let table_info = TableInfo {
             desc: "'system'.'backtrace'".to_string(),
