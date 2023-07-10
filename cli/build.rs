@@ -16,6 +16,10 @@ use std::error::Error;
 use vergen::EmitBuilder;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    EmitBuilder::builder().all_build().all_git().emit()?;
+    let _ = EmitBuilder::builder()
+        .fail_on_error()
+        .build_timestamp()
+        .git_sha(true)
+        .emit();
     Ok(())
 }
