@@ -67,7 +67,7 @@ impl DPhpy {
         }
     }
 
-    fn new_children(&mut self, s_expr: Arc<SExpr>) -> Result<Arc<SExpr>> {
+    fn new_children(&mut self, s_expr: Arc<SExpr>) -> Result<(Arc<SExpr>, bool)> {
         // Parallel process children
         let ctx = self.ctx.clone();
         let metadata = self.metadata.clone();
@@ -84,9 +84,9 @@ impl DPhpy {
             (dphyp.optimize(right_expr), dphyp.table_index_map)
         });
         let left_res = left_res.join()?;
-        let (left_expr, _) = left_res.0?;
+        let (left_expr, left_optimized) = left_res.0?;
         let right_res = right_res.join()?;
-        let (right_expr, _) = right_res.0?;
+        let (right_expr, right_optimized) = right_res.0?;
         let relation_idx = self.join_relations.len() as IndexType;
         for table_index in left_res.1.keys() {
             self.table_index_map.insert(*table_index, relation_idx);
@@ -94,7 +94,10 @@ impl DPhpy {
         for table_index in right_res.1.keys() {
             self.table_index_map.insert(*table_index, relation_idx);
         }
-        Ok(Arc::new(s_expr.replace_children([left_expr, right_expr])))
+        Ok((
+            Arc::new(s_expr.replace_children([left_expr, right_expr])),
+            left_optimized && right_optimized,
+        ))
     }
 
     // Traverse the s_expr and get all base relations and join conditions
@@ -108,19 +111,21 @@ impl DPhpy {
     ) -> Result<(Arc<SExpr>, bool)> {
         // Start to traverse and stop when meet join
         if s_expr.is_pattern() {
-            return Ok((s_expr, false));
+            return Ok((s_expr, true));
         }
 
         if is_subquery {
             // If it's a subquery, start a new dphyp
             let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
-            let (new_s_expr, _) = dphyp.optimize(s_expr)?;
-            let relation_idx = self.join_relations.len() as IndexType;
-            for table_index in dphyp.table_index_map.keys() {
-                self.table_index_map.insert(*table_index, relation_idx);
+            let (new_s_expr, optimized) = dphyp.optimize(s_expr)?;
+            if optimized {
+                let relation_idx = self.join_relations.len() as IndexType;
+                for table_index in dphyp.table_index_map.keys() {
+                    self.table_index_map.insert(*table_index, relation_idx);
+                }
+                self.join_relations.push(JoinRelation::new(&new_s_expr));
             }
-            self.join_relations.push(JoinRelation::new(&new_s_expr));
-            return Ok((new_s_expr, true));
+            return Ok((new_s_expr, optimized));
         }
 
         match s_expr.plan.as_ref() {
@@ -149,16 +154,25 @@ impl DPhpy {
                 let mut right_is_subquery = false;
                 let left_op = s_expr.child(0)?.plan.as_ref();
                 let right_op = s_expr.child(1)?.plan.as_ref();
-                // Eager aggregate will be executed after dphyp, so if join's child is aggregate, we should treat it as subquery.
                 if matches!(
                     left_op,
-                    RelOperator::EvalScalar(_) | RelOperator::Aggregate(_)
+                    RelOperator::EvalScalar(_)
+                        | RelOperator::Aggregate(_)
+                        | RelOperator::Sort(_)
+                        | RelOperator::Limit(_)
+                        | RelOperator::ProjectSet(_)
+                        | RelOperator::Window(_)
                 ) {
                     left_is_subquery = true;
                 }
                 if matches!(
                     right_op,
-                    RelOperator::EvalScalar(_) | RelOperator::Aggregate(_)
+                    RelOperator::EvalScalar(_)
+                        | RelOperator::Aggregate(_)
+                        | RelOperator::Sort(_)
+                        | RelOperator::Limit(_)
+                        | RelOperator::ProjectSet(_)
+                        | RelOperator::Window(_)
                 ) {
                     right_is_subquery = true;
                 }
@@ -173,10 +187,10 @@ impl DPhpy {
                     };
                     self.filters.insert(filter);
                 }
-                if !is_inner_join {
-                    let new_s_expr = self.new_children(s_expr)?;
+                if !is_inner_join || (left_is_subquery && right_is_subquery) {
+                    let (new_s_expr, optimized) = self.new_children(s_expr)?;
                     self.join_relations.push(JoinRelation::new(&new_s_expr));
-                    Ok((new_s_expr, true))
+                    Ok((new_s_expr, optimized))
                 } else {
                     let left_res = self.get_base_relations(
                         s_expr.children()[0].clone(),
@@ -197,9 +211,15 @@ impl DPhpy {
                     Ok((new_s_expr, left_res.1 && right_res.1))
                 }
             }
-            RelOperator::EvalScalar(_) | RelOperator::Filter(_) => {
+            RelOperator::ProjectSet(_)
+            | RelOperator::Aggregate(_)
+            | RelOperator::Sort(_)
+            | RelOperator::Limit(_)
+            | RelOperator::EvalScalar(_)
+            | RelOperator::Window(_)
+            | RelOperator::Filter(_) => {
                 if join_child {
-                    // If plan in filter, save it
+                    // If plan is filter, save it
                     if let RelOperator::Filter(op) = s_expr.plan.as_ref() {
                         self.filters.insert(op.clone());
                     }
@@ -224,30 +244,15 @@ impl DPhpy {
                     Ok((new_s_expr, optimized))
                 }
             }
-            RelOperator::ProjectSet(_)
-            | RelOperator::Aggregate(_)
-            | RelOperator::Window(_)
-            | RelOperator::Sort(_)
-            | RelOperator::Limit(_) => {
-                let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
-                let (child, _) = dphyp.optimize(s_expr.children()[0].clone())?;
-                let relation_idx = self.join_relations.len() as IndexType;
-                for table_index in dphyp.table_index_map.keys() {
-                    self.table_index_map.insert(*table_index, relation_idx);
-                }
-                let new_s_expr = Arc::new(s_expr.replace_children([child]));
-                self.join_relations.push(JoinRelation::new(&new_s_expr));
-                Ok((new_s_expr, false))
-            }
             RelOperator::UnionAll(_) => {
-                let new_s_expr = self.new_children(s_expr)?;
+                let (new_s_expr, optimized) = self.new_children(s_expr)?;
                 self.join_relations.push(JoinRelation::new(&new_s_expr));
-                Ok((new_s_expr, true))
+                Ok((new_s_expr, optimized))
             }
             RelOperator::Exchange(_)
             | RelOperator::Pattern(_)
             | RelOperator::RuntimeFilterSource(_) => unreachable!(),
-            RelOperator::DummyTableScan(_) => Ok((s_expr, false)),
+            RelOperator::DummyTableScan(_) => Ok((s_expr, true)),
         }
     }
 
@@ -258,9 +263,9 @@ impl DPhpy {
         // Firstly, we need to extract all join conditions and base tables
         // `join_condition` is pair, left is left_condition, right is right_condition
         let mut join_conditions = vec![];
-        let (s_expr, res) =
+        let (s_expr, optimized) =
             self.get_base_relations(s_expr, &mut join_conditions, false, None, false)?;
-        if !res {
+        if !optimized {
             return Ok((s_expr, false));
         }
         if self.join_relations.len() == 1 {
@@ -303,6 +308,9 @@ impl DPhpy {
                     )?;
                 }
                 continue;
+            } else {
+                // If one of `left_relation_set` and `right_relation_set` is empty, we need to forbid dphyp algo
+                return Ok((s_expr, false));
             }
         }
         for (_, neighbors) in self.query_graph.cached_neighbors.iter_mut() {

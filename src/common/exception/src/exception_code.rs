@@ -35,6 +35,7 @@ macro_rules! build_exceptions {
                     let bt = capture();
                     ErrorCode::create(
                         $code,
+                        stringify!($body),
                         display_text.into(),
                         None,
                         bt,
@@ -183,8 +184,7 @@ build_exceptions! {
 
     // Index related errors.
     UnsupportedIndex(1601),
-    IndexAlreadyRefreshed(1602),
-    RefreshIndexError(1603),
+    RefreshIndexError(1602),
 }
 
 // Meta service errors [2001, 3000].

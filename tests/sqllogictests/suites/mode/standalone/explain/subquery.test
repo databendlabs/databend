@@ -8,7 +8,7 @@ EvalScalar
     ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(CAST(is_not_null(scalar_subquery_5 (#5)) AS Boolean NULL), scalar_subquery_5 (#5), 0))]
     ├── estimated rows: 0.20
     └── HashJoin
-        ├── join type: SINGLE
+        ├── join type: LEFT SINGLE
         ├── build keys: [number (#2)]
         ├── probe keys: [number (#0)]
         ├── filters: []
@@ -161,7 +161,7 @@ EvalScalar
     ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = scalar_subquery_1 (#1))]
     ├── estimated rows: 0.20
     └── HashJoin
-        ├── join type: SINGLE
+        ├── join type: LEFT SINGLE
         ├── build keys: []
         ├── probe keys: []
         ├── filters: []
@@ -397,7 +397,7 @@ EvalScalar
     ├── filters: [is_true(try_to_boolean(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), TRY_CAST(scalar_subquery_4 (#4) AS UInt64 NULL), 0)))]
     ├── estimated rows: 0.20
     └── HashJoin
-        ├── join type: SINGLE
+        ├── join type: LEFT SINGLE
         ├── build keys: [number (#2)]
         ├── probe keys: [number (#0)]
         ├── filters: []

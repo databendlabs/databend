@@ -14,6 +14,10 @@
 
 mod admin;
 mod license_info;
+mod suggested_background_compaction_tasks;
+pub mod suggested_background_tasks;
 pub mod tenant_quota;
 
 pub use admin::AdminProcedure;
+
+pub use crate::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;

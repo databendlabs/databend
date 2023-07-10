@@ -14,7 +14,6 @@
 
 use std::convert::TryFrom;
 use std::sync::Arc;
-use std::time::Instant;
 
 use async_channel::Receiver;
 use common_catalog::table::AppendMode;
@@ -81,7 +80,7 @@ use common_storage::DataOperator;
 use common_storages_factory::Table;
 use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
-use common_storages_fuse::operations::SerializeDataTransform;
+use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use common_storages_stage::StageTable;
 use petgraph::matrix_graph::Zero;
@@ -91,9 +90,8 @@ use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::interpreters::append_data_and_set_finish;
-use crate::interpreters::fill_missing_columns;
-use crate::interpreters::PlanParam;
+use crate::pipelines::builders::build_distributed_append_data_pipeline;
+use crate::pipelines::builders::build_fill_missing_columns_pipeline;
 use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
@@ -222,19 +220,17 @@ impl PipelineBuilder {
         stage_table.set_block_thresholds(distributed_plan.thresholds);
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
-        let start = Instant::now();
         stage_table.read_data(table_ctx, &distributed_plan.source, &mut self.main_pipeline)?;
         // append data
-        append_data_and_set_finish(
-            &mut self.main_pipeline,
-            distributed_plan.required_source_schema.clone(),
-            PlanParam::DistributedCopyIntoTable(distributed_plan.clone()),
+        build_distributed_append_data_pipeline(
             ctx,
+            &mut self.main_pipeline,
+            distributed_plan.clone(),
+            distributed_plan.required_source_schema.clone(),
             to_table,
             distributed_plan.files.clone(),
-            start,
-            false,
         )?;
+
         Ok(())
     }
 
@@ -263,13 +259,14 @@ impl PipelineBuilder {
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;
         self.main_pipeline.add_transform(|input, output| {
-            SerializeDataTransform::try_create(
+            let proc = TransformSerializeBlock::new(
                 self.ctx.clone(),
                 input,
                 output,
                 table,
                 cluster_stats_gen.clone(),
-            )
+            );
+            proc.into_processor()
         })?;
         Ok(())
     }
@@ -861,7 +858,7 @@ impl PipelineBuilder {
         if params.group_columns.is_empty() {
             self.build_pipeline(&aggregate.input)?;
             self.main_pipeline.try_resize(1)?;
-            return self.main_pipeline.add_transform(|input, output| {
+            self.main_pipeline.add_transform(|input, output| {
                 let transform = FinalSingleStateAggregator::try_create(input, output, &params)?;
 
                 if self.enable_profiling {
@@ -873,20 +870,22 @@ impl PipelineBuilder {
                 } else {
                     Ok(ProcessorPtr::create(transform))
                 }
-            });
-        }
-
-        // Append a profile stub to record the output rows and bytes
-        if self.enable_profiling {
-            self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(Transformer::create(
-                    input,
-                    output,
-                    ProfileStub::new(aggregate.plan_id, self.proc_profs.clone())
-                        .accumulate_output_rows()
-                        .accumulate_output_bytes(),
-                )))
             })?;
+
+            // Append a profile stub to record the output rows and bytes
+            if self.enable_profiling {
+                self.main_pipeline.add_transform(|input, output| {
+                    Ok(ProcessorPtr::create(Transformer::create(
+                        input,
+                        output,
+                        ProfileStub::new(aggregate.plan_id, self.proc_profs.clone())
+                            .accumulate_output_rows()
+                            .accumulate_output_bytes(),
+                    )))
+                })?;
+            }
+
+            return Ok(());
         }
 
         let settings = self.ctx.get_settings();
@@ -1381,11 +1380,11 @@ impl PipelineBuilder {
             .get_table_by_info(&insert_select.table_info)?;
 
         let source_schema = insert_schema;
-        fill_missing_columns(
+        build_fill_missing_columns_pipeline(
             self.ctx.clone(),
+            &mut self.main_pipeline,
             table.clone(),
             source_schema.clone(),
-            &mut self.main_pipeline,
         )?;
 
         table.append_data(

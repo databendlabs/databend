@@ -12,7 +12,7 @@ statement ok
 DROP AGGREGATING INDEX IF EXISTS testi;
 
 statement ok
-CREATE TABLE t (a int, b int, c int) storage_format = 'parquet'
+CREATE TABLE t (a int, b int, c int)
 
 statement ok
 INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)
@@ -79,10 +79,45 @@ statement ok
 DROP AGGREGATING INDEX testi
 
 # query: eval-agg-eval-scan, index: eval-filter-scan
-# No available case for index scan.
+statement ok
+CREATE AGGREGATING INDEX testi AS select a + 1, b from t
+
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query I
+select sum(a + 1) as s from t group by b order by s
+----
+2
+7
+
+query I
+select sum(a + 1) as s from t
+----
+9
+
+statement ok
+DROP AGGREGATING INDEX testi
 
 # query: eval-agg-eval-filter-scan, index: eval-filter-scan
-# No available case for index scan.
+statement ok
+CREATE AGGREGATING INDEX testi AS select a + 1, b from t where b > 1
+
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query I
+select sum(a + 1) as s from t where b > 1 group by b order by s
+----
+7
+
+query I
+select sum(a + 1) as s from t where b > 1 order by s
+----
+7
+
+statement ok
+DROP AGGREGATING INDEX testi
 
 # query: eval-scan, index: eval-agg-eval-scan
 # No available case for index scan.
@@ -98,7 +133,7 @@ CREATE AGGREGATING INDEX testi AS select sum(a), b from t group by b
 statement ok
 REFRESH AGGREGATING INDEX testi
 
-query 1
+query I
 select sum(a) + 1 as s from t group by b order by s
 ----
 2
@@ -115,7 +150,7 @@ CREATE AGGREGATING INDEX testi AS select sum(a), b from t group by b
 statement ok
 REFRESH AGGREGATING INDEX testi
 
-query 1
+query I
 select sum(a) + 1 from t where b > 1 group by b
 ----
 5
@@ -140,7 +175,7 @@ CREATE AGGREGATING INDEX testi AS select b, sum(a) from t where c > 1 group by b
 statement ok
 REFRESH AGGREGATING INDEX testi
 
-query 1
+query I
 select sum(a) + 1 as s from t where c > 1 group by b order by s
 ----
 2
@@ -153,7 +188,7 @@ statement ok
 DROP TABLE t
 
 statement ok
-CREATE TABLE t (a int, b int, c int) storage_format = 'parquet'
+CREATE TABLE t (a int, b int, c int)
 
 statement ok
 INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)
@@ -170,7 +205,7 @@ CREATE AGGREGATING INDEX testi AS select sum(a), b from t group by b
 statement ok
 REFRESH AGGREGATING INDEX testi LIMIT 1
 
-query 1
+query I
 select sum(a) + 1 as s from t group by b order by s
 ----
 3

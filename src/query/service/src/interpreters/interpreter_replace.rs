@@ -26,12 +26,12 @@ use common_sql::plans::Replace;
 use common_sql::NameResolutionContext;
 
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::fill_missing_columns;
 use crate::interpreters::interpreter_copy::CopyInterpreter;
 use crate::interpreters::interpreter_insert::ValueSource;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
+use crate::pipelines::builders::build_fill_missing_columns_pipeline;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -76,11 +76,11 @@ impl Interpreter for ReplaceInterpreter {
             return Ok(pipeline);
         }
 
-        fill_missing_columns(
+        build_fill_missing_columns_pipeline(
             self.ctx.clone(),
+            &mut pipeline.main_pipeline,
             table.clone(),
             self.plan.schema(),
-            &mut pipeline.main_pipeline,
         )?;
 
         let on_conflict_fields = plan.on_conflict_fields.clone();

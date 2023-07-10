@@ -89,7 +89,7 @@ impl RowConverter<StringColumn> for CommonRowConverter {
                             let col = c.remove_nullable();
                             let col = col.as_variant().unwrap();
                             let mut builder =
-                                StringColumnBuilder::with_capacity(col.len(), col.data.len());
+                                StringColumnBuilder::with_capacity(col.len(), col.data().len());
                             for (i, val) in col.iter().enumerate() {
                                 if let Some(validity) = validity {
                                     if unsafe { !validity.get_bit_unchecked(i) } {

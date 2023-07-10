@@ -122,7 +122,7 @@ pub async fn get_snapshot_referenced_files(
     };
 
     let locations_referenced = fuse_table
-        .get_block_locations(ctx.clone(), &segments_vec, false)
+        .get_block_locations(ctx.clone(), &segments_vec, false, false)
         .await?;
 
     let mut segments = HashSet::with_capacity(segments_vec.len());

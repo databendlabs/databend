@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::iter::TrustedLen;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -21,9 +22,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
+use common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
+use crate::sql::plans::JoinType;
 
 impl JoinHashTable {
     pub(crate) fn probe_right_join<'a, H: HashJoinHashtableLike, IT>(
@@ -57,6 +60,16 @@ impl JoinHashTable {
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
         let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+        let right_single_scan_map = if self.hash_join_desc.join_type == JoinType::RightSingle {
+            outer_scan_map
+                .iter_mut()
+                .map(|sp| unsafe {
+                    std::mem::transmute::<*mut bool, *mut AtomicBool>(sp.as_mut_ptr())
+                })
+                .collect::<Vec<_>>()
+        } else {
+            vec![]
+        };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -107,9 +120,17 @@ impl JoinHashTable {
                         let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
                         if self.hash_join_desc.other_predicate.is_none() {
                             result_blocks.push(merged_block);
-                            for row_ptr in local_build_indexes.iter() {
-                                outer_scan_map[row_ptr.chunk_index as usize]
-                                    [row_ptr.row_index as usize] = true;
+                            if self.hash_join_desc.join_type == JoinType::RightSingle {
+                                self.update_right_single_scan_map(
+                                    local_build_indexes,
+                                    &right_single_scan_map,
+                                    None,
+                                )?;
+                            } else {
+                                for row_ptr in local_build_indexes.iter() {
+                                    outer_scan_map[row_ptr.chunk_index as usize]
+                                        [row_ptr.row_index as usize] = true;
+                                }
                             }
                         } else {
                             let (bm, all_true, all_false) = self.get_other_filters(
@@ -119,22 +140,39 @@ impl JoinHashTable {
 
                             if all_true {
                                 result_blocks.push(merged_block);
-                                for row_ptr in local_build_indexes.iter() {
-                                    outer_scan_map[row_ptr.chunk_index as usize]
-                                        [row_ptr.row_index as usize] = true;
+                                if self.hash_join_desc.join_type == JoinType::RightSingle {
+                                    self.update_right_single_scan_map(
+                                        local_build_indexes,
+                                        &right_single_scan_map,
+                                        None,
+                                    )?;
+                                } else {
+                                    for row_ptr in local_build_indexes.iter() {
+                                        outer_scan_map[row_ptr.chunk_index as usize]
+                                            [row_ptr.row_index as usize] = true;
+                                    }
                                 }
                             } else if !all_false {
                                 // Safe to unwrap.
                                 let validity = bm.unwrap();
-                                let mut idx = 0;
-                                while idx < max_block_size {
-                                    let valid = unsafe { validity.get_bit_unchecked(idx) };
-                                    if valid {
-                                        outer_scan_map
-                                            [local_build_indexes[idx].chunk_index as usize]
-                                            [local_build_indexes[idx].row_index as usize] = true;
+                                if self.hash_join_desc.join_type == JoinType::RightSingle {
+                                    self.update_right_single_scan_map(
+                                        local_build_indexes,
+                                        &right_single_scan_map,
+                                        Some(&validity),
+                                    )?;
+                                } else {
+                                    let mut idx = 0;
+                                    while idx < max_block_size {
+                                        let valid = unsafe { validity.get_bit_unchecked(idx) };
+                                        if valid {
+                                            outer_scan_map
+                                                [local_build_indexes[idx].chunk_index as usize]
+                                                [local_build_indexes[idx].row_index as usize] =
+                                                true;
+                                        }
+                                        idx += 1;
                                     }
-                                    idx += 1;
                                 }
                                 let filtered_block =
                                     DataBlock::filter_with_bitmap(merged_block, &validity)?;
@@ -198,8 +236,17 @@ impl JoinHashTable {
         if !merged_block.is_empty() {
             if self.hash_join_desc.other_predicate.is_none() {
                 result_blocks.push(merged_block);
-                for row_ptr in local_build_indexes.iter().take(matched_num) {
-                    outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] = true;
+                if self.hash_join_desc.join_type == JoinType::RightSingle {
+                    self.update_right_single_scan_map(
+                        &local_build_indexes[0..matched_num],
+                        &right_single_scan_map,
+                        None,
+                    )?;
+                } else {
+                    for row_ptr in local_build_indexes.iter().take(matched_num) {
+                        outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] =
+                            true;
+                    }
                 }
             } else {
                 let (bm, all_true, all_false) = self.get_other_filters(
@@ -209,28 +256,82 @@ impl JoinHashTable {
 
                 if all_true {
                     result_blocks.push(merged_block);
-                    for row_ptr in local_build_indexes.iter().take(matched_num) {
-                        outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] =
-                            true;
+                    if self.hash_join_desc.join_type == JoinType::RightSingle {
+                        self.update_right_single_scan_map(
+                            &local_build_indexes[0..matched_num],
+                            &right_single_scan_map,
+                            None,
+                        )?;
+                    } else {
+                        for row_ptr in local_build_indexes.iter().take(matched_num) {
+                            outer_scan_map[row_ptr.chunk_index as usize]
+                                [row_ptr.row_index as usize] = true;
+                        }
                     }
                 } else if !all_false {
                     // Safe to unwrap.
                     let validity = bm.unwrap();
-                    let mut idx = 0;
-                    while idx < matched_num {
-                        let valid = unsafe { validity.get_bit_unchecked(idx) };
-                        if valid {
-                            outer_scan_map[local_build_indexes[idx].chunk_index as usize]
-                                [local_build_indexes[idx].row_index as usize] = true;
+                    if self.hash_join_desc.join_type == JoinType::RightSingle {
+                        self.update_right_single_scan_map(
+                            &local_build_indexes[0..matched_num],
+                            &right_single_scan_map,
+                            Some(&validity),
+                        )?;
+                    } else {
+                        let mut idx = 0;
+                        while idx < matched_num {
+                            let valid = unsafe { validity.get_bit_unchecked(idx) };
+                            if valid {
+                                outer_scan_map[local_build_indexes[idx].chunk_index as usize]
+                                    [local_build_indexes[idx].row_index as usize] = true;
+                            }
+                            idx += 1;
                         }
-                        idx += 1;
                     }
                     let filtered_block = DataBlock::filter_with_bitmap(merged_block, &validity)?;
                     result_blocks.push(filtered_block);
                 }
             }
         }
-
         Ok(result_blocks)
+    }
+
+    fn update_right_single_scan_map(
+        &self,
+        build_indexes: &[RowPtr],
+        right_single_scan_map: &[*mut AtomicBool],
+        bitmap: Option<&Bitmap>,
+    ) -> Result<()> {
+        let dummy_bitmap = Bitmap::new();
+        let (has_bitmap, validity) = match bitmap {
+            Some(validity) => (true, validity),
+            None => (false, &dummy_bitmap),
+        };
+        for (idx, row_ptr) in build_indexes.iter().enumerate() {
+            if has_bitmap && unsafe { !validity.get_bit_unchecked(idx) } {
+                continue;
+            }
+            let old = unsafe {
+                (*right_single_scan_map[row_ptr.chunk_index as usize]
+                    .add(row_ptr.row_index as usize))
+                .load(Ordering::SeqCst)
+            };
+            if old {
+                return Err(ErrorCode::Internal(
+                    "Scalar subquery can't return more than one row",
+                ));
+            }
+            let res = unsafe {
+                (*right_single_scan_map[row_ptr.chunk_index as usize]
+                    .add(row_ptr.row_index as usize))
+                .compare_exchange_weak(old, true, Ordering::SeqCst, Ordering::SeqCst)
+            };
+            if res.is_err() {
+                return Err(ErrorCode::Internal(
+                    "Scalar subquery can't return more than one row",
+                ));
+            }
+        }
+        Ok(())
     }
 }
