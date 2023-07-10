@@ -43,6 +43,7 @@ use crate::interpreters::SelectInterpreter;
 use crate::pipelines::builders::build_append2table_with_commit_pipeline;
 use crate::pipelines::builders::build_append_data_pipeline;
 use crate::pipelines::builders::build_commit_data_pipeline;
+use crate::pipelines::builders::set_copy_on_finished;
 use crate::pipelines::builders::CopyPlanType;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_distributed_pipeline;
@@ -280,7 +281,14 @@ impl CopyInterpreter {
         )?;
         // if it's replace mode, don't commit
         match plan.write_mode {
-            CopyIntoTableMode::Replace => {}
+            CopyIntoTableMode::Replace => set_copy_on_finished(
+                ctx,
+                files,
+                plan.stage_table_info.stage_info.copy_options.purge,
+                plan.force,
+                plan.stage_table_info.stage_info.clone(),
+                &mut build_res.main_pipeline,
+            )?,
             _ => {
                 // commit.
                 build_commit_data_pipeline(
@@ -292,7 +300,7 @@ impl CopyInterpreter {
                     plan.force,
                     plan.stage_table_info.stage_info.copy_options.purge,
                     insert_overwrite_option,
-                )?;
+                )?
             }
         }
 

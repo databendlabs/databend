@@ -155,6 +155,26 @@ pub fn build_commit_data_pipeline(
     )?;
 
     // set on_finished callback.
+    set_copy_on_finished(
+        ctx,
+        files,
+        copy_purge_option,
+        copy_force_option,
+        stage_info.clone(),
+        main_pipeline,
+    )?;
+    Ok(())
+}
+
+pub fn set_copy_on_finished(
+    ctx: Arc<QueryContext>,
+    files: Vec<StageFileInfo>,
+    copy_purge_option: bool,
+    copy_force_option: bool,
+    stage_info: StageInfo,
+    main_pipeline: &mut Pipeline,
+) -> Result<()> {
+    // set on_finished callback.
     main_pipeline.set_on_finished(move |may_error| {
         match may_error {
             None => {
@@ -194,7 +214,6 @@ pub fn build_commit_data_pipeline(
         }
         Ok(())
     });
-
     Ok(())
 }
 
