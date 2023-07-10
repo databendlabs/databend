@@ -22,11 +22,11 @@ macro_rules! key {
 
 /// COPY
 pub fn metrics_inc_copy_purged_files_counter(c: u32) {
-    increment_gauge!(key!("copy_purge_files_counter"), c as f64);
+    increment_gauge!(key!("copy_purge_file_counter"), c as f64);
 }
 
 pub fn metrics_inc_copy_purged_files_cost_milliseconds(c: u32) {
-    increment_gauge!(key!("copy_purged_files_cost_milliseconds"), c as f64);
+    increment_gauge!(key!("copy_purge_file_cost_milliseconds"), c as f64);
 }
 
 pub fn metrics_inc_copy_commit_data_counter(c: u32) {
@@ -46,7 +46,7 @@ pub fn metrics_inc_copy_append_data_cost_milliseconds(c: u32) {
 }
 
 pub fn metrics_inc_copy_read_file_counter(c: u32) {
-    increment_gauge!(key!("copy_read_stage_file_counter"), c as f64);
+    increment_gauge!(key!("copy_read_file_counter"), c as f64);
 }
 
 pub fn metrics_inc_copy_read_file_cost_milliseconds(c: u32) {
