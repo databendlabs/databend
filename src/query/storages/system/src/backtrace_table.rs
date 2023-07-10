@@ -40,6 +40,8 @@ pub struct BacktraceTable {
 impl SyncSystemTable for BacktraceTable {
     const NAME: &'static str = "system.backtrace";
 
+    const IS_LOCAL: bool = false;
+
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }

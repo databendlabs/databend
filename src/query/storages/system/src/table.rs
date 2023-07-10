@@ -58,6 +58,7 @@ impl PartInfo for SystemTablePart {
 
 pub trait SyncSystemTable: Send + Sync {
     const NAME: &'static str;
+    const IS_LOCAL: bool = true;
 
     fn get_table_info(&self) -> &TableInfo;
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock>;
@@ -67,12 +68,20 @@ pub trait SyncSystemTable: Send + Sync {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        Ok((
-            PartStatistics::default(),
-            Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
-                SystemTablePart,
-            ))]),
-        ))
+        match Self::IS_LOCAL {
+            true => Ok((
+                PartStatistics::default(),
+                Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
+                    SystemTablePart,
+                ))]),
+            )),
+            false => Ok((
+                PartStatistics::default(),
+                Partitions::create_nolazy(PartitionsShuffleKind::Broadcast, vec![Arc::new(
+                    Box::new(SystemTablePart),
+                )]),
+            )),
+        }
     }
 
     fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
@@ -98,6 +107,10 @@ where Self: Table
 impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable> {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn is_local(&self) -> bool {
+        TTable::IS_LOCAL
     }
 
     fn get_table_info(&self) -> &TableInfo {
@@ -179,6 +192,7 @@ impl<TTable: 'static + SyncSystemTable> SyncSource for SystemTableSyncSource<TTa
 #[async_trait::async_trait]
 pub trait AsyncSystemTable: Send + Sync {
     const NAME: &'static str;
+    const IS_LOCAL: bool = true;
 
     fn get_table_info(&self) -> &TableInfo;
     async fn get_full_data(
@@ -193,12 +207,20 @@ pub trait AsyncSystemTable: Send + Sync {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        Ok((
-            PartStatistics::default(),
-            Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
-                SystemTablePart,
-            ))]),
-        ))
+        match Self::IS_LOCAL {
+            true => Ok((
+                PartStatistics::default(),
+                Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
+                    SystemTablePart,
+                ))]),
+            )),
+            false => Ok((
+                PartStatistics::default(),
+                Partitions::create_nolazy(PartitionsShuffleKind::Broadcast, vec![Arc::new(
+                    Box::new(SystemTablePart),
+                )]),
+            )),
+        }
     }
 }
 
@@ -220,6 +242,10 @@ where Self: Table
 impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTable> {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn is_local(&self) -> bool {
+        TTable::IS_LOCAL
     }
 
     fn get_table_info(&self) -> &TableInfo {
