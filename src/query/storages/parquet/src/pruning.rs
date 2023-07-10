@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Read;
 use std::io::Seek;
+use std::mem;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Field as ArrowField;
@@ -74,6 +75,8 @@ pub struct PartitionPruner {
     // /// Limit of this query. If there is order by and filter, it will not be used (assign to `usize::MAX`).
     // pub limit: usize,
     pub parquet_fast_read_bytes: usize,
+
+    pub compression_ratio: f64,
 }
 
 fn check_parquet_schema(
@@ -228,15 +231,6 @@ impl PartitionPruner {
         }
 
         let mut partitions = Vec::with_capacity(locations.len());
-        for paths in small_files.chunks(self.columns_to_read.len().max(1)) {
-            stats.read_rows += paths.len();
-            stats.read_bytes += paths.iter().map(|(_, size)| *size as usize).sum::<usize>();
-            stats.partitions_scanned += 1;
-            stats.partitions_total += 1;
-            partitions.push(ParquetPart::SmallFiles(ParquetSmallFilesPart {
-                files: paths.to_vec(),
-            }))
-        }
 
         let is_blocking_io = operator.info().can_blocking();
 
@@ -259,6 +253,8 @@ impl PartitionPruner {
         };
 
         // 2. Use file meta to prune row groups or pages.
+        let mut max_compression_ratio = self.compression_ratio;
+        let mut max_compressed_size = 0u64;
 
         // If one row group does not have stats, we cannot use the stats for topk optimization.
         for (file_id, file_meta) in file_metas.into_iter().enumerate() {
@@ -269,6 +265,9 @@ impl PartitionPruner {
                 operator.clone(),
             )?;
             for p in parts {
+                max_compression_ratio = max_compression_ratio
+                    .max(p.uncompressed_size() as f64 / p.compressed_size() as f64);
+                max_compressed_size = max_compressed_size.max(p.compressed_size());
                 partitions.push(ParquetPart::RowGroup(p));
             }
             stats.partitions_total += sub_stats.partitions_total;
@@ -276,6 +275,45 @@ impl PartitionPruner {
             stats.read_bytes += sub_stats.read_bytes;
             stats.read_rows += sub_stats.read_rows;
         }
+
+        if max_compression_ratio <= 0.0 || max_compression_ratio >= 1.0 {
+            max_compression_ratio = 1.0;
+        }
+        if max_compressed_size == 0 {
+            let max = 128usize >> 20;
+            max_compressed_size = (max as f64 / max_compression_ratio) as u64;
+        }
+
+        stats.read_rows += small_files.len();
+        let mut num_small_files = small_files.len();
+        let mut small_part = vec![];
+        let mut part_size = 0;
+        let mut make_small_files_part = |files, part_size| {
+            let estimated_uncompressed_size = (part_size as f64 / max_compression_ratio) as u64;
+            partitions.push(ParquetPart::SmallFiles(ParquetSmallFilesPart {
+                files,
+                estimated_uncompressed_size,
+            }));
+            stats.partitions_scanned += 1;
+            stats.partitions_total += 1;
+            num_small_files -= 1;
+        };
+        let max_files = self.columns_to_read.len() * 2;
+        for (path, size) in small_files.into_iter() {
+            stats.read_bytes += size as usize;
+            if !small_part.is_empty()
+                && (part_size + size > max_compressed_size || small_part.len() + 1 >= max_files)
+            {
+                make_small_files_part(mem::take(&mut small_part), part_size);
+                part_size = 0;
+            }
+            small_part.push((path, size));
+            part_size += size;
+        }
+        if !small_part.is_empty() {
+            make_small_files_part(mem::take(&mut small_part), part_size);
+        }
+        assert_eq!(num_small_files, 0);
 
         let partition_kind = PartitionsShuffleKind::Mod;
         let partitions = partitions

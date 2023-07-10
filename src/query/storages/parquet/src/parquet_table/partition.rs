@@ -123,6 +123,7 @@ impl ParquetTable {
             skip_pruning,
             top_k,
             parquet_fast_read_bytes,
+            compression_ratio: self.compression_ratio,
         })
     }
 
