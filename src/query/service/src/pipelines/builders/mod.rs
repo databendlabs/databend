@@ -3,7 +3,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-//
+
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
@@ -16,6 +16,7 @@ mod copy;
 mod table;
 
 pub use copy::build_append_data_pipeline;
+pub use copy::build_commit_data_pipeline;
 pub use copy::build_upsert_copied_files_to_meta_req;
 pub use copy::CopyPlanType;
 pub use table::build_append2table_with_commit_pipeline;

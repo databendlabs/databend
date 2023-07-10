@@ -30,6 +30,7 @@ use common_sql::executor::DistributedCopyIntoTable;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
 use common_sql::executor::PhysicalPlan;
+use common_sql::plans::CopyIntoTableMode;
 use common_sql::plans::CopyIntoTablePlan;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
@@ -41,6 +42,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::builders::build_append2table_with_commit_pipeline;
 use crate::pipelines::builders::build_append_data_pipeline;
+use crate::pipelines::builders::build_commit_data_pipeline;
 use crate::pipelines::builders::CopyPlanType;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_distributed_pipeline;
@@ -190,7 +192,6 @@ impl CopyInterpreter {
             thresholds: to_table.get_block_thresholds(),
             files,
             table_info: to_table.get_table_info().clone(),
-            local_node_id: self.ctx.get_cluster().local_id.clone(),
         }))
     }
 
@@ -270,15 +271,25 @@ impl CopyInterpreter {
             (build_res, plan.required_source_schema.clone(), files)
         };
 
-        build_append_data_pipeline(
-            ctx,
+        let insert_overwrite_option = build_append_data_pipeline(
+            ctx.clone(),
             &mut build_res.main_pipeline,
             CopyPlanType::CopyIntoTablePlanOption(plan.clone()),
             source_schema,
-            to_table,
-            files,
+            to_table.clone(),
         )?;
 
+        // commit.
+        build_commit_data_pipeline(
+            ctx.clone(),
+            &mut build_res.main_pipeline,
+            plan.stage_table_info.stage_info.clone(),
+            to_table,
+            files,
+            plan.force,
+            plan.stage_table_info.stage_info.copy_options.purge,
+            insert_overwrite_option,
+        )?;
         Ok(build_res)
     }
 
@@ -325,8 +336,40 @@ impl Interpreter for CopyInterpreter {
                         .try_transform_copy_plan_from_local_to_distributed(plan)
                         .await?;
                     if let Some(distributed_plan) = distributed_plan_op {
-                        self.build_cluster_copy_into_table_pipeline(&distributed_plan)
-                            .await
+                        let mut build_res = self
+                            .build_cluster_copy_into_table_pipeline(&distributed_plan)
+                            .await?;
+                        let to_table = self
+                            .ctx
+                            .get_table(
+                                &distributed_plan.catalog_name,
+                                &distributed_plan.database_name,
+                                &distributed_plan.table_name,
+                            )
+                            .await?;
+                        let mut insert_overwrite_option = false;
+                        match distributed_plan.write_mode {
+                            CopyIntoTableMode::Insert { overwrite } => {
+                                insert_overwrite_option = overwrite
+                            }
+                            _ => {}
+                        }
+                        // commit.
+                        build_commit_data_pipeline(
+                            self.ctx.clone(),
+                            &mut build_res.main_pipeline,
+                            distributed_plan.stage_table_info.stage_info.clone(),
+                            to_table,
+                            distributed_plan.files.clone(),
+                            distributed_plan.force,
+                            distributed_plan
+                                .stage_table_info
+                                .stage_info
+                                .copy_options
+                                .purge,
+                            insert_overwrite_option,
+                        )?;
+                        Ok(build_res)
                     } else {
                         self.build_local_copy_into_table_pipeline(plan).await
                     }
