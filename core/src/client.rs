@@ -75,12 +75,12 @@ pub struct APIClient {
     endpoint: Url,
     pub host: String,
     pub port: u16,
+    pub user: String,
+    password: Option<String>,
 
     tenant: Option<String>,
     warehouse: Arc<Mutex<Option<String>>>,
-    pub database: Arc<Mutex<Option<String>>>,
-    pub user: String,
-    password: Option<String>,
+    database: Arc<Mutex<Option<String>>>,
     session_settings: Arc<Mutex<BTreeMap<String, String>>>,
 
     wait_time_secs: Option<i64>,
@@ -159,6 +159,16 @@ impl APIClient {
         client.session_settings = Arc::new(Mutex::new(session_settings));
 
         Ok(client)
+    }
+
+    pub async fn current_warehouse(&self) -> Option<String> {
+        let guard = self.warehouse.lock().await;
+        guard.clone()
+    }
+
+    pub async fn current_database(&self) -> Option<String> {
+        let guard = self.database.lock().await;
+        guard.clone()
     }
 
     pub async fn query(&self, sql: &str) -> Result<QueryResponse> {

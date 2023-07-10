@@ -41,8 +41,8 @@ impl Client {
     }
 
     #[napi]
-    pub fn info(&self) -> ConnectionInfo {
-        ConnectionInfo(self.0.info())
+    pub async fn info(&self) -> ConnectionInfo {
+        ConnectionInfo(self.0.info().await)
     }
 
     #[napi]

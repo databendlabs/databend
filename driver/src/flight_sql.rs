@@ -44,12 +44,14 @@ pub struct FlightSQLConnection {
 
 #[async_trait]
 impl Connection for FlightSQLConnection {
-    fn info(&self) -> ConnectionInfo {
+    async fn info(&self) -> ConnectionInfo {
         ConnectionInfo {
             handler: "FlightSQL".to_string(),
             host: self.args.host.clone(),
             port: self.args.port,
             user: self.args.user.clone(),
+            database: self.args.database.clone(),
+            warehouse: self.args.warehouse.clone(),
         }
     }
 

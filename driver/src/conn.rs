@@ -33,13 +33,15 @@ pub struct ConnectionInfo {
     pub host: String,
     pub port: u16,
     pub user: String,
+    pub database: Option<String>,
+    pub warehouse: Option<String>,
 }
 
 pub type Reader = Box<dyn AsyncRead + Send + Sync + Unpin + 'static>;
 
 #[async_trait]
 pub trait Connection: DynClone + Send + Sync {
-    fn info(&self) -> ConnectionInfo;
+    async fn info(&self) -> ConnectionInfo;
 
     async fn version(&self) -> Result<String> {
         let row = self.query_row("SELECT version()").await?;

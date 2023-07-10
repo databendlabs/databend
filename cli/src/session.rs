@@ -48,7 +48,7 @@ pub struct Session {
 impl Session {
     pub async fn try_new(dsn: String, settings: Settings, is_repl: bool) -> Result<Self> {
         let conn = new_connection(&dsn)?;
-        let info = conn.info();
+        let info = conn.info().await;
         if is_repl {
             println!("Welcome to BendSQL {}.", VERSION.as_str());
             println!(
@@ -78,15 +78,25 @@ impl Session {
         }
     }
 
-    fn prompt(&self) -> String {
+    async fn prompt(&self) -> String {
         if !self.query.is_empty() {
             "> ".to_owned()
         } else {
-            let info = self.conn.info();
+            let info = self.conn.info().await;
             let mut prompt = self.settings.prompt.clone();
             prompt = prompt.replace("{host}", &info.host);
             prompt = prompt.replace("{user}", &info.user);
             prompt = prompt.replace("{port}", &info.port.to_string());
+            if let Some(database) = &info.database {
+                prompt = prompt.replace("{database}", database);
+            } else {
+                prompt = prompt.replace("{database}", "");
+            }
+            if let Some(warehouse) = &info.warehouse {
+                prompt = prompt.replace("{warehouse}", &format!("({})", warehouse));
+            } else {
+                prompt = prompt.replace("{warehouse}", &format!("{}:{}", info.host, info.port));
+            }
             format!("{} ", prompt.trim_end())
         }
     }
@@ -102,7 +112,7 @@ impl Session {
         rl.load_history(&get_history_path()).ok();
 
         'F: loop {
-            match rl.readline(&self.prompt()) {
+            match rl.readline(&self.prompt().await) {
                 Ok(line) => {
                     let queries = self.append_query(&line);
                     for query in queries {
@@ -353,7 +363,7 @@ impl Session {
     async fn reconnect(&mut self) -> Result<()> {
         self.conn = new_connection(&self.dsn)?;
         if self.is_repl {
-            let info = self.conn.info();
+            let info = self.conn.info().await;
             eprintln!(
                 "Trying reconnect to {}:{} as user {}.",
                 info.host, info.port, info.user

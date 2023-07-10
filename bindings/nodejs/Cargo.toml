@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 doc = false
 
 [dependencies]
-databend-driver = { path = "../../driver", version = "0.3.0", features = ["rustls", "flight-sql"] }
+databend-driver = { path = "../../driver", version = "0.3.1", features = ["rustls", "flight-sql"] }
 futures = "0.3.28"
 napi = { version = "2.13.2", default-features = false, features = [
     "napi6",

@@ -36,12 +36,14 @@ pub struct RestAPIConnection {
 
 #[async_trait]
 impl Connection for RestAPIConnection {
-    fn info(&self) -> ConnectionInfo {
+    async fn info(&self) -> ConnectionInfo {
         ConnectionInfo {
             handler: "RestAPI".to_string(),
             host: self.client.host.clone(),
             port: self.client.port,
             user: self.client.user.clone(),
+            database: self.client.current_database().await,
+            warehouse: self.client.current_warehouse().await,
         }
     }
 

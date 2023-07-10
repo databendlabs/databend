@@ -28,7 +28,7 @@ async fn stream_load(presigned: bool, file_type: &str) {
     } else {
         new_connection(&format!("{}&presigned_url_disabled=1", dsn)).unwrap()
     };
-    let info = client.info();
+    let info = client.info().await;
     if info.handler == "FlightSQL" {
         // NOTE: FlightSQL does not support stream load
         return;

@@ -21,7 +21,7 @@
 
 export class Client {
   constructor(dsn: string)
-  info(): ConnectionInfo
+  info(): Promise<ConnectionInfo>
   version(): Promise<string>
   exec(sql: string): Promise<number>
   queryRow(sql: string): Promise<Row | null>
