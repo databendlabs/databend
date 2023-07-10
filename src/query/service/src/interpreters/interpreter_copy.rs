@@ -361,11 +361,9 @@ impl Interpreter for CopyInterpreter {
                             )
                             .await?;
                         let mut insert_overwrite_option = false;
-                        match distributed_plan.write_mode {
-                            CopyIntoTableMode::Insert { overwrite } => {
-                                insert_overwrite_option = overwrite
-                            }
-                            _ => {}
+                        if let CopyIntoTableMode::Insert { overwrite } = distributed_plan.write_mode
+                        {
+                            insert_overwrite_option = overwrite
                         }
                         // commit.
                         build_commit_data_pipeline(

@@ -106,7 +106,7 @@ pub fn build_append_data_pipeline(
         CopyIntoTableMode::Insert { overwrite } => {
             insert_overwrite_option = overwrite;
             build_append2table_without_commit_pipeline(
-                ctx.clone(),
+                ctx,
                 main_pipeline,
                 to_table.clone(),
                 plan_required_values_schema,
@@ -115,7 +115,7 @@ pub fn build_append_data_pipeline(
         }
         CopyIntoTableMode::Replace => {}
         CopyIntoTableMode::Copy => build_append2table_without_commit_pipeline(
-            ctx.clone(),
+            ctx,
             main_pipeline,
             to_table.clone(),
             plan_required_values_schema,
@@ -155,13 +155,7 @@ pub fn build_commit_data_pipeline(
     )?;
 
     // set on_finished callback.
-    set_copy_on_finished(
-        ctx,
-        files,
-        copy_purge_option,
-        stage_info.clone(),
-        main_pipeline,
-    )?;
+    set_copy_on_finished(ctx, files, copy_purge_option, stage_info, main_pipeline)?;
     Ok(())
 }
 
