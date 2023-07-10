@@ -285,7 +285,6 @@ impl CopyInterpreter {
                 ctx,
                 files,
                 plan.stage_table_info.stage_info.copy_options.purge,
-                plan.force,
                 plan.stage_table_info.stage_info.clone(),
                 &mut build_res.main_pipeline,
             )?,

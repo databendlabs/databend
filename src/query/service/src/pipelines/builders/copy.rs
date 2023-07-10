@@ -159,7 +159,6 @@ pub fn build_commit_data_pipeline(
         ctx,
         files,
         copy_purge_option,
-        copy_force_option,
         stage_info.clone(),
         main_pipeline,
     )?;
@@ -170,7 +169,6 @@ pub fn set_copy_on_finished(
     ctx: Arc<QueryContext>,
     files: Vec<StageFileInfo>,
     copy_purge_option: bool,
-    copy_force_option: bool,
     stage_info: StageInfo,
     main_pipeline: &mut Pipeline,
 ) -> Result<()> {
