@@ -75,8 +75,8 @@ pub struct PartitionPruner {
     // /// Limit of this query. If there is order by and filter, it will not be used (assign to `usize::MAX`).
     // pub limit: usize,
     pub parquet_fast_read_bytes: usize,
-
     pub compression_ratio: f64,
+    pub max_memory_usage: u64,
 }
 
 fn check_parquet_schema(
@@ -249,7 +249,14 @@ impl PartitionPruner {
             }
             file_metas
         } else {
-            read_parquet_metas_in_parallel(operator.clone(), large_files.clone(), 16, 64).await?
+            read_parquet_metas_in_parallel(
+                operator.clone(),
+                large_files.clone(),
+                16,
+                64,
+                self.max_memory_usage,
+            )
+            .await?
         };
 
         // 2. Use file meta to prune row groups or pages.
