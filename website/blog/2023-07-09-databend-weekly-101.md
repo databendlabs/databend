@@ -71,7 +71,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 Databend has built the ability of `async-backtrace` into the system table. Developers can obtain trace information by querying the `system.backtrace` system table through `SELECT` statement, which will help further debugging and troubleshooting.
 
-Furthermore, if you are in cluster mode, executing a query for `system.backtrace` on any node will give you the call stack of the entire cluster.
+Furthermore, if you are in cluster mode, executing a query against `system.backtrace` on any node will return the call stack of the entire cluster.
 
 If you are interested in learning more, please check out the resources listed below:
 
@@ -83,7 +83,7 @@ We have also made these improvements to Databend that we hope you will find help
 
 - Added `bitmap_not_count`, `bitmap_union` and `bitmap_intersect` aggregate functions.
 - Added `cume_dist` window function.
-- Added suupport for `ATTACH TABLE`.
+- Added support for `ATTACH TABLE`.
 - Added `system.metrics` table and metrics for measuring spill and transformation operations.
 - Added support for converting stored computed column into a regular column.
 - Implemented task suggestion for **Serverless Background Service**.
@@ -92,9 +92,9 @@ We have also made these improvements to Databend that we hope you will find help
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-### Add Support for Random Seed to the Random Engine
+### Add Random Seed for Random Engine
 
-Databend has previously implemented a random engine that supports generating random tables using random data. In order to obtain deterministic and reproducible test results, we hope to add support for random seed.
+Databend previously implemented a random engine that supports generating random tables using random data. In order to obtain deterministic and reproducible test results, we plan to introduce random seed.
 
 ```SQL
 CREATE table(t int, time timestamp) ENGINE=RANDOM(1000)
@@ -102,7 +102,7 @@ CREATE table(t int, time timestamp) ENGINE=RANDOM(1000)
 
 [Issue #11863 | Feature: Support to add random seed on random engine](https://github.com/datafuselabs/databend/issues/11863)
 
-Please let us know if you're interested in contributing to this issue, or pick up a good first issue at <https://link.databend.rs/i-m-feeling-lucky> to get started.
+Please let us know if you're interested in contributing to this feature, or pick up a good first issue at <https://link.databend.rs/i-m-feeling-lucky> to get started.
 
 ## New Contributors
 
