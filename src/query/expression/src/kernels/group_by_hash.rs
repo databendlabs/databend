@@ -39,6 +39,7 @@ use crate::types::number::NumberColumn;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringIterator;
+use crate::types::timestamptz::TimestampTzColumn;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
@@ -641,6 +642,9 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
             })
         }
         Column::Timestamp(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
+        Column::TimestampTz(TimestampTzColumn(v, _)) => {
+            vec.extend_from_slice(v[row].to_le_bytes().as_ref())
+        }
         Column::Date(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         Column::Array(array) | Column::Map(array) => {
             let data = array.index(row).unwrap();

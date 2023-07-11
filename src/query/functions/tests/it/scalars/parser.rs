@@ -25,6 +25,7 @@ use common_expression::shrink_scalar;
 use common_expression::types::decimal::DecimalDataType;
 use common_expression::types::decimal::DecimalScalar;
 use common_expression::types::decimal::DecimalSize;
+use common_expression::types::timestamptz::TimestampTzDataType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
@@ -524,6 +525,9 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
             DataType::Nullable(Box::new(transform_data_type(*inner_type)))
         }
         common_ast::ast::TypeName::Variant => DataType::Variant,
+        common_ast::ast::TypeName::TimestampTz { tz } => {
+            DataType::TimestampTz(TimestampTzDataType { tz })
+        }
     }
 }
 

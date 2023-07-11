@@ -63,6 +63,7 @@ message DataType {
     Decimal  decimal_t     = 43;
     Empty    empty_map_t   = 44;
     Empty    bitmap_t      = 45;
+    TimestampTz    timestamptz_t      = 46;
   }
 }
 
@@ -199,6 +200,14 @@ message DecimalSize {
   
   int32 precision = 1;
   int32 scale = 2;
+}
+
+message TimestampTz {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // timestamp timezone
+  string tz = 1;
 }
 
 

@@ -22,6 +22,7 @@ use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
+use crate::types::timestamptz::TimestampTzColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
@@ -134,6 +135,19 @@ impl Column {
             Column::Timestamp(_) => {
                 let builder = Vec::with_capacity(capacity);
                 Self::concat_value_types::<TimestampType>(builder, columns)
+            }
+            Column::TimestampTz(TimestampTzColumn(_, tz)) => {
+                let mut builder = Vec::with_capacity(capacity);
+                for c in columns {
+                    match c {
+                        Column::TimestampTz(TimestampTzColumn(col, other_tz)) => {
+                            debug_assert_eq!(tz, other_tz);
+                            builder.extend_from_slice(col);
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                Column::TimestampTz(TimestampTzColumn(builder.into(), tz.clone()))
             }
             Column::Date(_) => {
                 let builder = Vec::with_capacity(capacity);

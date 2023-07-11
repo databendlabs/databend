@@ -14,6 +14,8 @@
 
 use std::ops::Range;
 
+use chrono_tz::Tz;
+
 use super::date::date_to_string;
 use super::number::NumberScalar;
 use super::timestamp::timestamp_to_string;
@@ -23,6 +25,7 @@ use crate::types::map::KvPair;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringIterator;
+use crate::types::timestamptz::TimestampTzScalar;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -193,6 +196,14 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
         ScalarRef::Boolean(b) => jsonb::Value::Bool(b),
         ScalarRef::String(s) => jsonb::Value::String(String::from_utf8_lossy(s)),
         ScalarRef::Timestamp(ts) => timestamp_to_string(ts, inner_tz).to_string().into(),
+        ScalarRef::TimestampTz(TimestampTzScalar(ts, tz)) => {
+            if let Some(tz) = tz {
+                let tz = tz.parse::<Tz>().unwrap();
+                timestamp_to_string(ts, tz).to_string().into()
+            } else {
+                timestamp_to_string(ts, inner_tz).to_string().into()
+            }
+        }
         ScalarRef::Date(d) => date_to_string(d, inner_tz).to_string().into(),
         ScalarRef::Array(col) => {
             let items = cast_scalars_to_variants(col.iter(), tz);

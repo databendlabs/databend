@@ -1,0 +1,44 @@
+statement ok
+set timezone = 'UTC'
+
+statement ok
+drop database if exists data_type
+
+statement ok
+create database data_type
+
+statement ok
+create table data_type.t(c2 timestamp_tz('Asia/Shanghai'), c3 timestamp)
+
+query T
+desc data_type.t
+----
+c2 TIMESTAMPTZ('ASIA/SHANGHAI') NO '1970-01-01 08:00:00.000000' (empty)
+c3 TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
+
+statement ok
+insert into data_type.t values('2022-02-02 00:01:00', '2022-02-02 00:01:00')
+
+query TTT
+select * from data_type.t;
+----
+2022-02-02 00:01:00.000000 2022-02-02 00:01:00.000000
+
+statement ok
+set timezone='Asia/Shanghai'
+
+query TTT
+select * from data_type.t;
+----
+2022-02-02 00:01:00.000000 2022-02-02 08:01:00.000000
+
+statement ok
+set timezone='America/Los_Angeles'
+
+query TTT
+select * from data_type.t;
+----
+2022-02-02 00:01:00.000000 2022-02-01 16:01:00.000000
+
+statement ok
+unset timezone;

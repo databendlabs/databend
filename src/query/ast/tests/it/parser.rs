@@ -108,7 +108,7 @@ fn test_statement() {
         r#"create database t FROM SHARE a.s;"#,
         r#"drop database ctl.t;"#,
         r#"drop database if exists t;"#,
-        r#"create table c(a DateTime null, b DateTime(3));"#,
+        r#"create table c(a DateTime null, b DateTime, c DateTime_TZ('Asia/Shanghai'));"#,
         r#"create view v as select number % 3 as a from numbers(1000);"#,
         r#"alter view v as select number % 3 as a from numbers(1000);"#,
         r#"drop view v;"#,

@@ -48,6 +48,7 @@ use common_expression::type_check::check_number;
 use common_expression::types::decimal::DecimalDataType;
 use common_expression::types::decimal::DecimalScalar;
 use common_expression::types::decimal::DecimalSize;
+use common_expression::types::timestamptz::TimestampTzDataType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
@@ -3149,6 +3150,9 @@ pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {
             TableDataType::Nullable(Box::new(resolve_type_name(inner_type)?))
         }
         TypeName::Variant => TableDataType::Variant,
+        TypeName::TimestampTz { tz } => {
+            TableDataType::TimestampTz(TimestampTzDataType { tz: tz.clone() })
+        }
     };
 
     Ok(data_type)

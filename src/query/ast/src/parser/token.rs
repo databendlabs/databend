@@ -413,6 +413,10 @@ pub enum TokenKind {
     DATE_TRUNC,
     #[token("DATETIME", ignore(ascii_case))]
     DATETIME,
+    #[token("DATETIME_TZ", ignore(ascii_case))]
+    DATETIME_TZ,
+    #[token("TIMESTAMP_TZ", ignore(ascii_case))]
+    TIMESTAMP_TZ,
     #[token("DAY", ignore(ascii_case))]
     DAY,
     #[token("DECADE", ignore(ascii_case))]

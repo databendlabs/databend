@@ -27,6 +27,7 @@ use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
+use crate::types::timestamptz::TimestampTzColumn;
 use crate::types::AnyType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
@@ -126,6 +127,10 @@ impl Column {
             Column::Timestamp(column) => {
                 let ts = Self::filter_primitive_types(column, filter);
                 Column::Timestamp(ts)
+            }
+            Column::TimestampTz(TimestampTzColumn(column, tz)) => {
+                let ts = Self::filter_primitive_types(column, filter);
+                Column::TimestampTz(TimestampTzColumn(ts, tz.clone()))
             }
             Column::Date(column) => {
                 let d = Self::filter_primitive_types(column, filter);

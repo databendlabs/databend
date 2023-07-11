@@ -37,6 +37,7 @@ pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
         },
         Scalar::Decimal(_) => unimplemented!("decimal type is not supported"),
         Scalar::Timestamp(x) => DataValue::Int64(*x),
+        Scalar::TimestampTz(_) => unimplemented!("timestamptz type is not supported"),
         Scalar::Date(x) => DataValue::Int64(*x as i64),
         Scalar::Boolean(x) => DataValue::Boolean(*x),
         Scalar::String(x) | Scalar::Variant(x) => DataValue::String(x.clone()),

@@ -234,6 +234,7 @@ impl Column {
                 let builder = TimestampType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<TimestampType>(columns, builder, indices)
             }
+            Column::TimestampTz(column) => Column::TimestampTz(column.clone()),
             Column::Date(_) => {
                 let builder = DateType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<DateType>(columns, builder, indices)

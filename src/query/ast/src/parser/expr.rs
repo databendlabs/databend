@@ -1307,9 +1307,16 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_date = value(TypeName::Date, rule! { DATE });
-    let ty_datetime = map(
-        rule! { (DATETIME | TIMESTAMP) ~ ( "(" ~ #literal_u64 ~ ")" )? },
-        |(_, _)| TypeName::Timestamp,
+    let ty_datetime = map(rule! { (DATETIME | TIMESTAMP) }, |_| TypeName::Timestamp);
+    // let ty_datetime_tz = map(
+    //     rule! { (DATETIME_TZ | TIMESTAMP_TZ) ~ ("(" ~ #literal_string  ~ ")")? },
+    //     |(_, opt_tz)| TypeName::TimestampTz {
+    //         tz: opt_tz.map(|(_, tz, _)| Some(tz)).unwrap_or(None),
+    //     },
+    // );
+    let ty_datetime_tz = map(
+        rule! { (DATETIME_TZ | TIMESTAMP_TZ) ~ "(" ~ #literal_string  ~ ")" },
+        |(_, _, tz, _)| TypeName::TimestampTz { tz: Some(tz) },
     );
     let ty_string = value(
         TypeName::String,
@@ -1341,6 +1348,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             rule! {
             ( #ty_date
             | #ty_datetime
+            | #ty_datetime_tz
             | #ty_string
             | #ty_variant
             | #ty_nullable

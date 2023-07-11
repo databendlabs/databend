@@ -25,6 +25,7 @@ use crate::types::number::SimpleDomain;
 use crate::types::number::F32;
 use crate::types::number::F64;
 use crate::types::string::StringDomain;
+use crate::types::timestamptz::TimestampTzDomain;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::BooleanType;
@@ -97,6 +98,7 @@ pub enum Domain {
     Boolean(BooleanDomain),
     String(StringDomain),
     Timestamp(SimpleDomain<i64>),
+    TimestampTz(TimestampTzDomain),
     Date(SimpleDomain<i32>),
     Nullable(NullableDomain<AnyType>),
     /// `Array(None)` means that the array is empty, thus there is no inner domain information.
@@ -175,6 +177,10 @@ impl Domain {
                 }
             },
             DataType::Timestamp => Domain::Timestamp(TimestampType::full_domain()),
+            DataType::TimestampTz(tz) => Domain::TimestampTz(TimestampTzDomain(
+                TimestampTzDomain::full_domain(),
+                tz.tz.clone(),
+            )),
             DataType::Date => Domain::Date(DateType::full_domain()),
             DataType::Null => Domain::Nullable(NullableDomain {
                 has_null: true,

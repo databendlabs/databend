@@ -836,7 +836,7 @@ statement ok
 drop table if exists ts
 
 statement ok
-create table ts(a DateTime(6), b DateTime, c Date)
+create table ts(a DateTime, b DateTime, c Date)
 
 statement ok
 insert into ts values('2022-02-03 00:00:00', '2022-02-03', today())
@@ -853,7 +853,7 @@ statement ok
 drop table if exists t
 
 statement ok
-create table t(a datetime, b DateTime(3), c Date)
+create table t(a datetime, b DateTime, c Date)
 
 statement ok
 insert into t values('2022-04-02 15:10:28', '2022-04-02 15:10:28', '1000-01-01')

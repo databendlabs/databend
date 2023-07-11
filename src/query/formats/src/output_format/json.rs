@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono_tz::Tz;
 use common_expression::date_helper::DateConverter;
 use common_expression::types::number::NumberScalar;
+use common_expression::types::timestamptz::TimestampTzScalar;
 use common_expression::DataBlock;
 use common_expression::ScalarRef;
 use common_expression::TableSchemaRef;
@@ -95,6 +97,16 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
         ScalarRef::Timestamp(v) => {
             let dt = DateConverter::to_timestamp(&v, format.timezone);
             serde_json::to_value(dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap()
+        }
+        ScalarRef::TimestampTz(TimestampTzScalar(v, tz)) => {
+            if let Some(tz) = tz {
+                let tz = tz.parse::<Tz>().unwrap();
+                let dt = DateConverter::to_timestamp(&v, tz);
+                serde_json::to_value(dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap()
+            } else {
+                let dt = DateConverter::to_timestamp(&v, format.timezone);
+                serde_json::to_value(dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap()
+            }
         }
         ScalarRef::EmptyArray => JsonValue::Array(vec![]),
         ScalarRef::EmptyMap => JsonValue::Object(JsonMap::new()),

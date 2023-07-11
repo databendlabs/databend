@@ -24,6 +24,7 @@ use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
+use crate::types::timestamptz::TimestampTzColumn;
 use crate::types::AnyType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
@@ -181,6 +182,18 @@ impl Column {
                 indices,
                 scatter_size,
             ),
+            Column::TimestampTz(TimestampTzColumn(column, tz)) => {
+                let mut builder = (0..scatter_size)
+                    .map(|_| Vec::with_capacity(length))
+                    .collect_vec();
+                for (index, item) in indices.iter().zip(column.iter()) {
+                    builder[index.to_usize()].push(*item);
+                }
+                builder
+                    .into_iter()
+                    .map(|v| Column::TimestampTz(TimestampTzColumn(v.into(), tz.clone())))
+                    .collect()
+            }
             Column::Date(column) => Self::scatter_scalars::<DateType, _>(
                 column,
                 Vec::with_capacity(length),

@@ -15,6 +15,7 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::fmt::Write;
 
 use chrono_tz::Tz;
 use comfy_table::Cell;
@@ -50,6 +51,10 @@ use crate::types::number::SimpleDomain;
 use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::timestamp_to_string;
+use crate::types::timestamptz::TimestampTzColumn;
+use crate::types::timestamptz::TimestampTzDataType;
+use crate::types::timestamptz::TimestampTzDomain;
+use crate::types::timestamptz::TimestampTzScalar;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::ValueType;
@@ -124,6 +129,7 @@ impl<'a> Debug for ScalarRef<'a> {
                 }
             },
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
+            ScalarRef::TimestampTz(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
@@ -172,6 +178,7 @@ impl Debug for Column {
             Column::Boolean(col) => f.debug_tuple("Boolean").field(col).finish(),
             Column::String(col) => write!(f, "{col:?}"),
             Column::Timestamp(col) => write!(f, "{col:?}"),
+            Column::TimestampTz(col) => write!(f, "{col:?}"),
             Column::Date(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Map(col) => write!(f, "{col:?}"),
@@ -203,6 +210,16 @@ impl<'a> Display for ScalarRef<'a> {
                 }
             },
             ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, Tz::UTC)),
+            ScalarRef::TimestampTz(ts) => {
+                let t = ts.0;
+                let tz = ts.1.clone();
+                if let Some(tz) = tz {
+                    let tz = tz.parse::<Tz>().unwrap();
+                    write!(f, "'{}'", timestamp_to_string(t, tz))
+                } else {
+                    write!(f, "'{}'", timestamp_to_string(t, Tz::UTC))
+                }
+            }
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, Tz::UTC)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
@@ -308,6 +325,17 @@ impl Debug for DecimalScalar {
     }
 }
 
+impl Debug for TimestampTzScalar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}_i64_{}",
+            self.0,
+            display_timestamptz(self.0, self.1.clone())
+        )
+    }
+}
+
 impl Display for DecimalScalar {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -318,6 +346,12 @@ impl Display for DecimalScalar {
                 write!(f, "{}", display_decimal_256(*val, size.scale))
             }
         }
+    }
+}
+
+impl Display for TimestampTzScalar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", display_timestamptz(self.0, self.1.clone()))
     }
 }
 
@@ -387,6 +421,21 @@ impl Debug for StringColumn {
     }
 }
 
+impl Debug for TimestampTzColumn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("TimestampTz")
+            .field(&format_args!(
+                "[{}]",
+                &self
+                    .0
+                    .iter()
+                    .map(|x| display_timestamptz(*x, self.1.clone()))
+                    .join(", ")
+            ))
+            .finish()
+    }
+}
+
 impl<Index: ColumnIndex> Display for RawExpr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -445,6 +494,7 @@ impl Display for DataType {
             DataType::Number(num) => write!(f, "{num}"),
             DataType::Decimal(decimal) => write!(f, "{decimal}"),
             DataType::Timestamp => write!(f, "Timestamp"),
+            DataType::TimestampTz(tstz_ty) => write!(f, "{tstz_ty}"),
             DataType::Date => write!(f, "Date"),
             DataType::Null => write!(f, "NULL"),
             DataType::Nullable(inner) => write!(f, "{inner} NULL"),
@@ -485,6 +535,7 @@ impl Display for TableDataType {
             TableDataType::Number(num) => write!(f, "{num}"),
             TableDataType::Decimal(decimal) => write!(f, "{decimal}"),
             TableDataType::Timestamp => write!(f, "Timestamp"),
+            TableDataType::TimestampTz(tz) => write!(f, "{tz}"),
             TableDataType::Date => write!(f, "Date"),
             TableDataType::Null => write!(f, "NULL"),
             TableDataType::Nullable(inner) => write!(f, "{inner} NULL"),
@@ -548,6 +599,16 @@ impl Display for DecimalDataType {
             DecimalDataType::Decimal256(size) => {
                 write!(f, "Decimal({}, {})", size.precision, size.scale)
             }
+        }
+    }
+}
+
+impl Display for TimestampTzDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        if let Some(tz) = self.tz.clone() {
+            write!(f, "TimestampTz('{}')", tz)
+        } else {
+            write!(f, "TimestampTz")
         }
     }
 }
@@ -891,6 +952,15 @@ impl Display for DecimalDomain {
     }
 }
 
+impl Display for TimestampTzDomain {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", SimpleDomain {
+            min: display_timestamptz(self.0.min, self.1.clone()),
+            max: display_timestamptz(self.0.max, self.1.clone()),
+        })
+    }
+}
+
 impl<T: Display> Display for SimpleDomain<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{{{}..={}}}", self.min, self.max)
@@ -904,6 +974,7 @@ impl Display for Domain {
             Domain::Boolean(domain) => write!(f, "{domain}"),
             Domain::String(domain) => write!(f, "{domain}"),
             Domain::Timestamp(domain) => write!(f, "{domain}"),
+            Domain::TimestampTz(domain) => write!(f, "{domain}"),
             Domain::Date(domain) => write!(f, "{domain}"),
             Domain::Nullable(domain) => write!(f, "{domain}"),
             Domain::Array(None) => write!(f, "[]"),
@@ -949,4 +1020,14 @@ fn display_f64(num: f64) -> String {
             .to_string(),
         None => num.to_string(),
     }
+}
+
+pub fn display_timestamptz(num: i64, tz: Option<String>) -> String {
+    let mut buf = String::new();
+    if let Some(tz) = tz {
+        write!(buf, "({}, {})", num, tz).unwrap();
+    } else {
+        write!(buf, "{}", num).unwrap();
+    }
+    buf
 }

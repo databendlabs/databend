@@ -22,6 +22,7 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
+use crate::types::timestamptz::TimestampTzColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
@@ -98,6 +99,13 @@ impl Column {
                     .into_int64()
                     .unwrap();
                 Column::Timestamp(ts)
+            }
+            Column::TimestampTz(TimestampTzColumn(values, tz)) => {
+                let builder = indices
+                    .iter()
+                    .map(|index| unsafe { *values.get_unchecked(index.to_usize()) })
+                    .collect_vec();
+                Column::TimestampTz(TimestampTzColumn(builder.into(), tz.clone()))
             }
             Column::Date(column) => {
                 let d = Self::take_arg_types::<NumberType<i32>, _>(column, indices)

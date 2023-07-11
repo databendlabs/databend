@@ -30,6 +30,7 @@ use serde::Serialize;
 
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalSize;
+use crate::types::timestamptz::TimestampTzDataType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
@@ -124,6 +125,7 @@ pub enum TableDataType {
     Number(NumberDataType),
     Decimal(DecimalDataType),
     Timestamp,
+    TimestampTz(TimestampTzDataType),
     Date,
     Nullable(Box<TableDataType>),
     Array(Box<TableDataType>),
@@ -1054,6 +1056,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::Number(ty) => DataType::Number(*ty),
             TableDataType::Decimal(ty) => DataType::Decimal(*ty),
             TableDataType::Timestamp => DataType::Timestamp,
+            TableDataType::TimestampTz(ty) => DataType::TimestampTz(ty.clone()),
             TableDataType::Date => DataType::Date,
             TableDataType::Nullable(ty) => DataType::Nullable(Box::new((&**ty).into())),
             TableDataType::Array(ty) => DataType::Array(Box::new((&**ty).into())),
@@ -1405,6 +1408,9 @@ impl From<&DataType> for ArrowDataType {
                 ArrowDataType::Decimal256(s.precision.into(), s.scale.into())
             }
             DataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
+            DataType::TimestampTz(TimestampTzDataType { tz }) => {
+                ArrowDataType::Timestamp(TimeUnit::Microsecond, tz.clone())
+            }
             DataType::Date => ArrowDataType::Date32,
             DataType::Nullable(ty) => ty.as_ref().into(),
             DataType::Array(ty) => {
@@ -1485,6 +1491,9 @@ impl From<&TableDataType> for ArrowDataType {
                 ArrowDataType::Decimal256(size.precision as usize, size.scale as usize)
             }
             TableDataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
+            TableDataType::TimestampTz(TimestampTzDataType { tz }) => {
+                ArrowDataType::Timestamp(TimeUnit::Microsecond, tz.clone())
+            }
             TableDataType::Date => ArrowDataType::Date32,
             TableDataType::Nullable(ty) => ty.as_ref().into(),
             TableDataType::Array(ty) => {
@@ -1557,6 +1566,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::String => Ok(TableDataType::String),
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),
+        DataType::TimestampTz(ty) => Ok(TableDataType::TimestampTz(ty.clone())),
         DataType::Decimal(x) => Ok(TableDataType::Decimal(*x)),
         DataType::Date => Ok(TableDataType::Date),
         DataType::Nullable(inner_type) => Ok(TableDataType::Nullable(Box::new(infer_schema_type(

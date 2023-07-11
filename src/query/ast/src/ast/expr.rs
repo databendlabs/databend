@@ -294,6 +294,9 @@ pub enum TypeName {
     },
     Date,
     Timestamp,
+    TimestampTz {
+        tz: Option<String>,
+    },
     String,
     Array(Box<TypeName>),
     Map {
@@ -705,6 +708,13 @@ impl Display for TypeName {
             }
             TypeName::Timestamp => {
                 write!(f, "TIMESTAMP")?;
+            }
+            TypeName::TimestampTz { tz } => {
+                if let Some(tz) = tz {
+                    write!(f, "TIMESTAMP_TZ('{}')", tz)?;
+                } else {
+                    write!(f, "TIMESTAMP_TZ")?;
+                }
             }
             TypeName::String => {
                 write!(f, "STRING")?;

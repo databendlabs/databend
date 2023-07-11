@@ -19,6 +19,7 @@ use std::io::BufRead;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
+use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -33,6 +34,7 @@ use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::number::Number;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::timestamp::check_timestamp;
+use common_expression::types::timestamptz::TimestampTzColumnBuilder;
 use common_expression::types::AnyType;
 use common_expression::types::NumberColumnBuilder;
 use common_expression::with_decimal_type;
@@ -131,6 +133,13 @@ impl FastFieldDecoderValues {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, reader, positions),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader, positions),
+            ColumnBuilder::TimestampTz(TimestampTzColumnBuilder(c, tz)) => {
+                if let Some(tz) = tz {
+                    self.read_timestamp_with_tz(c, tz.clone(), reader, positions)
+                } else {
+                    self.read_timestamp(c, reader, positions)
+                }
+            }
             ColumnBuilder::String(c) => self.read_string(c, reader, positions),
             ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
             ColumnBuilder::Map(c) => self.read_map(c, reader, positions),
@@ -266,6 +275,33 @@ impl FastFieldDecoderValues {
         self.read_string_inner(reader, &mut buf, positions)?;
         let mut buffer_readr = Cursor::new(&buf);
         let ts = buffer_readr.read_timestamp_text(&self.common_settings().timezone)?;
+        if !buffer_readr.eof() {
+            let data = buf.to_str().unwrap_or("not utf8");
+            let msg = format!(
+                "fail to deserialize timestamp, unexpected end at pos {} of {}",
+                buffer_readr.position(),
+                data
+            );
+            return Err(ErrorCode::BadBytes(msg));
+        }
+        let micros = ts.timestamp_micros();
+        check_timestamp(micros)?;
+        column.push(micros.as_());
+        Ok(())
+    }
+
+    fn read_timestamp_with_tz<R: AsRef<[u8]>>(
+        &self,
+        column: &mut Vec<i64>,
+        tz: String,
+        reader: &mut Cursor<R>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, positions)?;
+        let mut buffer_readr = Cursor::new(&buf);
+        let tz = tz.parse::<Tz>().unwrap();
+        let ts = buffer_readr.read_timestamp_text(&tz)?;
         if !buffer_readr.eof() {
             let data = buf.to_str().unwrap_or("not utf8");
             let msg = format!(

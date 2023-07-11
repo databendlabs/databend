@@ -264,6 +264,9 @@ impl FromToProto for ex::TableDataType {
                     Dt24::DecimalT(x) => {
                         ex::TableDataType::Decimal(ex::types::decimal::DecimalDataType::from_pb(x)?)
                     }
+                    Dt24::TimestamptzT(x) => ex::TableDataType::TimestampTz(
+                        ex::types::timestamptz::TimestampTzDataType::from_pb(x)?,
+                    ),
                     Dt24::EmptyMapT(_) => ex::TableDataType::EmptyMap,
                 };
                 Ok(x)
@@ -291,6 +294,10 @@ impl FromToProto for ex::TableDataType {
                 new_pb_dt24(Dt24::DecimalT(x))
             }
             TableDataType::Timestamp => new_pb_dt24(Dt24::TimestampT(pb::Empty {})),
+            TableDataType::TimestampTz(n) => {
+                let x = n.to_pb()?;
+                new_pb_dt24(Dt24::TimestamptzT(x))
+            }
             TableDataType::Date => new_pb_dt24(Dt24::DateT(pb::Empty {})),
             TableDataType::Nullable(v) => {
                 let x = v.to_pb()?;
@@ -457,6 +464,41 @@ impl FromToProto for ex::types::decimal::DecimalSize {
             precision: self.precision as i32,
             scale: self.scale as i32,
         })
+    }
+}
+
+impl FromToProto for ex::types::TimestampTzDataType {
+    type PB = pb::TimestampTz;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::TimestampTz) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        if p.tz == "NONE_TZ" {
+            Ok(ex::types::TimestampTzDataType { tz: None })
+        } else {
+            Ok(ex::types::TimestampTzDataType { tz: Some(p.tz) })
+        }
+    }
+
+    fn to_pb(&self) -> Result<pb::TimestampTz, Incompatible> {
+        if let Some(tz) = self.tz.clone() {
+            Ok(pb::TimestampTz {
+                ver: VER,
+                min_reader_ver: MIN_READER_VER,
+
+                tz,
+            })
+        } else {
+            Ok(pb::TimestampTz {
+                ver: VER,
+                min_reader_ver: MIN_READER_VER,
+
+                tz: "NONE_TZ".to_string(),
+            })
+        }
     }
 }
 

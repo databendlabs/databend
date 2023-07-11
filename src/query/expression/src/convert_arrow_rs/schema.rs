@@ -51,6 +51,13 @@ impl From<&DataType> for ArrowDataType {
                 ArrowDataType::Decimal256(s.precision, s.scale as i8)
             }
             DataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
+            DataType::TimestampTz(tz) => {
+                if let Some(tz) = tz.tz.clone() {
+                    ArrowDataType::Timestamp(TimeUnit::Microsecond, Some(tz.into()))
+                } else {
+                    ArrowDataType::Timestamp(TimeUnit::Microsecond, None)
+                }
+            }
             DataType::Date => ArrowDataType::Date32,
             DataType::Nullable(ty) => ty.as_ref().into(),
             DataType::Array(ty) => {

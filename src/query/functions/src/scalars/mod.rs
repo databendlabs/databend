@@ -22,6 +22,7 @@ mod boolean;
 mod comparison;
 mod control;
 mod datetime;
+// mod datetimetz;
 mod decimal;
 mod geo;
 mod hash;
@@ -47,6 +48,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     control::register(registry);
     comparison::register(registry);
     datetime::register(registry);
+    // datetimetz::register(registry);
     math::register(registry);
     map::register(registry);
     string::register(registry);

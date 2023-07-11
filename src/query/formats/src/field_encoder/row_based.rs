@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::types::array::ArrayColumn;
@@ -21,6 +22,7 @@ use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::NumberColumn;
 use common_expression::types::string::StringColumn;
 use common_expression::types::timestamp::timestamp_to_string;
+use common_expression::types::timestamptz::TimestampTzColumn;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use lexical_core::ToLexical;
@@ -59,6 +61,13 @@ pub trait FieldEncoderRowBased {
             Column::Decimal(c) => self.write_decimal(c, row_index, out_buf),
             Column::Date(c) => self.write_date(c, row_index, out_buf, raw),
             Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, raw),
+            Column::TimestampTz(TimestampTzColumn(c, tz)) => {
+                if let Some(tz) = tz {
+                    self.write_timestamp_with_tz(c, tz.clone(), row_index, out_buf, raw)
+                } else {
+                    self.write_timestamp(c, row_index, out_buf, raw)
+                }
+            }
             Column::String(c) => self.write_string(c, row_index, out_buf, raw),
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, raw),
             Column::Array(box c) => self.write_array(c, row_index, out_buf, raw),
@@ -162,6 +171,20 @@ pub trait FieldEncoderRowBased {
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
         let s = timestamp_to_string(*v, self.common_settings().timezone).to_string();
+        self.write_string_inner(s.as_bytes(), out_buf, raw);
+    }
+
+    fn write_timestamp_with_tz(
+        &self,
+        column: &Buffer<i64>,
+        tz: String,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        raw: bool,
+    ) {
+        let v = unsafe { column.get_unchecked(row_index) };
+        let tz = tz.parse::<Tz>().unwrap();
+        let s = timestamp_to_string(*v, tz).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, raw);
     }
 

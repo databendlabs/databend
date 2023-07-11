@@ -1677,9 +1677,9 @@ DropDatabase(
 
 
 ---------- Input ----------
-create table c(a DateTime null, b DateTime(3));
+create table c(a DateTime null, b DateTime, c DateTime_TZ('Asia/Shanghai'));
 ---------- Output ---------
-CREATE TABLE c (a TIMESTAMP NULL, b TIMESTAMP NOT NULL)
+CREATE TABLE c (a TIMESTAMP NULL, b TIMESTAMP NOT NULL, c TIMESTAMP_TZ('Asia/Shanghai') NOT NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1719,6 +1719,22 @@ CreateTable(
                             ),
                         },
                         data_type: Timestamp,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Some(
+                                44..45,
+                            ),
+                        },
+                        data_type: TimestampTz {
+                            tz: Some(
+                                "Asia/Shanghai",
+                            ),
+                        },
                         expr: None,
                         comment: None,
                     },

@@ -69,6 +69,10 @@ use crate::types::string::StringDomain;
 use crate::types::timestamp::check_timestamp;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
+use crate::types::timestamptz::TimestampTzColumn;
+use crate::types::timestamptz::TimestampTzColumnBuilder;
+use crate::types::timestamptz::TimestampTzDataType;
+use crate::types::timestamptz::TimestampTzScalar;
 use crate::types::variant::JSONB_NULL;
 use crate::types::*;
 use crate::utils::arrow::append_bitmap;
@@ -103,6 +107,7 @@ pub enum Scalar {
     Number(NumberScalar),
     Decimal(DecimalScalar),
     Timestamp(i64),
+    TimestampTz(TimestampTzScalar),
     Date(i32),
     Boolean(bool),
     String(Vec<u8>),
@@ -124,6 +129,7 @@ pub enum ScalarRef<'a> {
     Boolean(bool),
     String(&'a [u8]),
     Timestamp(i64),
+    TimestampTz(TimestampTzScalar),
     Date(i32),
     Array(Column),
     Map(Column),
@@ -142,6 +148,7 @@ pub enum Column {
     Boolean(Bitmap),
     String(StringColumn),
     Timestamp(Buffer<i64>),
+    TimestampTz(TimestampTzColumn),
     Date(Buffer<i32>),
     Array(Box<ArrayColumn<AnyType>>),
     Map(Box<ArrayColumn<AnyType>>),
@@ -161,6 +168,7 @@ pub enum ColumnBuilder {
     Boolean(MutableBitmap),
     String(StringColumnBuilder),
     Timestamp(Vec<i64>),
+    TimestampTz(TimestampTzColumnBuilder),
     Date(Vec<i32>),
     Array(Box<ArrayColumnBuilder<AnyType>>),
     Map(Box<ArrayColumnBuilder<AnyType>>),
@@ -306,6 +314,7 @@ impl Scalar {
             Scalar::Boolean(b) => ScalarRef::Boolean(*b),
             Scalar::String(s) => ScalarRef::String(s.as_slice()),
             Scalar::Timestamp(t) => ScalarRef::Timestamp(*t),
+            Scalar::TimestampTz(t) => ScalarRef::TimestampTz(t.clone()),
             Scalar::Date(d) => ScalarRef::Date(*d),
             Scalar::Array(col) => ScalarRef::Array(col.clone()),
             Scalar::Map(col) => ScalarRef::Map(col.clone()),
@@ -336,6 +345,7 @@ impl Scalar {
             }),
             DataType::Decimal(ty) => Scalar::Decimal(ty.default_scalar()),
             DataType::Timestamp => Scalar::Timestamp(0),
+            DataType::TimestampTz(ty) => Scalar::TimestampTz(TimestampTzScalar(0, ty.tz.clone())),
             DataType::Date => Scalar::Date(0),
             DataType::Nullable(_) => Scalar::Null,
             DataType::Array(ty) => {
@@ -378,6 +388,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Boolean(b) => Scalar::Boolean(*b),
             ScalarRef::String(s) => Scalar::String(s.to_vec()),
             ScalarRef::Timestamp(t) => Scalar::Timestamp(*t),
+            ScalarRef::TimestampTz(t) => Scalar::TimestampTz(t.clone()),
             ScalarRef::Date(d) => Scalar::Date(*d),
             ScalarRef::Array(col) => Scalar::Array(col.clone()),
             ScalarRef::Map(col) => Scalar::Map(col.clone()),
@@ -422,6 +433,7 @@ impl<'a> ScalarRef<'a> {
                 max: Some(s.to_vec()),
             }),
             ScalarRef::Timestamp(t) => Domain::Timestamp(SimpleDomain { min: *t, max: *t }),
+            ScalarRef::TimestampTz(dec) => Domain::TimestampTz(dec.domain()),
             ScalarRef::Date(d) => Domain::Date(SimpleDomain { min: *d, max: *d }),
             ScalarRef::Array(array) => {
                 if array.len() == 0 {
@@ -476,6 +488,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Boolean(_) => 1,
             ScalarRef::String(s) => s.len(),
             ScalarRef::Timestamp(_) => 8,
+            ScalarRef::TimestampTz(_) => 8,
             ScalarRef::Date(_) => 4,
             ScalarRef::Array(col) => col.memory_size(),
             ScalarRef::Map(col) => col.memory_size(),
@@ -503,6 +516,9 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Boolean(_) => DataType::Boolean,
             ScalarRef::String(_) => DataType::String,
             ScalarRef::Timestamp(_) => DataType::Timestamp,
+            ScalarRef::TimestampTz(s) => {
+                DataType::TimestampTz(TimestampTzDataType { tz: s.1.clone() })
+            }
             ScalarRef::Date(_) => DataType::Date,
             ScalarRef::Array(array) => DataType::Array(Box::new(array.data_type())),
             ScalarRef::Map(col) => DataType::Map(Box::new(col.data_type())),
@@ -614,6 +630,7 @@ impl Hash for ScalarRef<'_> {
             ScalarRef::Boolean(v) => v.hash(state),
             ScalarRef::String(v) => v.hash(state),
             ScalarRef::Timestamp(v) => v.hash(state),
+            ScalarRef::TimestampTz(TimestampTzScalar(v, _)) => v.hash(state),
             ScalarRef::Date(v) => v.hash(state),
             ScalarRef::Array(v) => {
                 let str = serialize_column(v);
@@ -655,6 +672,7 @@ impl PartialOrd for Column {
             (Column::Timestamp(col1), Column::Timestamp(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
             }
+            (Column::TimestampTz(col1), Column::TimestampTz(col2)) => col1.partial_cmp(col2),
             (Column::Date(col1), Column::Date(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Array(col1), Column::Array(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Map(col1), Column::Map(col2)) => col1.iter().partial_cmp(col2.iter()),
@@ -700,6 +718,7 @@ impl Column {
             Column::Boolean(col) => col.len(),
             Column::String(col) => col.len(),
             Column::Timestamp(col) => col.len(),
+            Column::TimestampTz(col) => col.len(),
             Column::Date(col) => col.len(),
             Column::Array(col) => col.len(),
             Column::Map(col) => col.len(),
@@ -720,6 +739,7 @@ impl Column {
             Column::Boolean(col) => Some(ScalarRef::Boolean(col.get(index)?)),
             Column::String(col) => Some(ScalarRef::String(col.index(index)?)),
             Column::Timestamp(col) => Some(ScalarRef::Timestamp(col.get(index).cloned()?)),
+            Column::TimestampTz(col) => Some(ScalarRef::TimestampTz(col.index(index)?)),
             Column::Date(col) => Some(ScalarRef::Date(col.get(index).cloned()?)),
             Column::Array(col) => Some(ScalarRef::Array(col.index(index)?)),
             Column::Map(col) => Some(ScalarRef::Map(col.index(index)?)),
@@ -748,6 +768,7 @@ impl Column {
             Column::Boolean(col) => ScalarRef::Boolean(col.get_bit_unchecked(index)),
             Column::String(col) => ScalarRef::String(col.index_unchecked(index)),
             Column::Timestamp(col) => ScalarRef::Timestamp(*col.get_unchecked(index)),
+            Column::TimestampTz(col) => ScalarRef::TimestampTz(col.index_unchecked(index)),
             Column::Date(col) => ScalarRef::Date(*col.get_unchecked(index)),
             Column::Array(col) => ScalarRef::Array(col.index_unchecked(index)),
             Column::Map(col) => ScalarRef::Map(col.index_unchecked(index)),
@@ -795,6 +816,7 @@ impl Column {
             Column::Timestamp(col) => {
                 Column::Timestamp(col.clone().sliced(range.start, range.end - range.start))
             }
+            Column::TimestampTz(col) => Column::TimestampTz(col.slice(range)),
             Column::Date(col) => {
                 Column::Date(col.clone().sliced(range.start, range.end - range.start))
             }
@@ -831,6 +853,7 @@ impl Column {
             Column::EmptyMap { .. } => Domain::Undefined,
             Column::Number(col) => Domain::Number(col.domain()),
             Column::Decimal(col) => Domain::Decimal(col.domain()),
+            Column::TimestampTz(col) => Domain::TimestampTz(col.domain()),
             Column::Boolean(col) => Domain::Boolean(BooleanDomain {
                 has_false: col.unset_bits() > 0,
                 has_true: col.len() - col.unset_bits() > 0,
@@ -908,6 +931,9 @@ impl Column {
             Column::Boolean(_) => DataType::Boolean,
             Column::String(_) => DataType::String,
             Column::Timestamp(_) => DataType::Timestamp,
+            Column::TimestampTz(c) => {
+                DataType::TimestampTz(TimestampTzDataType { tz: c.1.clone() })
+            }
             Column::Date(_) => DataType::Date,
             Column::Array(array) => {
                 let inner = array.values.data_type();
@@ -1072,6 +1098,14 @@ impl Column {
                 )
             }
             Column::Timestamp(col) => Box::new(
+                common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
+                    arrow_type,
+                    col.clone(),
+                    None,
+                )
+                .unwrap(),
+            ),
+            Column::TimestampTz(TimestampTzColumn(col, _)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
                     arrow_type,
                     col.clone(),
@@ -1385,7 +1419,7 @@ impl Column {
                 ))
             }
 
-            ArrowType::Timestamp(uint, _) => {
+            ArrowType::Timestamp(uint, tz) if tz.is_none() => {
                 let values = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::Int64Array>()
@@ -1407,7 +1441,35 @@ impl Column {
                         .collect::<Vec<_>>();
                     values.into()
                 };
+                // TODO(@eason): Now if Timestamp_tz with empty param also convert to arrowtype(uint, None),
+                // This will cause block value datatype and data_type not equal.
+                // If Datatype::TimestampTz() replace Datatype::Timestamp, here can return
+                // Column::TimestampTz(TimestampTzColumn(values, None))
                 Column::Timestamp(values)
+            }
+            ArrowType::Timestamp(uint, tz) if tz.is_some() => {
+                let values = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::Int64Array>()
+                    .expect("fail to read from arrow: array should be `Int64Array`")
+                    .values();
+                let convert = match uint {
+                    TimeUnit::Second => (1_000_000, 1),
+                    TimeUnit::Millisecond => (1_000, 1),
+                    TimeUnit::Microsecond => (1, 1),
+                    TimeUnit::Nanosecond => (1, 1_000),
+                };
+
+                let values = if convert.0 == 1 && convert.1 == 1 {
+                    values.clone()
+                } else {
+                    let values = values
+                        .iter()
+                        .map(|x| x * convert.0 / convert.1)
+                        .collect::<Vec<_>>();
+                    values.into()
+                };
+                Column::TimestampTz(TimestampTzColumn(values, tz.clone()))
             }
             ArrowDataType::Date32 => Column::Date(
                 arrow_col
@@ -1651,6 +1713,16 @@ impl Column {
                     .map(|_| SmallRng::from_entropy().gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX))
                     .collect::<Vec<i64>>(),
             ),
+            DataType::TimestampTz(t) => {
+                let tz = t.tz.clone();
+                Column::TimestampTz(TimestampTzColumn(
+                    (0..len)
+                        .map(|_| SmallRng::from_entropy().gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX))
+                        .collect::<Vec<i64>>()
+                        .into(),
+                    tz,
+                ))
+            }
             DataType::Date => DateType::from_data(
                 (0..len)
                     .map(|_| SmallRng::from_entropy().gen_range(DATE_MIN..=DATE_MAX))
@@ -1771,6 +1843,7 @@ impl Column {
             Column::Boolean(c) => c.as_slice().0.len(),
             Column::String(col) => col.memory_size(),
             Column::Timestamp(col) => col.len() * 8,
+            Column::TimestampTz(TimestampTzColumn(col, _)) => col.len() * 8,
             Column::Date(col) => col.len() * 4,
             Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
             Column::Map(col) => col.values.memory_size() + col.offsets.len() * 8,
@@ -1846,6 +1919,9 @@ impl ColumnBuilder {
             Column::Boolean(col) => ColumnBuilder::Boolean(bitmap_into_mut(col)),
             Column::String(col) => ColumnBuilder::String(StringColumnBuilder::from_column(col)),
             Column::Timestamp(col) => ColumnBuilder::Timestamp(buffer_into_mut(col)),
+            Column::TimestampTz(col) => {
+                ColumnBuilder::TimestampTz(TimestampTzColumnBuilder::from_column(col))
+            }
             Column::Date(col) => ColumnBuilder::Date(buffer_into_mut(col)),
             Column::Array(box col) => {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::from_column(col)))
@@ -1905,6 +1981,9 @@ impl ColumnBuilder {
             ScalarRef::Boolean(b) => ColumnBuilder::Boolean(constant_bitmap(*b, n)),
             ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
             ScalarRef::Timestamp(d) => ColumnBuilder::Timestamp(vec![*d; n]),
+            ScalarRef::TimestampTz(d) => {
+                ColumnBuilder::TimestampTz(TimestampTzColumnBuilder::repeat(d.clone(), n))
+            }
             ScalarRef::Date(d) => ColumnBuilder::Date(vec![*d; n]),
             ScalarRef::Array(col) => {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
@@ -1945,6 +2024,7 @@ impl ColumnBuilder {
             ColumnBuilder::Boolean(builder) => builder.len(),
             ColumnBuilder::String(builder) => builder.len(),
             ColumnBuilder::Timestamp(builder) => builder.len(),
+            ColumnBuilder::TimestampTz(builder) => builder.len(),
             ColumnBuilder::Date(builder) => builder.len(),
             ColumnBuilder::Array(builder) => builder.len(),
             ColumnBuilder::Map(builder) => builder.len(),
@@ -1979,6 +2059,7 @@ impl ColumnBuilder {
             ColumnBuilder::Boolean(c) => c.as_slice().len(),
             ColumnBuilder::String(col) => col.data.len() + col.offsets.len() * 8,
             ColumnBuilder::Timestamp(col) => col.len() * 8,
+            ColumnBuilder::TimestampTz(TimestampTzColumnBuilder(builder, _)) => builder.len() * 8,
             ColumnBuilder::Date(col) => col.len() * 4,
             ColumnBuilder::Array(col) => col.builder.memory_size() + col.offsets.len() * 8,
             ColumnBuilder::Map(col) => col.builder.memory_size() + col.offsets.len() * 8,
@@ -2004,6 +2085,9 @@ impl ColumnBuilder {
             ColumnBuilder::Boolean(_) => DataType::Boolean,
             ColumnBuilder::String(_) => DataType::String,
             ColumnBuilder::Timestamp(_) => DataType::Timestamp,
+            ColumnBuilder::TimestampTz(TimestampTzColumnBuilder(_, tz)) => {
+                DataType::TimestampTz(TimestampTzDataType { tz: tz.clone() })
+            }
             ColumnBuilder::Date(_) => DataType::Date,
             ColumnBuilder::Array(col) => {
                 let inner = col.builder.data_type();
@@ -2049,6 +2133,9 @@ impl ColumnBuilder {
                 ColumnBuilder::String(StringColumnBuilder::with_capacity(capacity, data_capacity))
             }
             DataType::Timestamp => ColumnBuilder::Timestamp(Vec::with_capacity(capacity)),
+            DataType::TimestampTz(timestamptz_ty) => ColumnBuilder::TimestampTz(
+                TimestampTzColumnBuilder::with_capacity(timestamptz_ty, capacity),
+            ),
             DataType::Date => ColumnBuilder::Date(Vec::with_capacity(capacity)),
             DataType::Nullable(ty) => ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                 builder: Self::with_capacity_hint(ty, capacity, enable_datasize_hint),
@@ -2110,6 +2197,9 @@ impl ColumnBuilder {
             (ColumnBuilder::Timestamp(builder), ScalarRef::Timestamp(value)) => {
                 builder.push(value);
             }
+            (ColumnBuilder::TimestampTz(builder), ScalarRef::TimestampTz(value)) => {
+                builder.push(value);
+            }
             (ColumnBuilder::Date(builder), ScalarRef::Date(value)) => builder.push(value),
             (ColumnBuilder::Array(builder), ScalarRef::Array(value)) => {
                 builder.push(value);
@@ -2151,6 +2241,7 @@ impl ColumnBuilder {
             ColumnBuilder::Boolean(builder) => builder.push(false),
             ColumnBuilder::String(builder) => builder.commit_row(),
             ColumnBuilder::Timestamp(builder) => builder.push(0),
+            ColumnBuilder::TimestampTz(builder) => builder.push_default(),
             ColumnBuilder::Date(builder) => builder.push(0),
             ColumnBuilder::Array(builder) => builder.push_default(),
             ColumnBuilder::Map(builder) => builder.push_default(),
@@ -2202,6 +2293,11 @@ impl ColumnBuilder {
                 let value: i64 = reader.read_scalar()?;
                 check_timestamp(value)?;
                 builder.push(value);
+            }
+            ColumnBuilder::TimestampTz(builder) => {
+                let value: i64 = reader.read_scalar()?;
+                check_timestamp(value)?;
+                builder.push(TimestampTzScalar(value, builder.1.clone()));
             }
             ColumnBuilder::Date(builder) => {
                 let value: i32 = reader.read_scalar()?;
@@ -2292,6 +2388,15 @@ impl ColumnBuilder {
                     builder.push(value);
                 }
             }
+            ColumnBuilder::TimestampTz(builder) => {
+                let tz = builder.1.clone();
+                for row in 0..rows {
+                    let mut reader = &reader[step * row..];
+                    let value: i64 = reader.read_scalar()?;
+                    check_timestamp(value)?;
+                    builder.push(TimestampTzScalar(value, tz.clone()));
+                }
+            }
             ColumnBuilder::Date(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
@@ -2370,6 +2475,7 @@ impl ColumnBuilder {
             ColumnBuilder::Boolean(builder) => builder.pop().map(Scalar::Boolean),
             ColumnBuilder::String(builder) => builder.pop().map(Scalar::String),
             ColumnBuilder::Timestamp(builder) => builder.pop().map(Scalar::Timestamp),
+            ColumnBuilder::TimestampTz(builder) => builder.pop().map(Scalar::TimestampTz),
             ColumnBuilder::Date(builder) => builder.pop().map(Scalar::Date),
             ColumnBuilder::Array(builder) => builder.pop().map(Scalar::Array),
             ColumnBuilder::Map(builder) => builder.pop().map(Scalar::Map),
@@ -2420,6 +2526,9 @@ impl ColumnBuilder {
             (ColumnBuilder::Timestamp(builder), Column::Timestamp(other)) => {
                 builder.extend_from_slice(other);
             }
+            (ColumnBuilder::TimestampTz(builder), Column::TimestampTz(other)) => {
+                builder.append_column(other);
+            }
             (ColumnBuilder::Date(builder), Column::Date(other)) => {
                 builder.extend_from_slice(other);
             }
@@ -2459,6 +2568,7 @@ impl ColumnBuilder {
             ColumnBuilder::Boolean(builder) => Column::Boolean(builder.into()),
             ColumnBuilder::String(builder) => Column::String(builder.build()),
             ColumnBuilder::Timestamp(builder) => Column::Timestamp(builder.into()),
+            ColumnBuilder::TimestampTz(builder) => Column::TimestampTz(builder.build()),
             ColumnBuilder::Date(builder) => Column::Date(builder.into()),
             ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
             ColumnBuilder::Map(builder) => Column::Map(Box::new(builder.build())),
@@ -2483,6 +2593,7 @@ impl ColumnBuilder {
             ColumnBuilder::Boolean(builder) => Scalar::Boolean(builder.get(0)),
             ColumnBuilder::String(builder) => Scalar::String(builder.build_scalar()),
             ColumnBuilder::Timestamp(builder) => Scalar::Timestamp(builder[0]),
+            ColumnBuilder::TimestampTz(builder) => Scalar::TimestampTz(builder.build_scalar()),
             ColumnBuilder::Date(builder) => Scalar::Date(builder[0]),
             ColumnBuilder::Array(builder) => Scalar::Array(builder.build_scalar()),
             ColumnBuilder::Map(builder) => Scalar::Map(builder.build_scalar()),

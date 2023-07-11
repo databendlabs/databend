@@ -28,6 +28,7 @@ pub mod number;
 pub mod number_class;
 pub mod string;
 pub mod timestamp;
+pub mod timestamptz;
 pub mod variant;
 
 use std::fmt::Debug;
@@ -55,8 +56,10 @@ pub use self::number::*;
 pub use self::number_class::*;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
+pub use self::timestamptz::TimestampTzType;
 pub use self::variant::VariantType;
 use crate::property::Domain;
+pub use crate::types::timestamptz::TimestampTzDataType;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -74,6 +77,7 @@ pub enum DataType {
     Number(NumberDataType),
     Decimal(DecimalDataType),
     Timestamp,
+    TimestampTz(TimestampTzDataType),
     Date,
     Nullable(Box<DataType>),
     Array(Box<DataType>),
@@ -185,7 +189,10 @@ impl DataType {
 
     #[inline]
     pub fn is_date_or_date_time(&self) -> bool {
-        matches!(self, DataType::Timestamp | DataType::Date)
+        matches!(
+            self,
+            DataType::Timestamp | DataType::Date | DataType::TimestampTz(_)
+        )
     }
 
     pub fn numeric_byte_size(&self) -> Result<usize, String> {
@@ -201,6 +208,7 @@ impl DataType {
             | DataType::Number(NumberDataType::Float32)
             | DataType::Number(NumberDataType::Int32) => Ok(4),
             DataType::Timestamp
+            | DataType::TimestampTz(_)
             | DataType::Number(NumberDataType::UInt64)
             | DataType::Number(NumberDataType::Float64)
             | DataType::Number(NumberDataType::Int64) => Ok(8),
