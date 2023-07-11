@@ -1,0 +1,19 @@
+{
+  "name": "@databend-driver/lib-darwin-x64",
+  "repository": "https://github.com/datafuselabs/bendsql.git",
+  "version": "0.1.0",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "databend-driver.darwin-x64.node",
+  "files": [
+    "databend-driver.darwin-x64.node"
+  ],
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">= 10"
+  }
+}

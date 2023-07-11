@@ -1,0 +1,19 @@
+{
+  "name": "@databend-driver/lib-win32-x64-msvc",
+  "repository": "https://github.com/datafuselabs/bendsql.git",
+  "version": "0.1.0",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "databend-driver.win32-x64-msvc.node",
+  "files": [
+    "databend-driver.win32-x64-msvc.node"
+  ],
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">= 10"
+  }
+}

@@ -104,9 +104,6 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: bindings/nodejs
     steps:
       - uses: actions/checkout@v3
       - name: Setup node
@@ -116,21 +113,26 @@ jobs:
           cache: yarn
           cache-dependency-path: "bindings/nodejs/yarn.lock"
       - name: Corepack
+        working-directory: bindings/nodejs
         run: corepack enable
       - name: Install dependencies
+        working-directory: bindings/nodejs
         run: yarn install --immutable
       - name: Download all artifacts
         uses: actions/download-artifact@v3
         with:
           path: bindings/nodejs/artifacts
       - name: Move artifacts
-        run: yarn run napi artifacts
-      - name: List packages
-        run: ls -R ./npm
+        shell: bash
+        working-directory: bindings/nodejs
+        run: |
+          ls -lRh artifacts
+          yarn run napi artifacts
+          ls -lRh npm
       - name: Add LICENSE
-        working-directory: .
         run: cp LICENSE ./bindings/nodejs
       - name: Publish
+        working-directory: bindings/nodejs
         run: |
           echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
           npm publish --access public --provenance
