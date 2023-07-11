@@ -176,7 +176,7 @@ impl PageManager {
                             break;
                         }
                         Err(_) => {
-                            info!("http query {} long pulling timeout", &self.query_id);
+                            debug!("http query {} long pulling timeout", &self.query_id);
                             break;
                         }
                     }
