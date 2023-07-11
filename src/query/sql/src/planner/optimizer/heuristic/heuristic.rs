@@ -46,6 +46,7 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::PushDownFilterSort,
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterJoin,
+        RuleID::PushDownFilterProjectSet,
         RuleID::FoldCountAggregate,
         RuleID::TryApplyAggIndex, // TryApplyAggIndex should before SplitAggregate
         RuleID::SplitAggregate,
