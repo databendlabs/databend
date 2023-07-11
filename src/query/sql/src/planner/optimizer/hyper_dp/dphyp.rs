@@ -268,7 +268,7 @@ impl DPhpy {
         if !optimized {
             return Ok((s_expr, false));
         }
-        if self.join_relations.len() == 1 {
+        if self.join_relations.len() == 1 || join_conditions.is_empty() {
             return Ok((s_expr, true));
         }
 
