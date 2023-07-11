@@ -36,11 +36,13 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::DroppedId;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -167,6 +169,15 @@ pub trait Catalog: DynClone + Send + Sync {
         db_name: &str,
         filter: Option<TableInfoFilter>,
     ) -> Result<Vec<Arc<dyn Table>>>;
+
+    async fn get_drop_table_infos(
+        &self,
+        _req: ListDroppedTableReq,
+    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
+        Err(ErrorCode::Unimplemented(
+            "'get_drop_table_infos' not implemented",
+        ))
+    }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply>;
 

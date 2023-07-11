@@ -45,6 +45,7 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::DroppedId;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetIndexReply;
@@ -53,6 +54,7 @@ use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
@@ -361,6 +363,29 @@ impl Catalog for MutableCatalog {
             let db = self.get_database(tenant, db_name).await?;
             db.list_tables_history(filter).await
         }
+    }
+
+    async fn get_drop_table_infos(
+        &self,
+        req: ListDroppedTableReq,
+    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
+        let ctx = DatabaseContext {
+            meta: self.ctx.meta.clone(),
+            storage_factory: self.ctx.storage_factory.clone(),
+            tenant: self.tenant.clone(),
+        };
+        let resp = ctx.meta.get_drop_table_infos(req).await?;
+
+        let drop_ids = resp.drop_ids.clone();
+        let drop_table_infos = resp.drop_table_infos;
+
+        let storage = ctx.storage_factory.clone();
+
+        let mut tables = vec![];
+        for table_info in drop_table_infos {
+            tables.push(storage.get_table(table_info.as_ref())?);
+        }
+        Ok((tables, drop_ids))
     }
 
     #[async_backtrace::framed]

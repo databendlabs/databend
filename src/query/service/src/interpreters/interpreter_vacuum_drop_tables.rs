@@ -22,6 +22,8 @@ use common_expression::DataSchemaRef;
 use common_expression::FromData;
 use common_license::license::Feature::Vacuum;
 use common_license::license_manager::get_license_manager;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::TableInfoFilter;
 use common_sql::plans::VacuumDropTablePlan;
 use vacuum_handler::get_vacuum_handler;
@@ -73,16 +75,21 @@ impl Interpreter for VacuumDropTablesInterpreter {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
         // if database if empty, vacuum all tables
         let filter = if self.plan.database.is_empty() {
-            Some(TableInfoFilter::AllDroppedTables(Some(retention_time)))
+            TableInfoFilter::AllDroppedTables(Some(retention_time))
         } else {
-            Some(TableInfoFilter::Dropped(Some(retention_time)))
+            TableInfoFilter::Dropped(Some(retention_time))
         };
 
         let tenant = self.ctx.get_tenant();
-        let tables = catalog
-            .list_tables_history(&tenant, &self.plan.database, filter)
+        let (tables, _) = catalog
+            .get_drop_table_infos(ListDroppedTableReq {
+                inner: DatabaseNameIdent {
+                    tenant,
+                    db_name: self.plan.database.clone(),
+                },
+                filter,
+            })
             .await?;
-
         let handler = get_vacuum_handler();
         let files_opt = handler
             .do_vacuum_drop_tables(
