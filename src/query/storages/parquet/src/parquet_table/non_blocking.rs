@@ -29,6 +29,7 @@ use common_storage::StageFilesInfo;
 use opendal::Operator;
 
 use super::table::create_parquet_table_info;
+use crate::parquet_table::blocking::get_compression_ratio;
 use crate::ParquetTable;
 
 impl ParquetTable {
@@ -54,7 +55,7 @@ impl ParquetTable {
             None => files_info.first_file(&operator).await?.path.clone(),
         };
 
-        let (arrow_schema, schema_descr) =
+        let (arrow_schema, schema_descr, compression_ratio) =
             Self::prepare_metas(&first_file, operator.clone()).await?;
 
         let table_info = create_parquet_table_info(arrow_schema.clone());
@@ -68,6 +69,7 @@ impl ParquetTable {
             stage_info,
             files_info,
             files_to_read,
+            compression_ratio,
             schema_from: first_file,
         }))
     }
@@ -76,7 +78,7 @@ impl ParquetTable {
     async fn prepare_metas(
         path: &str,
         operator: Operator,
-    ) -> Result<(ArrowSchema, SchemaDescriptor)> {
+    ) -> Result<(ArrowSchema, SchemaDescriptor, f64)> {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
@@ -85,7 +87,8 @@ impl ParquetTable {
             ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
         })?;
         let arrow_schema = infer_schema_with_extension(&first_meta)?;
+        let compression_ratio = get_compression_ratio(&first_meta);
         let schema_descr = first_meta.schema_descr;
-        Ok((arrow_schema, schema_descr))
+        Ok((arrow_schema, schema_descr, compression_ratio))
     }
 }
