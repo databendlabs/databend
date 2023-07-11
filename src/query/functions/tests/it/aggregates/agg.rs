@@ -101,15 +101,9 @@ fn gen_bitmap_data() -> Column {
     // construct bitmap column with 4 row:
     // 0..5, 1..6, 2..7, 3..8
     const N: u64 = 4;
-    let rbs_iter = (0..N).map(|i| {
-        let rb = Treemap::from_iter(i..(i + 5));
-        rb
-    });
+    let rbs_iter = (0..N).map(|i| Treemap::from_iter(i..(i + 5)));
 
-    let rbs = rbs_iter.map(|rb| {
-        let data = rb.serialize().unwrap();
-        data
-    });
+    let rbs = rbs_iter.map(|rb| rb.serialize().unwrap());
 
     BitmapType::from_data(rbs)
 }

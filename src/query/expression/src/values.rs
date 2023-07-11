@@ -1677,8 +1677,7 @@ impl Column {
             DataType::Bitmap => BitmapType::from_data((0..len).map(|_| {
                 let data: [u64; 4] = SmallRng::from_entropy().gen();
                 let rb = Treemap::from_iter(data);
-                let buf = rb.serialize().expect("failed serialize roaring treemap");
-                buf
+                rb.serialize().expect("failed serialize roaring treemap")
             })),
             DataType::Tuple(fields) => {
                 let fields = fields
@@ -1893,7 +1892,7 @@ impl ColumnBuilder {
             }
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
             ScalarRef::Bitmap(b) => {
-                let rb = Treemap::deserialize(*b).expect("failed to deserialize bitmap");
+                let rb = Treemap::deserialize(b).expect("failed to deserialize bitmap");
                 let buf = rb.serialize().expect("failed to serialize bitmap");
                 ColumnBuilder::Bitmap(StringColumnBuilder::repeat(&buf, n))
             }

@@ -141,7 +141,7 @@ impl<'a> Debug for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = Treemap::deserialize(*bits).unwrap();
+                let rb = Treemap::deserialize(bits).unwrap();
                 write!(f, "{rb:?}")
             }
             ScalarRef::Tuple(fields) => {
@@ -220,7 +220,7 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = Treemap::deserialize(*bits).unwrap();
+                let rb = Treemap::deserialize(bits).unwrap();
                 write!(f, "{rb:?}")
             }
             ScalarRef::Tuple(fields) => {
