@@ -63,11 +63,12 @@ use jsonb::as_str;
 use jsonb::build_object;
 use jsonb::get_by_index;
 use jsonb::get_by_name;
+use jsonb::get_by_path;
+use jsonb::get_by_path_array;
+use jsonb::get_by_path_first;
 use jsonb::is_array;
 use jsonb::is_object;
 use jsonb::jsonpath::parse_json_path;
-use jsonb::jsonpath::Mode as SelectorMode;
-use jsonb::jsonpath::Selector;
 use jsonb::object_keys;
 use jsonb::parse_value;
 use jsonb::to_bool;
@@ -330,9 +331,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match parse_json_path(path) {
                     Ok(json_path) => {
-                        let selector = Selector::new_with_mode(json_path, SelectorMode::Array);
-                        selector.nselect(
+                        get_by_path_array(
                             val,
+                            json_path,
                             &mut output.builder.data,
                             &mut output.builder.offsets,
                         );
@@ -367,9 +368,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match parse_json_path(path) {
                     Ok(json_path) => {
-                        let selector = Selector::new_with_mode(json_path, SelectorMode::First);
-                        selector.nselect(
+                        get_by_path_first(
                             val,
+                            json_path,
                             &mut output.builder.data,
                             &mut output.builder.offsets,
                         );
@@ -404,9 +405,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match parse_json_path(path) {
                     Ok(json_path) => {
-                        let selector = Selector::new_with_mode(json_path, SelectorMode::Mixed);
-                        selector.nselect(
+                        get_by_path(
                             val,
+                            json_path,
                             &mut output.builder.data,
                             &mut output.builder.offsets,
                         );
@@ -447,9 +448,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             Ok(json_path) => {
                                 let mut out_buf = Vec::new();
                                 let mut out_offsets = Vec::new();
-                                let selector =
-                                    Selector::new_with_mode(json_path, SelectorMode::Mixed);
-                                selector.nselect(&buf, &mut out_buf, &mut out_offsets);
+                                get_by_path(&buf, json_path, &mut out_buf, &mut out_offsets);
                                 if out_offsets.is_empty() {
                                     output.push_null();
                                 } else {

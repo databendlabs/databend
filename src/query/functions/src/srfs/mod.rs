@@ -88,13 +88,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                     match path_arg {
                         Value::Scalar(Scalar::String(path)) => match parse_json_path(&path) {
                             Ok(json_path) => {
-                                let selector =
-                                    Selector::new_with_mode(json_path, SelectorMode::All);
+                                let selector = Selector::new(json_path, SelectorMode::All);
                                 for row in 0..ctx.num_rows {
                                     let val = unsafe { val_arg.index_unchecked(row) };
                                     let mut builder = StringColumnBuilder::with_capacity(0, 0);
                                     if let ScalarRef::Variant(val) = val {
-                                        selector.nselect(
+                                        selector.select(
                                             val,
                                             &mut builder.data,
                                             &mut builder.offsets,
@@ -128,11 +127,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     match parse_json_path(path) {
                                         Ok(json_path) => {
                                             if let ScalarRef::Variant(val) = val {
-                                                let selector = Selector::new_with_mode(
-                                                    json_path,
-                                                    SelectorMode::All,
-                                                );
-                                                selector.nselect(
+                                                let selector =
+                                                    Selector::new(json_path, SelectorMode::All);
+                                                selector.select(
                                                     val,
                                                     &mut builder.data,
                                                     &mut builder.offsets,
