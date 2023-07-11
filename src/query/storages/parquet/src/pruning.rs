@@ -276,6 +276,8 @@ impl PartitionPruner {
             stats.read_rows += sub_stats.read_rows;
         }
 
+        let num_large_partitions = partitions.len();
+
         collect_small_file_parts(
             small_files,
             max_compression_ratio,
@@ -283,6 +285,11 @@ impl PartitionPruner {
             &mut partitions,
             &mut stats,
             self.columns_to_read.len(),
+        );
+
+        tracing::info!(
+            "copy {num_large_partitions} large partitions and {} small partitions.",
+            partitions.len() - num_large_partitions
         );
 
         let partition_kind = PartitionsShuffleKind::Mod;
