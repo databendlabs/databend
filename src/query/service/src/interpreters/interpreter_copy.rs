@@ -40,9 +40,11 @@ use tracing::info;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
-use crate::pipelines::builders::build_append2table_pipeline;
-use crate::pipelines::builders::build_local_append_data_pipeline;
-use crate::pipelines::builders::build_upsert_copied_files_to_meta_req;
+use crate::pipelines::builders::build_append2table_with_commit_pipeline;
+use crate::pipelines::builders::build_append_data_pipeline;
+use crate::pipelines::builders::build_commit_data_pipeline;
+use crate::pipelines::builders::set_copy_on_finished;
+use crate::pipelines::builders::CopyPlanType;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_distributed_pipeline;
 use crate::sessions::QueryContext;
@@ -122,11 +124,11 @@ impl CopyInterpreter {
             files_to_copy: None,
             is_select: false,
         };
-        let table = StageTable::try_create(stage_table_info)?;
-        build_append2table_pipeline(
+        let to_table = StageTable::try_create(stage_table_info)?;
+        build_append2table_with_commit_pipeline(
             self.ctx.clone(),
             &mut build_res.main_pipeline,
-            table,
+            to_table,
             data_schema,
             None,
             false,
@@ -172,6 +174,7 @@ impl CopyInterpreter {
         if read_source_plan.parts.len() <= 1 {
             return Ok(None);
         }
+
         Ok(Some(DistributedCopyIntoTable {
             // TODO(leiysky): we reuse the id of exchange here,
             // which is not correct. We should generate a new id for insert.
@@ -190,7 +193,6 @@ impl CopyInterpreter {
             thresholds: to_table.get_block_thresholds(),
             files,
             table_info: to_table.get_table_info().clone(),
-            local_node_id: self.ctx.get_cluster().local_id.clone(),
         }))
     }
 
@@ -232,7 +234,7 @@ impl CopyInterpreter {
         Ok(())
     }
 
-    /// Build a pipeline to copy data from local.
+    /// Build a COPY pipeline in standalone mode.
     #[async_backtrace::framed]
     async fn build_local_copy_into_table_pipeline(
         &self,
@@ -270,21 +272,44 @@ impl CopyInterpreter {
             (build_res, plan.required_source_schema.clone(), files)
         };
 
-        build_local_append_data_pipeline(
-            ctx,
+        build_append_data_pipeline(
+            ctx.clone(),
             &mut build_res.main_pipeline,
-            plan.clone(),
+            CopyPlanType::CopyIntoTablePlanOption(plan.clone()),
             source_schema,
-            to_table,
-            files,
+            to_table.clone(),
         )?;
+
+        // if it's replace mode, don't commit, because COPY is the source of replace.
+        match plan.write_mode {
+            CopyIntoTableMode::Replace => set_copy_on_finished(
+                ctx,
+                files,
+                plan.stage_table_info.stage_info.copy_options.purge,
+                plan.stage_table_info.stage_info.clone(),
+                &mut build_res.main_pipeline,
+            )?,
+            _ => {
+                // commit.
+                build_commit_data_pipeline(
+                    ctx.clone(),
+                    &mut build_res.main_pipeline,
+                    plan.stage_table_info.stage_info.clone(),
+                    to_table,
+                    files,
+                    plan.force,
+                    plan.stage_table_info.stage_info.copy_options.purge,
+                    plan.write_mode.is_overwrite(),
+                )?
+            }
+        }
 
         Ok(build_res)
     }
 
-    /// Build a pipeline to copy data into table for distributed.
+    /// Build distributed pipeline from source node id.
     #[async_backtrace::framed]
-    async fn build_distributed_copy_into_table_pipeline(
+    async fn build_cluster_copy_into_table_pipeline(
         &self,
         distributed_plan: &DistributedCopyIntoTable,
     ) -> Result<PipelineBuildResult> {
@@ -299,27 +324,7 @@ impl CopyInterpreter {
             kind: FragmentKind::Merge,
             keys: Vec::new(),
         });
-        let mut build_res = build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?;
-
-        let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
-        let to_table = catalog.get_table_by_info(&distributed_plan.table_info)?;
-        let copied_files = build_upsert_copied_files_to_meta_req(
-            self.ctx.clone(),
-            to_table.clone(),
-            distributed_plan.stage_table_info.stage_info.clone(),
-            distributed_plan.files.clone(),
-            distributed_plan.force,
-        )?;
-        let mut overwrite_ = false;
-        if let CopyIntoTableMode::Insert { overwrite } = distributed_plan.write_mode {
-            overwrite_ = overwrite;
-        }
-        to_table.commit_insertion(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            copied_files,
-            overwrite_,
-        )?;
+        let build_res = build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?;
 
         Ok(build_res)
     }
@@ -345,8 +350,34 @@ impl Interpreter for CopyInterpreter {
                         .try_transform_copy_plan_from_local_to_distributed(plan)
                         .await?;
                     if let Some(distributed_plan) = distributed_plan_op {
-                        self.build_distributed_copy_into_table_pipeline(&distributed_plan)
-                            .await
+                        let mut build_res = self
+                            .build_cluster_copy_into_table_pipeline(&distributed_plan)
+                            .await?;
+                        let to_table = self
+                            .ctx
+                            .get_table(
+                                &distributed_plan.catalog_name,
+                                &distributed_plan.database_name,
+                                &distributed_plan.table_name,
+                            )
+                            .await?;
+
+                        // commit.
+                        build_commit_data_pipeline(
+                            self.ctx.clone(),
+                            &mut build_res.main_pipeline,
+                            distributed_plan.stage_table_info.stage_info.clone(),
+                            to_table,
+                            distributed_plan.files.clone(),
+                            distributed_plan.force,
+                            distributed_plan
+                                .stage_table_info
+                                .stage_info
+                                .copy_options
+                                .purge,
+                            distributed_plan.write_mode.is_overwrite(),
+                        )?;
+                        Ok(build_res)
                     } else {
                         self.build_local_copy_into_table_pipeline(plan).await
                     }

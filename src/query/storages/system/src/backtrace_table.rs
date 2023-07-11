@@ -18,10 +18,9 @@ use common_base::dump_backtrace;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::ColumnBuilder;
+use common_expression::types::StringType;
 use common_expression::DataBlock;
-use common_expression::Scalar;
+use common_expression::FromData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -40,24 +39,36 @@ pub struct BacktraceTable {
 impl SyncSystemTable for BacktraceTable {
     const NAME: &'static str = "system.backtrace";
 
+    // Allow distributed query.
+    const IS_LOCAL: bool = false;
+
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
-    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+        let local_node = ctx.get_cluster().local_id.clone();
         let stack = dump_backtrace(false);
 
-        let mut stacks = ColumnBuilder::with_capacity(&DataType::String, 1);
-        stacks.push(Scalar::String(stack.as_bytes().to_vec()).as_ref());
+        let mut nodes: Vec<Vec<u8>> = Vec::with_capacity(1);
+        let mut stacks: Vec<Vec<u8>> = Vec::with_capacity(1);
 
-        Ok(DataBlock::new_from_columns(vec![stacks.build()]))
+        nodes.push(local_node.into_bytes());
+        stacks.push(stack.into_bytes());
+
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(nodes),
+            StringType::from_data(stacks),
+        ]))
     }
 }
 
 impl BacktraceTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema =
-            TableSchemaRefExt::create(vec![TableField::new("stack", TableDataType::String)]);
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("node", TableDataType::String),
+            TableField::new("stack", TableDataType::String),
+        ]);
 
         let table_info = TableInfo {
             desc: "'system'.'backtrace'".to_string(),

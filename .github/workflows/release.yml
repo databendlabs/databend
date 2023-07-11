@@ -181,6 +181,7 @@ jobs:
       - name: Build Release
         uses: ./.github/actions/build_linux
         with:
+          sha: ${{ github.sha }}
           target: ${{ steps.target.outputs.target }}
           artifacts: sqllogictests,metactl,meta,query
           upload: false
@@ -255,6 +256,7 @@ jobs:
       - name: Build Release
         uses: ./.github/actions/build_linux
         with:
+          sha: ${{ github.sha }}
           target: ${{ steps.target.outputs.target }}
           artifacts: query
           features: hive

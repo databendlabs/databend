@@ -1,8 +1,5 @@
 ---
-title: Connecting Databend With Grafana
-sidebar_label: Grafana
-description:
-  Connecting Databend with Grafana.
+title: Grafana
 ---
 
 ## What is [Grafana](https://grafana.com/)?

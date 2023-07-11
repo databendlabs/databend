@@ -66,7 +66,7 @@ pub fn build_fill_missing_columns_pipeline(
     Ok(())
 }
 
-pub fn build_append2table_pipeline(
+pub fn build_append2table_with_commit_pipeline(
     ctx: Arc<QueryContext>,
     main_pipeline: &mut Pipeline,
     table: Arc<dyn Table>,
