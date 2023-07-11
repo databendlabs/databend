@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - v*
   pull_request:
     branches:
       - main
@@ -99,9 +101,12 @@ jobs:
           path: bindings/nodejs/*.node
 
   publish:
-    if: github.event_name == 'push'
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v3
       - name: Setup node

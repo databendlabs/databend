@@ -1,21 +1,24 @@
 [package]
 name = "bendsql"
-version = "0.4.1"
-edition = "2021"
-license = "Apache-2.0"
 description = "Databend Native Command Line Tool"
 categories = ["database"]
 keywords = ["databend", "database", "cli"]
-repository = "https://github.com/datafuselabs/databend-client"
+
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
+databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
+
 anyhow = "1.0.70"
 async-trait = "0.1.68"
 chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
 clap = { version = "4.1.0", features = ["derive", "env"] }
 comfy-table = "6.1.4"
 csv = "1.2.1"
-databend-driver = { path = "../driver", version = "0.3.1", features = ["rustls", "flight-sql"] }
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 humantime-serde = "1.1.1"
 indicatif = "0.17.3"

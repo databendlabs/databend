@@ -1,12 +1,14 @@
 [package]
 name = "databend-driver"
-version = "0.3.1"
-edition = "2021"
-license = "Apache-2.0"
 description = "Databend Driver for Rust"
 categories = ["database"]
 keywords = ["databend", "database", "sdk"]
-repository = "https://github.com/datafuselabs/databend-client"
+
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
 
 [features]
 default = ["rustls"]
@@ -19,9 +21,10 @@ native-tls = ["databend-client/native-tls"]
 flight-sql = ["dep:arrow-array", "dep:arrow-cast", "dep:arrow-flight", "dep:arrow-schema", "dep:tonic"]
 
 [dependencies]
+databend-client = { workspace = true }
+
 async-trait = "0.1.68"
 chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
-databend-client = { version = "0.2.1", path = "../core" }
 dyn-clone = "1.0.11"
 http = "0.2.9"
 percent-encoding = "2.2.0"
