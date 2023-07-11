@@ -51,15 +51,15 @@ If you are interested in learning more, please check out the resources listed be
 
 - [Docs | Create External Stage with AWS IAM User](/doc/sql-commands/ddl/stage/ddl-create-stage#example-3-create-external-stage-with-aws-iam-user)
 
-### Tutorial | Create External Stage on Cloueflare R2
+### Tutorial | Create External Stage on Cloudflare R2
 
-[Cloueflare R2](https://www.cloudflare.com/products/r2/) gives you the freedom to create the multi-cloud architectures you desire with an S3-compatible object storage.
+[Cloudflare R2](https://www.cloudflare.com/products/r2/) gives you the freedom to create the multi-cloud architectures you desire with an S3-compatible object storage.
 
-You can use Databend to create external storage on Cloueflare R2 and further efficiently mine the value of data.
+You can use Databend to create external storage on Cloudflare R2 and further efficiently mine the value of data.
 
 If you are interested in learning more, please check out the resources listed below.
 
-- [Docs | Create External Stage on Cloueflare R2](/doc/sql-commands/ddl/stage/ddl-create-stage#example-4-create-external-stage-on-cloueflare-r2)
+- [Docs | Create External Stage on Cloudflare R2](/doc/sql-commands/ddl/stage/ddl-create-stage#example-4-create-external-stage-on-cloudflare-r2)
 
 ## Code Corner
 

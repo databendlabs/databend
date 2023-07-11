@@ -265,9 +265,9 @@ Use the access key and secret access key generated for the IAM user *databend* t
 CREATE STAGE iam_external_stage url = 's3://databend-toronto' CONNECTION =(aws_key_id='<your-access-key-id>' aws_secret_key='<your-secret-access-key>' region='us-east-2');
 ```
 
-### Example 4: Create External Stage on Cloueflare R2
+### Example 4: Create External Stage on Cloudflare R2
 
-[Cloudflare R2](https://www.cloudflare.com/en-ca/products/r2/) is an object storage service introduced by Cloudflare that is fully compatible with Amazon's AWS S3 service. This example creates an external stage named *r2_stage* on Cloueflare R2.
+[Cloudflare R2](https://www.cloudflare.com/en-ca/products/r2/) is an object storage service introduced by Cloudflare that is fully compatible with Amazon's AWS S3 service. This example creates an external stage named *r2_stage* on Cloudflare R2.
 
 #### Step 1: Create Bucket
 
