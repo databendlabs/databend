@@ -211,36 +211,25 @@ The procedure below creates an access policy named *databend-access* for the buc
 
 ```json
 {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "s3:PutObject",
-                "s3:GetObject",
-                "s3:GetObjectVersion",
-                "s3:DeleteObject",
-                "s3:DeleteObjectVersion",
-                "s3:ListBucket"
-            ],
-            "Resource": "arn:aws:s3:::databend-toronto/*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "s3:ListBucket",
-                "s3:GetBucketLocation"
-            ],
-            "Resource": "arn:aws:s3:::databend-toronto/*",
-            "Condition": {
-                "StringLike": {
-                    "s3:prefix": [
-                        "/*"
-                    ]
-                }
-            }
-        }
-    ]
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllObjectActions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:*Object"
+      ],
+      "Resource": "arn:aws:s3:::databend-toronto/*"
+    },
+    {
+      "Sid": "ListObjectsInBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Resource": "arn:aws:s3:::databend-toronto"
+    }
+  ]
 }
 ```
 
@@ -250,11 +239,11 @@ The procedure below creates an IAM user named *databend* and attach the access p
 
 1. Select **Users** in the left navigation pane, then select **Add users** on the right page.
 2. Configure the user:
-    - Set the user name to *databend*. 
+    - Set the user name to *databend*.
     - When setting permissions for the user, click **Attach policies directly**, then search for and select the access policy *databend-access*.
 3. After the user is created, click the user name to open the details page and select the **Security credentials** tab.
 4. In the **Access keys** section, click **Create access key**.
-5. Select **Third-party service** for the use case, and tick the checkbox below to confirm creation of the access key. 
+5. Select **Third-party service** for the use case, and tick the checkbox below to confirm creation of the access key.
 6. Copy and save the generated access key and secret access key to a safe place.
 
 #### Step 3: Create External Stage
@@ -265,9 +254,9 @@ Use the access key and secret access key generated for the IAM user *databend* t
 CREATE STAGE iam_external_stage url = 's3://databend-toronto' CONNECTION =(aws_key_id='<your-access-key-id>' aws_secret_key='<your-secret-access-key>' region='us-east-2');
 ```
 
-### Example 4: Create External Stage on Cloueflare R2
+### Example 4: Create External Stage on Cloudflare R2
 
-[Cloudflare R2](https://www.cloudflare.com/en-ca/products/r2/) is an object storage service introduced by Cloudflare that is fully compatible with Amazon's AWS S3 service. This example creates an external stage named *r2_stage* on Cloueflare R2.
+[Cloudflare R2](https://www.cloudflare.com/en-ca/products/r2/) is an object storage service introduced by Cloudflare that is fully compatible with Amazon's AWS S3 service. This example creates an external stage named *r2_stage* on Cloudflare R2.
 
 #### Step 1: Create Bucket
 
@@ -281,7 +270,7 @@ The procedure below creates a bucket named *databend* on Cloudflare R2.
 The procedure below creates an R2 API token that includes an Access Key ID and a Secret Access Key.
 
 1. Click **Manage R2 API Tokens** on **R2** > **Overview**.
-2. Click **Create API token** to create an API token. 
+2. Click **Create API token** to create an API token.
 3. When configuring the API token, select the necessary permission and set the **TTL** as needed.
 4. Click **Create API Token** to obtain the Access Key ID and Secret Access Key. Copy and save them to a safe place.
 
