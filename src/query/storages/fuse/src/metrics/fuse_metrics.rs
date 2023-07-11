@@ -30,7 +30,7 @@ pub fn metrics_inc_commit_mutation_latest_snapshot_append_only() {
     counter!(key!("commit_mutation_latest_snapshot_append_only"), 1);
 }
 
-pub fn metrics_inc_commit_mutation_modified_segment_exists_in_latest(){
+pub fn metrics_inc_commit_mutation_modified_segment_exists_in_latest() {
     counter!(key!("modified_segment_exists_in_latest"), 1);
 }
 
