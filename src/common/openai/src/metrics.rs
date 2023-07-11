@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use metrics::increment_gauge;
+use metrics::counter;
 
 pub fn metrics_completion_count(c: u32) {
-    increment_gauge!("openai_completion_count", c as f64);
+    counter!("openai_completion_count", c.into());
 }
 
 pub fn metrics_completion_token(c: u32) {
-    increment_gauge!("openai_completion_token", c as f64);
+    counter!("openai_completion_token", c.into());
 }
 
 pub fn metrics_embedding_count(c: u32) {
-    increment_gauge!("openai_embedding_count", c as f64);
+    counter!("openai_embedding_count", c.into());
 }
 
 pub fn metrics_embedding_token(c: u32) {
-    increment_gauge!("openai_embedding_token", c as f64);
+    counter!("openai_embedding_token", c.into());
 }
