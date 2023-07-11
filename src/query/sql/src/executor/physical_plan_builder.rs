@@ -412,10 +412,22 @@ impl PhysicalPlanBuilder {
             .await?;
 
         if let Some(agg_index) = &scan.agg_index {
-            let schema = source.schema();
+            // Compute the projection
+            let used_columns = agg_index.used_columns();
+            let projection = Self::build_projection(
+                &metadata,
+                &agg_index.schema,
+                used_columns.iter(),
+                false,
+                true,
+                true,
+                true,
+            );
+            let source_schema = source.schema();
             let push_down = source.push_downs.as_mut().unwrap();
-            let output_fields = TableScan::output_fields(schema, &name_mapping)?;
-            Self::push_down_agg_index(push_down, agg_index, &output_fields)?;
+            let output_fields = TableScan::output_fields(source_schema, &name_mapping)?;
+            let agg_index = Self::build_agg_index(agg_index, &output_fields, projection)?;
+            push_down.agg_index = Some(agg_index);
         }
         let internal_column = if project_internal_columns.is_empty() {
             None
@@ -432,11 +444,11 @@ impl PhysicalPlanBuilder {
         }))
     }
 
-    fn push_down_agg_index(
-        push_down: &mut PushDownInfo,
+    fn build_agg_index(
         agg: &planner::plans::AggIndexInfo,
         output_fields: &[DataField],
-    ) -> Result<()> {
+        projection: Projection,
+    ) -> Result<AggIndexInfo> {
         let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
             ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
@@ -469,17 +481,15 @@ impl PhysicalPlanBuilder {
                 ))
             })
             .collect::<Result<Vec<_>>>()?;
-        let agg_info = AggIndexInfo {
+        Ok(AggIndexInfo {
             index_id: agg.index_id,
             filter,
             selection,
             schema: agg.schema.clone(),
             actual_table_field_len: output_fields.len(),
             is_agg: agg.is_agg,
-        };
-        push_down.agg_index = Some(agg_info);
-
-        Ok(())
+            projection,
+        })
     }
 
     #[async_recursion::async_recursion]

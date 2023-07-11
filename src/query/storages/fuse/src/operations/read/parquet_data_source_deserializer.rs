@@ -141,9 +141,20 @@ impl Processor for DeserializeDataTransform {
         let chunks = self.chunks.pop();
         if let Some((part, read_res)) = part.zip(chunks) {
             match read_res {
-                DataSource::AggIndex(data) => {
+                DataSource::AggIndex((actual_part, data)) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
-                    let block = agg_index_reader.deserialize(&data)?;
+                    let block = agg_index_reader.deserialize_parquet_data(
+                        actual_part,
+                        data,
+                        self.uncompressed_buffer.clone(),
+                    )?;
+
+                    let progress_values = ProgressValues {
+                        rows: block.num_rows(),
+                        bytes: block.memory_size(),
+                    };
+                    self.scan_progress.incr(&progress_values);
+
                     self.output_data = Some(block);
                 }
                 DataSource::Normal(data) => {
