@@ -22,6 +22,8 @@ use reqwest::multipart::{Form, Part};
 use reqwest::{Body, Client as HttpClient};
 use tokio::io::AsyncRead;
 use tokio::sync::Mutex;
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
+use tokio_retry::Retry;
 use tokio_util::io::ReaderStream;
 use url::Url;
 
@@ -223,13 +225,16 @@ impl APIClient {
     pub async fn query_page(&self, next_uri: &str) -> Result<QueryResponse> {
         let endpoint = self.endpoint.join(next_uri)?;
         let headers = self.make_headers().await?;
-        let resp = self
-            .cli
-            .get(endpoint)
-            .basic_auth(self.user.clone(), self.password.clone())
-            .headers(headers)
-            .send()
-            .await?;
+        let retry_strategy = ExponentialBackoff::from_millis(10).map(jitter).take(3);
+        let req = || async {
+            self.cli
+                .get(endpoint.clone())
+                .basic_auth(self.user.clone(), self.password.clone())
+                .headers(headers.clone())
+                .send()
+                .await
+        };
+        let resp = Retry::spawn(retry_strategy, req).await?;
         if resp.status() != StatusCode::OK {
             let resp_err = QueryError {
                 code: resp.status().as_u16(),
