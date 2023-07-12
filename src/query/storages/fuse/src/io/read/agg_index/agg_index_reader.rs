@@ -12,20 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::io::BufReader;
-use std::io::Cursor;
-use std::io::Seek;
 use std::sync::Arc;
 
-use common_arrow::arrow::chunk::Chunk;
-use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::arrow::io::parquet::write::to_parquet_schema;
-use common_arrow::native::read as nread;
-use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_catalog::plan::AggIndexInfo;
 use common_catalog::plan::AggIndexMeta;
-use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::BooleanType;
@@ -40,26 +30,20 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use opendal::Operator;
-use storages_common_table_meta::meta::ColumnMeta;
-use storages_common_table_meta::meta::SingleColumnMeta;
 use storages_common_table_meta::table::TableCompression;
 use tracing::debug;
 
 use crate::io::BlockReader;
-use crate::io::ReadSettings;
-use crate::io::UncompressedBuffer;
-use crate::FusePartInfo;
-use crate::MergeIOReadResult;
 
 #[derive(Clone)]
 pub struct AggIndexReader {
     index_id: u64,
 
-    reader: Arc<BlockReader>,
-    compression: TableCompression,
+    pub(super) reader: Arc<BlockReader>,
+    pub(super) compression: TableCompression,
+    pub(super) schema: DataSchema,
 
     func_ctx: FunctionContext,
-    schema: DataSchema,
     selection: Vec<(Expr, Option<usize>)>,
     filter: Option<Expr>,
 
@@ -138,111 +122,7 @@ impl AggIndexReader {
         }
     }
 
-    pub fn sync_read_data_by_merge_io(
-        &self,
-        read_settings: &ReadSettings,
-        loc: &str,
-    ) -> Option<(PartInfoPtr, MergeIOReadResult)> {
-        match self.reader.operator.blocking().reader(loc) {
-            Ok(mut reader) => {
-                let metadata = pread::read_metadata(&mut reader)
-                    .inspect_err(|e| {
-                        debug!("Read aggregating index `{loc}`'s metadata failed: {e}")
-                    })
-                    .ok()?;
-                debug_assert_eq!(metadata.row_groups.len(), 1);
-                let row_group = &metadata.row_groups[0];
-                let columns_meta = Self::build_columns_meta(row_group);
-                let part = FusePartInfo::create(
-                    loc.to_string(),
-                    row_group.num_rows() as u64,
-                    columns_meta,
-                    None,
-                    self.compression.into(),
-                    None,
-                    None,
-                    None,
-                );
-                let res = self
-                    .reader
-                    .sync_read_columns_data_by_merge_io(read_settings, part.clone())
-                    .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
-                    .ok()?;
-                Some((part, res))
-            }
-            Err(e) => {
-                if e.kind() == opendal::ErrorKind::NotFound {
-                    debug!("Aggregating index `{loc}` not found.")
-                } else {
-                    debug!("Read aggregating index `{loc}` failed: {e}");
-                }
-                None
-            }
-        }
-    }
-
-    pub async fn read_data_by_merge_io(
-        &self,
-        read_settings: &ReadSettings,
-        loc: &str,
-    ) -> Option<(PartInfoPtr, MergeIOReadResult)> {
-        match self.reader.operator.reader(loc).await {
-            Ok(mut reader) => {
-                let metadata = pread::read_metadata_async(&mut reader)
-                    .await
-                    .inspect_err(|e| {
-                        debug!("Read aggregating index `{loc}`'s metadata failed: {e}")
-                    })
-                    .ok()?;
-                debug_assert_eq!(metadata.row_groups.len(), 1);
-                let row_group = &metadata.row_groups[0];
-                let columns_meta = Self::build_columns_meta(row_group);
-                let res = self
-                    .reader
-                    .read_columns_data_by_merge_io(read_settings, loc, &columns_meta)
-                    .await
-                    .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
-                    .ok()?;
-                let part = FusePartInfo::create(
-                    loc.to_string(),
-                    row_group.num_rows() as u64,
-                    columns_meta,
-                    None,
-                    self.compression.into(),
-                    None,
-                    None,
-                    None,
-                );
-                Some((part, res))
-            }
-            Err(e) => {
-                if e.kind() == opendal::ErrorKind::NotFound {
-                    debug!("Aggregating index `{loc}` not found.")
-                } else {
-                    debug!("Read aggregating index `{loc}` failed: {e}");
-                }
-                None
-            }
-        }
-    }
-
-    pub fn build_columns_meta(row_group: &RowGroupMetaData) -> HashMap<u32, ColumnMeta> {
-        let mut columns_meta = HashMap::with_capacity(row_group.columns().len());
-        for (index, c) in row_group.columns().iter().enumerate() {
-            let (offset, len) = c.byte_range();
-            columns_meta.insert(
-                index as u32,
-                ColumnMeta::Parquet(SingleColumnMeta {
-                    offset,
-                    len,
-                    num_values: c.num_values() as u64,
-                }),
-            );
-        }
-        columns_meta
-    }
-
-    fn apply_agg_info(&self, block: DataBlock) -> Result<DataBlock> {
+    pub(super) fn apply_agg_info(&self, block: DataBlock) -> Result<DataBlock> {
         let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
         // 1. Filter the block if there is a filter.
@@ -283,70 +163,5 @@ impl AggIndexReader {
             block.num_rows(),
             Some(AggIndexMeta::create(self.is_agg)),
         ))
-    }
-
-    pub fn deserialize_parquet_data(
-        &self,
-        part: PartInfoPtr,
-        data: MergeIOReadResult,
-        buffer: Arc<UncompressedBuffer>,
-    ) -> Result<DataBlock> {
-        let columns_chunks = data.columns_chunks()?;
-        let part = FusePartInfo::from_part(&part)?;
-        let block = self.reader.deserialize_parquet_chunks_with_buffer(
-            &part.location,
-            part.nums_rows,
-            &part.compression,
-            &part.columns_meta,
-            columns_chunks,
-            Some(buffer),
-        )?;
-
-        self.apply_agg_info(block)
-    }
-
-    pub fn deserialize_native_data(&self, data: &[u8]) -> Result<DataBlock> {
-        let mut reader = Cursor::new(data);
-        let schema = nread::reader::infer_schema(&mut reader)?;
-        let mut metas = nread::reader::read_meta(&mut reader)?;
-        let schema_descriptor = to_parquet_schema(&schema)?;
-        let mut leaves = schema_descriptor.columns().to_vec();
-
-        let mut arrays = vec![];
-        for field in schema.fields.iter() {
-            let n = pread::n_columns(&field.data_type);
-            let curr_metas = metas.drain(..n).collect::<Vec<_>>();
-            let curr_leaves = leaves.drain(..n).collect::<Vec<_>>();
-            let mut pages = Vec::with_capacity(n);
-            let mut readers = Vec::with_capacity(n);
-            for curr_meta in curr_metas.iter() {
-                pages.push(curr_meta.pages.clone());
-                let mut reader = Cursor::new(data);
-                reader.seek(std::io::SeekFrom::Start(curr_meta.offset))?;
-                let buffer_size = curr_meta.total_len() as usize;
-                let reader = BufReader::with_capacity(buffer_size, reader);
-                readers.push(reader);
-            }
-            let is_nested = !nread::reader::is_primitive(field.data_type());
-            let array = nread::batch_read::batch_read_array(
-                readers,
-                curr_leaves,
-                field.clone(),
-                is_nested,
-                pages,
-            )?;
-            arrays.push(array);
-        }
-        let chunk = Chunk::new(arrays);
-        let block = DataBlock::from_arrow_chunk(&chunk, &self.schema)?;
-
-        // Remove unused columns.
-        let block = DataBlock::resort(
-            block,
-            &self.schema,
-            &self.reader.projected_schema.as_ref().into(),
-        )?;
-
-        self.apply_agg_info(block)
     }
 }
