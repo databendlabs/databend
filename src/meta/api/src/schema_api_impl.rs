@@ -3967,22 +3967,27 @@ async fn gc_dropped_db_by_id(
         for c in keys.chunks(DEFAULT_MGET_SIZE) {
             let tb_id_list_seq_vec: Vec<(u64, Option<TableIdList>)> =
                 mget_pb_values(kv_api, c).await?;
+            let mut iter = c.iter();
             for (tb_id_list_seq, tb_id_list_opt) in tb_id_list_seq_vec {
-                let tb_id_list = if tb_id_list_seq == 0 {
-                    continue;
-                } else {
-                    match tb_id_list_opt {
-                        Some(list) => list,
-                        None => {
-                            continue;
-                        }
+                let tb_id_list = match tb_id_list_opt {
+                    Some(list) => list,
+                    None => {
+                        continue;
                     }
                 };
 
                 for tb_id in tb_id_list.id_list {
                     gc_dropped_table_data(kv_api, tb_id, &mut condition, &mut if_then).await?;
                 }
+
+                let id_key = iter.next().unwrap();
+                if_then.push(txn_op_del(id_key));
+                condition.push(txn_cond_seq(id_key, Eq, tb_id_list_seq));
             }
+
+            // for id_key in c {
+            // if_then.push(txn_op_del(id_key));
+            // }
         }
         db_id_list.id_list.remove(i);
         condition.push(txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq));

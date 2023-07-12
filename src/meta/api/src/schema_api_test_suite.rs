@@ -234,64 +234,58 @@ impl SchemaApiTestSuite {
     {
         let suite = SchemaApiTestSuite {};
 
-        if false {
-            suite.database_and_table_rename(&b.build().await).await?;
-            suite.database_create_get_drop(&b.build().await).await?;
-            suite
-                .database_create_from_share_and_drop(&b.build().await)
-                .await?;
-            suite
-                .database_create_get_drop_in_diff_tenant(&b.build().await)
-                .await?;
-            suite.database_list(&b.build().await).await?;
-            suite.database_list_in_diff_tenant(&b.build().await).await?;
-            suite.database_rename(&b.build().await).await?;
-            suite
-                .database_drop_undrop_list_history(&b.build().await)
-                .await?;
-            suite
-                .database_drop_out_of_retention_time_history(&b.build().await)
-                .await?;
+        suite.database_and_table_rename(&b.build().await).await?;
+        suite.database_create_get_drop(&b.build().await).await?;
+        suite
+            .database_create_from_share_and_drop(&b.build().await)
+            .await?;
+        suite
+            .database_create_get_drop_in_diff_tenant(&b.build().await)
+            .await?;
+        suite.database_list(&b.build().await).await?;
+        suite.database_list_in_diff_tenant(&b.build().await).await?;
+        suite.database_rename(&b.build().await).await?;
+        suite
+            .database_drop_undrop_list_history(&b.build().await)
+            .await?;
+        suite
+            .database_drop_out_of_retention_time_history(&b.build().await)
+            .await?;
 
-            suite.table_create_get_drop(&b.build().await).await?;
-            suite.table_rename(&b.build().await).await?;
-            suite.table_update_meta(&b.build().await).await?;
-            suite.table_upsert_option(&b.build().await).await?;
-            suite.table_list(&b.build().await).await?;
-            suite.table_list_all(&b.build().await).await?;
-            suite
-                .table_drop_undrop_list_history(&b.build().await)
-                .await?;
-            suite
-                .database_gc_out_of_retention_time(&b.build().await)
-                .await?;
-            suite
-                .table_gc_out_of_retention_time(&b.build().await)
-                .await?;
-            suite
-                .table_drop_out_of_retention_time_history(&b.build().await)
-                .await?;
-            suite.table_history_filter(&b.build().await).await?;
-            suite.get_table_by_id(&b.build().await).await?;
-            suite.get_table_copied_file(&b.build().await).await?;
-            suite.truncate_table(&b.build().await).await?;
-            suite.get_tables_from_share(&b.build().await).await?;
-            suite
-                .update_table_with_copied_files(&b.build().await)
-                .await?;
-            suite.index_create_list_drop(&b.build().await).await?;
-            suite.table_lock_revision(&b.build().await).await?;
-            suite
-                .virtual_column_create_list_drop(&b.build().await)
-                .await?;
-        } else {
-            suite
-                .table_gc_out_of_retention_time(&b.build().await)
-                .await?;
-            suite
-                .database_gc_out_of_retention_time(&b.build().await)
-                .await?;
-        }
+        suite.table_create_get_drop(&b.build().await).await?;
+        suite.table_rename(&b.build().await).await?;
+        suite.table_update_meta(&b.build().await).await?;
+        suite.table_upsert_option(&b.build().await).await?;
+        suite.table_list(&b.build().await).await?;
+        suite.table_list_all(&b.build().await).await?;
+        suite
+            .table_drop_undrop_list_history(&b.build().await)
+            .await?;
+        suite
+            .database_gc_out_of_retention_time(&b.build().await)
+            .await?;
+        suite
+            .table_gc_out_of_retention_time(&b.build().await)
+            .await?;
+        suite
+            .db_table_gc_out_of_retention_time(&b.build().await)
+            .await?;
+        suite
+            .table_drop_out_of_retention_time_history(&b.build().await)
+            .await?;
+        suite.table_history_filter(&b.build().await).await?;
+        suite.get_table_by_id(&b.build().await).await?;
+        suite.get_table_copied_file(&b.build().await).await?;
+        suite.truncate_table(&b.build().await).await?;
+        suite.get_tables_from_share(&b.build().await).await?;
+        suite
+            .update_table_with_copied_files(&b.build().await)
+            .await?;
+        suite.index_create_list_drop(&b.build().await).await?;
+        suite.table_lock_revision(&b.build().await).await?;
+        suite
+            .virtual_column_create_list_drop(&b.build().await)
+            .await?;
         Ok(())
     }
 
@@ -2637,6 +2631,196 @@ impl SchemaApiTestSuite {
 
         // assert old table meta and id to name mapping has been removed
         for table_id in old_id_list.iter() {
+            let id_key = TableId {
+                table_id: *table_id,
+            };
+            let id_mapping = TableIdToName {
+                table_id: *table_id,
+            };
+            let meta_res: Result<DatabaseMeta, KVAppError> =
+                get_kv_data(mt.as_kv_api(), &id_key).await;
+            let mapping_res: Result<DBIdTableName, KVAppError> =
+                get_kv_data(mt.as_kv_api(), &id_mapping).await;
+            assert!(meta_res.is_err());
+            assert!(mapping_res.is_err());
+        }
+
+        info!("--- assert stage file info has been removed");
+        {
+            let key = TableCopiedFileNameIdent {
+                table_id,
+                file: "file".to_string(),
+            };
+
+            let resp: Result<TableCopiedFileInfo, KVAppError> =
+                get_kv_data(mt.as_kv_api(), &key).await;
+            assert!(resp.is_err());
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn db_table_gc_out_of_retention_time<
+        MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
+    >(
+        self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant = "db_table_gc_out_of_retention_time";
+        let db1_name = "db1";
+        let tb1_name = "tb1";
+        let tbl_name_ident = TableNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db1_name.to_string(),
+            table_name: tb1_name.to_string(),
+        };
+
+        let plan = CreateDatabaseReq {
+            if_not_exists: false,
+            name_ident: DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: db1_name.to_string(),
+            },
+            meta: DatabaseMeta {
+                engine: "".to_string(),
+                ..DatabaseMeta::default()
+            },
+        };
+
+        let res = mt.create_database(plan).await?;
+        info!("create database res: {:?}", res);
+        let db_id = res.db_id;
+
+        let created_on = Utc::now();
+        let schema = || {
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]))
+        };
+
+        let create_table_meta = TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        let req = CreateTableReq {
+            if_not_exists: false,
+            name_ident: tbl_name_ident,
+            table_meta: create_table_meta.clone(),
+        };
+
+        let res = mt.create_table(req).await?;
+        let table_id = res.table_id;
+        info!("--- create and get stage file info");
+        {
+            let stage_info = TableCopiedFileInfo {
+                etag: Some("etag".to_owned()),
+                content_length: 1024,
+                last_modified: Some(Utc::now()),
+            };
+            let mut file_info = BTreeMap::new();
+            file_info.insert("file".to_string(), stage_info.clone());
+
+            let req = UpsertTableCopiedFileReq {
+                file_info: file_info.clone(),
+                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                fail_if_duplicated: true,
+            };
+
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: create_table_meta.clone(),
+                copied_files: Some(req),
+                deduplicated_label: None,
+            };
+
+            let _ = mt.update_table_meta(req).await?;
+
+            let key = TableCopiedFileNameIdent {
+                table_id,
+                file: "file".to_string(),
+            };
+
+            let stage_file: TableCopiedFileInfo = get_kv_data(mt.as_kv_api(), &key).await?;
+            assert_eq!(stage_file, stage_info);
+        }
+
+        // drop the db
+        let drop_on = Some(Utc::now() - Duration::days(1));
+        let drop_data = DatabaseMeta {
+            engine: "github".to_string(),
+            drop_on,
+            ..Default::default()
+        };
+        let id_key = DatabaseId { db_id };
+        let data = serialize_struct(&drop_data)?;
+        upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
+
+        let dbid_idlist1 = DbIdListKey {
+            tenant: tenant.to_string(),
+            db_name: db1_name.to_string(),
+        };
+        let old_id_list: DbIdList = get_kv_data(mt.as_kv_api(), &dbid_idlist1).await?;
+        assert_eq!(old_id_list.len(), 1);
+
+        let table_id_idlist = TableIdListKey {
+            db_id,
+            table_name: tb1_name.to_string(),
+        };
+
+        // save old id list
+        let id_list: TableIdList = get_kv_data(mt.as_kv_api(), &table_id_idlist).await?;
+        assert_eq!(id_list.len(), 1);
+        let old_table_id_list = id_list.id_list().clone();
+
+        // gc the data
+        {
+            let req = ListDroppedTableReq {
+                inner: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "".to_string(),
+                },
+                filter: TableInfoFilter::AllDroppedTables(None),
+            };
+            let resp = mt.get_drop_table_infos(req).await?;
+
+            let req = GcDroppedTableReq {
+                tenant: tenant.to_string(),
+                drop_ids: resp.drop_ids.clone(),
+            };
+            let _resp = mt.gc_drop_tables(req).await?;
+        }
+
+        // assert db id list has been cleaned
+        let id_list: DbIdList = get_kv_data(mt.as_kv_api(), &dbid_idlist1).await?;
+        assert_eq!(id_list.len(), 0);
+
+        // assert old db meta and id to name mapping has been removed
+        for db_id in old_id_list.id_list.iter() {
+            let id_key = DatabaseId { db_id: *db_id };
+            let id_mapping = DatabaseIdToName { db_id: *db_id };
+
+            let meta_res: Result<DatabaseMeta, KVAppError> =
+                get_kv_data(mt.as_kv_api(), &id_key).await;
+            assert!(meta_res.is_err());
+
+            let mapping_res: Result<DatabaseNameIdent, KVAppError> =
+                get_kv_data(mt.as_kv_api(), &id_mapping).await;
+            assert!(mapping_res.is_err());
+        }
+
+        // check table data has been gc
+        let id_list: Result<TableIdList, KVAppError> =
+            get_kv_data(mt.as_kv_api(), &table_id_idlist).await;
+        assert!(id_list.is_err());
+
+        // assert old table meta and id to name mapping has been removed
+        for table_id in old_table_id_list.iter() {
             let id_key = TableId {
                 table_id: *table_id,
             };
