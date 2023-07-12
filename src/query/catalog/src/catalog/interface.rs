@@ -37,6 +37,8 @@ use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::DroppedId;
+use common_meta_app::schema::GcDroppedTableReq;
+use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -177,6 +179,10 @@ pub trait Catalog: DynClone + Send + Sync {
         Err(ErrorCode::Unimplemented(
             "'get_drop_table_infos' not implemented",
         ))
+    }
+
+    async fn gc_drop_tables(&self, _req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
+        Err(ErrorCode::Unimplemented("'gc_drop_tables' not implemented"))
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply>;

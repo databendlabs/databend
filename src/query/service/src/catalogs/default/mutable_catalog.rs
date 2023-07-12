@@ -47,6 +47,8 @@ use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::DroppedId;
 use common_meta_app::schema::ExtendTableLockRevReq;
+use common_meta_app::schema::GcDroppedTableReq;
+use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
@@ -386,6 +388,12 @@ impl Catalog for MutableCatalog {
             tables.push(storage.get_table(table_info.as_ref())?);
         }
         Ok((tables, drop_ids))
+    }
+
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
+        let meta = self.ctx.meta.clone();
+        let resp = meta.gc_drop_tables(req).await?;
+        Ok(resp)
     }
 
     #[async_backtrace::framed]

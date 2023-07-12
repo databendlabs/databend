@@ -23,6 +23,7 @@ use common_expression::FromData;
 use common_license::license::Feature::Vacuum;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::TableInfoFilter;
 use common_sql::plans::VacuumDropTablePlan;
@@ -81,7 +82,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
         };
 
         let tenant = self.ctx.get_tenant();
-        let (tables, _) = catalog
+        let (tables, drop_ids) = catalog
             .get_drop_table_infos(ListDroppedTableReq {
                 inner: DatabaseNameIdent {
                     tenant,
@@ -101,6 +102,12 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 },
             )
             .await?;
+        // gc meta datas
+        let req = GcDroppedTableReq {
+            tenant: self.ctx.get_tenant(),
+            drop_ids,
+        };
+        let _ = catalog.gc_drop_tables(req).await?;
 
         match files_opt {
             None => return Ok(PipelineBuildResult::create()),
