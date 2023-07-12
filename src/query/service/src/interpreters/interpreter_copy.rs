@@ -266,6 +266,8 @@ impl CopyInterpreter {
                         files.clone(),
                     )
                     .await?;
+                } else {
+                    return Ok(build_res);
                 }
             }
             Some(query) => {
