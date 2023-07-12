@@ -1,3 +1,4 @@
+drop table if exists test;
 create table test(a string, b int, d boolean);
 insert into test values('a', 1, true);
 insert into test values('b', 2, false);
@@ -18,6 +19,8 @@ select 'in comment block';
 */
 
 select 1.00 + 2.00, 3.00;
+
+select/*+ SET_VAR(timezone='Asia/Shanghai') */ timezone();
 
 select 'bye';
 drop table test;
