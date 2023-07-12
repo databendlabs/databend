@@ -40,6 +40,7 @@ The list below shows all the window functions.
 | [SKEWNESS](../10-aggregate-functions/aggregate-skewness.md)           | General      | ✔      | ✔            |       |
 | [SUM](../10-aggregate-functions/aggregate-sum.md)                     | General      | ✔      | ✔            |       |
 | [SUM_IF](../10-aggregate-functions/aggregate-sum-if.md)               | General      | ✔      | ✔            |       |
+| [CUME_DIST](cume-dist.md)                                             | Rank-related | ✔      |              |       |
 | [DENSE_RANK](dense-rank.md)                                           | Rank-related | ✔      | ✔            |       |
 | [RANK](rank.md)                                                       | Rank-related | ✔      | ✔            |       |
 | [ROW_NUMBER](row-number.md)                                           | Rank-related | ✔      |              |       |
