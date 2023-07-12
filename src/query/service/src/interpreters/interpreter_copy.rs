@@ -41,6 +41,8 @@ use tracing::info;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::metrics::metrics_inc_copy_commit_data_cost_milliseconds;
+use crate::metrics::metrics_inc_copy_commit_data_counter;
 use crate::metrics::metrics_inc_copy_read_file_cost_milliseconds;
 use crate::metrics::metrics_inc_copy_read_file_counter;
 use crate::metrics::metrics_inc_copy_read_file_size_bytes;
@@ -238,90 +240,122 @@ impl CopyInterpreter {
         &self,
         plan: &CopyIntoTablePlan,
     ) -> Result<PipelineBuildResult> {
-        let ctx = self.ctx.clone();
-        let to_table = ctx
-            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
-            .await?;
+        let catalog = plan.catalog_name.as_str();
+        let database = plan.database_name.as_str();
+        let table = plan.table_name.as_str();
 
-        let start = Instant::now();
-        let (mut build_res, source_schema, files) = if let Some(query) = &plan.query {
-            let (build_res, source_schema) = self.build_query(query).await?;
-            (
-                build_res,
-                source_schema,
-                plan.stage_table_info
+        let ctx = self.ctx.clone();
+        let to_table = ctx.get_table(catalog, database, table).await?;
+
+        let mut build_res;
+        let source_schema;
+        let files;
+
+        match &plan.query {
+            None => {
+                let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
+
+                files = plan.collect_files(&table_ctx).await?;
+                source_schema = plan.required_source_schema.clone();
+                build_res = PipelineBuildResult::create();
+                if !files.is_empty() {
+                    self.build_read_stage_table_data_pipeline(
+                        &mut build_res.main_pipeline,
+                        plan,
+                        to_table.get_block_thresholds(),
+                        files.clone(),
+                    )
+                    .await?;
+                }
+            }
+            Some(query) => {
+                files = plan
+                    .stage_table_info
                     .files_to_copy
                     .clone()
-                    .ok_or(ErrorCode::Internal("files_to_copy should not be None"))?,
-            )
-        } else {
-            let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
-            let files = plan.collect_files(&table_ctx).await?;
-            let mut build_res = PipelineBuildResult::create();
-            if files.is_empty() {
-                return Ok(build_res);
+                    .ok_or(ErrorCode::Internal("files_to_copy should not be None"))?;
+
+                let (query_build_res, query_source_schema) = self.build_query(query).await?;
+                build_res = query_build_res;
+                source_schema = query_source_schema;
             }
-            self.build_read_stage_table_data_pipeline(
-                &mut build_res.main_pipeline,
-                plan,
-                to_table.get_block_thresholds(),
-                files.clone(),
-            )
-            .await?;
-            (build_res, plan.required_source_schema.clone(), files)
-        };
+        }
+
+        let file_sizes: u64 = files.iter().map(|f| f.size).sum();
 
         // Perf
         {
-            let sizes: u64 = files.iter().map(|f| f.size).sum();
-            metrics_inc_copy_read_file_size_bytes(sizes as u32);
+            metrics_inc_copy_read_file_size_bytes(file_sizes as u32);
             metrics_inc_copy_read_file_counter(files.len() as u32);
-            metrics_inc_copy_read_file_cost_milliseconds(start.elapsed().as_millis() as u32);
-
-            self.set_status(&format!(
-                "Copy begin to append data: {}, size_bytes:{} into table",
-                files.len(),
-                sizes
-            ));
         }
 
-        build_append_data_pipeline(
-            ctx.clone(),
-            &mut build_res.main_pipeline,
-            CopyPlanType::CopyIntoTablePlanOption(plan.clone()),
-            source_schema,
-            to_table.clone(),
-        )?;
+        // Append data.
+        {
+            self.set_status(&format!(
+                "Copy begin to append data: {} files, size_in_bytes:{} into table",
+                files.len(),
+                file_sizes
+            ));
 
-        // if it's replace mode, don't commit, because COPY is the source of replace.
-        match plan.write_mode {
-            CopyIntoTableMode::Replace => set_copy_on_finished(
-                ctx,
-                files,
-                plan.stage_table_info.stage_info.copy_options.purge,
-                plan.stage_table_info.stage_info.clone(),
+            let start = Instant::now();
+            build_append_data_pipeline(
+                ctx.clone(),
                 &mut build_res.main_pipeline,
-            )?,
-            _ => {
-                // commit.
-                build_commit_data_pipeline(
-                    ctx.clone(),
-                    &mut build_res.main_pipeline,
-                    plan.stage_table_info.stage_info.clone(),
-                    to_table,
-                    files,
-                    plan.force,
-                    plan.stage_table_info.stage_info.copy_options.purge,
-                    plan.write_mode.is_overwrite(),
-                )?
+                CopyPlanType::CopyIntoTablePlanOption(plan.clone()),
+                source_schema,
+                to_table.clone(),
+            )?;
+
+            // Perf
+            {
+                metrics_inc_copy_read_file_cost_milliseconds(start.elapsed().as_millis() as u32);
+                self.set_status(&format!(
+                    "Copy append data finished, cost:{} secs",
+                    start.elapsed().as_secs()
+                ));
             }
         }
 
-        // Status
-        self.set_status(&format!(
-            "Copy finished, cost:{} secs",
-            start.elapsed().as_secs()
-        ));
+        // Commit data.
+        {
+            let start = Instant::now();
+            self.set_status(&format!("Copy begin to commit data: {} files", files.len(),));
+
+            // if it's replace mode, don't commit, because COPY is the source of replace.
+            match plan.write_mode {
+                CopyIntoTableMode::Replace => set_copy_on_finished(
+                    ctx,
+                    files,
+                    plan.stage_table_info.stage_info.copy_options.purge,
+                    plan.stage_table_info.stage_info.clone(),
+                    &mut build_res.main_pipeline,
+                )?,
+                _ => {
+                    // commit.
+                    build_commit_data_pipeline(
+                        ctx.clone(),
+                        &mut build_res.main_pipeline,
+                        plan.stage_table_info.stage_info.clone(),
+                        to_table,
+                        files,
+                        plan.force,
+                        plan.stage_table_info.stage_info.copy_options.purge,
+                        plan.write_mode.is_overwrite(),
+                    )?
+                }
+            }
+
+            self.set_status(&format!(
+                "Copy commit data finished, cost:{} secs",
+                start.elapsed().as_secs()
+            ));
+
+            // Perf
+            {
+                metrics_inc_copy_commit_data_counter(1_u32);
+                metrics_inc_copy_commit_data_cost_milliseconds(start.elapsed().as_millis() as u32);
+            }
+        }
 
         Ok(build_res)
     }
