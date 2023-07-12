@@ -89,7 +89,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                         Value::Scalar(Scalar::String(path)) => match parse_json_path(&path) {
                             Ok(json_path) => {
                                 let selector = Selector::new(json_path, SelectorMode::All);
-                                for row in 0..ctx.num_rows {
+                                for (row, max_nums_per_row) in
+                                    max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
+                                {
                                     let val = unsafe { val_arg.index_unchecked(row) };
                                     let mut builder = StringColumnBuilder::with_capacity(0, 0);
                                     if let ScalarRef::Variant(val) = val {
@@ -102,8 +104,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     let array =
                                         Column::Variant(builder.build()).wrap_nullable(None);
                                     let array_len = array.len();
-                                    max_nums_per_row[row] =
-                                        std::cmp::max(max_nums_per_row[row], array_len);
+                                    *max_nums_per_row = std::cmp::max(*max_nums_per_row, array_len);
                                     results.push((
                                         Value::Column(Column::Tuple(vec![array])),
                                         array_len,
@@ -121,7 +122,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                         },
                         _ => {
-                            for row in 0..ctx.num_rows {
+                            for (row, max_nums_per_row) in
+                                max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
+                            {
                                 let val = unsafe { val_arg.index_unchecked(row) };
                                 let path = unsafe { path_arg.index_unchecked(row) };
                                 let mut builder = StringColumnBuilder::with_capacity(0, 0);
@@ -151,8 +154,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 }
                                 let array = Column::Variant(builder.build()).wrap_nullable(None);
                                 let array_len = array.len();
-                                max_nums_per_row[row] =
-                                    std::cmp::max(max_nums_per_row[row], array_len);
+                                *max_nums_per_row = std::cmp::max(*max_nums_per_row, array_len);
                                 results
                                     .push((Value::Column(Column::Tuple(vec![array])), array_len));
                             }
@@ -193,7 +195,7 @@ fn build_unnest(
             eval: FunctionEval::SRF {
                 eval: Box::new(|args, ctx, max_nums_per_row| {
                     let arg = args[0].clone().to_owned();
-                    let res = (0..ctx.num_rows)
+                    (0..ctx.num_rows)
                         .map(|row| match arg.index(row).unwrap() {
                             ScalarRef::Null => {
                                 (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0)
@@ -215,8 +217,7 @@ fn build_unnest(
                             }
                             _ => unreachable!(),
                         })
-                        .collect();
-                    res
+                        .collect()
                 }),
             },
         }),

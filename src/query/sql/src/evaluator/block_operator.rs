@@ -30,7 +30,6 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::FunctionContext;
-use common_expression::FunctionEval;
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -153,13 +152,14 @@ impl BlockOperator {
                 //   ],
                 //   ...
                 // ]
-                let mut max_nums_per_row = vec![0; input.num_rows()];
+                let input_num_rows = input.num_rows();
+                let mut max_nums_per_row = vec![0; input_num_rows];
                 let srf_results = srf_exprs
                     .iter()
                     .map(|srf_expr| eval.run_srf(srf_expr, &mut max_nums_per_row))
                     .collect::<Result<Vec<_>>>()?;
                 let mut total_num_rows = 0;
-                for max_nums in max_nums_per_row.iter() {
+                for max_nums in max_nums_per_row.iter().take(input_num_rows) {
                     total_num_rows += *max_nums;
                 }
 
@@ -172,7 +172,7 @@ impl BlockOperator {
                     let column = input.get_by_offset(index);
                     let mut builder =
                         ColumnBuilder::with_capacity(&column.data_type, total_num_rows);
-                    for (i, max_nums) in max_nums_per_row.iter().enumerate() {
+                    for (i, max_nums) in max_nums_per_row.iter().take(input_num_rows).enumerate() {
                         let scalar_ref = unsafe { column.value.index_unchecked(i) };
                         for _ in 0..*max_nums {
                             builder.push(scalar_ref.clone());
@@ -227,8 +227,12 @@ impl BlockOperator {
                                 }
                                 let column = builder.build().upcast();
                                 result.add_column(BlockEntry::new(
-                                    DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
-                                    Value::Column(Column::Tuple(vec![Column::Nullable(Box::new(column))])),
+                                    DataType::Tuple(vec![DataType::Nullable(Box::new(
+                                        DataType::Variant,
+                                    ))]),
+                                    Value::Column(Column::Tuple(vec![Column::Nullable(Box::new(
+                                        column,
+                                    ))])),
                                 ));
                             }
                             _ => {
