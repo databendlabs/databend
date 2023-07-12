@@ -54,8 +54,8 @@ use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
 use storages_common_table_meta::meta::TableSnapshot;
-
 use table_lock::TableLockHandlerWrapper;
+
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::executor::ExecutorSettings;
