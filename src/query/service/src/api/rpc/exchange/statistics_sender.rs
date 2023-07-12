@@ -101,7 +101,6 @@ impl StatisticsSender {
     }
 
     pub fn shutdown(&mut self, error: Option<ErrorCode>) {
-        self.shutdown_flag.store(true, Ordering::Release);
         let shutdown_flag_sender = self.shutdown_flag_sender.clone();
 
         let join_handle = self.join_handle.take();
