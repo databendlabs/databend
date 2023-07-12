@@ -211,8 +211,6 @@ impl CopyInterpreter {
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
 
-        self.set_status("begin to read stage source plan");
-
         let mut stage_table_info = plan.stage_table_info.clone();
         stage_table_info.files_to_copy = Some(files.clone());
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
@@ -228,23 +226,9 @@ impl CopyInterpreter {
                 .await?
         };
 
-        self.set_status(&format!(
-            "begin to read stage table data, parts:{}",
-            read_source_plan.parts.len()
-        ));
-
         stage_table.set_block_thresholds(block_thresholds);
-
-        let start = Instant::now();
         stage_table.read_data(table_ctx, &read_source_plan, pipeline)?;
 
-        // Perf
-        {
-            let sizes: u64 = files.iter().map(|f| f.size).sum();
-            metrics_inc_copy_read_file_size_bytes(sizes as u32);
-            metrics_inc_copy_read_file_counter(files.len() as u32);
-            metrics_inc_copy_read_file_cost_milliseconds(start.elapsed().as_millis() as u32);
-        }
         Ok(())
     }
 
@@ -259,6 +243,7 @@ impl CopyInterpreter {
             .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
             .await?;
 
+        let start = Instant::now();
         let (mut build_res, source_schema, files) = if let Some(query) = &plan.query {
             let (build_res, source_schema) = self.build_query(query).await?;
             (
@@ -285,6 +270,20 @@ impl CopyInterpreter {
             .await?;
             (build_res, plan.required_source_schema.clone(), files)
         };
+
+        // Perf
+        {
+            let sizes: u64 = files.iter().map(|f| f.size).sum();
+            metrics_inc_copy_read_file_size_bytes(sizes as u32);
+            metrics_inc_copy_read_file_counter(files.len() as u32);
+            metrics_inc_copy_read_file_cost_milliseconds(start.elapsed().as_millis() as u32);
+
+            self.set_status(&format!(
+                "Copy begin to append data: {}, size_bytes:{} into table",
+                files.len(),
+                sizes
+            ));
+        }
 
         build_append_data_pipeline(
             ctx.clone(),
@@ -317,6 +316,12 @@ impl CopyInterpreter {
                 )?
             }
         }
+
+        // Status
+        self.set_status(&format!(
+            "Copy finished, cost:{} secs",
+            start.elapsed().as_secs()
+        ));
 
         Ok(build_res)
     }
