@@ -1,8 +1,5 @@
 ---
 title: Metabase
-sidebar_label: Metabase
-description:
-  Integrating Databend with Metabase.
 ---
 
 [Metabase](https://www.metabase.com/) is an open-source business intelligence platform. You can use Metabase to ask questions about your data, or embed Metabase in your app to let your customers explore their data on their own. Databend provides a JDBC driver named [Metabase Databend Driver](https://github.com/databendcloud/metabase-databend-driver/releases/latest), enabling you to connect to Metabase and dashboard your data in Databend. For more information about the Metabase Databend Driver, refer to https://github.com/databendcloud/metabase-databend-driver

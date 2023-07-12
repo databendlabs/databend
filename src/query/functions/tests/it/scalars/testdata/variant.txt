@@ -2306,3 +2306,48 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : json_to_string(parse_json('true'))
+raw expr       : json_to_string(parse_json('true'))
+checked expr   : json_to_string<Variant>(parse_json<String>("true"))
+optimized expr : "true"
+output type    : String
+output domain  : {"true"..="true"}
+output         : 'true'
+
+
+ast            : json_to_string(parse_json('123456'))
+raw expr       : json_to_string(parse_json('123456'))
+checked expr   : json_to_string<Variant>(parse_json<String>("123456"))
+optimized expr : "123456"
+output type    : String
+output domain  : {"123456"..="123456"}
+output         : '123456'
+
+
+ast            : json_to_string(parse_json('"abcd"'))
+raw expr       : json_to_string(parse_json('"abcd"'))
+checked expr   : json_to_string<Variant>(parse_json<String>("\"abcd\""))
+optimized expr : "\"abcd\""
+output type    : String
+output domain  : {"\"abcd\""..="\"abcd\""}
+output         : '"abcd"'
+
+
+ast            : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
+raw expr       : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
+checked expr   : json_to_string<Variant>(parse_json<String>("[1, 2, 3, 4, 5, 6]"))
+optimized expr : "[1,2,3,4,5,6]"
+output type    : String
+output domain  : {"[1,2,3,4,5,6]"..="[1,2,3,4,5,6]"}
+output         : '[1,2,3,4,5,6]'
+
+
+ast            : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
+raw expr       : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
+checked expr   : json_to_string<Variant>(parse_json<String>("{\"k1\":123, \"k2\":\"abc\"}"))
+optimized expr : "{\"k1\":123,\"k2\":\"abc\"}"
+output type    : String
+output domain  : {"{\"k1\":123,\"k2\":\"abc\"}"..="{\"k1\":123,\"k2\":\"abc\"}"}
+output         : '{"k1":123,"k2":"abc"}'
+
+

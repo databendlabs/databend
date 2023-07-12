@@ -73,6 +73,8 @@ pub enum PartitionsShuffleKind {
     Mod,
     // Bind the Partition to executor by partition.rand() order.
     Rand,
+    // Bind the Partition to executor by broadcast
+    Broadcast,
 }
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct Partitions {
@@ -132,6 +134,21 @@ impl Partitions {
                 let mut parts = self.partitions.clone();
                 parts.shuffle(&mut rng);
                 parts
+            }
+            PartitionsShuffleKind::Broadcast => {
+                let mut executor_part = HashMap::default();
+                for executor in executors_sorted.iter() {
+                    executor_part.insert(
+                        executor.clone(),
+                        Partitions::create(
+                            PartitionsShuffleKind::Seq,
+                            self.partitions.clone(),
+                            self.is_lazy,
+                        ),
+                    );
+                }
+
+                return Ok(executor_part);
             }
         };
 

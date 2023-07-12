@@ -40,7 +40,7 @@ use databend_query::test_kits::create_query_context;
 async fn test_always_call_on_finished() -> Result<()> {
     let settings = ExecutorSettings {
         query_id: Arc::new("".to_string()),
-        max_execute_time: Default::default(),
+        max_execute_time_in_seconds: Default::default(),
     };
 
     {

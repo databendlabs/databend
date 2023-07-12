@@ -145,10 +145,10 @@ where T: Transform + 'static
         self.prof = self.prof
             + ProcessorProfile {
                 cpu_time: elapsed,
-                input_rows: self.prof.input_rows + input_rows,
-                input_bytes: self.prof.input_bytes + input_bytes,
-                output_rows: self.prof.output_rows + res.num_rows(),
-                output_bytes: self.prof.output_bytes + res.memory_size(),
+                input_rows,
+                input_bytes,
+                output_rows: res.num_rows(),
+                output_bytes: res.memory_size(),
             };
         Ok(res)
     }

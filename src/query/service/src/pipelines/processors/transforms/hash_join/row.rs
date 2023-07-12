@@ -39,6 +39,7 @@ pub struct RowSpace {
     pub data_schema: DataSchemaRef,
     pub chunks: RwLock<Vec<Chunk>>,
     pub buffer: RwLock<Vec<DataBlock>>,
+    pub buffer_row_size: RwLock<usize>,
 }
 
 impl RowSpace {
@@ -48,6 +49,7 @@ impl RowSpace {
             data_schema,
             chunks: RwLock::new(vec![]),
             buffer: RwLock::new(Vec::with_capacity(buffer_size as usize)),
+            buffer_row_size: RwLock::new(0),
         })
     }
 

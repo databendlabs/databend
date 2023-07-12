@@ -27,13 +27,13 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
 use super::fuse_segment::FuseSegment;
-use super::table_args::parse_func_history_args;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
+use crate::table_functions::parse_db_tb_ssid_args;
 use crate::table_functions::string_literal;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
@@ -46,7 +46,7 @@ pub struct FuseSegmentTable {
     table_info: TableInfo,
     arg_database_name: String,
     arg_table_name: String,
-    arg_snapshot_id: String,
+    arg_snapshot_id: Option<String>,
 }
 
 impl FuseSegmentTable {
@@ -57,7 +57,7 @@ impl FuseSegmentTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let (arg_database_name, arg_table_name, arg_snapshot_id) =
-            parse_func_history_args(&table_args)?;
+            parse_db_tb_ssid_args(&table_args, FUSE_FUNC_SEGMENT)?;
 
         let engine = FUSE_FUNC_SEGMENT.to_owned();
 
@@ -103,17 +103,19 @@ impl Table for FuseSegmentTable {
     }
 
     fn table_args(&self) -> Option<TableArgs> {
-        Some(TableArgs::new_positioned(vec![
-            string_literal(self.arg_database_name.as_str()),
-            string_literal(self.arg_table_name.as_str()),
-            string_literal(self.arg_snapshot_id.as_str()),
-        ]))
+        let mut args = Vec::new();
+        args.push(string_literal(self.arg_database_name.as_str()));
+        args.push(string_literal(self.arg_table_name.as_str()));
+        if let Some(arg_snapshot_id) = &self.arg_snapshot_id {
+            args.push(string_literal(arg_snapshot_id));
+        }
+        Some(TableArgs::new_positioned(args))
     }
 
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _: &DataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_source(
@@ -124,6 +126,7 @@ impl Table for FuseSegmentTable {
                     self.arg_database_name.to_owned(),
                     self.arg_table_name.to_owned(),
                     self.arg_snapshot_id.to_owned(),
+                    plan.push_downs.as_ref().and_then(|extras| extras.limit),
                 )
             },
             1,
@@ -138,7 +141,8 @@ struct FuseSegmentSource {
     ctx: Arc<dyn TableContext>,
     arg_database_name: String,
     arg_table_name: String,
-    arg_snapshot_id: String,
+    arg_snapshot_id: Option<String>,
+    limit: Option<usize>,
 }
 
 impl FuseSegmentSource {
@@ -147,7 +151,8 @@ impl FuseSegmentSource {
         output: Arc<OutputPort>,
         arg_database_name: String,
         arg_table_name: String,
-        arg_snapshot_id: String,
+        arg_snapshot_id: Option<String>,
+        limit: Option<usize>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, FuseSegmentSource {
             ctx,
@@ -155,6 +160,7 @@ impl FuseSegmentSource {
             arg_table_name,
             arg_database_name,
             arg_snapshot_id,
+            limit,
         })
     }
 }
@@ -184,9 +190,14 @@ impl AsyncSource for FuseSegmentSource {
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
         Ok(Some(
-            FuseSegment::new(self.ctx.clone(), tbl, self.arg_snapshot_id.clone())
-                .get_segments()
-                .await?,
+            FuseSegment::new(
+                self.ctx.clone(),
+                tbl,
+                self.arg_snapshot_id.clone(),
+                self.limit,
+            )
+            .get_segments()
+            .await?,
         ))
     }
 }

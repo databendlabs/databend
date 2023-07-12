@@ -49,10 +49,10 @@ use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::interpreters::common::append2table;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::builders::build_append2table_with_commit_pipeline;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
@@ -270,11 +270,11 @@ impl Interpreter for InsertInterpreter {
             _ => AppendMode::Normal,
         };
 
-        append2table(
+        build_append2table_with_commit_pipeline(
             self.ctx.clone(),
+            &mut build_res.main_pipeline,
             table.clone(),
             plan.schema(),
-            &mut build_res.main_pipeline,
             None,
             self.plan.overwrite,
             append_mode,

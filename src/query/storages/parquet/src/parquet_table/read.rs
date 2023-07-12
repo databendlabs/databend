@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::runtime::GLOBAL_MEM_STAT;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
@@ -181,12 +182,15 @@ impl ParquetTable {
     }
 }
 
-fn limit_parallelism_by_memory(max_memory: usize, sizes: &mut [usize]) -> usize {
-    sizes.sort_by(|a, b| b.cmp(a));
+fn limit_parallelism_by_memory(max_memory: usize, sizes: &mut [(usize, usize)]) -> usize {
+    // there may be 1 block  reading and 2 blocks in deserializer and sink.
+    // memory size of a can be as large as 2 * uncompressed_size.
+    // e.g. parquet may use 4 bytes for each string offset, but Block use 8 bytes i64.
+    // we can refine it later if this leads to too low parallelism.
     let mut mem = 0;
-    for (i, s) in sizes.iter().enumerate() {
-        // there may be 2 blocks in a pipe.
-        mem += s * 2;
+    for (i, (uncompressed, compressed)) in sizes.iter().enumerate() {
+        let s = uncompressed * 2 * 2 + compressed;
+        mem += s;
         if mem > max_memory {
             return i;
         }
@@ -205,30 +209,51 @@ pub fn calc_parallelism(
     let settings = ctx.get_settings();
     let num_partitions = plan.parts.partitions.len();
     let max_threads = settings.get_max_threads()? as usize;
+    let max_storage_io_requests = settings.get_max_storage_io_requests()? as usize;
+    let max_memory = settings.get_max_memory_usage()? as usize;
+
     let mut sizes = vec![];
     for p in plan.parts.partitions.iter() {
-        sizes.push(ParquetPart::from_part(p)?.uncompressed_size() as usize);
+        let p = ParquetPart::from_part(p)?;
+        sizes.push((p.uncompressed_size() as usize, p.compressed_size() as usize));
     }
+    sizes.sort_by(|a, b| b.cmp(a));
+    let max_split_size = sizes[0].0;
     let num_chunks = ParquetPart::from_part(&plan.parts.partitions[0])?
         .num_io()
         .max(1);
-    let max_memory = settings.get_max_memory_usage()? as usize;
-    let max_by_memory = limit_parallelism_by_memory(max_memory, &mut sizes).max(1);
+    // 1. used by other query
+    // 2. used for file metas, can be huge when there are many files.
+    let used_memory = GLOBAL_MEM_STAT.get_memory_usage();
+    let available_memory = max_memory.saturating_sub(used_memory as usize);
 
-    let max_storage_io_requests = settings.get_max_storage_io_requests()? as usize;
-    let num_readers = if is_blocking {
-        max_storage_io_requests
-    } else {
-        max_storage_io_requests / num_chunks
+    let max_by_memory = limit_parallelism_by_memory(available_memory, &mut sizes).max(1);
+    if max_by_memory == 0 {
+        return Err(ErrorCode::Overflow(format!(
+            "Memory limit exceeded before start copy pipeline: max_memory_usage: {}, used_memory: {}, max_split_size = {}",
+            max_memory, used_memory, max_split_size,
+        )));
     }
-    .min(max_by_memory)
-    .max(1);
-
     let num_deserializer = max_threads.min(max_by_memory).max(1);
+    // we somewhat considered the memory when calc num_deserializer: one reader for each num_deserializer.
+    let num_readers = if is_blocking {
+        num_deserializer
+    } else {
+        // chunks/files are read in parallel in each reader.
+        (max_storage_io_requests / num_chunks).max(num_deserializer)
+    };
 
     tracing::info!(
-        "loading {num_partitions} partitions with {num_readers} readers and {num_deserializer} deserializers, blocking = {is_blocking}, according to max_memory={max_memory}, num_chunks={num_chunks}, max_storage_io_requests={max_storage_io_requests}, max_split_size={}, max_threads={max_threads}",
-        sizes[0]
+        "loading {num_partitions} \
+        partitions with {num_readers} readers and {num_deserializer} deserializers, \
+        according to \
+        max_split_size={max_split_size}, \
+        max_threads={max_threads}, \
+        max_memory={max_memory}, \
+        available_memory={available_memory}, \
+        num_chunks={num_chunks}, \
+        max_storage_io_requests={max_storage_io_requests}, \
+        blocking = {is_blocking},",
     );
     Ok((num_readers, num_deserializer))
 }

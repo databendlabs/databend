@@ -42,3 +42,6 @@ yy__version	INT	1	27
 yy__us_core_race	VARCHAR	1	28
 yy__us_core_ethnicity	VARCHAR	1	29
 yy__us_core_birthsex	TUPLE(VALUECODE STRING,)	1	30
+--- variant file:
+a	INT	0	0
+b	VARIANT	0	1
