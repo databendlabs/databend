@@ -14,5 +14,7 @@
 
 #[allow(clippy::module_inception)]
 mod fuse_metrics;
+mod index_metrics;
 
 pub use fuse_metrics::*;
+pub use index_metrics::*;
