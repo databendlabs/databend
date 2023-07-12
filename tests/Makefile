@@ -26,6 +26,9 @@ test-bindings-python: up
 	cd ../bindings/python && ./test.sh
 	cd -
 
+test-bindings-nodejs: up
+	cd ../bindings/nodejs && yarn test
+
 down:
 	docker compose down
 

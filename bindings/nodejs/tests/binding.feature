@@ -1,0 +1,1 @@
+../../tests/features/binding.feature

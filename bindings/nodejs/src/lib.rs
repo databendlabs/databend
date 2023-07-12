@@ -24,10 +24,35 @@ pub struct Client(Box<dyn databend_driver::Connection>);
 pub struct ConnectionInfo(databend_driver::ConnectionInfo);
 
 #[napi]
+pub struct RowIterator(databend_driver::RowIterator);
+
+#[napi]
 pub struct Row(databend_driver::Row);
 
 #[napi]
-pub struct RowIterator(databend_driver::RowIterator);
+impl Row {
+    #[napi]
+    pub fn values(&self) -> Vec<Value> {
+        // FIXME: do not clone
+        self.0
+            .values()
+            .to_owned()
+            .into_iter()
+            .map(|v| Value(v))
+            .collect()
+    }
+}
+
+#[napi]
+pub struct Value(databend_driver::Value);
+
+#[napi]
+impl Value {
+    #[napi]
+    pub fn to_string(&self) -> String {
+        self.0.to_string()
+    }
+}
 
 #[napi]
 pub struct QueryProgress(databend_driver::QueryProgress);

@@ -1,4 +1,4 @@
-name: bindings nodejs
+name: Bindings Node.js
 
 on:
   push:
@@ -20,9 +20,6 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: bindings/nodejs
     steps:
       - uses: actions/checkout@v3
       - name: Setup Rust toolchain
@@ -36,25 +33,25 @@ jobs:
           cache: yarn
           cache-dependency-path: "bindings/nodejs/yarn.lock"
       - name: Corepack
+        working-directory: bindings/nodejs
         run: corepack enable
       - name: Install dependencies
+        working-directory: bindings/nodejs
         run: |
           yarn install --immutable
       - name: Check format
+        working-directory: bindings/nodejs
         run: yarn run prettier --check .
       - name: Build
+        working-directory: bindings/nodejs
         run: yarn build:debug
       - name: Check diff
         run: git diff --exit-code
-      - name: Test
-        run: yarn test
+      - run: make -C tests test-bindings-nodejs
 
   build:
     name: build-${{ matrix.os }}-${{ matrix.arch }}
     runs-on: ${{ matrix.os }}-latest
-    defaults:
-      run:
-        working-directory: bindings/nodejs
     strategy:
       matrix:
         include:
@@ -76,10 +73,13 @@ jobs:
           cache: yarn
           cache-dependency-path: "bindings/nodejs/yarn.lock"
       - name: Corepack
+        working-directory: bindings/nodejs
         run: corepack enable
       - name: Install dependencies
+        working-directory: bindings/nodejs
         run: yarn install --immutable
       - name: build
+        working-directory: bindings/nodejs
         shell: bash
         run: |
           if [[ "${{ matrix.target }}" == 'aarch64-apple-darwin' ]]; then
@@ -93,6 +93,7 @@ jobs:
           yarn build
       - name: strip for macos
         if: matrix.os == 'macos'
+        working-directory: bindings/nodejs
         run: |
           strip -x *.node
       - uses: actions/upload-artifact@v3

@@ -29,6 +29,11 @@ export class Client {
   streamLoad(sql: string, file: string, fileFormatOptions?: Array<[string, string]> | undefined | null, copyOptions?: Array<[string, string]> | undefined | null): Promise<QueryProgress>
 }
 export class ConnectionInfo { }
-export class Row { }
 export class RowIterator { }
+export class Row {
+  values(): Array<any>
+}
+export class Value {
+  toString(): string
+}
 export class QueryProgress { }
