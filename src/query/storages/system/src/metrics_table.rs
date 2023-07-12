@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_base::runtime::GLOBAL_MEM_STAT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -29,6 +30,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_metrics::reset_metrics;
+use common_metrics::MetricSample;
 use common_metrics::MetricValue;
 
 use crate::SyncOneBlockSystemTable;
@@ -54,7 +56,9 @@ impl SyncSystemTable for MetricsTable {
             ErrorCode::InitPrometheusFailure("Prometheus recorder is not initialized yet.")
         })?;
 
-        let samples = common_metrics::dump_metric_samples(prometheus_handle)?;
+        let mut samples = common_metrics::dump_metric_samples(prometheus_handle)?;
+        samples.extend(self.custom_metric_samples()?);
+
         let mut nodes: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
         let mut metrics: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
         let mut labels: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
@@ -135,5 +139,23 @@ impl MetricsTable {
                 err
             ))
         })
+    }
+
+    /// Custom metrics that are not collected by prometheus.
+    fn custom_metric_samples(&self) -> Result<Vec<MetricSample>> {
+        let samples = vec![
+            MetricSample {
+                name: "query_memory_usage_bytes".to_string(),
+                value: MetricValue::Counter(GLOBAL_MEM_STAT.get_memory_usage() as f64),
+                labels: HashMap::new(),
+            },
+            MetricSample {
+                name: "query_memory_peak_usage_bytes".to_string(),
+                value: MetricValue::Counter(GLOBAL_MEM_STAT.get_peak_memory_usage() as f64),
+                labels: HashMap::new(),
+            },
+        ];
+
+        Ok(samples)
     }
 }
