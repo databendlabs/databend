@@ -340,6 +340,13 @@ impl AggIndexReader {
         let chunk = Chunk::new(arrays);
         let block = DataBlock::from_arrow_chunk(&chunk, &self.schema)?;
 
+        // Remove unused columns.
+        let block = DataBlock::resort(
+            block,
+            &self.schema,
+            &self.reader.projected_schema.as_ref().into(),
+        )?;
+
         self.apply_agg_info(block)
     }
 }
