@@ -20,6 +20,7 @@ Feature: Databend Driver
 
     Scenario: Select Iter
         Given A new Databend Driver Client
+        Then Select numbers should iterate all rows
 
     Scenario: Stream Load
         Given A new Databend Driver Client

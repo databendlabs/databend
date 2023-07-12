@@ -449,6 +449,37 @@ impl_try_from_to_option!(i64);
 impl_try_from_to_option!(f32);
 impl_try_from_to_option!(f64);
 
+impl From<Value> for serde_json::Value {
+    fn from(val: Value) -> Self {
+        match val {
+            Value::Null => serde_json::Value::Null,
+            Value::Boolean(b) => serde_json::Value::Bool(b),
+            Value::Number(n) => match n {
+                NumberValue::Int8(i) => serde_json::Value::Number(i.into()),
+                NumberValue::Int16(i) => serde_json::Value::Number(i.into()),
+                NumberValue::Int32(i) => serde_json::Value::Number(i.into()),
+                NumberValue::Int64(i) => serde_json::Value::Number(i.into()),
+                NumberValue::UInt8(i) => serde_json::Value::Number(i.into()),
+                NumberValue::UInt16(i) => serde_json::Value::Number(i.into()),
+                NumberValue::UInt32(i) => serde_json::Value::Number(i.into()),
+                NumberValue::UInt64(i) => serde_json::Value::Number(i.into()),
+
+                NumberValue::Float32(i) => serde_json::Value::String(i.to_string()),
+                NumberValue::Float64(i) => serde_json::Value::String(i.to_string()),
+                NumberValue::Decimal128(i, s) => {
+                    serde_json::Value::String(display_decimal_128(i, s.scale))
+                }
+                NumberValue::Decimal256(i, s) => {
+                    serde_json::Value::String(display_decimal_256(i, s.scale))
+                }
+            },
+            Value::String(s) => serde_json::Value::String(s),
+            Value::Date(d) => serde_json::Value::String(d.to_string()),
+            Value::Timestamp(t) => serde_json::Value::String(t.to_string()),
+        }
+    }
+}
+
 impl std::fmt::Display for NumberValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

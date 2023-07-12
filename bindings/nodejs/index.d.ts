@@ -29,11 +29,10 @@ export class Client {
   streamLoad(sql: string, file: string, fileFormatOptions?: Array<[string, string]> | undefined | null, copyOptions?: Array<[string, string]> | undefined | null): Promise<QueryProgress>
 }
 export class ConnectionInfo { }
-export class RowIterator { }
-export class Row {
-  values(): Array<any>
+export class RowIterator {
+  next(): Promise<Error | Row | null>
 }
-export class Value {
-  toString(): string
+export class Row {
+  json(): Array<any>
 }
 export class QueryProgress { }

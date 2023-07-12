@@ -28,6 +28,17 @@ Given("A new Databend Driver Client", function () {
 
 Then("Select String {string} should be equal to {string}", async function (input, output) {
   const row = await this.client.queryRow(`SELECT '${input}'`);
-  const value = row.values()[0].toString();
+  const value = row.json()[0];
   assert(value === output);
+});
+
+Then("Select numbers should iterate all rows", async function () {
+  let rows = await this.client.queryIter("SELECT number FROM numbers(5)");
+  let ret = [];
+  let row = await rows.next();
+  while (row) {
+    ret.push(row.json()[0]);
+    row = await rows.next();
+  }
+  assert(JSON.stringify(ret) === JSON.stringify([0, 1, 2, 3, 4]));
 });

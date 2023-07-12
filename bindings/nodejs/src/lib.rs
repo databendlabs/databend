@@ -15,6 +15,7 @@
 #[macro_use]
 extern crate napi_derive;
 
+use futures::StreamExt;
 use napi::{bindgen_prelude::*, tokio};
 
 #[napi]
@@ -27,30 +28,30 @@ pub struct ConnectionInfo(databend_driver::ConnectionInfo);
 pub struct RowIterator(databend_driver::RowIterator);
 
 #[napi]
+impl RowIterator {
+    #[napi]
+    pub async unsafe fn next(&mut self) -> Option<Result<Row>> {
+        self.0
+            .next()
+            .await
+            .map(|row| row.map(Row).map_err(format_napi_error))
+    }
+}
+
+#[napi]
 pub struct Row(databend_driver::Row);
 
 #[napi]
 impl Row {
     #[napi]
-    pub fn values(&self) -> Vec<Value> {
+    pub fn json(&self) -> Vec<serde_json::Value> {
         // FIXME: do not clone
         self.0
             .values()
             .to_owned()
             .into_iter()
-            .map(|v| Value(v))
+            .map(|v| v.into())
             .collect()
-    }
-}
-
-#[napi]
-pub struct Value(databend_driver::Value);
-
-#[napi]
-impl Value {
-    #[napi]
-    pub fn to_string(&self) -> String {
-        self.0.to_string()
     }
 }
 
