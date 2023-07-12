@@ -82,6 +82,7 @@ use common_storage::DataOperator;
 use common_storages_factory::Table;
 use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
+use common_storages_fuse::operations::MutationKind;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use common_storages_stage::StageTable;
@@ -92,9 +93,11 @@ use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::interpreters::append_data_and_set_finish;
-use crate::interpreters::fill_missing_columns;
-use crate::interpreters::PlanParam;
+use crate::metrics::metrics_inc_copy_read_file_cost_milliseconds;
+use crate::metrics::metrics_inc_copy_read_file_counter;
+use crate::pipelines::builders::build_append_data_pipeline;
+use crate::pipelines::builders::build_fill_missing_columns_pipeline;
+use crate::pipelines::builders::CopyPlanType;
 use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
@@ -247,19 +250,25 @@ impl PipelineBuilder {
         stage_table.set_block_thresholds(distributed_plan.thresholds);
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
+
         let start = Instant::now();
         stage_table.read_data(table_ctx, &distributed_plan.source, &mut self.main_pipeline)?;
+
+        // Perf
+        {
+            metrics_inc_copy_read_file_counter(distributed_plan.files.len() as u32);
+            metrics_inc_copy_read_file_cost_milliseconds(start.elapsed().as_millis() as u32);
+        }
+
         // append data
-        append_data_and_set_finish(
-            &mut self.main_pipeline,
-            distributed_plan.required_source_schema.clone(),
-            PlanParam::DistributedCopyIntoTableFromStage(distributed_plan.clone()),
+        build_append_data_pipeline(
             ctx,
+            &mut self.main_pipeline,
+            CopyPlanType::DistributedCopyIntoTable(distributed_plan.clone()),
+            distributed_plan.required_source_schema.clone(),
             to_table,
-            distributed_plan.files.clone(),
-            start,
-            false,
         )?;
+
         Ok(())
     }
 
@@ -316,6 +325,7 @@ impl PipelineBuilder {
             &ctx,
             &mut self.main_pipeline,
             Arc::new(delete.snapshot.clone()),
+            MutationKind::Delete,
         )?;
         Ok(())
     }
@@ -1409,11 +1419,11 @@ impl PipelineBuilder {
             .get_table_by_info(&insert_select.table_info)?;
 
         let source_schema = insert_schema;
-        fill_missing_columns(
+        build_fill_missing_columns_pipeline(
             self.ctx.clone(),
+            &mut self.main_pipeline,
             table.clone(),
             source_schema.clone(),
-            &mut self.main_pipeline,
         )?;
 
         table.append_data(

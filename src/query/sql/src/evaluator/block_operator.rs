@@ -67,6 +67,9 @@ pub enum BlockOperator {
 
 impl BlockOperator {
     pub fn execute(&self, func_ctx: &FunctionContext, mut input: DataBlock) -> Result<DataBlock> {
+        if input.is_empty() {
+            return Ok(DataBlock::empty());
+        }
         match self {
             BlockOperator::Map { .. }
             | BlockOperator::MapWithOutput { .. }

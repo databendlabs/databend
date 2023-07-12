@@ -310,29 +310,16 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                     // perf
                     {
                         metrics_inc_aggregate_partial_spill_count();
+                        metrics_inc_aggregate_partial_spill_cell_count(1);
                         metrics_inc_aggregate_partial_hashtable_allocated_bytes(
                             v.allocated_bytes() as u64,
                         );
                     }
 
                     let _dropper = v._dropper.clone();
-                    let cells = PartitionedHashTableDropper::split_cell(v);
-                    // perf
-                    {
-                        metrics_inc_aggregate_partial_spill_cell_count(cells.len() as u64);
-                    }
-
-                    let mut blocks = Vec::with_capacity(cells.len());
-                    for (bucket, cell) in cells.into_iter().enumerate() {
-                        if cell.hashtable.len() != 0 {
-                            blocks.push(DataBlock::empty_with_meta(
-                                AggregateMeta::<Method, usize>::create_spilling(
-                                    bucket as isize,
-                                    cell,
-                                ),
-                            ));
-                        }
-                    }
+                    let blocks = vec![DataBlock::empty_with_meta(
+                        AggregateMeta::<Method, usize>::create_spilling(v),
+                    )];
 
                     let arena = Arc::new(Bump::new());
                     let method = PartitionedHashMethod::<Method>::create(self.method.clone());

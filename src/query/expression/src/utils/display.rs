@@ -378,8 +378,11 @@ impl Debug for DecimalColumn {
 impl Debug for StringColumn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StringColumn")
-            .field("data", &format_args!("0x{}", &hex::encode(&*self.data)))
-            .field("offsets", &self.offsets)
+            .field(
+                "data",
+                &format_args!("0x{}", &hex::encode(self.data().as_slice())),
+            )
+            .field("offsets", &self.offsets())
             .finish()
     }
 }

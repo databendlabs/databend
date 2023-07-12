@@ -57,7 +57,6 @@ pub trait Interpreter: Sync + Send {
             log_query_finished(&ctx, Some(err.clone()));
             return Err(err);
         }
-
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
             Err(build_error) => {

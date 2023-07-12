@@ -184,6 +184,9 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'name'                          | 'system'             | 'tables_with_history' | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                          | 'system'             | 'users'               | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'next_task_scheduled_time'      | 'system'             | 'background_jobs'     | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'node'                          | 'system'             | 'backtrace'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'node'                          | 'system'             | 'caches'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'node'                          | 'system'             | 'metrics'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'non_unique'                    | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'nullable'                      | 'information_schema' | 'columns'             | 'Nullable(UInt8)'  | 'TINYINT UNSIGNED'  | ''       | ''       | 'YES'    | ''       |
 | 'nullable'                      | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
@@ -247,6 +250,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'sql_user'                      | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'sql_user_privileges'           | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'sql_user_quota'                | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'stack'                         | 'system'             | 'backtrace'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'stack_trace'                   | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'stage_params'                  | 'system'             | 'stages'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'stage_type'                    | 'system'             | 'stages'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |

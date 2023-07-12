@@ -67,9 +67,12 @@ fn test_fixed_width() {
 
     let rows = converter.convert_columns(&cols, cols[0].len());
 
-    assert_eq!(rows.offsets, vec![0, 8, 16, 24, 32, 40, 48, 56].into());
     assert_eq!(
-        rows.data,
+        rows.offsets().clone(),
+        vec![0, 8, 16, 24, 32, 40, 48, 56].into()
+    );
+    assert_eq!(
+        rows.data().clone(),
         vec![
             1, 128, 1, //
             1, 191, 166, 102, 102, //
@@ -467,12 +470,13 @@ fn fuzz_test() {
                     // arrow_ord does not support LargeBinary converted from Databend String
                     Column::Nullable(c) => match &c.column {
                         Column::String(sc) => {
-                            let offsets = sc.offsets.iter().map(|offset| *offset as i32).collect();
+                            let offsets =
+                                sc.offsets().iter().map(|offset| *offset as i32).collect();
                             let array = Box::new(
                                 common_arrow::arrow::array::Utf8Array::<i32>::try_new(
                                     common_arrow::arrow::datatypes::DataType::Utf8,
                                     unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                                    sc.data.clone(),
+                                    sc.data().clone(),
                                     None,
                                 )
                                 .unwrap(),

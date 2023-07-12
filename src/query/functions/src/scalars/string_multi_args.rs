@@ -531,10 +531,7 @@ fn char_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
     let offsets = (0..(input_rows + 1) as u64 * args.len() as u64)
         .step_by(args.len())
         .collect::<Vec<_>>();
-    let result = StringColumn {
-        data: values.into(),
-        offsets: offsets.into(),
-    };
+    let result = StringColumn::new(values.into(), offsets.into());
     Value::Column(Column::String(result))
 }
 

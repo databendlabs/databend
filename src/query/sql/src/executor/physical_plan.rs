@@ -724,7 +724,6 @@ pub struct DistributedCopyIntoTableFromStage {
     pub thresholds: BlockThresholds,
     pub files: Vec<StageFileInfo>,
     pub table_info: TableInfo,
-    pub local_node_id: String,
 }
 
 impl DistributedCopyIntoTableFromStage {

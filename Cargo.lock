@@ -2927,11 +2927,14 @@ dependencies = [
  "common-meta-app",
  "common-pipeline-core",
  "common-pipeline-sources",
+ "common-pipeline-transforms",
  "common-storage",
  "dashmap",
  "opendal",
  "parking_lot 0.12.1",
+ "serde",
  "tracing",
+ "typetag",
  "uuid",
 ]
 
@@ -6369,8 +6372,8 @@ dependencies = [
 
 [[package]]
 name = "jsonb"
-version = "0.2.2"
-source = "git+https://github.com/datafuselabs/jsonb?rev=a9cccc7#a9cccc744c7beff0ca5fc7726eec1f2a347b3ef3"
+version = "0.2.3"
+source = "git+https://github.com/datafuselabs/jsonb?rev=fe6835a#fe6835a0a6813279366550db7ba6cd64aed317d8"
 dependencies = [
  "byteorder",
  "fast-float",

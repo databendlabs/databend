@@ -9,6 +9,8 @@ export STORAGE_ALLOW_INSECURE=true
 echo "Starting Cluster databend-query"
 ./scripts/ci/deploy/databend-query-cluster-3-nodes.sh
 
+export RUST_BACKTRACE=1
+
 TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http,clickhouse"}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 

@@ -31,6 +31,7 @@ use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
+use super::common::MutationKind;
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::delete::MutationTaskInfo;
 use crate::operations::mutation::MutationAction;
@@ -110,7 +111,7 @@ impl FuseTable {
             proc.into_processor()
         })?;
 
-        self.chain_mutation_pipes(&ctx, pipeline, snapshot)
+        self.chain_mutation_pipes(&ctx, pipeline, snapshot, MutationKind::Update)
     }
 
     #[async_backtrace::framed]

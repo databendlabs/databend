@@ -396,6 +396,11 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         cluster_key_str: String,
     ) -> Result<()> {
+        // if new cluter_key_str is the same with old one,
+        // no need to change
+        if let Some(old_cluster_key_str) = self.cluster_key_str() && *old_cluster_key_str == cluster_key_str{
+            return Ok(())
+        }
         let mut new_table_meta = self.get_table_info().meta.clone();
         new_table_meta = new_table_meta.push_cluster_key(cluster_key_str);
         let cluster_key_meta = new_table_meta.cluster_key();

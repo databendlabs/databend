@@ -66,6 +66,16 @@ pub enum CopyIntoTableMode {
     Copy,
 }
 
+impl CopyIntoTableMode {
+    pub fn is_overwrite(&self) -> bool {
+        match self {
+            CopyIntoTableMode::Insert { overwrite } => *overwrite,
+            CopyIntoTableMode::Replace => false,
+            CopyIntoTableMode::Copy => false,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct CopyIntoTablePlan {
     pub catalog_name: String,

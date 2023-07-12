@@ -13,13 +13,9 @@
 // limitations under the License.
 
 mod grant;
-mod stage;
 mod table;
 mod util;
+
 pub use grant::validate_grant_object_exists;
-pub use stage::try_purge_files;
-pub use table::append2table;
-pub use table::append2table_without_commit;
 pub use table::check_referenced_computed_columns;
-pub use table::fill_missing_columns;
 pub use util::check_deduplicate_label;

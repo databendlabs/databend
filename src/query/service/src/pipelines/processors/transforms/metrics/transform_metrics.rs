@@ -70,3 +70,17 @@ pub fn metrics_inc_aggregate_spill_read_bytes(c: u64) {
 pub fn metrics_inc_aggregate_spill_read_milliseconds(c: u64) {
     increment_gauge!(key!("aggregate_spill_read_milliseconds"), c as f64);
 }
+
+pub fn metrics_inc_aggregate_spill_data_serialize_milliseconds(c: u64) {
+    increment_gauge!(
+        key!("aggregate_spill_data_serialize_milliseconds"),
+        c as f64
+    );
+}
+
+pub fn metrics_inc_aggregate_spill_data_deserialize_milliseconds(c: u64) {
+    increment_gauge!(
+        key!("aggregate_spill_data_deserialize_milliseconds"),
+        c as f64
+    );
+}
