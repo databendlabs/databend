@@ -41,6 +41,7 @@ use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::io::WriteSettings;
 use common_storages_fuse::FuseTable;
 use jsonb::jsonpath::parse_json_path;
+use jsonb::jsonpath::Mode as SelectorMode;
 use jsonb::jsonpath::Selector;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
@@ -163,19 +164,16 @@ async fn materialize_virtual_columns(
             .convert_to_full_column(&block_entry.data_type, len);
 
         let json_path = parse_json_path(path.as_bytes()).unwrap();
-        let selector = Selector::new(json_path);
+        let selector = Selector::new(json_path, SelectorMode::First);
 
         let mut validity = MutableBitmap::with_capacity(len);
         let mut builder = StringColumnBuilder::with_capacity(len, len * 10);
         for row in 0..len {
             let val = unsafe { column.index_unchecked(row) };
             if let ScalarRef::Variant(v) = val {
-                let mut vals = selector.select(v);
-                if !vals.is_empty() {
+                selector.select(v, &mut builder.data, &mut builder.offsets);
+                if builder.offsets.len() == row + 2 {
                     validity.push(true);
-                    let val = vals.remove(0);
-                    builder.put_slice(val.as_slice());
-                    builder.commit_row();
                     continue;
                 }
             }

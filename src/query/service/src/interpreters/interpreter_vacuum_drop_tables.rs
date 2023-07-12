@@ -102,7 +102,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 },
             )
             .await?;
-        // gc meta datas
+        // gc meta data
         let req = GcDroppedTableReq {
             tenant: self.ctx.get_tenant(),
             drop_ids,

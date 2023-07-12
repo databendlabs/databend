@@ -60,14 +60,17 @@ use crate::sql::planner::plans::JoinType;
 impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
         let mut buffer = self.row_space.buffer.write();
+        let mut buffer_row_size = self.row_space.buffer_row_size.write();
+        *buffer_row_size += input.num_rows();
         buffer.push(input);
-        let buffer_row_size = buffer.iter().fold(0, |acc, x| acc + x.num_rows());
-        if buffer_row_size < *self.build_side_block_size_limit {
+        if *buffer_row_size < *self.build_side_block_size_limit {
             Ok(())
         } else {
             let data_block = DataBlock::concat(buffer.as_slice())?;
             buffer.clear();
+            *buffer_row_size = 0;
             drop(buffer);
+            drop(buffer_row_size);
             self.add_build_block(data_block)
         }
     }
@@ -305,7 +308,7 @@ impl HashJoinState for JoinHashTable {
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let space_size = match &keys_state {
-                    KeysState::Column(Column::String(col)) => col.offsets.last(),
+                    KeysState::Column(Column::String(col)) => col.offsets().last(),
                     // The function `build_keys_state` of both HashMethodSerializer and HashMethodSingleString
                     // must return `KeysState::Column(Column::String)`.
                     _ => unreachable!(),

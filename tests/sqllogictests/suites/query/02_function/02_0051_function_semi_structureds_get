@@ -210,6 +210,11 @@ select get_ignore_case(obj, 'A') from t2
 ----
 1
 
+query IT
+select id, obj:b from (select id, obj from t2) tt;
+----
+1 {"c":2}
+
 query T
 select get_path(arr, '[0]') from t1
 ----

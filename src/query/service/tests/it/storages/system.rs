@@ -50,6 +50,7 @@ use common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::stream::ReadDataBlockStream;
+use databend_query::test_kits::ClusterDescriptor;
 use futures::TryStreamExt;
 use goldenfile::Mint;
 use wiremock::matchers::method;
@@ -279,7 +280,7 @@ async fn test_metrics_table() -> Result<()> {
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 4);
+    assert_eq!(block.num_columns(), 5);
     assert!(block.num_rows() >= 1);
 
     let output = pretty_format_blocks(result.as_slice())?;
@@ -400,7 +401,9 @@ async fn test_caches_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("caches_table.txt").unwrap();
 
-    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
+    let cluster_desc = ClusterDescriptor::new().with_local_id("test-node");
+    let (_guard, ctx) =
+        databend_query::test_kits::create_query_context_with_cluster(cluster_desc).await?;
 
     let table = CachesTable::create(1);
 

@@ -12,7 +12,7 @@ statement ok
 DROP AGGREGATING INDEX IF EXISTS testi;
 
 statement ok
-CREATE TABLE t (a int, b int, c int) storage_format = 'parquet'
+CREATE TABLE t (a int, b int, c int)
 
 statement ok
 INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)
@@ -188,7 +188,7 @@ statement ok
 DROP TABLE t
 
 statement ok
-CREATE TABLE t (a int, b int, c int) storage_format = 'parquet'
+CREATE TABLE t (a int, b int, c int)
 
 statement ok
 INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)

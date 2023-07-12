@@ -50,7 +50,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "upper",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data.len(),
+            |col| col.data().len(),
             |val, output, _| {
                 for (start, end, ch) in val.char_indices() {
                     if ch == '\u{FFFD}' {
@@ -73,7 +73,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "lower",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data.len(),
+            |col| col.data().len(),
             |val, output, _| {
                 for (start, end, ch) in val.char_indices() {
                     if ch == '\u{FFFD}' {
@@ -105,9 +105,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             ValueRef::Scalar(s) => Value::Scalar(s.len() as u64),
             ValueRef::Column(c) => {
                 let diffs = c
-                    .offsets
+                    .offsets()
                     .iter()
-                    .zip(c.offsets.iter().skip(1))
+                    .zip(c.offsets().iter().skip(1))
                     .map(|(a, b)| b - a)
                     .collect::<Vec<_>>();
 
@@ -302,7 +302,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_base64",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data.len() * 4 / 3 + col.len() * 4,
+            |col| col.data().len() * 4 / 3 + col.len() * 4,
             |val, output, _| {
                 base64::write::EncoderWriter::new(&mut output.data, &general_purpose::STANDARD)
                     .write_all(val)
@@ -316,7 +316,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "from_base64",
         |_, _| FunctionDomain::MayThrow,
         vectorize_string_to_string(
-            |col| col.data.len() * 4 / 3 + col.len() * 4,
+            |col| col.data().len() * 4 / 3 + col.len() * 4,
             |val, output, ctx| {
                 if let Err(err) = general_purpose::STANDARD.decode_vec(val, &mut output.data) {
                     ctx.set_error(output.len(), err.to_string());
@@ -330,7 +330,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "quote",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data.len() * 2,
+            |col| col.data().len() * 2,
             |val, output, _| {
                 for ch in val {
                     match ch {
@@ -354,7 +354,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "reverse",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data.len(),
+            |col| col.data().len(),
             |val, output, _| {
                 let start = output.data.len();
                 output.put_slice(val);
@@ -384,7 +384,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "ltrim",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data.len(),
+            |col| col.data().len(),
             |val, output, _| {
                 let pos = val.iter().position(|ch| *ch != b' ' && *ch != b'\t');
                 if let Some(idx) = pos {
@@ -399,7 +399,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "rtrim",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data.len(),
+            |col| col.data().len(),
             |val, output, _| {
                 let pos = val.iter().rev().position(|ch| *ch != b' ' && *ch != b'\t');
                 if let Some(idx) = pos {
@@ -414,7 +414,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "trim",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data.len(),
+            |col| col.data().len(),
             |val, output, _| {
                 let start_pos = val.iter().position(|ch| *ch != b' ' && *ch != b'\t');
                 let end_pos = val.iter().rev().position(|ch| *ch != b' ' && *ch != b'\t');
@@ -430,7 +430,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "trim_leading",
         |_, _, _| FunctionDomain::Full,
         vectorize_string_to_string_2_arg(
-            |col, _| col.data.len(),
+            |col, _| col.data().len(),
             |val, trim_str, _, output| {
                 let chunk_size = trim_str.len();
                 let pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
@@ -446,7 +446,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "trim_trailing",
         |_, _, _| FunctionDomain::Full,
         vectorize_string_to_string_2_arg(
-            |col, _| col.data.len(),
+            |col, _| col.data().len(),
             |val, trim_str, _, output| {
                 let chunk_size = trim_str.len();
                 let pos = val.rchunks(chunk_size).position(|chunk| chunk != trim_str);
@@ -462,7 +462,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "trim_both",
         |_, _, _| FunctionDomain::Full,
         vectorize_string_to_string_2_arg(
-            |col, _| col.data.len(),
+            |col, _| col.data().len(),
             |val, trim_str, _, output| {
                 let chunk_size = trim_str.len();
                 let start_pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
@@ -490,7 +490,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "hex",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data.len() * 2,
+            |col| col.data().len() * 2,
             |val, output, _| {
                 let old_len = output.data.len();
                 let extra_len = val.len() * 2;
@@ -554,7 +554,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "unhex",
         |_, _| FunctionDomain::MayThrow,
         vectorize_string_to_string(
-            |col| col.data.len() / 2,
+            |col| col.data().len() / 2,
             |val, output, ctx| {
                 let old_len = output.data.len();
                 let extra_len = val.len() / 2;
@@ -595,7 +595,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "soundex",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| usize::max(col.data.len(), 4 * col.len()),
+            |col| usize::max(col.data().len(), 4 * col.len()),
             soundex::soundex,
         ),
     );

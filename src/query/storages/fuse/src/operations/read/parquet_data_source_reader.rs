@@ -29,7 +29,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 
-use super::DataSource;
+use super::parquet_data_source::DataSource;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;

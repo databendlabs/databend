@@ -172,7 +172,7 @@ impl IEJoinState {
 }
 
 impl RangeJoinState {
-    pub fn ie_join(&self, task_id: usize) -> Result<DataBlock> {
+    pub fn ie_join(&self, task_id: usize) -> Result<Vec<DataBlock>> {
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let tasks = self.tasks.read();
         let (left_idx, right_idx) = tasks[task_id];
@@ -190,7 +190,7 @@ impl RangeJoinState {
             None,
         )?;
         if !ie_join_state.intersection(&l1_sorted_block, &right_block) {
-            return Ok(DataBlock::empty());
+            return Ok(vec![DataBlock::empty()]);
         }
         let mut left_sorted_blocks = vec![l1_sorted_block, right_block];
 
@@ -278,7 +278,14 @@ impl RangeJoinState {
 
         drop(left_sorted_blocks);
 
-        self.ie_join_finalize(l1, l2, l1_index_column, &p_array, bit_array, task_id)
+        Ok(vec![self.ie_join_finalize(
+            l1,
+            l2,
+            l1_index_column,
+            &p_array,
+            bit_array,
+            task_id,
+        )?])
     }
 
     pub fn ie_join_finalize(
