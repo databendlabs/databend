@@ -55,7 +55,7 @@ impl StatisticsSender {
                 let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
                 let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
-                while true {
+                loop {
                     match futures::future::select(sleep_future, notified).await {
                         Either::Right((Ok(None), _)) | Either::Right((Err(_), _)) => {
                             break;
