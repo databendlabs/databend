@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.2"
+version = "0.4.3"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
@@ -18,5 +18,5 @@ keywords = ["databend", "database"]
 repository = "https://github.com/datafuselabs/bendsql"
 
 [workspace.dependencies]
-databend-client = { path = "core", version = "0.4.2" }
-databend-driver = { path = "driver", version = "0.4.2" }
+databend-client = { path = "core", version = "0.4.3" }
+databend-driver = { path = "driver", version = "0.4.3" }
