@@ -372,6 +372,21 @@ fn test_like(file: &mut impl Write) {
         ("rhs", StringType::from_data(vec!["a%", "_b_", "abe", "a"])),
     ];
     run_ast(file, "lhs like rhs", &columns);
+
+    run_ast(file, "parse_json('\"hello\"') like 'h%'", &[]);
+    run_ast(file, "parse_json('{\"abc\":1,\"def\":22}') like '%e%'", &[]);
+    run_ast(
+        file,
+        "parse_json('{\"k1\":\"abc\",\"k2\":\"def\"}') like '%e%'",
+        &[],
+    );
+
+    let columns = [(
+        "lhs",
+        StringType::from_data(vec!["\"abc\"", "{\"abd\":12}", "[\"abe\",\"abf\"]"]),
+    )];
+    run_ast(file, "parse_json(lhs) like 'a%'", &columns);
+    run_ast(file, "parse_json(lhs) like '%ab%'", &columns);
 }
 
 fn test_regexp(file: &mut impl Write) {

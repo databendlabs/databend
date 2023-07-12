@@ -35,6 +35,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
+use crate::operations::common::MutationKind;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::common::TransformSerializeSegment;
@@ -218,6 +219,7 @@ impl FuseTable {
                 self.meta_location_generator().clone(),
                 self.schema(),
                 self.get_operator(),
+                MutationKind::Recluster,
             );
             aggregator.accumulate_log_entry(mutator.mutation_logs());
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
