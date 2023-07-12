@@ -81,6 +81,7 @@ use common_storage::DataOperator;
 use common_storages_factory::Table;
 use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
+use common_storages_fuse::operations::MutationKind;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use common_storages_stage::StageTable;
@@ -299,6 +300,7 @@ impl PipelineBuilder {
             &ctx,
             &mut self.main_pipeline,
             Arc::new(delete.snapshot.clone()),
+            MutationKind::Delete,
         )?;
         Ok(())
     }
