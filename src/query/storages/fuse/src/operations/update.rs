@@ -288,7 +288,7 @@ impl FuseTable {
             // Status.
             {
                 let status = format!(
-                    "delete: begin to run update tasks, total tasks: {}",
+                    "update: begin to run update tasks, total tasks: {}",
                     total_tasks
                 );
                 ctx.set_status_info(&status);
