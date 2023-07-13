@@ -103,6 +103,11 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
         }
 
         if self.input_data.is_some() {
+            // Wake up upstream while executing async work
+            if !self.input.has_data() {
+                self.input.set_need_data();
+            }
+
             return Ok(Event::Async);
         }
 
@@ -124,7 +129,9 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
 
         match self.input.has_data() {
             true => {
+                // Wake up upstream while executing async work
                 self.input_data = Some(self.input.pull_data().unwrap()?);
+                self.input.set_need_data();
                 Ok(Event::Async)
             }
             false => {
