@@ -12,9 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use common_ast::ast::ShowColumnsStmt;
 use common_ast::ast::ShowLimit;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::UserGrantSet;
+use common_users::RoleCacheManager;
 use tracing::debug;
 
 use crate::normalize_identifier;
@@ -23,6 +29,11 @@ use crate::plans::RewriteKind;
 use crate::BindContext;
 use crate::Binder;
 use crate::SelectBuilder;
+
+// Used to check use can display which object when execute show statement.
+// Select a set of magic numbers as markers
+pub const GLOBAL_PRIV: &str = "0x5f3759df";
+pub const NO_PRIV: &str = "0x5f3758df";
 
 impl Binder {
     #[async_backtrace::framed]
@@ -67,6 +78,25 @@ impl Binder {
             table
         };
 
+        let tenant = self.ctx.get_tenant();
+        let user = self.ctx.get_current_user()?;
+        let (identity, grant_set) = (user.identity().to_string(), user.grants);
+
+        let unique_tables = generate_unique_object(
+            Some(database.clone()),
+            Some(table.clone()),
+            &tenant,
+            grant_set,
+        )
+        .await?;
+
+        if unique_tables.is_empty() {
+            return Err(ErrorCode::PermissionDenied(format!(
+                "Permission denied, user {} don't have privilege for table {}.{}",
+                identity, database, table
+            )));
+        }
+
         let mut select_builder = SelectBuilder::from("information_schema.columns");
 
         select_builder
@@ -108,4 +138,71 @@ impl Binder {
         self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowColumns)
             .await
     }
+}
+
+pub(crate) async fn generate_unique_object(
+    database: Option<String>,
+    table: Option<String>,
+    tenant: &str,
+    grant_set: UserGrantSet,
+) -> Result<HashSet<String>> {
+    let mut unique_object: HashSet<String> = HashSet::new();
+    let objects = RoleCacheManager::instance()
+        .find_related_roles(tenant, &grant_set.roles())
+        .await?
+        .into_iter()
+        .map(|role| role.grants)
+        .fold(grant_set, |a, b| a | b)
+        .entries()
+        .iter()
+        .map(|e| {
+            let object = e.object();
+            match object {
+                GrantObject::Global => GLOBAL_PRIV.to_string(),
+                GrantObject::Database(_, ldb) => {
+                    if let Some(database) = &database {
+                        if ldb == database {
+                            GLOBAL_PRIV.to_string()
+                        } else {
+                            NO_PRIV.to_string()
+                        }
+                    } else {
+                        format!("'{ldb}'")
+                    }
+                }
+                GrantObject::Table(_, ldb, ltab) => match (&database, &table) {
+                    // show columns from tab from db;
+                    (Some(database), Some(table)) => {
+                        if ldb == database && ltab == table {
+                            format!("'{ltab}'")
+                        } else {
+                            NO_PRIV.to_string()
+                        }
+                    }
+                    // show tables from db;
+                    (Some(database), None) => {
+                        if ldb == database {
+                            format!("'{ltab}'")
+                        } else {
+                            NO_PRIV.to_string()
+                        }
+                    }
+                    // show databases
+                    (None, None) => {
+                        format!("'{ldb}'")
+                    }
+                    _ => unreachable!(),
+                },
+            }
+        })
+        .collect::<Vec<_>>();
+
+    if !objects.is_empty() {
+        for object in objects {
+            if object != NO_PRIV {
+                unique_object.insert(object);
+            }
+        }
+    }
+    Ok(unique_object)
 }
