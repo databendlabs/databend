@@ -334,6 +334,14 @@ impl Settings {
         self.try_get_u64("parquet_fast_read_bytes")
     }
 
+    pub fn get_enable_table_lock(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_table_lock")? != 0)
+    }
+
+    pub fn set_enable_table_lock(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_table_lock", u64::from(val))
+    }
+
     pub fn set_table_lock_expire_secs(&self, val: u64) -> Result<()> {
         self.try_set_u64("table_lock_expire_secs", val)
     }

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -34,7 +32,6 @@ use crate::sessions::QueryContext;
 
 pub struct StatisticsSender {
     _spawner: Arc<QueryContext>,
-    shutdown_flag: Arc<AtomicBool>,
     shutdown_flag_sender: Sender<Option<ErrorCode>>,
     join_handle: Option<JoinHandle<()>>,
 }
@@ -47,18 +44,16 @@ impl StatisticsSender {
     ) -> StatisticsSender {
         let spawner = ctx.clone();
         let tx = exchange.convert_to_sender();
-        let shutdown_flag = Arc::new(AtomicBool::new(false));
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
         let handle = spawner.spawn({
             let query_id = query_id.to_string();
-            let shutdown_flag = shutdown_flag.clone();
 
             async move {
                 let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
                 let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
-                while !shutdown_flag.load(Ordering::Relaxed) {
+                loop {
                     match futures::future::select(sleep_future, notified).await {
                         Either::Right((Ok(None), _)) | Either::Right((Err(_), _)) => {
                             break;
@@ -94,14 +89,12 @@ impl StatisticsSender {
 
         StatisticsSender {
             _spawner: spawner,
-            shutdown_flag,
             shutdown_flag_sender,
             join_handle: Some(handle),
         }
     }
 
     pub fn shutdown(&mut self, error: Option<ErrorCode>) {
-        self.shutdown_flag.store(true, Ordering::Release);
         let shutdown_flag_sender = self.shutdown_flag_sender.clone();
 
         let join_handle = self.join_handle.take();
