@@ -81,7 +81,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
 
             eval: FunctionEval::SRF {
-                eval: Box::new(|args, ctx| {
+                eval: Box::new(|args, ctx, max_nums_per_row| {
                     let val_arg = args[0].clone().to_owned();
                     let path_arg = args[1].clone().to_owned();
                     let mut results = Vec::with_capacity(ctx.num_rows);
@@ -89,7 +89,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                         Value::Scalar(Scalar::String(path)) => match parse_json_path(&path) {
                             Ok(json_path) => {
                                 let selector = Selector::new(json_path, SelectorMode::All);
-                                for row in 0..ctx.num_rows {
+                                for (row, max_nums_per_row) in
+                                    max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
+                                {
                                     let val = unsafe { val_arg.index_unchecked(row) };
                                     let mut builder = StringColumnBuilder::with_capacity(0, 0);
                                     if let ScalarRef::Variant(val) = val {
@@ -102,6 +104,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     let array =
                                         Column::Variant(builder.build()).wrap_nullable(None);
                                     let array_len = array.len();
+                                    *max_nums_per_row = std::cmp::max(*max_nums_per_row, array_len);
                                     results.push((
                                         Value::Column(Column::Tuple(vec![array])),
                                         array_len,
@@ -119,7 +122,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                         },
                         _ => {
-                            for row in 0..ctx.num_rows {
+                            for (row, max_nums_per_row) in
+                                max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
+                            {
                                 let val = unsafe { val_arg.index_unchecked(row) };
                                 let path = unsafe { path_arg.index_unchecked(row) };
                                 let mut builder = StringColumnBuilder::with_capacity(0, 0);
@@ -149,6 +154,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 }
                                 let array = Column::Variant(builder.build()).wrap_nullable(None);
                                 let array_len = array.len();
+                                *max_nums_per_row = std::cmp::max(*max_nums_per_row, array_len);
                                 results
                                     .push((Value::Column(Column::Tuple(vec![array])), array_len));
                             }
@@ -174,7 +180,7 @@ fn build_unnest(
                     return_type: DataType::Tuple(vec![DataType::Null]),
                 },
                 eval: FunctionEval::SRF {
-                    eval: Box::new(|_, ctx| {
+                    eval: Box::new(|_, ctx, _| {
                         vec![(Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0); ctx.num_rows]
                     }),
                 },
@@ -187,7 +193,7 @@ fn build_unnest(
                 return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
             },
             eval: FunctionEval::SRF {
-                eval: Box::new(|args, ctx| {
+                eval: Box::new(|args, ctx, max_nums_per_row| {
                     let arg = args[0].clone().to_owned();
                     (0..ctx.num_rows)
                         .map(|row| match arg.index(row).unwrap() {
@@ -199,6 +205,8 @@ fn build_unnest(
                                 let mut builder = StringColumnBuilder::with_capacity(0, 0);
                                 if let Some(vals) = array_values(val) {
                                     len = vals.len();
+                                    max_nums_per_row[row] =
+                                        std::cmp::max(max_nums_per_row[row], len);
                                     for val in vals {
                                         builder.put_slice(&val);
                                         builder.commit_row();
@@ -234,7 +242,7 @@ fn build_unnest(
                 ))]),
             },
             eval: FunctionEval::SRF {
-                eval: Box::new(|args, ctx| {
+                eval: Box::new(|args, ctx, max_nums_per_row| {
                     let arg = args[0].clone().to_owned();
                     (0..ctx.num_rows)
                         .map(|row| {
@@ -257,6 +265,8 @@ fn build_unnest(
                                 ScalarRef::Array(col) => {
                                     let unnest_array = unnest_column(col);
                                     let array_len = unnest_array.len();
+                                    max_nums_per_row[row] =
+                                        std::cmp::max(max_nums_per_row[row], array_len);
                                     (Value::Column(Column::Tuple(vec![unnest_array])), array_len)
                                 }
                                 _ => unreachable!(),
