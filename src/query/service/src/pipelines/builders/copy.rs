@@ -28,7 +28,7 @@ use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
-use common_sql::executor::DistributedCopyIntoTable;
+use common_sql::executor::CopyIntoTable;
 use common_sql::plans::CopyIntoTableMode;
 use common_sql::plans::CopyIntoTablePlan;
 use common_storage::StageFileInfo;
@@ -137,7 +137,7 @@ pub fn build_local_append_data_pipeline(
 pub fn build_distributed_append_data_pipeline(
     ctx: Arc<QueryContext>,
     main_pipeline: &mut Pipeline,
-    plan: DistributedCopyIntoTable,
+    plan: CopyIntoTable,
     source_schema: Arc<DataSchema>,
     to_table: Arc<dyn Table>,
     files: Vec<StageFileInfo>,

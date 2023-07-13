@@ -19,9 +19,9 @@ use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateExpand;
+use super::CopyIntoTable;
 use super::DeleteFinal;
 use super::DeletePartial;
-use super::DistributedCopyIntoTable;
 use super::DistributedInsertSelect;
 use super::ProjectSet;
 use super::RowFetch;
@@ -365,7 +365,7 @@ impl Display for DeleteFinal {
         write!(f, "DeleteFinal")
     }
 }
-impl Display for DistributedCopyIntoTable {
+impl Display for CopyIntoTable {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DistributedCopyIntoTable")
     }

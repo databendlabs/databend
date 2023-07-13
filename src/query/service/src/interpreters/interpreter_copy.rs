@@ -26,7 +26,7 @@ use common_expression::DataSchemaRefExt;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use common_sql::executor::DistributedCopyIntoTable;
+use common_sql::executor::CopyIntoTable;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
 use common_sql::executor::PhysicalPlan;
@@ -144,7 +144,7 @@ impl CopyInterpreter {
     async fn try_transform_copy_plan_from_local_to_distributed(
         &self,
         plan: &CopyIntoTablePlan,
-    ) -> Result<Option<DistributedCopyIntoTable>> {
+    ) -> Result<Option<CopyIntoTable>> {
         let ctx = self.ctx.clone();
         let to_table = ctx
             .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
@@ -172,7 +172,7 @@ impl CopyInterpreter {
         if read_source_plan.parts.len() <= 1 {
             return Ok(None);
         }
-        Ok(Some(DistributedCopyIntoTable {
+        Ok(Some(CopyIntoTable {
             // TODO(leiysky): we reuse the id of exchange here,
             // which is not correct. We should generate a new id for insert.
             plan_id: 0,
@@ -286,7 +286,7 @@ impl CopyInterpreter {
     #[async_backtrace::framed]
     async fn build_distributed_copy_into_table_pipeline(
         &self,
-        distributed_plan: &DistributedCopyIntoTable,
+        distributed_plan: &CopyIntoTable,
     ) -> Result<PipelineBuildResult> {
         // add exchange plan node to enable distributed
         // TODO(leiysky): we reuse the id of exchange here,

@@ -54,9 +54,9 @@ use common_sql::executor::AggregateExpand;
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
+use common_sql::executor::CopyIntoTable;
 use common_sql::executor::DeleteFinal;
 use common_sql::executor::DeletePartial;
-use common_sql::executor::DistributedCopyIntoTable;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
@@ -211,7 +211,7 @@ impl PipelineBuilder {
 
     fn build_distributed_copy_into_table(
         &mut self,
-        distributed_plan: &DistributedCopyIntoTable,
+        distributed_plan: &CopyIntoTable,
     ) -> Result<()> {
         let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
         let to_table = catalog.get_table_by_info(&distributed_plan.table_info)?;

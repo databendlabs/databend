@@ -18,8 +18,8 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Partitions;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_sql::executor::CopyIntoTable;
 use common_sql::executor::DeletePartial;
-use common_sql::executor::DistributedCopyIntoTable;
 
 use crate::api::DataExchange;
 use crate::schedulers::Fragmenter;
@@ -244,9 +244,9 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
         }))
     }
 
-    fn replace_copy_into_table(&mut self, plan: &DistributedCopyIntoTable) -> Result<PhysicalPlan> {
+    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::DistributedCopyIntoTable(Box::new(
-            DistributedCopyIntoTable {
+            CopyIntoTable {
                 source: Box::new(self.source.clone()),
                 ..plan.clone()
             },

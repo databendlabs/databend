@@ -702,7 +702,7 @@ impl UnionAll {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DistributedCopyIntoTable {
+pub struct CopyIntoTable {
     pub plan_id: u32,
     pub catalog_name: String,
     pub database_name: String,
@@ -727,7 +727,7 @@ pub struct DistributedCopyIntoTable {
     pub local_node_id: String,
 }
 
-impl DistributedCopyIntoTable {
+impl CopyIntoTable {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRef::default())
     }
@@ -850,15 +850,15 @@ pub enum PhysicalPlan {
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
-    /// add distributed copy into table from @stage
-    DistributedCopyIntoTable(Box<DistributedCopyIntoTable>),
     /// Synthesized by fragmenter
     ExchangeSource(ExchangeSource),
     ExchangeSink(ExchangeSink),
 
-    /// For distributed delete
+    /// For delete
     DeletePartial(Box<DeletePartial>),
     DeleteFinal(Box<DeleteFinal>),
+    /// For copy
+    CopyIntoTable(Box<CopyIntoTable>),
 }
 
 impl PhysicalPlan {

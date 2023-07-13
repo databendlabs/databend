@@ -17,9 +17,9 @@ use common_exception::Result;
 use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregatePartial;
+use super::CopyIntoTable;
 use super::DeleteFinal;
 use super::DeletePartial;
-use super::DistributedCopyIntoTable;
 use super::DistributedInsertSelect;
 use super::EvalScalar;
 use super::Exchange;
@@ -279,7 +279,7 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_copy_into_table(&mut self, plan: &DistributedCopyIntoTable) -> Result<PhysicalPlan> {
+    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::DistributedCopyIntoTable(Box::new(
             plan.clone(),
         )))

@@ -25,7 +25,6 @@ use super::AggregateFunctionDesc;
 use super::AggregatePartial;
 use super::DeleteFinal;
 use super::DeletePartial;
-use super::DistributedCopyIntoTable;
 use super::EvalScalar;
 use super::Exchange;
 use super::Filter;
