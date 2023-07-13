@@ -78,8 +78,6 @@ use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
-use common_meta_types::GCDroppedDataReply;
-use common_meta_types::GCDroppedDataReq;
 use common_meta_types::MetaId;
 
 use crate::kv_app_error::KVAppError;
@@ -202,12 +200,6 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, KVAppError>;
-
-    // gc dropped {table|db} which out of retention time.
-    async fn gc_dropped_data(
-        &self,
-        req: GCDroppedDataReq,
-    ) -> Result<GCDroppedDataReply, KVAppError>;
 
     async fn get_drop_table_infos(
         &self,
