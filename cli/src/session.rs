@@ -301,9 +301,16 @@ impl Session {
                 Ok(false)
             }
             QueryKind::Query | QueryKind::Explain => {
+                let replace_newline = replace_newline_in_box_display(query);
                 let (schema, data) = self.conn.query_iter_ext(query).await?;
-                let mut displayer =
-                    FormatDisplay::new(&self.settings, query, start, Arc::new(schema), data);
+                let mut displayer = FormatDisplay::new(
+                    &self.settings,
+                    query,
+                    replace_newline,
+                    start,
+                    Arc::new(schema),
+                    data,
+                );
                 displayer.display().await?;
                 Ok(false)
             }
@@ -406,5 +413,17 @@ impl From<&str> for QueryKind {
             },
             _ => QueryKind::Query,
         }
+    }
+}
+
+fn replace_newline_in_box_display(query: &str) -> bool {
+    let mut tz = Tokenizer::new(query);
+    match tz.next() {
+        Some(Ok(t)) => match t.kind {
+            TokenKind::EXPLAIN => false,
+            TokenKind::SHOW => !matches!(tz.next(), Some(Ok(t)) if t.kind == TokenKind::CREATE),
+            _ => true,
+        },
+        _ => true,
     }
 }
