@@ -41,11 +41,15 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::DroppedId;
+use common_meta_app::schema::GcDroppedTableReq;
+use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -594,5 +598,16 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog
             .delete_table_lock_rev(table_info, revision)
             .await
+    }
+
+    async fn get_drop_table_infos(
+        &self,
+        req: ListDroppedTableReq,
+    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
+        self.mutable_catalog.get_drop_table_infos(req).await
+    }
+
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
+        self.mutable_catalog.gc_drop_tables(req).await
     }
 }

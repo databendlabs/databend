@@ -699,8 +699,36 @@ impl ListTableReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ListDroppedTableReq {
+    pub inner: DatabaseNameIdent,
+    pub filter: TableInfoFilter,
+}
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum DroppedId {
+    // db id, db name
+    Db(u64, String),
+    // db id, table id, table name
+    Table(u64, u64, String),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ListDroppedTableResp {
+    pub drop_table_infos: Vec<Arc<TableInfo>>,
+    pub drop_ids: Vec<DroppedId>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GcDroppedTableReq {
+    pub tenant: String,
+    pub drop_ids: Vec<DroppedId>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GcDroppedTableResp {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct CountTablesKey {
     pub tenant: String,
 }
