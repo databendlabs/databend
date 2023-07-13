@@ -39,6 +39,8 @@ use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::ExtendTableLockRevReq;
+use common_meta_app::schema::GcDroppedTableReq;
+use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
@@ -47,6 +49,8 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListDroppedTableReq;
+use common_meta_app::schema::ListDroppedTableResp;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
@@ -204,6 +208,16 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: GCDroppedDataReq,
     ) -> Result<GCDroppedDataReply, KVAppError>;
+
+    async fn get_drop_table_infos(
+        &self,
+        req: ListDroppedTableReq,
+    ) -> Result<ListDroppedTableResp, KVAppError>;
+
+    async fn gc_drop_tables(
+        &self,
+        req: GcDroppedTableReq,
+    ) -> Result<GcDroppedTableResp, KVAppError>;
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, KVAppError>;
 

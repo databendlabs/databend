@@ -151,6 +151,7 @@ impl FlightSqlServiceImpl {
                         let _ = s1
                             .send(Err(status!("Could not convert batches", err)))
                             .await;
+                        break;
                     }
                 }
             }
