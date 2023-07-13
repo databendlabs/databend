@@ -36,7 +36,7 @@ use crate::background_config::InnerBackgroundConfig;
 /// Inner config for query.
 ///
 /// All function should implement based on this Config.
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct InnerConfig {
     pub cmd: String,
     pub config_file: String,
@@ -122,7 +122,24 @@ impl InnerConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+impl Debug for InnerConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("InnerConfig")
+            .field("cmd", &self.cmd)
+            .field("config_file", &self.config_file)
+            .field("query", &self.query.sanitize())
+            .field("log", &self.log)
+            .field("meta", &self.meta)
+            .field("storage", &self.storage)
+            .field("local", &self.local)
+            .field("catalogs", &self.catalogs)
+            .field("cache", &self.cache)
+            .field("background", &self.background)
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
     pub tenant_id: String,
@@ -261,6 +278,16 @@ impl QueryConfig {
             rpc_tls_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert.clone(),
             domain_name: self.rpc_tls_query_service_domain_name.clone(),
         }
+    }
+
+    pub fn sanitize(&self) -> Self {
+        let mut sanitized = self.clone();
+        sanitized.databend_enterprise_license = self
+            .databend_enterprise_license
+            .clone()
+            .map(|s| mask_string(&s, 3));
+        sanitized.openai_api_key = mask_string(&self.openai_api_key, 3);
+        sanitized
     }
 }
 
