@@ -493,16 +493,14 @@ impl Interpreter for CopyInterpreter {
                     let distributed_plan_op = self
                         .try_transform_copy_plan_from_local_to_distributed(plan)
                         .await?;
-                    // can't get distributed plan, build local pipeline.
-                    if distributed_plan_op.is_none() {
-                        self.build_local_copy_into_table_pipeline(plan).await
-                    } else {
-                        let distributed_plan = distributed_plan_op.unwrap();
+                    if let Some(distributed_plan) = distributed_plan_op {
                         let build_res = self
                             .build_cluster_copy_into_table_pipeline(&distributed_plan)
                             .await?;
 
                         Ok(build_res)
+                    } else {
+                        self.build_local_copy_into_table_pipeline(plan).await
                     }
                 } else {
                     self.build_local_copy_into_table_pipeline(plan).await
