@@ -60,14 +60,6 @@ select count(*) from products;
 statement ok
 select block_count from fuse_snapshot('default','products');
 
-statement ok
-copy into products from (select $1,$2,$3 from @s1 as t2) force =  true purge = true;
-
-query I
-select count(*) from products;
-----
-8000000
-
 # error test
 statement error 1104
 copy into products from (select $1,$2,$4 from @s1 as t2) force = true;
@@ -75,10 +67,7 @@ copy into products from (select $1,$2,$4 from @s1 as t2) force = true;
 query I
 select count(*) from products;
 ----
-8000000
-
-statement ok
-set enable_distributed_copy_into = 0;
+0
 
 statement ok
 set max_threads = 1;
@@ -97,3 +86,14 @@ MutationSink × 1 processor
                 DeserializeTransformer × 1 processor
                   Resize × 1 processor
                     Aligner × 1 processor
+
+statement ok
+copy into products from (select $1,$2,$3 from @s1 as t2) force =  true purge = true;
+
+query I
+select count(*) from products;
+----
+8000000
+
+statement ok
+set enable_distributed_copy_into = 0;
