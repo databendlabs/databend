@@ -83,7 +83,7 @@ set enable_distributed_copy_into = 0;
 statement ok
 set max_threads = 1;
 
-statement ok
+query T
 explain pipeline copy into products from (select $1,$2,$4 from @s1 as t2);
 ----
 MutationSink × 1 processor
