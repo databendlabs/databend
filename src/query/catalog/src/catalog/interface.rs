@@ -53,7 +53,6 @@ use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -165,12 +164,8 @@ pub trait Catalog: DynClone + Send + Sync {
     ) -> Result<Arc<dyn Table>>;
 
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
-    async fn list_tables_history(
-        &self,
-        tenant: &str,
-        db_name: &str,
-        filter: Option<TableInfoFilter>,
-    ) -> Result<Vec<Arc<dyn Table>>>;
+    async fn list_tables_history(&self, tenant: &str, db_name: &str)
+    -> Result<Vec<Arc<dyn Table>>>;
 
     async fn get_drop_table_infos(
         &self,
