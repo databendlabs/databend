@@ -225,16 +225,12 @@ impl PipelineBuilder {
         self.build_pipeline(&copy_plan.input)?;
         let catalog = self.ctx.get_catalog(&copy_plan.catalog_name)?;
         let to_table = catalog.get_table_by_info(&copy_plan.table_info)?;
-        let start = Instant::now();
-        append_data_and_set_finish(
-            &mut self.main_pipeline,
-            copy_plan.required_source_schema.clone(),
-            PlanParam::CopyIntoTableFromQuery(copy_plan.clone()),
+        build_append_data_pipeline(
             self.ctx.clone(),
+            &mut self.main_pipeline,
+            CopyPlanType::CopyIntoTableFromQuery(copy_plan.clone()),
+            copy_plan.required_source_schema.clone(),
             to_table,
-            copy_plan.files.clone(),
-            start,
-            false,
         )?;
         Ok(())
     }
@@ -264,7 +260,7 @@ impl PipelineBuilder {
         build_append_data_pipeline(
             ctx,
             &mut self.main_pipeline,
-            CopyPlanType::DistributedCopyIntoTable(distributed_plan.clone()),
+            CopyPlanType::DistributedCopyIntoTableFromStage(distributed_plan.clone()),
             distributed_plan.required_source_schema.clone(),
             to_table,
         )?;

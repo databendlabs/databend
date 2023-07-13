@@ -154,7 +154,7 @@ impl CopyInterpreter {
     async fn try_transform_copy_plan_from_local_to_distributed(
         &self,
         plan: &CopyIntoTablePlan,
-    ) -> Result<Option<DistributedCopyIntoTableFromStage>> {
+    ) -> Result<Option<CopyPlanType>> {
         let ctx = self.ctx.clone();
         let to_table = ctx
             .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
@@ -182,22 +182,55 @@ impl CopyInterpreter {
         if read_source_plan.parts.len() <= 1 {
             return Ok(None);
         }
-
-        Ok(Some(DistributedCopyIntoTable {
-            // TODO(leiysky): we reuse the id of exchange here,
-            // which is not correct. We should generate a new id for insert.
-            plan_id: 0,
-            catalog_name: plan.catalog_name.clone(),
-            database_name: plan.database_name.clone(),
-            table_name: plan.table_name.clone(),
-            required_values_schema: plan.required_values_schema.clone(),
-            values_consts: plan.values_consts.clone(),
-            required_source_schema: plan.required_source_schema.clone(),
-            stage_table_info: plan.stage_table_info.clone(),
-            source: Box::new(read_source_plan),
-            files,
-            table_info: to_table.get_table_info().clone(),
-        }))
+        if plan.query.is_none() {
+            Ok(Some(CopyPlanType::DistributedCopyIntoTableFromStage(
+                DistributedCopyIntoTableFromStage {
+                    // TODO(leiysky): we reuse the id of exchange here,
+                    // which is not correct. We should generate a new id for insert.
+                    plan_id: 0,
+                    catalog_name: plan.catalog_name.clone(),
+                    database_name: plan.database_name.clone(),
+                    table_name: plan.table_name.clone(),
+                    required_values_schema: plan.required_values_schema.clone(),
+                    values_consts: plan.values_consts.clone(),
+                    required_source_schema: plan.required_source_schema.clone(),
+                    stage_table_info: plan.stage_table_info.clone(),
+                    source: Box::new(read_source_plan),
+                    files,
+                    table_info: to_table.get_table_info().clone(),
+                    force: plan.force,
+                    write_mode: plan.write_mode,
+                    thresholds: to_table.get_block_thresholds(),
+                    validation_mode: plan.validation_mode.clone(),
+                },
+            )))
+        } else {
+            // plan query must exist, we can use unwarp directly.
+            let (select_interpreter, _) = self.build_query(plan.query.as_ref().unwrap()).await?;
+            let plan_query = select_interpreter.build_physical_plan().await?;
+            Ok(Some(CopyPlanType::CopyIntoTableFromQuery(
+                CopyIntoTableFromQuery {
+                    // add exchange plan node to enable distributed
+                    // TODO(leiysky): we reuse the id of exchange here,
+                    // which is not correct. We should generate a new id
+                    plan_id: 0,
+                    catalog_name: plan.catalog_name.clone(),
+                    database_name: plan.database_name.clone(),
+                    table_name: plan.table_name.clone(),
+                    required_source_schema: plan.required_source_schema.clone(),
+                    values_consts: plan.values_consts.clone(),
+                    required_values_schema: plan.required_values_schema.clone(),
+                    write_mode: plan.write_mode,
+                    validation_mode: plan.validation_mode.clone(),
+                    force: plan.force,
+                    stage_table_info: plan.stage_table_info.clone(),
+                    local_node_id: self.ctx.get_cluster().local_id.clone(),
+                    input: Box::new(plan_query),
+                    files: plan.collect_files(&table_ctx).await?,
+                    table_info: to_table.get_table_info().clone(),
+                },
+            )))
+        }
     }
 
     #[async_backtrace::framed]
@@ -275,8 +308,9 @@ impl CopyInterpreter {
                     .clone()
                     .ok_or(ErrorCode::Internal("files_to_copy should not be None"))?;
 
-                let (query_build_res, query_source_schema) = self.build_query(query).await?;
-                build_res = query_build_res;
+                let (select_interpreter, query_source_schema) = self.build_query(query).await?;
+                let plan = select_interpreter.build_physical_plan().await?;
+                build_res = select_interpreter.build_pipeline(plan).await?;
                 source_schema = query_source_schema;
             }
         }
@@ -364,21 +398,78 @@ impl CopyInterpreter {
     #[async_backtrace::framed]
     async fn build_cluster_copy_into_table_pipeline(
         &self,
-        distributed_plan: &DistributedCopyIntoTable,
+        distributed_plan: &CopyPlanType,
     ) -> Result<PipelineBuildResult> {
-        // add exchange plan node to enable distributed
-        // TODO(leiysky): we reuse the id of exchange here,
-        // which is not correct. We should generate a new id for insert.
-        let exchange_plan = PhysicalPlan::Exchange(Exchange {
-            plan_id: 0,
-            input: Box::new(PhysicalPlan::DistributedCopyIntoTable(Box::new(
-                distributed_plan.clone(),
-            ))),
-            kind: FragmentKind::Merge,
-            keys: Vec::new(),
-        });
-        let build_res = build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?;
+        let catalog_name;
+        let database_name;
+        let table_name;
+        let stage_info;
+        let files;
+        let force;
+        let purge;
+        let is_overwrite;
+        let mut build_res = match distributed_plan {
+            CopyPlanType::DistributedCopyIntoTableFromStage(plan) => {
+                catalog_name = plan.catalog_name.clone();
+                database_name = plan.database_name.clone();
+                table_name = plan.table_name.clone();
+                stage_info = plan.stage_table_info.stage_info.clone();
+                files = plan.files.clone();
+                force = plan.force;
+                purge = plan.stage_table_info.stage_info.copy_options.purge;
+                is_overwrite = plan.write_mode.is_overwrite();
+                // add exchange plan node to enable distributed
+                // TODO(leiysky): we reuse the id of exchange here,
+                // which is not correct. We should generate a new id for insert.
+                let exchange_plan = PhysicalPlan::Exchange(Exchange {
+                    plan_id: 0,
+                    input: Box::new(PhysicalPlan::DistributedCopyIntoTableFromStage(Box::new(
+                        plan.clone(),
+                    ))),
+                    kind: FragmentKind::Merge,
+                    keys: Vec::new(),
+                });
 
+                build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?
+            }
+            CopyPlanType::CopyIntoTableFromQuery(plan) => {
+                catalog_name = plan.catalog_name.clone();
+                database_name = plan.database_name.clone();
+                table_name = plan.table_name.clone();
+                stage_info = plan.stage_table_info.stage_info.clone();
+                files = plan.files.clone();
+                force = plan.force;
+                purge = plan.stage_table_info.stage_info.copy_options.purge;
+                is_overwrite = plan.write_mode.is_overwrite();
+                // add exchange plan node to enable distributed
+                // TODO(leiysky): we reuse the id of exchange here,
+                // which is not correct. We should generate a new id
+                let exchange_plan = PhysicalPlan::Exchange(Exchange {
+                    plan_id: 0,
+                    input: Box::new(PhysicalPlan::CopyIntoTableFromQuery(Box::new(plan.clone()))),
+                    kind: FragmentKind::Merge,
+                    keys: Vec::new(),
+                });
+                build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?
+            }
+            _ => unreachable!(),
+        };
+        let to_table = self
+            .ctx
+            .get_table(&catalog_name, &database_name, &table_name)
+            .await?;
+
+        // commit.
+        build_commit_data_pipeline(
+            self.ctx.clone(),
+            &mut build_res.main_pipeline,
+            stage_info,
+            to_table,
+            files,
+            force,
+            purge,
+            is_overwrite,
+        )?;
         Ok(build_res)
     }
 }
@@ -402,37 +493,16 @@ impl Interpreter for CopyInterpreter {
                     let distributed_plan_op = self
                         .try_transform_copy_plan_from_local_to_distributed(plan)
                         .await?;
-                    if let Some(distributed_plan) = distributed_plan_op {
+                    // can't get distributed plan, build local pipeline.
+                    if distributed_plan_op.is_none() {
+                        self.build_local_copy_into_table_pipeline(plan).await
+                    } else {
+                        let distributed_plan = distributed_plan_op.unwrap();
                         let mut build_res = self
                             .build_cluster_copy_into_table_pipeline(&distributed_plan)
                             .await?;
-                        let to_table = self
-                            .ctx
-                            .get_table(
-                                &distributed_plan.catalog_name,
-                                &distributed_plan.database_name,
-                                &distributed_plan.table_name,
-                            )
-                            .await?;
 
-                        // commit.
-                        build_commit_data_pipeline(
-                            self.ctx.clone(),
-                            &mut build_res.main_pipeline,
-                            distributed_plan.stage_table_info.stage_info.clone(),
-                            to_table,
-                            distributed_plan.files.clone(),
-                            distributed_plan.force,
-                            distributed_plan
-                                .stage_table_info
-                                .stage_info
-                                .copy_options
-                                .purge,
-                            distributed_plan.write_mode.is_overwrite(),
-                        )?;
                         Ok(build_res)
-                    } else {
-                        self.build_local_copy_into_table_pipeline(plan).await
                     }
                 } else {
                     self.build_local_copy_into_table_pipeline(plan).await

@@ -29,7 +29,8 @@ use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
-use common_sql::executor::DistributedCopyIntoTable;
+use common_sql::executor::CopyIntoTableFromQuery;
+use common_sql::executor::DistributedCopyIntoTableFromStage;
 use common_sql::plans::CopyIntoTableMode;
 use common_sql::plans::CopyIntoTablePlan;
 use common_storage::StageFileInfo;
@@ -48,7 +49,10 @@ use crate::sessions::QueryContext;
 
 pub enum CopyPlanType {
     CopyIntoTablePlanOption(CopyIntoTablePlan),
-    DistributedCopyIntoTable(DistributedCopyIntoTable),
+    DistributedCopyIntoTableFromStage(DistributedCopyIntoTableFromStage),
+    // also distributed plan, but we think the real disteibuted part is the query
+    // so no "distributed" prefix here.
+    CopyIntoTableFromQuery(CopyIntoTableFromQuery),
 }
 
 pub fn build_append_data_pipeline(
@@ -70,7 +74,13 @@ pub fn build_append_data_pipeline(
             plan_values_consts = plan.values_consts;
             plan_write_mode = plan.write_mode;
         }
-        CopyPlanType::DistributedCopyIntoTable(plan) => {
+        CopyPlanType::DistributedCopyIntoTableFromStage(plan) => {
+            plan_required_source_schema = plan.required_source_schema;
+            plan_required_values_schema = plan.required_values_schema;
+            plan_values_consts = plan.values_consts;
+            plan_write_mode = plan.write_mode;
+        }
+        CopyPlanType::CopyIntoTableFromQuery(plan) => {
             plan_required_source_schema = plan.required_source_schema;
             plan_required_values_schema = plan.required_values_schema;
             plan_values_consts = plan.values_consts;
