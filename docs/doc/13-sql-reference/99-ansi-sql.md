@@ -2,7 +2,7 @@
 title: SQL Conformance
 ---
 
-Databend aims to conform to the SQL standard, with particular support for ISO/IEC 9075:2011, or simply as SQL:2011. While not an exhaustive statement of conformance, Databend incorporates many features required by the SQL standard, often with slight differences in syntax or function. This page outlines the level of conformity of Databend to the SQL:2011 standard.
+Databend aims to conform to the SQL standard, with particular support for ISO/IEC 9075:2011, also known as SQL:2011. While not an exhaustive statement of conformance, Databend incorporates many features required by the SQL standard, often with slight differences in syntax or function. This page outlines the level of conformity of Databend to the SQL:2011 standard.
 
 | Feature ID 	|                                                       Feature Name                                                       	| Supported? 	|                                                     Note                                                     	|
 |:----------:	|:------------------------------------------------------------------------------------------------------------------------:	|:----------:	|:------------------------------------------------------------------------------------------------------------:	|
