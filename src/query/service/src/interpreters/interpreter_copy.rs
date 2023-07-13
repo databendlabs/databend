@@ -400,14 +400,16 @@ impl CopyInterpreter {
         &self,
         distributed_plan: &CopyPlanType,
     ) -> Result<PipelineBuildResult> {
-        let catalog_name;
-        let database_name;
-        let table_name;
-        let stage_info;
-        let files;
-        let force;
-        let purge;
-        let is_overwrite;
+        let (
+            catalog_name,
+            database_name,
+            table_name,
+            stage_info,
+            files,
+            force,
+            purge,
+            is_overwrite,
+        );
         let mut build_res = match distributed_plan {
             CopyPlanType::DistributedCopyIntoTableFromStage(plan) => {
                 catalog_name = plan.catalog_name.clone();

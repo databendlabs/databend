@@ -79,3 +79,21 @@ select count(*) from products;
 
 statement ok
 set enable_distributed_copy_into = 0;
+
+statement ok
+set max_threads = 1;
+
+statement ok
+explain pipeline copy into products from (select $1,$2,$4 from @s1 as t2);
+----
+MutationSink × 1 processor
+  MutationAggregator × 1 processor
+    TransformExchangeDeserializer × 1 processor
+      Merge (DummyTransform × 3 processors) to (TransformExchangeDeserializer × 1)
+        Merge (TransformSerializeSegment × 1 processor) to (Resize × 3)
+          TransformSerializeSegment × 1 processor
+            TransformSerializeBlock × 1 processor
+              BlockCompactTransform × 1 processor
+                DeserializeTransformer × 1 processor
+                  Resize × 1 processor
+                    Aligner × 1 processor

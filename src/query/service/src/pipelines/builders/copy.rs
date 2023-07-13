@@ -50,7 +50,7 @@ use crate::sessions::QueryContext;
 pub enum CopyPlanType {
     CopyIntoTablePlanOption(CopyIntoTablePlan),
     DistributedCopyIntoTableFromStage(DistributedCopyIntoTableFromStage),
-    // also distributed plan, but we think the real disteibuted part is the query
+    // also distributed plan, but we think the real distributed part is the query
     // so no "distributed" prefix here.
     CopyIntoTableFromQuery(CopyIntoTableFromQuery),
 }
