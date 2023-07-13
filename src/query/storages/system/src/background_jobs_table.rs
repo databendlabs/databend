@@ -169,21 +169,30 @@ impl BackgroundJobTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("name", TableDataType::String),
-            TableField::new("job_type", TableDataType::String),
+            TableField::new("job_type", TableDataType::String.wrap_nullable()),
             TableField::new(
                 "scheduled_job_interval_secs",
-                TableDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
             ),
-            TableField::new("scheduled_job_cron_expression", TableDataType::String),
-            TableField::new("scheduled_job_cron_timezone", TableDataType::String),
+            TableField::new(
+                "scheduled_job_cron_expression",
+                TableDataType::String.wrap_nullable(),
+            ),
+            TableField::new(
+                "scheduled_job_cron_timezone",
+                TableDataType::String.wrap_nullable(),
+            ),
             TableField::new("task_type", TableDataType::String),
-            TableField::new("job_state", TableDataType::String),
-            TableField::new("last_task_id", TableDataType::String),
-            TableField::new("last_task_run_at", TableDataType::Timestamp),
-            TableField::new("next_task_scheduled_time", TableDataType::Timestamp),
+            TableField::new("job_state", TableDataType::String.wrap_nullable()),
+            TableField::new("last_task_id", TableDataType::String.wrap_nullable()),
+            TableField::new("last_task_run_at", TableDataType::Timestamp.wrap_nullable()),
+            TableField::new(
+                "next_task_scheduled_time",
+                TableDataType::Timestamp.wrap_nullable(),
+            ),
             TableField::new("message", TableDataType::String),
-            TableField::new("last_updated", TableDataType::Timestamp),
-            TableField::new("creator", TableDataType::String),
+            TableField::new("last_updated", TableDataType::Timestamp.wrap_nullable()),
+            TableField::new("creator", TableDataType::String.wrap_nullable()),
             TableField::new("created_on", TableDataType::Timestamp),
         ]);
 
