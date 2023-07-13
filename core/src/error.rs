@@ -19,6 +19,7 @@ pub enum Error {
     Parsing(String),
     BadArgument(String),
     Request(String),
+    IO(String),
     InvalidResponse(response::QueryError),
     InvalidPage(response::QueryError),
 }
@@ -29,6 +30,7 @@ impl std::fmt::Display for Error {
             Error::Parsing(msg) => write!(f, "ParsingError: {msg}"),
             Error::BadArgument(msg) => write!(f, "BadArgument: {msg}"),
             Error::Request(msg) => write!(f, "RequestError: {msg}"),
+            Error::IO(msg) => write!(f, "IOError: {msg}"),
             Error::InvalidResponse(e) => {
                 write!(f, "ResponseError with {}: {}", e.code, e.message)
             }
@@ -68,5 +70,11 @@ impl From<serde_json::Error> for Error {
 impl From<reqwest::Error> for Error {
     fn from(e: reqwest::Error) -> Self {
         Error::Request(e.to_string())
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::IO(e.to_string())
     }
 }

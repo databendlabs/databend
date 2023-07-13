@@ -39,6 +39,7 @@ pub enum Error {
     Parsing(String),
     Protocol(String),
     Transport(String),
+    IO(String),
     BadArgument(String),
     InvalidResponse(String),
     Api(databend_client::error::Error),
@@ -53,6 +54,7 @@ impl std::fmt::Display for Error {
             Error::Parsing(msg) => write!(f, "ParseError: {}", msg),
             Error::Protocol(msg) => write!(f, "ProtocolError: {}", msg),
             Error::Transport(msg) => write!(f, "TransportError: {}", msg),
+            Error::IO(msg) => write!(f, "IOError: {}", msg),
 
             Error::BadArgument(msg) => write!(f, "BadArgument: {}", msg),
             Error::InvalidResponse(msg) => write!(f, "ResponseError: {}", msg),
@@ -113,6 +115,12 @@ impl From<std::num::ParseFloatError> for Error {
 impl From<chrono::ParseError> for Error {
     fn from(e: chrono::ParseError) -> Self {
         Error::Parsing(e.to_string())
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::IO(e.to_string())
     }
 }
 

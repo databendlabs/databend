@@ -89,6 +89,8 @@ pub struct APIClient {
     max_rows_in_buffer: Option<i64>,
     max_rows_per_page: Option<i64>,
 
+    tls_ca_file: Option<String>,
+
     presigned_url_disabled: bool,
 }
 
@@ -144,6 +146,9 @@ impl APIClient {
                         scheme = "http";
                     }
                 }
+                "tls_ca_file" => {
+                    client.tls_ca_file = Some(v.to_string());
+                }
                 _ => {
                     session_settings.insert(k.to_string(), v.to_string());
                 }
@@ -157,6 +162,15 @@ impl APIClient {
                 _ => unreachable!(),
             },
         };
+
+        #[cfg(any(feature = "rustls", feature = "native-tls"))]
+        if scheme == "https" {
+            if let Some(ref ca_file) = client.tls_ca_file {
+                let cert_pem = std::fs::read(ca_file)?;
+                let cert = reqwest::Certificate::from_pem(&cert_pem)?;
+                client.cli = HttpClient::builder().add_root_certificate(cert).build()?;
+            }
+        }
         client.endpoint = Url::parse(&format!("{}://{}:{}", scheme, client.host, client.port))?;
         client.session_settings = Arc::new(Mutex::new(session_settings));
 
@@ -486,6 +500,7 @@ impl Default for APIClient {
             wait_time_secs: None,
             max_rows_in_buffer: None,
             max_rows_per_page: None,
+            tls_ca_file: None,
             presigned_url_disabled: false,
         }
     }

@@ -148,8 +148,16 @@ impl FlightSQLConnection {
             .http2_keep_alive_interval(args.http2_keep_alive_interval)
             .keep_alive_timeout(args.keep_alive_timeout)
             .keep_alive_while_idle(args.keep_alive_while_idle);
+        #[cfg(any(feature = "rustls", feature = "native-tls"))]
         if args.tls {
-            let tls_config = ClientTlsConfig::new();
+            let tls_config = match args.tls_ca_file {
+                None => ClientTlsConfig::new(),
+                Some(ref ca_file) => {
+                    let pem = std::fs::read(ca_file)?;
+                    let cert = tonic::transport::Certificate::from_pem(pem);
+                    ClientTlsConfig::new().ca_certificate(cert)
+                }
+            };
             endpoint = endpoint.tls_config(tls_config)?;
         }
         Ok((args, endpoint))
@@ -167,6 +175,7 @@ struct Args {
     tenant: Option<String>,
     warehouse: Option<String>,
     tls: bool,
+    tls_ca_file: Option<String>,
     connect_timeout: Duration,
     query_timeout: Duration,
     tcp_nodelay: bool,
@@ -187,6 +196,7 @@ impl Default for Args {
             tenant: None,
             warehouse: None,
             tls: true,
+            tls_ca_file: None,
             user: "root".to_string(),
             password: "".to_string(),
             connect_timeout: Duration::from_secs(20),
@@ -214,6 +224,7 @@ impl Args {
                         args.tls = false;
                     }
                 }
+                "tls_ca_file" => args.tls_ca_file = Some(v.to_string()),
                 "connect_timeout" => args.connect_timeout = Duration::from_secs(v.parse()?),
                 "query_timeout" => args.query_timeout = Duration::from_secs(v.parse()?),
                 "tcp_nodelay" => args.tcp_nodelay = v.parse()?,
