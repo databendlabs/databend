@@ -28,7 +28,6 @@ use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::CompactTarget;
-use common_catalog::table::DeletionFilters;
 use common_catalog::table::NavigationDescriptor;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -640,18 +639,6 @@ impl Table for FuseTable {
                 .navigate_to_time_point(snapshot_location, *time_point)
                 .await?),
         }
-    }
-
-    #[async_backtrace::framed]
-    async fn delete(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _filter: Option<DeletionFilters>,
-        _col_indices: Vec<usize>,
-        _query_row_id_col: bool,
-        _pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        panic!("deprecated")
     }
 
     #[async_backtrace::framed]
