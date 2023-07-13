@@ -93,9 +93,8 @@ impl ReplaceIntoMutator {
             let hash = row_hash_of_columns(columns, row_idx);
             if saw.contains(&hash) {
                 return Ok(ColumnHash::Conflict);
-            } else {
-                saw.insert(hash);
             }
+            saw.insert(hash);
             digests.insert(hash);
         }
         Ok(ColumnHash::NoConflict(digests))
