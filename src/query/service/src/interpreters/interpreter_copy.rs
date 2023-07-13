@@ -498,7 +498,7 @@ impl Interpreter for CopyInterpreter {
                         self.build_local_copy_into_table_pipeline(plan).await
                     } else {
                         let distributed_plan = distributed_plan_op.unwrap();
-                        let mut build_res = self
+                        let build_res = self
                             .build_cluster_copy_into_table_pipeline(&distributed_plan)
                             .await?;
 
