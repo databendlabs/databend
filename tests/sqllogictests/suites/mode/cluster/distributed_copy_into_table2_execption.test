@@ -68,5 +68,14 @@ select count(*) from products;
 ----
 8000000
 
+# error test
+statement error 1104
+copy into products from (select $1,$2,$4 from @s1 as t2) force = true;
+
+query I
+select count(*) from products;
+----
+8000000
+
 statement ok
 set enable_distributed_copy_into = 0;
