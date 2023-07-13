@@ -24,6 +24,7 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::DataBlock;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
@@ -323,10 +324,35 @@ impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<
         }
 
         self.finished = true;
-        Ok(Some(
-            self.inner
-                .get_full_data(self.context.clone(), self.push_downs.clone())
-                .await?,
-        ))
+        let block = self
+            .inner
+            .get_full_data(self.context.clone(), self.push_downs.clone())
+            .await?;
+
+        #[cfg(debug_assertions)]
+        {
+            let table_info = self.inner.get_table_info();
+            let data_types: Vec<DataType> = block
+                .columns()
+                .iter()
+                .map(|v| v.data_type.clone())
+                .collect();
+
+            let table_info_types: Vec<DataType> = table_info
+                .schema()
+                .fields()
+                .iter()
+                .map(|v| v.data_type().into())
+                .collect::<Vec<DataType>>();
+
+            assert!(
+                data_types == table_info_types,
+                "data_types: {:?}, table_info_types: {:?}",
+                data_types,
+                table_info_types
+            )
+        }
+
+        Ok(Some(block))
     }
 }

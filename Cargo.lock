@@ -6373,7 +6373,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.2.3"
-source = "git+https://github.com/datafuselabs/jsonb?rev=d81fbee#d81fbee0b6005bceb2bc92d1f877cfac68e6008f"
+source = "git+https://github.com/datafuselabs/jsonb?rev=fe6835a#fe6835a0a6813279366550db7ba6cd64aed317d8"
 dependencies = [
  "byteorder",
  "fast-float",
@@ -10278,6 +10278,7 @@ dependencies = [
  "common-meta-app",
  "futures",
  "rand 0.8.5",
+ "tracing",
 ]
 
 [[package]]
