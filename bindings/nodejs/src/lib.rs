@@ -17,7 +17,7 @@ extern crate napi_derive;
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use futures::StreamExt;
-use napi::{bindgen_prelude::*, tokio};
+use napi::bindgen_prelude::*;
 
 #[napi]
 pub struct Client(Box<dyn databend_driver::Connection>);
@@ -109,6 +109,39 @@ impl Row {
 pub struct QueryProgress(databend_driver::QueryProgress);
 
 #[napi]
+impl QueryProgress {
+    #[napi]
+    pub fn total_rows(&self) -> usize {
+        self.0.total_rows
+    }
+
+    #[napi]
+    pub fn total_bytes(&self) -> usize {
+        self.0.total_bytes
+    }
+
+    #[napi]
+    pub fn read_rows(&self) -> usize {
+        self.0.read_rows
+    }
+
+    #[napi]
+    pub fn read_bytes(&self) -> usize {
+        self.0.read_bytes
+    }
+
+    #[napi]
+    pub fn write_rows(&self) -> usize {
+        self.0.write_rows
+    }
+
+    #[napi]
+    pub fn write_bytes(&self) -> usize {
+        self.0.write_bytes
+    }
+}
+
+#[napi]
 impl Client {
     #[napi(constructor)]
     pub fn new(dsn: String) -> Result<Self> {
@@ -150,46 +183,20 @@ impl Client {
     }
 
     #[napi]
-    pub async fn stream_load(
-        &self,
-        sql: String,
-        file: String,
-        file_format_options: Option<Vec<(String, String)>>,
-        copy_options: Option<Vec<(String, String)>>,
-    ) -> Result<QueryProgress> {
-        let file_format_options_map = match file_format_options {
-            Some(ref o) => {
-                let mut map = std::collections::BTreeMap::new();
-                for (k, v) in o {
-                    map.insert(k.as_str(), v.as_str());
-                }
-                Some(map)
-            }
-            None => None,
-        };
-        let copy_options_map = match copy_options {
-            Some(ref o) => {
-                let mut map = std::collections::BTreeMap::new();
-                for (k, v) in o {
-                    map.insert(k.as_str(), v.as_str());
-                }
-                Some(map)
-            }
-            None => None,
-        };
-        let metadata = tokio::fs::metadata(&file).await.map_err(Error::from)?;
-        let size = metadata.len();
-        let f = tokio::fs::File::open(&file).await.map_err(Error::from)?;
-        let reader = tokio::io::BufReader::new(f);
+    pub async fn stream_load(&self, sql: String, data: Vec<Vec<String>>) -> Result<QueryProgress> {
+        let mut wtr = csv::WriterBuilder::new().from_writer(vec![]);
+        for row in data {
+            wtr.write_record(row)
+                .map_err(|e| Error::from_reason(format!("{}", e)))?;
+        }
+        let bytes = wtr
+            .into_inner()
+            .map_err(|e| Error::from_reason(format!("{}", e)))?;
+        let size = bytes.len() as u64;
+        let reader = Box::new(std::io::Cursor::new(bytes));
         let progress = self
             .0
-            .stream_load(
-                &sql,
-                Box::new(reader),
-                size,
-                file_format_options_map,
-                copy_options_map,
-            )
+            .stream_load(&sql, reader, size, None, None)
             .await
             .map_err(format_napi_error)?;
         Ok(QueryProgress(progress))

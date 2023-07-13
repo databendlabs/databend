@@ -76,3 +76,28 @@ Then("Insert and Select should be equal", async function () {
   ];
   assert.deepEqual(ret, expected);
 });
+
+Then("Stream load and Select should be equal", async function () {
+  const values = [
+    ["-1", "1", "1.0", "1", "1", "2011-03-06", "2011-03-06T06:20:00Z"],
+    ["-2", "2", "2.0", "2", "2", "2012-05-31", "2012-05-31T11:20:00Z"],
+    ["-3", "3", "3.0", "3", "2", "2016-04-04", "2016-04-04T11:30:00Z"],
+  ];
+  const progress = await this.client.streamLoad(`INSERT INTO test VALUES`, values);
+  assert.equal(progress.writeRows(), 3);
+  assert.equal(progress.writeBytes(), 178);
+
+  const rows = await this.client.queryIter("SELECT * FROM test");
+  const ret = [];
+  let row = await rows.next();
+  while (row) {
+    ret.push(row.values());
+    row = await rows.next();
+  }
+  const expected = [
+    [-1, 1, 1.0, "1", "1", new Date("2011-03-06"), new Date("2011-03-06T06:20:00Z")],
+    [-2, 2, 2.0, "2", "2", new Date("2012-05-31"), new Date("2012-05-31T11:20:00Z")],
+    [-3, 3, 3.0, "3", "2", new Date("2016-04-04"), new Date("2016-04-04T11:30:00Z")],
+  ];
+  assert.deepEqual(ret, expected);
+});

@@ -29,3 +29,5 @@ Feature: Databend Driver
 
     Scenario: Stream Load
         Given A new Databend Driver Client
+        When Create a test table
+        Then Stream load and Select should be equal

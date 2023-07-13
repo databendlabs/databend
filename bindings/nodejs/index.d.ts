@@ -26,7 +26,7 @@ export class Client {
   exec(sql: string): Promise<number>
   queryRow(sql: string): Promise<Row | null>
   queryIter(sql: string): Promise<RowIterator>
-  streamLoad(sql: string, file: string, fileFormatOptions?: Array<[string, string]> | undefined | null, copyOptions?: Array<[string, string]> | undefined | null): Promise<QueryProgress>
+  streamLoad(sql: string, data: Array<Array<string>>): Promise<QueryProgress>
 }
 export class ConnectionInfo { }
 export class RowIterator {
@@ -35,4 +35,11 @@ export class RowIterator {
 export class Row {
   values(): Array<any>
 }
-export class QueryProgress { }
+export class QueryProgress {
+  totalRows(): bigint
+  totalBytes(): bigint
+  readRows(): bigint
+  readBytes(): bigint
+  writeRows(): bigint
+  writeBytes(): bigint
+}

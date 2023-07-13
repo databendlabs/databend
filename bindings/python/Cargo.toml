@@ -33,7 +33,7 @@ doc = false
 databend-client = { workspace = true }
 databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
 
-chrono = { workspace = true }
+chrono = { version = "0.4.26", default-features = false, features = ["clock"] }
 futures = "0.3.28"
 pyo3 = { version = "0.18", features = ["abi3-py37"] }
 pyo3-asyncio = { version = "0.18", features = ["tokio-runtime"] }
