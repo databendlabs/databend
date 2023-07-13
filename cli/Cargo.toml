@@ -15,7 +15,7 @@ databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
 
 anyhow = "1.0.70"
 async-trait = "0.1.68"
-chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
+chrono = { workspace = true }
 clap = { version = "4.1.0", features = ["derive", "env"] }
 comfy-table = "6.1.4"
 csv = "1.2.1"

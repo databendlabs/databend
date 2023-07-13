@@ -20,3 +20,4 @@ repository = "https://github.com/datafuselabs/bendsql"
 [workspace.dependencies]
 databend-client = { path = "core", version = "0.4.4" }
 databend-driver = { path = "driver", version = "0.4.4" }
+chrono = { version = "0.4.26", default-features = false, features = ["clock"] }

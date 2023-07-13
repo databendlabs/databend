@@ -15,6 +15,7 @@
 #[macro_use]
 extern crate napi_derive;
 
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use futures::StreamExt;
 use napi::{bindgen_prelude::*, tokio};
 
@@ -23,6 +24,55 @@ pub struct Client(Box<dyn databend_driver::Connection>);
 
 #[napi]
 pub struct ConnectionInfo(databend_driver::ConnectionInfo);
+
+pub struct Value(databend_driver::Value);
+
+impl ToNapiValue for Value {
+    unsafe fn to_napi_value(env: sys::napi_env, val: Self) -> Result<sys::napi_value> {
+        match val.0 {
+            databend_driver::Value::Null => Null::to_napi_value(env, Null),
+            databend_driver::Value::Boolean(b) => bool::to_napi_value(env, b),
+            databend_driver::Value::String(s) => String::to_napi_value(env, s),
+            databend_driver::Value::Number(n) => NumberValue::to_napi_value(env, NumberValue(n)),
+            databend_driver::Value::Timestamp(_) => {
+                let v = NaiveDateTime::try_from(val.0).map_err(format_napi_error)?;
+                NaiveDateTime::to_napi_value(env, v)
+            }
+            databend_driver::Value::Date(_) => {
+                let v = NaiveDate::try_from(val.0).map_err(format_napi_error)?;
+                NaiveDateTime::to_napi_value(
+                    env,
+                    NaiveDateTime::new(v, NaiveTime::from_hms_opt(0, 0, 0).unwrap()),
+                )
+            }
+        }
+    }
+}
+
+pub struct NumberValue(databend_driver::NumberValue);
+
+impl ToNapiValue for NumberValue {
+    unsafe fn to_napi_value(env: sys::napi_env, val: Self) -> Result<sys::napi_value> {
+        match val.0 {
+            databend_driver::NumberValue::Int8(i) => i8::to_napi_value(env, i),
+            databend_driver::NumberValue::Int16(i) => i16::to_napi_value(env, i),
+            databend_driver::NumberValue::Int32(i) => i32::to_napi_value(env, i),
+            databend_driver::NumberValue::Int64(i) => i64::to_napi_value(env, i),
+            databend_driver::NumberValue::UInt8(i) => u8::to_napi_value(env, i),
+            databend_driver::NumberValue::UInt16(i) => u16::to_napi_value(env, i),
+            databend_driver::NumberValue::UInt32(i) => u32::to_napi_value(env, i),
+            databend_driver::NumberValue::UInt64(i) => u64::to_napi_value(env, i),
+            databend_driver::NumberValue::Float32(i) => f32::to_napi_value(env, i),
+            databend_driver::NumberValue::Float64(i) => f64::to_napi_value(env, i),
+            databend_driver::NumberValue::Decimal128(_, _) => {
+                String::to_napi_value(env, val.0.to_string())
+            }
+            databend_driver::NumberValue::Decimal256(_, _) => {
+                String::to_napi_value(env, val.0.to_string())
+            }
+        }
+    }
+}
 
 #[napi]
 pub struct RowIterator(databend_driver::RowIterator);
@@ -44,13 +94,13 @@ pub struct Row(databend_driver::Row);
 #[napi]
 impl Row {
     #[napi]
-    pub fn json(&self) -> Vec<serde_json::Value> {
+    pub fn values(&self) -> Vec<Value> {
         // FIXME: do not clone
         self.0
             .values()
             .to_owned()
             .into_iter()
-            .map(|v| v.into())
+            .map(|v| Value(v))
             .collect()
     }
 }

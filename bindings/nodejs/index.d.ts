@@ -33,6 +33,6 @@ export class RowIterator {
   next(): Promise<Error | Row | null>
 }
 export class Row {
-  json(): Array<any>
+  values(): Array<any>
 }
 export class QueryProgress { }
