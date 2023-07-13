@@ -239,7 +239,7 @@ impl NativeDeserializeDataTransform {
                 offset_in_part: 0,
 
                 index_reader,
-                max_block_size
+                max_block_size,
             },
         )))
     }
@@ -594,8 +594,17 @@ impl Processor for NativeDeserializeDataTransform {
             let chunks = match chunks {
                 DataSource::AggIndex(data) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
-                    let block = agg_index_reader.deserialize(data)?;
-                    self.output_data = Some(block);
+                    let data_block = agg_index_reader.deserialize(data)?;
+                    if data_block.num_rows() > self.max_block_size {
+                        let (sub_blocks, remain_block) =
+                            data_block.split_by_rows(self.max_block_size);
+                        self.output_data_blocks.extend(sub_blocks);
+                        if let Some(remain) = remain_block {
+                            self.output_data_blocks.push_back(remain);
+                        }
+                    } else {
+                        self.output_data_blocks.push_back(data_block);
+                    }
                     return self.finish_process();
                 }
                 DataSource::Normal(data) => data,
