@@ -39,8 +39,6 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
-use crate::metrics::metrics_inc_copy_commit_data_cost_milliseconds;
-use crate::metrics::metrics_inc_copy_commit_data_counter;
 use crate::metrics::metrics_inc_copy_purge_files_cost_milliseconds;
 use crate::metrics::metrics_inc_copy_purge_files_counter;
 use crate::pipelines::builders::build_append2table_without_commit_pipeline;
@@ -148,19 +146,12 @@ pub fn build_commit_data_pipeline(
         copy_force_option,
     )?;
 
-    let start = Instant::now();
     to_table.commit_insertion(
         ctx.clone(),
         main_pipeline,
         copied_files_meta_req,
         insert_overwrite_option,
     )?;
-
-    // Perf
-    {
-        metrics_inc_copy_commit_data_counter(1_u32);
-        metrics_inc_copy_commit_data_cost_milliseconds(start.elapsed().as_millis() as u32);
-    }
 
     // set on_finished callback.
     set_copy_on_finished(ctx, files, copy_purge_option, stage_info, main_pipeline)?;
