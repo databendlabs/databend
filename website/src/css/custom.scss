@@ -618,3 +618,18 @@ ul li {
   cursor: pointer;
   color: var(--color-text-1);
 }
+
+.text-blue {
+  color: rgba(50, 147, 248, 1.00);
+  font-weight: bold;
+}
+
+.text-red {
+  color: red;
+  font-weight: bold;
+}
+
+.text-orange {
+  color: orange;
+  font-weight: bold;
+}

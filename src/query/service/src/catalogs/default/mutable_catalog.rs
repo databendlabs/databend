@@ -59,7 +59,6 @@ use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
-use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -67,7 +66,6 @@ use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -342,29 +340,9 @@ impl Catalog for MutableCatalog {
         &self,
         tenant: &str,
         db_name: &str,
-        filter: Option<TableInfoFilter>,
     ) -> Result<Vec<Arc<dyn Table>>> {
-        if db_name.is_empty() {
-            let ctx = DatabaseContext {
-                meta: self.ctx.meta.clone(),
-                storage_factory: self.ctx.storage_factory.clone(),
-                tenant: self.tenant.clone(),
-            };
-            let table_infos = ctx
-                .meta
-                .get_table_history(ListTableReq::new_with_filter(tenant, db_name, filter))
-                .await?;
-
-            let storage = ctx.storage_factory.clone();
-            table_infos.iter().try_fold(vec![], |mut acc, item| {
-                let tbl = storage.get_table(item.as_ref())?;
-                acc.push(tbl);
-                Ok(acc)
-            })
-        } else {
-            let db = self.get_database(tenant, db_name).await?;
-            db.list_tables_history(filter).await
-        }
+        let db = self.get_database(tenant, db_name).await?;
+        db.list_tables_history().await
     }
 
     async fn get_drop_table_infos(
