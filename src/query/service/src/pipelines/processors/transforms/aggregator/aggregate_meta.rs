@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::ops::Range;
 
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
@@ -23,6 +24,7 @@ use common_expression::DataBlock;
 
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::HashTableCell;
 
 pub struct HashTablePayload<T: HashMethodBounds, V: Send + Sync + 'static> {
@@ -46,13 +48,14 @@ impl SerializedPayload {
 pub struct SpilledPayload {
     pub bucket: isize,
     pub location: String,
+    pub data_range: Range<u64>,
     pub columns_layout: Vec<usize>,
 }
 
 pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
     Serialized(SerializedPayload),
     HashTable(HashTablePayload<Method, V>),
-    Spilling(HashTablePayload<Method, V>),
+    Spilling(HashTablePayload<PartitionedHashMethod<Method>, V>),
     Spilled(SpilledPayload),
 
     Partitioned { bucket: isize, data: Vec<Self> },
@@ -74,10 +77,12 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
         }))
     }
 
-    pub fn create_spilling(bucket: isize, cell: HashTableCell<Method, V>) -> BlockMetaInfoPtr {
+    pub fn create_spilling(
+        cell: HashTableCell<PartitionedHashMethod<Method>, V>,
+    ) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::<Method, V>::Spilling(HashTablePayload {
             cell,
-            bucket,
+            bucket: 0,
             arena_holder: ArenaHolder::create(None),
         }))
     }
@@ -85,11 +90,13 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
     pub fn create_spilled(
         bucket: isize,
         location: String,
+        data_range: Range<u64>,
         columns_layout: Vec<usize>,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::<Method, V>::Spilled(SpilledPayload {
             bucket,
             location,
+            data_range,
             columns_layout,
         }))
     }

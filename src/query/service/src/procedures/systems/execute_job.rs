@@ -48,6 +48,7 @@ impl OneBlockProcedure for ExecuteJobProcedure {
 
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+        assert_eq!(args.len(), 1);
         let name = args[0].clone();
         let background_handler = get_background_service_handler();
 

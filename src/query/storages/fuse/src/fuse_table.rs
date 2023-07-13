@@ -64,6 +64,7 @@ use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::error;
 use tracing::warn;
@@ -200,6 +201,13 @@ impl FuseTable {
     }
 
     pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
+        // if OPT_KE_STORAGE_PREFIX is specified, use it as storage prefix
+        if let Some(prefix) = table_info.options().get(OPT_KEY_STORAGE_PREFIX) {
+            return Ok(prefix.clone());
+        }
+
+        // otherwise, use database id and table id as storage prefix
+
         let table_id = table_info.ident.table_id;
         let db_id = table_info
             .options()
@@ -388,6 +396,11 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         cluster_key_str: String,
     ) -> Result<()> {
+        // if new cluter_key_str is the same with old one,
+        // no need to change
+        if let Some(old_cluster_key_str) = self.cluster_key_str() && *old_cluster_key_str == cluster_key_str{
+            return Ok(())
+        }
         let mut new_table_meta = self.get_table_info().meta.clone();
         new_table_meta = new_table_meta.push_cluster_key(cluster_key_str);
         let cluster_key_meta = new_table_meta.cluster_key();

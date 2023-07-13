@@ -160,7 +160,7 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("max_execute_time", DefaultSettingValue {
+                ("max_execute_time_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum query execution time in seconds. Setting it to 0 means no limit.",
                     possible_values: None,
@@ -297,6 +297,12 @@ impl DefaultSettings {
                     possible_values: None,
                     // license key should not be reported
                     display_in_show_settings: false,
+                }),
+                ("enable_table_lock", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables table lock if necessary (enabled by default).",
+                    possible_values: None,
+                    display_in_show_settings: true,
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(5),

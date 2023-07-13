@@ -263,7 +263,7 @@ impl SubqueryRewriter {
                     left_conditions,
                     right_conditions,
                     non_equi_conditions: vec![],
-                    join_type: JoinType::Single,
+                    join_type: JoinType::LeftSingle,
                     marker_index: None,
                     from_correlated_subquery: true,
                     contain_runtime_filter: false,
@@ -273,7 +273,7 @@ impl SubqueryRewriter {
                     Arc::new(left.clone()),
                     Arc::new(flatten_plan),
                 );
-                Ok((s_expr, UnnestResult::SingleJoin))
+                Ok((s_expr, UnnestResult::SingleJoin { output_index: None }))
             }
             SubqueryType::Exists | SubqueryType::NotExists => {
                 if is_conjunctive_predicate {

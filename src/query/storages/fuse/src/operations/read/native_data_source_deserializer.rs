@@ -62,11 +62,12 @@ use common_pipeline_core::processors::Processor;
 use common_storage::ColumnNode;
 
 use super::fuse_source::fill_internal_column_meta;
+use super::native_data_source::DataSource;
 use crate::fuse_part::FusePartInfo;
+use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::NativeReaderExt;
 use crate::metrics::metrics_inc_pruning_prewhere_nums;
-use crate::operations::read::native_data_source::DataChunks;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 
 pub struct NativeDeserializeDataTransform {
@@ -79,7 +80,7 @@ pub struct NativeDeserializeDataTransform {
     output: Arc<OutputPort>,
     output_data_blocks: VecDeque<DataBlock>,
     parts: VecDeque<PartInfoPtr>,
-    chunks: VecDeque<DataChunks>,
+    chunks: VecDeque<DataSource>,
 
     prewhere_columns: Vec<usize>,
     prewhere_schema: DataSchema,
@@ -105,6 +106,8 @@ pub struct NativeDeserializeDataTransform {
     array_iters: BTreeMap<usize, ArrayIter<'static>>,
     // The Page numbers of each ArrayIter can skip.
     array_skip_pages: BTreeMap<usize, usize>,
+
+    index_reader: Arc<Option<AggIndexReader>>,
     // The max block size.
     max_block_size: usize,
 }
@@ -117,6 +120,7 @@ impl NativeDeserializeDataTransform {
         top_k: Option<TopK>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        index_reader: Arc<Option<AggIndexReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
@@ -233,7 +237,9 @@ impl NativeDeserializeDataTransform {
                 array_iters: BTreeMap::new(),
                 array_skip_pages: BTreeMap::new(),
                 offset_in_part: 0,
-                max_block_size,
+
+                index_reader,
+                max_block_size
             },
         )))
     }
@@ -565,7 +571,7 @@ impl Processor for NativeDeserializeDataTransform {
             if let Some(block_meta) = data_block.take_meta() {
                 if let Some(source_meta) = NativeDataSourceMeta::downcast_from(block_meta) {
                     self.parts = VecDeque::from(source_meta.part);
-                    self.chunks = VecDeque::from(source_meta.chunks);
+                    self.chunks = VecDeque::from(source_meta.data);
                     return Ok(Event::Sync);
                 }
             }
@@ -585,6 +591,16 @@ impl Processor for NativeDeserializeDataTransform {
 
     fn process(&mut self) -> Result<()> {
         if let Some(chunks) = self.chunks.front_mut() {
+            let chunks = match chunks {
+                DataSource::AggIndex(data) => {
+                    let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
+                    let block = agg_index_reader.deserialize(data)?;
+                    self.output_data = Some(block);
+                    return self.finish_process();
+                }
+                DataSource::Normal(data) => data,
+            };
+
             // this means it's empty projection
             if chunks.is_empty() && !self.inited {
                 return self.finish_process_with_empty_block();

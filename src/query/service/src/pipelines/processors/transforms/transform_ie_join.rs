@@ -140,8 +140,10 @@ impl Processor for TransformRangeJoinLeft {
                         Some(ref _ie_join_state) => self.state.ie_join(task_id)?,
                         None => self.state.merge_join(task_id)?,
                     };
-                    if !res.is_empty() {
-                        self.output_data_blocks.push_back(res);
+                    for block in res {
+                        if !block.is_empty() {
+                            self.output_data_blocks.push_back(block);
+                        }
                     }
                 } else {
                     self.execute_finished = true;

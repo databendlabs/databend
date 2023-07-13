@@ -149,14 +149,14 @@ impl Settings {
         self.try_set_u64("storage_io_max_page_bytes_for_read", val)
     }
 
-    // Get max_execute_time.
-    pub fn get_max_execute_time(&self) -> Result<u64> {
-        self.try_get_u64("max_execute_time")
+    // Get max_execute_time_in_seconds.
+    pub fn get_max_execute_time_in_seconds(&self) -> Result<u64> {
+        self.try_get_u64("max_execute_time_in_seconds")
     }
 
-    // Set max_execute_time.
-    pub fn set_max_execute_time(&self, val: u64) -> Result<()> {
-        self.try_set_u64("max_execute_time", val)
+    // Set max_execute_time_in_seconds.
+    pub fn set_max_execute_time_in_seconds(&self, val: u64) -> Result<()> {
+        self.try_set_u64("max_execute_time_in_seconds", val)
     }
 
     // Get flight client timeout.
@@ -332,6 +332,14 @@ impl Settings {
 
     pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
         self.try_get_u64("parquet_fast_read_bytes")
+    }
+
+    pub fn get_enable_table_lock(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_table_lock")? != 0)
+    }
+
+    pub fn set_enable_table_lock(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_table_lock", u64::from(val))
     }
 
     pub fn set_table_lock_expire_secs(&self, val: u64) -> Result<()> {

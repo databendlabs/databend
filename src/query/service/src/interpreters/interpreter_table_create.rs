@@ -30,12 +30,14 @@ use common_meta_types::MatchSeq;
 use common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use common_sql::field_default_value;
 use common_sql::plans::CreateTablePlan;
+use common_storage::DataOperator;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
+use common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use common_users::UserApiProvider;
 use once_cell::sync::Lazy;
 use storages_common_cache::LoadParams;
@@ -46,6 +48,7 @@ use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_ENGINE;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::error;
 
@@ -204,7 +207,12 @@ impl CreateTableInterpreter {
                 });
             }
         }
-        catalog.create_table(self.build_request(stat)?).await?;
+        let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
+            self.build_attach_request(storage_prefix).await
+        } else {
+            self.build_request(stat)
+        }?;
+        catalog.create_table(req).await?;
 
         Ok(PipelineBuildResult::create())
     }
@@ -261,6 +269,62 @@ impl CreateTableInterpreter {
             table_meta = table_meta.push_cluster_key(cluster_key.clone());
         }
 
+        let req = CreateTableReq {
+            if_not_exists: self.plan.if_not_exists,
+            name_ident: TableNameIdent {
+                tenant: self.plan.tenant.to_string(),
+                db_name: self.plan.database.to_string(),
+                table_name: self.plan.table.to_string(),
+            },
+            table_meta,
+        };
+
+        Ok(req)
+    }
+
+    async fn build_attach_request(&self, storage_prefix: &str) -> Result<CreateTableReq> {
+        // Safe to unwrap in this function, as attach table must have storage params.
+        let sp = self.plan.storage_params.as_ref().unwrap();
+        let operator = DataOperator::try_create(sp).await?;
+        let operator = operator.operator();
+        let reader = MetaReaders::table_snapshot_reader(operator.clone());
+        let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
+        let snapshot_loc = operator.read(&hint).await?;
+        let snapshot_loc = String::from_utf8(snapshot_loc)?;
+        let info = operator.info();
+        let root = info.root();
+        let snapshot_loc = snapshot_loc[root.len()..].to_string();
+        let mut options = self.plan.options.clone();
+        options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc.clone());
+
+        let params = LoadParams {
+            location: snapshot_loc.clone(),
+            len_hint: None,
+            ver: TableSnapshot::VERSION,
+            put_cache: true,
+        };
+
+        let snapshot = reader.read(&params).await?;
+        let stat = TableStatistics {
+            number_of_rows: snapshot.summary.row_count,
+            data_bytes: snapshot.summary.uncompressed_byte_size,
+            compressed_data_bytes: snapshot.summary.compressed_byte_size,
+            index_data_bytes: snapshot.summary.index_size,
+            number_of_segments: Some(snapshot.segments.len() as u64),
+            number_of_blocks: Some(snapshot.summary.block_count),
+        };
+        let table_meta = TableMeta {
+            schema: Arc::new(snapshot.schema.clone()),
+            engine: self.plan.engine.to_string(),
+            storage_params: self.plan.storage_params.clone(),
+            part_prefix: self.plan.part_prefix.clone(),
+            options,
+            default_cluster_key: None,
+            field_comments: self.plan.field_comments.clone(),
+            drop_on: None,
+            statistics: stat,
+            ..Default::default()
+        };
         let req = CreateTableReq {
             if_not_exists: self.plan.if_not_exists,
             name_ident: TableNameIdent {

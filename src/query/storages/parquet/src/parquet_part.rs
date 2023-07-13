@@ -55,6 +55,13 @@ impl ParquetPart {
     pub fn uncompressed_size(&self) -> u64 {
         match self {
             ParquetPart::RowGroup(r) => r.uncompressed_size(),
+            ParquetPart::SmallFiles(p) => p.uncompressed_size(),
+        }
+    }
+
+    pub fn compressed_size(&self) -> u64 {
+        match self {
+            ParquetPart::RowGroup(r) => r.compressed_size(),
             ParquetPart::SmallFiles(p) => p.compressed_size(),
         }
     }
@@ -70,11 +77,15 @@ impl ParquetPart {
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ParquetSmallFilesPart {
     pub files: Vec<(String, u64)>,
+    pub estimated_uncompressed_size: u64,
 }
 
 impl ParquetSmallFilesPart {
     pub fn compressed_size(&self) -> u64 {
         self.files.iter().map(|(_, s)| *s).sum()
+    }
+    pub fn uncompressed_size(&self) -> u64 {
+        self.estimated_uncompressed_size
     }
 }
 
@@ -94,6 +105,10 @@ impl ParquetRowGroupPart {
             .values()
             .map(|c| c.uncompressed_size)
             .sum()
+    }
+
+    pub fn compressed_size(&self) -> u64 {
+        self.column_metas.values().map(|c| c.length).sum()
     }
 }
 

@@ -21,15 +21,15 @@ use common_settings::Settings;
 #[derive(Clone)]
 pub struct ExecutorSettings {
     pub query_id: Arc<String>,
-    pub max_execute_time: Duration,
+    pub max_execute_time_in_seconds: Duration,
 }
 
 impl ExecutorSettings {
     pub fn try_create(settings: &Settings, query_id: String) -> Result<ExecutorSettings> {
-        let max_execute_time = settings.get_max_execute_time()?;
+        let max_execute_time_in_seconds = settings.get_max_execute_time_in_seconds()?;
         Ok(ExecutorSettings {
             query_id: Arc::new(query_id),
-            max_execute_time: Duration::from_millis(max_execute_time),
+            max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
         })
     }
 }

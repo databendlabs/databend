@@ -55,6 +55,7 @@ jobs:
       - uses: ./.github/actions/build_linux
         timeout-minutes: 30
         with:
+          sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
           artifacts: all
 
@@ -75,6 +76,7 @@ jobs:
       - uses: ./.github/actions/build_linux
         timeout-minutes: 30
         with:
+          sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
           artifacts: query
 
@@ -214,6 +216,7 @@ jobs:
           - "ee"
         format:
           - "parquet"
+          - "native"
         handlers:
           - "mysql,http,clickhouse"
     steps:

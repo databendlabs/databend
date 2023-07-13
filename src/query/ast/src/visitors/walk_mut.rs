@@ -356,6 +356,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::TruncateTable(stmt) => visitor.visit_truncate_table(stmt),
         Statement::OptimizeTable(stmt) => visitor.visit_optimize_table(stmt),
         Statement::VacuumTable(stmt) => visitor.visit_vacuum_table(stmt),
+        Statement::VacuumDropTable(stmt) => visitor.visit_vacuum_drop_table(stmt),
         Statement::AnalyzeTable(stmt) => visitor.visit_analyze_table(stmt),
         Statement::ExistsTable(stmt) => visitor.visit_exists_table(stmt),
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
@@ -446,5 +447,6 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::CreateDatamaskPolicy(stmt) => visitor.visit_create_data_mask_policy(stmt),
         Statement::DropDatamaskPolicy(stmt) => visitor.visit_drop_data_mask_policy(stmt),
         Statement::DescDatamaskPolicy(stmt) => visitor.visit_desc_data_mask_policy(stmt),
+        Statement::AttachTable(_) => {}
     }
 }

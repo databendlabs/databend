@@ -387,6 +387,8 @@ pub enum TokenKind {
     COUNT,
     #[token("CREATE", ignore(ascii_case))]
     CREATE,
+    #[token("ATTACH", ignore(ascii_case))]
+    ATTACH,
     #[token("CREDENTIALS", ignore(ascii_case))]
     CREDENTIALS,
     #[token("CROSS", ignore(ascii_case))]
@@ -1155,6 +1157,7 @@ impl TokenKind {
             // | TokenKind::CHAR
             | TokenKind::CHARACTER
             | TokenKind::CREATE
+            | TokenKind::ATTACH
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FOR
@@ -1269,6 +1272,7 @@ impl TokenKind {
             | TokenKind::AS
             | TokenKind::BETWEEN
             | TokenKind::CREATE
+            | TokenKind::ATTACH
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FOR

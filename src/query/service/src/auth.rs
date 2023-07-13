@@ -91,8 +91,12 @@ impl AuthMgr {
                         _ => return Err(ErrorCode::AuthenticateFailure("wrong auth type")),
                     },
                     Err(e) => {
-                        if e.code() != ErrorCode::UNKNOWN_USER {
-                            return Err(ErrorCode::AuthenticateFailure(e.message()));
+                        match e.code() {
+                            ErrorCode::UNKNOWN_USER => {}
+                            ErrorCode::META_SERVICE_ERROR => {
+                                return Err(e);
+                            }
+                            _ => return Err(ErrorCode::AuthenticateFailure(e.message())),
                         }
                         let ensure_user = jwt
                             .custom

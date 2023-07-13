@@ -105,7 +105,35 @@ pub struct VacuumTablePlan {
 
 impl VacuumTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+        if self.option.dry_run.is_some() {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "Files",
+                DataType::String,
+            )]))
+        } else {
+            Arc::new(DataSchema::empty())
+        }
+    }
+}
+
+/// Vacuum drop table
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VacuumDropTablePlan {
+    pub catalog: String,
+    pub database: String,
+    pub option: VacuumTableOption,
+}
+
+impl VacuumDropTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        if self.option.dry_run.is_some() {
+            Arc::new(DataSchema::new(vec![
+                DataField::new("Table", DataType::String),
+                DataField::new("File", DataType::String),
+            ]))
+        } else {
+            Arc::new(DataSchema::empty())
+        }
     }
 }
 

@@ -31,7 +31,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 use super::fuse_source::fill_internal_column_meta;
-use super::DataSource;
+use super::parquet_data_source::DataSource;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -123,7 +123,7 @@ impl Processor for DeserializeDataTransform {
             let mut data_block = self.input.pull_data().unwrap()?;
             if let Some(source_meta) = data_block.take_meta() {
                 if let Some(source_meta) = DataSourceMeta::downcast_from(source_meta) {
-                    self.parts = source_meta.part;
+                    self.parts = source_meta.parts;
                     self.chunks = source_meta.data;
                     return Ok(Event::Sync);
                 }

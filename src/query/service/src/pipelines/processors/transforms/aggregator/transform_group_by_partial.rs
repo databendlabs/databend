@@ -160,18 +160,9 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                     if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table)
                     {
                         let _dropper = v._dropper.clone();
-                        let cells = PartitionedHashTableDropper::split_cell(v);
-                        let mut blocks = Vec::with_capacity(cells.len());
-                        for (bucket, cell) in cells.into_iter().enumerate() {
-                            if cell.hashtable.len() != 0 {
-                                blocks.push(DataBlock::empty_with_meta(
-                                    AggregateMeta::<Method, ()>::create_spilling(
-                                        bucket as isize,
-                                        cell,
-                                    ),
-                                ));
-                            }
-                        }
+                        let blocks = vec![DataBlock::empty_with_meta(
+                            AggregateMeta::<Method, ()>::create_spilling(v),
+                        )];
 
                         let arena = Arc::new(Bump::new());
                         let method = PartitionedHashMethod::<Method>::create(self.method.clone());
