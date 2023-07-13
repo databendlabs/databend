@@ -165,6 +165,7 @@ impl BlockOperator {
 
                 let input_num_columns = input.num_columns();
                 let mut result = DataBlock::empty();
+                let mut block_is_empty = true;
                 for index in 0..input_num_columns {
                     if unused_indices.contains(&index) {
                         continue;
@@ -180,8 +181,9 @@ impl BlockOperator {
                     }
                     let block_entry =
                         BlockEntry::new(column.data_type.clone(), Value::Column(builder.build()));
-                    if index == 0 {
-                        result = DataBlock::new(vec![block_entry], total_num_rows)
+                    if block_is_empty {
+                        result = DataBlock::new(vec![block_entry], total_num_rows);
+                        block_is_empty = false;
                     } else {
                         result.add_column(block_entry);
                     }
@@ -191,7 +193,6 @@ impl BlockOperator {
                     if let Expr::FunctionCall { function, .. } = srf_expr {
                         match function.signature.name.as_str() {
                             "json_path_query" => {
-                                // Value::Column(Column::Tuple(vec![Column::Variant]))
                                 let mut builder: NullableColumnBuilder<VariantType> =
                                     NullableColumnBuilder::with_capacity(total_num_rows, &[]);
                                 for (i, (row_result, repeat_times)) in
@@ -226,14 +227,20 @@ impl BlockOperator {
                                     }
                                 }
                                 let column = builder.build().upcast();
-                                result.add_column(BlockEntry::new(
+                                let block_entry = BlockEntry::new(
                                     DataType::Tuple(vec![DataType::Nullable(Box::new(
                                         DataType::Variant,
                                     ))]),
                                     Value::Column(Column::Tuple(vec![Column::Nullable(Box::new(
                                         column,
                                     ))])),
-                                ));
+                                );
+                                if block_is_empty {
+                                    result = DataBlock::new(vec![block_entry], total_num_rows);
+                                    block_is_empty = false;
+                                } else {
+                                    result.add_column(block_entry);
+                                }
                             }
                             _ => {
                                 let mut result_data_blocks = Vec::with_capacity(input.num_rows());
@@ -292,10 +299,16 @@ impl BlockOperator {
                                 }
                                 let data_block = DataBlock::concat(&result_data_blocks)?;
                                 debug_assert!(data_block.num_rows() == total_num_rows);
-                                result.add_column(BlockEntry::new(
+                                let block_entry = BlockEntry::new(
                                     data_block.get_by_offset(0).data_type.clone(),
                                     data_block.get_by_offset(0).value.clone(),
-                                ));
+                                );
+                                if block_is_empty {
+                                    result = DataBlock::new(vec![block_entry], total_num_rows);
+                                    block_is_empty = false;
+                                } else {
+                                    result.add_column(block_entry);
+                                }
                             }
                         }
                     } else {
