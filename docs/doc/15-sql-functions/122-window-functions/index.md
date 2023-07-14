@@ -41,9 +41,11 @@ The list below shows all the window functions.
 | [SUM](../10-aggregate-functions/aggregate-sum.md)                     | General      | ✔      | ✔            |       |
 | [SUM_IF](../10-aggregate-functions/aggregate-sum-if.md)               | General      | ✔      | ✔            |       |
 | [CUME_DIST](cume-dist.md)                                             | Rank-related | ✔      |              |       |
+| [PERCENT_RANK](percent_rank.md)                                       | Rank-related | ✔      | ✔            |       |
 | [DENSE_RANK](dense-rank.md)                                           | Rank-related | ✔      | ✔            |       |
 | [RANK](rank.md)                                                       | Rank-related | ✔      | ✔            |       |
 | [ROW_NUMBER](row-number.md)                                           | Rank-related | ✔      |              |       |
+| [NTILE](nth-value.md)                                                 | Rank-related | ✔      |              |       |
 | [FIRST_VALUE](first-value.md)                                         | Rank-related 	| ✔     | ✔            |       |
 | [FIRST](first.md)                                                     | Rank-related 	| ✔     | ✔            |       |
 | [LAST_VALUE](last-value.md)                                           | Rank-related 	| ✔     | ✔            |       |
