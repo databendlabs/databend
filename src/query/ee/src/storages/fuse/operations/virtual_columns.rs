@@ -197,13 +197,7 @@ async fn materialize_virtual_columns(
     let virtual_block = DataBlock::new(virtual_columns, len);
 
     let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-    let _ = serialize_block(
-        write_settings,
-        &virtual_schema,
-        virtual_block,
-        None,
-        &mut buffer,
-    )?;
+    let _ = serialize_block(write_settings, &virtual_schema, virtual_block, &mut buffer)?;
 
     write_data(buffer, operator, location).await?;
 
