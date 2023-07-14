@@ -81,6 +81,7 @@ impl InterpreterQueryLog {
         let handler_type = ctx.get_current_session().get_type().to_string();
         let tenant_id = ctx.get_tenant();
         let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
+        let node_id = ctx.get_cluster().local_id.clone();
         let user = ctx.get_current_user()?;
         let sql_user = user.name;
         let sql_user_quota = format!("{:?}", user.quota);
@@ -138,6 +139,7 @@ impl InterpreterQueryLog {
             handler_type,
             tenant_id,
             cluster_id,
+            node_id,
             sql_user,
             sql_user_quota,
             sql_user_privileges,
@@ -184,6 +186,7 @@ impl InterpreterQueryLog {
         let handler_type = ctx.get_current_session().get_type().to_string();
         let tenant_id = GlobalConfig::instance().query.tenant_id.clone();
         let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
+        let node_id = ctx.get_cluster().local_id.clone();
         let user = ctx.get_current_user()?;
         let sql_user = user.name;
         let sql_user_quota = format!("{:?}", user.quota);
@@ -249,6 +252,7 @@ impl InterpreterQueryLog {
             handler_type,
             tenant_id,
             cluster_id,
+            node_id,
             sql_user,
             sql_user_quota,
             sql_user_privileges,

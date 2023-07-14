@@ -19,12 +19,12 @@ use common_exception::Result;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use common_sql::plans::RenameTableColumnPlan;
 use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::common::check_referenced_computed_columns;
+use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -78,12 +78,7 @@ impl Interpreter for RenameTableColumnInterpreter {
             let catalog = self.ctx.get_catalog(catalog_name)?;
             let mut new_table_meta = table.get_table_info().meta.clone();
 
-            if INTERNAL_COLUMN_FACTORY.exist(&self.plan.new_column) {
-                return Err(ErrorCode::TableWithInternalColumnName(format!(
-                    "Cannot rename table column with the same name as internal column: {}",
-                    self.plan.new_column
-                )));
-            }
+            is_valid_column(&self.plan.new_column)?;
 
             let table_schema = table_info.schema();
             let field = table_schema.field_with_name(self.plan.old_column.as_str())?;
