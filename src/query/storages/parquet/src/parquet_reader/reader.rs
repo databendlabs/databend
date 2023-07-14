@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
+use common_storage::common_metrics::copy::metrics_inc_copy_read_size_bytes;
 use common_storage::ColumnNodes;
 use opendal::BlockingOperator;
 use opendal::Operator;
@@ -215,6 +216,7 @@ impl ParquetReader {
             let meta = &part.column_metas[index];
             let reader =
                 operator.range_reader(&part.location, meta.offset..meta.offset + meta.length)?;
+            metrics_inc_copy_read_size_bytes(meta.length);
             readers.insert(
                 *index,
                 DataReader::new(Box::new(reader), meta.length as usize),
@@ -236,6 +238,7 @@ impl ParquetReader {
                     let buffer = op.read(path.0.as_str())?;
                     buffers.push(buffer);
                 }
+                metrics_inc_copy_read_size_bytes(part.compressed_size());
                 Ok(ParquetPartData::SmallFiles(buffers))
             }
         }
@@ -258,6 +261,7 @@ impl ParquetReader {
 
                     join_handlers.push(async move {
                         let data = op.range_read(&path, offset..offset + length).await?;
+                        metrics_inc_copy_read_size_bytes(length);
                         Ok::<_, ErrorCode>((
                             *index,
                             DataReader::new(Box::new(std::io::Cursor::new(data)), length as usize),
@@ -275,7 +279,7 @@ impl ParquetReader {
                     let op = self.operator.clone();
                     join_handlers.push(async move { op.read(path.as_str()).await });
                 }
-
+                metrics_inc_copy_read_size_bytes(part.compressed_size());
                 let buffers = futures::future::try_join_all(join_handlers).await?;
                 Ok(ParquetPartData::SmallFiles(buffers))
             }

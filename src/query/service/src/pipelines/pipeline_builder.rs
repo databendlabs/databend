@@ -14,7 +14,6 @@
 
 use std::convert::TryFrom;
 use std::sync::Arc;
-use std::time::Instant;
 
 use async_channel::Receiver;
 use common_catalog::table::AppendMode;
@@ -92,8 +91,6 @@ use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::metrics::metrics_inc_copy_read_file_cost_milliseconds;
-use crate::metrics::metrics_inc_copy_read_file_counter;
 use crate::pipelines::builders::build_append_data_pipeline;
 use crate::pipelines::builders::build_fill_missing_columns_pipeline;
 use crate::pipelines::builders::CopyPlanType;
@@ -226,14 +223,7 @@ impl PipelineBuilder {
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
 
-        let start = Instant::now();
         stage_table.read_data(table_ctx, &distributed_plan.source, &mut self.main_pipeline)?;
-
-        // Perf
-        {
-            metrics_inc_copy_read_file_counter(distributed_plan.files.len() as u32);
-            metrics_inc_copy_read_file_cost_milliseconds(start.elapsed().as_millis() as u32);
-        }
 
         // append data
         build_append_data_pipeline(

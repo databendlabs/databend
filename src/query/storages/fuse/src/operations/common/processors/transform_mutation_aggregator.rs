@@ -26,7 +26,6 @@ use opendal::Operator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use tracing::debug;
-use tracing::info;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::mutation_accumulator::MutationKind;
@@ -99,7 +98,6 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
                 self.start_time.elapsed().as_secs()
             );
             self.ctx.set_status_info(&status);
-            info!(status);
         }
         Ok(None)
     }

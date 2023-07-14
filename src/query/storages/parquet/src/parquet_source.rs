@@ -28,6 +28,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
+use common_storage::common_metrics::copy::metrics_inc_copy_read_part_counter;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -99,14 +100,16 @@ impl SyncSource for SyncParquetSource {
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.ctx.get_partition() {
             None => Ok(None),
-            Some(part) => Ok(Some(DataBlock::empty_with_meta(Box::new(
-                ParquetSourceMeta {
-                    parts: vec![(
-                        part.clone(),
-                        self.block_reader.readers_from_blocking_io(part)?,
-                    )],
-                },
-            )))),
+            Some(part) => {
+                let part_clone = part.clone();
+                let data = self.block_reader.readers_from_blocking_io(part)?;
+                metrics_inc_copy_read_part_counter();
+                Ok(Some(DataBlock::empty_with_meta(Box::new(
+                    ParquetSourceMeta {
+                        parts: vec![(part_clone, data)],
+                    },
+                ))))
+            }
         }
     }
 }
@@ -178,6 +181,7 @@ impl Processor for AsyncParquetSource {
             let data = block_reader
                 .readers_from_non_blocking_io(part.clone())
                 .await?;
+            metrics_inc_copy_read_part_counter();
             self.output_data = Some(vec![(part, data)]);
         } else {
             self.finished = true;

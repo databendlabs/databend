@@ -196,14 +196,10 @@ impl FuseTable {
         ctx.set_partitions(parts)?;
 
         // Status.
-        {
-            let status = format!(
-                "delete: begin to run delete tasks, total tasks: {}",
-                total_tasks
-            );
-            ctx.set_status_info(&status);
-            info!(status);
-        }
+        ctx.set_status_info(&format!(
+            "delete: begin to run delete tasks, total tasks: {}",
+            total_tasks
+        ));
 
         let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
         let mut schema = block_reader.schema().as_ref().clone();

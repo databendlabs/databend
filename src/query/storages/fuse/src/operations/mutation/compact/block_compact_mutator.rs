@@ -30,7 +30,6 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
-use tracing::info;
 
 use crate::io::SegmentsIO;
 use crate::operations::common::BlockMetaIndex;
@@ -98,11 +97,8 @@ impl BlockCompactMutator {
         let mut checked_end_at = 0;
 
         // Status.
-        {
-            let status = "compact: begin to build compact tasks";
-            self.ctx.set_status_info(status);
-            info!(status);
-        }
+        self.ctx
+            .set_status_info("compact: begin to build compact tasks");
 
         let segments_io = SegmentsIO::create(
             self.ctx.clone(),
@@ -157,7 +153,6 @@ impl BlockCompactMutator {
                     start.elapsed().as_secs()
                 );
                 self.ctx.set_status_info(&status);
-                info!(status);
             }
 
             if is_end {
@@ -186,16 +181,12 @@ impl BlockCompactMutator {
         }
 
         // Status.
-        {
-            let status = format!(
-                "compact: end to build compact tasks:{}, segments to be compacted:{}, cost:{} sec",
-                self.compact_tasks.len(),
-                compacted_segment_cnt,
-                start.elapsed().as_secs()
-            );
-            self.ctx.set_status_info(&status);
-            info!(status);
-        }
+        self.ctx.set_status_info(&format!(
+            "compact: end to build compact tasks:{}, segments to be compacted:{}, cost:{} sec",
+            self.compact_tasks.len(),
+            compacted_segment_cnt,
+            start.elapsed().as_secs()
+        ));
         Ok(())
     }
 
