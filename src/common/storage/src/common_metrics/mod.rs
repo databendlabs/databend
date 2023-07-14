@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod metric_service;
+pub mod copy;
+mod storage_metrics;
 
-pub use metric_service::MetricService;
+pub use storage_metrics::StorageMetrics;
+pub use storage_metrics::StorageMetricsLayer;

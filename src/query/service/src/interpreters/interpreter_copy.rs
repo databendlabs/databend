@@ -42,11 +42,6 @@ use tracing::info;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
-use crate::metrics::metrics_inc_copy_commit_data_cost_milliseconds;
-use crate::metrics::metrics_inc_copy_commit_data_counter;
-use crate::metrics::metrics_inc_copy_read_file_cost_milliseconds;
-use crate::metrics::metrics_inc_copy_read_file_counter;
-use crate::metrics::metrics_inc_copy_read_file_size_bytes;
 use crate::pipelines::builders::build_append2table_with_commit_pipeline;
 use crate::pipelines::builders::build_append_data_pipeline;
 use crate::pipelines::builders::build_commit_data_pipeline;
@@ -317,12 +312,6 @@ impl CopyInterpreter {
 
         let file_sizes: u64 = files.iter().map(|f| f.size).sum();
 
-        // Perf
-        {
-            metrics_inc_copy_read_file_size_bytes(file_sizes as u32);
-            metrics_inc_copy_read_file_counter(files.len() as u32);
-        }
-
         // Append data.
         {
             self.set_status(&format!(
@@ -342,7 +331,6 @@ impl CopyInterpreter {
 
             // Perf
             {
-                metrics_inc_copy_read_file_cost_milliseconds(start.elapsed().as_millis() as u32);
                 self.set_status(&format!(
                     "Copy append data finished, cost:{} secs",
                     start.elapsed().as_secs()
@@ -352,9 +340,6 @@ impl CopyInterpreter {
 
         // Commit data.
         {
-            let start = Instant::now();
-            self.set_status(&format!("Copy begin to commit data: {} files", files.len(),));
-
             // if it's replace mode, don't commit, because COPY is the source of replace.
             match plan.write_mode {
                 CopyIntoTableMode::Replace => set_copy_on_finished(
@@ -377,17 +362,6 @@ impl CopyInterpreter {
                         plan.write_mode.is_overwrite(),
                     )?
                 }
-            }
-
-            self.set_status(&format!(
-                "Copy commit data finished, cost:{} secs",
-                start.elapsed().as_secs()
-            ));
-
-            // Perf
-            {
-                metrics_inc_copy_commit_data_counter(1_u32);
-                metrics_inc_copy_commit_data_cost_milliseconds(start.elapsed().as_millis() as u32);
             }
         }
 

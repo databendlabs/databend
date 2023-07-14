@@ -33,6 +33,8 @@ use common_sql::executor::CopyIntoTableFromQuery;
 use common_sql::executor::DistributedCopyIntoTableFromStage;
 use common_sql::plans::CopyIntoTableMode;
 use common_sql::plans::CopyIntoTablePlan;
+use common_storage::common_metrics::copy::metrics_inc_copy_purge_files_cost_milliseconds;
+use common_storage::common_metrics::copy::metrics_inc_copy_purge_files_counter;
 use common_storage::StageFileInfo;
 use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
@@ -40,8 +42,6 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
-use crate::metrics::metrics_inc_copy_purge_files_cost_milliseconds;
-use crate::metrics::metrics_inc_copy_purge_files_counter;
 use crate::pipelines::builders::build_append2table_without_commit_pipeline;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
@@ -180,13 +180,6 @@ pub fn set_copy_on_finished(
         match may_error {
             None => {
                 GlobalIORuntime::instance().block_on(async move {
-                    {
-                        let status =
-                            format!("end of commit, number of copied files:{}", files.len());
-                        ctx.set_status_info(&status);
-                        info!(status);
-                    }
-
                     // 1. log on_error mode errors.
                     // todo(ariesdevil): persist errors with query_id
                     if let Some(error_map) = ctx.get_maximum_error_per_file() {

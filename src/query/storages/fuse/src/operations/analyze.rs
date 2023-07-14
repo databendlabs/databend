@@ -23,7 +23,6 @@ use common_exception::Result;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
-use tracing::info;
 use tracing::warn;
 
 use crate::io::SegmentsIO;
@@ -111,7 +110,6 @@ impl FuseTable {
                         start.elapsed().as_secs()
                     );
                     ctx.set_status_info(&status);
-                    info!(status);
                 }
             }
 

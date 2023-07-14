@@ -29,30 +29,10 @@ pub fn metrics_inc_copy_purge_files_cost_milliseconds(c: u32) {
     increment_gauge!(key!("copy_purge_file_cost_milliseconds"), c as f64);
 }
 
-pub fn metrics_inc_copy_commit_data_counter(c: u32) {
-    increment_gauge!(key!("copy_commit_data_counter"), c as f64);
+pub fn metrics_inc_copy_read_part_counter() {
+    increment_gauge!(key!("copy_read_part_counter"), 1.0);
 }
 
-pub fn metrics_inc_copy_commit_data_cost_milliseconds(c: u32) {
-    increment_gauge!(key!("copy_commit_data_cost_milliseconds"), c as f64);
-}
-
-pub fn metrics_inc_copy_append_data_counter(c: u32) {
-    increment_gauge!(key!("copy_append_data_counter"), c as f64);
-}
-
-pub fn metrics_inc_copy_append_data_cost_milliseconds(c: u32) {
-    increment_gauge!(key!("copy_append_data_cost_milliseconds"), c as f64);
-}
-
-pub fn metrics_inc_copy_read_file_counter(c: u32) {
-    increment_gauge!(key!("copy_read_file_counter"), c as f64);
-}
-
-pub fn metrics_inc_copy_read_file_size_bytes(c: u32) {
-    increment_gauge!(key!("copy_read_file_size_bytes"), c as f64);
-}
-
-pub fn metrics_inc_copy_read_file_cost_milliseconds(c: u32) {
-    increment_gauge!(key!("copy_read_file_cost_milliseconds"), c as f64);
+pub fn metrics_inc_copy_read_size_bytes(c: u64) {
+    increment_gauge!(key!("copy_read_size_bytes"), c as f64);
 }

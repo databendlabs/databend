@@ -31,7 +31,6 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
-use tracing::info;
 
 use crate::io::SegmentsIO;
 use crate::io::SerializedSegment;
@@ -113,7 +112,6 @@ impl AsyncAccumulatingTransform for CompactAggregator {
                                 self.start_time.elapsed().as_secs()
                             );
                             self.ctx.set_status_info(&status);
-                            info!(status);
                         }
                     }
                     _ => return Err(ErrorCode::Internal("It's a bug.")),
@@ -151,7 +149,6 @@ impl AsyncAccumulatingTransform for CompactAggregator {
                 serialized_segments.len()
             );
             self.ctx.set_status_info(&status);
-            info!(status);
         }
         // write segments, schema in segments_io is useless here.
         let segments_io = SegmentsIO::create(
@@ -162,14 +159,10 @@ impl AsyncAccumulatingTransform for CompactAggregator {
         segments_io.write_segments(serialized_segments).await?;
 
         // Refresh status
-        {
-            let status = format!(
-                "compact: end to write new segments, cost:{} sec",
-                start.elapsed().as_secs()
-            );
-            self.ctx.set_status_info(&status);
-            info!(status);
-        }
+        self.ctx.set_status_info(&format!(
+            "compact: end to write new segments, cost:{} sec",
+            start.elapsed().as_secs()
+        ));
         // gather the all segments.
         let merged_segments = std::mem::take(&mut self.merged_segments)
             .into_values()

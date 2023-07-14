@@ -41,6 +41,14 @@ pub fn metrics_inc_commit_mutation_success() {
     counter!(key!("commit_mutation_success"), 1);
 }
 
+pub fn metrics_inc_commit_copied_files(n: u64) {
+    counter!(key!("commit_copied_files"), n);
+}
+
+pub fn metrics_inc_commit_milliseconds(c: u128) {
+    increment_gauge!(key!("commit_milliseconds"), c as f64);
+}
+
 pub fn metrics_inc_commit_aborts() {
     counter!(key!("commit_aborts"), 1);
 }

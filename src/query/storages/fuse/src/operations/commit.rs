@@ -294,11 +294,7 @@ impl FuseTable {
         let mut concurrently_appended_segment_locations: &[Location] = &[];
 
         // Status
-        {
-            let status = "mutation: begin try to commit";
-            ctx.set_status_info(status);
-            info!(status);
-        }
+        ctx.set_status_info("mutation: begin try to commit");
 
         loop {
             let mut snapshot_tobe_committed =
