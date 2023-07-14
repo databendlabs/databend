@@ -30,6 +30,7 @@ use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::share::ShareNameIdent;
+use itertools::Itertools;
 use tracing::debug;
 
 use crate::binder::ddl::column::generate_unique_object;
@@ -69,15 +70,7 @@ impl Binder {
         let mut select_builder = if has_object_priv {
             SelectBuilder::from("system.databases")
         } else {
-            let mut in_list = "".to_string();
-            let last = unique_dbs.len() - 1;
-            for (i, db) in unique_dbs.iter().enumerate() {
-                if i == last {
-                    in_list += db;
-                    break;
-                }
-                in_list = in_list + db + ",";
-            }
+            let in_list = unique_dbs.iter().join(",");
             SelectBuilder::from(&format!(
                 "(select * from system.databases where name in ({in_list}))"
             ))
