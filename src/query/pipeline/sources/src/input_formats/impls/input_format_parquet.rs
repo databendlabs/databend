@@ -26,11 +26,9 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::read_columns;
-use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::to_deserializer;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
-use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_exception::ErrorCode;
@@ -39,13 +37,11 @@ use common_expression::BlockMetaInfo;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
-use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use common_storage::infer_schema_with_extension;
-use common_storage::read_parquet_metas_in_parallel;
 use common_storage::StageFileInfo;
 use futures::AsyncRead;
 use futures::AsyncReadExt;
@@ -61,102 +57,27 @@ use crate::input_formats::input_pipeline::InputFormatPipe;
 use crate::input_formats::input_pipeline::ReadBatchTrait;
 use crate::input_formats::input_pipeline::RowBatchTrait;
 use crate::input_formats::input_split::DynData;
-use crate::input_formats::input_split::FileInfo;
 use crate::input_formats::InputContext;
 use crate::input_formats::InputFormat;
 use crate::input_formats::SplitInfo;
 
 pub struct InputFormatParquet;
 
-impl InputFormatParquet {
-    fn make_splits(
-        file_infos: Vec<StageFileInfo>,
-        metas: Vec<FileMetaData>,
-    ) -> Result<Vec<Arc<SplitInfo>>> {
-        let mut infos = vec![];
-        let mut schema = None;
-        for (info, mut file_meta) in file_infos.into_iter().zip(metas.into_iter()) {
-            let size = info.size as usize;
-            let path = info.path.clone();
-            let row_groups = mem::take(&mut file_meta.row_groups);
-            if schema.is_none() {
-                schema = Some(infer_schema_with_extension(&file_meta)?);
-            }
-            let fields = Arc::new(schema.clone().unwrap().fields);
-            let read_file_meta = Arc::new(FileMeta { fields });
-
-            let file_info = Arc::new(FileInfo {
-                path,
-                size,
-                num_splits: row_groups.len(),
-                compress_alg: None,
-            });
-
-            let num_file_splits = row_groups.len();
-            for (i, rg) in row_groups.into_iter().enumerate() {
-                if !rg.columns().is_empty() {
-                    let offset = rg
-                        .columns()
-                        .iter()
-                        .map(col_offset)
-                        .min()
-                        .expect("must success") as usize;
-                    let size = rg.total_byte_size();
-                    let meta = Arc::new(SplitMeta {
-                        file: read_file_meta.clone(),
-                        meta: rg,
-                    });
-                    let info = Arc::new(SplitInfo {
-                        file: file_info.clone(),
-                        seq_in_file: i,
-                        offset,
-                        size,
-                        num_file_splits,
-                        format_info: Some(meta),
-                    });
-                    infos.push(info);
-                }
-            }
-        }
-
-        Ok(infos)
-    }
-}
-
-fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
-    meta.data_page_offset()
-}
-
 #[async_trait::async_trait]
 impl InputFormat for InputFormatParquet {
     #[async_backtrace::framed]
     async fn get_splits(
         &self,
-        file_infos: Vec<StageFileInfo>,
+        _file_infos: Vec<StageFileInfo>,
         _stage_info: &StageInfo,
-        op: &Operator,
-        settings: &Arc<Settings>,
+        _op: &Operator,
+        _settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
-        let max_memory_usage = settings.get_max_memory_usage()?;
-        let files = file_infos
-            .iter()
-            .map(|f| (f.path.clone(), f.size))
-            .collect::<Vec<_>>();
-        let metas =
-            read_parquet_metas_in_parallel(op.clone(), files, 16, 64, max_memory_usage).await?;
-        Self::make_splits(file_infos, metas)
+        unimplemented!("InputFormatParquet::get_splits")
     }
 
-    #[async_backtrace::framed]
-    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<TableSchemaRef> {
-        let mut reader = op.reader(path).await?;
-        let file_meta = read_metadata_async(&mut reader).await?;
-        let arrow_schema = infer_schema_with_extension(&file_meta)?;
-        Ok(Arc::new(TableSchema::from(&arrow_schema)))
-    }
-
-    fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
-        ParquetFormatPipe::execute_copy_aligned(ctx, pipeline)
+    fn exec_copy(&self, _ctx: Arc<InputContext>, _pipeline: &mut Pipeline) -> Result<()> {
+        unimplemented!("ParquetFormatPipe::exec_copy")
     }
 
     fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
