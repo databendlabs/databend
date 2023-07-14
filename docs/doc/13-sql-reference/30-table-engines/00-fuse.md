@@ -32,6 +32,8 @@ The `CLUSTER BY` parameter specifies the sorting method for data that consists o
 
 Fuse engine support following common case-insensitive options:
 
+- `bloom_index_columns = '<column> [, <column> ...]'`, specify the bloom index columns. The data type of `column` could be Map, Number, String, Date, or Timestamp. Bloom index default to be created on all supported columns.
+
 - `compression = '<compression>'`, `compression` could be `lz4`, `zstd`, `snappy`, `none`. Compression method defaults to be `zstd` in object storage but `lz4` in fs storage.
 
 - `storage_format = '<storage_format>'`, `storage_format` could be `parquet` and `native`. Storage format defaults to be `parquet` in object storage but `native` in fs storage.

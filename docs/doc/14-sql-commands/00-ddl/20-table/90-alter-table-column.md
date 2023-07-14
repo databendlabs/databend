@@ -1,5 +1,5 @@
 ---
-title: ALTER TABLE
+title: ALTER TABLE COLUMN
 description:
   Adds or drops a column of a table.
 ---
