@@ -17,6 +17,7 @@
 #![feature(io_error_other)]
 #![feature(let_chains)]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(result_option_inspect)]
 
 mod constants;
 mod fuse_lazy_part;

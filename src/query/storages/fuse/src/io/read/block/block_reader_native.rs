@@ -48,12 +48,14 @@ impl<T: NativeReadBuf + std::io::Seek + Send + Sync> NativeReaderExt for T {}
 
 pub type Reader = Box<dyn NativeReaderExt>;
 
+pub type NativeSourceData = BTreeMap<usize, Vec<NativeReader<Reader>>>;
+
 impl BlockReader {
     #[async_backtrace::framed]
     pub async fn async_read_native_columns_data(
         &self,
         part: PartInfoPtr,
-    ) -> Result<BTreeMap<usize, Vec<NativeReader<Reader>>>> {
+    ) -> Result<NativeSourceData> {
         // Perf
         {
             metrics_inc_remote_io_read_parts(1);
@@ -108,7 +110,7 @@ impl BlockReader {
     }
 
     #[async_backtrace::framed]
-    pub async fn read_native_columns_data(
+    async fn read_native_columns_data(
         op: Operator,
         path: &str,
         index: usize,
@@ -133,10 +135,7 @@ impl BlockReader {
         Ok((index, native_readers))
     }
 
-    pub fn sync_read_native_columns_data(
-        &self,
-        part: PartInfoPtr,
-    ) -> Result<BTreeMap<usize, Vec<NativeReader<Reader>>>> {
+    pub fn sync_read_native_columns_data(&self, part: PartInfoPtr) -> Result<NativeSourceData> {
         let part = FusePartInfo::from_part(&part)?;
 
         let mut results: BTreeMap<usize, Vec<NativeReader<Reader>>> = BTreeMap::new();
@@ -176,7 +175,7 @@ impl BlockReader {
         Ok(results)
     }
 
-    pub fn sync_read_native_column(
+    fn sync_read_native_column(
         op: Operator,
         path: &str,
         metas: Vec<ColumnMeta>,

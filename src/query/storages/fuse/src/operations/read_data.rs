@@ -201,7 +201,7 @@ impl FuseTable {
                         ctx.clone(),
                         self.operator.clone(),
                         agg,
-                        self.storage_format,
+                        self.table_compression,
                     )
                 })
                 .transpose()?,

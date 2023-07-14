@@ -18,10 +18,12 @@ use std::fmt::Debug;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
-use common_expression::DataSchema;
 use common_expression::RemoteExpr;
+use common_expression::TableSchemaRef;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
+use super::Projection;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AggIndexInfo {
     pub index_id: u64,
     /// The selection on the aggregating index.
@@ -37,7 +39,9 @@ pub struct AggIndexInfo {
     /// because index scan will skip the execution of `EvalScalar` and `Filter`.
     pub selection: Vec<(RemoteExpr, Option<usize>)>,
     pub filter: Option<RemoteExpr>,
-    pub schema: DataSchema,
+    pub schema: TableSchemaRef,
+    /// Columns in the index block to read.
+    pub projection: Projection,
 
     /// The size of the output fields of a table scan plan without the index.
     pub actual_table_field_len: usize,
