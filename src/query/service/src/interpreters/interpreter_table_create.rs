@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_expression::BLOCK_NAME_COL_NAME;
 use common_expression::ROW_ID_COL_NAME;
@@ -34,6 +35,7 @@ use common_meta_types::MatchSeq;
 use common_sql::field_default_value;
 use common_sql::plans::CreateTablePlan;
 use common_sql::plans::PREDICATE_COLUMN_NAME;
+use common_sql::BloomIndexColumns;
 use common_storage::DataOperator;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
@@ -45,8 +47,10 @@ use common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use common_users::UserApiProvider;
 use once_cell::sync::Lazy;
 use storages_common_cache::LoadParams;
+use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
+use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use storages_common_table_meta::table::OPT_KEY_COMMENT;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_ENGINE;
@@ -236,7 +240,7 @@ impl CreateTableInterpreter {
         let schema = TableSchemaRefExt::create(fields);
 
         let mut table_meta = TableMeta {
-            schema,
+            schema: schema.clone(),
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
             part_prefix: self.plan.part_prefix.clone(),
@@ -253,6 +257,9 @@ impl CreateTableInterpreter {
         };
 
         is_valid_block_per_segment(&table_meta.options)?;
+
+        // check bloom_index_columns.
+        is_valid_bloom_index_columns(&table_meta.options, schema)?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
@@ -347,6 +354,7 @@ pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
 
+    r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
     r.insert(OPT_KEY_TABLE_COMPRESSION);
     r.insert(OPT_KEY_STORAGE_FORMAT);
     r.insert(OPT_KEY_DATABASE_ID);
@@ -396,6 +404,16 @@ pub fn is_valid_block_per_segment(options: &BTreeMap<String, String>) -> Result<
             error!(error_str);
             return Err(ErrorCode::TableOptionInvalid(error_str));
         }
+    }
+    Ok(())
+}
+
+pub fn is_valid_bloom_index_columns(
+    options: &BTreeMap<String, String>,
+    schema: TableSchemaRef,
+) -> Result<()> {
+    if let Some(value) = options.get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
+        BloomIndexColumns::verify_definition(value, schema, BloomIndex::supported_type)?;
     }
     Ok(())
 }
