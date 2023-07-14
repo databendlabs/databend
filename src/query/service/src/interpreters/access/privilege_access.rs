@@ -106,9 +106,8 @@ impl AccessChecker for PrivilegeAccess {
                 // Just need to check user grant objects contain the db that be used.
                 let database = &plan.database;
                 let user = self.ctx.get_current_user()?;
-                let mut can_use = false;
                 let (identity, grant_set) = (user.identity().to_string(), user.grants);
-                let _objects = RoleCacheManager::instance()
+                let can_use = RoleCacheManager::instance()
                     .find_related_roles(&self.ctx.get_tenant(), &grant_set.roles())
                     .await?
                     .into_iter()
@@ -116,25 +115,15 @@ impl AccessChecker for PrivilegeAccess {
                     .fold(grant_set, |a, b| a | b)
                     .entries()
                     .iter()
-                    .map(|e| {
+                    .any(|e| {
                         let object = e.object();
                         match object {
-                            GrantObject::Global => {
-                                can_use = true;
-                            }
-                            GrantObject::Database(_, ldb) => {
-                                if ldb == database {
-                                    can_use = true;
-                                }
-                            }
-                            GrantObject::Table(_, ldb, _) => {
-                                if ldb == database {
-                                    can_use = true;
-                                }
+                            GrantObject::Global => true,
+                            GrantObject::Database(_, ldb) | GrantObject::Table(_, ldb, _) => {
+                                ldb == database
                             }
                         }
-                    })
-                    .collect::<Vec<_>>();
+                    });
 
                 return if can_use {
                     Ok(())
