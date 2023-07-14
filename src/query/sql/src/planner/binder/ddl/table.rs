@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::AnalyzeTableStmt;
+use common_ast::ast::AttachTableStmt;
 use common_ast::ast::ColumnDefinition;
 use common_ast::ast::ColumnExpr;
 use common_ast::ast::CompactTarget;
@@ -44,6 +45,7 @@ use common_ast::ast::TableReference;
 use common_ast::ast::TruncateTableStmt;
 use common_ast::ast::UndropTableStmt;
 use common_ast::ast::UriLocation;
+use common_ast::ast::VacuumDropTableStmt;
 use common_ast::ast::VacuumTableStmt;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
@@ -70,9 +72,12 @@ use common_storages_view::view_table::VIEW_ENGINE;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::debug;
+use tracing::error;
 
+use crate::binder::ddl::column::generate_unique_object;
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
@@ -107,6 +112,7 @@ use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::BindContext;
@@ -131,10 +137,43 @@ impl Binder {
 
         let database = self.check_database_exist(catalog, database).await?;
 
-        let mut select_builder = if stmt.with_history {
-            SelectBuilder::from("system.tables_with_history")
+        let tenant = self.ctx.get_tenant();
+        let user = self.ctx.get_current_user()?;
+        let (identity, grant_set) = (user.identity().to_string(), user.grants);
+
+        let (unique_tables, has_object_priv) =
+            generate_unique_object(Some(database.clone()), None, &tenant, grant_set).await?;
+
+        if unique_tables.is_empty() && !has_object_priv {
+            return Err(ErrorCode::PermissionDenied(format!(
+                "Permission denied, user {} don't have privilege for database {}",
+                identity, database
+            )));
+        }
+
+        let target_sys_tab = if stmt.with_history {
+            "system.tables_with_history"
         } else {
-            SelectBuilder::from("system.tables")
+            "system.tables"
+        };
+        let mut need_filter = true;
+        let mut select_builder = if has_object_priv {
+            SelectBuilder::from(target_sys_tab)
+        } else {
+            let mut in_list = "".to_string();
+            let last = unique_tables.len() - 1;
+            for (i, tables) in unique_tables.iter().enumerate() {
+                if i == last {
+                    in_list += tables;
+                    break;
+                }
+                in_list = in_list + tables + ",";
+            }
+            need_filter = false;
+            // Need filter database = 'db', ensure will execute optimizer find_eq_filter
+            SelectBuilder::from(&format!(
+                "(select * from {target_sys_tab} where database = '{database}' and name in ({in_list}))"
+            ))
         };
 
         if *full {
@@ -166,7 +205,9 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        if need_filter {
+            select_builder.with_filter(format!("database = '{database}'"));
+        }
 
         if let Some(catalog) = catalog {
             let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
@@ -468,6 +509,16 @@ impl Binder {
             ))?,
         };
 
+        // for fuse engine, we will insert database_id, so if we check it in execute phase,
+        // we can't distinct user key and our internal key.
+        if options.contains_key(&OPT_KEY_DATABASE_ID.to_lowercase()) {
+            error!("invalid opt for fuse table in create table statement");
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "table option {} is invalid for create table statement",
+                OPT_KEY_DATABASE_ID
+            )));
+        }
+
         if engine == Engine::Fuse {
             // Currently, [Table] can not accesses its database id yet, thus
             // here we keep the db id AS an entry of `table_meta.options`.
@@ -563,6 +614,67 @@ impl Binder {
             },
         };
         Ok(Plan::CreateTable(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_attach_table(
+        &mut self,
+        stmt: &AttachTableStmt,
+    ) -> Result<Plan> {
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
+
+        let mut path = stmt.uri_location.path.clone();
+        // First, to make it easy for users to use, path = "/testbucket/admin/data/1/2" and path = "/testbucket/admin/data/1/2/" are both legal
+        // So we need to remove the last "/"
+        if path.ends_with('/') {
+            path.pop();
+        }
+        // Then, split the path into two parts, the first part is the root, and the second part is the storage_prefix
+        // For example, path = "/testbucket/admin/data/1/2", then root = "/testbucket/admin/data/", storage_prefix = "1/2"
+        // root is used by OpenDAL operator, storage_prefix is used to specify the storage location of the table
+        // Note that the root must end with "/", and the storage_prefix must not start or end with "/"
+        let mut parts = path.split('/').collect::<Vec<_>>();
+        if parts.len() < 2 {
+            return Err(ErrorCode::BadArguments(format!(
+                "Invalid path: {}",
+                stmt.uri_location
+            )));
+        }
+        let storage_prefix = parts.split_off(parts.len() - 2).join("/");
+        let root = format!("{}/", parts.join("/"));
+        let mut options = BTreeMap::new();
+        options.insert(OPT_KEY_STORAGE_PREFIX.to_string(), storage_prefix);
+
+        let mut uri = stmt.uri_location.clone();
+        uri.path = root;
+        let (sp, _) = parse_uri_location(&mut uri)?;
+
+        // create a temporary op to check if params is correct
+        DataOperator::try_create(&sp).await?;
+
+        // Path ends with "/" means it's a directory.
+        let part_prefix = if uri.path.ends_with('/') {
+            uri.part_prefix.clone()
+        } else {
+            "".to_string()
+        };
+
+        Ok(Plan::CreateTable(Box::new(CreateTablePlan {
+            if_not_exists: false,
+            tenant: self.ctx.get_tenant(),
+            catalog,
+            database,
+            table,
+            options,
+            engine: Engine::Fuse,
+            cluster_key: None,
+            as_select: None,
+            schema: Arc::new(TableSchema::default()),
+            field_comments: vec![],
+            storage_params: Some(sp),
+            part_prefix,
+        })))
     }
 
     #[async_backtrace::framed]
@@ -933,6 +1045,51 @@ impl Binder {
             catalog,
             database,
             table,
+            option,
+        })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_drop_table(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &VacuumDropTableStmt,
+    ) -> Result<Plan> {
+        let VacuumDropTableStmt {
+            catalog,
+            database,
+            option,
+        } = stmt;
+
+        let catalog = catalog
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| "".to_string());
+
+        let option = {
+            let retain_hours = match option.retain_hours {
+                Some(Expr::Literal {
+                    lit: Literal::UInt64(uint),
+                    ..
+                }) => Some(uint as usize),
+                Some(_) => {
+                    return Err(ErrorCode::IllegalDataType("Unsupported hour type"));
+                }
+                _ => None,
+            };
+
+            VacuumTableOption {
+                retain_hours,
+                dry_run: option.dry_run,
+            }
+        };
+        Ok(Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
+            catalog,
+            database,
             option,
         })))
     }

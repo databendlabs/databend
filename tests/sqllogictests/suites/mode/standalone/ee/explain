@@ -168,7 +168,7 @@ EvalScalar
     ├── filters: [is_true(SUM(a) (#16) = scalar_subquery_15 (#15))]
     ├── estimated rows: 0.00
     └── HashJoin
-        ├── join type: SINGLE
+        ├── join type: LEFT SINGLE
         ├── build keys: [b (#13)]
         ├── probe keys: [b (#5)]
         ├── filters: []
@@ -261,6 +261,36 @@ DROP AGGREGATING INDEX idx1
 
 statement ok
 CREATE AGGREGATING INDEX idx1 AS SELECT a + 1 from t1
+
+query T
+EXPLAIN SELECT avg(a + 1) from t1
+----
+EvalScalar
+├── expressions: [avg((a + 1)) (#6)]
+├── estimated rows: 1.00
+└── AggregateFinal
+    ├── group by: []
+    ├── aggregate functions: [avg(avg_arg_0)]
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [avg(avg_arg_0)]
+        ├── estimated rows: 1.00
+        └── EvalScalar
+            ├── expressions: [t1.a (#3) + 1]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.test_index_db.t1
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                ├── aggregating index: [SELECT (a + 1) FROM test_index_db.t1]
+                ├── rewritten query: [selection: [index_col_0 (#0)]]
+                ├── output columns: [a]
+                └── estimated rows: 0.00
+
 
 # Should not be rewritten
 query T

@@ -33,7 +33,6 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::NormalizeDisjunctiveFilter,
         RuleID::NormalizeScalarFilter,
         RuleID::EliminateFilter,
-        RuleID::EliminateEvalScalar,
         RuleID::MergeFilter,
         RuleID::MergeEvalScalar,
         RuleID::PushDownFilterUnion,
@@ -47,6 +46,7 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::PushDownFilterSort,
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterJoin,
+        RuleID::PushDownFilterProjectSet,
         RuleID::FoldCountAggregate,
         RuleID::TryApplyAggIndex, // TryApplyAggIndex should before SplitAggregate
         RuleID::SplitAggregate,
@@ -56,7 +56,8 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
     ]
 });
 
-pub static COMMUTE_JOIN_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| vec![RuleID::CommuteJoin]);
+pub static RESIDUAL_RULES: Lazy<Vec<RuleID>> =
+    Lazy::new(|| vec![RuleID::EliminateEvalScalar, RuleID::CommuteJoin]);
 
 /// A heuristic query optimizer. It will apply specific transformation rules in order and
 /// implement the logical plans with default implementation rules.

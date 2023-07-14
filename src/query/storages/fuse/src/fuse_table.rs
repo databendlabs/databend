@@ -28,7 +28,6 @@ use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::CompactTarget;
-use common_catalog::table::DeletionFilters;
 use common_catalog::table::NavigationDescriptor;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -45,6 +44,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_sharing::create_share_table_operator;
 use common_sql::parse_exprs;
+use common_sql::BloomIndexColumns;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
@@ -60,10 +60,12 @@ use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::table_storage_prefix;
 use storages_common_table_meta::table::TableCompression;
+use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::error;
 use tracing::warn;
@@ -94,6 +96,7 @@ pub struct FuseTable {
     pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) storage_format: FuseStorageFormat,
     pub(crate) table_compression: TableCompression,
+    pub(crate) bloom_index_cols: BloomIndexColumns,
 
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
@@ -140,6 +143,12 @@ impl FuseTable {
             .cloned()
             .unwrap_or_default();
 
+        let bloom_index_cols = table_info
+            .options()
+            .get(OPT_KEY_BLOOM_INDEX_COLUMNS)
+            .and_then(|s| s.parse::<BloomIndexColumns>().ok())
+            .unwrap_or(BloomIndexColumns::All);
+
         let part_prefix = table_info.meta.part_prefix.clone();
 
         let meta_location_generator =
@@ -149,6 +158,7 @@ impl FuseTable {
             table_info,
             meta_location_generator,
             cluster_key_meta,
+            bloom_index_cols,
             operator,
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
@@ -200,6 +210,13 @@ impl FuseTable {
     }
 
     pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
+        // if OPT_KE_STORAGE_PREFIX is specified, use it as storage prefix
+        if let Some(prefix) = table_info.options().get(OPT_KEY_STORAGE_PREFIX) {
+            return Ok(prefix.clone());
+        }
+
+        // otherwise, use database id and table id as storage prefix
+
         let table_id = table_info.ident.table_id;
         let db_id = table_info
             .options()
@@ -331,6 +348,10 @@ impl FuseTable {
     pub fn cluster_key_str(&self) -> Option<&String> {
         self.cluster_key_meta.as_ref().map(|(_, key)| key)
     }
+
+    pub fn bloom_index_cols(&self) -> BloomIndexColumns {
+        self.bloom_index_cols.clone()
+    }
 }
 
 #[async_trait::async_trait]
@@ -388,6 +409,11 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         cluster_key_str: String,
     ) -> Result<()> {
+        // if new cluter_key_str is the same with old one,
+        // no need to change
+        if let Some(old_cluster_key_str) = self.cluster_key_str() && *old_cluster_key_str == cluster_key_str{
+            return Ok(())
+        }
         let mut new_table_meta = self.get_table_info().meta.clone();
         new_table_meta = new_table_meta.push_cluster_key(cluster_key_str);
         let cluster_key_meta = new_table_meta.cluster_key();
@@ -627,18 +653,6 @@ impl Table for FuseTable {
                 .navigate_to_time_point(snapshot_location, *time_point)
                 .await?),
         }
-    }
-
-    #[async_backtrace::framed]
-    async fn delete(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _filter: Option<DeletionFilters>,
-        _col_indices: Vec<usize>,
-        _query_row_id_col: bool,
-        _pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        panic!("deprecated")
     }
 
     #[async_backtrace::framed]

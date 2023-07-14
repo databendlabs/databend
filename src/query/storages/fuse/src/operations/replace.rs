@@ -31,6 +31,7 @@ use rand::prelude::SliceRandom;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 
+use super::common::MutationKind;
 use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
 use crate::operations::common::CommitSink;
@@ -166,13 +167,13 @@ impl FuseTable {
         let segment_partition_num =
             std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
 
-        let serialize_block_transform = TransformSerializeBlock::new(
+        let serialize_block_transform = TransformSerializeBlock::try_create(
             ctx.clone(),
             InputPort::create(),
             OutputPort::create(),
             self,
             cluster_stats_gen,
-        );
+        )?;
         let block_builder = serialize_block_transform.get_block_builder();
 
         let serialize_segment_transform = TransformSerializeSegment::new(
@@ -272,7 +273,7 @@ impl FuseTable {
         //    ┌───────────────────┐       ┌───────────────────────┐         ┌───────────────────┐
         //    │ResizeProcessor(1) ├──────►│TableMutationAggregator├────────►│     CommitSink    │
         //    └───────────────────┘       └───────────────────────┘         └───────────────────┘
-        self.chain_mutation_pipes(&ctx, pipeline, base_snapshot)?;
+        self.chain_mutation_pipes(&ctx, pipeline, base_snapshot, MutationKind::Replace)?;
 
         Ok(())
     }
@@ -337,6 +338,7 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         base_snapshot: Arc<TableSnapshot>,
+        mutation_kind: MutationKind,
     ) -> Result<()> {
         // resize
         pipeline.try_resize(1)?;
@@ -357,6 +359,7 @@ impl FuseTable {
                 location_gen,
                 schema,
                 dal,
+                mutation_kind,
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input,

@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_base::runtime::GLOBAL_MEM_STAT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -28,8 +29,9 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_metrics::reset_metrics;
+use common_metrics::MetricSample;
 use common_metrics::MetricValue;
-use common_storages_fuse::metrics_reset;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -40,22 +42,30 @@ pub struct MetricsTable {
 
 impl SyncSystemTable for MetricsTable {
     const NAME: &'static str = "system.metrics";
+    // Allow distributed query.
+    const IS_LOCAL: bool = false;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
-    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+        let local_id = ctx.get_cluster().local_id.clone();
+
         let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
             ErrorCode::InitPrometheusFailure("Prometheus recorder is not initialized yet.")
         })?;
 
-        let samples = common_metrics::dump_metric_samples(prometheus_handle)?;
+        let mut samples = common_metrics::dump_metric_samples(prometheus_handle)?;
+        samples.extend(self.custom_metric_samples()?);
+
+        let mut nodes: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
         let mut metrics: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
         let mut labels: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
         let mut kinds: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
         let mut values: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
         for sample in samples.into_iter() {
+            nodes.push(local_id.clone().into_bytes());
             metrics.push(sample.name.clone().into_bytes());
             kinds.push(sample.value.kind().into_bytes());
             labels.push(self.display_sample_labels(&sample.labels)?.into_bytes());
@@ -63,6 +73,7 @@ impl SyncSystemTable for MetricsTable {
         }
 
         Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(nodes),
             StringType::from_data(metrics),
             StringType::from_data(kinds),
             StringType::from_data(labels),
@@ -71,7 +82,11 @@ impl SyncSystemTable for MetricsTable {
     }
 
     fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
-        metrics_reset();
+        let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
+            ErrorCode::InitPrometheusFailure("Prometheus recorder is not initialized yet.")
+        })?;
+
+        reset_metrics(prometheus_handle)?;
         Ok(())
     }
 }
@@ -79,6 +94,7 @@ impl SyncSystemTable for MetricsTable {
 impl MetricsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
+            TableField::new("node", TableDataType::String),
             TableField::new("metric", TableDataType::String),
             TableField::new("kind", TableDataType::String),
             TableField::new("labels", TableDataType::String),
@@ -123,5 +139,23 @@ impl MetricsTable {
                 err
             ))
         })
+    }
+
+    /// Custom metrics that are not collected by prometheus.
+    fn custom_metric_samples(&self) -> Result<Vec<MetricSample>> {
+        let samples = vec![
+            MetricSample {
+                name: "query_memory_usage_bytes".to_string(),
+                value: MetricValue::Counter(GLOBAL_MEM_STAT.get_memory_usage() as f64),
+                labels: HashMap::new(),
+            },
+            MetricSample {
+                name: "query_memory_peak_usage_bytes".to_string(),
+                value: MetricValue::Counter(GLOBAL_MEM_STAT.get_peak_memory_usage() as f64),
+                labels: HashMap::new(),
+            },
+        ];
+
+        Ok(samples)
     }
 }

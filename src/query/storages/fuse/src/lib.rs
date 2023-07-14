@@ -18,6 +18,7 @@
 #![feature(let_chains)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(int_roundings)]
+#![feature(result_option_inspect)]
 
 mod constants;
 mod fuse_lazy_part;
@@ -42,8 +43,6 @@ pub use fuse_table::FuseStorageFormat;
 pub use fuse_table::FuseTable;
 pub use io::MergeIOReadResult;
 pub use pruning::SegmentLocation;
-
-pub use crate::metrics::metrics_reset;
 
 mod sessions {
     pub use common_catalog::table_context::TableContext;

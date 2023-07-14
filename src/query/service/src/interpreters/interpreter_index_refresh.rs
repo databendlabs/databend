@@ -235,10 +235,9 @@ impl Interpreter for RefreshIndexInterpreter {
             .await?;
 
         if new_read_source.is_none() {
-            return Err(ErrorCode::IndexAlreadyRefreshed(format!(
-                "Aggregating Index {} already refreshed",
-                self.plan.index_name.clone()
-            )));
+            // The partitions are all pruned, we don't need to generate indexes for these partitions (blocks).
+            let empty_pipeline = PipelineBuildResult::create();
+            return Ok(empty_pipeline);
         }
 
         let new_read_source = new_read_source.unwrap();

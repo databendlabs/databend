@@ -483,6 +483,20 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+
+    let attach_table = map(
+        rule! {
+            ATTACH ~ TABLE ~ #period_separated_idents_1_to_3 ~ #uri_location
+        },
+        |(_, _, (catalog, database, table), uri_location)| {
+            Statement::AttachTable(AttachTableStmt {
+                catalog,
+                database,
+                table,
+                uri_location,
+            })
+        },
+    );
     let create_table = map(
         rule! {
             CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
@@ -621,6 +635,22 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 catalog,
                 database,
                 table,
+                option,
+            })
+        },
+    );
+    let vacuum_drop_table = map(
+        rule! {
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ #period_separated_idents_1_to_2)? ~ #vacuum_table_option
+        },
+        |(_, _, _, database_option, option)| {
+            let (catalog, database) = database_option.map_or_else(
+                || (None, None),
+                |(_, catalog_database)| (catalog_database.0, Some(catalog_database.1)),
+            );
+            Statement::VacuumDropTable(VacuumDropTableStmt {
+                catalog,
+                database,
                 option,
             })
         },
@@ -1329,6 +1359,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
             | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
             | #show_drop_tables_status : "`SHOW DROP TABLES [FROM <database>]`"
+            | #attach_table : "`ATTACH TABLE [<database>.]<table> <uri>`"
             | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
             | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
             | #undrop_table : "`UNDROP TABLE [<database>.]<table>`"
@@ -1337,6 +1368,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN]`"
+            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN]`"
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"

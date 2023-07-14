@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -40,7 +41,7 @@ pub struct TransformScatterAggregateSpillWriter<Method: HashMethodBounds> {
     location_prefix: String,
     params: Arc<AggregatorParams>,
     input_data_block: Option<DataBlock>,
-    output_data_block: Option<DataBlock>,
+    output_data_block: VecDeque<DataBlock>,
     spilling_futures: Vec<BoxFuture<'static, Result<()>>>,
 }
 
@@ -61,8 +62,8 @@ impl<Method: HashMethodBounds> TransformScatterAggregateSpillWriter<Method> {
             operator,
             location_prefix,
             input_data_block: None,
-            output_data_block: None,
             spilling_futures: vec![],
+            output_data_block: VecDeque::new(),
         })
     }
 }
@@ -93,7 +94,7 @@ impl<Method: HashMethodBounds> Processor for TransformScatterAggregateSpillWrite
             return Ok(Event::Async);
         }
 
-        if let Some(output_block) = self.output_data_block.take() {
+        if let Some(output_block) = self.output_data_block.pop_front() {
             self.output.push_data(Ok(output_block));
             return Ok(Event::NeedConsume);
         }
@@ -125,6 +126,7 @@ impl<Method: HashMethodBounds> Processor for TransformScatterAggregateSpillWrite
             {
                 let mut new_blocks = Vec::with_capacity(block_meta.blocks.len());
 
+                let mut max_size = 0;
                 for mut block in block_meta.blocks {
                     let block_meta = block
                         .get_meta()
@@ -135,7 +137,7 @@ impl<Method: HashMethodBounds> Processor for TransformScatterAggregateSpillWrite
                             .take_meta()
                             .and_then(AggregateMeta::<Method, usize>::downcast_from)
                         {
-                            let (output_block, spilling_future) = spilling_aggregate_payload(
+                            let (spilled_blocks, spilling_future) = spilling_aggregate_payload(
                                 self.operator.clone(),
                                 &self.method,
                                 &self.location_prefix,
@@ -143,18 +145,36 @@ impl<Method: HashMethodBounds> Processor for TransformScatterAggregateSpillWrite
                                 payload,
                             )?;
 
-                            new_blocks.push(output_block);
+                            max_size = std::cmp::max(max_size, spilled_blocks.len());
+                            new_blocks.push(spilled_blocks);
                             self.spilling_futures.push(Box::pin(spilling_future));
                             continue;
                         }
                     }
 
-                    new_blocks.push(block);
+                    max_size = std::cmp::max(max_size, 1);
+                    new_blocks.push(VecDeque::from(vec![block]));
                 }
 
-                self.output_data_block = Some(DataBlock::empty_with_meta(
-                    ExchangeShuffleMeta::create(new_blocks),
-                ));
+                for _index in 0..max_size {
+                    let mut has_data = false;
+                    let mut buckets_block = Vec::with_capacity(new_blocks.len());
+                    for bucket_blocks in new_blocks.iter_mut() {
+                        buckets_block.push(match bucket_blocks.pop_front() {
+                            None => DataBlock::empty(),
+                            Some(block) => {
+                                has_data |= !block.is_empty() || block.get_meta().is_some();
+                                block
+                            }
+                        });
+                    }
+
+                    if has_data {
+                        self.output_data_block.push_back(DataBlock::empty_with_meta(
+                            ExchangeShuffleMeta::create(buckets_block),
+                        ));
+                    }
+                }
             }
         }
 

@@ -204,6 +204,7 @@ async fn query_final_handler(
     _ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
+    info!("final http query: {}", query_id);
     let http_query_manager = HttpQueryManager::instance();
     match http_query_manager.remove_query(&query_id).await {
         Some(query) => {
@@ -226,6 +227,7 @@ async fn query_cancel_handler(
     _ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> impl IntoResponse {
+    info!("kill http query: {}", query_id);
     let http_query_manager = HttpQueryManager::instance();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
@@ -278,7 +280,7 @@ pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
-    info!("receive http query: {:?}", req);
+    info!("new http query request: {:?}", req);
     let http_query_manager = HttpQueryManager::instance();
     let sql = req.sql.clone();
 

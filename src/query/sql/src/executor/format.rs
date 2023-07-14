@@ -95,6 +95,20 @@ impl PhysicalPlan {
                     children,
                 ))
             }
+            PhysicalPlan::RangeJoin(plan) => {
+                let left_child = plan.left.format_join(metadata)?;
+                let right_child = plan.right.format_join(metadata)?;
+
+                let children = vec![
+                    FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+                    FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+                ];
+
+                Ok(FormatTreeNode::with_children(
+                    format!("RangeJoin: {}", plan.join_type),
+                    children,
+                ))
+            }
             other => {
                 let children = other
                     .children()

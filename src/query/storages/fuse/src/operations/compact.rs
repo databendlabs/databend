@@ -98,8 +98,7 @@ impl FuseTable {
             return Ok(());
         }
 
-        let mutator = Box::new(segment_mutator);
-        mutator.try_commit(Arc::new(self.clone())).await
+        segment_mutator.try_commit(Arc::new(self.clone())).await
     }
 
     /// The flow of Pipeline is as follows:
@@ -166,13 +165,13 @@ impl FuseTable {
 
         pipeline.add_transform(
             |input: Arc<common_pipeline_core::processors::port::InputPort>, output| {
-                let proc = TransformSerializeBlock::new(
+                let proc = TransformSerializeBlock::try_create(
                     ctx.clone(),
                     input,
                     output,
                     self,
                     cluster_stats_gen.clone(),
-                );
+                )?;
                 proc.into_processor()
             },
         )?;

@@ -19,7 +19,12 @@ use std::sync::Arc;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
+use common_expression::BLOCK_NAME_COL_NAME;
+use common_expression::ROW_ID_COL_NAME;
+use common_expression::SEGMENT_NAME_COL_NAME;
+use common_expression::SNAPSHOT_NAME_COL_NAME;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::CreateTableReq;
@@ -27,27 +32,31 @@ use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::TableStatistics;
 use common_meta_types::MatchSeq;
-use common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use common_sql::field_default_value;
 use common_sql::plans::CreateTablePlan;
+use common_sql::plans::PREDICATE_COLUMN_NAME;
+use common_sql::BloomIndexColumns;
+use common_storage::DataOperator;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
+use common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use common_users::UserApiProvider;
 use once_cell::sync::Lazy;
 use storages_common_cache::LoadParams;
+use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
+use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use storages_common_table_meta::table::OPT_KEY_COMMENT;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_ENGINE;
-use storages_common_table_meta::table::OPT_KEY_EXTERNAL_LOCATION;
-use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::error;
 
@@ -206,7 +215,12 @@ impl CreateTableInterpreter {
                 });
             }
         }
-        catalog.create_table(self.build_request(stat)?).await?;
+        let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
+            self.build_attach_request(storage_prefix).await
+        } else {
+            self.build_request(stat)
+        }?;
+        catalog.create_table(req).await?;
 
         Ok(PipelineBuildResult::create())
     }
@@ -221,17 +235,12 @@ impl CreateTableInterpreter {
             if field.default_expr().is_some() {
                 let _ = field_default_value(self.ctx.clone(), field)?;
             }
-            if INTERNAL_COLUMN_FACTORY.exist(field.name()) {
-                return Err(ErrorCode::TableWithInternalColumnName(format!(
-                    "Cannot create table has column with the same name as internal column: {}",
-                    field.name()
-                )));
-            }
+            is_valid_column(field.name())?;
         }
         let schema = TableSchemaRefExt::create(fields);
 
         let mut table_meta = TableMeta {
-            schema,
+            schema: schema.clone(),
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
             part_prefix: self.plan.part_prefix.clone(),
@@ -248,6 +257,9 @@ impl CreateTableInterpreter {
         };
 
         is_valid_block_per_segment(&table_meta.options)?;
+
+        // check bloom_index_columns.
+        is_valid_bloom_index_columns(&table_meta.options, schema)?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
@@ -275,6 +287,62 @@ impl CreateTableInterpreter {
 
         Ok(req)
     }
+
+    async fn build_attach_request(&self, storage_prefix: &str) -> Result<CreateTableReq> {
+        // Safe to unwrap in this function, as attach table must have storage params.
+        let sp = self.plan.storage_params.as_ref().unwrap();
+        let operator = DataOperator::try_create(sp).await?;
+        let operator = operator.operator();
+        let reader = MetaReaders::table_snapshot_reader(operator.clone());
+        let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
+        let snapshot_loc = operator.read(&hint).await?;
+        let snapshot_loc = String::from_utf8(snapshot_loc)?;
+        let info = operator.info();
+        let root = info.root();
+        let snapshot_loc = snapshot_loc[root.len()..].to_string();
+        let mut options = self.plan.options.clone();
+        options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc.clone());
+
+        let params = LoadParams {
+            location: snapshot_loc.clone(),
+            len_hint: None,
+            ver: TableSnapshot::VERSION,
+            put_cache: true,
+        };
+
+        let snapshot = reader.read(&params).await?;
+        let stat = TableStatistics {
+            number_of_rows: snapshot.summary.row_count,
+            data_bytes: snapshot.summary.uncompressed_byte_size,
+            compressed_data_bytes: snapshot.summary.compressed_byte_size,
+            index_data_bytes: snapshot.summary.index_size,
+            number_of_segments: Some(snapshot.segments.len() as u64),
+            number_of_blocks: Some(snapshot.summary.block_count),
+        };
+        let table_meta = TableMeta {
+            schema: Arc::new(snapshot.schema.clone()),
+            engine: self.plan.engine.to_string(),
+            storage_params: self.plan.storage_params.clone(),
+            part_prefix: self.plan.part_prefix.clone(),
+            options,
+            default_cluster_key: None,
+            field_comments: self.plan.field_comments.clone(),
+            drop_on: None,
+            statistics: stat,
+            ..Default::default()
+        };
+        let req = CreateTableReq {
+            if_not_exists: self.plan.if_not_exists,
+            name_ident: TableNameIdent {
+                tenant: self.plan.tenant.to_string(),
+                db_name: self.plan.database.to_string(),
+                table_name: self.plan.table.to_string(),
+            },
+            table_meta,
+        };
+
+        Ok(req)
+    }
 }
 
 /// Table option keys that can occur in 'create table statement'.
@@ -286,14 +354,12 @@ pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
 
-    r.insert(OPT_KEY_SNAPSHOT_LOCATION);
-    r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
+    r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
     r.insert(OPT_KEY_TABLE_COMPRESSION);
     r.insert(OPT_KEY_STORAGE_FORMAT);
     r.insert(OPT_KEY_DATABASE_ID);
-
     r.insert(OPT_KEY_COMMENT);
-    r.insert(OPT_KEY_EXTERNAL_LOCATION);
+
     r.insert(OPT_KEY_ENGINE);
 
     r.insert("transient");
@@ -302,6 +368,31 @@ pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 
 pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S) -> bool {
     CREATE_TABLE_OPTIONS.contains(opt_key.as_ref().to_lowercase().as_str())
+}
+
+/// The internal occupied coulmn that cannot be create.
+pub static INTERNAL_COLUMN_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    let mut r = HashSet::new();
+
+    // The key in INTERNAL_COLUMN_FACTORY.
+    r.insert(ROW_ID_COL_NAME);
+    r.insert(SNAPSHOT_NAME_COL_NAME);
+    r.insert(SEGMENT_NAME_COL_NAME);
+    r.insert(BLOCK_NAME_COL_NAME);
+
+    r.insert(PREDICATE_COLUMN_NAME);
+
+    r
+});
+
+pub fn is_valid_column(name: &str) -> Result<()> {
+    if INTERNAL_COLUMN_KEYS.contains(name) {
+        return Err(ErrorCode::TableWithInternalColumnName(format!(
+            "Cannot create table has column with the same name as internal column: {}",
+            name
+        )));
+    }
+    Ok(())
 }
 
 pub fn is_valid_block_per_segment(options: &BTreeMap<String, String>) -> Result<()> {
@@ -313,6 +404,16 @@ pub fn is_valid_block_per_segment(options: &BTreeMap<String, String>) -> Result<
             error!(error_str);
             return Err(ErrorCode::TableOptionInvalid(error_str));
         }
+    }
+    Ok(())
+}
+
+pub fn is_valid_bloom_index_columns(
+    options: &BTreeMap<String, String>,
+    schema: TableSchemaRef,
+) -> Result<()> {
+    if let Some(value) = options.get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
+        BloomIndexColumns::verify_definition(value, schema, BloomIndex::supported_type)?;
     }
     Ok(())
 }

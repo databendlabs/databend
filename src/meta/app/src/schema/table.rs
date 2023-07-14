@@ -645,24 +645,8 @@ impl GetTableReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum TableInfoFilter {
-    // if datatime is some, filter only dropped tables which drop time before that,
-    // else filter all dropped tables
-    Dropped(Option<DateTime<Utc>>),
-    // filter all dropped tables, including all tables in dropped database and dropped tables in exist dbs,
-    // in this case, `ListTableReq`.db_name will be ignored
-    // return Tables in two cases:
-    //  1) if database drop before date time, then all table in this db will be return;
-    //  2) else, return all the tables drop before data time.
-    AllDroppedTables(Option<DateTime<Utc>>),
-    // return all tables, ignore drop on time.
-    All,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ListTableReq {
     pub inner: DatabaseNameIdent,
-    pub filter: Option<TableInfoFilter>,
 }
 
 impl Deref for ListTableReq {
@@ -680,27 +664,55 @@ impl ListTableReq {
                 tenant: tenant.into(),
                 db_name: db_name.into(),
             },
-            filter: None,
-        }
-    }
-
-    pub fn new_with_filter(
-        tenant: impl Into<String>,
-        db_name: impl Into<String>,
-        filter: Option<TableInfoFilter>,
-    ) -> ListTableReq {
-        ListTableReq {
-            inner: DatabaseNameIdent {
-                tenant: tenant.into(),
-                db_name: db_name.into(),
-            },
-            filter,
         }
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum TableInfoFilter {
+    // if datatime is some, filter only dropped tables which drop time before that,
+    // else filter all dropped tables
+    Dropped(Option<DateTime<Utc>>),
+    // filter all dropped tables, including all tables in dropped database and dropped tables in exist dbs,
+    // in this case, `ListTableReq`.db_name will be ignored
+    // return Tables in two cases:
+    //  1) if database drop before date time, then all table in this db will be return;
+    //  2) else, return all the tables drop before data time.
+    AllDroppedTables(Option<DateTime<Utc>>),
+    // return all tables, ignore drop on time.
+    All,
+}
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ListDroppedTableReq {
+    pub inner: DatabaseNameIdent,
+    pub filter: TableInfoFilter,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum DroppedId {
+    // db id, db name
+    Db(u64, String),
+    // db id, table id, table name
+    Table(u64, u64, String),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ListDroppedTableResp {
+    pub drop_table_infos: Vec<Arc<TableInfo>>,
+    pub drop_ids: Vec<DroppedId>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GcDroppedTableReq {
+    pub tenant: String,
+    pub drop_ids: Vec<DroppedId>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GcDroppedTableResp {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct CountTablesKey {
     pub tenant: String,
 }

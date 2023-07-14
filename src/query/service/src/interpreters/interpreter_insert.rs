@@ -49,15 +49,14 @@ use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::interpreters::common::append2table;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::builders::build_append2table_with_commit_pipeline;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
-use crate::schedulers::build_distributed_pipeline;
-use crate::schedulers::build_local_pipeline;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -247,11 +246,12 @@ impl Interpreter for InsertInterpreter {
                     }
                 };
 
-                let mut build_res = if !insert_select_plan.is_distributed_plan() {
-                    build_local_pipeline(&self.ctx, &insert_select_plan, false).await
-                } else {
-                    build_distributed_pipeline(&self.ctx, &insert_select_plan, false).await
-                }?;
+                let mut build_res = build_query_pipeline_without_render_result_set(
+                    &self.ctx,
+                    &insert_select_plan,
+                    false,
+                )
+                .await?;
 
                 table.commit_insertion(
                     self.ctx.clone(),
@@ -270,11 +270,11 @@ impl Interpreter for InsertInterpreter {
             _ => AppendMode::Normal,
         };
 
-        append2table(
+        build_append2table_with_commit_pipeline(
             self.ctx.clone(),
+            &mut build_res.main_pipeline,
             table.clone(),
             plan.schema(),
-            &mut build_res.main_pipeline,
             None,
             self.plan.overwrite,
             append_mode,
