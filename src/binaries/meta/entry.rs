@@ -42,6 +42,7 @@ use databend_meta::version::METASRV_COMMIT_VERSION;
 use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use tokio::time::sleep;
+use tokio::time::Instant;
 use tracing::info;
 use tracing::warn;
 
@@ -128,7 +129,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     println!("Log:");
     println!("    File: {}", conf.log.file);
     println!("    Stderr: {}", conf.log.stderr);
-    println!("Id: {}", conf.raft_config.config_id);
+    println!("Id: {}", conf.raft_config.id);
     println!("Raft Cluster Name: {}", conf.raft_config.cluster_name);
     println!("Raft Dir: {}", conf.raft_config.raft_dir);
     println!("Raft Status: {}", single_or_join);
@@ -259,80 +260,85 @@ async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), a
         "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"
     );
 
-    let wait_leader_timeout = Duration::from_millis(conf.raft_config.wait_leader_timeout);
+    let mut last_err = None;
+    let mut sleep_time = Duration::from_millis(500);
+
+    let timeout = Duration::from_millis(conf.raft_config.wait_leader_timeout);
+    let timeout_at = Instant::now() + timeout;
+
     info!(
         "Wait {:?} for active leader to register node, raft election timeouts: {:?}",
-        wait_leader_timeout,
+        timeout,
         conf.raft_config.election_timeout()
     );
-    println!("Wait for {:?} for active leader...", wait_leader_timeout);
+    println!("Wait for {:?} for active leader...", timeout);
 
-    let wait = meta_node.raft.wait(Some(wait_leader_timeout));
-    let metrics = wait
-        .metrics(|x| x.current_leader.is_some(), "receive an active leader")
-        .await?;
+    loop {
+        if Instant::now() > timeout_at {
+            break;
+        }
 
-    info!("Current raft node metrics: {:?}", metrics);
+        let wait = meta_node.raft.wait(Some(timeout_at - Instant::now()));
+        let metrics = wait
+            .metrics(|x| x.current_leader.is_some(), "receive an active leader")
+            .await?;
 
-    let leader_id = metrics.current_leader.unwrap();
+        info!("Current raft node metrics: {:?}", metrics);
 
-    println!("Leader Id: {}", leader_id);
-    println!(
-        "    Metrics: id={}, {:?}, term={}, last_log={:?}, last_applied={}, membership={{log_id:{}, {}}}",
-        metrics.id,
-        metrics.state,
-        metrics.current_term,
-        metrics.last_log_index,
-        metrics.last_applied.summary(),
-        metrics.membership_config.log_id().summary(),
-        metrics.membership_config.membership().summary(),
-    );
-    println!();
+        let leader_id = metrics.current_leader.unwrap();
 
-    for _i in 0..20 {
+        println!("Leader Id: {}", leader_id);
+        println!(
+            "    Metrics: id={}, {:?}, term={}, last_log={:?}, last_applied={}, membership={{log_id:{}, {}}}",
+            metrics.id,
+            metrics.state,
+            metrics.current_term,
+            metrics.last_log_index,
+            metrics.last_applied.summary(),
+            metrics.membership_config.log_id().summary(),
+            metrics.membership_config.membership().summary(),
+        );
+        println!();
+
         if meta_node.get_node(&leader_id).await?.is_none() {
             warn!("Leader node is not replicated to local store, wait and try again");
             sleep(Duration::from_millis(500)).await
         }
 
-        info!(
-            "Leader node is replicated to local store. About to register node with grpc-advertise-addr"
-        );
+        info!("Registering node with grpc-advertise-addr...");
 
         let res = do_register(meta_node, conf).await;
         info!("Register-node result: {:?}", res);
+
         match res {
             Ok(_) => {
+                info!("Register-node Ok");
+                println!("    Register-node: Ok");
+                println!();
+
                 return Ok(());
             }
             Err(e) => {
-                match &e {
-                    MetaAPIError::ForwardToLeader(f) => {
-                        info!(
-                            "Leader changed, sleep a while and retry forwarding to {:?}",
-                            f
-                        );
-                        sleep(Duration::from_millis(500)).await;
-                        continue;
-                    }
-                    MetaAPIError::CanNotForward(any_err) => {
-                        info!(
-                            "Leader changed, can not forward, sleep a while and retry: {:?}",
-                            any_err
-                        );
-                        sleep(Duration::from_millis(500)).await;
-                        continue;
-                    }
-                    _ => {
-                        // un-handle-able error
-                        return Err(e.into());
-                    }
-                }
+                warn!(
+                    "Error while registering node: {}, sleep {:?} and retry",
+                    e, sleep_time
+                );
+                println!("    Error: {}", e);
+                println!("    Sleep {:?} and retry", sleep_time);
+                println!();
+
+                last_err = Some(e);
+                sleep(sleep_time).await;
+                sleep_time = std::cmp::min(sleep_time * 2, Duration::from_secs(5));
             }
         }
     }
 
-    unreachable!("Tried too many times registering node")
+    if let Some(e) = last_err {
+        return Err(e.into());
+    }
+
+    Err(anyhow::anyhow!("timeout; no error received"))
 }
 
 async fn run_cmd(conf: &Config) -> bool {

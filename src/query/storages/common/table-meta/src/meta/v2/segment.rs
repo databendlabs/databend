@@ -12,11 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_arrow::native::ColumnMeta as NativeColumnMeta;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::ColumnId;
 use common_expression::TableField;
 use enum_as_inner::EnumAsInner;
@@ -73,6 +78,9 @@ pub struct BlockMeta {
     #[serde(default)]
     pub bloom_filter_index_size: u64,
     pub compression: Compression,
+
+    // block create_on
+    pub create_on: Option<DateTime<Utc>>,
 }
 
 impl BlockMeta {
@@ -88,6 +96,7 @@ impl BlockMeta {
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
         compression: Compression,
+        create_on: Option<DateTime<Utc>>,
     ) -> Self {
         Self {
             row_count,
@@ -100,6 +109,7 @@ impl BlockMeta {
             bloom_filter_index_location,
             bloom_filter_index_size,
             compression,
+            create_on,
         }
     }
 
@@ -117,6 +127,24 @@ impl BlockMeta {
         } else {
             self.row_count
         }
+    }
+}
+
+#[typetag::serde(name = "blockmeta")]
+impl BlockMetaInfo for BlockMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        match BlockMeta::downcast_ref_from(info) {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 }
 
@@ -233,6 +261,7 @@ impl BlockMeta {
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,
+            create_on: None,
         }
     }
 
@@ -263,6 +292,7 @@ impl BlockMeta {
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
             bloom_filter_index_size: s.bloom_filter_index_size,
             compression: s.compression,
+            create_on: None,
         }
     }
 }

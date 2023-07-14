@@ -14,6 +14,7 @@
 
 pub mod agg_index;
 mod filter_join;
+mod rule_commute_join;
 mod rule_eliminate_eval_scalar;
 mod rule_eliminate_filter;
 mod rule_fold_count_aggregate;
@@ -24,6 +25,7 @@ mod rule_normalize_scalar;
 mod rule_push_down_filter_aggregate;
 mod rule_push_down_filter_eval_scalar;
 mod rule_push_down_filter_join;
+mod rule_push_down_filter_project_set;
 mod rule_push_down_filter_scan;
 mod rule_push_down_filter_sort;
 mod rule_push_down_filter_union;
@@ -38,6 +40,7 @@ mod rule_push_down_sort_scan;
 mod rule_split_aggregate;
 mod rule_try_apply_agg_index;
 
+pub use rule_commute_join::RuleCommuteJoin;
 pub use rule_eliminate_eval_scalar::RuleEliminateEvalScalar;
 pub use rule_eliminate_filter::RuleEliminateFilter;
 pub use rule_fold_count_aggregate::RuleFoldCountAggregate;
@@ -49,6 +52,7 @@ pub use rule_push_down_filter_aggregate::RulePushDownFilterAggregate;
 pub use rule_push_down_filter_eval_scalar::RulePushDownFilterEvalScalar;
 pub use rule_push_down_filter_join::try_push_down_filter_join;
 pub use rule_push_down_filter_join::RulePushDownFilterJoin;
+pub use rule_push_down_filter_project_set::RulePushDownFilterProjectSet;
 pub use rule_push_down_filter_scan::RulePushDownFilterScan;
 pub use rule_push_down_filter_sort::RulePushDownFilterSort;
 pub use rule_push_down_filter_union::RulePushDownFilterUnion;

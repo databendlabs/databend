@@ -50,11 +50,11 @@ struct RelationSetNode {
 }
 // The tree is initialized by join conditions' relation sets
 // Such as condition: t1.a + t2.b == t3.b , the tree will be
-//            root
-//           /     \
-//       [{},{1}]  [{3}, {}]
-//          /
-//      [{1, 2}, {}]
+//   root: [{},{1, 3}]
+//             /    \
+//       [{},{2}]  [{3}, {}]
+//           /
+//     [{1, 2}, {}]
 #[derive(Default, Clone)]
 pub struct RelationSetTree {
     root: RelationSetNode,

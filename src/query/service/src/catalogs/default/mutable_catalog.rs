@@ -45,12 +45,18 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::DroppedId;
 use common_meta_app::schema::ExtendTableLockRevReq;
+use common_meta_app::schema::GcDroppedTableReq;
+use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
@@ -67,6 +73,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -186,6 +194,7 @@ impl Catalog for MutableCatalog {
             .meta
             .list_databases(ListDatabaseReq {
                 tenant: tenant.to_string(),
+                filter: None,
             })
             .await?;
 
@@ -232,6 +241,16 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply> {
         Ok(self.ctx.meta.drop_index(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
+        Ok(self.ctx.meta.get_index(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
+        Ok(self.ctx.meta.update_index(req).await?)
     }
 
     #[async_backtrace::framed]
@@ -324,6 +343,35 @@ impl Catalog for MutableCatalog {
     ) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
         db.list_tables_history().await
+    }
+
+    async fn get_drop_table_infos(
+        &self,
+        req: ListDroppedTableReq,
+    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
+        let ctx = DatabaseContext {
+            meta: self.ctx.meta.clone(),
+            storage_factory: self.ctx.storage_factory.clone(),
+            tenant: self.tenant.clone(),
+        };
+        let resp = ctx.meta.get_drop_table_infos(req).await?;
+
+        let drop_ids = resp.drop_ids.clone();
+        let drop_table_infos = resp.drop_table_infos;
+
+        let storage = ctx.storage_factory.clone();
+
+        let mut tables = vec![];
+        for table_info in drop_table_infos {
+            tables.push(storage.get_table(table_info.as_ref())?);
+        }
+        Ok((tables, drop_ids))
+    }
+
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
+        let meta = self.ctx.meta.clone();
+        let resp = meta.gc_drop_tables(req).await?;
+        Ok(resp)
     }
 
     #[async_backtrace::framed]

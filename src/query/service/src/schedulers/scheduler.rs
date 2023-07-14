@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_profile::ProfSpanSetRef;
+use common_profile::SharedProcessorProfiles;
 
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
@@ -38,16 +38,8 @@ pub async fn build_query_pipeline(
     ignore_result: bool,
     enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
-    let mut build_res = if !plan.is_distributed_plan() {
-        build_local_pipeline(ctx, plan, enable_profiling).await
-    } else {
-        if enable_profiling {
-            return Err(ErrorCode::Unimplemented(
-                "Query profiling is not supported in distributed mode",
-            ));
-        }
-        build_distributed_pipeline(ctx, plan, enable_profiling).await
-    }?;
+    let mut build_res =
+        build_query_pipeline_without_render_result_set(ctx, plan, enable_profiling).await?;
 
     let input_schema = plan.output_schema()?;
     PipelineBuilder::render_result_set(
@@ -60,6 +52,25 @@ pub async fn build_query_pipeline(
     Ok(build_res)
 }
 
+#[async_backtrace::framed]
+pub async fn build_query_pipeline_without_render_result_set(
+    ctx: &Arc<QueryContext>,
+    plan: &PhysicalPlan,
+    enable_profiling: bool,
+) -> Result<PipelineBuildResult> {
+    let build_res = if !plan.is_distributed_plan() {
+        build_local_pipeline(ctx, plan, enable_profiling).await
+    } else {
+        if enable_profiling {
+            return Err(ErrorCode::Unimplemented(
+                "Query profiling is not supported in distributed mode",
+            ));
+        }
+        build_distributed_pipeline(ctx, plan, enable_profiling).await
+    }?;
+    Ok(build_res)
+}
+
 /// Build local pipeline.
 #[async_backtrace::framed]
 pub async fn build_local_pipeline(
@@ -67,8 +78,11 @@ pub async fn build_local_pipeline(
     plan: &PhysicalPlan,
     enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
-    let pipeline =
-        PipelineBuilder::create(ctx.clone(), enable_profiling, ProfSpanSetRef::default());
+    let pipeline = PipelineBuilder::create(
+        ctx.clone(),
+        enable_profiling,
+        SharedProcessorProfiles::default(),
+    );
     let mut build_res = pipeline.finalize(plan)?;
 
     let settings = ctx.get_settings();

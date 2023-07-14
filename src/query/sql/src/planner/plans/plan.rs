@@ -32,6 +32,9 @@ use super::DropDatamaskPolicyPlan;
 use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
 use super::ModifyTableColumnPlan;
+use super::RenameTableColumnPlan;
+use super::SetOptionsPlan;
+use super::VacuumDropTablePlan;
 use super::VacuumTablePlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy::CopyPlan;
@@ -85,6 +88,7 @@ use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
 use crate::plans::KillPlan;
 use crate::plans::OptimizeTablePlan;
+use crate::plans::RefreshIndexPlan;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTablePlan;
@@ -163,6 +167,7 @@ pub enum Plan {
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
     RenameTable(Box<RenameTablePlan>),
+    RenameTableColumn(Box<RenameTableColumnPlan>),
     AddTableColumn(Box<AddTableColumnPlan>),
     DropTableColumn(Box<DropTableColumnPlan>),
     ModifyTableColumn(Box<ModifyTableColumnPlan>),
@@ -173,8 +178,10 @@ pub enum Plan {
     TruncateTable(Box<TruncateTablePlan>),
     OptimizeTable(Box<OptimizeTablePlan>),
     VacuumTable(Box<VacuumTablePlan>),
+    VacuumDropTable(Box<VacuumDropTablePlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
+    SetOptions(Box<SetOptionsPlan>),
 
     // Insert
     Insert(Box<Insert>),
@@ -190,6 +197,7 @@ pub enum Plan {
     // Indexes
     CreateIndex(Box<CreateIndexPlan>),
     DropIndex(Box<DropIndexPlan>),
+    RefreshIndex(Box<RefreshIndexPlan>),
 
     // Virtual Columns
     CreateVirtualColumns(Box<CreateVirtualColumnsPlan>),
@@ -308,6 +316,7 @@ impl Display for Plan {
             Plan::DropTable(_) => write!(f, "DropTable"),
             Plan::UndropTable(_) => write!(f, "UndropTable"),
             Plan::RenameTable(_) => write!(f, "RenameTable"),
+            Plan::RenameTableColumn(_) => write!(f, "RenameTableColumn"),
             Plan::AddTableColumn(_) => write!(f, "AddTableColumn"),
             Plan::ModifyTableColumn(_) => write!(f, "ModifyTableColumn"),
             Plan::DropTableColumn(_) => write!(f, "DropTableColumn"),
@@ -317,6 +326,7 @@ impl Display for Plan {
             Plan::TruncateTable(_) => write!(f, "TruncateTable"),
             Plan::OptimizeTable(_) => write!(f, "OptimizeTable"),
             Plan::VacuumTable(_) => write!(f, "VacuumTable"),
+            Plan::VacuumDropTable(_) => write!(f, "VacuumDropTable"),
             Plan::AnalyzeTable(_) => write!(f, "AnalyzeTable"),
             Plan::ExistsTable(_) => write!(f, "ExistsTable"),
             Plan::CreateView(_) => write!(f, "CreateView"),
@@ -324,6 +334,7 @@ impl Display for Plan {
             Plan::DropView(_) => write!(f, "DropView"),
             Plan::CreateIndex(_) => write!(f, "CreateIndex"),
             Plan::DropIndex(_) => write!(f, "DropIndex"),
+            Plan::RefreshIndex(_) => write!(f, "RefreshIndex"),
             Plan::CreateVirtualColumns(_) => write!(f, "CreateVirtualColumns"),
             Plan::AlterVirtualColumns(_) => write!(f, "AlterVirtualColumns"),
             Plan::DropVirtualColumns(_) => write!(f, "DropVirtualColumns"),
@@ -382,6 +393,9 @@ impl Display for Plan {
             Plan::DescDatamaskPolicy(..) => {
                 write!(f, "Desc Data Mask Policy")
             }
+            Plan::SetOptions(..) => {
+                write!(f, "SetOptions")
+            }
         }
     }
 }
@@ -408,6 +422,7 @@ impl Plan {
             Plan::ShowCreateTable(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
+            Plan::VacuumDropTable(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
@@ -454,6 +469,7 @@ impl Plan {
                 | Plan::ShowGrants(_)
                 | Plan::Presign(_)
                 | Plan::VacuumTable(_)
+                | Plan::VacuumDropTable(_)
                 | Plan::DescDatamaskPolicy(_)
         )
     }

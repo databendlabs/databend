@@ -25,7 +25,6 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::io::parquet::read::infer_schema;
 use common_arrow::arrow::io::parquet::read::read_columns;
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::to_deserializer;
@@ -36,6 +35,7 @@ use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfo;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
@@ -44,6 +44,7 @@ use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
+use common_storage::infer_schema_with_extension;
 use common_storage::read_parquet_metas_in_parallel;
 use common_storage::StageFileInfo;
 use futures::AsyncRead;
@@ -79,7 +80,7 @@ impl InputFormatParquet {
             let path = info.path.clone();
             let row_groups = mem::take(&mut file_meta.row_groups);
             if schema.is_none() {
-                schema = Some(infer_schema(&file_meta)?);
+                schema = Some(infer_schema_with_extension(&file_meta)?);
             }
             let fields = Arc::new(schema.clone().unwrap().fields);
             let read_file_meta = Arc::new(FileMeta { fields });
@@ -134,13 +135,15 @@ impl InputFormat for InputFormatParquet {
         file_infos: Vec<StageFileInfo>,
         _stage_info: &StageInfo,
         op: &Operator,
-        _settings: &Arc<Settings>,
+        settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
+        let max_memory_usage = settings.get_max_memory_usage()?;
         let files = file_infos
             .iter()
             .map(|f| (f.path.clone(), f.size))
             .collect::<Vec<_>>();
-        let metas = read_parquet_metas_in_parallel(op.clone(), files, 16, 64).await?;
+        let metas =
+            read_parquet_metas_in_parallel(op.clone(), files, 16, 64, max_memory_usage).await?;
         Self::make_splits(file_infos, metas)
     }
 
@@ -148,7 +151,7 @@ impl InputFormat for InputFormatParquet {
     async fn infer_schema(&self, path: &str, op: &Operator) -> Result<TableSchemaRef> {
         let mut reader = op.reader(path).await?;
         let file_meta = read_metadata_async(&mut reader).await?;
-        let arrow_schema = infer_schema(&file_meta)?;
+        let arrow_schema = infer_schema_with_extension(&file_meta)?;
         Ok(Arc::new(TableSchema::from(&arrow_schema)))
     }
 
@@ -236,6 +239,7 @@ impl DynData for SplitMeta {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct RowGroupInMemory {
     pub split_info: String,
     pub meta: RowGroupMetaData,
@@ -254,6 +258,21 @@ impl RowBatchTrait for RowGroupInMemory {
 
     fn rows(&self) -> usize {
         self.meta.num_rows()
+    }
+}
+
+#[typetag::serde(name = "row_batch_parquet")]
+impl BlockMetaInfo for RowGroupInMemory {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
+        unreachable!("RowGroupInMemory as BlockMetaInfo is not expected to be compared.")
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        unreachable!("RowGroupInMemory as BlockMetaInfo is not expected to be cloned.")
     }
 }
 
@@ -440,7 +459,7 @@ impl AligningStateTrait for ParquetAligningState {
             );
             let mut cursor = Cursor::new(file_in_memory);
             let file_meta = read_metadata(&mut cursor)?;
-            let infer_schema = infer_schema(&file_meta)?;
+            let infer_schema = infer_schema_with_extension(&file_meta)?;
             let fields = Arc::new(get_used_fields(&infer_schema.fields, &self.ctx.schema)?);
             let mut row_batches = Vec::with_capacity(file_meta.row_groups.len());
             for row_group in file_meta.row_groups.into_iter() {

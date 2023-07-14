@@ -333,6 +333,13 @@ impl Binder {
             let push_item =
                 empty_exclude || exclude_cols.get(&column_binding.column_name).is_none();
             if star {
+                if column_binding.column_name.starts_with('_')
+                    && column_binding.database_name == Some("system".to_string())
+                {
+                    return Err(ErrorCode::SemanticError(
+                        "can not select * from csv/ndjson file",
+                    ));
+                }
                 // Expands wildcard star, for example we have a table `t(a INT, b INT)`:
                 // The query `SELECT * FROM t` will be expanded into `SELECT t.a, t.b FROM t`
                 if push_item {
@@ -354,6 +361,13 @@ impl Binder {
                         &self.name_resolution_ctx,
                     )
                 {
+                    if column_binding.column_name.starts_with('_')
+                        && column_binding.database_name == Some("system".to_string())
+                    {
+                        return Err(ErrorCode::SemanticError(
+                            "can not select * from csv/ndjson file",
+                        ));
+                    }
                     match_table = true;
                     let item = self
                         .build_select_item(

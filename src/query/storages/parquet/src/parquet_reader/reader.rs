@@ -17,8 +17,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::schema_projection as ap;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
+use common_storage::common_metrics::copy::metrics_inc_copy_read_size_bytes;
 use common_storage::ColumnNodes;
 use opendal::BlockingOperator;
 use opendal::Operator;
@@ -99,7 +100,7 @@ pub struct ParquetReader {
     /// ```
     /// output_schema = DataSchema::from(projected_arrow_schema)
     /// ```
-    pub(crate) output_schema: DataSchemaRef,
+    pub output_schema: DataSchemaRef,
     /// The actual schema used to read parquet.
     ///
     /// The reason of using [`ArrowSchema`] to read parquet is that
@@ -115,7 +116,8 @@ pub struct ParquetReader {
 impl ParquetReader {
     pub fn create(
         operator: Operator,
-        schema: ArrowSchema,
+        schema: &ArrowSchema,
+        schema_descr: &SchemaDescriptor,
         projection: Projection,
     ) -> Result<Arc<ParquetReader>> {
         let (
@@ -123,7 +125,7 @@ impl ParquetReader {
             projected_column_nodes,
             projected_column_descriptors,
             columns_to_read,
-        ) = Self::do_projection(&schema, &projection)?;
+        ) = Self::do_projection(schema, schema_descr, &projection)?;
 
         let t_schema = arrow_to_table_schema(projected_arrow_schema.clone());
         let output_schema = DataSchema::from(&t_schema);
@@ -142,6 +144,7 @@ impl ParquetReader {
     #[allow(clippy::type_complexity)]
     pub fn do_projection(
         schema: &ArrowSchema,
+        schema_descr: &SchemaDescriptor,
         projection: &Projection,
     ) -> Result<(
         ArrowSchema,
@@ -152,7 +155,6 @@ impl ParquetReader {
         // Full schema and column leaves.
 
         let column_nodes = ColumnNodes::new_from_schema(schema, None);
-        let schema_descriptors = to_parquet_schema(schema)?;
         // Project schema
         let projected_arrow_schema = match projection {
             Projection::Columns(indices) => ap::project(schema, indices),
@@ -178,8 +180,7 @@ impl ParquetReader {
         for column_node in column_nodes {
             for index in &column_node.leaf_indices {
                 columns_to_read.insert(*index);
-                projected_column_descriptors
-                    .insert(*index, schema_descriptors.columns()[*index].clone());
+                projected_column_descriptors.insert(*index, schema_descr.columns()[*index].clone());
             }
         }
         Ok((
@@ -215,6 +216,7 @@ impl ParquetReader {
             let meta = &part.column_metas[index];
             let reader =
                 operator.range_reader(&part.location, meta.offset..meta.offset + meta.length)?;
+            metrics_inc_copy_read_size_bytes(meta.length);
             readers.insert(
                 *index,
                 DataReader::new(Box::new(reader), meta.length as usize),
@@ -236,6 +238,7 @@ impl ParquetReader {
                     let buffer = op.read(path.0.as_str())?;
                     buffers.push(buffer);
                 }
+                metrics_inc_copy_read_size_bytes(part.compressed_size());
                 Ok(ParquetPartData::SmallFiles(buffers))
             }
         }
@@ -258,6 +261,7 @@ impl ParquetReader {
 
                     join_handlers.push(async move {
                         let data = op.range_read(&path, offset..offset + length).await?;
+                        metrics_inc_copy_read_size_bytes(length);
                         Ok::<_, ErrorCode>((
                             *index,
                             DataReader::new(Box::new(std::io::Cursor::new(data)), length as usize),
@@ -275,7 +279,7 @@ impl ParquetReader {
                     let op = self.operator.clone();
                     join_handlers.push(async move { op.read(path.as_str()).await });
                 }
-
+                metrics_inc_copy_read_size_bytes(part.compressed_size());
                 let buffers = futures::future::try_join_all(join_handlers).await?;
                 Ok(ParquetPartData::SmallFiles(buffers))
             }

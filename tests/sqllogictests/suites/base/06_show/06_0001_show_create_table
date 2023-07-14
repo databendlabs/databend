@@ -37,15 +37,12 @@ show create table test.v_b
 v_b CREATE VIEW `test`.`v_b` AS SELECT * FROM `test`.`b`
 
 statement ok
-CREATE TABLE test.c (a int) CLUSTER BY (a, a % 3)
+CREATE TABLE test.c (a int) CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
 
-## SQL LOGIC has bugs to compare these stmt
-## query TT
-## SHOW CREATE TABLE `test`.`c`
-## ----
-## c CREATE TABLE `c` (
-##   `a` INT
-## ) ENGINE=FUSE CLUSTER BY (a, (a % 3)) COMPRESSION='zstd' STORAGE_FORMAT='parquet'
+query TT
+SHOW CREATE TABLE `test`.`c`
+----
+c CREATE TABLE `c` (   `a` INT ) ENGINE=FUSE CLUSTER BY (a, (a % 3)) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
 
 statement ok
 DROP TABLE `test`.`a`

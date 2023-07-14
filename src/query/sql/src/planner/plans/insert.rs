@@ -18,6 +18,7 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::FileFormatParams;
+use common_meta_app::principal::OnErrorMode;
 use common_meta_types::MetaId;
 use common_pipeline_sources::input_formats::InputContext;
 
@@ -30,7 +31,12 @@ pub enum InsertInputSource {
     // used in clickhouse handler only;
     StreamingWithFormat(String, usize, Option<Arc<InputContext>>),
     // From outside streaming source with 'FILE_FORMAT = (type=<type_name> ...)
-    StreamingWithFileFormat(FileFormatParams, usize, Option<Arc<InputContext>>),
+    StreamingWithFileFormat {
+        format: FileFormatParams,
+        on_error_mode: OnErrorMode,
+        start: usize,
+        input_context_option: Option<Arc<InputContext>>,
+    },
     // From cloned String and format
     Values(String),
     // From stage

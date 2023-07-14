@@ -293,11 +293,6 @@ impl Processor for HiveTableSource {
             return Ok(Event::NeedConsume);
         }
 
-        if matches!(self.state, State::Finish) {
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
         if matches!(self.state, State::Generated(_, _)) {
             if let State::Generated(mut hive_blocks, mut data_blocks) =
                 std::mem::replace(&mut self.state, State::Finish)

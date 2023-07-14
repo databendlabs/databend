@@ -31,7 +31,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
-use tracing::info;
+use tracing::error;
 use tracing::warn;
 
 use crate::io::Files;
@@ -49,69 +49,44 @@ impl FuseTable {
         &self,
         ctx: &Arc<dyn TableContext>,
         snapshot_files: Vec<String>,
+        limit: Option<usize>,
         keep_last_snapshot: bool,
-        dry_run_limit: Option<usize>,
+        dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         // 1. Read the root snapshot.
-        let root_snapshot_location_op = self.snapshot_loc().await?;
-        if root_snapshot_location_op.is_none() {
-            if dry_run_limit.is_some() {
+        let root_snapshot_info_op = self.read_root_snapshot(ctx, keep_last_snapshot).await?;
+        if root_snapshot_info_op.is_none() {
+            if dry_run {
                 return Ok(Some(vec![]));
             } else {
                 return Ok(None);
             }
         }
-
-        let root_snapshot_location = root_snapshot_location_op.unwrap();
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-        let ver = TableMetaLocationGenerator::snapshot_version(root_snapshot_location.as_str());
-        let params = LoadParams {
-            location: root_snapshot_location.clone(),
-            len_hint: None,
-            ver,
-            put_cache: true,
-        };
-        let root_snapshot = match reader.read(&params).await {
-            Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
-                // concurrent gc: someone else has already collected this snapshot, ignore it
-                warn!(
-                    "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
-                    root_snapshot_location, self.table_info.desc, self.table_info.ident,
-                );
-                if dry_run_limit.is_some() {
-                    return Ok(Some(vec![]));
-                } else {
-                    return Ok(None);
-                }
-            }
-            Err(e) => return Err(e),
-            Ok(v) => v,
-        };
-
-        let locations_referenced_by_root = self
-            .get_block_locations(ctx.clone(), &root_snapshot.segments, keep_last_snapshot)
-            .await?;
-        let root_snapshot_lite = Arc::new(SnapshotLiteExtended {
-            format_version: ver,
-            snapshot_id: root_snapshot.snapshot_id,
-            timestamp: root_snapshot.timestamp,
-            segments: HashSet::from_iter(root_snapshot.segments.clone()),
-            table_statistics_location: root_snapshot.table_statistics_location.clone(),
-        });
-        drop(root_snapshot);
+        let root_snapshot_info = root_snapshot_info_op.unwrap();
 
         let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
-
-        let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
         let location_gen = self.meta_location_generator();
-        let mut count = 0;
+        let purged_snapshot_limit = limit.unwrap_or(snapshot_files.len());
+
+        let mut read_snapshot_count = 0;
         let mut remain_snapshots = Vec::<SnapshotLiteExtended>::new();
         let mut counter = PurgeCounter::new();
         let mut dry_run_purge_files = vec![];
-        // 3. Read snapshot fields by chunk size(max_storage_io_requests).
+        let mut purged_snapshot_count = 0;
+
+        // 2. Read snapshot fields by chunk size(max_storage_io_requests).
+        let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
         for chunk in snapshot_files.chunks(chunk_size).rev() {
+            if let Err(err) = ctx.check_aborting() {
+                error!(
+                    "gc: aborted query, because the server is shutting down or the query was killed. table: {}, ident {}",
+                    self.table_info.desc, self.table_info.ident,
+                );
+                return Err(err);
+            }
+
             let results = snapshots_io
-                .read_snapshot_lite_extends(chunk, root_snapshot_lite.clone(), false)
+                .read_snapshot_lite_extends(chunk, root_snapshot_info.snapshot_lite.clone(), false)
                 .await?;
             let mut snapshots: Vec<_> = results.into_iter().flatten().collect();
             if snapshots.is_empty() {
@@ -120,12 +95,14 @@ impl FuseTable {
             // Gather the remain snapshots.
             snapshots.extend(std::mem::take(&mut remain_snapshots));
             // Sort snapshot by timestamp.
-            snapshots.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+            snapshots.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
 
-            // Set the first snapshot as base snapshot, extend the base snapshot.
-            let base_segments = snapshots[0].segments.clone();
-            let base_timestamp = snapshots[0].timestamp;
-            let base_ts_location_opt = snapshots[0].table_statistics_location.clone();
+            // Set the last snapshot as base snapshot, extend the base snapshot.
+            let base_snapshot = snapshots.pop().unwrap();
+            let base_segments = base_snapshot.segments.clone();
+            let base_timestamp = base_snapshot.timestamp;
+            let base_ts_location_opt = base_snapshot.table_statistics_location.clone();
+            remain_snapshots.push(base_snapshot);
 
             let mut snapshots_to_be_purged = HashSet::new();
             let mut segments_to_be_purged = HashSet::new();
@@ -136,13 +113,18 @@ impl FuseTable {
                     continue;
                 }
 
-                let diff: HashSet<_> = s.segments.difference(&base_segments).cloned().collect();
-                segments_to_be_purged.extend(diff);
                 if let Ok(loc) =
                     location_gen.snapshot_location_from_uuid(&s.snapshot_id, s.format_version)
                 {
+                    if purged_snapshot_count >= purged_snapshot_limit {
+                        break;
+                    }
                     snapshots_to_be_purged.insert(loc);
+                    purged_snapshot_count += 1;
                 }
+
+                let diff: HashSet<_> = s.segments.difference(&base_segments).cloned().collect();
+                segments_to_be_purged.extend(diff);
 
                 if s.table_statistics_location.is_some()
                     && s.table_statistics_location != base_ts_location_opt
@@ -153,43 +135,46 @@ impl FuseTable {
 
             // Refresh status.
             {
-                count += chunk.len();
+                read_snapshot_count += chunk.len();
                 let status = format!(
                     "gc: read snapshot files:{}/{}, cost:{} sec",
-                    count,
+                    read_snapshot_count,
                     snapshot_files.len(),
                     counter.start.elapsed().as_secs()
                 );
-                info!(status);
                 ctx.set_status_info(&status);
             }
 
             if !snapshots_to_be_purged.is_empty() {
-                if let Some(dry_run_limit) = dry_run_limit {
-                    if self
-                        .dry_run_purge(
-                            ctx,
-                            &mut dry_run_purge_files,
-                            dry_run_limit,
-                            &locations_referenced_by_root,
-                            segments_to_be_purged,
-                            ts_to_be_purged,
-                            snapshots_to_be_purged,
-                        )
-                        .await?
-                    {
+                if dry_run {
+                    debug_assert!(limit.is_some());
+                    self.dry_run_purge(
+                        ctx,
+                        &mut dry_run_purge_files,
+                        &root_snapshot_info.referenced_locations,
+                        segments_to_be_purged,
+                        ts_to_be_purged,
+                        snapshots_to_be_purged,
+                    )
+                    .await?;
+
+                    if dry_run_purge_files.len() >= limit.unwrap() {
                         return Ok(Some(dry_run_purge_files));
                     }
                 } else {
                     self.partial_purge(
                         ctx,
                         &mut counter,
-                        &locations_referenced_by_root,
+                        &root_snapshot_info.referenced_locations,
                         segments_to_be_purged,
                         ts_to_be_purged,
                         snapshots_to_be_purged,
                     )
                     .await?;
+
+                    if purged_snapshot_count >= purged_snapshot_limit {
+                        return Ok(None);
+                    }
                 }
             }
         }
@@ -202,7 +187,11 @@ impl FuseTable {
                 if let Ok(loc) =
                     location_gen.snapshot_location_from_uuid(&s.snapshot_id, s.format_version)
                 {
+                    if purged_snapshot_count >= purged_snapshot_limit {
+                        break;
+                    }
                     snapshots_to_be_purged.insert(loc);
+                    purged_snapshot_count += 1;
                 }
 
                 segments_to_be_purged.extend(s.segments);
@@ -211,26 +200,21 @@ impl FuseTable {
                     ts_to_be_purged.insert(s.table_statistics_location.unwrap());
                 }
             }
-            if let Some(dry_run_limit) = dry_run_limit {
-                if self
-                    .dry_run_purge(
-                        ctx,
-                        &mut dry_run_purge_files,
-                        dry_run_limit,
-                        &locations_referenced_by_root,
-                        segments_to_be_purged,
-                        ts_to_be_purged,
-                        snapshots_to_be_purged,
-                    )
-                    .await?
-                {
-                    return Ok(Some(dry_run_purge_files));
-                }
+            if dry_run {
+                self.dry_run_purge(
+                    ctx,
+                    &mut dry_run_purge_files,
+                    &root_snapshot_info.referenced_locations,
+                    segments_to_be_purged,
+                    ts_to_be_purged,
+                    snapshots_to_be_purged,
+                )
+                .await?;
             } else {
                 self.partial_purge(
                     ctx,
                     &mut counter,
-                    &locations_referenced_by_root,
+                    &root_snapshot_info.referenced_locations,
                     segments_to_be_purged,
                     ts_to_be_purged,
                     snapshots_to_be_purged,
@@ -239,51 +223,97 @@ impl FuseTable {
             }
         }
 
-        // 4. purge root snapshots.
-
-        if dry_run_limit.is_some() {
-            Ok(Some(dry_run_purge_files))
-        } else {
-            if !keep_last_snapshot {
-                self.purge_root_snapshot(
-                    ctx,
-                    &mut counter,
-                    root_snapshot_lite,
-                    locations_referenced_by_root,
-                    root_snapshot_location,
-                )
-                .await?;
-            }
-            Ok(None)
+        if dry_run {
+            return Ok(Some(dry_run_purge_files));
         }
+
+        // 3. purge root snapshots.
+        if !keep_last_snapshot {
+            self.purge_root_snapshot(
+                ctx,
+                &mut counter,
+                root_snapshot_info.snapshot_lite,
+                root_snapshot_info.referenced_locations,
+                root_snapshot_info.snapshot_location,
+            )
+            .await?;
+        }
+        Ok(None)
     }
 
-    // Return `true` if `purge_files.len()` >= `dry_run_limit`
-    #[allow(clippy::too_many_arguments)]
+    async fn read_root_snapshot(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        put_cache: bool,
+    ) -> Result<Option<RootSnapshotInfo>> {
+        let root_snapshot_location_op = self.snapshot_loc().await?;
+        if root_snapshot_location_op.is_none() {
+            return Ok(None);
+        }
+
+        let snapshot_location = root_snapshot_location_op.unwrap();
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
+        let params = LoadParams {
+            location: snapshot_location.clone(),
+            len_hint: None,
+            ver,
+            put_cache,
+        };
+        let root_snapshot = match reader.read(&params).await {
+            Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
+                // concurrent gc: someone else has already collected this snapshot, ignore it
+                warn!(
+                    "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
+                    snapshot_location, self.table_info.desc, self.table_info.ident,
+                );
+                return Ok(None);
+            }
+            Err(e) => return Err(e),
+            Ok(v) => v,
+        };
+
+        // root snapshot cannot ignore storage not find error.
+        let referenced_locations = self
+            .get_block_locations(ctx.clone(), &root_snapshot.segments, put_cache, false)
+            .await?;
+        let snapshot_lite = Arc::new(SnapshotLiteExtended {
+            format_version: ver,
+            snapshot_id: root_snapshot.snapshot_id,
+            timestamp: root_snapshot.timestamp,
+            segments: HashSet::from_iter(root_snapshot.segments.clone()),
+            table_statistics_location: root_snapshot.table_statistics_location.clone(),
+        });
+        Ok(Some(RootSnapshotInfo {
+            snapshot_location,
+            referenced_locations,
+            snapshot_lite,
+        }))
+    }
+
     async fn dry_run_purge(
         &self,
         ctx: &Arc<dyn TableContext>,
         purge_files: &mut Vec<String>,
-        dry_run_limit: usize,
         locations_referenced_by_root: &LocationTuple,
         segments_to_be_purged: HashSet<Location>,
         ts_to_be_purged: HashSet<String>,
         snapshots_to_be_purged: HashSet<String>,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
         // Purge segments&blocks by chunk size
         let segment_locations = Vec::from_iter(segments_to_be_purged);
         for chunk in segment_locations.chunks(chunk_size) {
-            let locations = self.get_block_locations(ctx.clone(), chunk, false).await?;
+            // since we are purging files, the ErrorCode::STORAGE_NOT_FOUND error can be safely ignored.
+            let locations = self
+                .get_block_locations(ctx.clone(), chunk, false, true)
+                .await?;
 
             for loc in &locations.block_location {
                 if locations_referenced_by_root.block_location.contains(loc) {
                     continue;
                 }
                 purge_files.push(loc.to_string())
-            }
-            if purge_files.len() >= dry_run_limit {
-                return Ok(true);
             }
 
             for loc in &locations.bloom_location {
@@ -292,22 +322,13 @@ impl FuseTable {
                 }
                 purge_files.push(loc.to_string())
             }
-            if purge_files.len() >= dry_run_limit {
-                return Ok(true);
-            }
 
             purge_files.extend(chunk.iter().map(|loc| loc.0.clone()));
-            if purge_files.len() >= dry_run_limit {
-                return Ok(true);
-            }
         }
         purge_files.extend(ts_to_be_purged.iter().map(|loc| loc.to_string()));
-        if purge_files.len() >= dry_run_limit {
-            return Ok(true);
-        }
         purge_files.extend(snapshots_to_be_purged.iter().map(|loc| loc.to_string()));
 
-        Ok(purge_files.len() >= dry_run_limit)
+        Ok(())
     }
 
     async fn partial_purge(
@@ -324,7 +345,10 @@ impl FuseTable {
         let mut count = 0;
         let segment_locations = Vec::from_iter(segments_to_be_purged);
         for chunk in segment_locations.chunks(chunk_size) {
-            let locations = self.get_block_locations(ctx.clone(), chunk, false).await?;
+            // since we are purging files, the ErrorCode::STORAGE_NOT_FOUND error can be safely ignored.
+            let locations = self
+                .get_block_locations(ctx.clone(), chunk, false, true)
+                .await?;
 
             let mut blocks_to_be_purged = HashSet::new();
             for loc in &locations.block_location {
@@ -358,7 +382,6 @@ impl FuseTable {
                     segment_locations.len(),
                     counter.start.elapsed().as_secs()
                 );
-                info!(status);
                 ctx.set_status_info(&status);
             }
 
@@ -494,7 +517,6 @@ impl FuseTable {
                 counter.start.elapsed().as_secs()
             );
             ctx.set_status_info(&status);
-            info!(status);
         }
         Ok(())
     }
@@ -538,30 +560,34 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         segment_locations: &[Location],
         put_cache: bool,
+        ignore_err: bool,
     ) -> Result<LocationTuple> {
         let mut blocks = HashSet::new();
         let mut blooms = HashSet::new();
 
         let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
-        let results = fuse_segments
-            .read_segments::<LocationTuple>(segment_locations, put_cache)
-            .await?;
-        for (idx, location_tuple) in results.into_iter().enumerate() {
-            let location_tuple = match location_tuple {
-                Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
-                    let location = &segment_locations[idx];
-                    // concurrent gc: someone else has already collected this segment, ignore it
-                    warn!(
-                        "concurrent gc: segment of location {} already collected. table: {}, ident {}",
-                        location.0, self.table_info.desc, self.table_info.ident,
-                    );
-                    continue;
-                }
-                Err(e) => return Err(e),
-                Ok(v) => v,
-            };
-            blocks.extend(location_tuple.block_location.into_iter());
-            blooms.extend(location_tuple.bloom_location.into_iter());
+        let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        for chunk in segment_locations.chunks(chunk_size) {
+            let results = fuse_segments
+                .read_segments::<LocationTuple>(chunk, put_cache)
+                .await?;
+            for (idx, location_tuple) in results.into_iter().enumerate() {
+                let location_tuple = match location_tuple {
+                    Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND && ignore_err => {
+                        let location = &segment_locations[idx];
+                        // concurrent gc: someone else has already collected this segment, ignore it
+                        warn!(
+                            "concurrent gc: segment of location {} already collected. table: {}, ident {}",
+                            location.0, self.table_info.desc, self.table_info.ident,
+                        );
+                        continue;
+                    }
+                    Err(e) => return Err(e),
+                    Ok(v) => v,
+                };
+                blocks.extend(location_tuple.block_location.into_iter());
+                blooms.extend(location_tuple.bloom_location.into_iter());
+            }
         }
 
         Ok(LocationTuple {
@@ -578,6 +604,12 @@ impl FuseTable {
         );
         SnapshotsIO::list_files(self.get_operator(), &prefix, None).await
     }
+}
+
+struct RootSnapshotInfo {
+    snapshot_location: String,
+    referenced_locations: LocationTuple,
+    snapshot_lite: Arc<SnapshotLiteExtended>,
 }
 
 #[derive(Default)]

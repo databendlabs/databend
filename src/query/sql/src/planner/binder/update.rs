@@ -64,7 +64,7 @@ impl Binder {
             ));
         };
 
-        let (_, mut context) = self.bind_table_reference(bind_context, table).await?;
+        let (table_expr, mut context) = self.bind_table_reference(bind_context, table).await?;
 
         let table = self
             .ctx
@@ -97,35 +97,29 @@ impl Binder {
                 )));
             }
 
-            // TODO(zhyass): selection and update_list support subquery.
+            // TODO(zhyass): update_list support subquery.
             let (scalar, _) = scalar_binder.bind(&update_expr.expr).await?;
             if matches!(scalar, ScalarExpr::SubqueryExpr(_)) {
                 return Err(ErrorCode::Internal(
-                    "Update does not support subquery temporarily",
+                    "update_list in update statement does not support subquery temporarily",
                 ));
             }
             update_columns.insert(index, scalar);
         }
 
-        let push_downs = if let Some(expr) = selection {
-            let (scalar, _) = scalar_binder.bind(expr).await?;
-            if matches!(scalar, ScalarExpr::SubqueryExpr(_)) {
-                return Err(ErrorCode::Internal(
-                    "Update does not support subquery temporarily",
-                ));
-            }
-            Some(scalar)
-        } else {
-            None
-        };
+        let (selection, subquery_desc) = self
+            .process_selection(selection, table_expr, &mut scalar_binder)
+            .await?;
 
         let plan = UpdatePlan {
             catalog: catalog_name,
             database: database_name,
             table: table_name,
             update_list: update_columns,
-            selection: push_downs,
+            selection,
             bind_context: Box::new(context.clone()),
+            metadata: self.metadata.clone(),
+            subquery_desc,
         };
         Ok(Plan::Update(Box::new(plan)))
     }

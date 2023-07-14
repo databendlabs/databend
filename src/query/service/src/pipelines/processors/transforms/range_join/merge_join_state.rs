@@ -25,7 +25,7 @@ use crate::pipelines::processors::transforms::range_join::ie_join_util::filter_b
 use crate::pipelines::processors::transforms::RangeJoinState;
 
 impl RangeJoinState {
-    pub fn merge_join(&self, task_id: usize) -> Result<DataBlock> {
+    pub fn merge_join(&self, task_id: usize) -> Result<Vec<DataBlock>> {
         let tasks = self.tasks.read();
         let (left_idx, right_idx) = tasks[task_id];
         let left_sorted_blocks = self.left_sorted_blocks.read();
@@ -74,7 +74,7 @@ impl RangeJoinState {
         let row_offset = self.row_offset.read();
         let (left_offset, right_offset) = row_offset[task_id];
 
-        let mut result_blocks = vec![];
+        let mut result_blocks = Vec::with_capacity(left_len);
         let left_table = self.left_table.read();
         let right_table = self.right_table.read();
 
@@ -94,7 +94,7 @@ impl RangeJoinState {
                 self.conditions[0].operator.as_str(),
             ) {
                 let mut left_result_block = DataBlock::empty();
-                let mut right_buffer = vec![];
+                let mut right_buffer = Vec::with_capacity(right_len - j);
                 if let ScalarRef::Number(NumberScalar::Int64(left)) =
                     unsafe { left_idx_col.index_unchecked(i) }
                 {
@@ -116,7 +116,7 @@ impl RangeJoinState {
                 if !left_result_block.is_empty() {
                     let mut indices = Vec::with_capacity(right_buffer.len());
                     for res in right_buffer.iter() {
-                        indices.push((0usize, *res, 1usize));
+                        indices.push((0u32, *res as u32, 1usize));
                     }
                     let right_result_block =
                         DataBlock::take_blocks(&[&right_table[right_idx]], &indices, indices.len());
@@ -134,10 +134,7 @@ impl RangeJoinState {
                 j += 1;
             }
         }
-        if result_blocks.is_empty() {
-            return Ok(DataBlock::empty());
-        }
-        DataBlock::concat(&result_blocks)
+        Ok(result_blocks)
     }
 
     // Used by merge join

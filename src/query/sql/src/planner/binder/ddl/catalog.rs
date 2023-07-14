@@ -30,6 +30,7 @@ use common_expression::DataSchemaRefExt;
 use common_meta_app::schema::CatalogMeta;
 use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CatalogType;
+use common_meta_app::schema::HiveCatalogOption;
 use common_meta_app::schema::IcebergCatalogOption;
 use url::Url;
 
@@ -148,20 +149,12 @@ impl Binder {
                     .get("address")
                     .ok_or_else(|| ErrorCode::InvalidArgument("expected field: ADDRESS"))?;
 
-                CatalogOption::Hive(address.to_string())
+                CatalogOption::Hive(HiveCatalogOption {
+                    address: address.to_string(),
+                })
             }
             CatalogType::Iceberg => {
                 let mut catalog_options = options.clone();
-
-                // getting other options to create this catalog
-                let flatten = matches!(
-                    catalog_options
-                        .get("flatten")
-                        .map(|v| v.to_lowercase())
-                        .unwrap_or_default()
-                        .as_str(),
-                    "true" | "on"
-                );
 
                 // the uri should in the same schema as in stages
                 let uri = catalog_options
@@ -213,7 +206,6 @@ impl Binder {
 
                 let opt = IcebergCatalogOption {
                     storage_params: Box::new(sp),
-                    flatten,
                 };
                 CatalogOption::Iceberg(opt)
             }

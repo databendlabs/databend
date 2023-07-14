@@ -17,6 +17,7 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use common_base::base::tokio;
+use common_meta_api::BackgroundApiTestSuite;
 use common_meta_api::SchemaApiTestSuite;
 use common_meta_api::ShareApiTestSuite;
 use common_meta_kvapi::kvapi;
@@ -59,5 +60,6 @@ async fn test_meta_embedded_single() -> anyhow::Result<()> {
     };
 
     SchemaApiTestSuite::test_single_node(builder.clone()).await?;
-    ShareApiTestSuite::test_single_node_share(builder).await
+    ShareApiTestSuite::test_single_node_share(builder.clone()).await?;
+    BackgroundApiTestSuite::test_single_node(builder).await
 }

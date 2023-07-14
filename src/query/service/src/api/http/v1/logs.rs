@@ -72,7 +72,7 @@ async fn select_table(sessions: &Arc<SessionManager>) -> Result<Body> {
 async fn execute_query(ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
     // TODO make default a constant
     let tracing_table = ctx.get_table("default", "system", "tracing").await?;
-    let tracing_table_read_plan = tracing_table.read_plan(ctx.clone(), None).await?;
+    let tracing_table_read_plan = tracing_table.read_plan(ctx.clone(), None, true).await?;
 
     tracing_table
         .read_data_block_stream(ctx, &tracing_table_read_plan)

@@ -31,6 +31,7 @@ use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_sql::parse_to_remote_string_expr;
 use common_sql::plans::CreateTablePlan;
+use common_sql::BloomIndexColumns;
 use common_storages_fuse::pruning::create_segment_location_vector;
 use common_storages_fuse::pruning::FusePruner;
 use common_storages_fuse::FuseTable;
@@ -56,12 +57,13 @@ async fn apply_block_pruning(
     push_down: &Option<PushDownInfo>,
     ctx: Arc<QueryContext>,
     op: Operator,
+    bloom_index_cols: BloomIndexColumns,
 ) -> Result<Vec<Arc<BlockMeta>>> {
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
-    FusePruner::create(&ctx, op, schema, push_down)?
-        .pruning(segment_locs)
+    FusePruner::create(&ctx, op, schema, push_down, bloom_index_cols)?
+        .read_pruning(segment_locs)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }
@@ -244,6 +246,7 @@ async fn test_block_pruner() -> Result<()> {
             &extra,
             ctx.clone(),
             fuse_table.get_operator(),
+            fuse_table.bloom_index_cols(),
         )
         .await?;
 

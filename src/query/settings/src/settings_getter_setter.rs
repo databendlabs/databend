@@ -149,14 +149,14 @@ impl Settings {
         self.try_set_u64("storage_io_max_page_bytes_for_read", val)
     }
 
-    // Get max_execute_time.
-    pub fn get_max_execute_time(&self) -> Result<u64> {
-        self.try_get_u64("max_execute_time")
+    // Get max_execute_time_in_seconds.
+    pub fn get_max_execute_time_in_seconds(&self) -> Result<u64> {
+        self.try_get_u64("max_execute_time_in_seconds")
     }
 
-    // Set max_execute_time.
-    pub fn set_max_execute_time(&self, val: u64) -> Result<()> {
-        self.try_set_u64("max_execute_time", val)
+    // Set max_execute_time_in_seconds.
+    pub fn set_max_execute_time_in_seconds(&self, val: u64) -> Result<()> {
+        self.try_set_u64("max_execute_time_in_seconds", val)
     }
 
     // Get flight client timeout.
@@ -211,16 +211,8 @@ impl Settings {
         self.try_set_u64("quoted_ident_case_sensitive", u64::from(val))
     }
 
-    pub fn get_enable_distributed_eval_index(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_distributed_eval_index")? != 0)
-    }
-
     pub fn get_max_result_rows(&self) -> Result<u64> {
         self.try_get_u64("max_result_rows")
-    }
-
-    pub fn set_enable_distributed_eval_index(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_distributed_eval_index", u64::from(val))
     }
 
     pub fn get_enable_dphyp(&self) -> Result<bool> {
@@ -326,12 +318,12 @@ impl Settings {
         Ok(self.try_get_u64("efficiently_memory_group_by")? == 1)
     }
 
-    pub fn set_lazy_topn_threshold(&self, value: u64) -> Result<()> {
-        self.try_set_u64("lazy_topn_threshold", value)
+    pub fn set_lazy_read_threshold(&self, value: u64) -> Result<()> {
+        self.try_set_u64("lazy_read_threshold", value)
     }
 
-    pub fn get_lazy_topn_threshold(&self) -> Result<u64> {
-        self.try_get_u64("lazy_topn_threshold")
+    pub fn get_lazy_read_threshold(&self) -> Result<u64> {
+        self.try_get_u64("lazy_read_threshold")
     }
 
     pub fn set_parquet_fast_read_bytes(&self, value: u64) -> Result<()> {
@@ -340,6 +332,14 @@ impl Settings {
 
     pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
         self.try_get_u64("parquet_fast_read_bytes")
+    }
+
+    pub fn get_enable_table_lock(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_table_lock")? != 0)
+    }
+
+    pub fn set_enable_table_lock(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_table_lock", u64::from(val))
     }
 
     pub fn set_table_lock_expire_secs(&self, val: u64) -> Result<()> {
@@ -365,5 +365,25 @@ impl Settings {
         } else {
             Ok(Some(deduplicate_label))
         }
+    }
+
+    pub fn set_deduplicate_label(&self, val: String) -> Result<()> {
+        self.set_setting("deduplicate_label".to_string(), val)
+    }
+
+    pub fn get_enable_distributed_copy(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_distributed_copy_into")? != 0)
+    }
+
+    pub fn set_enable_distributed_copy(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_distributed_copy_into", u64::from(val))
+    }
+
+    pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
+    }
+
+    pub fn set_enable_aggregating_index_scan(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_aggregating_index_scan", u64::from(val))
     }
 }

@@ -33,6 +33,7 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::parser_values_with_placeholder;
 use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
+use common_ast::Visitor;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
@@ -53,6 +54,7 @@ use parking_lot::RwLock;
 use tracing::debug;
 
 use crate::binder::location::parse_uri_location;
+use crate::binder::select::MaxColumnPosition;
 use crate::binder::Binder;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
@@ -128,6 +130,8 @@ impl<'a> Binder {
                     required_values_schema: required_values_schema.clone(),
                     write_mode: CopyIntoTableMode::Copy,
                     query: None,
+
+                    enable_distributed: false,
                 };
 
                 self.bind_copy_into_table_from_location(bind_context, plan)
@@ -203,6 +207,8 @@ impl<'a> Binder {
                     required_values_schema: required_values_schema.clone(),
                     write_mode: CopyIntoTableMode::Copy,
                     query: None,
+
+                    enable_distributed: false,
                 };
 
                 self.bind_copy_into_table_from_location(bind_context, plan)
@@ -304,6 +310,13 @@ impl<'a> Binder {
             ) => {
                 let (catalog_name, database_name, table_name) =
                     self.normalize_object_identifier_triple(catalog, database, table);
+
+                let mut max_column_position = MaxColumnPosition::new();
+                max_column_position.visit_query(query.as_ref());
+                self.metadata
+                    .write()
+                    .set_max_column_position(max_column_position.max_pos);
+
                 let (select_list, location, alias) = check_transform_query(query)?;
                 let (mut stage_info, path) =
                     parse_file_location(&self.ctx, location, BTreeMap::new()).await?;
@@ -345,6 +358,8 @@ impl<'a> Binder {
                     write_mode: CopyIntoTableMode::Copy,
                     query: None,
                     validation_mode: ValidationMode::None,
+
+                    enable_distributed: false,
                 };
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
                     .await
@@ -464,6 +479,8 @@ impl<'a> Binder {
             write_mode,
             query: None,
             validation_mode: ValidationMode::None,
+
+            enable_distributed: false,
         };
 
         self.bind_copy_into_table_from_location(bind_context, plan)
@@ -648,7 +665,6 @@ impl<'a> Binder {
         if need_copy_file_infos.is_empty() {
             return Ok(Plan::Copy(Box::new(CopyPlan::NoFileToCopy)));
         }
-
         plan.stage_table_info.files_to_copy = Some(need_copy_file_infos.clone());
 
         let (s_expr, mut from_context) = self

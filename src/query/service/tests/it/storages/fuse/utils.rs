@@ -55,7 +55,7 @@ pub async fn do_purge_test(
     let snapshot_files = fuse_table.list_snapshot_files().await?;
     let table_ctx: Arc<dyn TableContext> = fixture.ctx();
     fuse_table
-        .do_purge(&table_ctx, snapshot_files, true, None)
+        .do_purge(&table_ctx, snapshot_files, None, true, false)
         .await?;
 
     check_data_dir(

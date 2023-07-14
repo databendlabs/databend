@@ -17,7 +17,6 @@ mod alter_table;
 mod analyze;
 mod clustering;
 mod commit;
-mod computed_column;
 mod gc;
 mod internal_column;
 mod mutation;

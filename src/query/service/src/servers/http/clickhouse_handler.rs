@@ -54,6 +54,7 @@ use tracing::info;
 
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
+use crate::servers::http::middleware::sanitize_request_headers;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::short_sql;
 use crate::sessions::QueryContext;
@@ -61,7 +62,7 @@ use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
 // accept all clickhouse params, so they do not go to settings.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct StatementHandlerParams {
     query: Option<String>,
     #[allow(unused)]
@@ -267,6 +268,11 @@ pub async fn clickhouse_handler_post(
     Query(params): Query<StatementHandlerParams>,
     headers: &HeaderMap,
 ) -> PoemResult<impl IntoResponse> {
+    info!(
+        "new clickhouse handler request: headers={:?}, params={:?}",
+        sanitize_request_headers(headers),
+        params,
+    );
     let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
     if let Some(db) = &params.database {
         session.set_current_database(db.clone());
@@ -352,11 +358,12 @@ pub async fn clickhouse_handler_post(
                 )
                 .await
             }));
-        } else if let InsertInputSource::StreamingWithFileFormat(
-            option_settings,
+        } else if let InsertInputSource::StreamingWithFileFormat {
+            format,
+            on_error_mode,
             start,
-            input_context_ref,
-        ) = &mut insert.source
+            input_context_option,
+        } = &mut insert.source
         {
             let (tx, rx) = tokio::sync::mpsc::channel(2);
             let to_table = ctx
@@ -371,18 +378,19 @@ pub async fn clickhouse_handler_post(
                 InputContext::try_create_from_insert_file_format(
                     rx,
                     ctx.get_settings(),
-                    option_settings.clone(),
+                    format.clone(),
                     table_schema,
                     ctx.get_scan_progress(),
                     false,
                     to_table.get_block_thresholds(),
+                    on_error_mode.clone(),
                 )
                 .await
                 .map_err(|err| err.display_with_sql(&sql))
                 .map_err(InternalServerError)?,
             );
 
-            *input_context_ref = Some(input_context.clone());
+            *input_context_option = Some(input_context.clone());
             info!("clickhouse insert with file_format {:?}", input_context);
 
             let compression_alg = input_context

@@ -111,7 +111,7 @@ fn test_env_config_s3() -> Result<()> {
             assert_eq!(1, configured.meta.endpoints.len());
             assert_eq!("0.0.0.0:9191", configured.meta.endpoints[0]);
 
-            assert_eq!("s3", configured.storage.storage_type);
+            assert_eq!("s3", configured.storage.typ);
             assert_eq!(16, configured.storage.storage_num_cpus);
 
             // config of fs should not be loaded, take default value.
@@ -229,7 +229,7 @@ fn test_env_config_fs() -> Result<()> {
             assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
             assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
 
-            assert_eq!("fs", configured.storage.storage_type);
+            assert_eq!("fs", configured.storage.typ);
             assert_eq!(16, configured.storage.storage_num_cpus);
 
             assert_eq!("/tmp/test", configured.storage.fs.data_path);
@@ -347,7 +347,7 @@ fn test_env_config_gcs() -> Result<()> {
             assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
             assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
 
-            assert_eq!("gcs", configured.storage.storage_type);
+            assert_eq!("gcs", configured.storage.typ);
             assert_eq!(16, configured.storage.storage_num_cpus);
 
             assert_eq!(
@@ -477,7 +477,7 @@ fn test_env_config_oss() -> Result<()> {
             assert_eq!(1, configured.meta.endpoints.len());
             assert_eq!("0.0.0.0:9191", configured.meta.endpoints[0]);
 
-            assert_eq!("oss", configured.storage.storage_type);
+            assert_eq!("oss", configured.storage.typ);
             assert_eq!(16, configured.storage.storage_num_cpus);
 
             // Storage type is oss, s3 related value should be default.
@@ -612,7 +612,7 @@ fn test_env_config_webhdfs() -> Result<()> {
             assert_eq!(1, configured.meta.endpoints.len());
             assert_eq!("0.0.0.0:9191", configured.meta.endpoints[0]);
 
-            assert_eq!("webhdfs", configured.storage.storage_type);
+            assert_eq!("webhdfs", configured.storage.typ);
             assert_eq!(16, configured.storage.storage_num_cpus);
 
             // Storage type is webhdfs, s3 related value should be default.
@@ -811,7 +811,7 @@ path = "_cache"
 
             assert_eq!("tenant_id_from_env", cfg.query.tenant_id);
             assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
-            assert_eq!("s3", cfg.storage.storage_type);
+            assert_eq!("s3", cfg.storage.typ);
 
             let cache_config = &cfg.cache;
             assert_eq!(
@@ -826,7 +826,7 @@ path = "_cache"
             // Outer -> Inner -> Outer
             //
             // config in `catalog` field will be moved to `catalogs` field
-            assert!(cfg.catalog.meta_store_address.is_empty());
+            assert!(cfg.catalog.address.is_empty());
             assert!(cfg.catalog.protocol.is_empty());
             // config in `catalog` field, with name of "hive"
             assert!(cfg.catalogs.get("hive").is_some(), "catalogs is none!");
@@ -860,7 +860,7 @@ fn test_override_config_old_hive_catalog() -> Result<()> {
     f.write_all(
         r#"
 [catalog]
-meta_store_address = "1.1.1.1:10000"
+address = "1.1.1.1:10000"
 protocol = "binary"
 "#
         .as_bytes(),

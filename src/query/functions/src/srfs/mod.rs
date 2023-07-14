@@ -27,8 +27,10 @@ use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::Value;
-use jsonb::get_by_path;
+use jsonb::array_values;
 use jsonb::jsonpath::parse_json_path;
+use jsonb::jsonpath::Mode as SelectorMode;
+use jsonb::jsonpath::Selector;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.properties.insert(
@@ -42,7 +44,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 ty @ (DataType::Null
                 | DataType::EmptyArray
                 | DataType::Nullable(_)
-                | DataType::Array(_)),
+                | DataType::Array(_)
+                | DataType::Variant),
             ] => Some(build_unnest(ty, Box::new(|ty| ty))),
             _ => {
                 // Generate a fake function with signature `unset(Array(T0 NULL))` to have a better error message.
@@ -63,8 +66,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         if args_type.len() != 2 {
             return None;
         }
-        if args_type[0].remove_nullable() != DataType::Variant
-            || args_type[1].remove_nullable() != DataType::String
+        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
+            || (args_type[1].remove_nullable() != DataType::String
+                && args_type[1] != DataType::Null)
         {
             return None;
         }
@@ -73,45 +77,90 @@ pub fn register(registry: &mut FunctionRegistry) {
             signature: FunctionSignature {
                 name: "json_path_query".to_string(),
                 args_type: args_type.to_vec(),
-                return_type: DataType::Tuple(vec![DataType::Variant]),
+                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
             },
 
             eval: FunctionEval::SRF {
-                eval: Box::new(|args, ctx| {
+                eval: Box::new(|args, ctx, max_nums_per_row| {
                     let val_arg = args[0].clone().to_owned();
                     let path_arg = args[1].clone().to_owned();
-                    (0..ctx.num_rows)
-                        .map(|row| {
-                            let val = val_arg.index(row).unwrap();
-                            let path = path_arg.index(row).unwrap();
-                            let mut builder = StringColumnBuilder::with_capacity(0, 0);
-                            if let ScalarRef::String(path) = path {
-                                match parse_json_path(path) {
-                                    Ok(json_path) => {
-                                        if let ScalarRef::Variant(val) = val {
-                                            let vals = get_by_path(val, json_path);
-                                            for val in vals {
-                                                builder.put(&val);
-                                                builder.commit_row();
-                                            }
-                                        }
-                                    }
-                                    Err(_) => {
-                                        ctx.set_error(
-                                            0,
-                                            format!(
-                                                "Invalid JSON Path '{}'",
-                                                &String::from_utf8_lossy(path),
-                                            ),
+                    let mut results = Vec::with_capacity(ctx.num_rows);
+                    match path_arg {
+                        Value::Scalar(Scalar::String(path)) => match parse_json_path(&path) {
+                            Ok(json_path) => {
+                                let selector = Selector::new(json_path, SelectorMode::All);
+                                for (row, max_nums_per_row) in
+                                    max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
+                                {
+                                    let val = unsafe { val_arg.index_unchecked(row) };
+                                    let mut builder = StringColumnBuilder::with_capacity(0, 0);
+                                    if let ScalarRef::Variant(val) = val {
+                                        selector.select(
+                                            val,
+                                            &mut builder.data,
+                                            &mut builder.offsets,
                                         );
                                     }
+                                    let array =
+                                        Column::Variant(builder.build()).wrap_nullable(None);
+                                    let array_len = array.len();
+                                    *max_nums_per_row = std::cmp::max(*max_nums_per_row, array_len);
+                                    results.push((
+                                        Value::Column(Column::Tuple(vec![array])),
+                                        array_len,
+                                    ));
                                 }
                             }
-                            let array = Column::Variant(builder.build());
-                            let array_len = array.len();
-                            (Value::Column(Column::Tuple(vec![array])), array_len)
-                        })
-                        .collect()
+                            Err(_) => {
+                                ctx.set_error(
+                                    0,
+                                    format!(
+                                        "Invalid JSON Path '{}'",
+                                        &String::from_utf8_lossy(&path),
+                                    ),
+                                );
+                            }
+                        },
+                        _ => {
+                            for (row, max_nums_per_row) in
+                                max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
+                            {
+                                let val = unsafe { val_arg.index_unchecked(row) };
+                                let path = unsafe { path_arg.index_unchecked(row) };
+                                let mut builder = StringColumnBuilder::with_capacity(0, 0);
+                                if let ScalarRef::String(path) = path {
+                                    match parse_json_path(path) {
+                                        Ok(json_path) => {
+                                            if let ScalarRef::Variant(val) = val {
+                                                let selector =
+                                                    Selector::new(json_path, SelectorMode::All);
+                                                selector.select(
+                                                    val,
+                                                    &mut builder.data,
+                                                    &mut builder.offsets,
+                                                );
+                                            }
+                                        }
+                                        Err(_) => {
+                                            ctx.set_error(
+                                                row,
+                                                format!(
+                                                    "Invalid JSON Path '{}'",
+                                                    &String::from_utf8_lossy(path),
+                                                ),
+                                            );
+                                        }
+                                    }
+                                }
+                                let array = Column::Variant(builder.build()).wrap_nullable(None);
+                                let array_len = array.len();
+                                *max_nums_per_row = std::cmp::max(*max_nums_per_row, array_len);
+                                results
+                                    .push((Value::Column(Column::Tuple(vec![array])), array_len));
+                            }
+                        }
+                    }
+                    results
                 }),
             },
         }))
@@ -131,12 +180,47 @@ fn build_unnest(
                     return_type: DataType::Tuple(vec![DataType::Null]),
                 },
                 eval: FunctionEval::SRF {
-                    eval: Box::new(|_, ctx| {
+                    eval: Box::new(|_, ctx, _| {
                         vec![(Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0); ctx.num_rows]
                     }),
                 },
             })
         }
+        DataType::Variant | DataType::Nullable(box DataType::Variant) => Arc::new(Function {
+            signature: FunctionSignature {
+                name: "unnest".to_string(),
+                args_type: vec![wrap_type(DataType::Nullable(Box::new(DataType::Variant)))],
+                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
+            },
+            eval: FunctionEval::SRF {
+                eval: Box::new(|args, ctx, max_nums_per_row| {
+                    let arg = args[0].clone().to_owned();
+                    (0..ctx.num_rows)
+                        .map(|row| match arg.index(row).unwrap() {
+                            ScalarRef::Null => {
+                                (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0)
+                            }
+                            ScalarRef::Variant(val) => {
+                                let mut len = 0;
+                                let mut builder = StringColumnBuilder::with_capacity(0, 0);
+                                if let Some(vals) = array_values(val) {
+                                    len = vals.len();
+                                    max_nums_per_row[row] =
+                                        std::cmp::max(max_nums_per_row[row], len);
+                                    for val in vals {
+                                        builder.put_slice(&val);
+                                        builder.commit_row();
+                                    }
+                                }
+                                let col = Column::Variant(builder.build()).wrap_nullable(None);
+                                (Value::Column(Column::Tuple(vec![col])), len)
+                            }
+                            _ => unreachable!(),
+                        })
+                        .collect()
+                }),
+            },
+        }),
         DataType::Array(ty) => build_unnest(
             ty,
             Box::new(move |ty| wrap_type(DataType::Array(Box::new(ty)))),
@@ -158,7 +242,7 @@ fn build_unnest(
                 ))]),
             },
             eval: FunctionEval::SRF {
-                eval: Box::new(|args, ctx| {
+                eval: Box::new(|args, ctx, max_nums_per_row| {
                     let arg = args[0].clone().to_owned();
                     (0..ctx.num_rows)
                         .map(|row| {
@@ -181,6 +265,8 @@ fn build_unnest(
                                 ScalarRef::Array(col) => {
                                     let unnest_array = unnest_column(col);
                                     let array_len = unnest_array.len();
+                                    max_nums_per_row[row] =
+                                        std::cmp::max(max_nums_per_row[row], array_len);
                                     (Value::Column(Column::Tuple(vec![unnest_array])), array_len)
                                 }
                                 _ => unreachable!(),

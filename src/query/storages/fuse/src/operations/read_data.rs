@@ -31,6 +31,7 @@ use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
+use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
@@ -56,7 +57,7 @@ impl FuseTable {
     }
 
     // Build the block reader.
-    fn build_block_reader(
+    pub fn build_block_reader(
         &self,
         plan: &DataSourcePlan,
         ctx: Arc<dyn TableContext>,
@@ -191,6 +192,21 @@ impl FuseTable {
             )
         });
 
+        let index_reader = Arc::new(
+            plan.push_downs
+                .as_ref()
+                .and_then(|p| p.agg_index.as_ref())
+                .map(|agg| {
+                    AggIndexReader::try_create(
+                        ctx.clone(),
+                        self.operator.clone(),
+                        agg,
+                        self.table_compression,
+                    )
+                })
+                .transpose()?,
+        );
+
         Self::build_fuse_source_pipeline(
             ctx.clone(),
             pipeline,
@@ -199,6 +215,7 @@ impl FuseTable {
             plan,
             topk,
             max_io_requests,
+            index_reader,
         )?;
 
         // replace the column which has data mask if needed
@@ -207,6 +224,7 @@ impl FuseTable {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn build_fuse_source_pipeline(
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
@@ -215,6 +233,7 @@ impl FuseTable {
         plan: &DataSourcePlan,
         top_k: Option<TopK>,
         max_io_requests: usize,
+        index_reader: Arc<Option<AggIndexReader>>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
@@ -227,6 +246,7 @@ impl FuseTable {
                 plan,
                 top_k,
                 max_io_requests,
+                index_reader,
             ),
             FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
                 ctx,
@@ -235,6 +255,7 @@ impl FuseTable {
                 plan,
                 max_threads,
                 max_io_requests,
+                index_reader,
             ),
         }
     }

@@ -31,6 +31,7 @@ use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;
 
 use super::config::Config;
+use crate::background_config::InnerBackgroundConfig;
 
 /// Inner config for query.
 ///
@@ -61,6 +62,9 @@ pub struct InnerConfig {
 
     // Cache Config
     pub cache: CacheConfig,
+
+    // Background Config
+    pub background: InnerBackgroundConfig,
 }
 
 impl InnerConfig {

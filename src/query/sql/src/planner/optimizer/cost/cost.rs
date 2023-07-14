@@ -46,7 +46,7 @@ impl Add for Cost {
     }
 }
 
-pub trait CostModel {
+pub trait CostModel: Send {
     /// Compute cost of given `MExpr`(children are not encapsulated).
     fn compute_cost(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost>;
 }

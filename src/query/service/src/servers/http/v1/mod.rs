@@ -17,6 +17,7 @@ pub mod json_block;
 mod load;
 mod query;
 mod stage;
+mod suggestions;
 
 pub use http_query_handlers::make_final_uri;
 pub use http_query_handlers::make_page_uri;
@@ -35,5 +36,7 @@ pub use query::HttpQueryManager;
 pub use query::HttpSessionConf;
 pub use stage::upload_to_stage;
 pub use stage::UploadToStageResponse;
+pub use suggestions::list_suggestions;
+pub use suggestions::SuggestionsResponse;
 
 pub use crate::servers::http::clickhouse_handler::clickhouse_router;

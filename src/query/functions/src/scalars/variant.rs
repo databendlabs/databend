@@ -60,11 +60,9 @@ use jsonb::as_bool;
 use jsonb::as_f64;
 use jsonb::as_i64;
 use jsonb::as_str;
-use jsonb::build_array;
 use jsonb::build_object;
 use jsonb::get_by_index;
 use jsonb::get_by_name;
-use jsonb::get_by_name_ignore_case;
 use jsonb::get_by_path;
 use jsonb::get_by_path_array;
 use jsonb::get_by_path_first;
@@ -85,7 +83,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
         "parse_json",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|s, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -109,7 +107,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, VariantType, _, _>(
         "parse_json",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, VariantType>(|s, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -131,7 +129,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
         "try_parse_json",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|s, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -154,7 +152,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<StringType, VariantType, _, _>(
         "try_parse_json",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<StringType, NullableType<VariantType>>(|s, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -175,7 +173,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
         "check_json",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|s, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -194,7 +192,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<StringType, StringType, _, _>(
         "check_json",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<StringType, NullableType<StringType>>(|s, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -211,7 +209,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg_core::<NullableType<VariantType>, NullableType<UInt32Type>, _, _>(
         "length",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_1_arg::<NullableType<VariantType>, NullableType<UInt32Type>>(|val, _| {
             val.and_then(|v| array_length(v).map(|v| v as u32))
         }),
@@ -219,7 +217,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg_core::<NullableType<VariantType>, NullableType<VariantType>, _, _>(
         "json_object_keys",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_1_arg::<NullableType<VariantType>, NullableType<VariantType>>(|val, _| {
             val.and_then(object_keys)
         }),
@@ -227,7 +225,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
         "get",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
             |val, name, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -237,7 +235,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match std::str::from_utf8(name) {
-                    Ok(name) => match get_by_name(val, name) {
+                    Ok(name) => match get_by_name(val, name, false) {
                         Some(v) => {
                             output.push(&v);
                         }
@@ -263,7 +261,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<VariantType, Int64Type, VariantType, _, _>(
         "get",
-        |_, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<VariantType, Int64Type, NullableType<VariantType>>(
             |val, idx, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -275,7 +273,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 if idx < 0 || idx > i32::MAX.into() {
                     output.push_null();
                 } else {
-                    match get_by_index(val, idx as i32) {
+                    match get_by_index(val, idx as usize) {
                         Some(v) => {
                             output.push(&v);
                         }
@@ -290,7 +288,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
         "get_ignore_case",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
             |val, name, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -300,7 +298,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match std::str::from_utf8(name) {
-                    Ok(name) => match get_by_name_ignore_case(val, name) {
+                    Ok(name) => match get_by_name(val, name, true) {
                         Some(v) => output.push(&v),
                         None => output.push_null(),
                     },
@@ -322,7 +320,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
         "json_path_query_array",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
             |val, path, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -332,10 +330,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match parse_json_path(path) {
-                    Ok(json_path) => match get_by_path_array(val, json_path) {
-                        Some(v) => output.push(&v),
-                        None => output.push_null(),
-                    },
+                    Ok(json_path) => {
+                        get_by_path_array(
+                            val,
+                            json_path,
+                            &mut output.builder.data,
+                            &mut output.builder.offsets,
+                        );
+                        if output.builder.offsets.len() == output.len() + 1 {
+                            output.push_null();
+                        } else {
+                            output.validity.push(true);
+                        }
+                    }
                     Err(_) => {
                         ctx.set_error(
                             output.len(),
@@ -350,7 +357,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
         "json_path_query_first",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
             |val, path, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -360,10 +367,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match parse_json_path(path) {
-                    Ok(json_path) => match get_by_path_first(val, json_path) {
-                        Some(v) => output.push(&v),
-                        None => output.push_null(),
-                    },
+                    Ok(json_path) => {
+                        get_by_path_first(
+                            val,
+                            json_path,
+                            &mut output.builder.data,
+                            &mut output.builder.offsets,
+                        );
+                        if output.builder.offsets.len() == output.len() + 1 {
+                            output.push_null();
+                        } else {
+                            output.validity.push(true);
+                        }
+                    }
                     Err(_) => {
                         ctx.set_error(
                             output.len(),
@@ -378,7 +394,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
         "get_path",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
             |val, path, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -389,17 +405,16 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match parse_json_path(path) {
                     Ok(json_path) => {
-                        let mut vals = get_by_path(val, json_path);
-                        if vals.is_empty() {
+                        get_by_path(
+                            val,
+                            json_path,
+                            &mut output.builder.data,
+                            &mut output.builder.offsets,
+                        );
+                        if output.builder.offsets.len() == output.len() + 1 {
                             output.push_null();
-                        } else if vals.len() == 1 {
-                            let v = vals.remove(0);
-                            output.push(&v);
                         } else {
-                            let mut array_val = Vec::new();
-                            let items: Vec<_> = vals.iter().map(|v| v.as_slice()).collect();
-                            build_array(items, &mut array_val).unwrap();
-                            output.push(&array_val);
+                            output.validity.push(true);
                         }
                     }
                     Err(_) => {
@@ -416,7 +431,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<StringType, StringType, StringType, _, _>(
         "json_extract_path_text",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<StringType>>(
             |s, path, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -431,19 +446,16 @@ pub fn register(registry: &mut FunctionRegistry) {
                         val.write_to_vec(&mut buf);
                         match parse_json_path(path) {
                             Ok(json_path) => {
-                                let mut vals = get_by_path(&buf, json_path);
-                                if vals.is_empty() {
+                                let mut out_buf = Vec::new();
+                                let mut out_offsets = Vec::new();
+                                get_by_path(&buf, json_path, &mut out_buf, &mut out_offsets);
+                                if out_offsets.is_empty() {
                                     output.push_null();
-                                } else if vals.len() == 1 {
-                                    let v = vals.remove(0);
-                                    let json_val = to_string(&v);
-                                    output.push(json_val.as_bytes());
                                 } else {
-                                    let mut array_val = Vec::new();
-                                    let items: Vec<_> = vals.iter().map(|v| v.as_slice()).collect();
-                                    build_array(items, &mut array_val).unwrap();
-                                    let json_val = to_string(&array_val);
-                                    output.push(json_val.as_bytes());
+                                    let json_str = to_string(&out_buf);
+                                    output.builder.put(json_str.as_bytes());
+                                    output.builder.commit_row();
+                                    output.validity.push(true);
                                 }
                             }
                             Err(_) => {
@@ -469,7 +481,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "as_boolean",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<BooleanType>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -486,7 +498,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, Int64Type, _, _>(
         "as_integer",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<Int64Type>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -503,7 +515,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, Float64Type, _, _>(
         "as_float",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<Float64Type>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -520,7 +532,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
         "as_string",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -537,7 +549,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
         "as_array",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -555,7 +567,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
         "as_object",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -573,7 +585,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
         "to_variant",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         |val, ctx| match val {
             ValueRef::Scalar(scalar) => {
                 let mut buf = Vec::new();
@@ -589,7 +601,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
         "try_to_variant",
-        |_| {
+        |_, _| {
             FunctionDomain::Domain(NullableDomain {
                 has_null: false,
                 value: Some(Box::new(())),
@@ -613,7 +625,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "to_boolean",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|val, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -633,7 +645,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "try_to_boolean",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<BooleanType>>(
             |val, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -654,7 +666,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
         "to_string",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -674,7 +686,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
         "try_to_string",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(
             |val, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -697,7 +709,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<VariantType, DateType, _, _>(
         "to_date",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, DateType>(|val, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -717,7 +729,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, DateType, _, _>(
         "try_to_date",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|val, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -736,7 +748,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<VariantType, TimestampType, _, _>(
         "to_timestamp",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, TimestampType>(|val, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -758,7 +770,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, TimestampType, _, _>(
         "try_to_timestamp",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
             |val, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -789,7 +801,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry
                     .register_passthrough_nullable_1_arg::<VariantType, NumberType<NUM_TYPE>, _, _>(
                         &name,
-                        |_| FunctionDomain::MayThrow,
+                        |_, _| FunctionDomain::MayThrow,
                         vectorize_with_builder_1_arg::<VariantType, NumberType<NUM_TYPE>>(
                             move |val, output, ctx| {
                                 if let Some(validity) = &ctx.validity {
@@ -825,7 +837,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry
                     .register_combine_nullable_1_arg::<VariantType, NumberType<NUM_TYPE>, _, _>(
                         &name,
-                        |_| FunctionDomain::Full,
+                        |_, _| FunctionDomain::Full,
                         vectorize_with_builder_1_arg::<
                             VariantType,
                             NullableType<NumberType<NUM_TYPE>>,
@@ -873,6 +885,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         });
     }
 
+    registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
+        "json_to_string",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            let s = to_string(val);
+            output.put_slice(s.as_bytes());
+            output.commit_row();
+        }),
+    );
+
     registry.register_function_factory("json_object", |_, args_type| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
@@ -881,7 +909,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
                 eval: Box::new(move |args, ctx| json_object_fn(args, ctx, false)),
             },
         }))
@@ -895,7 +923,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
                 eval: Box::new(move |args, ctx| json_object_fn(args, ctx, true)),
             },
         }))

@@ -70,7 +70,8 @@ pub enum FunctionEval {
     /// Scalar function that returns a single value.
     Scalar {
         /// Given the domains of the arguments, return the domain of the output value.
-        calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
+        calc_domain:
+            Box<dyn Fn(&FunctionContext, &[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
         /// Given a set of arguments, return a single value.
         /// The result must be in the same length as the input arguments if its a column.
         eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
@@ -80,7 +81,11 @@ pub enum FunctionEval {
         /// Given multiple rows, return multiple sets of results
         /// for each input row, along with the number of rows in each set.
         eval: Box<
-            dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Vec<(Value<AnyType>, usize)>
+            dyn Fn(
+                    &[ValueRef<AnyType>],
+                    &mut EvalContext,
+                    &mut [usize],
+                ) -> Vec<(Value<AnyType>, usize)>
                 + Send
                 + Sync,
         >,
@@ -162,7 +167,7 @@ impl Function {
                 return_type: self.signature.return_type.wrap_nullable(),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(wrap_nullable(eval)),
             },
         }
@@ -175,8 +180,8 @@ impl Function {
 
         let (calc_domain, eval) = self.eval.into_scalar().unwrap();
 
-        let new_calc_domain = Box::new(move |domains: &[Domain]| {
-            let domain = calc_domain(domains);
+        let new_calc_domain = Box::new(move |ctx: &FunctionContext, domains: &[Domain]| {
+            let domain = calc_domain(ctx, domains);
             match domain {
                 FunctionDomain::Domain(domain) => {
                     let new_domain = NullableDomain {

@@ -232,7 +232,31 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
+            Plan::SetOptions(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Alter],
+                    )
+                    .await?;
+            }
             Plan::AddTableColumn(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Alter],
+                    )
+                    .await?;
+            }
+            Plan::RenameTableColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -336,6 +360,14 @@ impl AccessChecker for PrivilegeAccess {
                             plan.database.clone(),
                             plan.table.clone(),
                         ),
+                        vec![UserPrivilegeType::Super],
+                    )
+                    .await?;
+            }
+            Plan::VacuumDropTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                         vec![UserPrivilegeType::Super],
                     )
                     .await?;
@@ -469,7 +501,8 @@ impl AccessChecker for PrivilegeAccess {
             Plan::AlterUser(_)
             | Plan::AlterUDF(_)
             | Plan::RenameDatabase(_)
-            | Plan::RevertTable(_) => {
+            | Plan::RevertTable(_)
+            | Plan::RefreshIndex(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Alter])
                     .await?;

@@ -1012,7 +1012,10 @@ SELECT parse_json('"cd"') like 'ab'
 ----
 0
 
-
+query B
+select parse_json('{"name":"jcs.sol"}') like '%.sol%';
+----
+1
 
 query B
 SELECT parse_json('"ab"') not like 'ab'
@@ -1026,7 +1029,10 @@ SELECT parse_json('"cd"') not like 'ab'
 ----
 1
 
-
+query B
+select parse_json('{"name":"jcs.sol"}') not like '%.sol%';
+----
+0
 
 query B
 SELECT parse_json('"ab"') regexp '.*'

@@ -46,6 +46,8 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
@@ -64,6 +66,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -461,6 +465,16 @@ impl Catalog for HiveCatalog {
 
     #[async_backtrace::framed]
     async fn drop_index(&self, _req: DropIndexReq) -> Result<DropIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
         unimplemented!()
     }
 

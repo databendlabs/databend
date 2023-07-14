@@ -84,14 +84,17 @@ impl<T: AsyncTransform + 'static> Processor for AsyncTransformer<T> {
         match self.output.is_finished() {
             true => self.finish_input(),
             false if !self.output.can_push() => self.not_need_data(),
-            false => match self.output_data.take() {
-                None if self.input_data.is_some() => Ok(Event::Async),
-                None => self.pull_data(),
-                Some(data) => {
+            false => {
+                if let Some(data) = self.output_data.take() {
                     self.output.push_data(Ok(data));
-                    Ok(Event::NeedConsume)
                 }
-            },
+
+                if self.input_data.is_some() {
+                    return Ok(Event::Async);
+                }
+
+                self.pull_data()
+            }
         }
     }
 

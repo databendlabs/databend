@@ -13,14 +13,19 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fmt::Display;
+use std::fmt::Formatter;
 
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumn;
+use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
+use common_catalog::plan::StageTableInfo;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -28,15 +33,20 @@ use common_expression::DataSchemaRefExt;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
+use common_expression::TableSchemaRef;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
+use common_storage::StageFileInfo;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::RangeJoinCondition;
 use crate::optimizer::ColumnSet;
+use crate::plans::CopyIntoTableMode;
 use crate::plans::JoinType;
 use crate::plans::RuntimeFilterId;
+use crate::plans::ValidationMode;
 use crate::plans::WindowFuncFrame;
 use crate::ColumnBinding;
 use crate::IndexType;
@@ -60,14 +70,21 @@ pub struct TableScan {
 }
 
 impl TableScan {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let mut fields = Vec::with_capacity(self.name_mapping.len());
-        let schema = self.source.schema();
-        for (name, id) in self.name_mapping.iter() {
+    pub fn output_fields(
+        schema: TableSchemaRef,
+        name_mapping: &BTreeMap<String, IndexType>,
+    ) -> Result<Vec<DataField>> {
+        let mut fields = Vec::with_capacity(name_mapping.len());
+        for (name, id) in name_mapping.iter() {
             let orig_field = schema.field_with_name(name)?;
             let data_type = DataType::from(orig_field.data_type());
             fields.push(DataField::new(&id.to_string(), data_type));
         }
+        Ok(fields)
+    }
+
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let fields = TableScan::output_fields(self.source.schema(), &self.name_mapping)?;
         Ok(DataSchemaRefExt::create(fields))
     }
 }
@@ -159,6 +176,8 @@ pub struct ProjectSet {
 
     pub srf_exprs: Vec<(RemoteExpr, IndexType)>,
 
+    pub unused_indices: HashSet<IndexType>,
+
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -166,7 +185,12 @@ pub struct ProjectSet {
 impl ProjectSet {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
-        let mut fields = input_schema.fields().clone();
+        let mut fields = Vec::with_capacity(input_schema.num_fields() + self.srf_exprs.len());
+        for (i, field) in input_schema.fields().iter().enumerate() {
+            if !self.unused_indices.contains(&i) {
+                fields.push(field.clone());
+            }
+        }
         fields.extend(self.srf_exprs.iter().map(|(srf, index)| {
             DataField::new(
                 &index.to_string(),
@@ -302,6 +326,8 @@ pub enum WindowFunction {
     PercentRank,
     LagLead(LagLeadFunctionDesc),
     NthValue(NthValueFunctionDesc),
+    Ntile(NtileFunctionDesc),
+    CumeDist,
 }
 
 impl WindowFunction {
@@ -311,9 +337,12 @@ impl WindowFunction {
             WindowFunction::RowNumber | WindowFunction::Rank | WindowFunction::DenseRank => {
                 Ok(DataType::Number(NumberDataType::UInt64))
             }
-            WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
+            WindowFunction::PercentRank | WindowFunction::CumeDist => {
+                Ok(DataType::Number(NumberDataType::Float64))
+            }
             WindowFunction::LagLead(f) => Ok(f.return_type.clone()),
             WindowFunction::NthValue(f) => Ok(f.return_type.clone()),
+            WindowFunction::Ntile(f) => Ok(f.return_type.clone()),
         }
     }
 }
@@ -329,6 +358,8 @@ impl Display for WindowFunction {
             WindowFunction::LagLead(lag_lead) if lag_lead.is_lag => write!(f, "lag"),
             WindowFunction::LagLead(_) => write!(f, "lead"),
             WindowFunction::NthValue(_) => write!(f, "nth_value"),
+            WindowFunction::Ntile(_) => write!(f, "ntile"),
+            WindowFunction::CumeDist => write!(f, "cume_dist"),
         }
     }
 }
@@ -370,6 +401,7 @@ pub struct Sort {
 
     // If the sort plan is after the exchange plan
     pub after_exchange: bool,
+    pub pre_projection: Option<Vec<IndexType>>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -377,7 +409,19 @@ pub struct Sort {
 
 impl Sort {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
+        let input_schema = self.input.output_schema()?;
+        if let Some(proj) = &self.pre_projection {
+            let fields = proj
+                .iter()
+                .filter_map(|index| input_schema.field_with_name(&index.to_string()).ok())
+                .cloned()
+                .collect::<Vec<_>>();
+            if fields.len() < input_schema.fields().len() {
+                // Only if the projection is not a full projection, we need to add a projection transform.
+                return Ok(DataSchemaRefExt::create(fields));
+            }
+        }
+        Ok(input_schema)
     }
 }
 
@@ -456,7 +500,7 @@ impl HashJoin {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = self.probe.output_schema()?.fields().clone();
         match self.join_type {
-            JoinType::Left | JoinType::Single => {
+            JoinType::Left | JoinType::LeftSingle => {
                 for field in self.build.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
@@ -464,7 +508,7 @@ impl HashJoin {
                     ));
                 }
             }
-            JoinType::Right => {
+            JoinType::Right | JoinType::RightSingle => {
                 fields.clear();
                 for field in self.probe.output_schema()?.fields() {
                     fields.push(DataField::new(
@@ -569,6 +613,9 @@ impl RangeJoin {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Exchange {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
     pub kind: FragmentKind,
     pub keys: Vec<RemoteExpr>,
@@ -582,6 +629,9 @@ impl Exchange {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSource {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    pub plan_id: u32,
+
     /// Output schema of exchanged data
     pub schema: DataSchemaRef,
 
@@ -609,6 +659,9 @@ pub enum FragmentKind {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSink {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
     /// Input schema of exchanged data
     pub schema: DataSchemaRef,
@@ -618,7 +671,6 @@ pub struct ExchangeSink {
     /// Fragment ID of sink fragment
     pub destination_fragment_id: usize,
     /// Addresses of destination nodes
-    pub destinations: Vec<String>,
     pub query_id: String,
 }
 
@@ -650,7 +702,41 @@ impl UnionAll {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct DistributedCopyIntoTable {
+    pub plan_id: u32,
+    pub catalog_name: String,
+    pub database_name: String,
+    pub table_name: String,
+    // ... into table(<columns>) ..  -> <columns>
+    pub required_values_schema: DataSchemaRef,
+    // (1, ?, 'a', ?) -> (1, 'a')
+    pub values_consts: Vec<Scalar>,
+    // (1, ?, 'a', ?) -> (?, ?)
+    pub required_source_schema: DataSchemaRef,
+
+    pub write_mode: CopyIntoTableMode,
+    pub validation_mode: ValidationMode,
+    pub force: bool,
+
+    pub stage_table_info: StageTableInfo,
+    pub source: Box<DataSourcePlan>,
+
+    pub thresholds: BlockThresholds,
+    pub files: Vec<StageFileInfo>,
+    pub table_info: TableInfo,
+}
+
+impl DistributedCopyIntoTable {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DistributedInsertSelect {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
     pub catalog: String,
     pub table_info: TableInfo,
@@ -688,6 +774,60 @@ impl RuntimeFilterSource {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct DeletePartial {
+    pub parts: Partitions,
+    pub filter: RemoteExpr<String>,
+    pub table_info: TableInfo,
+    pub catalog_name: String,
+    pub col_indices: Vec<usize>,
+    pub query_row_id_col: bool,
+}
+
+impl DeletePartial {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+}
+
+impl DeleteFinal {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct DeleteFinal {
+    pub input: Box<PhysicalPlan>,
+    pub snapshot: TableSnapshot,
+    pub table_info: TableInfo,
+    pub catalog_name: String,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RefreshIndex {
+    pub input: Box<PhysicalPlan>,
+    pub index_id: u64,
+    pub table_info: TableInfo,
+    pub select_schema: DataSchemaRef,
+    pub select_column_bindings: Vec<ColumnBinding>,
+}
+
+impl RefreshIndex {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRefExt::create(vec![DataField::new(
+            "index_loc",
+            DataType::String,
+        )]))
+    }
+}
+
+impl Display for RefreshIndex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RefreshIndex")
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum PhysicalPlan {
     TableScan(TableScan),
     Filter(Filter),
@@ -709,10 +849,15 @@ pub enum PhysicalPlan {
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
-
+    /// add distributed copy into table from @stage
+    DistributedCopyIntoTable(Box<DistributedCopyIntoTable>),
     /// Synthesized by fragmenter
     ExchangeSource(ExchangeSource),
     ExchangeSink(ExchangeSink),
+
+    /// For distributed delete
+    DeletePartial(Box<DeletePartial>),
+    DeleteFinal(Box<DeleteFinal>),
 }
 
 impl PhysicalPlan {
@@ -722,6 +867,35 @@ impl PhysicalPlan {
                 self,
                 Self::ExchangeSource(_) | Self::ExchangeSink(_) | Self::Exchange(_)
             )
+    }
+
+    /// Get the id of the plan node
+    pub fn get_id(&self) -> u32 {
+        match self {
+            PhysicalPlan::TableScan(v) => v.plan_id,
+            PhysicalPlan::Filter(v) => v.plan_id,
+            PhysicalPlan::Project(v) => v.plan_id,
+            PhysicalPlan::EvalScalar(v) => v.plan_id,
+            PhysicalPlan::ProjectSet(v) => v.plan_id,
+            PhysicalPlan::AggregateExpand(v) => v.plan_id,
+            PhysicalPlan::AggregatePartial(v) => v.plan_id,
+            PhysicalPlan::AggregateFinal(v) => v.plan_id,
+            PhysicalPlan::Window(v) => v.plan_id,
+            PhysicalPlan::Sort(v) => v.plan_id,
+            PhysicalPlan::Limit(v) => v.plan_id,
+            PhysicalPlan::RowFetch(v) => v.plan_id,
+            PhysicalPlan::HashJoin(v) => v.plan_id,
+            PhysicalPlan::RangeJoin(v) => v.plan_id,
+            PhysicalPlan::Exchange(v) => v.plan_id,
+            PhysicalPlan::UnionAll(v) => v.plan_id,
+            PhysicalPlan::RuntimeFilterSource(v) => v.plan_id,
+            PhysicalPlan::DistributedInsertSelect(v) => v.plan_id,
+            PhysicalPlan::ExchangeSource(v) => v.plan_id,
+            PhysicalPlan::ExchangeSink(v) => v.plan_id,
+            PhysicalPlan::DeletePartial(_) | PhysicalPlan::DeleteFinal(_) => unreachable!(),
+            // for distributed_copy_into_table, planId is useless
+            PhysicalPlan::DistributedCopyIntoTable(v) => v.plan_id,
+        }
     }
 
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
@@ -745,7 +919,10 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
+            PhysicalPlan::DeletePartial(plan) => plan.output_schema(),
+            PhysicalPlan::DeleteFinal(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
+            PhysicalPlan::DistributedCopyIntoTable(plan) => plan.output_schema(),
         }
     }
 
@@ -770,7 +947,10 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
+            PhysicalPlan::DeletePartial(_) => "DeletePartial".to_string(),
+            PhysicalPlan::DeleteFinal(_) => "DeleteFinal".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
+            PhysicalPlan::DistributedCopyIntoTable(_) => "DistributedCopyIntoTable".to_string(),
         }
     }
 
@@ -799,6 +979,8 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
+            PhysicalPlan::DeletePartial(_plan) => Box::new(std::iter::empty()),
+            PhysicalPlan::DeleteFinal(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ProjectSet(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::RuntimeFilterSource(plan) => Box::new(
                 std::iter::once(plan.left_side.as_ref())
@@ -807,6 +989,7 @@ impl PhysicalPlan {
             PhysicalPlan::RangeJoin(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
+            PhysicalPlan::DistributedCopyIntoTable(_) => Box::new(std::iter::empty()),
         }
     }
 
@@ -825,6 +1008,7 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::DistributedCopyIntoTable(plan) => Some(&plan.source),
             PhysicalPlan::RuntimeFilterSource(_)
             | PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
@@ -832,7 +1016,9 @@ impl PhysicalPlan {
             | PhysicalPlan::RangeJoin(_)
             | PhysicalPlan::AggregateExpand(_)
             | PhysicalPlan::AggregateFinal(_)
-            | PhysicalPlan::AggregatePartial(_) => None,
+            | PhysicalPlan::AggregatePartial(_)
+            | PhysicalPlan::DeletePartial(_)
+            | PhysicalPlan::DeleteFinal(_) => None,
         }
     }
 }
@@ -864,6 +1050,12 @@ pub struct LagLeadFunctionDesc {
 pub struct NthValueFunctionDesc {
     pub n: Option<u64>,
     pub arg: usize,
+    pub return_type: DataType,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct NtileFunctionDesc {
+    pub n: u64,
     pub return_type: DataType,
 }
 

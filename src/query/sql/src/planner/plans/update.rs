@@ -30,13 +30,17 @@ use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast_scalar;
-use crate::parse_computed_exprs;
+use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
+use crate::plans::SubqueryDesc;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::MetadataRef;
 use crate::Visibility;
+
+pub const PREDICATE_COLUMN_NAME: &str = "_predicate";
 
 #[derive(Clone, Debug)]
 pub struct UpdatePlan {
@@ -46,6 +50,8 @@ pub struct UpdatePlan {
     pub update_list: HashMap<FieldIndex, ScalarExpr>,
     pub selection: Option<ScalarExpr>,
     pub bind_context: Box<BindContext>,
+    pub metadata: MetadataRef,
+    pub subquery_desc: Vec<SubqueryDesc>,
 }
 
 impl UpdatePlan {
@@ -66,7 +72,7 @@ impl UpdatePlan {
                 table_name: None,
                 column_position: None,
                 table_index: None,
-                column_name: "_predicate".to_string(),
+                column_name: PREDICATE_COLUMN_NAME.to_string(),
                 index: schema.num_fields(),
                 data_type: Box::new(DataType::Boolean),
                 visibility: Visibility::Visible,
@@ -132,8 +138,7 @@ impl UpdatePlan {
         let mut remote_exprs = BTreeMap::new();
         for (i, f) in schema.fields().iter().enumerate() {
             if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
-                let mut expr = parse_computed_exprs(ctx.clone(), schema.clone(), stored_expr)?;
-                let mut expr = expr.remove(0);
+                let mut expr = parse_computed_expr(ctx.clone(), schema.clone(), stored_expr)?;
                 if expr.data_type() != f.data_type() {
                     expr = Expr::Cast {
                         span: None,

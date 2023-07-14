@@ -18,6 +18,7 @@ use common_base::base::GlobalInstance;
 use common_exception::exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_license::license::Feature;
 use common_license::license::LicenseInfo;
 use common_license::license_manager::LicenseManager;
 use common_license::license_manager::LicenseManagerWrapper;
@@ -60,7 +61,7 @@ impl LicenseManager for RealLicenseManager {
         &self,
         settings: &Arc<Settings>,
         tenant: String,
-        feature: String,
+        feature: Feature,
     ) -> Result<()> {
         let license_key = settings.get_enterprise_license().map_err_to_code(
             ErrorCode::LicenseKeyInvalid,
@@ -74,13 +75,14 @@ impl LicenseManager for RealLicenseManager {
         }
 
         if let Some(v) = self.cache.get(license_key.as_str()) {
-            return Self::verify_license(v.value());
+            return Self::verify_license(v.value(), feature);
         }
 
         let license = self.parse_license(license_key.as_str()).map_err_to_code(
             ErrorCode::LicenseKeyInvalid,
             || format!("use of {feature} requires an enterprise license. current license is invalid for {tenant}"),
         )?;
+        Self::verify_feature(&license, feature)?;
         self.cache.insert(license_key, license);
         Ok(())
     }
@@ -106,8 +108,7 @@ impl RealLicenseManager {
         }
     }
 
-    // Only need to verify expire since other fields have already verified before enter into cache.
-    fn verify_license(l: &JWTClaims<LicenseInfo>) -> Result<()> {
+    fn verify_license(l: &JWTClaims<LicenseInfo>, feature: Feature) -> Result<()> {
         let now = Clock::now_since_epoch();
         match l.expires_at {
             Some(expire_at) => {
@@ -124,7 +125,21 @@ impl RealLicenseManager {
                 ));
             }
         }
+        Self::verify_feature(l, feature)?;
+        Ok(())
+    }
 
+    fn verify_feature(l: &JWTClaims<LicenseInfo>, feature: Feature) -> Result<()> {
+        if l.custom.features.is_none() {
+            return Ok(());
+        }
+        let features = l.custom.features.as_ref().unwrap();
+        if !features.contains(&feature.to_string()) {
+            return Err(ErrorCode::LicenseKeyInvalid(format!(
+                "license key does not support feature {}, supported features: {:?}",
+                feature, features
+            )));
+        }
         Ok(())
     }
 }

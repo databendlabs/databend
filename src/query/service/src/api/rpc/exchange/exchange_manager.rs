@@ -29,7 +29,7 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
-use common_profile::ProfSpanSetRef;
+use common_profile::SharedProcessorProfiles;
 use common_sql::executor::PhysicalPlan;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
@@ -330,6 +330,8 @@ impl DataExchangeManager {
 
                 let statistics_receiver: Mutex<StatisticsReceiver> =
                     Mutex::new(statistics_receiver);
+
+                let on_finished = build_res.main_pipeline.take_on_finished();
                 build_res.main_pipeline.set_on_finished(move |may_error| {
                     let query_id = ctx.get_id();
                     let mut statistics_receiver = statistics_receiver.lock();
@@ -337,6 +339,8 @@ impl DataExchangeManager {
                     statistics_receiver.shutdown(may_error.is_some());
                     ctx.get_exchange_manager().on_finished_query(&query_id);
                     statistics_receiver.wait_shutdown()?;
+
+                    on_finished(may_error)?;
 
                     match may_error {
                         None => Ok(()),
@@ -631,7 +635,6 @@ impl QueryCoordinator {
 
             return Ok(build_res);
         }
-
         Err(ErrorCode::Unimplemented("ExchangeSource is unimplemented"))
     }
 
@@ -802,8 +805,11 @@ impl FragmentCoordinator {
             self.initialized = true;
 
             let pipeline_ctx = QueryContext::create_from(ctx);
-            let pipeline_builder =
-                PipelineBuilder::create(pipeline_ctx, enable_profiling, ProfSpanSetRef::default());
+            let pipeline_builder = PipelineBuilder::create(
+                pipeline_ctx,
+                enable_profiling,
+                SharedProcessorProfiles::default(),
+            );
             self.pipeline_build_res = Some(pipeline_builder.finalize(&self.physical_plan)?);
         }
 

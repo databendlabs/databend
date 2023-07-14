@@ -23,9 +23,10 @@ use common_expression::types::NullableType;
 use common_expression::types::ValueType;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
-use common_hashtable::MarkerKind;
 
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
 
@@ -41,8 +42,8 @@ impl JoinHashTable {
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
+        let mut max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
-        let mut block_size = JOIN_MAX_BLOCK_SIZE;
         // `probe_column` is the subquery result column.
         // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
         let probe_column = input.get_by_offset(0).value.as_column().unwrap();
@@ -56,11 +57,11 @@ impl JoinHashTable {
         let build_indexes_ptr = build_index.as_mut_ptr();
 
         // If find join partner, set the marker to true.
-        let mut self_row_ptrs = self.row_ptrs.write();
+        let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
 
         for (i, key) in keys_iter.enumerate() {
-            if (i & block_size) == 0 {
-                block_size <<= 1;
+            if (i & max_block_size) == 0 {
+                max_block_size <<= 1;
 
                 if self.interrupt.load(Ordering::Relaxed) {
                     return Err(ErrorCode::AbortedQuery(
@@ -73,13 +74,18 @@ impl JoinHashTable {
                 .hash_join_desc
                 .from_correlated_subquery
             {
-                true => hash_table.probe_hash_table(
+                true => {
+                    hash_table.probe_hash_table(key, build_indexes_ptr, occupied, max_block_size)
+                }
+                false => self.probe_key(
+                    hash_table,
                     key,
+                    valids,
+                    i,
                     build_indexes_ptr,
                     occupied,
-                    JOIN_MAX_BLOCK_SIZE,
+                    max_block_size,
                 ),
-                false => self.probe_key(hash_table, key, valids, i, build_indexes_ptr, occupied),
             };
             if match_count == 0 {
                 continue;
@@ -87,9 +93,8 @@ impl JoinHashTable {
             occupied += match_count;
             loop {
                 for probed_row in &build_index[0..occupied] {
-                    if let Some(p) = self_row_ptrs.iter_mut().find(|p| (*p).eq(&probed_row)) {
-                        p.marker = Some(MarkerKind::True);
-                    }
+                    mark_scan_map[probed_row.chunk_index as usize][probed_row.row_index as usize] =
+                        MARKER_KIND_TRUE;
                 }
                 occupied = 0;
                 if incomplete_ptr == 0 {
@@ -100,7 +105,7 @@ impl JoinHashTable {
                     incomplete_ptr,
                     build_indexes_ptr,
                     occupied,
-                    JOIN_MAX_BLOCK_SIZE,
+                    max_block_size,
                 );
                 if match_count == 0 {
                     break;
@@ -109,7 +114,7 @@ impl JoinHashTable {
             }
         }
 
-        Ok(vec![DataBlock::empty()])
+        Ok(vec![])
     }
 
     pub(crate) fn probe_left_mark_join_with_conjunct<'a, H: HashJoinHashtableLike, IT>(
@@ -123,8 +128,8 @@ impl JoinHashTable {
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
+        let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
-
         // `probe_column` is the subquery result column.
         // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
         let probe_column = input.get_by_offset(0).value.as_column().unwrap();
@@ -138,7 +143,6 @@ impl JoinHashTable {
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
 
         let mut occupied = 0;
-        let mut row_ptrs = self.row_ptrs.write();
         let mut probe_indexes_len = 0;
         let probe_indexes = &mut probe_state.probe_indexes;
         let build_indexes = &mut probe_state.build_indexes;
@@ -153,15 +157,24 @@ impl JoinHashTable {
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
+        let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
+        let _mark_scan_map_lock = self.mark_scan_map_lock.lock();
+
         for (i, key) in keys_iter.enumerate() {
-            let (mut match_count, mut incomplete_ptr) = if self
-                .hash_join_desc
-                .from_correlated_subquery
-            {
-                hash_table.probe_hash_table(key, build_indexes_ptr, occupied, JOIN_MAX_BLOCK_SIZE)
-            } else {
-                self.probe_key(hash_table, key, valids, i, build_indexes_ptr, occupied)
-            };
+            let (mut match_count, mut incomplete_ptr) =
+                if self.hash_join_desc.from_correlated_subquery {
+                    hash_table.probe_hash_table(key, build_indexes_ptr, occupied, max_block_size)
+                } else {
+                    self.probe_key(
+                        hash_table,
+                        key,
+                        valids,
+                        i,
+                        build_indexes_ptr,
+                        occupied,
+                        max_block_size,
+                    )
+                };
             if match_count == 0 {
                 continue;
             }
@@ -169,7 +182,7 @@ impl JoinHashTable {
             occupied += match_count;
             probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
             probe_indexes_len += 1;
-            if occupied >= JOIN_MAX_BLOCK_SIZE {
+            if occupied >= max_block_size {
                 loop {
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -194,14 +207,17 @@ impl JoinHashTable {
                     let data = &filter_viewer.column;
 
                     for (idx, build_index) in build_indexes.iter().enumerate() {
-                        let self_row_ptr =
-                            row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
                         if !validity.get_bit(idx) {
-                            if self_row_ptr.marker == Some(MarkerKind::False) {
-                                self_row_ptr.marker = Some(MarkerKind::Null);
+                            if mark_scan_map[build_index.chunk_index as usize]
+                                [build_index.row_index as usize]
+                                == MARKER_KIND_FALSE
+                            {
+                                mark_scan_map[build_index.chunk_index as usize]
+                                    [build_index.row_index as usize] = MARKER_KIND_NULL;
                             }
                         } else if data.get_bit(idx) {
-                            self_row_ptr.marker = Some(MarkerKind::True);
+                            mark_scan_map[build_index.chunk_index as usize]
+                                [build_index.row_index as usize] = MARKER_KIND_TRUE;
                         }
                     }
 
@@ -216,7 +232,7 @@ impl JoinHashTable {
                         incomplete_ptr,
                         build_indexes_ptr,
                         occupied,
-                        JOIN_MAX_BLOCK_SIZE,
+                        max_block_size,
                     );
                     if match_count == 0 {
                         break;
@@ -226,7 +242,7 @@ impl JoinHashTable {
                     probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
                     probe_indexes_len += 1;
 
-                    if occupied < JOIN_MAX_BLOCK_SIZE {
+                    if occupied < max_block_size {
                         break;
                     }
                 }
@@ -249,13 +265,16 @@ impl JoinHashTable {
         let data = &filter_viewer.column;
 
         for (idx, build_index) in (build_indexes[0..occupied]).iter().enumerate() {
-            let self_row_ptr = row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
             if !validity.get_bit(idx) {
-                if self_row_ptr.marker == Some(MarkerKind::False) {
-                    self_row_ptr.marker = Some(MarkerKind::Null);
+                if mark_scan_map[build_index.chunk_index as usize][build_index.row_index as usize]
+                    == MARKER_KIND_FALSE
+                {
+                    mark_scan_map[build_index.chunk_index as usize]
+                        [build_index.row_index as usize] = MARKER_KIND_NULL;
                 }
             } else if data.get_bit(idx) {
-                self_row_ptr.marker = Some(MarkerKind::True);
+                mark_scan_map[build_index.chunk_index as usize][build_index.row_index as usize] =
+                    MARKER_KIND_TRUE;
             }
         }
 
@@ -266,6 +285,6 @@ impl JoinHashTable {
             *has_null = false;
         }
 
-        Ok(vec![DataBlock::empty()])
+        Ok(vec![])
     }
 }

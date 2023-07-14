@@ -14,8 +14,6 @@
 
 use std::io::BufRead;
 use std::io::Cursor;
-use std::io::Seek;
-use std::io::SeekFrom;
 
 use bstr::ByteSlice;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -232,26 +230,20 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, raw)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let pos = buffer_readr.position();
-        let ts_result = buffer_readr.read_num_text_exact();
-        let ts = match ts_result {
-            Err(_) => {
-                buffer_readr
-                    .seek(SeekFrom::Start(pos))
-                    .expect("buffer reader seek must success");
-                let t = buffer_readr.read_timestamp_text(&self.common_settings().timezone)?;
-                if !buffer_readr.eof() {
-                    let data = buf.to_str().unwrap_or("not utf8");
-                    let msg = format!(
-                        "fail to deserialize timestamp, unexpected end at pos {} of {}",
-                        buffer_readr.position(),
-                        data
-                    );
-                    return Err(ErrorCode::BadBytes(msg));
-                }
-                t.timestamp_micros()
+        let ts = if !buf.contains(&b'-') {
+            buffer_readr.read_num_text_exact()?
+        } else {
+            let t = buffer_readr.read_timestamp_text(&self.common_settings().timezone)?;
+            if !buffer_readr.eof() {
+                let data = buf.to_str().unwrap_or("not utf8");
+                let msg = format!(
+                    "fail to deserialize timestamp, unexpected end at pos {} of {}",
+                    buffer_readr.position(),
+                    data
+                );
+                return Err(ErrorCode::BadBytes(msg));
             }
-            Ok(t) => t,
+            t.timestamp_micros()
         };
         check_timestamp(ts)?;
         column.push(ts);

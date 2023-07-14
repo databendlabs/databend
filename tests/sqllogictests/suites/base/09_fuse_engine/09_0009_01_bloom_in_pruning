@@ -55,7 +55,41 @@ select * from t1 where a = 6 order by b;
 5 6
 
 statement ok
+CREATE TABLE t2(a int, b int, c int) bloom_index_columns='a,b,c'
+
+statement ok
+INSERT INTO TABLE t2 values(1,2,3),(4,5,6)
+
+statement ok
+ALTER TABLE t2 drop column c
+
+statement ok
+INSERT INTO TABLE t2 values(7,8)
+
+statement ok
+ALTER TABLE t2 rename column b to c
+
+statement ok
+INSERT INTO TABLE t2 values(9,10)
+
+query II
+SELECT * FROM t2 ORDER BY a
+----
+1 2
+4 5
+7 8
+9 10
+
+query I
+SELECT a FROM t2 where a = 3
+----
+
+
+statement ok
 DROP TABLE t1
+
+statement ok
+DROP TABLE t2
 
 statement ok
 DROP DATABASE db_09_0009_01

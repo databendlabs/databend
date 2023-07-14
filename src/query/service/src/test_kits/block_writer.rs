@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::Utc;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -19,6 +20,7 @@ use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
+use common_sql::BloomIndexColumns;
 use common_storages_fuse::io::serialize_block;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::io::WriteSettings;
@@ -88,6 +90,7 @@ impl<'a> BlockWriter<'a> {
             bloom_filter_index_location,
             bloom_filter_index_size,
             Compression::Lz4Raw,
+            Some(Utc::now()),
         );
         Ok((block_meta, meta))
     }
@@ -103,8 +106,15 @@ impl<'a> BlockWriter<'a> {
             .location_generator
             .block_bloom_index_location(&block_id);
 
-        let maybe_bloom_index =
-            BloomIndex::try_create(FunctionContext::default(), schema, location.1, &[block])?;
+        let bloom_index_cols = BloomIndexColumns::All;
+        let bloom_columns_map =
+            bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
+        let maybe_bloom_index = BloomIndex::try_create(
+            FunctionContext::default(),
+            location.1,
+            &[block],
+            bloom_columns_map,
+        )?;
         if let Some(bloom_index) = maybe_bloom_index {
             let index_block = bloom_index.serialize_to_data_block()?;
             let filter_schema = bloom_index.filter_schema;

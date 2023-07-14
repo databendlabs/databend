@@ -14,9 +14,13 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(type_alias_impl_trait)]
+#![feature(impl_trait_in_assoc_type)]
 
 extern crate core;
 
+mod background_jobs_table;
+mod background_tasks_table;
+mod backtrace_table;
 mod build_options_table;
 mod caches_table;
 mod catalogs_table;
@@ -38,6 +42,7 @@ mod one_table;
 mod processes_table;
 mod query_cache_table;
 mod query_log_table;
+mod query_profile_table;
 mod roles_table;
 mod settings_table;
 mod stages_table;
@@ -48,6 +53,9 @@ mod tracing_table;
 mod users_table;
 mod util;
 
+pub use background_jobs_table::BackgroundJobTable;
+pub use background_tasks_table::BackgroundTaskTable;
+pub use backtrace_table::BacktraceTable;
 pub use build_options_table::BuildOptionsTable;
 pub use caches_table::CachesTable;
 pub use catalogs_table::CatalogsTable;
@@ -76,6 +84,7 @@ pub use query_log_table::LogType;
 pub use query_log_table::QueryLogElement;
 pub use query_log_table::QueryLogQueue;
 pub use query_log_table::QueryLogTable;
+pub use query_profile_table::QueryProfileTable;
 pub use roles_table::RolesTable;
 pub use settings_table::SettingsTable;
 pub use stages_table::StagesTable;

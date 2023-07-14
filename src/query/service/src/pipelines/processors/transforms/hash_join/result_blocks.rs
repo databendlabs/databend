@@ -16,7 +16,10 @@ use std::iter::TrustedLen;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockEntry;
 use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_hashtable::HashJoinHashtableLike;
 
 use super::JoinHashTable;
@@ -68,14 +71,19 @@ impl JoinHashTable {
                 }
             }
             // Single join is similar to left join, but the result is a single row.
-            JoinType::Left | JoinType::Single | JoinType::Full => {
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    self.probe_left_join::<false, _, _>(hash_table, probe_state, keys_iter, input)
+                    self.probe_left_join::<_, _>(hash_table, probe_state, keys_iter, input)
                 } else {
-                    self.probe_left_join::<true, _, _>(hash_table, probe_state, keys_iter, input)
+                    self.probe_left_join_with_conjunct::<_, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
+                        input,
+                    )
                 }
             }
-            JoinType::Right => {
+            JoinType::Right | JoinType::RightSingle => {
                 self.probe_right_join::<_, _>(hash_table, probe_state, keys_iter, input)
             }
             // Three cases will produce Mark join:
@@ -111,5 +119,25 @@ impl JoinHashTable {
                 self.hash_join_desc.join_type
             ))),
         }
+    }
+
+    pub(crate) fn left_fast_return(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
+        if self.hash_join_desc.join_type == JoinType::LeftAnti {
+            return Ok(vec![input.clone()]);
+        }
+        let null_build_block = DataBlock::new(
+            self.row_space
+                .data_schema
+                .fields()
+                .iter()
+                .map(|df| BlockEntry {
+                    data_type: df.data_type().clone(),
+                    value: Value::Scalar(Scalar::Null),
+                })
+                .collect(),
+            input.num_rows(),
+        );
+
+        Ok(vec![self.merge_eq_block(&null_build_block, input)?])
     }
 }

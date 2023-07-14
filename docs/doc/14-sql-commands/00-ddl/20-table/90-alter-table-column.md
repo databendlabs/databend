@@ -3,86 +3,132 @@ title: ALTER TABLE
 description:
   Adds or drops a column of a table.
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-Adds or drops a column of a table.
+<FunctionDescription description="Introduced: v1.2.8"/>
+
+Modifies a table by adding, converting, renaming, or removing a column.
 
 ## Syntax
 
 ```sql
+-- Add a column
 ALTER TABLE [IF EXISTS] [database.]<table_name> 
-ADD COLUMN <column_name> <data_type> [NOT NULL | NULL] [DEFAULT <constant_expr>];
+ADD COLUMN <column_name> <data_type> [NOT NULL | NULL] [DEFAULT <constant_value>];
 
+-- Add a virtual computed column
+ALTER TABLE [IF EXISTS] [database.]<table_name> 
+ADD COLUMN <column_name> <data_type> AS (<expr>) VIRTUAL;
+
+-- Convert a stored computed column to a regular column
+ALTER TABLE [IF EXISTS] [database.]<table_name> 
+MODIFY COLUMN <column_name> DROP STORED;
+
+-- Rename a column
+ALTER TABLE [IF EXISTS] [database.]<table_name>
+RENAME COLUMN <column_name> TO <new_column_name>;
+
+-- Remove a column
 ALTER TABLE [IF EXISTS] [database.]<table_name> 
 DROP COLUMN <column_name>;
 ```
 
-:::caution
-In `ALTER TABLE ADD COLUMN`, the default value for a column must be a constant value.
-
-This is different from [CREATE TABLE](10-ddl-create-table.md), where the default value can be any expression.
-
-If a non-constant expression is used, an error will occur.
+:::note
+- Only a constant value can be accepted as a default value when adding a new column. If a non-constant expression is used, an error will occur.
+- Adding a stored computed column with ALTER TABLE is not supported yet.
 :::
 
 ## Examples
 
-### Add Column
+## Example 1: Adding, Renaming, and Removing a Column
 
-Add a new column to an existing table:
-
-```sql
--- Create a table
-CREATE TABLE students (
-  id BIGINT,
-  name VARCHAR
-);
-
--- Add a new column 'age' to the 'students' table
-ALTER TABLE students ADD COLUMN age INT;
-```
-
-### Drop Column
-
-Remove an existing column from a table:
-
-```sql
--- Create a table with three columns
-CREATE TABLE employees (
-  id BIGINT,
-  name VARCHAR,
-  department VARCHAR
-);
-
--- Remove the 'department' column from the 'employees' table
-ALTER TABLE employees DROP COLUMN department;
-```
-
-### Add Column with Default Value
-
-Add a new column to an existing table with a default value:
+This example illustrates the creation of a table called "default.users" with columns for id, username, email, and age. It showcases the addition of columns for business_email, middle_name, and phone_number with various constraints. The example also demonstrates the renaming and subsequent removal of the "age" column.
 
 ```sql
 -- Create a table
-CREATE TABLE orders (
-  id BIGINT,
-  item VARCHAR
+CREATE TABLE default.users (
+  id INT,
+  username VARCHAR(50) NOT NULL,
+  email VARCHAR(255),
+  age INT
 );
 
--- Add a new column 'status' with a default value 'Pending' to the 'orders' table
-ALTER TABLE orders ADD COLUMN status VARCHAR DEFAULT 'Pending';
+-- Add a column with a default value
+ALTER TABLE default.users
+ADD COLUMN business_email VARCHAR(255) NOT NULL DEFAULT 'example@example.com';
+
+-- Add a column allowing NULL values
+ALTER TABLE default.users
+ADD COLUMN middle_name VARCHAR(50) NULL;
+
+-- Add a column with NOT NULL constraint
+ALTER TABLE default.users
+ADD COLUMN phone_number VARCHAR(20) NOT NULL;
+
+-- Rename a column
+ALTER TABLE default.users
+RENAME COLUMN age TO new_age;
+
+-- Remove a column
+ALTER TABLE default.users
+DROP COLUMN new_age;
+
+DESC default.users;
+
+Field         |Type   |Null|Default              |Extra|
+--------------+-------+----+---------------------+-----+
+id            |INT    |NO  |0                    |     |
+username      |VARCHAR|NO  |''                   |     |
+email         |VARCHAR|NO  |''                   |     |
+business_email|VARCHAR|NO  |'example@example.com'|     |
+middle_name   |VARCHAR|YES |NULL                 |     |
+phone_number  |VARCHAR|NO  |''                   |     |
 ```
 
-### Add Column with NOT NULL Constraint
+## Example 2: Adding a Computed Column
 
-Add a new column to an existing table with a NOT NULL constraint, which ensures that a value must be assigned to the column:
+This example demonstrates creating a table for storing employee information, inserting data into the table, and adding a computed column to calculate the age of each employee based on their birth year.
 
 ```sql
 -- Create a table
-CREATE TABLE products (
-  id BIGINT,
-  name VARCHAR
+CREATE TABLE Employees (
+  ID INT,
+  Name VARCHAR(50),
+  BirthYear INT
 );
 
--- Add a new column 'price' with a NOT NULL constraint to the 'products' table
-ALTER TABLE products ADD COLUMN price INT NOT NULL;
+-- Insert data
+INSERT INTO Employees (ID, Name, BirthYear)
+VALUES
+  (1, 'John Doe', 1990),
+  (2, 'Jane Smith', 1985),
+  (3, 'Robert Johnson', 1982);
+
+-- Add a computed column named Age
+ALTER TABLE Employees
+ADD COLUMN Age INT64 AS (2023 - BirthYear) VIRTUAL;
+
+SELECT * FROM Employees;
+
+ID | Name          | BirthYear | Age
+------------------------------------
+1  | John Doe      | 1990      | 33
+2  | Jane Smith    | 1985      | 38
+3  | Robert Johnson| 1982      | 41
+```
+
+## Example 3: Converting a Computed Column
+
+This example creates a table called "products" with columns for ID, price, quantity, and a computed column "total_price." The ALTER TABLE statement removes the computed functionality from the "total_price" column, converting it into a regular column.
+
+```sql
+CREATE TABLE IF NOT EXISTS products (
+  id INT,
+  price FLOAT64,
+  quantity INT,
+  total_price FLOAT64 AS (price * quantity) STORED
+);
+
+ALTER TABLE products
+MODIFY COLUMN total_price DROP STORED;
 ```

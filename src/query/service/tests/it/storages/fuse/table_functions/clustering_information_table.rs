@@ -46,11 +46,11 @@ async fn test_clustering_information_table_read() -> Result<()> {
 
     {
         let expected = vec![
-            "+----------+----------+----------+----------+----------+----------+",
-            "| Column 0 | Column 1 | Column 2 | Column 3 | Column 4 | Column 5 |",
-            "+----------+----------+----------+----------+----------+----------+",
-            "| '(id)'   | 0        | 0        | 0        | 0        | {}       |",
-            "+----------+----------+----------+----------+----------+----------+",
+            "+----------+----------+----------+----------+----------+----------+----------+",
+            "| Column 0 | Column 1 | Column 2 | Column 3 | Column 4 | Column 5 | Column 6 |",
+            "+----------+----------+----------+----------+----------+----------+----------+",
+            "| '(id)'   | 0        | 0        | 0        | 0        | 0        | {}       |",
+            "+----------+----------+----------+----------+----------+----------+----------+",
         ];
 
         expects_ok(
@@ -69,11 +69,11 @@ async fn test_clustering_information_table_read() -> Result<()> {
         let qry = format!("insert into {}.{} values(1, (2, 3)),(2, (4, 6))", db, tbl);
         execute_query(ctx.clone(), qry.as_str()).await?;
         let expected = vec![
-            "+----------+----------+----------+----------+----------+-------------+",
-            "| Column 0 | Column 1 | Column 2 | Column 3 | Column 4 | Column 5    |",
-            "+----------+----------+----------+----------+----------+-------------+",
-            "| '(id)'   | 1        | 0        | 0        | 1        | {\"00001\":1} |",
-            "+----------+----------+----------+----------+----------+-------------+",
+            "+----------+----------+----------+----------+----------+----------+-------------+",
+            "| Column 0 | Column 1 | Column 2 | Column 3 | Column 4 | Column 5 | Column 6    |",
+            "+----------+----------+----------+----------+----------+----------+-------------+",
+            "| '(id)'   | 1        | 0        | 0        | 0        | 1        | {\"00001\":1} |",
+            "+----------+----------+----------+----------+----------+----------+-------------+",
         ];
 
         let qry = format!("select * from clustering_information('{}', '{}')", db, tbl);
@@ -115,7 +115,7 @@ async fn test_drive_clustering_information(
     let source_plan = func
         .clone()
         .as_table()
-        .read_plan(ctx.clone(), Some(PushDownInfo::default()))
+        .read_plan(ctx.clone(), Some(PushDownInfo::default()), true)
         .await?;
     ctx.set_partitions(source_plan.parts.clone())?;
     func.as_table()

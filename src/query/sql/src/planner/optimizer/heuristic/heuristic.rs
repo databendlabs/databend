@@ -33,7 +33,6 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::NormalizeDisjunctiveFilter,
         RuleID::NormalizeScalarFilter,
         RuleID::EliminateFilter,
-        RuleID::EliminateEvalScalar,
         RuleID::MergeFilter,
         RuleID::MergeEvalScalar,
         RuleID::PushDownFilterUnion,
@@ -47,6 +46,7 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::PushDownFilterSort,
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterJoin,
+        RuleID::PushDownFilterProjectSet,
         RuleID::FoldCountAggregate,
         RuleID::TryApplyAggIndex, // TryApplyAggIndex should before SplitAggregate
         RuleID::SplitAggregate,
@@ -56,18 +56,21 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
     ]
 });
 
+pub static RESIDUAL_RULES: Lazy<Vec<RuleID>> =
+    Lazy::new(|| vec![RuleID::EliminateEvalScalar, RuleID::CommuteJoin]);
+
 /// A heuristic query optimizer. It will apply specific transformation rules in order and
 /// implement the logical plans with default implementation rules.
-pub struct HeuristicOptimizer {
+pub struct HeuristicOptimizer<'a> {
     func_ctx: FunctionContext,
-    bind_context: Box<BindContext>,
+    bind_context: &'a BindContext,
     metadata: MetadataRef,
 }
 
-impl HeuristicOptimizer {
+impl<'a> HeuristicOptimizer<'a> {
     pub fn new(
         func_ctx: FunctionContext,
-        bind_context: Box<BindContext>,
+        bind_context: &'a BindContext,
         metadata: MetadataRef,
     ) -> Self {
         HeuristicOptimizer {
@@ -84,20 +87,22 @@ impl HeuristicOptimizer {
         }
 
         // always pruner the unused columns before and after optimization
-        let pruner = UnusedColumnPruner::new(self.metadata.clone());
+        // Don't consider lazy columns pruning in pre optimize, because the order of each operator is not determined.
+        let pruner = UnusedColumnPruner::new(self.metadata.clone(), false);
         let require_columns: ColumnSet = self.bind_context.column_set();
         pruner.remove_unused_columns(&s_expr, require_columns)
     }
 
     fn post_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
-        let pruner = UnusedColumnPruner::new(self.metadata.clone());
+        // Consider lazy columns pruning in post optimize
+        let pruner = UnusedColumnPruner::new(self.metadata.clone(), true);
         let require_columns: ColumnSet = self.bind_context.column_set();
         pruner.remove_unused_columns(&s_expr, require_columns)
     }
 
-    pub fn optimize(&self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn optimize(&self, s_expr: SExpr, rules: &[RuleID]) -> Result<SExpr> {
         let pre_optimized = self.pre_optimize(s_expr)?;
-        let optimized = self.optimize_expression(&pre_optimized, &DEFAULT_REWRITE_RULES)?;
+        let optimized = self.optimize_expression(&pre_optimized, rules)?;
         let post_optimized = self.post_optimize(optimized)?;
 
         Ok(post_optimized)

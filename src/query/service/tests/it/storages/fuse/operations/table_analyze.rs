@@ -82,7 +82,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(query).await?;
     if let Plan::Delete(delete) = plan {
-        do_deletion(ctx.clone(), table.clone(), *delete).await?;
+        do_deletion(ctx.clone(), *delete).await?;
     }
     execute_command(ctx.clone(), statistics_sql).await?;
 

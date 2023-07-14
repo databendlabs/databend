@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
@@ -1061,12 +1060,12 @@ impl Column {
             ),
             Column::String(col) => {
                 let offsets: Buffer<i64> =
-                    col.offsets.iter().map(|offset| *offset as i64).collect();
+                    col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(
                     common_arrow::arrow::array::BinaryArray::<i64>::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data.clone(),
+                        col.data().clone(),
                         None,
                     )
                     .unwrap(),
@@ -1130,12 +1129,12 @@ impl Column {
             }
             Column::Bitmap(col) => {
                 let offsets: Buffer<i64> =
-                    col.offsets.iter().map(|offset| *offset as i64).collect();
+                    col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(
                     common_arrow::arrow::array::BinaryArray::<i64>::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data.clone(),
+                        col.data().clone(),
                         None,
                     )
                     .unwrap(),
@@ -1155,12 +1154,12 @@ impl Column {
             ),
             Column::Variant(col) => {
                 let offsets: Buffer<i64> =
-                    col.offsets.iter().map(|offset| *offset as i64).collect();
+                    col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(
                     common_arrow::arrow::array::BinaryArray::<i64>::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data.clone(),
+                        col.data().clone(),
                         None,
                     )
                     .unwrap(),
@@ -1330,10 +1329,7 @@ impl Column {
                 let offsets = arrow_col.offsets().clone().into_inner();
 
                 let offsets = unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                Column::String(StringColumn {
-                    data: arrow_col.values().clone(),
-                    offsets,
-                })
+                Column::String(StringColumn::new(arrow_col.values().clone(), offsets))
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::Binary => {
@@ -1348,10 +1344,10 @@ impl Column {
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
 
-                Column::String(StringColumn {
-                    data: arrow_col.values().clone(),
-                    offsets: offsets.into(),
-                })
+                Column::String(StringColumn::new(
+                    arrow_col.values().clone(),
+                    offsets.into(),
+                ))
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::Utf8 => {
@@ -1366,10 +1362,10 @@ impl Column {
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
 
-                Column::String(StringColumn {
-                    data: arrow_col.values().clone(),
-                    offsets: offsets.into(),
-                })
+                Column::String(StringColumn::new(
+                    arrow_col.values().clone(),
+                    offsets.into(),
+                ))
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::LargeUtf8 => {
@@ -1383,10 +1379,10 @@ impl Column {
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
-                Column::String(StringColumn {
-                    data: arrow_col.values().clone(),
-                    offsets: offsets.into(),
-                })
+                Column::String(StringColumn::new(
+                    arrow_col.values().clone(),
+                    offsets.into(),
+                ))
             }
 
             ArrowType::Timestamp(uint, _) => {
@@ -1421,21 +1417,40 @@ impl Column {
                     .values()
                     .clone(),
             ),
-            ArrowDataType::Extension(name, _, None) if name == ARROW_EXT_TYPE_VARIANT => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
-                    .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
-                let offsets = arrow_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-                Column::Variant(StringColumn {
-                    data: arrow_col.values().clone(),
-                    offsets: offsets.into(),
-                })
+            ArrowDataType::Extension(name, box ty, None) if name == ARROW_EXT_TYPE_VARIANT => {
+                match ty {
+                    ArrowDataType::LargeBinary => {
+                        let arrow_col = arrow_col
+                            .as_any()
+                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
+                            .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
+                        let offsets = arrow_col.offsets().clone().into_inner();
+
+                        let offsets =
+                            unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+
+                        Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
+                    }
+                    ArrowDataType::Binary => {
+                        let arrow_col = arrow_col
+                            .as_any()
+                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
+                            .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
+                        let offsets = arrow_col
+                            .offsets()
+                            .buffer()
+                            .iter()
+                            .map(|x| *x as u64)
+                            .collect::<Vec<_>>();
+                        Column::Variant(StringColumn::new(
+                            arrow_col.values().clone(),
+                            offsets.into(),
+                        ))
+                    }
+                    _ => unreachable!(
+                        "fail to read from arrow: array should be `BinaryArray<i32>` or `BinaryArray<i64>`"
+                    ),
+                }
             }
             ArrowDataType::List(f) => {
                 let array_list = arrow_cast::cast(
@@ -1543,18 +1558,39 @@ impl Column {
                     scale: *scale as u8,
                 }))
             }
-            ArrowDataType::Extension(name, _, None) if name == ARROW_EXT_TYPE_BITMAP => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
-                    .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
-                let offsets = arrow_col.offsets().clone().into_inner();
+            ArrowDataType::Extension(name, box ty, None) if name == ARROW_EXT_TYPE_BITMAP => {
+                match ty {
+                    ArrowDataType::LargeBinary => {
+                        let arrow_col = arrow_col
+                            .as_any()
+                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
+                            .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
+                        let offsets = arrow_col.offsets().clone().into_inner();
 
-                let offsets = unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                Column::Bitmap(StringColumn {
-                    data: arrow_col.values().clone(),
-                    offsets,
-                })
+                        let offsets =
+                            unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                        Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
+                    }
+                    ArrowDataType::Binary => {
+                        let arrow_col = arrow_col
+                            .as_any()
+                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
+                            .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
+                        let offsets = arrow_col
+                            .offsets()
+                            .buffer()
+                            .iter()
+                            .map(|x| *x as u64)
+                            .collect::<Vec<_>>();
+                        Column::Bitmap(StringColumn::new(
+                            arrow_col.values().clone(),
+                            offsets.into(),
+                        ))
+                    }
+                    _ => unreachable!(
+                        "fail to read from arrow: array should be `BinaryArray<i32>` or `BinaryArray<i64>`"
+                    ),
+                }
             }
             ty => unimplemented!("unsupported arrow type {ty:?}"),
         };
@@ -1572,11 +1608,7 @@ impl Column {
     }
 
     pub fn random(ty: &DataType, len: usize) -> Self {
-        use jsonb::Number as JsonbNumber;
-        use jsonb::Object as JsonbObject;
-        use jsonb::Value as JsonbValue;
         use rand::distributions::Alphanumeric;
-        use rand::distributions::DistString;
         use rand::rngs::SmallRng;
         use rand::Rng;
         use rand::SeedableRng;
@@ -1676,41 +1708,7 @@ impl Column {
             DataType::Variant => {
                 let mut data = Vec::with_capacity(len);
                 for _ in 0..len {
-                    let opt = SmallRng::from_entropy().gen_range(0..=6);
-                    let val = match opt {
-                        0 => JsonbValue::Null,
-                        1 => JsonbValue::Bool(true),
-                        2 => JsonbValue::Bool(false),
-                        3 => {
-                            let s = Alphanumeric.sample_string(&mut rand::thread_rng(), 5);
-                            JsonbValue::String(Cow::from(s))
-                        }
-                        4 => {
-                            let num = SmallRng::from_entropy().gen_range(i64::MIN..=i64::MAX);
-                            JsonbValue::Number(JsonbNumber::Int64(num))
-                        }
-                        5 => {
-                            let arr_len = SmallRng::from_entropy().gen_range(0..=5);
-                            let mut values = Vec::with_capacity(arr_len);
-                            for _ in 0..arr_len {
-                                let num = SmallRng::from_entropy().gen_range(i64::MIN..=i64::MAX);
-                                values.push(JsonbValue::Number(JsonbNumber::Int64(num)))
-                            }
-                            JsonbValue::Array(values)
-                        }
-                        6 => {
-                            let obj_len = SmallRng::from_entropy().gen_range(0..=5);
-                            let mut obj = JsonbObject::new();
-                            for _ in 0..obj_len {
-                                let k = Alphanumeric.sample_string(&mut rand::thread_rng(), 5);
-                                let num = SmallRng::from_entropy().gen_range(i64::MIN..=i64::MAX);
-                                let v = JsonbValue::Number(JsonbNumber::Int64(num));
-                                obj.insert(k, v);
-                            }
-                            JsonbValue::Object(obj)
-                        }
-                        _ => JsonbValue::Null,
-                    };
+                    let val = jsonb::rand_value();
                     data.push(val.to_vec());
                 }
                 VariantType::from_data(data)
@@ -1771,15 +1769,15 @@ impl Column {
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Boolean(c) => c.as_slice().0.len(),
-            Column::String(col) => col.data.len() + col.offsets.len() * 8,
+            Column::String(col) => col.memory_size(),
             Column::Timestamp(col) => col.len() * 8,
             Column::Date(col) => col.len() * 4,
             Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
             Column::Map(col) => col.values.memory_size() + col.offsets.len() * 8,
-            Column::Bitmap(col) => col.data.len() + col.offsets.len() * 8,
+            Column::Bitmap(col) => col.memory_size(),
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
-            Column::Variant(col) => col.data.len() + col.offsets.len() * 8,
+            Column::Variant(col) => col.memory_size(),
         }
     }
 

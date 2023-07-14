@@ -25,17 +25,20 @@ use common_exception::Result;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
+use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::CompoundBlockOperator;
 use storages_common_table_meta::meta::BlockMeta;
 
-use crate::operations::common::AppendTransform;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
+use crate::operations::common::MutationKind;
 use crate::operations::common::TableMutationAggregator;
+use crate::operations::common::TransformSerializeBlock;
+use crate::operations::common::TransformSerializeSegment;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
@@ -43,6 +46,7 @@ use crate::pruning::FusePruner;
 use crate::FuseTable;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
+use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 impl FuseTable {
     #[async_backtrace::framed]
@@ -51,9 +55,9 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         if self.cluster_key_meta.is_none() {
-            return Ok(());
+            return Ok(0);
         }
 
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -61,18 +65,24 @@ impl FuseTable {
             val
         } else {
             // no snapshot, no recluster.
-            return Ok(());
+            return Ok(0);
         };
 
         let schema = self.table_info.schema();
         let segment_locations = snapshot.segments.clone();
         let segment_locations = create_segment_location_vector(segment_locations, None);
-        let pruner = FusePruner::create(&ctx, self.operator.clone(), schema, &push_downs)?;
-        let block_metas = pruner.pruning(segment_locations).await?;
+        let mut pruner = FusePruner::create(
+            &ctx,
+            self.operator.clone(),
+            schema,
+            &push_downs,
+            self.bloom_index_cols(),
+        )?;
+        let block_metas = pruner.read_pruning(segment_locations).await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
         let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> = BTreeMap::new();
-        block_metas.iter().for_each(|(idx, b)| {
+        block_metas.into_iter().for_each(|(idx, b)| {
             if let Some(stats) = &b.cluster_stats {
                 if stats.cluster_key_id == default_cluster_key_id && stats.level >= 0 {
                     blocks_map.entry(stats.level).or_default().push((
@@ -80,7 +90,7 @@ impl FuseTable {
                             segment_idx: idx.segment_idx,
                             block_idx: idx.block_idx,
                         },
-                        b.clone(),
+                        b,
                     ));
                 }
             }
@@ -102,7 +112,7 @@ impl FuseTable {
 
         let need_recluster = mutator.target_select(blocks_map).await?;
         if !need_recluster {
-            return Ok(());
+            return Ok(0);
         }
 
         let block_metas: Vec<_> = mutator
@@ -110,6 +120,7 @@ impl FuseTable {
             .iter()
             .map(|meta| (None, meta.clone()))
             .collect();
+        let block_count = block_metas.len() as u64;
         let (statistics, parts) = self.read_partitions_with_metas(
             self.table_info.schema(),
             None,
@@ -156,7 +167,12 @@ impl FuseTable {
         }
 
         // sort
-        let block_size = ctx.get_settings().get_max_block_size()? as usize;
+        let final_block_size = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
+        let partial_block_size = if pipeline.output_len() > 1 {
+            ctx.get_settings().get_max_block_size()? as usize
+        } else {
+            final_block_size
+        };
         // construct output fields
         let output_fields: Vec<DataField> = cluster_stats_gen.out_fields.clone();
         let schema = DataSchemaRefExt::create(output_fields);
@@ -171,19 +187,32 @@ impl FuseTable {
             })
             .collect();
 
-        build_full_sort_pipeline(pipeline, schema, sort_descs, None, block_size, None, false)?;
+        build_full_sort_pipeline(
+            pipeline,
+            schema,
+            sort_descs,
+            None,
+            partial_block_size,
+            final_block_size,
+            None,
+            false,
+        )?;
 
         assert_eq!(pipeline.output_len(), 1);
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
-            let proc = AppendTransform::new(
+            let proc = TransformSerializeBlock::try_create(
                 ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 self,
                 cluster_stats_gen.clone(),
-                block_thresholds,
-            );
+            )?;
+            proc.into_processor()
+        })?;
+
+        pipeline.add_transform(|input, output| {
+            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
             proc.into_processor()
         })?;
 
@@ -196,6 +225,7 @@ impl FuseTable {
                 self.meta_location_generator().clone(),
                 self.schema(),
                 self.get_operator(),
+                MutationKind::Recluster,
             );
             aggregator.accumulate_log_entry(mutator.mutation_logs());
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
@@ -205,8 +235,16 @@ impl FuseTable {
 
         let snapshot_gen = MutationGenerator::new(snapshot);
         pipeline.add_sink(|input| {
-            CommitSink::try_create(self, ctx.clone(), None, snapshot_gen.clone(), input, None)
+            CommitSink::try_create(
+                self,
+                ctx.clone(),
+                None,
+                snapshot_gen.clone(),
+                input,
+                None,
+                true,
+            )
         })?;
-        Ok(())
+        Ok(block_count)
     }
 }

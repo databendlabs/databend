@@ -24,6 +24,7 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
+use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
@@ -33,6 +34,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::TableSchemaRefExt;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::Pipeline;
@@ -44,8 +46,8 @@ use dashmap::DashMap;
 use opendal::Operator;
 use parking_lot::Mutex;
 
-use crate::stage_table_sink::StageTableSink;
-
+use crate::parquet_file::append_data_to_parquet_files;
+use crate::row_based_file::append_data_to_row_based_files;
 /// TODO: we need to track the data metrics in stage table.
 pub struct StageTable {
     table_info: StageTableInfo,
@@ -109,6 +111,7 @@ impl Table for StageTable {
         &self,
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let stage_info = &self.table_info;
         // User set the files.
@@ -147,6 +150,15 @@ impl Table for StageTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let projection = if let Some(PushDownInfo {
+            projection: Some(Projection::Columns(columns)),
+            ..
+        }) = &plan.push_downs
+        {
+            Some(columns.clone())
+        } else {
+            None
+        };
         let stage_table_info =
             if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
                 stage_table_info
@@ -192,8 +204,9 @@ impl Table for StageTable {
             compact_threshold,
             on_error_map,
             self.table_info.is_select,
+            projection,
         )?);
-
+        tracing::debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
         Ok(())
     }
@@ -204,44 +217,50 @@ impl Table for StageTable {
         pipeline: &mut Pipeline,
         _: AppendMode,
     ) -> Result<()> {
-        let single = self.table_info.stage_info.copy_options.single;
-        let op = StageTable::get_op(&self.table_info.stage_info)?;
+        let settings = ctx.get_settings();
 
+        let single = self.table_info.stage_info.copy_options.single;
+        let max_file_size = if single {
+            usize::MAX
+        } else {
+            let max_file_size = self.table_info.stage_info.copy_options.max_file_size;
+            if max_file_size == 0 {
+                // 256M per file by default.
+                256 * 1024 * 1024
+            } else {
+                let mem_limit = (settings.get_max_memory_usage()? / 2) as usize;
+                max_file_size.min(mem_limit)
+            }
+        };
+        let max_threads = settings.get_max_threads()? as usize;
+
+        let op = StageTable::get_op(&self.table_info.stage_info)?;
+        let fmt = self.table_info.stage_info.file_format_params.clone();
         let uuid = uuid::Uuid::new_v4().to_string();
         let group_id = AtomicUsize::new(0);
-
-        // parallel compact unload, the partial block will flush into next operator
-        if !single && pipeline.output_len() > 1 {
-            pipeline.add_transform(|input, output| {
-                let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                StageTableSink::try_create(
-                    input,
-                    ctx.clone(),
-                    self.table_info.clone(),
-                    op.clone(),
-                    Some(output),
-                    uuid.clone(),
-                    gid,
-                )
-            })?;
-        }
-
-        // final compact unload
-        pipeline.resize(1)?;
-
-        // Add sink pipe.
-        pipeline.add_sink(|input| {
-            let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            StageTableSink::try_create(
-                input,
+        match fmt {
+            FileFormatParams::Parquet(_) => append_data_to_parquet_files(
+                pipeline,
                 ctx.clone(),
                 self.table_info.clone(),
-                op.clone(),
-                None,
-                uuid.clone(),
-                gid,
-            )
-        })
+                op,
+                max_file_size,
+                max_threads,
+                uuid,
+                &group_id,
+            )?,
+            _ => append_data_to_row_based_files(
+                pipeline,
+                ctx.clone(),
+                self.table_info.clone(),
+                op,
+                max_file_size,
+                max_threads,
+                uuid,
+                &group_id,
+            )?,
+        };
+        Ok(())
     }
 
     // Truncate the stage file.
@@ -260,5 +279,32 @@ impl Table for StageTable {
     fn set_block_thresholds(&self, thresholds: BlockThresholds) {
         let mut guard = self.block_compact_threshold.lock();
         (*guard) = Some(thresholds)
+    }
+}
+
+pub fn unload_path(
+    stage_table_info: &StageTableInfo,
+    uuid: &str,
+    group_id: usize,
+    batch_id: usize,
+) -> String {
+    let format_name = format!(
+        "{:?}",
+        stage_table_info.stage_info.file_format_params.get_type()
+    )
+    .to_ascii_lowercase();
+
+    let path = &stage_table_info.files_info.path;
+
+    if path.ends_with("data_") {
+        format!(
+            "{}{}_{:0>4}_{:0>8}.{}",
+            path, uuid, group_id, batch_id, format_name
+        )
+    } else {
+        format!(
+            "{}/data_{}_{:0>4}_{:0>8}.{}",
+            path, uuid, group_id, batch_id, format_name
+        )
     }
 }

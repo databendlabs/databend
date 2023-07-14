@@ -1,0 +1,54 @@
+statement ok
+drop table if exists t1
+
+statement ok
+drop table if exists t2
+
+statement ok
+create table t1 (a int)
+
+statement ok
+create table t2(b int)
+
+statement ok
+insert into t1 values(1), (2), (3), (8);
+
+statement ok
+insert into t2 values(2), (3);
+
+query T
+explain delete from t1 where a in (select b from t2);
+----
+DeletePlan:
+EvalScalar
+├── scalars: [t1._row_id (#2)]
+└── Filter
+    ├── filters: [3 (#3)]
+    └── HashJoin: RIGHT MARK
+        ├── equi conditions: [eq(t1.a (#0), CAST(subquery_1 (#1) AS Int32))]
+        ├── non-equi conditions: []
+        ├── LogicalGet
+        │   ├── table: default.default.t1
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── EvalScalar
+            ├── scalars: [t2.b (#1)]
+            └── LogicalGet
+                ├── table: default.default.t2
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+query T
+explain delete from t1 where a > 2;
+----
+DeletePlan:
+Filter
+├── filters: [gt(t1.a (#0), 2)]
+└── LogicalGet
+    ├── table: default.default.t1
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE

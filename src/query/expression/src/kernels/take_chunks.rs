@@ -43,7 +43,7 @@ use crate::Scalar;
 use crate::Value;
 
 // Block idx, row idx in the block, repeat times
-pub type BlockRowIndex = (usize, usize, usize);
+pub type BlockRowIndex = (u32, u32, usize);
 
 impl DataBlock {
     pub fn take_blocks(
@@ -213,7 +213,8 @@ impl Column {
                         .collect_vec();
                     let mut builder = Vec::with_capacity(result_size);
                     for &(block_index, row, times) in indices {
-                        let val = unsafe { columns[block_index].get_unchecked(row) };
+                        let val =
+                            unsafe { columns[block_index as usize].get_unchecked(row as usize) };
                         for _ in 0..times {
                             builder.push(*val);
                         }
@@ -343,7 +344,8 @@ impl Column {
             .map(|col| T::try_downcast_column(col).unwrap())
             .collect_vec();
         for &(block_index, row, times) in indices {
-            let val = unsafe { T::index_column_unchecked(&columns[block_index], row) };
+            let val =
+                unsafe { T::index_column_unchecked(&columns[block_index as usize], row as usize) };
             for _ in 0..times {
                 T::push_item(&mut builder, val.clone())
             }

@@ -13,16 +13,16 @@ echo "INSERT /*+ SET_VAR(deduplicate_label='insert-test') */ INTO t1 (a, b) VALU
 echo "select * from t1" | $MYSQL_CLIENT_CONNECT
 
 echo "CREATE STAGE s0;" | $MYSQL_CLIENT_CONNECT
-echo "copy into /*+SET_VAR(deduplicate_label='copy-test')*/ @s0 from (select * from t1);" | $MYSQL_CLINEENRT_CONNECT
+echo "copy /*+SET_VAR(deduplicate_label='copy-test')*/ into @s0 from (select * from t1);" | $MYSQL_CLINEENRT_CONNECT
 echo "select * from @s0;" | $MYSQL_CLINEENRT_CONNECT
 echo "CREATE STAGE s1;" | $MYSQL_CLINEENRT_CONNECT
-echo "copy into /*+SET_VAR(deduplicate_label='copy-test')*/ @s1 from (select * from t1);" | $MYSQL_CLINEENRT_CONNECT
-echo "select * from @s0;" | $MYSQL_CLINEENRT_CONNECT
+echo "copy /*+SET_VAR(deduplicate_label='copy-test')*/ into @s1 from (select * from t1);" | $MYSQL_CLINEENRT_CONNECT
+echo "select * from @s1;" | $MYSQL_CLINEENRT_CONNECT
 
-echo "UPDATE /*+ SET_VAR(deduplicate_label='update-test') */ t SET a = 20 WHERE b = false;" | $MYSQL_CLIENT_CONNECT
-echo "UPDATE /*+ SET_VAR(deduplicate_label='update-test') */ t SET a = 30 WHERE b = false;" | $MYSQL_CLIENT_CONNECT
+echo "UPDATE /*+ SET_VAR(deduplicate_label='update-test') */ t1 SET a = 20 WHERE b = false;" | $MYSQL_CLIENT_CONNECT
+echo "UPDATE /*+ SET_VAR(deduplicate_label='update-test') */ t1 SET a = 30 WHERE b = false;" | $MYSQL_CLIENT_CONNECT
 echo "select * from t1" | $MYSQL_CLIENT_CONNECT
 
-echo "replace /*+ SET_VAR(deduplicate_label='replace-test') */ into t on(a,b) values(40,false);" | $MYSQL_CLIENT_CONNECT
-echo "replace /*+ SET_VAR(deduplicate_label='replace-test') */ into t on(a,b) values(50,false);" | $MYSQL_CLIENT_CONNECT
+echo "replace /*+ SET_VAR(deduplicate_label='replace-test') */ into t1 on(a,b) values(40,false);" | $MYSQL_CLIENT_CONNECT
+echo "replace /*+ SET_VAR(deduplicate_label='replace-test') */ into t1 on(a,b) values(50,false);" | $MYSQL_CLIENT_CONNECT
 echo "select * from t1" | $MYSQL_CLIENT_CONNECT

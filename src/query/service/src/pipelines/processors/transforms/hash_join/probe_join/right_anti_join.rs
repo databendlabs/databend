@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
 
@@ -35,12 +34,13 @@ impl JoinHashTable {
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
+        let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         let mut occupied = 0;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
 
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -50,12 +50,13 @@ impl JoinHashTable {
                 i,
                 local_build_indexes_ptr,
                 occupied,
+                max_block_size,
             );
             if match_count == 0 {
                 continue;
             }
             occupied += match_count;
-            if occupied >= JOIN_MAX_BLOCK_SIZE {
+            if occupied >= max_block_size {
                 loop {
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -64,7 +65,8 @@ impl JoinHashTable {
                     }
 
                     for row_ptr in local_build_indexes.iter() {
-                        outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                        outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] =
+                            true;
                     }
 
                     occupied = 0;
@@ -77,7 +79,7 @@ impl JoinHashTable {
                         incomplete_ptr,
                         local_build_indexes_ptr,
                         occupied,
-                        JOIN_MAX_BLOCK_SIZE,
+                        max_block_size,
                     );
                     if match_count == 0 {
                         break;
@@ -85,7 +87,7 @@ impl JoinHashTable {
 
                     occupied += match_count;
 
-                    if occupied < JOIN_MAX_BLOCK_SIZE {
+                    if occupied < max_block_size {
                         break;
                     }
                 }
@@ -93,7 +95,7 @@ impl JoinHashTable {
         }
 
         for row_ptr in local_build_indexes.iter().take(occupied) {
-            outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+            outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] = true;
         }
 
         Ok(vec![])
@@ -110,6 +112,7 @@ impl JoinHashTable {
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
+        let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         // The right join will return multiple data blocks of similar size.
         let mut occupied = 0;
@@ -126,7 +129,7 @@ impl JoinHashTable {
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -136,6 +139,7 @@ impl JoinHashTable {
                 i,
                 local_build_indexes_ptr,
                 occupied,
+                max_block_size,
             );
             if match_count == 0 {
                 continue;
@@ -143,7 +147,7 @@ impl JoinHashTable {
             occupied += match_count;
             local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
             probe_indexes_len += 1;
-            if occupied >= JOIN_MAX_BLOCK_SIZE {
+            if occupied >= max_block_size {
                 loop {
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -169,7 +173,8 @@ impl JoinHashTable {
 
                         if all_true {
                             for row_ptr in local_build_indexes.iter() {
-                                outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                                outer_scan_map[row_ptr.chunk_index as usize]
+                                    [row_ptr.row_index as usize] = true;
                             }
                         } else if !all_false {
                             // Safe to unwrap.
@@ -178,8 +183,8 @@ impl JoinHashTable {
                             while idx < occupied {
                                 let valid = unsafe { validity.get_bit_unchecked(idx) };
                                 if valid {
-                                    outer_scan_bitmap[local_build_indexes[idx].chunk_index]
-                                        .set(local_build_indexes[idx].row_index, true);
+                                    outer_scan_map[local_build_indexes[idx].chunk_index as usize]
+                                        [local_build_indexes[idx].row_index as usize] = true;
                                 }
                                 idx += 1;
                             }
@@ -197,7 +202,7 @@ impl JoinHashTable {
                         incomplete_ptr,
                         local_build_indexes_ptr,
                         occupied,
-                        JOIN_MAX_BLOCK_SIZE,
+                        max_block_size,
                     );
                     if match_count == 0 {
                         break;
@@ -207,7 +212,7 @@ impl JoinHashTable {
                     local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
                     probe_indexes_len += 1;
 
-                    if occupied < JOIN_MAX_BLOCK_SIZE {
+                    if occupied < max_block_size {
                         break;
                     }
                 }
@@ -233,7 +238,7 @@ impl JoinHashTable {
 
             if all_true {
                 for row_ptr in local_build_indexes.iter().take(occupied) {
-                    outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                    outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] = true;
                 }
             } else if !all_false {
                 // Safe to unwrap.
@@ -242,8 +247,8 @@ impl JoinHashTable {
                 while idx < occupied {
                     let valid = unsafe { validity.get_bit_unchecked(idx) };
                     if valid {
-                        outer_scan_bitmap[local_build_indexes[idx].chunk_index]
-                            .set(local_build_indexes[idx].row_index, true);
+                        outer_scan_map[local_build_indexes[idx].chunk_index as usize]
+                            [local_build_indexes[idx].row_index as usize] = true;
                     }
                     idx += 1;
                 }

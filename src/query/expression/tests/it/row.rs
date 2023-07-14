@@ -17,14 +17,19 @@ use std::sync::Arc;
 use arrow_ord::sort::LexicographicalComparator;
 use arrow_ord::sort::SortColumn;
 use arrow_schema::SortOptions;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::offset::OffsetsBuffer;
 use common_expression::types::decimal::*;
+use common_expression::types::nullable::NullableColumn;
+use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::*;
 use common_expression::Column;
 use common_expression::FromOptData;
 use common_expression::RowConverter;
 use common_expression::SortField;
 use ethnum::i256;
+use jsonb::convert_to_comparable;
+use jsonb::parse_value;
 use ordered_float::OrderedFloat;
 use rand::distributions::Standard;
 use rand::prelude::Distribution;
@@ -62,9 +67,12 @@ fn test_fixed_width() {
 
     let rows = converter.convert_columns(&cols, cols[0].len());
 
-    assert_eq!(rows.offsets, vec![0, 8, 16, 24, 32, 40, 48, 56].into());
     assert_eq!(
-        rows.data,
+        rows.offsets().clone(),
+        vec![0, 8, 16, 24, 32, 40, 48, 56].into()
+    );
+    assert_eq!(
+        rows.data().clone(),
         vec![
             1, 128, 1, //
             1, 191, 166, 102, 102, //
@@ -291,6 +299,88 @@ fn test_string() {
     }
 }
 
+#[test]
+fn test_variant() {
+    let values = vec![
+        None,
+        Some("false".to_string()),
+        Some("true".to_string()),
+        Some("-3".to_string()),
+        Some("-2.1".to_string()),
+        Some("1.1".to_string()),
+        Some("2".to_string()),
+        Some("\"\"".to_string()),
+        Some("\"abc\"".to_string()),
+        Some("\"de\"".to_string()),
+        Some("{\"k1\":\"v1\",\"k2\":\"v2\"}".to_string()),
+        Some("{\"k1\":\"v2\"}".to_string()),
+        Some("[1,2,3]".to_string()),
+        Some("[\"xx\",11]".to_string()),
+        Some("null".to_string()),
+    ];
+
+    let mut validity = MutableBitmap::with_capacity(values.len());
+    let mut builder = StringColumnBuilder::with_capacity(values.len(), values.len() * 10);
+    for value in values {
+        if let Some(value) = value {
+            validity.push(true);
+            let val = parse_value(value.as_bytes()).unwrap();
+            let buf = val.to_vec();
+            convert_to_comparable(&buf, &mut builder.data);
+        } else {
+            validity.push(false);
+        }
+        builder.commit_row();
+    }
+    let col = Column::Nullable(Box::new(NullableColumn {
+        column: Column::Variant(builder.build()),
+        validity: validity.into(),
+    }));
+
+    let converter =
+        RowConverter::new(vec![SortField::new(DataType::Variant.wrap_nullable())]).unwrap();
+    let num_rows = col.len();
+    let rows = converter.convert_columns(&[col.clone()], num_rows);
+
+    unsafe {
+        for i in 0..rows.len() {
+            for j in i + 1..rows.len() {
+                assert!(
+                    rows.index_unchecked(i) < rows.index_unchecked(j),
+                    "{} < {} - {:?} < {:?}",
+                    i,
+                    j,
+                    rows.index_unchecked(i),
+                    rows.index_unchecked(j)
+                );
+            }
+        }
+    }
+
+    let converter = RowConverter::new(vec![SortField::new_with_options(
+        DataType::Variant.wrap_nullable(),
+        false,
+        false,
+    )])
+    .unwrap();
+    let rows = converter.convert_columns(&[col], num_rows);
+
+    unsafe {
+        for i in 0..rows.len() {
+            for j in i + 1..rows.len() {
+                assert!(
+                    rows.index_unchecked(i) > rows.index_unchecked(j),
+                    "{} > {} - {:?} > {:?}",
+                    i,
+                    j,
+                    rows.index_unchecked(i),
+                    rows.index_unchecked(j)
+                );
+            }
+        }
+    }
+}
+
 fn generate_number_column<K>(len: usize, valid_percent: f64) -> Column
 where
     K: Number,
@@ -380,12 +470,13 @@ fn fuzz_test() {
                     // arrow_ord does not support LargeBinary converted from Databend String
                     Column::Nullable(c) => match &c.column {
                         Column::String(sc) => {
-                            let offsets = sc.offsets.iter().map(|offset| *offset as i32).collect();
+                            let offsets =
+                                sc.offsets().iter().map(|offset| *offset as i32).collect();
                             let array = Box::new(
                                 common_arrow::arrow::array::Utf8Array::<i32>::try_new(
                                     common_arrow::arrow::datatypes::DataType::Utf8,
                                     unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                                    sc.data.clone(),
+                                    sc.data().clone(),
                                     None,
                                 )
                                 .unwrap(),

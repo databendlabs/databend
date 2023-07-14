@@ -14,7 +14,9 @@
 
 use common_meta_kvapi::kvapi;
 
+use crate::background_api_keys::ID_GEN_BACKGROUND_JOB;
 use crate::data_mask_api_keys::ID_GEN_DATA_MASK;
+use crate::schema_api_keys::ID_GEN_CATALOG;
 use crate::schema_api_keys::ID_GEN_DATABASE;
 use crate::schema_api_keys::ID_GEN_INDEX;
 use crate::schema_api_keys::ID_GEN_TABLE;
@@ -77,6 +79,19 @@ impl IdGenerator {
     pub fn table_lock_id() -> Self {
         Self {
             resource: ID_GEN_TABLE_LOCK.to_string(),
+        }
+    }
+
+    pub fn background_job_id() -> Self {
+        Self {
+            resource: ID_GEN_BACKGROUND_JOB.to_string(),
+        }
+    }
+
+    /// Create a key for generating catalog id with kvapi::KVApi
+    pub fn catalog_id() -> Self {
+        Self {
+            resource: ID_GEN_CATALOG.to_string(),
         }
     }
 }

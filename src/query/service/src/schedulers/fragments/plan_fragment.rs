@@ -15,8 +15,11 @@
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::Partitions;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_sql::executor::DeletePartial;
+use common_sql::executor::DistributedCopyIntoTable;
 
 use crate::api::DataExchange;
 use crate::schedulers::Fragmenter;
@@ -41,9 +44,12 @@ pub enum FragmentType {
     /// Leaf fragment of a query plan, which contains
     /// a `TableScan` operator.
     Source,
+    /// Leaf fragment of a delete plan, which contains
+    /// a `DeletePartial` operator.
+    DeleteLeaf,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PlanFragment {
     pub plan: PhysicalPlan,
     pub fragment_type: FragmentType,
@@ -65,7 +71,7 @@ impl PlanFragment {
             input.get_actions(ctx.clone(), actions)?;
         }
 
-        let mut fragment_actions = QueryFragmentActions::create(true, self.fragment_id);
+        let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
 
         match &self.fragment_type {
             FragmentType::Root => {
@@ -112,6 +118,13 @@ impl PlanFragment {
                 }
                 actions.add_fragment_actions(fragment_actions)?;
             }
+            FragmentType::DeleteLeaf => {
+                let mut fragment_actions = self.redistribute_delete_leaf(ctx)?;
+                if let Some(ref exchange) = self.exchange {
+                    fragment_actions.set_exchange(exchange.clone());
+                }
+                actions.add_fragment_actions(fragment_actions)?;
+            }
         }
 
         Ok(())
@@ -129,7 +142,7 @@ impl PlanFragment {
 
         let executors = Fragmenter::get_executors(ctx);
         // Redistribute partitions of ReadDataSourcePlan.
-        let mut fragment_actions = QueryFragmentActions::create(true, self.fragment_id);
+        let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
 
         let partitions = &read_source.parts;
         let partition_reshuffle = partitions.reshuffle(executors)?;
@@ -152,6 +165,35 @@ impl PlanFragment {
         Ok(fragment_actions)
     }
 
+    fn redistribute_delete_leaf(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
+        let plan = match &self.plan {
+            PhysicalPlan::ExchangeSink(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+        let plan = match plan.input.as_ref() {
+            PhysicalPlan::DeletePartial(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+        let partitions = &plan.parts;
+        let executors = Fragmenter::get_executors(ctx);
+        let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
+        let partition_reshuffle = partitions.reshuffle(executors)?;
+
+        for (executor, parts) in partition_reshuffle.iter() {
+            let mut plan = self.plan.clone();
+
+            let mut replace_delete_partial = ReplaceDeletePartial {
+                partitions: parts.clone(),
+            };
+            plan = replace_delete_partial.replace(&plan)?;
+
+            fragment_actions
+                .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+        }
+
+        Ok(fragment_actions)
+    }
+
     fn get_read_source(&self) -> Result<DataSourcePlan> {
         if self.fragment_type != FragmentType::Source {
             return Err(ErrorCode::Internal(
@@ -164,6 +206,8 @@ impl PlanFragment {
         let mut collect_read_source = |plan: &PhysicalPlan| {
             if let PhysicalPlan::TableScan(scan) = plan {
                 source.push(*scan.source.clone())
+            } else if let PhysicalPlan::DistributedCopyIntoTable(distributed_plan) = plan {
+                source.push(*distributed_plan.source.clone())
             }
         };
 
@@ -184,7 +228,7 @@ impl PlanFragment {
     }
 }
 
-struct ReplaceReadSource {
+pub struct ReplaceReadSource {
     pub source: DataSourcePlan,
 }
 
@@ -198,5 +242,27 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
             stat_info: plan.stat_info.clone(),
             internal_column: plan.internal_column.clone(),
         }))
+    }
+
+    fn replace_copy_into_table(&mut self, plan: &DistributedCopyIntoTable) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::DistributedCopyIntoTable(Box::new(
+            DistributedCopyIntoTable {
+                source: Box::new(self.source.clone()),
+                ..plan.clone()
+            },
+        )))
+    }
+}
+
+struct ReplaceDeletePartial {
+    pub partitions: Partitions,
+}
+
+impl PhysicalPlanReplacer for ReplaceDeletePartial {
+    fn replace_delete_partial(&mut self, plan: &DeletePartial) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::DeletePartial(Box::new(DeletePartial {
+            parts: self.partitions.clone(),
+            ..plan.clone()
+        })))
     }
 }

@@ -66,6 +66,7 @@ common-meta-app = { path = "../../meta/app" }
 jsonb = { workspace = true }
 # common-meta-embedded = { path = "../../meta/embedded" }
 aggregating-index = { path = "../ee-features/aggregating-index" }
+background-service = { path = "../ee-features/background-service" }
 common-license = { path = "../../common/license" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
@@ -76,7 +77,7 @@ common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sinks = { path = "../pipeline/sinks" }
 common-pipeline-sources = { path = "../pipeline/sources" }
 common-pipeline-transforms = { path = "../pipeline/transforms" }
-common-profile = { path = "../../common/profile" }
+common-profile = { path = "../profile" }
 common-settings = { path = "../settings" }
 common-sharing = { path = "../sharing" }
 common-sql = { path = "../sql" }
@@ -104,15 +105,14 @@ storages-common-table-meta = { path = "../storages/common/table-meta" }
 table-lock = { path = "../ee-features/table-lock" }
 vacuum-handler = { path = "../ee-features/vacuum-handler" }
 virtual-columns-handler = { path = "../ee-features/virtual-columns-handler" }
-
 # GitHub dependencies
 
 # Crates.io dependencies
 aho-corasick = { version = "1.0.1" }
-arrow-array = { version = "37.0.0" }
-arrow-flight = { version = "37.0.0", features = ["flight-sql-experimental", "tls"] }
-arrow-ipc = { version = "37.0.0" }
-arrow-schema = { version = "37.0.0" }
+arrow-array = { version = "40.0.0" }
+arrow-flight = { version = "40.0.0", features = ["flight-sql-experimental", "tls"] }
+arrow-ipc = { version = "40.0.0" }
+arrow-schema = { version = "40.0.0" }
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
 async-stream = "0.3.3"
@@ -150,7 +150,6 @@ prost = { version = "0.11", default-features = false }
 rand = "0.8.5"
 regex = "1.8.1"
 reqwest = { workspace = true }
-scopeguard = "1.1.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_urlencoded = "0.7.1"
@@ -167,7 +166,7 @@ uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 
 [dev-dependencies]
-arrow-cast = { version = "37.0.0", features = ["prettyprint"] }
+arrow-cast = { version = "40.0.0", features = ["prettyprint"] }
 common-meta-embedded = { path = "../../meta/embedded" }
 ordered-float = { workspace = true }
 

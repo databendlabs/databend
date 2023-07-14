@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
+use common_ast::ast::FormatTreeNode;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -25,9 +26,15 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
-use common_profile::ProfSpanSetRef;
+use common_profile::QueryProfileManager;
+use common_profile::SharedProcessorProfiles;
+use common_sql::executor::ProfileHelper;
 use common_sql::MetadataRef;
+use common_storages_result_cache::gen_result_cache_key;
+use common_storages_result_cache::ResultCacheReader;
+use common_users::UserApiProvider;
 
+use super::InterpreterFactory;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -66,20 +73,21 @@ impl Interpreter for ExplainInterpreter {
 
             ExplainKind::Plan => match &self.plan {
                 Plan::Query {
-                    s_expr, metadata, ..
+                    s_expr,
+                    metadata,
+                    formatted_ast,
+                    ..
                 } => {
                     let ctx = self.ctx.clone();
-                    let settings = ctx.get_settings();
-
-                    let enable_distributed_eval_index =
-                        settings.get_enable_distributed_eval_index()?;
-                    settings.set_enable_distributed_eval_index(false)?;
-                    scopeguard::defer! {
-                        let _ = settings.set_enable_distributed_eval_index(enable_distributed_eval_index);
-                    }
-                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx);
+                    // If `formatted_ast` is Some, it means we may use query result cache.
+                    // If we use result cache for this query,
+                    // we should not use `dry_run` mode to build the physical plan.
+                    // It's because we need to get the same partitions as the original selecting plan.
+                    let mut builder =
+                        PhysicalPlanBuilder::new(metadata.clone(), ctx, formatted_ast.is_none());
                     let plan = builder.build(s_expr).await?;
-                    self.explain_physical_plan(&plan, metadata)?
+                    self.explain_physical_plan(&plan, metadata, formatted_ast)
+                        .await?
                 }
                 _ => self.explain_plan(&self.plan)?,
             },
@@ -89,15 +97,7 @@ impl Interpreter for ExplainInterpreter {
                     s_expr, metadata, ..
                 } => {
                     let ctx = self.ctx.clone();
-                    let settings = ctx.get_settings();
-
-                    let enable_distributed_eval_index =
-                        settings.get_enable_distributed_eval_index()?;
-                    settings.set_enable_distributed_eval_index(false)?;
-                    scopeguard::defer! {
-                        let _ = settings.set_enable_distributed_eval_index(enable_distributed_eval_index);
-                    }
-                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx);
+                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, true);
                     let plan = builder.build(s_expr).await?;
                     self.explain_join_order(&plan, metadata)?
                 }
@@ -113,16 +113,6 @@ impl Interpreter for ExplainInterpreter {
                     ignore_result,
                     ..
                 } => {
-                    let ctx = self.ctx.clone();
-                    let settings = ctx.get_settings();
-
-                    let enable_distributed_eval_index =
-                        settings.get_enable_distributed_eval_index()?;
-                    settings.set_enable_distributed_eval_index(false)?;
-                    scopeguard::defer! {
-                        let _ = settings.set_enable_distributed_eval_index(enable_distributed_eval_index);
-                    }
-
                     self.explain_analyze(s_expr, metadata, *ignore_result)
                         .await?
                 }
@@ -131,20 +121,11 @@ impl Interpreter for ExplainInterpreter {
                 ))?,
             },
 
-            ExplainKind::Pipeline => match &self.plan {
-                Plan::Query {
-                    s_expr,
-                    metadata,
-                    ignore_result,
-                    ..
-                } => {
-                    self.explain_pipeline(*s_expr.clone(), metadata.clone(), *ignore_result)
-                        .await?
-                }
-                _ => {
-                    return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
-                }
-            },
+            ExplainKind::Pipeline => {
+                let interpter = InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
+                let pipeline = interpter.execute2().await?;
+                Self::format_pipeline(&pipeline)
+            }
 
             ExplainKind::Fragments => match &self.plan {
                 Plan::Query {
@@ -196,13 +177,43 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
-    pub fn explain_physical_plan(
+    pub async fn explain_physical_plan(
         &self,
         plan: &PhysicalPlan,
         metadata: &MetadataRef,
+        formatted_ast: &Option<String>,
     ) -> Result<Vec<DataBlock>> {
+        if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
+            let key = gen_result_cache_key(formatted_ast.as_ref().unwrap());
+            let kv_store = UserApiProvider::instance().get_meta_store_client();
+            let cache_reader = ResultCacheReader::create(
+                self.ctx.clone(),
+                &key,
+                kv_store.clone(),
+                self.ctx
+                    .get_settings()
+                    .get_query_result_cache_allow_inconsistent()?,
+            );
+            if let Some(v) = cache_reader.check_cache().await? {
+                // Construct a format tree for result cache reading
+                let children = vec![
+                    FormatTreeNode::new(format!("SQL: {}", v.sql)),
+                    FormatTreeNode::new(format!("Number of rows: {}", v.num_rows)),
+                    FormatTreeNode::new(format!("Result size: {}", v.result_size)),
+                ];
+
+                let format_tree =
+                    FormatTreeNode::with_children("ReadQueryResultCache".to_string(), children);
+
+                let result = format_tree.format_pretty()?;
+                let line_split_result: Vec<&str> = result.lines().collect();
+                let formatted_plan = StringType::from_data(line_split_result);
+                return Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])]);
+            }
+        }
+
         let result = plan
-            .format(metadata.clone(), ProfSpanSetRef::default())?
+            .format(metadata.clone(), SharedProcessorProfiles::default())?
             .format_pretty()?;
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
@@ -220,17 +231,7 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
-    #[async_backtrace::framed]
-    pub async fn explain_pipeline(
-        &self,
-        s_expr: SExpr,
-        metadata: MetadataRef,
-        ignore_result: bool,
-    ) -> Result<Vec<DataBlock>> {
-        let mut builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone());
-        let plan = builder.build(&s_expr).await?;
-        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result, false).await?;
-
+    fn format_pipeline(build_res: &PipelineBuildResult) -> Vec<DataBlock> {
         let mut blocks = Vec::with_capacity(1 + build_res.sources_pipelines.len());
         // Format root pipeline
         let line_split_result = format!("{}", build_res.main_pipeline.display_indent())
@@ -248,7 +249,7 @@ impl ExplainInterpreter {
             let column = StringType::from_data(line_split_result);
             blocks.push(DataBlock::new_from_columns(vec![column]));
         }
-        Ok(blocks)
+        blocks
     }
 
     #[async_backtrace::framed]
@@ -258,7 +259,7 @@ impl ExplainInterpreter {
         metadata: MetadataRef,
     ) -> Result<Vec<DataBlock>> {
         let ctx = self.ctx.clone();
-        let plan = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone())
+        let plan = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true)
             .build(&s_expr)
             .await?;
 
@@ -283,7 +284,7 @@ impl ExplainInterpreter {
         metadata: &MetadataRef,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
-        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
         let plan = builder.build(s_expr).await?;
         let mut build_res =
             build_query_pipeline(&self.ctx, &[], &plan, ignore_result, true).await?;
@@ -293,7 +294,7 @@ impl ExplainInterpreter {
         let settings = self.ctx.get_settings();
         let query_id = self.ctx.get_id();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
-        let settings = ExecutorSettings::try_create(&settings, query_id)?;
+        let settings = ExecutorSettings::try_create(&settings, query_id.clone())?;
 
         // Drain the data
         if build_res.main_pipeline.is_complete_pipeline()? {
@@ -308,6 +309,17 @@ impl ExplainInterpreter {
             pulling_executor.start();
             while (pulling_executor.pull_data()?).is_some() {}
         }
+
+        let profile = ProfileHelper::build_query_profile(
+            &query_id,
+            metadata,
+            &plan,
+            &prof_span_set.lock().unwrap(),
+        )?;
+
+        // Record the query profile
+        let prof_mgr = QueryProfileManager::instance();
+        prof_mgr.insert(Arc::new(profile));
 
         let result = plan
             .format(metadata.clone(), prof_span_set)?

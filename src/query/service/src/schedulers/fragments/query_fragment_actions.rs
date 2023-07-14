@@ -54,15 +54,13 @@ impl QueryFragmentAction {
 #[derive(Debug)]
 pub struct QueryFragmentActions {
     pub fragment_id: usize,
-    pub exchange_actions: bool,
     pub data_exchange: Option<DataExchange>,
     pub fragment_actions: Vec<QueryFragmentAction>,
 }
 
 impl QueryFragmentActions {
-    pub fn create(exchange_actions: bool, fragment_id: usize) -> QueryFragmentActions {
+    pub fn create(fragment_id: usize) -> QueryFragmentActions {
         QueryFragmentActions {
-            exchange_actions,
             fragment_id,
             data_exchange: None,
             fragment_actions: vec![],

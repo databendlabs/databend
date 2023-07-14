@@ -65,6 +65,12 @@ pub struct TestGuard {
     thread_name: String,
 }
 
+impl TestGuard {
+    pub fn new(thread_name: String) -> Self {
+        Self { thread_name }
+    }
+}
+
 impl Drop for TestGuard {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]

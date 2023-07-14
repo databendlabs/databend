@@ -41,8 +41,8 @@ impl PhysicalPlanBuilder {
         mut other_conditions: Vec<ScalarExpr>,
         s_expr: &SExpr,
     ) -> Result<PhysicalPlan> {
-        let left_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
-        let right_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
+        let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
+        let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
 
         debug_assert!(!range_conditions.is_empty());
 
@@ -57,8 +57,8 @@ impl PhysicalPlanBuilder {
         };
 
         // Construct IEJoin
-        let left_side = self.build(s_expr.child(0)?).await?;
-        let right_side = self.build(s_expr.child(1)?).await?;
+        let left_side = self.build(s_expr.child(1)?).await?;
+        let right_side = self.build(s_expr.child(0)?).await?;
 
         let left_schema = left_side.output_schema()?;
         let right_schema = right_side.output_schema()?;

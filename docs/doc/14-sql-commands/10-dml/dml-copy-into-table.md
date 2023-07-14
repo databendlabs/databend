@@ -206,21 +206,21 @@ copyOptions ::=
   [ PURGE = <bool> ]
   [ FORCE = <bool> ]
   [ DISABLE_VARIANT_CHECK = <bool> ]
-  [ ON_ERROR = { continue | abort } ]
+  [ ON_ERROR = { continue | abort | abort_N } ]
   [ MAX_FILES = <num> ]
 ```
 
-| Parameter             | Description                                                                                                                                             | Required |
-|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
-| SIZE_LIMIT            | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits.                                          | Optional |
-| PURGE                 | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`.                           | Optional |
-| FORCE                 | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped.       | Optional |
-| DISABLE_VARIANT_CHECK | If `True`, this will allow the variant field to insert invalid JSON strings. Default: `False`.                                                           | Optional |
-| ON_ERROR              | Provides options to handle a file containing errors. Select `continue` to skip the file and continue, or `abort` (default) to abort the load operation. | Optional |
-| MAX_FILES             | Sets the maximum number of files to load. Defaults to `0` meaning no limits.                                                                             | Optional |
+| Parameter             | Description                                                                                                                                                                                                              | Required |
+|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| SIZE_LIMIT            | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits.                                                                                                           | Optional |
+| PURGE                 | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`.                                                                                            | Optional |
+| FORCE                 | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped.                                                                        | Optional |
+| DISABLE_VARIANT_CHECK | If `True`, this will allow the variant field to insert invalid JSON strings. Default: `False`.                                                                                                                           | Optional |
+| ON_ERROR              | Decides how to handle a file that contains errors: 'continue' to skip and proceed, 'abort' to terminate on error, 'abort_N' to terminate when errors ≥ N. Default is 'abort'. Note: 'abort_N' not available for Parquet files. | Optional |
+| MAX_FILES             | Sets the maximum number of files to load. Defaults to `0` meaning no limits.                                                                                                                                             | Optional |
 
-:::info
-The parameter ON_ERROR currently does not work for parquet files.
+:::tip
+When importing large volumes of data, such as logs, it is recommended to set both `PURGE` and `FORCE` to True. This ensures efficient data import without the need for interaction with the Meta server (updating the copied-files set). However, it is important to be aware that this may lead to duplicate data imports.
 :::
 
 ## Examples
@@ -263,11 +263,11 @@ This example reads 10 rows from a CSV file and inserts them into a table:
 COPY INTO mytable
 FROM 's3://mybucket/data.csv'
 CONNECTION = (
-    ENDPOINT_URL = 'https://<endpoint-URL>',
-    ACCESS_KEY_ID = '<your-access-key-ID>',
+    ENDPOINT_URL = 'https://<endpoint-URL>'
+    ACCESS_KEY_ID = '<your-access-key-ID>'
     SECRET_ACCESS_KEY = '<your-secret-access-key>'
 )
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1)
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
 SIZE_LIMIT = 10;
 ```
 
@@ -276,7 +276,7 @@ This example loads data from a CSV file without specifying the endpoint URL:
 ```sql
 COPY INTO mytable
 FROM 's3://mybucket/data.csv'
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1)
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
 SIZE_LIMIT = 10;
 ```
 
@@ -290,8 +290,8 @@ This example reads data from a CSV file and inserts it into a table:
 COPY INTO mytable
 FROM 'azblob://mybucket/data.csv'
 CONNECTION = (
-    ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net',
-    ACCOUNT_NAME = '<account_name>',
+    ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net'
+    ACCOUNT_NAME = '<account_name>'
     ACCOUNT_KEY = '<account_key>'
 )
 FILE_FORMAT = (type = CSV);
@@ -318,7 +318,7 @@ This example reads data from a CSV file on IPFS and inserts it into a table:
 COPY INTO mytable
 FROM 'ipfs://<your-ipfs-hash>'
 CONNECTION = (endpoint_url = 'https://<your-ipfs-gateway>')
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1);
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
 </TabItem>
 
@@ -332,7 +332,7 @@ This example uses pattern matching to only load from CSV files containing `sales
 COPY INTO mytable
 FROM 's3://mybucket/'
 PATTERN = '.*sales.*[.]csv'
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1);
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
 Where `.*` is interpreted as `zero or more occurrences of any character`. The square brackets escape the period character `(.)` that precedes a file extension.
 
@@ -341,7 +341,7 @@ If you want to load from all the CSV files, use `PATTERN = '.*[.]csv'`:
 COPY INTO mytable
 FROM 's3://mybucket/'
 PATTERN = '.*[.]csv'
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1);
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
 
 ### 5. Loading Data with AWS IAM Role
@@ -356,7 +356,7 @@ CONNECTION = (
     EXTERNAL_ID = '123456'
 )
 PATTERN = '.*[.]csv'
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1);
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
 
 ### 6. Loading Data with Compression
@@ -371,7 +371,7 @@ CONNECTION = (
     ACCESS_KEY_ID = '<your-access-key-ID>',
     SECRET_ACCESS_KEY = '<your-secret-access-key>'
 )
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, compression = AUTO)
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = AUTO)
 SIZE_LIMIT = 10;
 ```
 
@@ -387,3 +387,15 @@ CONNECTION = (
 PATTERN = '.*[.]parquet'
 FILE_FORMAT = (TYPE = PARQUET);
 ```
+
+### 8. Controlling Parallel Processing
+
+In Databend, the *max_threads* setting specifies the maximum number of threads that can be utilized to execute a request. By default, this value is typically set to match the number of CPU cores available on the machine.
+
+When loading data into Databend with COPY INTO, you can control the parallel processing capabilities by injecting hints into the COPY INTO command and setting the *max_threads* parameter. For example:
+
+```sql
+COPY /*+ set_var(max_threads=6) */ INTO mytable FROM @mystage/ pattern='.*[.]parq' FILE_FORMAT=(TYPE=parquet);
+```
+
+For more information about injecting hints, see [SET_VAR](../80-setting-cmds/03-set-var.md).

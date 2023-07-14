@@ -560,7 +560,7 @@ impl Table for HiveTable {
         &self.table_info
     }
 
-    fn benefit_column_prune(&self) -> bool {
+    fn support_column_projection(&self) -> bool {
         true
     }
 
@@ -573,6 +573,7 @@ impl Table for HiveTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         self.do_read_partitions(ctx, push_downs).await
     }
@@ -617,8 +618,9 @@ impl Table for HiveTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _instant: Option<NavigationPoint>,
+        _limit: Option<usize>,
         _keep_last_snapshot: bool,
-        _dry_run_limit: Option<usize>,
+        _dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         Ok(None)
     }

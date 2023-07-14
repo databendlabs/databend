@@ -17,6 +17,9 @@ use common_exception::Result;
 use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregatePartial;
+use super::DeleteFinal;
+use super::DeletePartial;
+use super::DistributedCopyIntoTable;
 use super::DistributedInsertSelect;
 use super::EvalScalar;
 use super::Exchange;
@@ -58,7 +61,10 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
+            PhysicalPlan::DeletePartial(plan) => self.replace_delete_partial(plan),
+            PhysicalPlan::DeleteFinal(plan) => self.replace_delete_final(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
+            PhysicalPlan::DistributedCopyIntoTable(plan) => self.replace_copy_into_table(plan),
         }
     }
 
@@ -197,6 +203,7 @@ pub trait PhysicalPlanReplacer {
             order_by: plan.order_by.clone(),
             limit: plan.limit,
             after_exchange: plan.after_exchange,
+            pre_projection: plan.pre_projection.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -231,6 +238,7 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::Exchange(Exchange {
+            plan_id: plan.plan_id,
             input: Box::new(input),
             kind: plan.kind.clone(),
             keys: plan.keys.clone(),
@@ -245,12 +253,15 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::ExchangeSink(ExchangeSink {
+            // TODO(leiysky): we reuse the plan id of the Exchange node here,
+            // should generate a new one.
+            plan_id: plan.plan_id,
+
             input: Box::new(input),
             schema: plan.schema.clone(),
             kind: plan.kind.clone(),
             keys: plan.keys.clone(),
             destination_fragment_id: plan.destination_fragment_id,
-            destinations: plan.destinations.clone(),
             query_id: plan.query_id.clone(),
         }))
     }
@@ -268,11 +279,18 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
+    fn replace_copy_into_table(&mut self, plan: &DistributedCopyIntoTable) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::DistributedCopyIntoTable(Box::new(
+            plan.clone(),
+        )))
+    }
+
     fn replace_insert_select(&mut self, plan: &DistributedInsertSelect) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::DistributedInsertSelect(Box::new(
             DistributedInsertSelect {
+                plan_id: plan.plan_id,
                 input: Box::new(input),
                 catalog: plan.catalog.clone(),
                 table_info: plan.table_info.clone(),
@@ -284,12 +302,25 @@ pub trait PhysicalPlanReplacer {
         )))
     }
 
+    fn replace_delete_partial(&mut self, plan: &DeletePartial) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::DeletePartial(Box::new(plan.clone())))
+    }
+
+    fn replace_delete_final(&mut self, plan: &DeleteFinal) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::DeleteFinal(Box::new(DeleteFinal {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
     fn replace_project_set(&mut self, plan: &ProjectSet) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::ProjectSet(ProjectSet {
             plan_id: plan.plan_id,
             input: Box::new(input),
             srf_exprs: plan.srf_exprs.clone(),
+            unused_indices: plan.unused_indices.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -372,6 +403,7 @@ impl PhysicalPlan {
                 PhysicalPlan::ProjectSet(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit)
                 }
+                PhysicalPlan::DistributedCopyIntoTable(_) => {}
                 PhysicalPlan::RuntimeFilterSource(plan) => {
                     Self::traverse(&plan.left_side, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right_side, pre_visit, visit, post_visit);
@@ -379,6 +411,10 @@ impl PhysicalPlan {
                 PhysicalPlan::RangeJoin(plan) => {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::DeletePartial(_) => {}
+                PhysicalPlan::DeleteFinal(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
             }
             post_visit(plan);

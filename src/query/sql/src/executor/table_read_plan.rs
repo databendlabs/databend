@@ -32,6 +32,7 @@ use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableField;
+use common_license::license::Feature::DataMask;
 use common_license::license_manager::get_license_manager;
 use common_settings::Settings;
 use common_users::UserApiProvider;
@@ -56,8 +57,9 @@ pub trait ToReadDataSourcePlan {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        dry_run: bool,
     ) -> Result<DataSourcePlan> {
-        self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs, None)
+        self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs, None, dry_run)
             .await
     }
 
@@ -67,6 +69,7 @@ pub trait ToReadDataSourcePlan {
         catalog: String,
         push_downs: Option<PushDownInfo>,
         internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
+        dry_run: bool,
     ) -> Result<DataSourcePlan>;
 }
 
@@ -79,6 +82,7 @@ impl ToReadDataSourcePlan for dyn Table {
         catalog: String,
         push_downs: Option<PushDownInfo>,
         internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
+        dry_run: bool,
     ) -> Result<DataSourcePlan> {
         let (statistics, parts) = if let Some(PushDownInfo {
             filter:
@@ -91,7 +95,9 @@ impl ToReadDataSourcePlan for dyn Table {
         {
             Ok((PartStatistics::default(), Partitions::default()))
         } else {
-            self.read_partitions(ctx.clone(), push_downs.clone()).await
+            ctx.set_status_info("build physical plan - read partitions");
+            self.read_partitions(ctx.clone(), push_downs.clone(), dry_run)
+                .await
         }?;
 
         ctx.incr_total_scan_value(ProgressValues {
@@ -109,7 +115,7 @@ impl ToReadDataSourcePlan for dyn Table {
 
         let schema = &source_info.schema();
         let description = statistics.get_description(&source_info.desc());
-        let mut output_schema = match (self.benefit_column_prune(), &push_downs) {
+        let mut output_schema = match (self.support_column_projection(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.prewhere {
                 Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
                 _ => {
@@ -158,7 +164,7 @@ impl ToReadDataSourcePlan for dyn Table {
                 let ret = license_manager.manager.check_enterprise_enabled(
                     &ctx.get_settings(),
                     tenant.clone(),
-                    "data_mask".to_string(),
+                    DataMask,
                 );
                 if ret.is_err() {
                     None

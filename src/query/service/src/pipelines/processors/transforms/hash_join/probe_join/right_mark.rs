@@ -23,9 +23,10 @@ use common_expression::types::NullableType;
 use common_expression::types::ValueType;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
-use common_hashtable::MarkerKind;
 
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
 
@@ -51,12 +52,12 @@ impl JoinHashTable {
             };
 
             if contains {
-                markers[i] = MarkerKind::True;
+                markers[i] = MARKER_KIND_TRUE;
             }
         }
 
         Ok(vec![self.merge_eq_block(
-            &self.create_marker_block(has_null, markers.clone())?,
+            &self.create_marker_block(has_null, markers, input.num_rows())?,
             input,
         )?])
     }
@@ -72,6 +73,7 @@ impl JoinHashTable {
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
+        let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         let has_null = *self.hash_join_desc.marker_join_desc.has_null.read();
         let cols = input
@@ -79,7 +81,8 @@ impl JoinHashTable {
             .iter()
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
             .collect::<Vec<_>>();
-        let mut markers = Self::init_markers(&cols, input.num_rows());
+        let markers = probe_state.markers.as_mut().unwrap();
+        Self::init_markers(&cols, input.num_rows(), markers);
 
         let _func_ctx = self.ctx.get_function_context()?;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
@@ -100,14 +103,20 @@ impl JoinHashTable {
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
         for (i, key) in keys_iter.enumerate() {
-            let (mut match_count, mut incomplete_ptr) = if self
-                .hash_join_desc
-                .from_correlated_subquery
-            {
-                hash_table.probe_hash_table(key, build_indexes_ptr, occupied, JOIN_MAX_BLOCK_SIZE)
-            } else {
-                self.probe_key(hash_table, key, valids, i, build_indexes_ptr, occupied)
-            };
+            let (mut match_count, mut incomplete_ptr) =
+                if self.hash_join_desc.from_correlated_subquery {
+                    hash_table.probe_hash_table(key, build_indexes_ptr, occupied, max_block_size)
+                } else {
+                    self.probe_key(
+                        hash_table,
+                        key,
+                        valids,
+                        i,
+                        build_indexes_ptr,
+                        occupied,
+                        max_block_size,
+                    )
+                };
             if match_count == 0 {
                 continue;
             }
@@ -115,7 +124,7 @@ impl JoinHashTable {
             occupied += match_count;
             probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
             probe_indexes_len += 1;
-            if occupied >= JOIN_MAX_BLOCK_SIZE {
+            if occupied >= max_block_size {
                 loop {
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -147,11 +156,11 @@ impl JoinHashTable {
                         let marker = &mut markers[index as usize];
                         for _ in 0..cnt {
                             if !validity.get_bit(idx) {
-                                if *marker == MarkerKind::False {
-                                    *marker = MarkerKind::Null;
+                                if *marker == MARKER_KIND_FALSE {
+                                    *marker = MARKER_KIND_NULL;
                                 }
                             } else if data.get_bit(idx) {
-                                *marker = MarkerKind::True;
+                                *marker = MARKER_KIND_TRUE;
                             }
                             idx += 1;
                         }
@@ -168,7 +177,7 @@ impl JoinHashTable {
                         incomplete_ptr,
                         build_indexes_ptr,
                         occupied,
-                        JOIN_MAX_BLOCK_SIZE,
+                        max_block_size,
                     );
                     if match_count == 0 {
                         break;
@@ -178,7 +187,7 @@ impl JoinHashTable {
                     probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
                     probe_indexes_len += 1;
 
-                    if occupied < JOIN_MAX_BLOCK_SIZE {
+                    if occupied < max_block_size {
                         break;
                     }
                 }
@@ -208,18 +217,18 @@ impl JoinHashTable {
             let marker = &mut markers[index as usize];
             for _ in 0..cnt {
                 if !validity.get_bit(idx) {
-                    if *marker == MarkerKind::False {
-                        *marker = MarkerKind::Null;
+                    if *marker == MARKER_KIND_FALSE {
+                        *marker = MARKER_KIND_NULL;
                     }
                 } else if data.get_bit(idx) {
-                    *marker = MarkerKind::True;
+                    *marker = MARKER_KIND_TRUE;
                 }
                 idx += 1;
             }
         }
 
         Ok(vec![self.merge_eq_block(
-            &self.create_marker_block(has_null, markers)?,
+            &self.create_marker_block(has_null, markers, input.num_rows())?,
             input,
         )?])
     }

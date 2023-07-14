@@ -30,7 +30,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(io_error_other)]
-#![feature(once_cell)]
 
 mod config;
 pub use config::ShareTableConfig;
@@ -40,9 +39,9 @@ mod operator;
 pub use operator::init_operator;
 pub use operator::DataOperator;
 
-mod metrics;
-pub use metrics::StorageMetrics;
-pub use metrics::StorageMetricsLayer;
+pub mod common_metrics;
+pub use common_metrics::StorageMetrics;
+pub use common_metrics::StorageMetricsLayer;
 
 mod runtime_layer;
 
@@ -51,6 +50,7 @@ pub use column_node::ColumnNode;
 pub use column_node::ColumnNodes;
 
 mod parquet;
+pub use parquet::infer_schema_with_extension;
 pub use parquet::read_parquet_metas_in_parallel;
 pub use parquet::read_parquet_schema_async;
 

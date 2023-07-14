@@ -27,7 +27,7 @@ Databend also offers a variety of functions for converting expressions into diff
 | TO_INT32( expr )              | Converts a value to INT32 data type                                    | TO_INT32('123')                                     | 123                        |
 | TO_INT64( expr )              | Converts a value to INT64 data type                                    | TO_INT64('123')                                     | 123                        |
 | TO_STRING( expr )             | Converts a value to STRING data type                                   | TO_STRING(10)                                       | 10                         |
-| TO_STRING( expr, expr )       | Converts a date value to a specific STRING format                      | TO_STRING('2022-12-25', 'Month/Day/Year: %m/%d/%Y') | Month/Day/Year: 12/25/2022 |
+| TO_STRING( expr, expr )       | Alias for [DATE_FORMAT](../30-datetime-functions/dateformat.md)         | TO_STRING('2022-12-25', 'Month/Day/Year: %m/%d/%Y') | Month/Day/Year: 12/25/2022 |
 | TO_UINT8( expr )              | Converts a value to UINT8 data type                                    | TO_UINT8('123')                                     | 123                        |
 | TO_UINT16( expr )             | Converts a value to UINT16 data type                                   | TO_UINT16('123')                                    | 123                        |
 | TO_UINT32( expr )             | Converts a value to UINT32 data type                                   | TO_UINT32('123')                                    | 123                        |

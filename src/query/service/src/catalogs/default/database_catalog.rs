@@ -15,7 +15,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::catalog::StorageDescription;
+use common_catalog::database::Database;
 use common_catalog::table_args::TableArgs;
+use common_catalog::table_function::TableFunction;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -38,9 +41,15 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::DroppedId;
+use common_meta_app::schema::GcDroppedTableReq;
+use common_meta_app::schema::GcDroppedTableResp;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -56,6 +65,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -69,10 +80,7 @@ use tracing::info;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::default::ImmutableCatalog;
 use crate::catalogs::default::MutableCatalog;
-use crate::databases::Database;
-use crate::storages::StorageDescription;
 use crate::storages::Table;
-use crate::table_functions::TableFunction;
 use crate::table_functions::TableFunctionFactory;
 
 /// Combine two catalogs together
@@ -490,6 +498,16 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
+        self.mutable_catalog.get_index(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
+        self.mutable_catalog.update_index(req).await
+    }
+
+    #[async_backtrace::framed]
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
         self.mutable_catalog.list_indexes(req).await
     }
@@ -578,5 +596,16 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog
             .delete_table_lock_rev(table_info, revision)
             .await
+    }
+
+    async fn get_drop_table_infos(
+        &self,
+        req: ListDroppedTableReq,
+    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
+        self.mutable_catalog.get_drop_table_infos(req).await
+    }
+
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
+        self.mutable_catalog.gc_drop_tables(req).await
     }
 }

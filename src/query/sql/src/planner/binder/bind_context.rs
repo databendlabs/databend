@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::hash::Hash;
 
@@ -100,30 +101,14 @@ pub struct ColumnBinding {
     pub virtual_computed_expr: Option<String>,
 }
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug)]
 pub struct InternalColumnBinding {
     /// Database name of this `InternalColumnBinding` in current context
     pub database_name: Option<String>,
     /// Table name of this `InternalColumnBinding` in current context
     pub table_name: Option<String>,
-    /// Column index of InternalColumnBinding
-    pub index: IndexType,
 
     pub internal_column: InternalColumn,
-}
-
-impl PartialEq for InternalColumnBinding {
-    fn eq(&self, other: &Self) -> bool {
-        self.index == other.index
-    }
-}
-
-impl Eq for InternalColumnBinding {}
-
-impl Hash for InternalColumnBinding {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.index.hash(state);
-    }
 }
 
 impl ColumnIndex for ColumnBinding {}
@@ -364,7 +349,6 @@ impl BindContext {
                 let column_binding = InternalColumnBinding {
                     database_name: database.map(|n| n.to_owned()),
                     table_name: table.map(|n| n.to_owned()),
-                    index: bind_context.columns.len(),
                     internal_column,
                 };
                 result.push(NameResolutionResult::InternalColumn(column_binding));
@@ -469,31 +453,34 @@ impl BindContext {
     fn get_internal_column_table_index(
         column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
-    ) -> (IndexType, Option<String>, Option<String>) {
+    ) -> Result<IndexType> {
         let metadata = metadata.read();
-        let (database_name, table_name) =
-            match (&column_binding.database_name, &column_binding.table_name) {
-                (Some(database_name), Some(table_name)) => {
-                    (Some(database_name.clone()), Some(table_name.clone()))
-                }
-                (None, Some(table_name)) => (None, Some(table_name.clone())),
-                (database_name, None) => {
-                    // If table_name is None, assert that metadata.tables has only one table
-                    debug_assert!(metadata.tables().len() == 1);
-                    return (metadata.table(0).index(), database_name.clone(), None);
-                }
-            };
 
-        (
+        if let Some(table_name) = &column_binding.table_name {
             metadata
-                .get_table_index(
-                    database_name.as_deref(),
-                    table_name.as_ref().unwrap().as_str(),
-                )
-                .unwrap(),
-            database_name,
-            table_name,
-        )
+                .get_table_index(column_binding.database_name.as_deref(), table_name)
+                .ok_or_else(|| {
+                    ErrorCode::TableInfoError(format!(
+                        "Table `{table_name}` is not found in the metadata"
+                    ))
+                })
+        } else {
+            let tables = metadata
+                .tables()
+                .iter()
+                .filter(|t| !t.is_source_of_index())
+                .collect::<Vec<_>>();
+            debug_assert!(!tables.is_empty());
+
+            if tables.len() > 1 {
+                return Err(ErrorCode::SemanticError(format!(
+                    "The table of the internal column `{}` is ambiguous",
+                    column_binding.internal_column.column_name()
+                )));
+            }
+
+            Ok(tables[0].index())
+        }
     }
 
     // Add internal column binding into `BindContext`
@@ -502,34 +489,45 @@ impl BindContext {
         &mut self,
         column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
-    ) -> ColumnBinding {
+    ) -> Result<ColumnBinding> {
         let column_id = column_binding.internal_column.column_id();
-        if let std::collections::btree_map::Entry::Vacant(e) =
-            self.bound_internal_columns.entry(column_id)
-        {
-            // New added internal column MUST at the end of `columns` array.
-            debug_assert_eq!(column_binding.index, self.columns.len());
+        let (table_index, column_index, new) = match self.bound_internal_columns.entry(column_id) {
+            btree_map::Entry::Vacant(e) => {
+                let table_index =
+                    BindContext::get_internal_column_table_index(column_binding, metadata.clone())?;
+                let mut metadata = metadata.write();
+                let column_index = metadata
+                    .add_internal_column(table_index, column_binding.internal_column.clone());
+                e.insert((table_index, column_index));
+                (table_index, column_index, true)
+            }
+            btree_map::Entry::Occupied(e) => {
+                let (table_index, column_index) = e.get();
+                (*table_index, *column_index, false)
+            }
+        };
 
-            let (table_index, database_name, table_name) =
-                BindContext::get_internal_column_table_index(column_binding, metadata.clone());
+        let metadata = metadata.read();
+        let table = metadata.table(table_index);
+        let column = metadata.column(column_index);
+        let column_binding = ColumnBinding {
+            database_name: Some(table.database().to_string()),
+            table_name: Some(table.name().to_string()),
+            column_position: None,
+            table_index: Some(table_index),
+            column_name: column.name(),
+            index: column_index,
+            data_type: Box::new(column.data_type()),
+            visibility: Visibility::Visible,
+            virtual_computed_expr: None,
+        };
 
-            let mut metadata = metadata.write();
-            metadata.add_internal_column(table_index, column_binding.internal_column.clone());
-            self.columns.push(ColumnBinding {
-                database_name,
-                table_name,
-                column_position: None,
-                table_index: Some(table_index),
-                column_name: column_binding.internal_column.column_name().clone(),
-                index: column_binding.index,
-                data_type: Box::new(column_binding.internal_column.data_type()),
-                visibility: Visibility::Visible,
-                virtual_computed_expr: None,
-            });
-
-            e.insert((table_index, column_binding.index));
+        if new {
+            debug_assert!(!self.columns.iter().any(|c| c == &column_binding));
+            self.columns.push(column_binding.clone());
         }
-        self.columns[column_binding.index].clone()
+
+        Ok(column_binding)
     }
 
     pub fn add_internal_column_into_expr(&self, s_expr: SExpr) -> SExpr {

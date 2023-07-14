@@ -16,10 +16,12 @@ use std::io::Write;
 
 use arrow::array::Array;
 use arrow::chunk::Chunk;
+use arrow::datatypes::DataType;
 use arrow::datatypes::Schema;
 use arrow::error::Result;
 use arrow::io::parquet::write::to_parquet_schema;
 use arrow::io::parquet::write::RowGroupIterator;
+use parquet2::metadata::KeyValue;
 use parquet2::metadata::ThriftFileMetaData;
 use parquet2::write::FileWriter;
 use parquet2::write::WriteOptions;
@@ -36,6 +38,18 @@ where
     A: AsRef<dyn Array> + 'static + Send + Sync,
     I: Iterator<Item = Result<Chunk<A>>>,
 {
+    // add extension data type to parquet meta.
+    let mut key_values = Vec::new();
+    for field in &schema.fields {
+        if let DataType::Extension(ty, _, _) = &field.data_type {
+            let key_value = KeyValue {
+                key: field.name.clone(),
+                value: Some(ty.clone()),
+            };
+            key_values.push(key_value);
+        }
+    }
+
     let parquet_schema = to_parquet_schema(&schema)?;
 
     // Arrow2 should be honored
@@ -45,7 +59,13 @@ where
     for group in row_groups {
         file_writer.write(group?)?;
     }
-    let file_size = file_writer.end(None)?;
+
+    let key_value_metadata = if !key_values.is_empty() {
+        Some(key_values)
+    } else {
+        None
+    };
+    let file_size = file_writer.end(key_value_metadata)?;
     let (_meta_size, thrift_file_meta_data) = file_writer.into_inner_and_metadata();
     Ok((file_size, thrift_file_meta_data))
 }

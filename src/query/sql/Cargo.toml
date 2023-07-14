@@ -28,12 +28,12 @@ common-functions = { path = "../functions" }
 common-license = { path = "../../common/license" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
-common-profile = { path = "../../common/profile" }
 
 common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sources = { path = "../pipeline/sources" }
 common-pipeline-transforms = { path = "../pipeline/transforms" }
 
+common-profile = { path = "../profile" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
 common-storages-parquet = { path = "../storages/parquet" }

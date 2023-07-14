@@ -458,6 +458,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_tables_status(&mut self, _stmt: &mut ShowTablesStatusStmt) {}
 
+    fn visit_show_drop_tables(&mut self, _stmt: &mut ShowDropTablesStmt) {}
+
     fn visit_create_table(&mut self, _stmt: &mut CreateTableStmt) {}
 
     fn visit_create_table_source(&mut self, _source: &mut CreateTableSource) {}
@@ -478,6 +480,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_vacuum_table(&mut self, _stmt: &mut VacuumTableStmt) {}
 
+    fn visit_vacuum_drop_table(&mut self, _stmt: &mut VacuumDropTableStmt) {}
+
     fn visit_analyze_table(&mut self, _stmt: &mut AnalyzeTableStmt) {}
 
     fn visit_exists_table(&mut self, _stmt: &mut ExistsTableStmt) {}
@@ -491,6 +495,7 @@ pub trait VisitorMut: Sized {
     fn visit_create_index(&mut self, _stmt: &mut CreateIndexStmt) {}
 
     fn visit_drop_index(&mut self, _stmt: &mut DropIndexStmt) {}
+    fn visit_refresh_index(&mut self, _stmt: &mut RefreshIndexStmt) {}
 
     fn visit_create_virtual_columns(&mut self, _stmt: &mut CreateVirtualColumnsStmt) {}
 

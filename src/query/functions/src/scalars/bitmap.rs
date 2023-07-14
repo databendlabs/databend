@@ -35,7 +35,7 @@ use roaring::RoaringTreemap;
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, BitmapType, _, _>(
         "to_bitmap",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, BitmapType>(|s, builder, ctx| {
             match std::str::from_utf8(s)
                 .map_err(|e| e.to_string())
@@ -61,7 +61,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<UInt64Type, BitmapType, _, _>(
         "to_bitmap",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<UInt64Type, BitmapType>(|arg, builder, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(builder.len()) {
@@ -79,7 +79,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<ArrayType<UInt64Type>, BitmapType, _, _>(
         "build_bitmap",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<ArrayType<UInt64Type>, BitmapType>(|arg, builder, _ctx| {
             let mut rb = RoaringTreemap::new();
             for a in arg.iter() {
@@ -93,7 +93,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<BitmapType, UInt64Type, _, _>(
         "bitmap_count",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|arg, builder, ctx| {
             match RoaringTreemap::deserialize_from(arg) {
                 Ok(rb) => {
@@ -111,7 +111,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<BitmapType, StringType, _, _>(
         "to_string",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BitmapType, StringType>(|b, builder, ctx| {
             match RoaringTreemap::deserialize_from(b) {
                 Ok(rb) => {
@@ -130,7 +130,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<BitmapType, UInt64Type, BooleanType, _, _>(
         "bitmap_contains",
-        |_, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<BitmapType, UInt64Type, BooleanType>(
             |b, item, builder, ctx| match RoaringTreemap::deserialize_from(b) {
                 Ok(rb) => {
@@ -146,7 +146,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType, _, _>(
         "bitmap_subset_limit",
-        |_, _, _| FunctionDomain::MayThrow,
+        |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
             |b, range_start, limit, builder, ctx| match RoaringTreemap::deserialize_from(b) {
                 Ok(rb) => {
@@ -164,7 +164,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType, _, _>(
         "bitmap_subset_in_range",
-        |_, _, _| FunctionDomain::MayThrow,
+        |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
             |b, start, end, builder, ctx| match RoaringTreemap::deserialize_from(b) {
                 Ok(rb) => {
@@ -182,7 +182,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType, _, _>(
         "sub_bitmap",
-        |_, _, _| FunctionDomain::MayThrow,
+        |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
             |b, offset, length, builder, ctx| {
                     match RoaringTreemap::deserialize_from(b) {
@@ -211,7 +211,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BooleanType, _, _>(
         "bitmap_has_all",
-        |_, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<BitmapType, BitmapType, BooleanType>(
             |b, items, builder, ctx| {
                 let rb = match RoaringTreemap::deserialize_from(b) {
@@ -237,7 +237,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BooleanType, _, _>(
         "bitmap_has_any",
-        |_, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<BitmapType, BitmapType, BooleanType>(
             |b, items, builder, ctx| {
                 let rb = match RoaringTreemap::deserialize_from(b) {
@@ -263,7 +263,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<BitmapType, UInt64Type, _, _>(
         "bitmap_max",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|b, builder, ctx| {
             let val = match RoaringTreemap::deserialize_from(b) {
                 Ok(rb) => match rb.max() {
@@ -284,7 +284,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<BitmapType, UInt64Type, _, _>(
         "bitmap_min",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|b, builder, ctx| {
             let val = match RoaringTreemap::deserialize_from(b) {
                 Ok(rb) => match rb.min() {
@@ -305,7 +305,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BitmapType, _, _>(
         "bitmap_or",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<BitmapType, BitmapType, BitmapType>(
             |arg1, arg2, builder, ctx| bitmap_logic_operate(arg1, arg2, builder, ctx, LogicOp::Or),
         ),
@@ -313,7 +313,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BitmapType, _, _>(
         "bitmap_and",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<BitmapType, BitmapType, BitmapType>(
             |arg1, arg2, builder, ctx| bitmap_logic_operate(arg1, arg2, builder, ctx, LogicOp::And),
         ),
@@ -321,7 +321,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BitmapType, _, _>(
         "bitmap_xor",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<BitmapType, BitmapType, BitmapType>(
             |arg1, arg2, builder, ctx| bitmap_logic_operate(arg1, arg2, builder, ctx, LogicOp::Xor),
         ),
@@ -329,7 +329,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BitmapType, _, _>(
         "bitmap_not",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<BitmapType, BitmapType, BitmapType>(
             |arg1, arg2, builder, ctx| bitmap_logic_operate(arg1, arg2, builder, ctx, LogicOp::Not),
         ),

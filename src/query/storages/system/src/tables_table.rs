@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
+use common_expression::types::TimestampType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::FromOptData;
@@ -167,6 +168,8 @@ where TablesTable<T>: HistoryAware
             }
         }
 
+        let mut number_of_blocks: Vec<Option<u64>> = Vec::new();
+        let mut number_of_segments: Vec<Option<u64>> = Vec::new();
         let mut num_rows: Vec<Option<u64>> = Vec::new();
         let mut data_size: Vec<Option<u64>> = Vec::new();
         let mut data_compressed_size: Vec<Option<u64>> = Vec::new();
@@ -175,6 +178,8 @@ where TablesTable<T>: HistoryAware
         for tbl in &database_tables {
             let stats = tbl.table_statistics()?;
             num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
+            number_of_blocks.push(stats.as_ref().and_then(|v| v.number_of_blocks));
+            number_of_segments.push(stats.as_ref().and_then(|v| v.number_of_segments));
             data_size.push(stats.as_ref().and_then(|v| v.data_size));
             data_compressed_size.push(stats.as_ref().and_then(|v| v.data_size_compressed));
             index_size.push(stats.as_ref().and_then(|v| v.index_size));
@@ -217,6 +222,12 @@ where TablesTable<T>: HistoryAware
             .collect();
         let dropped_owns: Vec<Vec<u8>> =
             dropped_owns.iter().map(|s| s.as_bytes().to_vec()).collect();
+
+        let updated_on = database_tables
+            .iter()
+            .map(|v| v.get_table_info().meta.updated_on.timestamp_micros())
+            .collect::<Vec<_>>();
+
         let cluster_bys: Vec<String> = database_tables
             .iter()
             .map(|v| {
@@ -238,7 +249,6 @@ where TablesTable<T>: HistoryAware
                 }
             })
             .collect();
-
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(catalogs),
             StringType::from_data(databases),
@@ -250,10 +260,13 @@ where TablesTable<T>: HistoryAware
             StringType::from_data(is_transient),
             StringType::from_data(created_owns),
             StringType::from_data(dropped_owns),
+            TimestampType::from_data(updated_on),
             UInt64Type::from_opt_data(num_rows),
             UInt64Type::from_opt_data(data_size),
             UInt64Type::from_opt_data(data_compressed_size),
             UInt64Type::from_opt_data(index_size),
+            UInt64Type::from_opt_data(number_of_segments),
+            UInt64Type::from_opt_data(number_of_blocks),
         ]))
     }
 }
@@ -273,6 +286,7 @@ where TablesTable<T>: HistoryAware
             TableField::new("is_transient", TableDataType::String),
             TableField::new("created_on", TableDataType::String),
             TableField::new("dropped_on", TableDataType::String),
+            TableField::new("updated_on", TableDataType::Timestamp),
             TableField::new(
                 "num_rows",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
@@ -287,6 +301,14 @@ where TablesTable<T>: HistoryAware
             ),
             TableField::new(
                 "index_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "number_of_segments",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "number_of_blocks",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
         ])

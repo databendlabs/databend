@@ -84,6 +84,7 @@ fn test_format() {
         Arc::new(DummyTable::new("table".to_string())),
         None,
         false,
+        false,
     );
     let col1 = metadata.add_base_table_column(
         "col1".to_string(),

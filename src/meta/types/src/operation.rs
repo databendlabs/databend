@@ -36,18 +36,3 @@ impl<T> Debug for Operation<T> {
         }
     }
 }
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct GCDroppedDataReq {
-    pub tenant: String,
-    // gc at least dropped tables, 0 means donot gc table
-    pub table_at_least: u32,
-    // gc at most dropped db, 0 means donot gc db
-    pub db_at_least: u32,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct GCDroppedDataReply {
-    pub gc_table_count: u32,
-    pub gc_db_count: u32,
-}
