@@ -18,6 +18,7 @@ const LoadLazyImg: FC<IProps> = ({src, width, className}): ReactElement=> {
     <>
     {!isLoaded && <LightDatabendSingleSvg width={width}></LightDatabendSingleSvg>}
     <LazyLoadImage
+      placeholder={<div></div>}
       onLoad={()=> handleImageLoad()}
       className={clsx('g-w100', className, isLoaded ? 'g-db' :'g-dn')}
       src={src} />
