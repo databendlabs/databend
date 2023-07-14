@@ -299,6 +299,9 @@ impl TableContext for QueryContext {
     }
 
     fn set_status_info(&self, info: &str) {
+        // set_status_info is not called frequently, so we can use info! here.
+        // make it easier to match the status to the log.
+        tracing::info!("{}: {}", self.get_id(), info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
     }

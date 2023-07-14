@@ -30,7 +30,6 @@ use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::FuseTable;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::CompactSegmentInfo;
-use tracing::info;
 
 use crate::storages::fuse::get_snapshot_referenced_segments;
 
@@ -183,7 +182,6 @@ pub async fn do_gc_orphan_files(
         referenced_files.blocks_index.len(),
         start.elapsed().as_secs()
     );
-    info!(status);
     ctx.set_status_info(&status);
 
     // 2. Purge orphan segment files.
@@ -196,7 +194,6 @@ pub async fn do_gc_orphan_files(
         segment_locations_to_be_purged.len(),
         start.elapsed().as_secs()
     );
-    info!(status);
     ctx.set_status_info(&status);
 
     // 2.2 Delete all the orphan segment files to be purged
@@ -212,7 +209,6 @@ pub async fn do_gc_orphan_files(
         purged_file_num,
         start.elapsed().as_secs()
     );
-    info!(status);
     ctx.set_status_info(&status);
 
     // 3. Purge orphan block files.
@@ -224,7 +220,6 @@ pub async fn do_gc_orphan_files(
         block_locations_to_be_purged.len(),
         start.elapsed().as_secs()
     );
-    info!(status);
     ctx.set_status_info(&status);
 
     // 3.2 Delete all the orphan block files to be purged
@@ -240,7 +235,6 @@ pub async fn do_gc_orphan_files(
         purged_file_num,
         start.elapsed().as_secs()
     );
-    info!(status);
     ctx.set_status_info(&status);
 
     // 4. Purge orphan block index files.
@@ -253,7 +247,6 @@ pub async fn do_gc_orphan_files(
         index_locations_to_be_purged.len(),
         start.elapsed().as_secs()
     );
-    info!(status);
     ctx.set_status_info(&status);
 
     // 4.2 Delete all the orphan block index files to be purged
@@ -269,7 +262,6 @@ pub async fn do_gc_orphan_files(
         purged_file_num,
         start.elapsed().as_secs()
     );
-    info!(status);
     ctx.set_status_info(&status);
 
     Ok(())
@@ -296,7 +288,6 @@ pub async fn do_dry_run_orphan_files(
         referenced_files.blocks_index.len(),
         start.elapsed().as_secs()
     );
-    info!(status);
     ctx.set_status_info(&status);
 
     // 2. Get purge orphan segment files.
@@ -308,7 +299,6 @@ pub async fn do_dry_run_orphan_files(
         segment_locations_to_be_purged.len(),
         start.elapsed().as_secs()
     );
-    info!(status);
     ctx.set_status_info(&status);
 
     purge_files.extend(segment_locations_to_be_purged);
@@ -324,7 +314,6 @@ pub async fn do_dry_run_orphan_files(
         block_locations_to_be_purged.len(),
         start.elapsed().as_secs()
     );
-    info!(status);
     ctx.set_status_info(&status);
     purge_files.extend(block_locations_to_be_purged);
     if purge_files.len() >= dry_run_limit {
@@ -340,7 +329,6 @@ pub async fn do_dry_run_orphan_files(
         index_locations_to_be_purged.len(),
         start.elapsed().as_secs()
     );
-    info!(status);
     ctx.set_status_info(&status);
 
     purge_files.extend(index_locations_to_be_purged);
@@ -366,7 +354,6 @@ pub async fn do_vacuum(
         "do_vacuum: purged table, cost:{} sec",
         start.elapsed().as_secs()
     );
-    info!(status);
     ctx.set_status_info(&status);
     if let Some(mut purge_files) = purge_files_opt {
         let dry_run_limit = dry_run_limit.unwrap();
