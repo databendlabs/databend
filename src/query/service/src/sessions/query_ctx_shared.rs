@@ -25,17 +25,21 @@ use common_base::runtime::Runtime;
 use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
+use common_sql::IndexType;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
+use common_storages_memory::MemoryTable;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use storages_common_index::Index;
 use uuid::Uuid;
 
 use crate::catalogs::CatalogManager;
@@ -84,6 +88,11 @@ pub struct QueryContextShared {
     pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
+    /// Query profile manager
+    pub(in crate::sessions) profile_mgr: Arc<QueryProfileManager>,
+    /// Key is cte index, value contains cte's materialized blocks
+    pub(in crate::sessions) materialized_cte_tables:
+        Arc<RwLock<HashMap<IndexType, Arc<RwLock<Vec<DataBlock>>>>>>,
 }
 
 impl QueryContextShared {
@@ -117,6 +126,8 @@ impl QueryContextShared {
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
+            profile_mgr: QueryProfileManager::instance(),
+            materialized_cte_tables: Arc::new(Default::default()),
         }))
     }
 

@@ -23,6 +23,7 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -36,6 +37,7 @@ use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use dashmap::DashMap;
+use parking_lot::RwLock;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -153,4 +155,10 @@ pub trait TableContext: Send + Sync {
         files: &[StageFileInfo],
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>>;
+
+    fn set_materialized_cte(
+        &self,
+        idx: usize,
+        mem_table: Arc<RwLock<Vec<DataBlock>>>,
+    ) -> Result<()>;
 }

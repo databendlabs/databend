@@ -59,10 +59,12 @@ use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesReq;
+use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
+use common_storages_memory::MemoryTable;
 use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultCacheMetaManager;
 use common_storages_result_cache::ResultCacheReader;
@@ -71,6 +73,7 @@ use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
+use parking_lot::RwLock;
 
 use crate::binder::copy::parse_file_location;
 use crate::binder::scalar::ScalarBinder;
@@ -83,6 +86,7 @@ use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::CteScan;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
@@ -180,9 +184,20 @@ impl Binder {
                 };
                 // Check and bind common table expression
                 if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
-                    return self
-                        .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
-                        .await;
+                    return if !cte_info.materialized {
+                        self.bind_cte(*span, bind_context, &table_name, alias, &cte_info)
+                            .await
+                    } else {
+                        let (cte_s_expr, cte_bind_ctx) = self
+                            .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
+                            .await?;
+                        for column_binding in cte_bind_ctx.columns.iter() {
+                            bind_context.columns.push(column_binding.clone());
+                        }
+                        bind_context.materialized_ctes.push(cte_s_expr);
+                        let s_expr = self.bind_cte_scan(&cte_info)?;
+                        Ok((s_expr, bind_context.clone()))
+                    };
                 }
 
                 let tenant = self.ctx.get_tenant();
@@ -689,8 +704,22 @@ impl Binder {
         Ok((result_expr, result_ctx))
     }
 
+    fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
+        let memory_table = Arc::new(RwLock::new(vec![]));
+        self.ctx
+            .set_materialized_cte(cte_info.cte_idx, memory_table.clone())?;
+        let cte_scan = SExpr::create_leaf(Arc::new(
+            CteScan {
+                cte_idx: cte_info.cte_idx,
+                memory_table,
+            }
+            .into(),
+        ));
+        Ok(cte_scan)
+    }
+
     #[async_backtrace::framed]
-    async fn bind_cte(
+    pub(crate) async fn bind_cte(
         &mut self,
         span: Span,
         bind_context: &BindContext,
@@ -705,7 +734,8 @@ impl Binder {
             aggregate_info: Default::default(),
             windows: Default::default(),
             in_grouping: false,
-            ctes_map: Box::new(DashMap::new()),
+            ctes_map: Box::new(HashMap::new()),
+            materialized_ctes: vec![],
             view_info: None,
             srfs: Default::default(),
             expr_context: ExprContext::default(),

@@ -63,6 +63,7 @@ use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::IndexType;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -100,6 +101,7 @@ use databend_query::sessions::QueryContext;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
+use parking_lot::RwLock;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -558,6 +560,14 @@ impl TableContext for CtxDelegation {
         _files: &[StageFileInfo],
         _max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
+        todo!()
+    }
+
+    fn set_materialized_cte(
+        &self,
+        _idx: IndexType,
+        _mem_table: Arc<RwLock<Vec<DataBlock>>>,
+    ) -> Result<()> {
         todo!()
     }
 }

@@ -59,6 +59,7 @@ pub struct With {
 pub struct CTE {
     pub span: Span,
     pub alias: TableAlias,
+    pub materialized: bool,
     pub query: Query,
 }
 

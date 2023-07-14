@@ -14,6 +14,7 @@
 
 use std::collections::btree_map;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::hash::Hash;
 
 use common_ast::ast::Query;
@@ -139,7 +140,9 @@ pub struct BindContext {
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
 
-    pub ctes_map: Box<DashMap<String, CteInfo>>,
+    pub ctes_map: Box<HashMap<String, CteInfo>>,
+
+    pub materialized_ctes: Vec<SExpr>,
 
     /// If current binding table is a view, record its database and name.
     ///
@@ -163,6 +166,8 @@ pub struct BindContext {
 pub struct CteInfo {
     pub columns_alias: Vec<String>,
     pub query: Query,
+    pub materialized: bool,
+    pub cte_idx: IndexType,
 }
 
 impl BindContext {
@@ -174,7 +179,8 @@ impl BindContext {
             aggregate_info: AggregateInfo::default(),
             windows: WindowInfo::default(),
             in_grouping: false,
-            ctes_map: Box::new(DashMap::new()),
+            ctes_map: Box::new(HashMap::new()),
+            materialized_ctes: vec![],
             view_info: None,
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
@@ -192,6 +198,7 @@ impl BindContext {
             windows: Default::default(),
             in_grouping: false,
             ctes_map: parent.ctes_map.clone(),
+            materialized_ctes: parent.materialized_ctes.clone(),
             view_info: None,
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
@@ -205,6 +212,7 @@ impl BindContext {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
         bind_context.ctes_map = self.ctes_map.clone();
+        bind_context.materialized_ctes = self.materialized_ctes.clone();
         bind_context
     }
 

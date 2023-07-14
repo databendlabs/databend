@@ -279,6 +279,7 @@ impl Binder {
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
         output_context.ctes_map = from_context.ctes_map;
+        output_context.materialized_ctes = from_context.materialized_ctes;
 
         Ok((s_expr, output_context))
     }
@@ -319,7 +320,7 @@ impl Binder {
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
         if let Some(with) = &query.with {
-            for cte in with.ctes.iter() {
+            for (idx, cte) in with.ctes.iter().enumerate() {
                 let table_name = cte.alias.name.name.clone();
                 if bind_context.ctes_map.contains_key(&table_name) {
                     return Err(ErrorCode::SemanticError(format!(
@@ -329,6 +330,8 @@ impl Binder {
                 let cte_info = CteInfo {
                     columns_alias: cte.alias.columns.iter().map(|c| c.name.clone()).collect(),
                     query: cte.query.clone(),
+                    materialized: cte.materialized,
+                    cte_idx: idx,
                 };
                 bind_context.ctes_map.insert(table_name, cte_info);
             }

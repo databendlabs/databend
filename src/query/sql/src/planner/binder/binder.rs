@@ -29,6 +29,7 @@ use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::Expr;
@@ -39,6 +40,7 @@ use tracing::warn;
 
 use crate::binder::wrap_cast;
 use crate::normalize_identifier;
+use crate::optimizer::SExpr;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CallPlan;
@@ -50,7 +52,9 @@ use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
+use crate::plans::MaterializedCte;
 use crate::plans::Plan;
+use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
@@ -153,7 +157,16 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let plan = match stmt {
             Statement::Query(query) => {
-                let (s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                // Wrap `LogicalMaterializedCte` to `s_expr`
+                dbg!(bind_context.materialized_ctes.len());
+                for materialized_cte in bind_context.materialized_ctes.iter() {
+                    s_expr = SExpr::create_binary(
+                        Arc::new(RelOperator::MaterializedCte(MaterializedCte {})),
+                        Arc::new(materialized_cte.clone()),
+                        Arc::new(s_expr),
+                    );
+                }
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
                     Some(format_statement(stmt.clone())?)
                 } else {

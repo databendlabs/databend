@@ -41,6 +41,7 @@ use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::date_helper::TzFactory;
+use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -53,6 +54,7 @@ use common_meta_app::schema::TableInfo;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
+use common_sql::IndexType;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
@@ -657,6 +659,16 @@ impl TableContext for QueryContext {
             }
         }
         Ok(results)
+    }
+
+    fn set_materialized_cte(
+        &self,
+        idx: IndexType,
+        mem_table: Arc<RwLock<Vec<DataBlock>>>,
+    ) -> Result<()> {
+        let mut ctes = self.shared.materialized_cte_tables.write();
+        ctes.insert(idx, mem_table);
+        Ok(())
     }
 }
 

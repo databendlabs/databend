@@ -94,6 +94,7 @@ common-storages-share = { path = "../storages/share" }
 common-storages-stage = { path = "../storages/stage" }
 common-storages-system = { path = "../storages/system" }
 common-storages-view = { path = "../storages/view" }
+common-storages-memory = { path = "../storages/memory"}
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 data-mask-feature = { path = "../ee-features/data-mask" }
