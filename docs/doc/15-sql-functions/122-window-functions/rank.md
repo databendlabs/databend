@@ -2,9 +2,6 @@
 title: RANK
 ---
 
-
-## RANK
-
 The RANK() function assigns a unique rank to each value within an ordered group of values.
 
 The rank value starts at 1 and continues up sequentially. If two values are the same, they have the same rank.
