@@ -3164,6 +3164,11 @@ csstype@^3.0.2:
   version "3.1.1"
   resolved "https://registry.yarnpkg.com/csstype/-/csstype-3.1.1.tgz#841b532c45c758ee546a11d5bd7b7b473c8c30b9"
 
+databend-logos@^0.0.12:
+  version "0.0.12"
+  resolved "https://registry.yarnpkg.com/databend-logos/-/databend-logos-0.0.12.tgz#cf97e6c1f793484ff5e9113219258ceba0dfe954"
+  integrity sha512-RhpYx5F6PftQpW2/g3qAgbf5D4mY6Ra/no5CwP6bwUMAARssEjEDijax+MfRd5mMokhPMacE8TRoSzIsNK7axA==
+
 dayjs@^1.11.7, dayjs@^1.9.1:
   version "1.11.7"
   resolved "https://registry.npmjs.org/dayjs/-/dayjs-1.11.7.tgz"
@@ -4793,6 +4798,11 @@ lodash.flow@^3.3.0:
 lodash.memoize@^4.1.2:
   version "4.1.2"
   resolved "https://registry.npmjs.org/lodash.memoize/-/lodash.memoize-4.1.2.tgz"
+
+lodash.throttle@^4.1.1:
+  version "4.1.1"
+  resolved "https://registry.yarnpkg.com/lodash.throttle/-/lodash.throttle-4.1.1.tgz#c23e91b710242ac70c37f1e1cda9274cc39bf2f4"
+  integrity sha512-wIkUCfVKpVsWo3JSZlc+8MB5it+2AN5W8J7YVMST30UrvcQNZ1Okbj+rbVniijTWE6FGYy4XJq/rHkas8qJMLQ==
 
 lodash.uniq@4.5.0, lodash.uniq@^4.5.0:
   version "4.5.0"
@@ -6488,6 +6498,14 @@ react-json-view@^1.21.3:
     react-base16-styling "^0.6.0"
     react-lifecycles-compat "^3.0.4"
     react-textarea-autosize "^8.3.2"
+
+react-lazy-load-image-component@^1.6.0:
+  version "1.6.0"
+  resolved "https://registry.yarnpkg.com/react-lazy-load-image-component/-/react-lazy-load-image-component-1.6.0.tgz#f262c2f163052d71011e282031fd60aafa6494ac"
+  integrity sha512-8KFkDTgjh+0+PVbH+cx0AgxLGbdTsxWMnxXzU5HEUztqewk9ufQAu8cstjZhyvtMIPsdMcPZfA0WAa7HtjQbBQ==
+  dependencies:
+    lodash.debounce "^4.0.8"
+    lodash.throttle "^4.1.1"
 
 react-lifecycles-compat@^3.0.4:
   version "3.0.4"
