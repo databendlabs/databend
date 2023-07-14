@@ -172,7 +172,6 @@ impl DescNetworkPolicyPlan {
             DataField::new("Allowed Ip List", DataType::String),
             DataField::new("Blocked Ip List", DataType::String),
             DataField::new("Comment", DataType::String),
-            DataField::new("Create On", DataType::String),
         ])
     }
 }
@@ -187,7 +186,6 @@ impl ShowNetworkPoliciesPlan {
             DataField::new("Allowed Ip List", DataType::String),
             DataField::new("Blocked Ip List", DataType::String),
             DataField::new("Comment", DataType::String),
-            DataField::new("Create On", DataType::String),
         ])
     }
 }

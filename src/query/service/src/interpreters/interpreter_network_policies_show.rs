@@ -59,13 +59,11 @@ impl Interpreter for ShowNetworkPoliciesInterpreter {
         let mut allowed_ip_lists = Vec::with_capacity(network_policies.len());
         let mut blocked_ip_lists = Vec::with_capacity(network_policies.len());
         let mut comments = Vec::with_capacity(network_policies.len());
-        let mut create_ons = Vec::with_capacity(network_policies.len());
         for network_policy in network_policies {
             names.push(network_policy.name.as_bytes().to_vec());
             allowed_ip_lists.push(network_policy.allowed_ip_list.join(",").as_bytes().to_vec());
             blocked_ip_lists.push(network_policy.blocked_ip_list.join(",").as_bytes().to_vec());
             comments.push(network_policy.comment.as_bytes().to_vec());
-            create_ons.push(network_policy.create_on.to_string().as_bytes().to_vec());
         }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
@@ -73,7 +71,6 @@ impl Interpreter for ShowNetworkPoliciesInterpreter {
             StringType::from_data(allowed_ip_lists),
             StringType::from_data(blocked_ip_lists),
             StringType::from_data(comments),
-            StringType::from_data(create_ons),
         ])])
     }
 }

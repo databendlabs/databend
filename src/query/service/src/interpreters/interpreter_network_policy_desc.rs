@@ -62,14 +62,12 @@ impl Interpreter for DescNetworkPolicyInterpreter {
         let allowed_ip_lists = vec![network_policy.allowed_ip_list.join(",").as_bytes().to_vec()];
         let blocked_ip_lists = vec![network_policy.blocked_ip_list.join(",").as_bytes().to_vec()];
         let comments = vec![network_policy.comment.as_bytes().to_vec()];
-        let create_ons = vec![network_policy.create_on.to_string().as_bytes().to_vec()];
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(allowed_ip_lists),
             StringType::from_data(blocked_ip_lists),
             StringType::from_data(comments),
-            StringType::from_data(create_ons),
         ])])
     }
 }
