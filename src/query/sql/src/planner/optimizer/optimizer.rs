@@ -139,16 +139,11 @@ pub fn optimize(
                 CopyPlan::IntoTable(mut into_table) => {
                     into_table.enable_distributed = opt_ctx.config.enable_distributed_optimization
                         && ctx.get_settings().get_enable_distributed_copy()?;
-                    match into_table.query {
-                        Some(_) => CopyPlan::IntoTable(into_table),
-                        None => {
-                            info!(
-                                "after optimization enable_distributed_copy? : {}",
-                                into_table.enable_distributed
-                            );
-                            CopyPlan::IntoTable(into_table)
-                        }
-                    }
+                    info!(
+                        "after optimization enable_distributed_copy? : {}",
+                        into_table.enable_distributed
+                    );
+                    CopyPlan::IntoTable(into_table)
                 }
             })))
         }
