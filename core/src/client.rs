@@ -194,14 +194,29 @@ impl APIClient {
             .with_session(session_settings);
         let endpoint = self.endpoint.join("v1/query")?;
         let headers = self.make_headers().await?;
-        let resp = self
+        let mut resp = self
             .cli
-            .post(endpoint)
+            .post(endpoint.clone())
             .json(&req)
             .basic_auth(self.user.clone(), self.password.clone())
-            .headers(headers)
+            .headers(headers.clone())
             .send()
             .await?;
+        let mut retries = 3;
+        while resp.status() != StatusCode::OK {
+            if resp.status() != StatusCode::SERVICE_UNAVAILABLE || retries <= 0 {
+                break;
+            }
+            retries -= 1;
+            resp = self
+                .cli
+                .post(endpoint.clone())
+                .json(&req)
+                .basic_auth(self.user.clone(), self.password.clone())
+                .headers(headers.clone())
+                .send()
+                .await?;
+        }
         if resp.status() != StatusCode::OK {
             let resp_err = QueryError {
                 code: resp.status().as_u16(),
@@ -209,6 +224,7 @@ impl APIClient {
             };
             return Err(Error::InvalidResponse(resp_err));
         }
+
         let resp: QueryResponse = resp.json().await?;
         if let Some(err) = resp.error {
             return Err(Error::InvalidResponse(err));
@@ -359,14 +375,30 @@ impl APIClient {
             .with_stage_attachment(stage_attachment);
         let endpoint = self.endpoint.join("v1/query")?;
         let headers = self.make_headers().await?;
-        let resp = self
+
+        let mut resp = self
             .cli
-            .post(endpoint)
+            .post(endpoint.clone())
             .json(&req)
             .basic_auth(self.user.clone(), self.password.clone())
-            .headers(headers)
+            .headers(headers.clone())
             .send()
             .await?;
+        let mut retries = 3;
+        while resp.status() != StatusCode::OK {
+            if resp.status() != StatusCode::SERVICE_UNAVAILABLE || retries <= 0 {
+                break;
+            }
+            retries -= 1;
+            resp = self
+                .cli
+                .post(endpoint.clone())
+                .json(&req)
+                .basic_auth(self.user.clone(), self.password.clone())
+                .headers(headers.clone())
+                .send()
+                .await?;
+        }
         if resp.status() != StatusCode::OK {
             let resp_err = QueryError {
                 code: resp.status().as_u16(),
@@ -374,6 +406,7 @@ impl APIClient {
             };
             return Err(Error::InvalidResponse(resp_err));
         }
+
         let resp: QueryResponse = resp.json().await?;
         let resp = self.wait_for_query(resp).await?;
         Ok(resp)
