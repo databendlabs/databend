@@ -119,6 +119,7 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::test_kits::block_writer;
 
 pub struct PipelineBuilder {
     ctx: Arc<QueryContext>,
@@ -203,32 +204,25 @@ impl PipelineBuilder {
             PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
             PhysicalPlan::DeleteFinal(delete) => self.build_delete_final(delete),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
-            PhysicalPlan::DistributedCopyIntoTable(distributed_plan) => {
-                self.build_distributed_copy_into_table(distributed_plan)
-            }
+            PhysicalPlan::CopyIntoTable(plan) => self.build_copy_into_table(plan),
         }
     }
 
-    fn build_distributed_copy_into_table(
-        &mut self,
-        distributed_plan: &CopyIntoTable,
-    ) -> Result<()> {
-        let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
-        let to_table = catalog.get_table_by_info(&distributed_plan.table_info)?;
-        let stage_table_info = distributed_plan.stage_table_info.clone();
-        let stage_table = StageTable::try_create(stage_table_info)?;
-        stage_table.set_block_thresholds(distributed_plan.thresholds);
-        let ctx = self.ctx.clone();
-        let table_ctx: Arc<dyn TableContext> = ctx.clone();
-        stage_table.read_data(table_ctx, &distributed_plan.source, &mut self.main_pipeline)?;
+    fn build_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<()> {
+        let catalog = self.ctx.get_catalog(&plan.serializable_part.catalog_name)?;
+        let to_table = catalog.get_table_by_info(&plan.table_info)?;
+        let stage_table = StageTable::try_create(plan.serializable_part.stage_table_info.clone())?;
+        stage_table.set_block_thresholds(to_table.get_block_thresholds());
+        let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
+        stage_table.read_data(table_ctx, &plan.source, &mut self.main_pipeline)?;
         // append data
         build_distributed_append_data_pipeline(
-            ctx,
+            self.ctx.clone(),
             &mut self.main_pipeline,
-            distributed_plan.clone(),
-            distributed_plan.required_source_schema.clone(),
+            plan.clone(),
+            plan.serializable_part.required_source_schema.clone(),
             to_table,
-            distributed_plan.files.clone(),
+            plan.files.clone(),
         )?;
 
         Ok(())

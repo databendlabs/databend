@@ -58,6 +58,7 @@ use crate::binder::select::MaxColumnPosition;
 use crate::binder::Binder;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
+use crate::plans::CopyIntoTableSerializable;
 use crate::plans::CopyPlan;
 use crate::plans::Plan;
 use crate::plans::ValidationMode;
@@ -113,22 +114,25 @@ impl<'a> Binder {
                 let stage_schema = infer_table_schema(&required_values_schema)?;
 
                 let plan = CopyIntoTablePlan {
-                    catalog_name,
-                    database_name,
-                    table_name,
-                    validation_mode,
-                    force: stmt.force,
-                    stage_table_info: StageTableInfo {
-                        schema: stage_schema,
-                        files_info,
-                        stage_info,
-                        files_to_copy: None,
-                        is_select: false,
+                    serializable_part: CopyIntoTableSerializable {
+                        catalog_name,
+                        database_name,
+                        table_name,
+                        validation_mode,
+                        force: stmt.force,
+                        stage_table_info: StageTableInfo {
+                            schema: stage_schema,
+                            files_info,
+                            stage_info,
+                            files_to_copy: None,
+                            is_select: false,
+                        },
+                        values_consts: vec![],
+                        required_source_schema: required_values_schema.clone(),
+                        required_values_schema: required_values_schema.clone(),
+                        write_mode: CopyIntoTableMode::Copy,
                     },
-                    values_consts: vec![],
-                    required_source_schema: required_values_schema.clone(),
-                    required_values_schema: required_values_schema.clone(),
-                    write_mode: CopyIntoTableMode::Copy,
+
                     query: None,
 
                     enable_distributed: false,
@@ -190,22 +194,25 @@ impl<'a> Binder {
                 let stage_schema = infer_table_schema(&required_values_schema)?;
 
                 let plan = CopyIntoTablePlan {
-                    catalog_name,
-                    database_name,
-                    table_name,
-                    validation_mode,
-                    force: stmt.force,
-                    stage_table_info: StageTableInfo {
-                        schema: stage_schema,
-                        files_info,
-                        stage_info,
-                        files_to_copy: None,
-                        is_select: false,
+                    serializable_part: CopyIntoTableSerializable {
+                        catalog_name,
+                        database_name,
+                        table_name,
+                        validation_mode,
+                        force: stmt.force,
+                        stage_table_info: StageTableInfo {
+                            schema: stage_schema,
+                            files_info,
+                            stage_info,
+                            files_to_copy: None,
+                            is_select: false,
+                        },
+                        values_consts: vec![],
+                        required_source_schema: required_values_schema.clone(),
+                        required_values_schema: required_values_schema.clone(),
+                        write_mode: CopyIntoTableMode::Copy,
                     },
-                    values_consts: vec![],
-                    required_source_schema: required_values_schema.clone(),
-                    required_values_schema: required_values_schema.clone(),
-                    write_mode: CopyIntoTableMode::Copy,
+
                     query: None,
 
                     enable_distributed: false,
@@ -341,24 +348,25 @@ impl<'a> Binder {
                 );
 
                 let plan = CopyIntoTablePlan {
-                    catalog_name,
-                    database_name,
-                    table_name,
-                    required_source_schema: required_values_schema.clone(),
-                    required_values_schema: required_values_schema.clone(),
-                    values_consts: vec![],
-                    force: stmt.force,
-                    stage_table_info: StageTableInfo {
-                        schema: infer_table_schema(&required_values_schema)?,
-                        files_info,
-                        stage_info,
-                        files_to_copy: None,
-                        is_select: false,
+                    serializable_part: CopyIntoTableSerializable {
+                        catalog_name,
+                        database_name,
+                        table_name,
+                        required_source_schema: required_values_schema.clone(),
+                        required_values_schema: required_values_schema.clone(),
+                        values_consts: vec![],
+                        force: stmt.force,
+                        stage_table_info: StageTableInfo {
+                            schema: infer_table_schema(&required_values_schema)?,
+                            files_info,
+                            stage_info,
+                            files_to_copy: None,
+                            is_select: false,
+                        },
+                        write_mode: CopyIntoTableMode::Copy,
+                        validation_mode: ValidationMode::None,
                     },
-                    write_mode: CopyIntoTableMode::Copy,
                     query: None,
-                    validation_mode: ValidationMode::None,
-
                     enable_distributed: false,
                 };
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
@@ -381,11 +389,11 @@ impl<'a> Binder {
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
         if matches!(
-            plan.stage_table_info.stage_info.file_format_params,
+            plan.serializable_part.stage_table_info.stage_info.file_format_params,
             FileFormatParams::Parquet(_)
         ) {
             let select_list = plan
-                .required_source_schema
+                .serializable_part.required_source_schema
                 .fields()
                 .iter()
                 .map(|f| SelectTarget::AliasedExpr {
@@ -462,23 +470,26 @@ impl<'a> Binder {
         let stage_schema = infer_table_schema(&data_schema)?;
 
         let plan = CopyIntoTablePlan {
-            catalog_name,
-            database_name,
-            table_name,
-            required_source_schema: data_schema.clone(),
-            required_values_schema,
-            values_consts: const_columns,
-            force: true,
-            stage_table_info: StageTableInfo {
-                schema: stage_schema,
-                files_info,
-                stage_info,
-                files_to_copy: None,
-                is_select: false,
+            serializable_part: CopyIntoTableSerializable {
+                catalog_name,
+                database_name,
+                table_name,
+                required_source_schema: data_schema.clone(),
+                required_values_schema,
+                values_consts: const_columns,
+                force: true,
+                stage_table_info: StageTableInfo {
+                    schema: stage_schema,
+                    files_info,
+                    stage_info,
+                    files_to_copy: None,
+                    is_select: false,
+                },
+                write_mode,
+                validation_mode: ValidationMode::None,
             },
-            write_mode,
+
             query: None,
-            validation_mode: ValidationMode::None,
 
             enable_distributed: false,
         };
@@ -665,13 +676,13 @@ impl<'a> Binder {
         if need_copy_file_infos.is_empty() {
             return Ok(Plan::Copy(Box::new(CopyPlan::NoFileToCopy)));
         }
-        plan.stage_table_info.files_to_copy = Some(need_copy_file_infos.clone());
+        plan.serializable_part.stage_table_info.files_to_copy = Some(need_copy_file_infos.clone());
 
         let (s_expr, mut from_context) = self
             .bind_stage_table(
                 bind_context,
-                plan.stage_table_info.stage_info.clone(),
-                plan.stage_table_info.files_info.clone(),
+                plan.serializable_part.stage_table_info.stage_info.clone(),
+                plan.serializable_part.stage_table_info.files_info.clone(),
                 alias,
                 Some(need_copy_file_infos.clone()),
             )

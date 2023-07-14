@@ -293,7 +293,7 @@ impl Display for Plan {
         match self {
             Plan::Query { .. } => write!(f, "Query"),
             Plan::Copy(plan) => match plan.deref() {
-                CopyPlan::IntoTable(copy_plan) => match copy_plan.write_mode {
+                CopyPlan::IntoTable(copy_plan) => match copy_plan.serializable_part.write_mode {
                     CopyIntoTableMode::Insert { .. } => write!(f, "Insert"),
                     _ => write!(f, "Copy"),
                 },

@@ -23,6 +23,7 @@ use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregateFunctionDesc;
 use super::AggregatePartial;
+use super::CopyIntoTable;
 use super::DeleteFinal;
 use super::DeletePartial;
 use super::EvalScalar;
@@ -157,7 +158,7 @@ fn to_format_tree(
             runtime_filter_source_to_format_tree(plan, metadata, prof_span_set)
         }
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, prof_span_set),
-        PhysicalPlan::DistributedCopyIntoTable(plan) => distributed_copy_into_table(plan),
+        PhysicalPlan::CopyIntoTable(plan) => distributed_copy_into_table(plan),
     }
 }
 
@@ -179,10 +180,10 @@ fn append_profile_info(
     }
 }
 
-fn distributed_copy_into_table(plan: &DistributedCopyIntoTable) -> Result<FormatTreeNode<String>> {
+fn distributed_copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::new(format!(
         "copy into table {}.{}.{} from {:?}",
-        plan.catalog_name, plan.database_name, plan.table_name, plan.source
+        plan.serializable_part.catalog_name, plan.serializable_part.database_name, plan.serializable_part.table_name, plan.source
     )))
 }
 

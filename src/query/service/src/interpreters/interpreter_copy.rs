@@ -45,6 +45,7 @@ use crate::pipelines::builders::build_local_append_data_pipeline;
 use crate::pipelines::builders::build_upsert_copied_files_to_meta_req;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_distributed_pipeline;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlan;
@@ -141,57 +142,46 @@ impl CopyInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn try_transform_copy_plan_from_local_to_distributed(
-        &self,
-        plan: &CopyIntoTablePlan,
-    ) -> Result<Option<CopyIntoTable>> {
-        let ctx = self.ctx.clone();
-        let to_table = ctx
-            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
+    async fn build_physical_plan(&self, plan: &CopyIntoTablePlan) -> Result<PhysicalPlan> {
+        let to_table = self
+            .ctx
+            .get_table(
+                &plan.serializable_part.catalog_name,
+                &plan.serializable_part.database_name,
+                &plan.serializable_part.table_name,
+            )
             .await?;
         let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
         let files = plan.collect_files(&table_ctx).await?;
-        if files.is_empty() {
-            return Ok(None);
-        }
-        let mut stage_table_info = plan.stage_table_info.clone();
-        stage_table_info.files_to_copy = Some(files.clone());
-        let stage_table = StageTable::try_create(stage_table_info.clone())?;
+        let mut stage_table_info = plan.serializable_part.stage_table_info.clone();
+        stage_table_info.files_to_copy = Some(files);
+        let stage_table = StageTable::try_create(stage_table_info)?;
         let read_source_plan = {
             stage_table
                 .read_plan_with_catalog(
                     self.ctx.clone(),
-                    plan.catalog_name.to_string(),
+                    plan.serializable_part.catalog_name.to_string(),
                     None,
                     None,
                     false,
                 )
                 .await?
         };
-
-        if read_source_plan.parts.len() <= 1 {
-            return Ok(None);
-        }
-        Ok(Some(CopyIntoTable {
-            // TODO(leiysky): we reuse the id of exchange here,
-            // which is not correct. We should generate a new id for insert.
-            plan_id: 0,
-            catalog_name: plan.catalog_name.clone(),
-            database_name: plan.database_name.clone(),
-            table_name: plan.table_name.clone(),
-            required_values_schema: plan.required_values_schema.clone(),
-            values_consts: plan.values_consts.clone(),
-            required_source_schema: plan.required_source_schema.clone(),
-            write_mode: plan.write_mode,
-            validation_mode: plan.validation_mode.clone(),
-            force: plan.force,
-            stage_table_info: plan.stage_table_info.clone(),
+        let parts_num = read_source_plan.parts.len();
+        let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+            serializable_part: plan.serializable_part.clone(),
             source: Box::new(read_source_plan),
-            thresholds: to_table.get_block_thresholds(),
-            files,
             table_info: to_table.get_table_info().clone(),
-            local_node_id: self.ctx.get_cluster().local_id.clone(),
-        }))
+        }));
+        if plan.enable_distributed && parts_num > 1 {
+            root = PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(root),
+                kind: FragmentKind::Merge,
+                keys: Vec::new(),
+            });
+        }
+        Ok(root)
     }
 
     #[async_backtrace::framed]
@@ -207,14 +197,14 @@ impl CopyInterpreter {
 
         self.set_status("begin to read stage source plan");
 
-        let mut stage_table_info = plan.stage_table_info.clone();
+        let mut stage_table_info = plan.serializable_part.stage_table_info.clone();
         stage_table_info.files_to_copy = Some(files.clone());
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
         let read_source_plan = {
             stage_table
                 .read_plan_with_catalog(
                     ctx.clone(),
-                    plan.catalog_name.to_string(),
+                    plan.serializable_part.catalog_name.to_string(),
                     None,
                     None,
                     false,
@@ -288,17 +278,6 @@ impl CopyInterpreter {
         &self,
         distributed_plan: &CopyIntoTable,
     ) -> Result<PipelineBuildResult> {
-        // add exchange plan node to enable distributed
-        // TODO(leiysky): we reuse the id of exchange here,
-        // which is not correct. We should generate a new id for insert.
-        let exchange_plan = PhysicalPlan::Exchange(Exchange {
-            plan_id: 0,
-            input: Box::new(PhysicalPlan::DistributedCopyIntoTable(Box::new(
-                distributed_plan.clone(),
-            ))),
-            kind: FragmentKind::Merge,
-            keys: Vec::new(),
-        });
         let mut build_res = build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?;
 
         let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
@@ -340,19 +319,14 @@ impl Interpreter for CopyInterpreter {
 
         match &self.plan {
             CopyPlan::IntoTable(plan) => {
-                if plan.enable_distributed {
-                    let distributed_plan_op = self
-                        .try_transform_copy_plan_from_local_to_distributed(plan)
-                        .await?;
-                    if let Some(distributed_plan) = distributed_plan_op {
-                        self.build_distributed_copy_into_table_pipeline(&distributed_plan)
-                            .await
-                    } else {
-                        self.build_local_copy_into_table_pipeline(plan).await
-                    }
-                } else {
-                    self.build_local_copy_into_table_pipeline(plan).await
-                }
+                let physical_plan = self.build_physical_plan(plan).await?;
+                let build_res = build_query_pipeline_without_render_result_set(
+                    &self.ctx,
+                    &physical_plan,
+                    false,
+                )
+                .await?;
+                todo!()
             }
             CopyPlan::IntoStage {
                 stage, from, path, ..

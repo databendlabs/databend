@@ -82,7 +82,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
-            PhysicalPlan::DistributedCopyIntoTable(copy_into_table) => {
+            PhysicalPlan::CopyIntoTable(copy_into_table) => {
                 write!(f, "{}", copy_into_table)?
             }
         }

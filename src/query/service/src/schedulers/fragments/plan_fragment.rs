@@ -206,7 +206,7 @@ impl PlanFragment {
         let mut collect_read_source = |plan: &PhysicalPlan| {
             if let PhysicalPlan::TableScan(scan) = plan {
                 source.push(*scan.source.clone())
-            } else if let PhysicalPlan::DistributedCopyIntoTable(distributed_plan) = plan {
+            } else if let PhysicalPlan::CopyIntoTable(distributed_plan) = plan {
                 source.push(*distributed_plan.source.clone())
             }
         };
@@ -245,7 +245,7 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
     }
 
     fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::DistributedCopyIntoTable(Box::new(
+        Ok(PhysicalPlan::CopyIntoTable(Box::new(
             CopyIntoTable {
                 source: Box::new(self.source.clone()),
                 ..plan.clone()

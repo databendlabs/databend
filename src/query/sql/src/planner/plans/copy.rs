@@ -66,8 +66,20 @@ pub enum CopyIntoTableMode {
     Copy,
 }
 
+/// To add a new field to this struct,
+///
+/// 1. If it is easy to derive `Serialize`, add it to `CopyIntoTableSerializable`.
+/// 2. Else, add it to `CopyIntoTablePlan`, and modify `CopyInterpreter::build_physical_plan()` to serialize it.
 #[derive(Clone)]
 pub struct CopyIntoTablePlan {
+    pub serializable_part: CopyIntoTableSerializable,
+    pub query: Option<Box<Plan>>,
+
+    pub enable_distributed: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct CopyIntoTableSerializable {
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
@@ -79,11 +91,7 @@ pub struct CopyIntoTablePlan {
     pub write_mode: CopyIntoTableMode,
     pub validation_mode: ValidationMode,
     pub force: bool,
-
     pub stage_table_info: StageTableInfo,
-    pub query: Option<Box<Plan>>,
-
-    pub enable_distributed: bool,
 }
 
 fn set_and_log_status(ctx: &Arc<dyn TableContext>, status: &str) {
@@ -96,7 +104,7 @@ impl CopyIntoTablePlan {
         set_and_log_status(ctx, "begin to list files");
         let start = Instant::now();
 
-        let stage_table_info = &self.stage_table_info;
+        let stage_table_info = &self.serializable_part.stage_table_info;
         let max_files = stage_table_info.stage_info.copy_options.max_files;
         let max_files = if max_files == 0 {
             None
@@ -106,7 +114,7 @@ impl CopyIntoTablePlan {
 
         let operator = init_stage_operator(&stage_table_info.stage_info)?;
         let all_source_file_infos = if operator.info().can_blocking() {
-            if self.force {
+            if self.serializable_part.force {
                 stage_table_info
                     .files_info
                     .blocking_list(&operator, false, max_files)
@@ -115,7 +123,7 @@ impl CopyIntoTablePlan {
                     .files_info
                     .blocking_list(&operator, false, None)
             }
-        } else if self.force {
+        } else if self.serializable_part.force {
             stage_table_info
                 .files_info
                 .list(&operator, false, max_files)
@@ -131,10 +139,10 @@ impl CopyIntoTablePlan {
 
         info!("end to list files: got {} files", num_all_files);
 
-        let need_copy_file_infos = if self.force {
+        let need_copy_file_infos = if self.serializable_part.force {
             info!(
                 "force mode, ignore file filtering. ({}.{})",
-                &self.database_name, &self.table_name
+                &self.serializable_part.database_name, &self.serializable_part.table_name
             );
             all_source_file_infos
         } else {
@@ -142,9 +150,9 @@ impl CopyIntoTablePlan {
             set_and_log_status(ctx, "begin to filter out copied files");
             let files = ctx
                 .filter_out_copied_files(
-                    &self.catalog_name,
-                    &self.database_name,
-                    &self.table_name,
+                    &self.serializable_part.catalog_name,
+                    &self.serializable_part.database_name,
+                    &self.serializable_part.table_name,
                     &all_source_file_infos,
                     max_files,
                 )
@@ -169,12 +177,16 @@ impl CopyIntoTablePlan {
 impl Debug for CopyIntoTablePlan {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let CopyIntoTablePlan {
-            catalog_name,
-            database_name,
-            table_name,
-            validation_mode,
-            force,
-            stage_table_info,
+            serializable_part:
+                CopyIntoTableSerializable {
+                    catalog_name,
+                    database_name,
+                    table_name,
+                    validation_mode,
+                    stage_table_info,
+                    force,
+                    ..
+                },
             query,
             ..
         } = self;
