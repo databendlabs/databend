@@ -32,7 +32,6 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 use tracing::error;
-use tracing::info;
 use tracing::warn;
 
 use crate::io::Files;
@@ -143,7 +142,6 @@ impl FuseTable {
                     snapshot_files.len(),
                     counter.start.elapsed().as_secs()
                 );
-                info!(status);
                 ctx.set_status_info(&status);
             }
 
@@ -384,7 +382,6 @@ impl FuseTable {
                     segment_locations.len(),
                     counter.start.elapsed().as_secs()
                 );
-                info!(status);
                 ctx.set_status_info(&status);
             }
 
@@ -520,7 +517,6 @@ impl FuseTable {
                 counter.start.elapsed().as_secs()
             );
             ctx.set_status_info(&status);
-            info!(status);
         }
         Ok(())
     }

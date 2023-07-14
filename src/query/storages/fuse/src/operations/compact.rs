@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use storages_common_table_meta::meta::TableSnapshot;
-use tracing::info;
 
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
@@ -131,11 +130,7 @@ impl FuseTable {
         }
 
         // Status.
-        {
-            let status = "compact: begin to run compact tasks";
-            ctx.set_status_info(status);
-            info!(status);
-        }
+        ctx.set_status_info("compact: begin to run compact tasks");
         ctx.set_partitions(mutator.compact_tasks.clone())?;
 
         let all_column_indices = self.all_column_indices();
