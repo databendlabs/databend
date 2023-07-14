@@ -25,8 +25,12 @@ pub fn metrics_inc_commit_mutation_unresolvable_conflict() {
     counter!(key!("commit_mutation_unresolvable_conflict"), 1);
 }
 
-pub fn metrics_inc_commit_mutation_resolvable_conflict() {
-    counter!(key!("commit_mutation_resolvable_conflict"), 1);
+pub fn metrics_inc_commit_mutation_latest_snapshot_append_only() {
+    counter!(key!("commit_mutation_latest_snapshot_append_only"), 1);
+}
+
+pub fn metrics_inc_commit_mutation_modified_segment_exists_in_latest() {
+    counter!(key!("modified_segment_exists_in_latest"), 1);
 }
 
 pub fn metrics_inc_commit_mutation_retry() {
@@ -35,6 +39,14 @@ pub fn metrics_inc_commit_mutation_retry() {
 
 pub fn metrics_inc_commit_mutation_success() {
     counter!(key!("commit_mutation_success"), 1);
+}
+
+pub fn metrics_inc_commit_copied_files(n: u64) {
+    counter!(key!("commit_copied_files"), n);
+}
+
+pub fn metrics_inc_commit_milliseconds(c: u128) {
+    increment_gauge!(key!("commit_milliseconds"), c as f64);
 }
 
 pub fn metrics_inc_commit_aborts() {

@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
@@ -32,6 +33,9 @@ use opendal::Operator;
 use crate::io;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
+use crate::metrics::metrics_inc_agg_index_write_bytes;
+use crate::metrics::metrics_inc_agg_index_write_milliseconds;
+use crate::metrics::metrics_inc_agg_index_write_nums;
 
 pub struct AggIndexSink {
     data_accessor: Operator,
@@ -106,19 +110,21 @@ impl AsyncSink for AggIndexSink {
     async fn on_finish(&mut self) -> Result<()> {
         let blocks = self.blocks.iter().collect::<Vec<_>>();
         for (loc, indexes) in &self.location_data {
+            let start = Instant::now();
             let block = DataBlock::take_blocks(&blocks, indexes, indexes.len());
             let loc = TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
                 loc,
                 self.index_id,
             );
             let mut data = vec![];
-            io::serialize_block(
-                &self.write_settings,
-                &self.sink_schema,
-                block,
-                None,
-                &mut data,
-            )?;
+            io::serialize_block(&self.write_settings, &self.sink_schema, block, &mut data)?;
+
+            {
+                metrics_inc_agg_index_write_nums(1);
+                metrics_inc_agg_index_write_bytes(data.len() as u64);
+                metrics_inc_agg_index_write_milliseconds(start.elapsed().as_millis() as u64);
+            }
+
             self.data_accessor.write(&loc, data).await?;
         }
         Ok(())

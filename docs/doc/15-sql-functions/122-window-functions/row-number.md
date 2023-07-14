@@ -2,9 +2,6 @@
 title: ROW_NUMBER
 ---
 
-
-## ROW_NUMBER
-
 Returns a unique row number for each row within a window partition.
 
 The row number starts at 1 and continues up sequentially.

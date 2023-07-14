@@ -35,6 +35,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
+use crate::operations::common::MutationKind;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::common::TransformSerializeSegment;
@@ -70,7 +71,13 @@ impl FuseTable {
         let schema = self.table_info.schema();
         let segment_locations = snapshot.segments.clone();
         let segment_locations = create_segment_location_vector(segment_locations, None);
-        let mut pruner = FusePruner::create(&ctx, self.operator.clone(), schema, &push_downs)?;
+        let mut pruner = FusePruner::create(
+            &ctx,
+            self.operator.clone(),
+            schema,
+            &push_downs,
+            self.bloom_index_cols(),
+        )?;
         let block_metas = pruner.read_pruning(segment_locations).await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
@@ -194,13 +201,13 @@ impl FuseTable {
         assert_eq!(pipeline.output_len(), 1);
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
-            let proc = TransformSerializeBlock::new(
+            let proc = TransformSerializeBlock::try_create(
                 ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 self,
                 cluster_stats_gen.clone(),
-            );
+            )?;
             proc.into_processor()
         })?;
 
@@ -218,6 +225,7 @@ impl FuseTable {
                 self.meta_location_generator().clone(),
                 self.schema(),
                 self.get_operator(),
+                MutationKind::Recluster,
             );
             aggregator.accumulate_log_entry(mutator.mutation_logs());
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(

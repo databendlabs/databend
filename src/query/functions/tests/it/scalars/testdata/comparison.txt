@@ -1334,6 +1334,77 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------+
 
 
+ast            : parse_json('"hello"') like 'h%'
+raw expr       : like(parse_json('"hello"'), 'h%')
+checked expr   : like<Variant, String>(parse_json<String>("\"hello\""), "h%")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"abc":1,"def":22}') like '%e%'
+raw expr       : like(parse_json('{"abc":1,"def":22}'), '%e%')
+checked expr   : like<Variant, String>(parse_json<String>("{\"abc\":1,\"def\":22}"), "%e%")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json('{"k1":"abc","k2":"def"}') like '%e%'
+raw expr       : like(parse_json('{"k1":"abc","k2":"def"}'), '%e%')
+checked expr   : like<Variant, String>(parse_json<String>("{\"k1\":\"abc\",\"k2\":\"def\"}"), "%e%")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : parse_json(lhs) like 'a%'
+raw expr       : like(parse_json(lhs::String), 'a%')
+checked expr   : like<Variant, String>(parse_json<String>(lhs), "a%")
+evaluation:
++--------+------------------------------+---------+
+|        | lhs                          | Output  |
++--------+------------------------------+---------+
+| Type   | String                       | Boolean |
+| Domain | {"\"abc\""..="{\"abd\":12}"} | Unknown |
+| Row 0  | '"abc"'                      | true    |
+| Row 1  | '{"abd":12}'                 | false   |
+| Row 2  | '["abe","abf"]'              | false   |
++--------+------------------------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                       |
++--------+------------------------------------------------------------------------------------------------------------+
+| lhs    | StringColumn { data: 0x22616263227b22616264223a31327d5b22616265222c22616266225d, offsets: [0, 5, 15, 28] } |
+| Output | Boolean([0b_____001])                                                                                      |
++--------+------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json(lhs) like '%ab%'
+raw expr       : like(parse_json(lhs::String), '%ab%')
+checked expr   : like<Variant, String>(parse_json<String>(lhs), "%ab%")
+evaluation:
++--------+------------------------------+---------+
+|        | lhs                          | Output  |
++--------+------------------------------+---------+
+| Type   | String                       | Boolean |
+| Domain | {"\"abc\""..="{\"abd\":12}"} | Unknown |
+| Row 0  | '"abc"'                      | true    |
+| Row 1  | '{"abd":12}'                 | true    |
+| Row 2  | '["abe","abf"]'              | true    |
++--------+------------------------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                       |
++--------+------------------------------------------------------------------------------------------------------------+
+| lhs    | StringColumn { data: 0x22616263227b22616264223a31327d5b22616265222c22616266225d, offsets: [0, 5, 15, 28] } |
+| Output | Boolean([0b_____111])                                                                                      |
++--------+------------------------------------------------------------------------------------------------------------+
+
+
 ast            : lhs regexp rhs
 raw expr       : regexp(lhs::String, rhs::String)
 checked expr   : regexp<String, String>(lhs, rhs)

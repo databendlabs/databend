@@ -60,7 +60,6 @@ use jsonb::as_bool;
 use jsonb::as_f64;
 use jsonb::as_i64;
 use jsonb::as_str;
-use jsonb::build_array;
 use jsonb::build_object;
 use jsonb::get_by_index;
 use jsonb::get_by_name;
@@ -331,10 +330,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match parse_json_path(path) {
-                    Ok(json_path) => match get_by_path_array(val, json_path) {
-                        Some(v) => output.push(&v),
-                        None => output.push_null(),
-                    },
+                    Ok(json_path) => {
+                        get_by_path_array(
+                            val,
+                            json_path,
+                            &mut output.builder.data,
+                            &mut output.builder.offsets,
+                        );
+                        if output.builder.offsets.len() == output.len() + 1 {
+                            output.push_null();
+                        } else {
+                            output.validity.push(true);
+                        }
+                    }
                     Err(_) => {
                         ctx.set_error(
                             output.len(),
@@ -359,10 +367,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match parse_json_path(path) {
-                    Ok(json_path) => match get_by_path_first(val, json_path) {
-                        Some(v) => output.push(&v),
-                        None => output.push_null(),
-                    },
+                    Ok(json_path) => {
+                        get_by_path_first(
+                            val,
+                            json_path,
+                            &mut output.builder.data,
+                            &mut output.builder.offsets,
+                        );
+                        if output.builder.offsets.len() == output.len() + 1 {
+                            output.push_null();
+                        } else {
+                            output.validity.push(true);
+                        }
+                    }
                     Err(_) => {
                         ctx.set_error(
                             output.len(),
@@ -388,17 +405,16 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match parse_json_path(path) {
                     Ok(json_path) => {
-                        let mut vals = get_by_path(val, json_path);
-                        if vals.is_empty() {
+                        get_by_path(
+                            val,
+                            json_path,
+                            &mut output.builder.data,
+                            &mut output.builder.offsets,
+                        );
+                        if output.builder.offsets.len() == output.len() + 1 {
                             output.push_null();
-                        } else if vals.len() == 1 {
-                            let v = vals.remove(0);
-                            output.push(&v);
                         } else {
-                            let mut array_val = Vec::new();
-                            let items: Vec<_> = vals.iter().map(|v| v.as_slice()).collect();
-                            build_array(items, &mut array_val).unwrap();
-                            output.push(&array_val);
+                            output.validity.push(true);
                         }
                     }
                     Err(_) => {
@@ -430,19 +446,16 @@ pub fn register(registry: &mut FunctionRegistry) {
                         val.write_to_vec(&mut buf);
                         match parse_json_path(path) {
                             Ok(json_path) => {
-                                let mut vals = get_by_path(&buf, json_path);
-                                if vals.is_empty() {
+                                let mut out_buf = Vec::new();
+                                let mut out_offsets = Vec::new();
+                                get_by_path(&buf, json_path, &mut out_buf, &mut out_offsets);
+                                if out_offsets.is_empty() {
                                     output.push_null();
-                                } else if vals.len() == 1 {
-                                    let v = vals.remove(0);
-                                    let json_val = to_string(&v);
-                                    output.push(json_val.as_bytes());
                                 } else {
-                                    let mut array_val = Vec::new();
-                                    let items: Vec<_> = vals.iter().map(|v| v.as_slice()).collect();
-                                    build_array(items, &mut array_val).unwrap();
-                                    let json_val = to_string(&array_val);
-                                    output.push(json_val.as_bytes());
+                                    let json_str = to_string(&out_buf);
+                                    output.builder.put(json_str.as_bytes());
+                                    output.builder.commit_row();
+                                    output.validity.push(true);
                                 }
                             }
                             Err(_) => {

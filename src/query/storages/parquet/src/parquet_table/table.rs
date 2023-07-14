@@ -55,6 +55,7 @@ pub struct ParquetTable {
     pub(super) schema_descr: SchemaDescriptor,
     pub(super) files_to_read: Option<Vec<StageFileInfo>>,
     pub(super) schema_from: String,
+    pub(super) compression_ratio: f64,
 }
 
 impl ParquetTable {
@@ -71,6 +72,7 @@ impl ParquetTable {
             files_to_read: info.files_to_read.clone(),
             schema_descr: info.schema_descr.clone(),
             schema_from: info.schema_from.clone(),
+            compression_ratio: info.compression_ratio,
         }))
     }
 }
@@ -111,6 +113,7 @@ impl Table for ParquetTable {
             files_info: self.files_info.clone(),
             files_to_read: self.files_to_read.clone(),
             schema_from: self.schema_from.clone(),
+            compression_ratio: self.compression_ratio,
         })
     }
 

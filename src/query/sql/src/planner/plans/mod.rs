@@ -76,5 +76,5 @@ pub use setting::*;
 pub use share::*;
 pub use sort::*;
 pub use union_all::UnionAll;
-pub use update::UpdatePlan;
+pub use update::*;
 pub use window::*;

@@ -298,6 +298,12 @@ impl DefaultSettings {
                     // license key should not be reported
                     display_in_show_settings: false,
                 }),
+                ("enable_table_lock", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables table lock if necessary (enabled by default).",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("table_lock_expire_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(5),
                     desc: "Sets the seconds that the table lock will expire in.",

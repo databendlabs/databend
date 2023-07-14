@@ -21,10 +21,9 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::FormatVersion;
-use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
 
+use super::ConflictResolveContext;
 use crate::operations::common::AbortOperation;
 use crate::operations::mutation::MutationDeletedSegment;
 
@@ -102,20 +101,17 @@ impl TryFrom<DataBlock> for MutationLogs {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CommitMeta {
-    pub segments: Vec<Location>,
-    pub summary: Statistics,
+    pub conflict_resolve_context: ConflictResolveContext,
     pub abort_operation: AbortOperation,
 }
 
 impl CommitMeta {
     pub fn new(
-        segments: Vec<Location>,
-        summary: Statistics,
+        conflict_resolve_context: ConflictResolveContext,
         abort_operation: AbortOperation,
     ) -> Self {
         CommitMeta {
-            segments,
-            summary,
+            conflict_resolve_context,
             abort_operation,
         }
     }
