@@ -167,13 +167,13 @@ impl FuseTable {
         let segment_partition_num =
             std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
 
-        let serialize_block_transform = TransformSerializeBlock::new(
+        let serialize_block_transform = TransformSerializeBlock::try_create(
             ctx.clone(),
             InputPort::create(),
             OutputPort::create(),
             self,
             cluster_stats_gen,
-        );
+        )?;
         let block_builder = serialize_block_transform.get_block_builder();
 
         let serialize_segment_transform = TransformSerializeSegment::new(

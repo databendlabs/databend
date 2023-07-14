@@ -26,6 +26,7 @@ use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use tracing::error;
 
 use super::interpreter_table_create::is_valid_block_per_segment;
+use super::interpreter_table_create::is_valid_bloom_index_columns;
 use super::interpreter_table_create::is_valid_create_opt;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -93,6 +94,9 @@ impl Interpreter for SetOptionsInterpreter {
         } else {
             return Err(ErrorCode::UnknownTable(self.plan.table.as_str()));
         };
+
+        // check bloom_index_columns.
+        is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
 
         let req = UpsertTableOptionReq {
             table_id: table.get_id(),
