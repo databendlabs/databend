@@ -41,7 +41,7 @@ pub fn metrics_inc_commit_mutation_success() {
     counter!(key!("commit_mutation_success"), 1);
 }
 
-pub fn metrics_inc_commit_copied_files(n: usize) {
+pub fn metrics_inc_commit_copied_files(n: u64) {
     counter!(key!("commit_copied_files"), n);
 }
 
