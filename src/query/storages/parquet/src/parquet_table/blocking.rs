@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read as pread;
+use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::table::Table;
@@ -43,7 +44,7 @@ impl ParquetTable {
             None => files_info.blocking_first_file(&operator)?.path,
         };
 
-        let (arrow_schema, schema_descr) =
+        let (arrow_schema, schema_descr, compression_ratio) =
             Self::blocking_prepare_metas(&first_file, operator.clone())?;
 
         let table_info = create_parquet_table_info(arrow_schema.clone());
@@ -57,6 +58,7 @@ impl ParquetTable {
             stage_info,
             files_info,
             files_to_read,
+            compression_ratio,
             schema_from: first_file,
         }))
     }
@@ -64,7 +66,7 @@ impl ParquetTable {
     fn blocking_prepare_metas(
         path: &str,
         operator: Operator,
-    ) -> Result<(ArrowSchema, SchemaDescriptor)> {
+    ) -> Result<(ArrowSchema, SchemaDescriptor, f64)> {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
@@ -74,7 +76,31 @@ impl ParquetTable {
         })?;
 
         let arrow_schema = infer_schema_with_extension(&first_meta)?;
+        let compression_ratio = get_compression_ratio(&first_meta);
         let schema_descr = first_meta.schema_descr;
-        Ok((arrow_schema, schema_descr))
+        Ok((arrow_schema, schema_descr, compression_ratio))
+    }
+}
+
+pub fn get_compression_ratio(filemeta: &FileMetaData) -> f64 {
+    let compressed_size: usize = filemeta
+        .row_groups
+        .iter()
+        .map(|g| g.compressed_size())
+        .sum();
+    let uncompressed_size: usize = filemeta
+        .row_groups
+        .iter()
+        .map(|g| {
+            g.columns()
+                .iter()
+                .map(|c| c.uncompressed_size() as usize)
+                .sum::<usize>()
+        })
+        .sum();
+    if compressed_size == 0 {
+        1.0
+    } else {
+        (uncompressed_size as f64) / (compressed_size as f64)
     }
 }

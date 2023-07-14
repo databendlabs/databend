@@ -56,7 +56,6 @@ use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -233,7 +232,6 @@ impl Catalog for IcebergCatalog {
         &self,
         _tenant: &str,
         _db_name: &str,
-        _filter: Option<TableInfoFilter>,
     ) -> Result<Vec<Arc<dyn Table>>> {
         unimplemented!()
     }

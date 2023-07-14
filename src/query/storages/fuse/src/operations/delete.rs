@@ -49,12 +49,12 @@ use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
-use super::mutation::MutationDeletedSegment;
 use crate::metrics::metrics_inc_deletion_block_range_pruned_nums;
 use crate::metrics::metrics_inc_deletion_block_range_pruned_whole_block_nums;
 use crate::metrics::metrics_inc_deletion_segment_range_purned_whole_segment_nums;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationAction;
+use crate::operations::mutation::MutationDeletedSegment;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
 use crate::pipelines::Pipeline;
@@ -267,37 +267,6 @@ impl FuseTable {
             max_threads,
         )?;
         Ok(())
-    }
-
-    #[async_backtrace::framed]
-    pub async fn mutation_block_pruning(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
-        inverted_filter: Option<RemoteExpr<String>>,
-        projection: Projection,
-        base_snapshot: &TableSnapshot,
-        with_origin: bool,
-    ) -> Result<MutationTaskInfo> {
-        {
-            let status = "delete: begin pruning".to_string();
-            ctx.set_status_info(&status);
-            info!(status);
-        }
-
-        let (parts, part_info) = self
-            .do_mutation_block_pruning(
-                ctx.clone(),
-                filter,
-                inverted_filter,
-                projection.clone(),
-                base_snapshot,
-                with_origin,
-                false, // for update
-            )
-            .await?;
-        ctx.set_partitions(parts)?;
-        Ok(part_info)
     }
 
     pub fn all_column_indices(&self) -> Vec<FieldIndex> {

@@ -20,6 +20,10 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRefExt;
+use common_expression::BLOCK_NAME_COL_NAME;
+use common_expression::ROW_ID_COL_NAME;
+use common_expression::SEGMENT_NAME_COL_NAME;
+use common_expression::SNAPSHOT_NAME_COL_NAME;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::CreateTableReq;
@@ -27,9 +31,9 @@ use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::TableStatistics;
 use common_meta_types::MatchSeq;
-use common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use common_sql::field_default_value;
 use common_sql::plans::CreateTablePlan;
+use common_sql::plans::PREDICATE_COLUMN_NAME;
 use common_storage::DataOperator;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
@@ -227,12 +231,7 @@ impl CreateTableInterpreter {
             if field.default_expr().is_some() {
                 let _ = field_default_value(self.ctx.clone(), field)?;
             }
-            if INTERNAL_COLUMN_FACTORY.exist(field.name()) {
-                return Err(ErrorCode::TableWithInternalColumnName(format!(
-                    "Cannot create table has column with the same name as internal column: {}",
-                    field.name()
-                )));
-            }
+            is_valid_column(field.name())?;
         }
         let schema = TableSchemaRefExt::create(fields);
 
@@ -361,6 +360,31 @@ pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 
 pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S) -> bool {
     CREATE_TABLE_OPTIONS.contains(opt_key.as_ref().to_lowercase().as_str())
+}
+
+/// The internal occupied coulmn that cannot be create.
+pub static INTERNAL_COLUMN_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    let mut r = HashSet::new();
+
+    // The key in INTERNAL_COLUMN_FACTORY.
+    r.insert(ROW_ID_COL_NAME);
+    r.insert(SNAPSHOT_NAME_COL_NAME);
+    r.insert(SEGMENT_NAME_COL_NAME);
+    r.insert(BLOCK_NAME_COL_NAME);
+
+    r.insert(PREDICATE_COLUMN_NAME);
+
+    r
+});
+
+pub fn is_valid_column(name: &str) -> Result<()> {
+    if INTERNAL_COLUMN_KEYS.contains(name) {
+        return Err(ErrorCode::TableWithInternalColumnName(format!(
+            "Cannot create table has column with the same name as internal column: {}",
+            name
+        )));
+    }
+    Ok(())
 }
 
 pub fn is_valid_block_per_segment(options: &BTreeMap<String, String>) -> Result<()> {

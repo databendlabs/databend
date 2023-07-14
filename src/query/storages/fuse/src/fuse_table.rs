@@ -28,7 +28,6 @@ use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::CompactTarget;
-use common_catalog::table::DeletionFilters;
 use common_catalog::table::NavigationDescriptor;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -396,6 +395,11 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         cluster_key_str: String,
     ) -> Result<()> {
+        // if new cluter_key_str is the same with old one,
+        // no need to change
+        if let Some(old_cluster_key_str) = self.cluster_key_str() && *old_cluster_key_str == cluster_key_str{
+            return Ok(())
+        }
         let mut new_table_meta = self.get_table_info().meta.clone();
         new_table_meta = new_table_meta.push_cluster_key(cluster_key_str);
         let cluster_key_meta = new_table_meta.cluster_key();
@@ -635,18 +639,6 @@ impl Table for FuseTable {
                 .navigate_to_time_point(snapshot_location, *time_point)
                 .await?),
         }
-    }
-
-    #[async_backtrace::framed]
-    async fn delete(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _filter: Option<DeletionFilters>,
-        _col_indices: Vec<usize>,
-        _query_row_id_col: bool,
-        _pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        panic!("deprecated")
     }
 
     #[async_backtrace::framed]

@@ -135,13 +135,15 @@ impl InputFormat for InputFormatParquet {
         file_infos: Vec<StageFileInfo>,
         _stage_info: &StageInfo,
         op: &Operator,
-        _settings: &Arc<Settings>,
+        settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
+        let max_memory_usage = settings.get_max_memory_usage()?;
         let files = file_infos
             .iter()
             .map(|f| (f.path.clone(), f.size))
             .collect::<Vec<_>>();
-        let metas = read_parquet_metas_in_parallel(op.clone(), files, 16, 64).await?;
+        let metas =
+            read_parquet_metas_in_parallel(op.clone(), files, 16, 64, max_memory_usage).await?;
         Self::make_splits(file_infos, metas)
     }
 

@@ -36,11 +36,15 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::DroppedId;
+use common_meta_app::schema::GcDroppedTableReq;
+use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -49,7 +53,6 @@ use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -161,12 +164,21 @@ pub trait Catalog: DynClone + Send + Sync {
     ) -> Result<Arc<dyn Table>>;
 
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
-    async fn list_tables_history(
+    async fn list_tables_history(&self, tenant: &str, db_name: &str)
+    -> Result<Vec<Arc<dyn Table>>>;
+
+    async fn get_drop_table_infos(
         &self,
-        tenant: &str,
-        db_name: &str,
-        filter: Option<TableInfoFilter>,
-    ) -> Result<Vec<Arc<dyn Table>>>;
+        _req: ListDroppedTableReq,
+    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
+        Err(ErrorCode::Unimplemented(
+            "'get_drop_table_infos' not implemented",
+        ))
+    }
+
+    async fn gc_drop_tables(&self, _req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
+        Err(ErrorCode::Unimplemented("'gc_drop_tables' not implemented"))
+    }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply>;
 

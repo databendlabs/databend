@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono::Utc;
 use common_base::runtime::GlobalIORuntime;
@@ -38,6 +39,8 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
+use crate::metrics::metrics_inc_copy_purge_files_cost_milliseconds;
+use crate::metrics::metrics_inc_copy_purge_files_counter;
 use crate::pipelines::builders::build_append2table_without_commit_pipeline;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
@@ -142,6 +145,7 @@ pub fn build_commit_data_pipeline(
         files.clone(),
         copy_force_option,
     )?;
+
     to_table.commit_insertion(
         ctx.clone(),
         main_pipeline,
@@ -189,7 +193,16 @@ pub fn set_copy_on_finished(
                     // 2. Try to purge copied files if purge option is true, if error will skip.
                     // If a file is already copied(status with AlreadyCopied) we will try to purge them.
                     if copy_purge_option {
+                        let start = Instant::now();
                         try_purge_files(ctx.clone(), &stage_info, &files).await;
+
+                        // Perf.
+                        {
+                            metrics_inc_copy_purge_files_counter(files.len() as u32);
+                            metrics_inc_copy_purge_files_cost_milliseconds(
+                                start.elapsed().as_millis() as u32,
+                            );
+                        }
                     }
 
                     Ok(())
