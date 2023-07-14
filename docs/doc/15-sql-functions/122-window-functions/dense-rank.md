@@ -2,8 +2,6 @@
 title: DENSE_RANK
 ---
 
-## DENSE_RANK
-
 Returns the rank of a value within a group of values, without gaps in the ranks.
 
 The rank value starts at 1 and continues up sequentially.
