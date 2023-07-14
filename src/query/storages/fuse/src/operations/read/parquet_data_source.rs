@@ -26,7 +26,7 @@ use serde::Serializer;
 use crate::io::MergeIOReadResult;
 
 pub enum DataSource {
-    AggIndex(Vec<u8>),
+    AggIndex((PartInfoPtr, MergeIOReadResult)),
     Normal(MergeIOReadResult),
 }
 

@@ -17,10 +17,12 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::infer_schema_type;
 use common_expression::types::DataType;
-use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use itertools::Itertools;
 use tracing::info;
 
@@ -238,13 +240,13 @@ pub fn try_rewrite(
                         // the actual data in the index is the temp state of the function.
                         // (E.g. `sum` function will store serialized `sum_state` in index data.)
                         // So the data type will be `String`.
-                        return DataField::new(&format!("index_col_{idx}"), DataType::String);
+                        return Ok(TableField::new(&idx.to_string(), TableDataType::String));
                     }
                 }
 
-                DataField::new(&format!("index_col_{idx}"), ty.clone())
+                Ok(TableField::new(&idx.to_string(), infer_schema_type(ty)?))
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
 
         new_selection.sort_by_key(|i| i.index);
 
@@ -252,7 +254,7 @@ pub fn try_rewrite(
             index_id: *index_id,
             selection: new_selection,
             predicates: new_predicates,
-            schema: DataSchema::new(index_fields),
+            schema: TableSchemaRefExt::create(index_fields),
             is_agg,
         })?;
 
