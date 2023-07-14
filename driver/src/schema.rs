@@ -201,13 +201,14 @@ impl TryFrom<&TypeDesc<'_>> for DataType {
                 DataType::Array(Box::new(inner))
             }
             "Map" => {
-                if desc.args.len() != 1 {
+                if desc.args.len() != 2 {
                     return Err(Error::Parsing(
-                        "Map type must have one argument".to_string(),
+                        "Map type must have two argument".to_string(),
                     ));
                 }
-                let inner = Self::try_from(&desc.args[0])?;
-                DataType::Map(Box::new(inner))
+                let key_ty = Self::try_from(&desc.args[0])?;
+                let val_ty = Self::try_from(&desc.args[1])?;
+                DataType::Map(Box::new(DataType::Tuple(vec![key_ty, val_ty])))
             }
             "Tuple" => {
                 let mut inner = vec![];
