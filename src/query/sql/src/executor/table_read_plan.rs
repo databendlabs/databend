@@ -95,6 +95,7 @@ impl ToReadDataSourcePlan for dyn Table {
         {
             Ok((PartStatistics::default(), Partitions::default()))
         } else {
+            ctx.set_status_info("build physical plan - read partitions");
             self.read_partitions(ctx.clone(), push_downs.clone(), dry_run)
                 .await
         }?;
