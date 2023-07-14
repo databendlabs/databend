@@ -30,11 +30,6 @@ use crate::BindContext;
 use crate::Binder;
 use crate::SelectBuilder;
 
-// Used to check use can display which object when execute show statement.
-// Select a set of magic numbers as markers
-pub const GLOBAL_PRIV: &str = "0x5f3759df";
-pub const NO_PRIV: &str = "0x5f3758df";
-
 impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_columns(
@@ -82,7 +77,7 @@ impl Binder {
         let user = self.ctx.get_current_user()?;
         let (identity, grant_set) = (user.identity().to_string(), user.grants);
 
-        let unique_tables = generate_unique_object(
+        let (unique_tables, has_object_priv) = generate_unique_object(
             Some(database.clone()),
             Some(table.clone()),
             &tenant,
@@ -90,7 +85,7 @@ impl Binder {
         )
         .await?;
 
-        if unique_tables.is_empty() {
+        if unique_tables.is_empty() && !has_object_priv {
             return Err(ErrorCode::PermissionDenied(format!(
                 "Permission denied, user {} don't have privilege for table {}.{}",
                 identity, database, table
@@ -145,9 +140,10 @@ pub(crate) async fn generate_unique_object(
     table: Option<String>,
     tenant: &str,
     grant_set: UserGrantSet,
-) -> Result<HashSet<String>> {
+) -> Result<(HashSet<String>, bool)> {
     let mut unique_object: HashSet<String> = HashSet::new();
-    let objects = RoleCacheManager::instance()
+    let mut has_object_priv = false;
+    let _objects = RoleCacheManager::instance()
         .find_related_roles(tenant, &grant_set.roles())
         .await?
         .into_iter()
@@ -158,38 +154,36 @@ pub(crate) async fn generate_unique_object(
         .map(|e| {
             let object = e.object();
             match object {
-                GrantObject::Global => GLOBAL_PRIV.to_string(),
+                GrantObject::Global => {
+                    has_object_priv = true;
+                }
                 GrantObject::Database(_, ldb) => {
                     if let Some(database) = &database {
+                        // show columns from table from db
+                        // show tables from db
                         if ldb == database {
-                            GLOBAL_PRIV.to_string()
-                        } else {
-                            NO_PRIV.to_string()
+                            has_object_priv = true;
                         }
                     } else {
-                        format!("'{ldb}'")
+                        unique_object.insert(format!("'{ldb}'"));
                     }
                 }
                 GrantObject::Table(_, ldb, ltab) => match (&database, &table) {
                     // show columns from tab from db;
                     (Some(database), Some(table)) => {
                         if ldb == database && ltab == table {
-                            format!("'{ltab}'")
-                        } else {
-                            NO_PRIV.to_string()
+                            has_object_priv = true;
                         }
                     }
                     // show tables from db;
                     (Some(database), None) => {
                         if ldb == database {
-                            format!("'{ltab}'")
-                        } else {
-                            NO_PRIV.to_string()
+                            unique_object.insert(format!("'{ltab}'"));
                         }
                     }
                     // show databases
                     (None, None) => {
-                        format!("'{ldb}'")
+                        unique_object.insert(format!("'{ldb}'"));
                     }
                     _ => unreachable!(),
                 },
@@ -197,12 +191,5 @@ pub(crate) async fn generate_unique_object(
         })
         .collect::<Vec<_>>();
 
-    if !objects.is_empty() {
-        for object in objects {
-            if object != NO_PRIV {
-                unique_object.insert(object);
-            }
-        }
-    }
-    Ok(unique_object)
+    Ok((unique_object, has_object_priv))
 }

@@ -33,7 +33,6 @@ use common_meta_app::share::ShareNameIdent;
 use tracing::debug;
 
 use crate::binder::ddl::column::generate_unique_object;
-use crate::binder::ddl::column::GLOBAL_PRIV;
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::CreateDatabasePlan;
@@ -64,9 +63,10 @@ impl Binder {
         let user = self.ctx.get_current_user()?;
         let grant_set = user.grants;
 
-        let unique_dbs = generate_unique_object(None, None, &tenant, grant_set).await?;
+        let (unique_dbs, has_object_priv) =
+            generate_unique_object(None, None, &tenant, grant_set).await?;
 
-        let mut select_builder = if unique_dbs.contains(GLOBAL_PRIV) {
+        let mut select_builder = if has_object_priv {
             SelectBuilder::from("system.databases")
         } else {
             let mut in_list = "".to_string();

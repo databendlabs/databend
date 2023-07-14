@@ -78,7 +78,6 @@ use tracing::debug;
 use tracing::error;
 
 use crate::binder::ddl::column::generate_unique_object;
-use crate::binder::ddl::column::GLOBAL_PRIV;
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
@@ -142,10 +141,10 @@ impl Binder {
         let user = self.ctx.get_current_user()?;
         let (identity, grant_set) = (user.identity().to_string(), user.grants);
 
-        let unique_tables =
+        let (unique_tables, has_object_priv) =
             generate_unique_object(Some(database.clone()), None, &tenant, grant_set).await?;
 
-        if unique_tables.is_empty() {
+        if unique_tables.is_empty() && !has_object_priv {
             return Err(ErrorCode::PermissionDenied(format!(
                 "Permission denied, user {} don't have privilege for database {}",
                 identity, database
@@ -158,7 +157,7 @@ impl Binder {
             "system.tables"
         };
         let mut need_filter = true;
-        let mut select_builder = if unique_tables.contains(GLOBAL_PRIV) {
+        let mut select_builder = if has_object_priv {
             SelectBuilder::from(target_sys_tab)
         } else {
             let mut in_list = "".to_string();
