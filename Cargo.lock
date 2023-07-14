@@ -2639,6 +2639,7 @@ dependencies = [
  "flagset",
  "futures",
  "log",
+ "metrics",
  "opendal",
  "regex",
  "reqwest",
