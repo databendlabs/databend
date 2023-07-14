@@ -293,13 +293,13 @@ impl PipelineBuilder {
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;
         self.main_pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeBlock::new(
+            let proc = TransformSerializeBlock::try_create(
                 self.ctx.clone(),
                 input,
                 output,
                 table,
                 cluster_stats_gen.clone(),
-            );
+            )?;
             proc.into_processor()
         })?;
         Ok(())
