@@ -103,7 +103,7 @@ impl<'a> ClusteringInformation<'a> {
         );
         let default_cluster_key_id = self.table.cluster_key_meta.clone().unwrap().0;
         let total_block_count = snapshot.summary.block_count;
-        let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
                 .read_segments::<Arc<SegmentInfo>>(chunk, true)
