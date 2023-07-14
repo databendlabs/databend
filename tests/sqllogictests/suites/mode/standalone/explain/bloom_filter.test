@@ -172,6 +172,9 @@ statement ok
 alter table bloom_test_alter_t1 set options(bloom_index_columns='c2')
 
 # the bloom index column 'c1' is invalid
+#
+# note that although the bloom index of column c1 has been created for the previous 2 blocks,
+# the index (of column c1) will NOT be used in the following case
 query T
 explain select 1 from bloom_test_alter_t1 where c1 = 5
 ----
