@@ -580,7 +580,7 @@ impl Processor for NativeDeserializeDataTransform {
             let chunks = match chunks {
                 DataSource::AggIndex(data) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
-                    let block = agg_index_reader.deserialize(data)?;
+                    let block = agg_index_reader.deserialize_native_data(data)?;
                     self.output_data = Some(block);
                     return self.finish_process();
                 }

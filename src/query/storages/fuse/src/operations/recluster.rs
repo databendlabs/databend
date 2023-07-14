@@ -71,7 +71,13 @@ impl FuseTable {
         let schema = self.table_info.schema();
         let segment_locations = snapshot.segments.clone();
         let segment_locations = create_segment_location_vector(segment_locations, None);
-        let mut pruner = FusePruner::create(&ctx, self.operator.clone(), schema, &push_downs)?;
+        let mut pruner = FusePruner::create(
+            &ctx,
+            self.operator.clone(),
+            schema,
+            &push_downs,
+            self.bloom_index_cols(),
+        )?;
         let block_metas = pruner.read_pruning(segment_locations).await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
@@ -195,13 +201,13 @@ impl FuseTable {
         assert_eq!(pipeline.output_len(), 1);
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
-            let proc = TransformSerializeBlock::new(
+            let proc = TransformSerializeBlock::try_create(
                 ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 self,
                 cluster_stats_gen.clone(),
-            );
+            )?;
             proc.into_processor()
         })?;
 

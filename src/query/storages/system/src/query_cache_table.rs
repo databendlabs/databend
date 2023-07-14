@@ -119,10 +119,7 @@ impl QueryCacheTable {
             TableField::new("query_id", TableDataType::String),
             TableField::new("result_size", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("num_rows", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new(
-                "partitions_sha",
-                TableDataType::Array(Box::new(TableDataType::String)),
-            ),
+            TableField::new("partitions_sha", TableDataType::String),
             TableField::new("location", TableDataType::String),
             TableField::new("active_result_scan", TableDataType::Boolean),
         ]);

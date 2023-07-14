@@ -61,8 +61,4 @@ impl InternalColumnFactory {
             .get(name)
             .map(|internal_column| internal_column.to_owned())
     }
-
-    pub fn exist(&self, name: &str) -> bool {
-        self.internal_columns.contains_key(name)
-    }
 }
