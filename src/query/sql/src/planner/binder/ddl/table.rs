@@ -69,6 +69,7 @@ use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
+use itertools::Itertools;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -160,15 +161,7 @@ impl Binder {
         let mut select_builder = if has_object_priv {
             SelectBuilder::from(target_sys_tab)
         } else {
-            let mut in_list = "".to_string();
-            let last = unique_tables.len() - 1;
-            for (i, tables) in unique_tables.iter().enumerate() {
-                if i == last {
-                    in_list += tables;
-                    break;
-                }
-                in_list = in_list + tables + ",";
-            }
+            let in_list = unique_tables.iter().join(",");
             need_filter = false;
             // Need filter database = 'db', ensure will execute optimizer find_eq_filter
             SelectBuilder::from(&format!(
