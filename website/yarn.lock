@@ -3164,10 +3164,10 @@ csstype@^3.0.2:
   version "3.1.1"
   resolved "https://registry.yarnpkg.com/csstype/-/csstype-3.1.1.tgz#841b532c45c758ee546a11d5bd7b7b473c8c30b9"
 
-databend-logos@^0.0.12:
-  version "0.0.12"
-  resolved "https://registry.yarnpkg.com/databend-logos/-/databend-logos-0.0.12.tgz#cf97e6c1f793484ff5e9113219258ceba0dfe954"
-  integrity sha512-RhpYx5F6PftQpW2/g3qAgbf5D4mY6Ra/no5CwP6bwUMAARssEjEDijax+MfRd5mMokhPMacE8TRoSzIsNK7axA==
+databend-logos@^0.0.14:
+  version "0.0.14"
+  resolved "https://registry.yarnpkg.com/databend-logos/-/databend-logos-0.0.14.tgz#6e47b7acfb5623d41577b113645a7e298618dddc"
+  integrity sha512-PKUSIUDBx7puDrVBS+4TKey4B2IOKhoh3yitTwmS0XORJHPo5eB4W4VSOzfbN3AdO7cPD9MwGt86g8+iVS5ySg==
 
 dayjs@^1.11.7, dayjs@^1.9.1:
   version "1.11.7"

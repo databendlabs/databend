@@ -6,7 +6,7 @@ import { LazyLoadImage } from 'react-lazy-load-image-component';
 import clsx from 'clsx';
 interface IProps {
   src: string;
-  width?: number;
+  width?: number | string;
   className?: string;
 }
 const LoadLazyImg: FC<IProps> = ({src, width, className}): ReactElement=> {
@@ -26,6 +26,6 @@ const LoadLazyImg: FC<IProps> = ({src, width, className}): ReactElement=> {
   );
 };
 LoadLazyImg.defaultProps = {
-  width: 200
+  width: "100%"
 }
 export default LoadLazyImg;

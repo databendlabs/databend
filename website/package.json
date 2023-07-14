@@ -31,7 +31,7 @@
     "clsx": "^1.1.1",
     "copy-to-clipboard": "^3.3.3",
     "copyforjs": "^1.0.6",
-    "databend-logos": "^0.0.12",
+    "databend-logos": "^0.0.14",
     "dayjs": "^1.11.7",
     "docusaurus-plugin-devserver": "^1.0.6",
     "docusaurus-plugin-sass": "^0.2.1",
