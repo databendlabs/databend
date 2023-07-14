@@ -28,12 +28,12 @@ use common_expression::TableSchema;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
+use common_sql::plans::PREDICATE_COLUMN_NAME;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
-use super::common::MutationKind;
+use crate::operations::common::MutationKind;
 use crate::operations::common::TransformSerializeBlock;
-use crate::operations::delete::MutationTaskInfo;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationSource;
 use crate::pipelines::Pipeline;
@@ -41,7 +41,6 @@ use crate::FuseTable;
 
 impl FuseTable {
     /// UPDATE column = expression WHERE condition
-    /// The flow of Pipeline is the same as that of deletion.
     #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn do_update(
@@ -101,13 +100,13 @@ impl FuseTable {
             self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
 
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeBlock::new(
+            let proc = TransformSerializeBlock::try_create(
                 ctx.clone(),
                 input,
                 output,
                 self,
                 cluster_stats_gen.clone(),
-            );
+            )?;
             proc.into_processor()
         })?;
 
@@ -154,7 +153,10 @@ impl FuseTable {
                 .map(|index| schema.fields()[*index].clone())
                 .collect();
 
-            fields.push(TableField::new("_predicate", TableDataType::Boolean));
+            fields.push(TableField::new(
+                PREDICATE_COLUMN_NAME,
+                TableDataType::Boolean,
+            ));
             pos += 1;
 
             let remain_col_indices: Vec<FieldIndex> = all_column_indices
@@ -248,9 +250,20 @@ impl FuseTable {
             (Arc::new(None), None)
         };
 
-        let MutationTaskInfo { total_tasks, .. } = self
-            .mutation_block_pruning(ctx.clone(), filter, None, projection, base_snapshot, false)
+        let (parts, part_info) = self
+            .do_mutation_block_pruning(
+                ctx.clone(),
+                filter,
+                None,
+                projection,
+                base_snapshot,
+                false,
+                false, // for update
+            )
             .await?;
+        ctx.set_partitions(parts)?;
+
+        let total_tasks = part_info.total_tasks;
         if total_tasks != 0 {
             let max_threads =
                 std::cmp::min(ctx.get_settings().get_max_threads()? as usize, total_tasks);
@@ -275,7 +288,7 @@ impl FuseTable {
             // Status.
             {
                 let status = format!(
-                    "delete: begin to run delete tasks, total tasks: {}",
+                    "update: begin to run update tasks, total tasks: {}",
                     total_tasks
                 );
                 ctx.set_status_info(&status);

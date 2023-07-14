@@ -23,6 +23,7 @@ pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
 pub const OPT_KEY_COMMENT: &str = "comment";
 pub const OPT_KEY_EXTERNAL_LOCATION: &str = "external_location";
 pub const OPT_KEY_ENGINE: &str = "engine";
+pub const OPT_KEY_BLOOM_INDEX_COLUMNS: &str = "bloom_index_columns";
 
 /// Legacy table snapshot location key
 ///

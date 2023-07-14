@@ -12,9 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use common_ast::ast::ShowColumnsStmt;
 use common_ast::ast::ShowLimit;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::UserGrantSet;
+use common_users::RoleCacheManager;
 use tracing::debug;
 
 use crate::normalize_identifier;
@@ -67,6 +73,25 @@ impl Binder {
             table
         };
 
+        let tenant = self.ctx.get_tenant();
+        let user = self.ctx.get_current_user()?;
+        let (identity, grant_set) = (user.identity().to_string(), user.grants);
+
+        let (unique_tables, has_object_priv) = generate_unique_object(
+            Some(database.clone()),
+            Some(table.clone()),
+            &tenant,
+            grant_set,
+        )
+        .await?;
+
+        if unique_tables.is_empty() && !has_object_priv {
+            return Err(ErrorCode::PermissionDenied(format!(
+                "Permission denied, user {} don't have privilege for table {}.{}",
+                identity, database, table
+            )));
+        }
+
         let mut select_builder = SelectBuilder::from("information_schema.columns");
 
         select_builder
@@ -108,4 +133,63 @@ impl Binder {
         self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowColumns)
             .await
     }
+}
+
+pub(crate) async fn generate_unique_object(
+    database: Option<String>,
+    table: Option<String>,
+    tenant: &str,
+    grant_set: UserGrantSet,
+) -> Result<(HashSet<String>, bool)> {
+    let mut unique_object: HashSet<String> = HashSet::new();
+    let mut has_object_priv = false;
+    let _objects = RoleCacheManager::instance()
+        .find_related_roles(tenant, &grant_set.roles())
+        .await?
+        .into_iter()
+        .map(|role| role.grants)
+        .fold(grant_set, |a, b| a | b)
+        .entries()
+        .iter()
+        .map(|e| {
+            let object = e.object();
+            match object {
+                GrantObject::Global => {
+                    has_object_priv = true;
+                }
+                GrantObject::Database(_, ldb) => {
+                    if let Some(database) = &database {
+                        // show columns from table from db
+                        // show tables from db
+                        if ldb == database {
+                            has_object_priv = true;
+                        }
+                    } else {
+                        unique_object.insert(format!("'{ldb}'"));
+                    }
+                }
+                GrantObject::Table(_, ldb, ltab) => match (&database, &table) {
+                    // show columns from tab from db;
+                    (Some(database), Some(table)) => {
+                        if ldb == database && ltab == table {
+                            has_object_priv = true;
+                        }
+                    }
+                    // show tables from db;
+                    (Some(database), None) => {
+                        if ldb == database {
+                            unique_object.insert(format!("'{ltab}'"));
+                        }
+                    }
+                    // show databases
+                    (None, None) => {
+                        unique_object.insert(format!("'{ldb}'"));
+                    }
+                    _ => unreachable!(),
+                },
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Ok((unique_object, has_object_priv))
 }

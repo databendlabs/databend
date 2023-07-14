@@ -26,6 +26,7 @@ use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use opendal::Operator;
+use storages_common_index::BloomIndex;
 
 use crate::io::write_data;
 use crate::io::BlockBuilder;
@@ -71,29 +72,33 @@ pub struct TransformSerializeBlock {
 }
 
 impl TransformSerializeBlock {
-    pub fn new(
+    pub fn try_create(
         ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
-    ) -> Self {
+    ) -> Result<Self> {
         let source_schema = Arc::new(table.table_info.schema().remove_virtual_computed_fields());
+        let bloom_columns_map = table
+            .bloom_index_cols
+            .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
         let block_builder = BlockBuilder {
             ctx,
             meta_locations: table.meta_location_generator().clone(),
             source_schema,
             write_settings: table.get_write_settings(),
             cluster_stats_gen,
+            bloom_columns_map,
         };
-        TransformSerializeBlock {
+        Ok(TransformSerializeBlock {
             state: State::Consume,
             input,
             output,
             output_data: None,
             block_builder,
             dal: table.get_operator(),
-        }
+        })
     }
 
     pub fn into_processor(self) -> Result<ProcessorPtr> {

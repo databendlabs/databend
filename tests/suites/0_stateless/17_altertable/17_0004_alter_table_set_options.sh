@@ -19,7 +19,13 @@ echo "select * from t2;" | $MYSQL_CLIENT_CONNECT
 echo "alter table t2 set options(abc = '1')" | $MYSQL_CLIENT_CONNECT
 echo "alter table t2 set options(block_per_segment = 2000)" | $MYSQL_CLIENT_CONNECT
 echo "alter table t2 set options(storage_format = 'memory')" | $MYSQL_CLIENT_CONNECT
+echo "alter table t2 set options(bloom_index_columns = 'b')" | $MYSQL_CLIENT_CONNECT
+
+# valid bloom index column data type.
+echo "create table t3(a decimal(4,2))" | $MYSQL_CLIENT_CONNECT
+echo "alter table t3 set options(bloom_index_columns = 'a')" | $MYSQL_CLIENT_CONNECT
 
 #drop table
 echo "drop table if exists t" | $MYSQL_CLIENT_CONNECT
 echo "drop table if exists t2" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists t3" | $MYSQL_CLIENT_CONNECT
