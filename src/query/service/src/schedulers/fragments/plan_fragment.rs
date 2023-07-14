@@ -19,7 +19,7 @@ use common_catalog::plan::Partitions;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::executor::DeletePartial;
-use common_sql::executor::DistributedCopyIntoTable;
+use common_sql::executor::DistributedCopyIntoTableFromStage;
 
 use crate::api::DataExchange;
 use crate::schedulers::Fragmenter;
@@ -206,7 +206,7 @@ impl PlanFragment {
         let mut collect_read_source = |plan: &PhysicalPlan| {
             if let PhysicalPlan::TableScan(scan) = plan {
                 source.push(*scan.source.clone())
-            } else if let PhysicalPlan::DistributedCopyIntoTable(distributed_plan) = plan {
+            } else if let PhysicalPlan::DistributedCopyIntoTableFromStage(distributed_plan) = plan {
                 source.push(*distributed_plan.source.clone())
             }
         };
@@ -244,9 +244,12 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
         }))
     }
 
-    fn replace_copy_into_table(&mut self, plan: &DistributedCopyIntoTable) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::DistributedCopyIntoTable(Box::new(
-            DistributedCopyIntoTable {
+    fn replace_copy_into_table(
+        &mut self,
+        plan: &DistributedCopyIntoTableFromStage,
+    ) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::DistributedCopyIntoTableFromStage(Box::new(
+            DistributedCopyIntoTableFromStage {
                 source: Box::new(self.source.clone()),
                 ..plan.clone()
             },
