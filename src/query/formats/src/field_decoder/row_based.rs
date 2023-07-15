@@ -233,7 +233,10 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         let ts = if !buf.contains(&b'-') {
             buffer_readr.read_num_text_exact()?
         } else {
-            let t = buffer_readr.read_timestamp_text(&self.common_settings().timezone)?;
+            let t = buffer_readr
+                .read_timestamp_text(&self.common_settings().timezone, false)?
+                .0
+                .unwrap();
             if !buffer_readr.eof() {
                 let data = buf.to_str().unwrap_or("not utf8");
                 let msg = format!(

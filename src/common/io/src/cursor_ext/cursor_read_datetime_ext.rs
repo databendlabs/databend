@@ -32,7 +32,11 @@ use crate::cursor_ext::cursor_read_bytes_ext::ReadBytesExt;
 
 pub trait BufferReadDateTimeExt {
     fn read_date_text(&mut self, tz: &Tz) -> Result<NaiveDate>;
-    fn read_timestamp_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>>;
+    fn read_timestamp_text(
+        &mut self,
+        tz: &Tz,
+        only_date_text: bool,
+    ) -> Result<(Option<DateTime<Tz>>, Option<NaiveDate>)>;
     fn parse_time_offset(
         &mut self,
         tz: &Tz,
@@ -76,11 +80,20 @@ where T: AsRef<[u8]>
 {
     fn read_date_text(&mut self, tz: &Tz) -> Result<NaiveDate> {
         // TODO support YYYYMMDD format
-        self.read_timestamp_text(tz)
-            .map(|dt| dt.naive_local().date())
+        self.read_timestamp_text(tz, true).map(|(dt, nd)| {
+            if let Some(dt) = dt {
+                dt.naive_local().date()
+            } else {
+                nd.unwrap()
+            }
+        })
     }
 
-    fn read_timestamp_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>> {
+    fn read_timestamp_text(
+        &mut self,
+        tz: &Tz,
+        only_date_text: bool,
+    ) -> Result<(Option<DateTime<Tz>>, Option<NaiveDate>)> {
         // Date Part YYYY-MM-DD
         let mut buf = vec![0; DATE_LEN];
         self.read_exact(buf.as_mut_slice())?;
@@ -98,21 +111,18 @@ where T: AsRef<[u8]>
             .map_err_to_code(ErrorCode::BadBytes, || {
                 format!("Cannot parse value:{} to Date type", v)
             })?;
-        let mut dt = tz
-            .from_local_datetime(&d.and_hms_opt(0, 0, 0).unwrap())
-            .unwrap();
 
         let less_1000 = |dt: DateTime<Tz>| {
             // convert timestamp less than `1000-01-01 00:00:00` to `1000-01-01 00:00:00`
             if dt.year() < 1000 {
-                Ok(tz.from_utc_datetime(
+                tz.from_utc_datetime(
                     &NaiveDate::from_ymd_opt(1000, 1, 1)
                         .unwrap()
                         .and_hms_opt(0, 0, 0)
                         .unwrap(),
-                ))
+                )
             } else {
-                Ok(dt)
+                dt
             }
         };
 
@@ -140,11 +150,11 @@ where T: AsRef<[u8]>
             // Examples: '2022-02-02T', '2022-02-02 ', '2022-02-02T02', '2022-02-02T3:', '2022-02-03T03:13', '2022-02-03T03:13:'
             if times.len() < 3 {
                 times.resize(3, 0);
-                unwrap_local_time(tz, &d, &mut dt, &mut times)?;
-                return less_1000(dt);
+                let dt = unwrap_local_time(tz, &d, &mut times)?;
+                return Ok((Some(less_1000(dt)), None));
             }
 
-            unwrap_local_time(tz, &d, &mut dt, &mut times)?;
+            let dt = unwrap_local_time(tz, &d, &mut times)?;
 
             // ms .microseconds
             let dt = if self.ignore_byte(b'.') {
@@ -191,27 +201,70 @@ where T: AsRef<[u8]>
             if self.ignore(|b| b == b'z' || b == b'Z') {
                 // ISO 8601 The Z on the end means UTC (that is, an offset-from-UTC of zero hours-minutes-seconds).
                 if dt.year() < 1000 {
-                    Ok(tz.from_utc_datetime(
-                        &NaiveDate::from_ymd_opt(1000, 1, 1)
-                            .unwrap()
-                            .and_hms_opt(0, 0, 0)
-                            .unwrap(),
+                    Ok((
+                        Some(
+                            tz.from_utc_datetime(
+                                &NaiveDate::from_ymd_opt(1000, 1, 1)
+                                    .unwrap()
+                                    .and_hms_opt(0, 0, 0)
+                                    .unwrap(),
+                            ),
+                        ),
+                        None,
                     ))
                 } else {
                     let current_tz = dt.offset().fix().local_minus_utc();
-                    calc_offset(current_tz.into(), 0, &dt)
+                    Ok((Some(calc_offset(current_tz.into(), 0, &dt)?), None))
                 }
             } else if self.ignore_byte(b'+') {
-                self.parse_time_offset(tz, &mut buf, &dt, false, calc_offset)
+                Ok((
+                    Some(self.parse_time_offset(tz, &mut buf, &dt, false, calc_offset)?),
+                    None,
+                ))
             } else if self.ignore_byte(b'-') {
-                self.parse_time_offset(tz, &mut buf, &dt, true, calc_offset)
+                Ok((
+                    Some(self.parse_time_offset(tz, &mut buf, &dt, true, calc_offset)?),
+                    None,
+                ))
             } else {
                 // only datetime part
-                less_1000(dt)
+                Ok((Some(less_1000(dt)), None))
             }
         } else {
             // only date part
-            less_1000(dt)
+            if d.year() < 1000 {
+                Ok((
+                    Some(
+                        tz.from_utc_datetime(
+                            &NaiveDate::from_ymd_opt(1000, 1, 1)
+                                .unwrap()
+                                .and_hms_opt(0, 0, 0)
+                                .unwrap(),
+                        ),
+                    ),
+                    None,
+                ))
+            } else {
+                match tz.from_local_datetime(&d.and_hms_opt(0, 0, 0).unwrap()) {
+                    LocalResult::None => {
+                        // like to_date('1941-03-15') => 1941-03-15 00:00:00 in Asia/Shanghai is not exists
+                        // but if just convert to Date, it should can return NaiveDate
+                        if only_date_text {
+                            Ok((None, Some(d)))
+                        } else {
+                            Err(ErrorCode::BadBytes(format!(
+                                "maybe none with tz: `{:?}` DST, date part is: {:?}",
+                                tz, d
+                            )))
+                        }
+                    }
+                    LocalResult::Single(t) => Ok((Some(t), None)),
+                    LocalResult::Ambiguous(t1, t2) => Err(ErrorCode::BadBytes(format!(
+                        "Ambiguous local time, ranging from {:?} to {:?}",
+                        t1, t2
+                    ))),
+                }
+            }
         }
     }
 
@@ -286,17 +339,9 @@ where T: AsRef<[u8]>
 // -- if unwrap() will cause session panic.
 // -- https://github.com/chronotope/chrono/blob/v0.4.24/src/offset/mod.rs#L186
 // select to_date(to_timestamp('2021-03-28 01:00:00'));
-fn unwrap_local_time(
-    tz: &Tz,
-    d: &NaiveDate,
-    dt: &mut DateTime<Tz>,
-    times: &mut Vec<u32>,
-) -> Result<()> {
+fn unwrap_local_time(tz: &Tz, d: &NaiveDate, times: &mut Vec<u32>) -> Result<DateTime<Tz>> {
     match tz.from_local_datetime(&d.and_hms_opt(times[0], times[1], times[2]).unwrap()) {
-        LocalResult::Single(t) => {
-            *dt = t;
-            Ok(())
-        }
+        LocalResult::Single(t) => Ok(t),
         LocalResult::None => Err(ErrorCode::BadBytes(format!(
             "maybe none with tz: `{:?}` DST, date part is: {:?}, times part is: is {:?}",
             tz, d, times

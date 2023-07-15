@@ -50,7 +50,7 @@ fn test_read_timestamp_text() -> Result<()> {
     ];
     let mut res = vec![];
     for _ in 0..expected.len() {
-        let time = reader.read_timestamp_text(&tz)?;
+        let time = reader.read_timestamp_text(&tz, false)?.0.unwrap();
         res.push(format!("{:?}", time));
         reader.ignore_byte(b',');
     }

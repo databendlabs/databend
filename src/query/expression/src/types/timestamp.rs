@@ -216,9 +216,9 @@ pub fn microseconds_to_days(micros: i64) -> i32 {
 #[inline]
 pub fn string_to_timestamp(ts_str: impl AsRef<[u8]>, tz: Tz) -> Option<DateTime<Tz>> {
     let mut reader = Cursor::new(std::str::from_utf8(ts_str.as_ref()).unwrap().as_bytes());
-    match reader.read_timestamp_text(&tz) {
-        Ok(dt) => match reader.must_eof() {
-            Ok(..) => Some(dt),
+    match reader.read_timestamp_text(&tz, false) {
+        Ok((dt, _)) => match reader.must_eof() {
+            Ok(..) => dt,
             Err(_) => None,
         },
         Err(_) => None,

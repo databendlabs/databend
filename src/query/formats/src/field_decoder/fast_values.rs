@@ -265,7 +265,10 @@ impl FastFieldDecoderValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let ts = buffer_readr.read_timestamp_text(&self.common_settings().timezone)?;
+        let ts = buffer_readr
+            .read_timestamp_text(&self.common_settings().timezone, false)?
+            .0
+            .unwrap();
         if !buffer_readr.eof() {
             let data = buf.to_str().unwrap_or("not utf8");
             let msg = format!(
