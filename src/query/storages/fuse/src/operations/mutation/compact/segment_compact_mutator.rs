@@ -95,10 +95,10 @@ impl SegmentCompactMutator {
         let fuse_segment_io =
             SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone(), schema);
         let segment_writer = SegmentWriter::new(&self.data_accessor, &self.location_generator);
-        let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         let compactor = SegmentCompactor::new(
             self.compact_params.block_per_seg as u64,
-            max_io_requests,
+            chunk_size,
             &fuse_segment_io,
             segment_writer,
         );
