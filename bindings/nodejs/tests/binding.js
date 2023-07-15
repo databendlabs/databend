@@ -84,8 +84,8 @@ Then("Stream load and Select should be equal", async function () {
     ["-3", "3", "3.0", "3", "2", "2016-04-04", "2016-04-04T11:30:00Z"],
   ];
   const progress = await this.client.streamLoad(`INSERT INTO test VALUES`, values);
-  assert.equal(progress.writeRows(), 3);
-  assert.equal(progress.writeBytes(), 178);
+  assert.equal(progress.writeRows, 3);
+  assert.equal(progress.writeBytes, 178);
 
   const rows = await this.client.queryIter("SELECT * FROM test");
   const ret = [];

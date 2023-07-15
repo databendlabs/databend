@@ -268,10 +268,14 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { Client, ConnectionInfo, RowIterator, Row, QueryProgress } = nativeBinding
+const { Client, ConnectionInfo, Schema, Field, RowIterator, RowIteratorExt, RowOrProgress, Row, QueryProgress } = nativeBinding
 
 module.exports.Client = Client
 module.exports.ConnectionInfo = ConnectionInfo
+module.exports.Schema = Schema
+module.exports.Field = Field
 module.exports.RowIterator = RowIterator
+module.exports.RowIteratorExt = RowIteratorExt
+module.exports.RowOrProgress = RowOrProgress
 module.exports.Row = Row
 module.exports.QueryProgress = QueryProgress
