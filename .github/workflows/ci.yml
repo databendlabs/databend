@@ -23,6 +23,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   build:
+    needs: check
     runs-on: ${{ matrix.os }}-latest
     name: build-${{ matrix.os }}-${{ matrix.arch }}
     strategy:
@@ -40,6 +41,7 @@ jobs:
       - run: cargo build
 
   unit:
+    needs: check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -49,6 +51,7 @@ jobs:
       - run: cargo test --all-features --lib -- --show-output
 
   integration:
+    needs: check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3

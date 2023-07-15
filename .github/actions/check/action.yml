@@ -7,6 +7,10 @@ inputs:
 runs:
   using: "composite"
   steps:
+
+    - name: Check Apache License Header
+      uses: korandoru/hawkeye@v3
+
     - name: Typos
       uses: crate-ci/typos@master
 

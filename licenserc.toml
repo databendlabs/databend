@@ -1,5 +1,7 @@
 baseDir = "."
 
+headerPath = "Apache-2.0.txt"
+
 excludes = [
     # hidden files
     ".cargo",
@@ -8,6 +10,8 @@ excludes = [
     ".gitignore",
     ".gitattributes",
     ".editorconfig",
+    ".npmignore",
+    ".prettierignore",
 
     "LICENSE",
     "Makefile",
@@ -27,6 +31,11 @@ excludes = [
     "**/*.yapf",
     "**/*.test",
     "**/*.txt",
+
+    # test files
+    "core/tests/**",
+    "driver/tests/**",
+    "cli/tests/**",
 ]
 
 [properties]
