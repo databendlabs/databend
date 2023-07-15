@@ -142,8 +142,7 @@ pub(crate) async fn generate_unique_object(
     grant_set: UserGrantSet,
 ) -> Result<(HashSet<String>, bool)> {
     let mut unique_object: HashSet<String> = HashSet::new();
-    let mut has_object_priv = false;
-    let _objects = RoleCacheManager::instance()
+    let has_object_priv = RoleCacheManager::instance()
         .find_related_roles(tenant, &grant_set.roles())
         .await?
         .into_iter()
@@ -151,45 +150,39 @@ pub(crate) async fn generate_unique_object(
         .fold(grant_set, |a, b| a | b)
         .entries()
         .iter()
-        .map(|e| {
+        .any(|e| {
             let object = e.object();
             match object {
-                GrantObject::Global => {
-                    has_object_priv = true;
-                }
+                GrantObject::Global => true,
                 GrantObject::Database(_, ldb) => {
                     if let Some(database) = &database {
                         // show columns from table from db
                         // show tables from db
-                        if ldb == database {
-                            has_object_priv = true;
-                        }
+                        ldb == database
                     } else {
-                        unique_object.insert(format!("'{ldb}'"));
+                        // show databases
+                        unique_object.insert(format!("'{}'", ldb));
+                        false
                     }
                 }
                 GrantObject::Table(_, ldb, ltab) => match (&database, &table) {
                     // show columns from tab from db;
-                    (Some(database), Some(table)) => {
-                        if ldb == database && ltab == table {
-                            has_object_priv = true;
-                        }
-                    }
+                    (Some(database), Some(table)) => ldb == database && ltab == table,
                     // show tables from db;
                     (Some(database), None) => {
                         if ldb == database {
-                            unique_object.insert(format!("'{ltab}'"));
+                            unique_object.insert(format!("'{}'", ltab));
                         }
+                        false
                     }
                     // show databases
                     (None, None) => {
-                        unique_object.insert(format!("'{ldb}'"));
+                        unique_object.insert(format!("'{}'", ldb));
+                        false
                     }
                     _ => unreachable!(),
                 },
             }
-        })
-        .collect::<Vec<_>>();
-
+        });
     Ok((unique_object, has_object_priv))
 }

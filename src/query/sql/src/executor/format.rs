@@ -23,9 +23,10 @@ use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregateFunctionDesc;
 use super::AggregatePartial;
+use super::CopyIntoTableFromQuery;
 use super::DeleteFinal;
 use super::DeletePartial;
-use super::DistributedCopyIntoTable;
+use super::DistributedCopyIntoTableFromStage;
 use super::EvalScalar;
 use super::Exchange;
 use super::Filter;
@@ -172,7 +173,10 @@ fn to_format_tree(
             runtime_filter_source_to_format_tree(plan, metadata, prof_span_set)
         }
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, prof_span_set),
-        PhysicalPlan::DistributedCopyIntoTable(plan) => distributed_copy_into_table(plan),
+        PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => {
+            distributed_copy_into_table_from_stage(plan)
+        }
+        PhysicalPlan::CopyIntoTableFromQuery(plan) => copy_into_table_from_query(plan),
     }
 }
 
@@ -194,10 +198,19 @@ fn append_profile_info(
     }
 }
 
-fn distributed_copy_into_table(plan: &DistributedCopyIntoTable) -> Result<FormatTreeNode<String>> {
+fn distributed_copy_into_table_from_stage(
+    plan: &DistributedCopyIntoTableFromStage,
+) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::new(format!(
         "copy into table {}.{}.{} from {:?}",
         plan.catalog_name, plan.database_name, plan.table_name, plan.source
+    )))
+}
+
+fn copy_into_table_from_query(plan: &CopyIntoTableFromQuery) -> Result<FormatTreeNode<String>> {
+    Ok(FormatTreeNode::new(format!(
+        "copy into table {}.{}.{} from {:?}",
+        plan.catalog_name, plan.database_name, plan.table_name, plan.input
     )))
 }
 
