@@ -45,6 +45,7 @@ use common_io::constants::NULL_BYTES_UPPER;
 use common_io::constants::TRUE_BYTES_LOWER;
 use common_io::cursor_ext::BufferReadDateTimeExt;
 use common_io::cursor_ext::BufferReadStringExt;
+use common_io::cursor_ext::DateTimeResType;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_io::cursor_ext::ReadNumberExt;
@@ -265,22 +266,24 @@ impl FastFieldDecoderValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let ts = buffer_readr
-            .read_timestamp_text(&self.common_settings().timezone, false)?
-            .0
-            .unwrap();
-        if !buffer_readr.eof() {
-            let data = buf.to_str().unwrap_or("not utf8");
-            let msg = format!(
-                "fail to deserialize timestamp, unexpected end at pos {} of {}",
-                buffer_readr.position(),
-                data
-            );
-            return Err(ErrorCode::BadBytes(msg));
+        let ts = buffer_readr.read_timestamp_text(&self.common_settings().timezone, false)?;
+        match ts {
+            DateTimeResType::Datetime(ts) => {
+                if !buffer_readr.eof() {
+                    let data = buf.to_str().unwrap_or("not utf8");
+                    let msg = format!(
+                        "fail to deserialize timestamp, unexpected end at pos {} of {}",
+                        buffer_readr.position(),
+                        data
+                    );
+                    return Err(ErrorCode::BadBytes(msg));
+                }
+                let micros = ts.timestamp_micros();
+                check_timestamp(micros)?;
+                column.push(micros.as_());
+            }
+            _ => unreachable!(),
         }
-        let micros = ts.timestamp_micros();
-        check_timestamp(micros)?;
-        column.push(micros.as_());
         Ok(())
     }
 

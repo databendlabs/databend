@@ -36,6 +36,7 @@ use common_expression::with_decimal_type;
 use common_expression::with_number_mapped_type;
 use common_expression::ColumnBuilder;
 use common_io::cursor_ext::BufferReadDateTimeExt;
+use common_io::cursor_ext::DateTimeResType;
 use common_io::cursor_ext::ReadNumberExt;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
@@ -215,14 +216,16 @@ impl FieldJsonAstDecoder {
             Value::String(v) => {
                 let v = v.clone();
                 let mut reader = Cursor::new(v.as_bytes());
-                let ts = reader
-                    .read_timestamp_text(&self.timezone, false)?
-                    .0
-                    .unwrap();
+                let ts = reader.read_timestamp_text(&self.timezone, false)?;
 
-                let micros = ts.timestamp_micros();
-                check_timestamp(micros)?;
-                column.push(micros.as_());
+                match ts {
+                    DateTimeResType::Datetime(ts) => {
+                        let micros = ts.timestamp_micros();
+                        check_timestamp(micros)?;
+                        column.push(micros.as_());
+                    }
+                    _ => unreachable!(),
+                }
                 Ok(())
             }
             Value::Number(number) => match number.as_i64() {
