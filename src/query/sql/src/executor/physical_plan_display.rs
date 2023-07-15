@@ -36,6 +36,7 @@ use crate::executor::ExchangeSource;
 use crate::executor::Filter;
 use crate::executor::HashJoin;
 use crate::executor::Limit;
+use crate::executor::MaterializedCte;
 use crate::executor::PhysicalPlan;
 use crate::executor::Project;
 use crate::executor::RangeJoin;
@@ -91,6 +92,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
                 write!(f, "{}", copy_into_table_from_query)?
             }
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
+            PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -111,6 +113,12 @@ impl Display for TableScan {
 impl Display for CteScan {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "CteScan: [{}]", self.cte_idx)
+    }
+}
+
+impl Display for MaterializedCte {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MaterializedCte")
     }
 }
 

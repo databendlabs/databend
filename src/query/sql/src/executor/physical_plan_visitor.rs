@@ -36,6 +36,7 @@ use super::RowFetch;
 use super::Sort;
 use super::TableScan;
 use crate::executor::CteScan;
+use crate::executor::MaterializedCte;
 use crate::executor::RangeJoin;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::UnionAll;
@@ -73,6 +74,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::CopyIntoTableFromQuery(plan) => {
                 self.replace_copy_into_table_from_query(plan)
             }
+            PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
         }
     }
 
@@ -186,6 +188,18 @@ pub trait PhysicalPlanReplacer {
             marker_index: plan.marker_index,
             from_correlated_subquery: plan.from_correlated_subquery,
             contain_runtime_filter: plan.contain_runtime_filter,
+            stat_info: plan.stat_info.clone(),
+        }))
+    }
+
+    fn replace_materialized_cte(&mut self, plan: &MaterializedCte) -> Result<PhysicalPlan> {
+        let left = self.replace(&plan.left)?;
+        let right = self.replace(&plan.right)?;
+
+        Ok(PhysicalPlan::MaterializedCte(MaterializedCte {
+            plan_id: plan.plan_id,
+            left: Box::new(left),
+            right: Box::new(right),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -446,6 +460,10 @@ impl PhysicalPlan {
                 PhysicalPlan::DeletePartial(_) => {}
                 PhysicalPlan::DeleteFinal(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MaterializedCte(plan) => {
+                    Self::traverse(&plan.left, pre_visit, visit, post_visit);
+                    Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
             }
             post_visit(plan);

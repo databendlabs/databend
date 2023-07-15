@@ -52,11 +52,12 @@ use common_pipeline_transforms::processors::transforms::Transformer;
 use common_profile::SharedProcessorProfiles;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::{AggregateExpand, CteScan};
+use common_sql::executor::AggregateExpand;
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
 use common_sql::executor::CopyIntoTableFromQuery;
+use common_sql::executor::CteScan;
 use common_sql::executor::DeleteFinal;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::DistributedCopyIntoTableFromStage;
@@ -67,6 +68,7 @@ use common_sql::executor::ExchangeSource;
 use common_sql::executor::Filter;
 use common_sql::executor::HashJoin;
 use common_sql::executor::Limit;
+use common_sql::executor::MaterializedCte;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
@@ -214,6 +216,9 @@ impl PipelineBuilder {
             PhysicalPlan::CopyIntoTableFromQuery(copy_plan) => {
                 self.build_copy_into_table_from_query(copy_plan)
             }
+            PhysicalPlan::MaterializedCte(materialized_cte) => {
+                self.build_materialized_cte(materialized_cte)
+            }
         }
     }
 
@@ -271,11 +276,11 @@ impl PipelineBuilder {
     /// The flow of Pipeline is as follows:
     ///
     /// +---------------+      +-----------------------+
-    /// |MutationSource1| ---> |SerializeDataTransform1|   
-    /// +---------------+      +-----------------------+               
+    /// |MutationSource1| ---> |SerializeDataTransform1|
+    /// +---------------+      +-----------------------+
     /// |     ...       | ---> |          ...          |
-    /// +---------------+      +-----------------------+               
-    /// |MutationSourceN| ---> |SerializeDataTransformN|   
+    /// +---------------+      +-----------------------+
+    /// |MutationSourceN| ---> |SerializeDataTransformN|
     /// +---------------+      +-----------------------+
     fn build_delete_partial(&mut self, delete: &DeletePartial) -> Result<()> {
         let table =
@@ -1513,5 +1518,9 @@ impl PipelineBuilder {
             runtime_filter_source.left_runtime_filters.clone(),
             runtime_filter_source.right_runtime_filters.clone(),
         )))
+    }
+
+    fn build_materialized_cte(&self, materialized_cte: &MaterializedCte) -> Result<()> {
+        todo!()
     }
 }

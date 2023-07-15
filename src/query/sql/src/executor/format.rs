@@ -46,6 +46,7 @@ use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
+use crate::executor::MaterializedCte;
 use crate::executor::RangeJoin;
 use crate::executor::RangeJoinType;
 use crate::executor::RuntimeFilterSource;
@@ -175,6 +176,9 @@ fn to_format_tree(
         }
         PhysicalPlan::CopyIntoTableFromQuery(plan) => copy_into_table_from_query(plan),
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
+        PhysicalPlan::MaterializedCte(plan) => {
+            materialized_cte_to_format_tree(plan, metadata, prof_span_set)
+        }
     }
 }
 
@@ -1000,6 +1004,21 @@ fn runtime_filter_source_to_format_tree(
     ];
     Ok(FormatTreeNode::with_children(
         "RuntimeFilterSource".to_string(),
+        children,
+    ))
+}
+
+fn materialized_cte_to_format_tree(
+    plan: &MaterializedCte,
+    metadata: &MetadataRef,
+    prof_span_set: &SharedProcessorProfiles,
+) -> Result<FormatTreeNode<String>> {
+    let children = vec![
+        to_format_tree(&plan.left, metadata, prof_span_set)?,
+        to_format_tree(&plan.right, metadata, prof_span_set)?,
+    ];
+    Ok(FormatTreeNode::with_children(
+        "MaterializedCTE".to_string(),
         children,
     ))
 }
