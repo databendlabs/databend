@@ -702,7 +702,7 @@ impl UnionAll {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DistributedCopyIntoTable {
+pub struct DistributedCopyIntoTableFromStage {
     pub plan_id: u32,
     pub catalog_name: String,
     pub database_name: String,
@@ -726,7 +726,36 @@ pub struct DistributedCopyIntoTable {
     pub table_info: TableInfo,
 }
 
-impl DistributedCopyIntoTable {
+impl DistributedCopyIntoTableFromStage {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct CopyIntoTableFromQuery {
+    pub plan_id: u32,
+    pub catalog_name: String,
+    pub database_name: String,
+    pub table_name: String,
+
+    pub required_values_schema: DataSchemaRef, // ... into table(<columns>) ..  -> <columns>
+    pub values_consts: Vec<Scalar>,            // (1, ?, 'a', ?) -> (1, 'a')
+    pub required_source_schema: DataSchemaRef, // (1, ?, 'a', ?) -> (?, ?)
+
+    pub write_mode: CopyIntoTableMode,
+    pub validation_mode: ValidationMode,
+    pub force: bool,
+
+    pub stage_table_info: StageTableInfo,
+    pub local_node_id: String,
+    // after build_query, we will make it as the input
+    pub input: Box<PhysicalPlan>,
+    pub files: Vec<StageFileInfo>,
+    pub table_info: TableInfo,
+}
+
+impl CopyIntoTableFromQuery {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRef::default())
     }
@@ -850,7 +879,9 @@ pub enum PhysicalPlan {
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
     /// add distributed copy into table from @stage
-    DistributedCopyIntoTable(Box<DistributedCopyIntoTable>),
+    DistributedCopyIntoTableFromStage(Box<DistributedCopyIntoTableFromStage>),
+    /// /// add distributed copy into table from query
+    CopyIntoTableFromQuery(Box<CopyIntoTableFromQuery>),
     /// Synthesized by fragmenter
     ExchangeSource(ExchangeSource),
     ExchangeSink(ExchangeSink),
@@ -894,7 +925,8 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(v) => v.plan_id,
             PhysicalPlan::DeletePartial(_) | PhysicalPlan::DeleteFinal(_) => unreachable!(),
             // for distributed_copy_into_table, planId is useless
-            PhysicalPlan::DistributedCopyIntoTable(v) => v.plan_id,
+            PhysicalPlan::DistributedCopyIntoTableFromStage(v) => v.plan_id,
+            PhysicalPlan::CopyIntoTableFromQuery(v) => v.plan_id,
         }
     }
 
@@ -922,7 +954,8 @@ impl PhysicalPlan {
             PhysicalPlan::DeletePartial(plan) => plan.output_schema(),
             PhysicalPlan::DeleteFinal(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
-            PhysicalPlan::DistributedCopyIntoTable(plan) => plan.output_schema(),
+            PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => plan.output_schema(),
+            PhysicalPlan::CopyIntoTableFromQuery(plan) => plan.output_schema(),
         }
     }
 
@@ -950,7 +983,10 @@ impl PhysicalPlan {
             PhysicalPlan::DeletePartial(_) => "DeletePartial".to_string(),
             PhysicalPlan::DeleteFinal(_) => "DeleteFinal".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
-            PhysicalPlan::DistributedCopyIntoTable(_) => "DistributedCopyIntoTable".to_string(),
+            PhysicalPlan::DistributedCopyIntoTableFromStage(_) => {
+                "DistributedCopyIntoTableFromStage".to_string()
+            }
+            PhysicalPlan::CopyIntoTableFromQuery(_) => "CopyIntoTableFromQuery".to_string(),
         }
     }
 
@@ -989,7 +1025,8 @@ impl PhysicalPlan {
             PhysicalPlan::RangeJoin(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
-            PhysicalPlan::DistributedCopyIntoTable(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::DistributedCopyIntoTableFromStage(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::CopyIntoTableFromQuery(_) => Box::new(std::iter::empty()),
         }
     }
 
@@ -1008,7 +1045,8 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
-            PhysicalPlan::DistributedCopyIntoTable(plan) => Some(&plan.source),
+            PhysicalPlan::CopyIntoTableFromQuery(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => Some(&plan.source),
             PhysicalPlan::RuntimeFilterSource(_)
             | PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
