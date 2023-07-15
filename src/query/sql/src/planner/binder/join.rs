@@ -64,6 +64,21 @@ impl Binder {
         check_duplicate_join_tables(&left_context, &right_context)?;
 
         let mut bind_context = bind_context.replace();
+        if matches!(
+            join.op,
+            JoinOperator::Inner
+                | JoinOperator::CrossJoin
+                | JoinOperator::LeftOuter
+                | JoinOperator::RightOuter
+                | JoinOperator::FullOuter
+        ) {
+            bind_context
+                .materialized_ctes
+                .extend(left_context.materialized_ctes.clone());
+            bind_context
+                .materialized_ctes
+                .extend(right_context.materialized_ctes.clone());
+        }
 
         match &join.op {
             JoinOperator::LeftOuter | JoinOperator::RightOuter | JoinOperator::FullOuter
