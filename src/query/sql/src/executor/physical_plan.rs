@@ -99,6 +99,21 @@ impl TableScan {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct CteScan {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+    pub cte_idx: IndexType,
+    pub output_schema: DataSchemaRef,
+}
+
+impl CteScan {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(self.output_schema.clone())
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Filter {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
@@ -888,6 +903,7 @@ pub enum PhysicalPlan {
     Exchange(Exchange),
     UnionAll(UnionAll),
     RuntimeFilterSource(RuntimeFilterSource),
+    CteScan(CteScan),
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
@@ -940,6 +956,7 @@ impl PhysicalPlan {
             // for distributed_copy_into_table, planId is useless
             PhysicalPlan::DistributedCopyIntoTableFromStage(v) => v.plan_id,
             PhysicalPlan::CopyIntoTableFromQuery(v) => v.plan_id,
+            PhysicalPlan::CteScan(v) => v.plan_id,
         }
     }
 
@@ -969,6 +986,7 @@ impl PhysicalPlan {
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
             PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoTableFromQuery(plan) => plan.output_schema(),
+            PhysicalPlan::CteScan(plan) => plan.output_schema(),
         }
     }
 
@@ -1000,12 +1018,13 @@ impl PhysicalPlan {
                 "DistributedCopyIntoTableFromStage".to_string()
             }
             PhysicalPlan::CopyIntoTableFromQuery(_) => "CopyIntoTableFromQuery".to_string(),
+            PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
         }
     }
 
     pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         match self {
-            PhysicalPlan::TableScan(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::TableScan(_) | PhysicalPlan::CteScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Project(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -1069,7 +1088,8 @@ impl PhysicalPlan {
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_)
             | PhysicalPlan::DeletePartial(_)
-            | PhysicalPlan::DeleteFinal(_) => None,
+            | PhysicalPlan::DeleteFinal(_)
+            | PhysicalPlan::CteScan(_) => None,
         }
     }
 }

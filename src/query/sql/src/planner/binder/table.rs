@@ -46,6 +46,7 @@ use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
+use common_expression::DataField;
 use common_expression::FunctionKind;
 use common_expression::Scalar;
 use common_expression::TableDataType;
@@ -192,7 +193,7 @@ impl Binder {
                             .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
                             .await?;
                         cte_bind_ctx.materialized_ctes.push(cte_s_expr);
-                        let s_expr = self.bind_cte_scan(&cte_info)?;
+                        let s_expr = self.bind_cte_scan(&cte_bind_ctx, &cte_info)?;
                         Ok((s_expr, cte_bind_ctx))
                     };
                 }
@@ -701,14 +702,22 @@ impl Binder {
         Ok((result_expr, result_ctx))
     }
 
-    fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
+    fn bind_cte_scan(&mut self, bind_ctx: &BindContext, cte_info: &CteInfo) -> Result<SExpr> {
         let memory_table = Arc::new(RwLock::new(vec![]));
         self.ctx
             .set_materialized_cte(cte_info.cte_idx, memory_table.clone())?;
+        // Get the fields in the cte
+        let mut fields = vec![];
+        for column in bind_ctx.columns.iter() {
+            fields.push(DataField::new(
+                column.index.to_string().as_str(),
+                *column.data_type.clone(),
+            ))
+        }
         let cte_scan = SExpr::create_leaf(Arc::new(
             CteScan {
                 cte_idx: cte_info.cte_idx,
-                memory_table,
+                fields,
             }
             .into(),
         ));

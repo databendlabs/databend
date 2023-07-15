@@ -52,7 +52,7 @@ use common_pipeline_transforms::processors::transforms::Transformer;
 use common_profile::SharedProcessorProfiles;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::AggregateExpand;
+use common_sql::executor::{AggregateExpand, CteScan};
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
@@ -180,6 +180,7 @@ impl PipelineBuilder {
     fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
+            PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),
             PhysicalPlan::Filter(filter) => self.build_filter(filter),
             PhysicalPlan::Project(project) => self.build_project(project),
             PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
@@ -569,6 +570,10 @@ impl PipelineBuilder {
         }
 
         Ok(())
+    }
+
+    fn build_cte_scan(&mut self, cte_scan: &CteScan) -> Result<()> {
+        todo!()
     }
 
     fn build_filter(&mut self, filter: &Filter) -> Result<()> {

@@ -41,6 +41,7 @@ use super::TableScan;
 use super::UnionAll;
 use super::WindowFunction;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::CteScan;
 use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
@@ -173,6 +174,7 @@ fn to_format_tree(
             distributed_copy_into_table_from_stage(plan)
         }
         PhysicalPlan::CopyIntoTableFromQuery(plan) => copy_into_table_from_query(plan),
+        PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
     }
 }
 
@@ -333,6 +335,13 @@ fn table_scan_to_format_tree(
         "TableScan".to_string(),
         children,
     ))
+}
+
+fn cte_scan_to_format_tree(plan: &CteScan) -> Result<FormatTreeNode<String>> {
+    let cte_idx = FormatTreeNode::new(format!("CTE index: {}", plan.cte_idx));
+    Ok(FormatTreeNode::with_children("CTEScan".to_string(), vec![
+        cte_idx,
+    ]))
 }
 
 fn filter_to_format_tree(

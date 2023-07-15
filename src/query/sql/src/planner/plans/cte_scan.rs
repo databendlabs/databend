@@ -18,6 +18,9 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_meta_app::schema::IndexType;
 use common_storages_memory::MemoryTable;
 use parking_lot::RwLock;
 
@@ -34,7 +37,7 @@ use crate::plans::RelOp;
 #[derive(Clone, Debug)]
 pub struct CteScan {
     pub cte_idx: usize,
-    pub memory_table: Arc<RwLock<Vec<DataBlock>>>,
+    pub fields: Vec<DataField>,
 }
 
 impl CteScan {
@@ -62,11 +65,11 @@ impl Operator for CteScan {
         RelOp::CteScan
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+    fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         Ok(Arc::new(RelationalProperty {
-            output_columns: ColumnSet::new(),
+            output_columns: self.used_columns()?,
             outer_columns: ColumnSet::new(),
-            used_columns: ColumnSet::new(),
+            used_columns: self.used_columns()?,
         }))
     }
 

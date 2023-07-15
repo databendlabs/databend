@@ -65,6 +65,7 @@ use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_join;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
+use crate::executor::CteScan;
 use crate::executor::FragmentKind;
 use crate::executor::LagLeadDefault;
 use crate::executor::LagLeadFunctionDesc;
@@ -1097,6 +1098,12 @@ impl PhysicalPlanBuilder {
                     stat_info: Some(stat_info),
                 }))
             }
+
+            RelOperator::CteScan(cte_scan) => Ok(PhysicalPlan::CteScan(CteScan {
+                plan_id: self.next_plan_id(),
+                cte_idx: cte_scan.cte_idx.clone(),
+                output_schema: DataSchemaRefExt::create(cte_scan.fields.clone()),
+            })),
 
             _ => Err(ErrorCode::Internal(format!(
                 "Unsupported physical plan: {:?}",
