@@ -5,7 +5,6 @@
 set -e
 
 export STORAGE_ALLOW_INSECURE=true
-export NONE_ADAPTIVE_NATIVE_COMPRESSION=1
 
 echo "Starting standalone DatabendQuery and DatabendMeta"
 ./scripts/ci/deploy/databend-query-standalone-native.sh

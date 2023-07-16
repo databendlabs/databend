@@ -68,10 +68,6 @@ pub fn serialize_block(
                 default_compress_ratio = Some(3.72f64);
             }
 
-            if option_env!("NONE_ADAPTIVE_NATIVE_COMPRESSION") == Some("1") {
-                default_compress_ratio = None;
-            }
-
             let mut writer = NativeWriter::new(
                 buf,
                 arrow_schema,
