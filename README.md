@@ -36,7 +36,7 @@ sudo apt update
 sudo apt install bendsql
 ```
 
-* Binary: check for latest release [here](https://github.com/datafuselabs/databend-client/releases)
+* Binary: check for latest release [here](https://github.com/datafuselabs/bendsql/releases)
 
 
 ## Usage

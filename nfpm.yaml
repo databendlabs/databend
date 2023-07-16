@@ -8,7 +8,7 @@ maintainer: "Databend Authors <opensource@datafuselabs.com>"
 description: |
   BendSQL is a native command line tool for Databend.
 vendor: "Datafuse Labs"
-homepage: "https://github.com/datafuselabs/databend-client"
+homepage: "https://github.com/datafuselabs/bendsql"
 license: "Apache-2.0"
 contents:
 - src: dist/bendsql
