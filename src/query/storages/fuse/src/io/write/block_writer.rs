@@ -61,12 +61,21 @@ pub fn serialize_block(
         }
         FuseStorageFormat::Native => {
             let arrow_schema = schema.to_arrow();
+            let leaf_column_ids = schema.to_leaf_column_ids();
+
+            let mut default_compress_ratio = Some(2.10f64);
+            if matches!(write_settings.table_compression, TableCompression::Zstd) {
+                default_compress_ratio = Some(3.72f64);
+            }
+
             let mut writer = NativeWriter::new(
                 buf,
                 arrow_schema,
                 common_arrow::native::write::WriteOptions {
-                    compression: write_settings.table_compression.into(),
+                    default_compression: write_settings.table_compression.into(),
                     max_page_size: Some(write_settings.max_page_size),
+                    default_compress_ratio,
+                    forbidden_compressions: vec![],
                 },
             );
 
@@ -76,7 +85,6 @@ pub fn serialize_block(
             writer.write(&batch)?;
             writer.finish()?;
 
-            let leaf_column_ids = &schema.to_leaf_column_ids();
             let mut metas = HashMap::with_capacity(writer.metas.len());
             for (idx, meta) in writer.metas.iter().enumerate() {
                 // use column id as key instead of index
