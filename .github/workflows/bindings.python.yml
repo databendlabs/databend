@@ -1,0 +1,47 @@
+name: Bindings Python
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - v*
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'bindings/python/**'
+      - ".github/workflows/bindings.python.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup
+        with:
+          cache-key: bindings-python
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pipenv'
+          cache-dependency-path: 'bindings/python/Pipfile.lock'
+      - name: Install pipenv
+        run: curl https://raw.githubusercontent.com/pypa/pipenv/master/get-pipenv.py | python
+      - name: Install dependencies
+        working-directory: bindings/python
+        run: pipenv install --dev
+      - name: Check format
+        working-directory: bindings/python
+        run: pipenv run black --check .
+      - name: Setup develop
+        working-directory: bindings/python
+        run: pipenv run maturin develop
+      - name: Test
+        run: make -C tests test-bindings-python

@@ -22,9 +22,7 @@ test-bendsql: up
 	cd .. && ./cli/test.sh flight
 
 test-bindings-python: up
-	TEST_DATABEND_DSN=databend+http://root:@localhost:8000/?sslmode=disable
-	cd ../bindings/python && ./test.sh
-	cd -
+	cd ../bindings/python && pipenv run behave tests
 
 test-bindings-nodejs: up
 	cd ../bindings/nodejs && yarn test

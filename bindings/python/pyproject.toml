@@ -1,6 +1,6 @@
 [build-system]
 build-backend = "maturin"
-requires = ["maturin>=0.14.16,<0.15"]
+requires = ["maturin>=1.0,<2.0"]
 
 [project]
 classifiers = [
@@ -15,16 +15,9 @@ readme = "README.md"
 requires-python = ">=3.7"
 
 [project.optional-dependencies]
-benchmark = [
-    "gevent",
-    "greenify",
-    "greenlet",
-    "boto3",
-    "pydantic",
-    "boto3-stubs[essential]",
-]
 docs = ["pdoc"]
 test = ["behave"]
+lint = ["black", "flake8"]
 
 [project.urls]
 Documentation = ""

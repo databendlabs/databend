@@ -21,18 +21,20 @@ import databend_driver
 
 @given("A new Databend-Driver Async Connector")
 @async_run_until_complete
-async def step_impl(context):
-    dsn = os.getenv("TEST_DATABEND_DSN", "databend+http://root:root@localhost:8000/?sslmode=disable")
+async def _(context):
+    dsn = os.getenv(
+        "TEST_DATABEND_DSN", "databend+http://root:root@localhost:8000/?sslmode=disable"
+    )
     context.ad = databend_driver.AsyncDatabendDriver(dsn)
 
 
 @when('Async exec "{sql}"')
 @async_run_until_complete
-async def step_impl(context, sql):
+async def _(context, sql):
     await context.ad.exec(sql)
 
 
 @then('The select "{select_sql}" should run')
 @async_run_until_complete
-async def step_impl(context, select_sql):
+async def _(context, select_sql):
     await context.ad.exec(select_sql)

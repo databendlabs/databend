@@ -13,9 +13,10 @@ crate-type = ["cdylib"]
 doc = false
 
 [dependencies]
+databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
+
 chrono = { version = "0.4.26", default-features = false }
 csv = "1.2.2"
-databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
 futures = "0.3.28"
 napi = { version = "2.13.2", default-features = false, features = [
     "napi6",

@@ -58,7 +58,7 @@ impl Connection for FlightSQLConnection {
     async fn exec(&self, sql: &str) -> Result<i64> {
         self.handshake().await?;
         let mut client = self.client.lock().await;
-        let affected_rows = client.execute_update(sql.to_string()).await?;
+        let affected_rows = client.execute_update(sql.to_string(), None).await?;
         Ok(affected_rows)
     }
 
@@ -81,7 +81,7 @@ impl Connection for FlightSQLConnection {
     async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowProgressIterator)> {
         self.handshake().await?;
         let mut client = self.client.lock().await;
-        let mut stmt = client.prepare(sql.to_string()).await?;
+        let mut stmt = client.prepare(sql.to_string(), None).await?;
         let flight_info = stmt.execute().await?;
         let ticket = flight_info.endpoint[0]
             .ticket
