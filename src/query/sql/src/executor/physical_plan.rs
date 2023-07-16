@@ -121,9 +121,7 @@ pub struct MaterializedCte {
 
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
-
-    /// Only used for explain
-    pub stat_info: Option<PlanStatsInfo>,
+    pub cte_idx: IndexType,
 }
 
 impl MaterializedCte {

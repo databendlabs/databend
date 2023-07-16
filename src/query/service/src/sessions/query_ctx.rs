@@ -670,6 +670,11 @@ impl TableContext for QueryContext {
         ctes.insert(idx, mem_table);
         Ok(())
     }
+
+    fn get_materialized_cte(&self, idx: IndexType) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
+        let ctes = self.shared.materialized_cte_tables.read();
+        Ok(ctes.get(&idx).cloned())
+    }
 }
 
 impl TrySpawn for QueryContext {

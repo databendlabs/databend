@@ -24,9 +24,12 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct MaterializedCte {}
+pub struct MaterializedCte {
+    pub(crate) cte_idx: IndexType,
+}
 
 impl Operator for MaterializedCte {
     fn rel_op(&self) -> RelOp {

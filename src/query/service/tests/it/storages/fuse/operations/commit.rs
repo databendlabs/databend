@@ -570,6 +570,10 @@ impl TableContext for CtxDelegation {
     ) -> Result<()> {
         todo!()
     }
+
+    fn get_materialized_cte(&self, idx: usize) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
+        todo!()
+    }
 }
 
 #[derive(Clone)]

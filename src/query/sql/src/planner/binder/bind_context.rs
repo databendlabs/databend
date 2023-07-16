@@ -16,6 +16,7 @@ use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::ops::Index;
 
 use common_ast::ast::Query;
 use common_ast::ast::TableAlias;
@@ -142,7 +143,7 @@ pub struct BindContext {
 
     pub ctes_map: Box<HashMap<String, CteInfo>>,
 
-    pub materialized_ctes: Vec<SExpr>,
+    pub materialized_ctes: Vec<(IndexType, SExpr)>,
 
     /// If current binding table is a view, record its database and name.
     ///

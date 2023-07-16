@@ -192,7 +192,9 @@ impl Binder {
                         let (cte_s_expr, mut cte_bind_ctx) = self
                             .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
                             .await?;
-                        cte_bind_ctx.materialized_ctes.push(cte_s_expr);
+                        cte_bind_ctx
+                            .materialized_ctes
+                            .push((cte_info.cte_idx, cte_s_expr));
                         let s_expr = self.bind_cte_scan(&cte_bind_ctx, &cte_info)?;
                         Ok((s_expr, cte_bind_ctx))
                     };

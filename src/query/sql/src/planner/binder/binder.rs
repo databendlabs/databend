@@ -159,11 +159,10 @@ impl<'a> Binder {
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
                 // Wrap `LogicalMaterializedCte` to `s_expr`
-                dbg!(bind_context.materialized_ctes.len());
                 for materialized_cte in bind_context.materialized_ctes.iter() {
                     s_expr = SExpr::create_binary(
-                        Arc::new(RelOperator::MaterializedCte(MaterializedCte {})),
-                        Arc::new(materialized_cte.clone()),
+                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { cte_idx: materialized_cte.0})),
+                        Arc::new(materialized_cte.1.clone()),
                         Arc::new(s_expr),
                     );
                 }

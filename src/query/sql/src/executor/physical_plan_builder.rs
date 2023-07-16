@@ -69,6 +69,7 @@ use crate::executor::CteScan;
 use crate::executor::FragmentKind;
 use crate::executor::LagLeadDefault;
 use crate::executor::LagLeadFunctionDesc;
+use crate::executor::MaterializedCte;
 use crate::executor::NtileFunctionDesc;
 use crate::executor::PhysicalJoinType;
 use crate::executor::PhysicalPlan;
@@ -1104,6 +1105,15 @@ impl PhysicalPlanBuilder {
                 cte_idx: cte_scan.cte_idx.clone(),
                 output_schema: DataSchemaRefExt::create(cte_scan.fields.clone()),
             })),
+
+            RelOperator::MaterializedCte(op) => {
+                Ok(PhysicalPlan::MaterializedCte(MaterializedCte {
+                    plan_id: self.next_plan_id(),
+                    left: Box::new(self.build(s_expr.child(0)?).await?),
+                    right: Box::new(self.build(s_expr.child(1)?).await?),
+                    cte_idx: op.cte_idx,
+                }))
+            }
 
             _ => Err(ErrorCode::Internal(format!(
                 "Unsupported physical plan: {:?}",

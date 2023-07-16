@@ -200,7 +200,7 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             left: Box::new(left),
             right: Box::new(right),
-            stat_info: plan.stat_info.clone(),
+            cte_idx: plan.cte_idx,
         }))
     }
 
