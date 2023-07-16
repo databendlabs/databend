@@ -63,9 +63,9 @@ impl From<TableCompression> for native::CommonCompression {
     fn from(value: TableCompression) -> Self {
         match value {
             TableCompression::None => native::CommonCompression::None,
-            TableCompression::LZ4 => native::CommonCompression::LZ4,
-            TableCompression::Snappy => native::CommonCompression::SNAPPY,
-            TableCompression::Zstd => native::CommonCompression::ZSTD,
+            TableCompression::LZ4 => native::CommonCompression::Lz4,
+            TableCompression::Snappy => native::CommonCompression::Snappy,
+            TableCompression::Zstd => native::CommonCompression::Zstd,
         }
     }
 }
