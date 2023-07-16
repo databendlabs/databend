@@ -25,11 +25,14 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::check_number;
 use common_expression::types::decimal::DecimalType;
 use common_expression::types::*;
 use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_io::prelude::BinaryWrite;
 use ethnum::i256;
@@ -43,6 +46,7 @@ use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::assert_variadic_params;
 use crate::aggregates::AggregateFunction;
 use crate::with_simple_no_number_mapped_type;
+use crate::BUILTIN_FUNCTIONS;
 
 #[derive(Clone)]
 struct AggregateBitmapFunction<OP, AGG> {
@@ -334,7 +338,7 @@ where
     <T as ValueType>::Scalar: Send + Sync,
 {
     display_name: String,
-    inner: AggregateBitmapFunction<BitmapOrOp, BitmapCountResult>,
+    inner: AggregateBitmapFunction<BitmapAndOp, BitmapCountResult>,
     filter_values: Vec<T::Scalar>,
     _t: PhantomData<T>,
 }
@@ -346,25 +350,8 @@ where
 {
     fn try_create(
         display_name: &str,
-        filter_type: DataType,
-        params: Vec<Scalar>,
+        filter_values: Vec<T::Scalar>,
     ) -> Result<Arc<dyn AggregateFunction>> {
-        let mut filter_values = Vec::with_capacity(params.len());
-        for (i, param) in params.iter().enumerate() {
-            let val_opt = T::try_downcast_scalar(&param.as_ref()).map(|s| T::to_owned_scalar(s));
-            match val_opt {
-                Some(val) => filter_values.push(val),
-                None => {
-                    return Err(ErrorCode::BadDataValueType(format!(
-                        "{} param({}) type mismatch, expect: '{:?}', but got: '{:?}'",
-                        display_name,
-                        i,
-                        filter_type,
-                        param.as_ref().infer_data_type()
-                    )));
-                }
-            };
-        }
         let func = AggregateBitmapIntersectCountFunction::<T> {
             display_name: display_name.to_string(),
             inner: AggregateBitmapFunction {
@@ -574,8 +561,7 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
         DataType::T => {
             AggregateBitmapIntersectCountFunction::<T>::try_create(
                 display_name,
-                filter_column_type,
-                params,
+                extract_params::<T>(display_name, filter_column_type, params)?,
             )
         }
         DataType::Number(num_type) => {
@@ -583,8 +569,7 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
                 NumberDataType::NUM => {
                     AggregateBitmapIntersectCountFunction::<NumberType<NUM>>::try_create(
                         display_name,
-                        filter_column_type,
-                        params,
+                        extract_number_params::<NUM>(num_type, params)?,
                     )
                 }
             })
@@ -592,25 +577,73 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
         DataType::Decimal(DecimalDataType::Decimal128(_)) => {
             AggregateBitmapIntersectCountFunction::<DecimalType<i128>>::try_create(
                 display_name,
-                filter_column_type,
-                params,
+                extract_params::<DecimalType<i128>>(display_name, filter_column_type, params)?,
             )
         }
         DataType::Decimal(DecimalDataType::Decimal256(_)) => {
             AggregateBitmapIntersectCountFunction::<DecimalType<i256>>::try_create(
                 display_name,
-                filter_column_type,
-                params,
+                extract_params::<DecimalType<i256>>(display_name, filter_column_type, params)?,
             )
         }
         _ => {
             AggregateBitmapIntersectCountFunction::<AnyType>::try_create(
                 display_name,
-                filter_column_type,
-                params,
+                extract_params::<AnyType>(display_name, filter_column_type, params)?,
             )
         }
     })
+}
+
+fn extract_params<T: ValueType>(
+    display_name: &str,
+    val_type: DataType,
+    params: Vec<Scalar>,
+) -> Result<Vec<T::Scalar>> {
+    let mut filter_values = Vec::with_capacity(params.len());
+    for (i, param) in params.iter().enumerate() {
+        let val_opt = T::try_downcast_scalar(&param.as_ref()).map(|s| T::to_owned_scalar(s));
+        match val_opt {
+            Some(val) => filter_values.push(val),
+            None => {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "{} param({}) type mismatch, expect: '{:?}', but got: '{:?}'",
+                    display_name,
+                    i,
+                    val_type,
+                    param.as_ref().infer_data_type()
+                )));
+            }
+        };
+    }
+    Ok(filter_values)
+}
+
+fn extract_number_params<N: Number>(
+    num_type: NumberDataType,
+    params: Vec<Scalar>,
+) -> Result<Vec<N>> {
+    let mut result = Vec::with_capacity(params.len());
+    for param in &params {
+        let data_type = param.as_ref().infer_data_type();
+        let val: N = check_number(
+            None,
+            &FunctionContext::default(),
+            &Expr::<usize>::Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(Expr::Constant {
+                    span: None,
+                    scalar: param.clone(),
+                    data_type,
+                }),
+                dest_type: DataType::Number(num_type),
+            },
+            &BUILTIN_FUNCTIONS,
+        )?;
+        result.push(val);
+    }
+    Ok(result)
 }
 
 pub fn aggregate_bitmap_and_count_function_desc() -> AggregateFunctionDescription {
