@@ -415,7 +415,7 @@ impl PhysicalPlan {
                 }
                 PhysicalPlan::CopyIntoTable(plan) => match &plan.source {
                     CopyIntoTableSource::Query(input) => {
-                        Self::traverse(&input, pre_visit, visit, post_visit);
+                        Self::traverse(input, pre_visit, visit, post_visit);
                     }
                     CopyIntoTableSource::Stage(_) => {}
                 },
