@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use opendal::services::Cos;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use opendal::services::Cos;
 
 use super::Cost;
 use super::CostModel;
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
-use crate::plans::{Join, MaterializedCte};
+use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::MaterializedCte;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 

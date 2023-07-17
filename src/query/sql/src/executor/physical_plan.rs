@@ -126,8 +126,7 @@ pub struct MaterializedCte {
 
 impl MaterializedCte {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let mut fields = self.left.output_schema()?.fields().clone();
-        fields.extend(self.right.output_schema()?.fields().clone());
+        let fields = self.right.output_schema()?.fields().clone();
         Ok(DataSchemaRefExt::create(fields))
     }
 }

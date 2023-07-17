@@ -147,7 +147,7 @@ impl Processor for TransformMaterializedCte {
                     return Ok(Event::Finished);
                 }
 
-                self.input_port.set_not_need_data();
+                self.input_port.set_need_data();
                 Ok(Event::NeedData)
             }
         }
@@ -200,7 +200,7 @@ impl Sink for MaterializedCteSink {
             let mut blocks = blocks.write();
             blocks.extend(self.blocks.clone());
         }
-        Ok(())
+        self.state.detach_sinker()
     }
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
