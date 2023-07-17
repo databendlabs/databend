@@ -54,6 +54,26 @@ pub fn build_full_sort_pipeline(
         })?;
     }
 
+    build_merge_sort_pipeline(
+        pipeline,
+        input_schema,
+        sort_desc,
+        limit,
+        partial_block_size,
+        final_block_size,
+        prof_info,
+    )
+}
+
+pub fn build_merge_sort_pipeline(
+    pipeline: &mut Pipeline,
+    input_schema: DataSchemaRef,
+    sort_desc: Vec<SortColumnDescription>,
+    limit: Option<usize>,
+    partial_block_size: usize,
+    final_block_size: usize,
+    prof_info: Option<(u32, SharedProcessorProfiles)>,
+) -> Result<()> {
     // Merge sort
     let need_multi_merge = pipeline.output_len() > 1;
     pipeline.add_transform(|input, output| {

@@ -2708,6 +2708,7 @@ dependencies = [
  "storages-common-pruner",
  "storages-common-table-meta",
  "streaming-decompression",
+ "sys-info",
  "table-lock",
  "tracing",
  "typetag",
