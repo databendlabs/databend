@@ -538,6 +538,18 @@ fn test_agg_bitmap_count(file: &mut impl Write, simulator: impl AggregationSimul
         get_example().as_slice(),
         simulator,
     );
+    run_agg_ast(
+        file,
+        "intersect_count(1, 2, 3, 4)(bm, b)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "intersect_count(1, 2)(bm, b)",
+        get_example().as_slice(),
+        simulator,
+    );
 }
 
 fn test_agg_bitmap(file: &mut impl Write, simulator: impl AggregationSimulator) {

@@ -17,6 +17,7 @@ use super::aggregate_arg_min_max::aggregate_arg_max_function_desc;
 use super::aggregate_arg_min_max::aggregate_arg_min_function_desc;
 use super::aggregate_avg::aggregate_avg_function_desc;
 use super::aggregate_bitmap::aggregate_bitmap_and_count_function_desc;
+use super::aggregate_bitmap::aggregate_bitmap_intersect_count_function_desc;
 use super::aggregate_bitmap::aggregate_bitmap_intersect_function_desc;
 use super::aggregate_bitmap::aggregate_bitmap_not_count_function_desc;
 use super::aggregate_bitmap::aggregate_bitmap_or_count_function_desc;
@@ -101,6 +102,10 @@ impl Aggregators {
         factory.register(
             "bitmap_intersect",
             aggregate_bitmap_intersect_function_desc(),
+        );
+        factory.register(
+            "intersect_count",
+            aggregate_bitmap_intersect_count_function_desc(),
         );
     }
 
