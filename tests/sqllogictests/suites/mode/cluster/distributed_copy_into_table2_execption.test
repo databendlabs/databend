@@ -5,6 +5,12 @@ statement ok
 drop table if exists products;
 
 statement ok
+drop table if exists parquet_table_;
+
+statement ok
+drop stage if exists parquet_stage_;
+
+statement ok
 drop table if exists table_random;
 
 statement ok
@@ -94,6 +100,45 @@ query I
 select count(*) from products;
 ----
 8000000
+
+## add parquet_file_test
+statement ok
+create table parquet_table_(a int,b string,c string);
+
+statement ok
+create stage parquet_stage_ file_format = (type = parquet);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b from table_random2 limit 1000000);
+
+statement error 1046
+copy into parquet_table_ from @parquet_stage_;
+
+query I
+select count(*) from parquet_table_;
+----
+0
 
 statement ok
 set enable_distributed_copy_into = 0;

@@ -2,6 +2,12 @@ statement ok
 set enable_distributed_copy_into = 1;
 
 statement ok
+drop table if exists parquet_table;
+
+statement ok
+drop stage if exists parquet_stage;
+
+statement ok
 create stage st FILE_FORMAT = (TYPE = CSV);
 
 statement ok
@@ -82,6 +88,53 @@ query I
 select count(*) from t_query;
 ----
 2000000
+
+## add parquet_file_test
+statement ok
+create table parquet_table(a int,b string,c string);
+
+statement ok
+create stage parquet_stage file_format = (type = parquet);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into parquet_table from @parquet_stage;
+
+query I
+select count(*) from parquet_table;
+----
+8000000
+
+statement ok
+copy into parquet_table from @parquet_stage force = true purge = true;
+
+query I
+select count(*) from parquet_table;
+----
+16000000
 
 # make sure it's distributed.
 
