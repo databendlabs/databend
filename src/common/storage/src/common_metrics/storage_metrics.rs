@@ -310,6 +310,11 @@ impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
     }
 
     #[async_backtrace::framed]
+    async fn sink(&mut self, size: u64, s: oio::Streamer) -> Result<()> {
+        self.inner.sink(size, s).await
+    }
+
+    #[async_backtrace::framed]
     async fn close(&mut self) -> Result<()> {
         self.inner.close().await
     }
