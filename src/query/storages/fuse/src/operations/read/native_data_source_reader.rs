@@ -111,7 +111,7 @@ impl SyncSource for ReadNativeDataSource<true> {
                             &fuse_part.location,
                             index_reader.index_id(),
                         );
-                    if let Some(data) = index_reader.sync_read_data(&loc) {
+                    if let Some(data) = index_reader.sync_read_native_data(&loc) {
                         // Read from aggregating index.
                         return Ok(Some(DataBlock::empty_with_meta(
                             NativeDataSourceMeta::create(vec![part.clone()], vec![
@@ -184,7 +184,7 @@ impl Processor for ReadNativeDataSource<false> {
                             &fuse_part.location,
                             index_reader.index_id(),
                         );
-                            if let Some(data) = index_reader.read_data(&loc).await {
+                            if let Some(data) = index_reader.read_native_data(&loc).await {
                                 // Read from aggregating index.
                                 return Ok::<_, ErrorCode>(DataSource::AggIndex(data));
                             }
