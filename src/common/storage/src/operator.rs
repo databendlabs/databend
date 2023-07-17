@@ -231,13 +231,13 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         let endpoint_url = cfg.endpoint_url.clone();
         let bucket = cfg.bucket.clone();
 
-        let reigon = GlobalIORuntime::instance().block_on(async move {
+        let region = GlobalIORuntime::instance().block_on(async move {
             let b = services::S3::default();
             b.detect_region(&endpoint_url, &bucket)
                 .await
                 .ok_or_else(|| ErrorCode::InvalidConfig("region is not detected"))
         });
-        if let Ok(region) = reigon {
+        if let Ok(region) = region {
             builder.region(&region);
         }
     }
