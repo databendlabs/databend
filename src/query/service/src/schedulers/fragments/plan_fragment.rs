@@ -208,7 +208,7 @@ impl PlanFragment {
             PhysicalPlan::TableScan(scan) => source.push(*scan.source.clone()),
             PhysicalPlan::CopyIntoTable(copy) => {
                 if let Some(stage) = copy.source.as_stage().cloned() {
-                    source.push(stage);
+                    source.push(*stage);
                 }
             }
             _ => {}
