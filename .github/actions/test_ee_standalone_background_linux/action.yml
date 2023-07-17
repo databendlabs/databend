@@ -21,6 +21,7 @@ runs:
                 -e "MINIO_ACCESS_KEY=minioadmin" \
                 -e "MINIO_SECRET_KEY=minioadmin" \
                 -e "MINIO_ADDRESS=:9900" \
+                -e "MINIO_REGION=databend-test" \
                 -v /tmp/data:/data \
                 -v /tmp/config:/root/.minio \
                 minio/minio server /data
