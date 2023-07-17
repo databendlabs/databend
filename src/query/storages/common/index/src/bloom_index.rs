@@ -476,12 +476,12 @@ impl BloomIndex {
         Xor8Filter::supported_type(&data_type)
     }
 
+    /// Checks if the average length of a string column exceeds 256 bytes.
+    /// If it does, the bloom index for the column will not be established.
     fn check_large_string(column: &Column) -> bool {
         if let Column::String(v) = &column {
             let bytes_per_row = v.data().len() / v.len().max(1);
             if bytes_per_row > 256 {
-                // If the average length of the string column exceeds 256 bytes,
-                // the bloom index for the column will not be established.
                 return true;
             }
         }
