@@ -344,6 +344,7 @@ pub enum AlterTableAction {
     ReclusterTable {
         is_final: bool,
         selection: Option<Expr>,
+        limit: Option<u64>,
     },
     RevertTo {
         point: TimeTravelPoint,
@@ -388,6 +389,7 @@ impl Display for AlterTableAction {
             AlterTableAction::ReclusterTable {
                 is_final,
                 selection,
+                limit,
             } => {
                 write!(f, "RECLUSTER")?;
                 if *is_final {
@@ -395,6 +397,9 @@ impl Display for AlterTableAction {
                 }
                 if let Some(conditions) = selection {
                     write!(f, " WHERE {conditions}")?;
+                }
+                if let Some(limit) = limit {
+                    write!(f, " LIMIT {limit}")?;
                 }
                 Ok(())
             }

@@ -45,7 +45,7 @@ The list below shows all the window functions.
 | [DENSE_RANK](dense-rank.md)                                           | Rank-related | ✔      | ✔            |       |
 | [RANK](rank.md)                                                       | Rank-related | ✔      | ✔            |       |
 | [ROW_NUMBER](row-number.md)                                           | Rank-related | ✔      |              |       |
-| [NTILE](nth-value.md)                                                 | Rank-related | ✔      |              |       |
+| [NTILE](ntile.md)                                                     | Rank-related | ✔      |              |       |
 | [FIRST_VALUE](first-value.md)                                         | Rank-related 	| ✔     | ✔            |       |
 | [FIRST](first.md)                                                     | Rank-related 	| ✔     | ✔            |       |
 | [LAST_VALUE](last-value.md)                                           | Rank-related 	| ✔     | ✔            |       |

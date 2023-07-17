@@ -278,6 +278,13 @@ impl QueryContextShared {
         }
     }
 
+    pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
+        let mut tables_refs = self.tables_refs.lock();
+        tables_refs.remove(&table_meta_key);
+        Ok(())
+    }
+
     /// Init runtime when first get
     pub fn try_get_runtime(&self) -> Result<Arc<Runtime>> {
         let mut query_runtime = self.runtime.write();

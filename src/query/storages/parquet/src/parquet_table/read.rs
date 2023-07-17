@@ -151,16 +151,16 @@ impl ParquetTable {
         let src_schema = DataSchemaRefExt::create(src_fields);
         let is_blocking = self.operator.info().can_blocking();
 
-        let (num_reader, num_deserializer) = calc_parallelism(&ctx, plan, is_blocking)?;
+        let num_deserializer = calc_parallelism(&ctx, plan)?;
         if is_blocking {
             pipeline.add_source(
                 |output| SyncParquetSource::create(ctx.clone(), output, source_reader.clone()),
-                num_reader,
+                num_deserializer,
             )?;
         } else {
             pipeline.add_source(
                 |output| AsyncParquetSource::create(ctx.clone(), output, source_reader.clone()),
-                num_reader,
+                num_deserializer,
             )?;
         };
 
@@ -198,18 +198,13 @@ fn limit_parallelism_by_memory(max_memory: usize, sizes: &mut [(usize, usize)]) 
     sizes.len()
 }
 
-pub fn calc_parallelism(
-    ctx: &Arc<dyn TableContext>,
-    plan: &DataSourcePlan,
-    is_blocking: bool,
-) -> Result<(usize, usize)> {
+fn calc_parallelism(ctx: &Arc<dyn TableContext>, plan: &DataSourcePlan) -> Result<usize> {
     if plan.parts.partitions.is_empty() {
-        return Ok((1, 1));
+        return Ok(1);
     }
     let settings = ctx.get_settings();
     let num_partitions = plan.parts.partitions.len();
     let max_threads = settings.get_max_threads()? as usize;
-    let max_storage_io_requests = settings.get_max_storage_io_requests()? as usize;
     let max_memory = settings.get_max_memory_usage()? as usize;
 
     let mut sizes = vec![];
@@ -219,9 +214,6 @@ pub fn calc_parallelism(
     }
     sizes.sort_by(|a, b| b.cmp(a));
     let max_split_size = sizes[0].0;
-    let num_chunks = ParquetPart::from_part(&plan.parts.partitions[0])?
-        .num_io()
-        .max(1);
     // 1. used by other query
     // 2. used for file metas, can be huge when there are many files.
     let used_memory = GLOBAL_MEM_STAT.get_memory_usage();
@@ -235,25 +227,15 @@ pub fn calc_parallelism(
         )));
     }
     let num_deserializer = max_threads.min(max_by_memory).max(1);
-    // we somewhat considered the memory when calc num_deserializer: one reader for each num_deserializer.
-    let num_readers = if is_blocking {
-        num_deserializer
-    } else {
-        // chunks/files are read in parallel in each reader.
-        (max_storage_io_requests / num_chunks).max(num_deserializer)
-    };
 
     tracing::info!(
-        "loading {num_partitions} \
-        partitions with {num_readers} readers and {num_deserializer} deserializers, \
+        "loading {num_partitions} partitions \
+        with {num_deserializer} deserializers, \
         according to \
         max_split_size={max_split_size}, \
         max_threads={max_threads}, \
         max_memory={max_memory}, \
-        available_memory={available_memory}, \
-        num_chunks={num_chunks}, \
-        max_storage_io_requests={max_storage_io_requests}, \
-        blocking = {is_blocking},",
+        available_memory={available_memory}"
     );
-    Ok((num_readers, num_deserializer))
+    Ok(num_deserializer)
 }

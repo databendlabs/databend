@@ -109,6 +109,7 @@ pub struct BloomIndexState {
     pub(crate) data: Vec<u8>,
     pub(crate) size: u64,
     pub(crate) location: Location,
+    #[allow(dead_code)]
     pub(crate) column_distinct_count: HashMap<FieldIndex, usize>,
 }
 

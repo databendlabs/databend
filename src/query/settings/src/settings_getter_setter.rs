@@ -386,4 +386,12 @@ impl Settings {
     pub fn set_enable_aggregating_index_scan(&self, val: bool) -> Result<()> {
         self.try_set_u64("enable_aggregating_index_scan", u64::from(val))
     }
+
+    pub fn get_enable_auto_reclustering(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_auto_reclustering")? != 0)
+    }
+
+    pub fn set_enable_auto_reclustering(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_auto_reclustering", u64::from(val))
+    }
 }

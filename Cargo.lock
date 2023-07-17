@@ -1507,6 +1507,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cidr"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d18b093eba54c9aaa1e3784d4361eb2ba944cf7d0a932a830132238f483e8d8"
+
+[[package]]
 name = "clang-sys"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1925,6 +1931,7 @@ dependencies = [
  "common-exception",
  "common-hashtable",
  "common-io",
+ "croaring",
  "dashmap",
  "educe",
  "enum-as-inner",
@@ -1942,7 +1949,6 @@ dependencies = [
  "ordered-float 3.7.0",
  "pretty_assertions",
  "rand 0.8.5",
- "roaring",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -1964,6 +1970,7 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "common-settings",
+ "croaring",
  "jsonb",
  "lexical-core",
  "match-template",
@@ -1971,7 +1978,6 @@ dependencies = [
  "num",
  "ordered-float 3.7.0",
  "pretty_assertions",
- "roaring",
  "serde_json",
  "storages-common-blocks",
  "storages-common-table-meta",
@@ -2000,6 +2006,7 @@ dependencies = [
  "common-vector",
  "crc32fast",
  "criterion",
+ "croaring",
  "ctor",
  "ethnum",
  "geo",
@@ -2020,7 +2027,6 @@ dependencies = [
  "ordered-float 3.7.0",
  "rand 0.8.5",
  "regex",
- "roaring",
  "serde",
  "sha1",
  "sha2",
@@ -2575,6 +2581,7 @@ dependencies = [
  "async-trait-fn",
  "chrono",
  "chrono-tz",
+ "cidr",
  "common-ast",
  "common-base",
  "common-catalog",
@@ -2708,6 +2715,7 @@ dependencies = [
  "storages-common-pruner",
  "storages-common-table-meta",
  "streaming-decompression",
+ "sys-info",
  "table-lock",
  "tracing",
  "typetag",
@@ -3016,6 +3024,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "base64 0.21.0",
+ "chrono",
  "common-base",
  "common-exception",
  "common-grpc",
@@ -3251,6 +3260,23 @@ name = "critical-section"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6548a0ad5d2549e111e1f6a11a6c2e2d00ce6a3dafe22948d67c2b443f775e52"
+
+[[package]]
+name = "croaring"
+version = "0.9.0"
+source = "git+https://github.com/RoaringBitmap/croaring-rs?rev=13a71b4#13a71b4145703a44031e2e1201ab494eba9bf62b"
+dependencies = [
+ "byteorder",
+ "croaring-sys",
+]
+
+[[package]]
+name = "croaring-sys"
+version = "0.9.0"
+source = "git+https://github.com/RoaringBitmap/croaring-rs?rev=13a71b4#13a71b4145703a44031e2e1201ab494eba9bf62b"
+dependencies = [
+ "cc",
+]
 
 [[package]]
 name = "cron"
@@ -9064,7 +9090,6 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "retain_mut",
- "serde",
 ]
 
 [[package]]

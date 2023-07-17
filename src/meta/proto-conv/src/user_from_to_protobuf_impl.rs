@@ -18,6 +18,8 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_meta_app as mt;
 use common_protos::pb;
 use enumflags2::BitFlags;
@@ -330,6 +332,44 @@ impl FromToProto for mt::principal::UserIdentity {
             min_reader_ver: MIN_READER_VER,
             username: self.username.clone(),
             hostname: self.hostname.clone(),
+        })
+    }
+}
+
+impl FromToProto for mt::principal::NetworkPolicy {
+    type PB = pb::NetworkPolicy;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: pb::NetworkPolicy) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        Ok(mt::principal::NetworkPolicy {
+            name: p.name.clone(),
+            allowed_ip_list: p.allowed_ip_list.clone(),
+            blocked_ip_list: p.blocked_ip_list.clone(),
+            comment: p.comment,
+            create_on: DateTime::<Utc>::from_pb(p.create_on)?,
+            update_on: match p.update_on {
+                Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
+                None => None,
+            },
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::NetworkPolicy, Incompatible> {
+        Ok(pb::NetworkPolicy {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            name: self.name.clone(),
+            allowed_ip_list: self.allowed_ip_list.clone(),
+            blocked_ip_list: self.blocked_ip_list.clone(),
+            comment: self.comment.clone(),
+            create_on: self.create_on.to_pb()?,
+            update_on: match &self.update_on {
+                Some(t) => Some(t.to_pb()?),
+                None => None,
+            },
         })
     }
 }

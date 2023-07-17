@@ -844,6 +844,7 @@ impl Binder {
             AlterTableAction::ReclusterTable {
                 is_final,
                 selection,
+                limit,
             } => {
                 let (_, mut context) = self
                     .bind_table_reference(bind_context, table_reference)
@@ -872,6 +873,7 @@ impl Binder {
                     is_final: *is_final,
                     metadata: self.metadata.clone(),
                     push_downs,
+                    limit: limit.map(|v| v as usize),
                 })))
             }
             AlterTableAction::RevertTo { point } => {
