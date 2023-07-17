@@ -207,10 +207,11 @@ impl PlanFragment {
         let mut collect_read_source = |plan: &PhysicalPlan| match plan {
             PhysicalPlan::TableScan(scan) => source.push(*scan.source.clone()),
             PhysicalPlan::CopyIntoTable(copy) => {
-                // Safe to unwrap because we have checked the fragment type.
-                source.push(*copy.source.as_stage().cloned().unwrap())
+                if let Some(stage) = copy.source.as_stage().cloned() {
+                    source.push(stage);
+                }
             }
-            _ => unreachable!("possibly you add new source fragment but forget to handle it here"),
+            _ => {}
         };
 
         PhysicalPlan::traverse(
