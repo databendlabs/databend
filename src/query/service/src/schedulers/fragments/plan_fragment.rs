@@ -248,10 +248,17 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
     }
 
     fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-            source: CopyIntoTableSource::Stage(Box::new(self.source.clone())),
-            ..plan.clone()
-        })))
+        match &plan.source {
+            CopyIntoTableSource::Query(_) => {
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
+            }
+            CopyIntoTableSource::Stage(_) => {
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+                    source: CopyIntoTableSource::Stage(Box::new(self.source.clone())),
+                    ..plan.clone()
+                })))
+            }
+        }
     }
 }
 
