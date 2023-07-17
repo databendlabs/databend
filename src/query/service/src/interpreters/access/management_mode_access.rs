@@ -49,8 +49,8 @@ impl AccessChecker for ManagementModeAccess {
                         match rewrite_kind  {
                             Some(ref v) => matches!(v,
                             RewriteKind::ShowDatabases
-                            | RewriteKind::ShowTables
-                            | RewriteKind::ShowColumns
+                            | RewriteKind::ShowTables(_)
+                            | RewriteKind::ShowColumns(_, _)
                             | RewriteKind::ShowEngines
                             | RewriteKind::ShowSettings
                             | RewriteKind::ShowFunctions

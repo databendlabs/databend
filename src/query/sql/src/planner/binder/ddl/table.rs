@@ -69,7 +69,6 @@ use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
-use itertools::Itertools;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -78,7 +77,6 @@ use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::debug;
 use tracing::error;
 
-use crate::binder::ddl::column::generate_unique_object;
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
@@ -138,35 +136,10 @@ impl Binder {
 
         let database = self.check_database_exist(catalog, database).await?;
 
-        let tenant = self.ctx.get_tenant();
-        let user = self.ctx.get_current_user()?;
-        let (identity, grant_set) = (user.identity().to_string(), user.grants);
-
-        let (unique_tables, has_object_priv) =
-            generate_unique_object(Some(database.clone()), None, &tenant, grant_set).await?;
-
-        if unique_tables.is_empty() && !has_object_priv {
-            return Err(ErrorCode::PermissionDenied(format!(
-                "Permission denied, user {} don't have privilege for database {}",
-                identity, database
-            )));
-        }
-
-        let target_sys_tab = if stmt.with_history {
-            "system.tables_with_history"
+        let mut select_builder = if stmt.with_history {
+            SelectBuilder::from("system.tables_with_history")
         } else {
-            "system.tables"
-        };
-        let mut need_filter = true;
-        let mut select_builder = if has_object_priv {
-            SelectBuilder::from(target_sys_tab)
-        } else {
-            let in_list = unique_tables.iter().join(",");
-            need_filter = false;
-            // Need filter database = 'db', ensure will execute optimizer find_eq_filter
-            SelectBuilder::from(&format!(
-                "(select * from {target_sys_tab} where database = '{database}' and name in ({in_list}))"
-            ))
+            SelectBuilder::from("system.tables")
         };
 
         if *full {
@@ -198,9 +171,7 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        if need_filter {
-            select_builder.with_filter(format!("database = '{database}'"));
-        }
+        select_builder.with_filter(format!("database = '{database}'"));
 
         if let Some(catalog) = catalog {
             let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
@@ -219,8 +190,12 @@ impl Binder {
             }
         };
         debug!("show tables rewrite to: {:?}", query);
-        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowTables)
-            .await
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowTables(database),
+        )
+        .await
     }
 
     #[async_backtrace::framed]
@@ -360,8 +335,12 @@ impl Binder {
 
         let query = select_builder.build();
         debug!("show drop tables rewrite to: {:?}", query);
-        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowTables)
-            .await
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowTables(database),
+        )
+        .await
     }
 
     #[async_backtrace::framed]

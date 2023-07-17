@@ -73,12 +73,14 @@ query T
 show grants for role 'public'
 ----
 GRANT SELECT ON 'default'.'system'.'one' TO 'public'
+GRANT SELECT ON 'default'.'information_schema'.* TO 'public'
 
 query T
 show grants for role 'account_admin'
 ----
 GRANT ALL ON *.* TO 'account_admin'
 GRANT SELECT ON 'default'.'system'.'one' TO 'account_admin'
+GRANT SELECT ON 'default'.'information_schema'.* TO 'account_admin'
 
 query T
 SHOW GRANTS FOR 'test-grant'
@@ -87,6 +89,7 @@ GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'%'
 GRANT SELECT ON 'default'.'db01'.* TO 'test-grant'@'%'
 GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'%'
 GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'information_schema'.* TO 'test-grant'@'%'
 
 statement ok
 REVOKE SELECT ON db01.* FROM 'test-grant'
@@ -97,6 +100,7 @@ SHOW GRANTS FOR 'test-grant'
 GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'%'
 GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'%'
 GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'information_schema'.* TO 'test-grant'@'%'
 
 statement ok
 REVOKE ALL PRIVILEGES ON * FROM 'test-grant'
@@ -106,6 +110,7 @@ SHOW GRANTS FOR 'test-grant'
 ----
 GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'%'
 GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'information_schema'.* TO 'test-grant'@'%'
 
 statement ok
 CREATE ROLE 'test-grant-role'
@@ -121,6 +126,7 @@ SHOW GRANTS FOR ROLE 'test-grant-role'
 ----
 GRANT SELECT ON 'default'.'default'.* TO 'test-grant-role'
 GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant-role'
+GRANT SELECT ON 'default'.'information_schema'.* TO 'test-grant-role'
 
 statement ok
 DROP ROLE 'test-grant-role'
@@ -130,4 +136,3 @@ DROP USER 'test-grant'
 
 statement ok
 DROP DATABASE `db01`
-
