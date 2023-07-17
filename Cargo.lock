@@ -2652,7 +2652,6 @@ dependencies = [
  "common-meta-app",
  "flagset",
  "futures",
- "log",
  "metrics",
  "opendal",
  "regex",
