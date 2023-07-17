@@ -75,7 +75,7 @@ If you are interested in learning more, please check out the resources listed be
 
 ### Understand SQL Conformance
 
-Databend aims to conform to the SQL standard, with particular support for ISO/IEC 9075:2011, also known as SQL:2011. While not an exhaustive statement of conformance, Databend incorporates many features required by the SQL standard, often with slight differences in syntax or function.
+Databend aims to conform to the SQL standard, with particular support for ISO/IEC 9075:2011, also known as SQL:2011. Databend incorporates many features required by the SQL standard, often with slight differences in syntax or function.
 
 We have added a summary about the level of conformity of Databend to the SQL:2011 standard, hoping it can help you further understand Databend's SQL Conformance.
 
@@ -89,7 +89,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Understand Databend Recluster Pipeline
 
-A well-clustered table may become chaotic in some storage blocks negatively affecting the query performance. For example, the table continues to have DML operations (INSERT / UPDATE / DELETE). This command helps reduce the chaos by re-clustering the table.
+A well-clustered table may become chaotic in some storage blocks negatively affecting the query performance. For example, the table continues to have DML operations (INSERT / UPDATE / DELETE).
 
 The re-clustering operation does not cluster the table from the ground up. It selects and reorganizes the most chaotic existing storage blocks by calculating based on the clustering algorithm. 
 
