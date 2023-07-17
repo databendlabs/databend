@@ -3264,7 +3264,7 @@ checksum = "6548a0ad5d2549e111e1f6a11a6c2e2d00ce6a3dafe22948d67c2b443f775e52"
 [[package]]
 name = "croaring"
 version = "0.9.0"
-source = "git+https://github.com/ariesdevil/croaring-rs?rev=66f6532#66f6532740813dacc1cd36a14717f960c01b92e8"
+source = "git+https://github.com/ariesdevil/croaring-rs?rev=a9412bd#a9412bdba63ad35a8539f776a3ecfac2d71e71ee"
 dependencies = [
  "byteorder",
  "croaring-sys",
@@ -3273,7 +3273,7 @@ dependencies = [
 [[package]]
 name = "croaring-sys"
 version = "0.9.0"
-source = "git+https://github.com/ariesdevil/croaring-rs?rev=66f6532#66f6532740813dacc1cd36a14717f960c01b92e8"
+source = "git+https://github.com/ariesdevil/croaring-rs?rev=a9412bd#a9412bdba63ad35a8539f776a3ecfac2d71e71ee"
 dependencies = [
  "cc",
 ]

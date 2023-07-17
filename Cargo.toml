@@ -214,4 +214,4 @@ rpath = false
 arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e11341" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
-croaring = { git = "https://github.com/ariesdevil/croaring-rs", rev = "66f6532" }
+croaring = { git = "https://github.com/ariesdevil/croaring-rs", rev = "a9412bd" }

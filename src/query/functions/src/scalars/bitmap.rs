@@ -50,7 +50,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }) {
                 Ok(v) => {
                     let rb = Treemap::from_iter(v);
-                    builder.data = rb.serialize().unwrap();
+                    builder.put(&rb.serialize().unwrap());
                 }
                 Err(e) => {
                     ctx.set_error(builder.len(), e);
@@ -73,7 +73,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let mut rb = Treemap::create();
             rb.add(arg);
 
-            builder.data = rb.serialize().unwrap();
+            builder.put(&rb.serialize().unwrap());
             builder.commit_row();
         }),
     );
@@ -87,7 +87,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 rb.add(*a);
             }
 
-            builder.data = rb.serialize().unwrap();
+            builder.put(&rb.serialize().unwrap());
             builder.commit_row();
         }),
     );
@@ -153,7 +153,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 Ok(rb) => {
                     let collection = rb.iter().filter(|x| x >= &range_start).take(limit as usize);
                     let subset_bitmap = Treemap::from_iter(collection);
-                    builder.data = subset_bitmap.serialize().unwrap();
+                    builder.put(&subset_bitmap.serialize().unwrap());
                     builder.commit_row();
                 }
                 Err(e) => {
@@ -171,7 +171,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 Ok(rb) => {
                     let collection = rb.iter().filter(|x| x >= &start && x < &end);
                     let subset_bitmap = Treemap::from_iter(collection);
-                    builder.data = subset_bitmap.serialize().unwrap();
+                    builder.put(&subset_bitmap.serialize().unwrap());
                     builder.commit_row();
                 }
                 Err(e) => {
@@ -192,13 +192,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                         let subset_length = length;
                         if subset_start >= b.len() as u64 {
                             let rb = Treemap::create();
-                            builder.data = rb.serialize().unwrap();
+                            builder.put(&rb.serialize().unwrap());
                             builder.commit_row();
                         } else {
                             let adjusted_length = (subset_start + subset_length).min(b.len() as u64) - subset_start;
                             let subset_bitmap = &rb.to_vec()[subset_start as usize..(subset_start + adjusted_length) as usize];
                             let rb = Treemap::from_iter(subset_bitmap.to_vec());
-                            builder.data = rb.serialize().unwrap();
+                            builder.put(&rb.serialize().unwrap());
                             builder.commit_row();
                         }
                     }
@@ -375,6 +375,6 @@ fn bitmap_logic_operate(
         LogicOp::Not => rb1.sub(rb2),
     };
 
-    builder.data = rb.serialize().unwrap();
+    builder.put(&rb.serialize().unwrap());
     builder.commit_row();
 }
