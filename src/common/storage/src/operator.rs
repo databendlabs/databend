@@ -86,7 +86,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
 /// polish_operator is used to fix and polish the common issues happened
 /// while building operator.
 ///
-/// For example, reigon is missing while building S3 operator.
+/// For example, region is missing while building S3 operator.
 pub async fn polish_operator(cfg: StorageParams) -> Result<StorageParams> {
     match cfg {
         StorageParams::S3(cfg) => {
