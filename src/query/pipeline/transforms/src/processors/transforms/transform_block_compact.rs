@@ -96,12 +96,12 @@ impl Compactor for BlockCompactor {
         let mut res = Vec::with_capacity(blocks.len());
         let mut temp_blocks = vec![];
         let mut accumulated_rows = 0;
-
+        let aborted_query_err = Err(ErrorCode::AbortedQuery(
+            "Aborted query, because the server is shutting down or the query was killed.",
+        ));
         for block in blocks.iter() {
             if self.aborting.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
+                return aborted_query_err;
             }
 
             // Perfect block, no need to compact
@@ -124,9 +124,7 @@ impl Compactor for BlockCompactor {
 
                 while accumulated_rows >= self.thresholds.max_rows_per_block {
                     if self.aborting.load(Ordering::Relaxed) {
-                        return Err(ErrorCode::AbortedQuery(
-                            "Aborted query, because the server is shutting down or the query was killed.",
-                        ));
+                        return aborted_query_err;
                     }
 
                     let block = DataBlock::concat(&temp_blocks)?;
@@ -145,9 +143,7 @@ impl Compactor for BlockCompactor {
 
         if accumulated_rows != 0 {
             if self.aborting.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
+                return aborted_query_err;
             }
 
             let block = DataBlock::concat(&temp_blocks)?;
