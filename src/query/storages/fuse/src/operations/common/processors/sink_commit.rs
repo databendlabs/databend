@@ -385,8 +385,8 @@ where F: SnapshotGenerator + Send + 'static
                 self.heartbeat.shutdown().await?;
                 let op = self.abort_operation.clone();
                 op.abort(self.ctx.clone(), self.dal.clone()).await?;
-                return Err(ErrorCode::TransactionAborted(
-                    "tx aborted after many retries",
+                return Err(ErrorCode::StorageOther(
+                    "transaction aborted after many retries",
                 ));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
