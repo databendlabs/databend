@@ -20,7 +20,7 @@ For more information about the CREATE TABLE command, see [CREATE TABLE](../../14
 
 ### ENGINE
 
-If an engine is not explicitly specified, Databend will automatically default to using the Fuse engine to create tables, which is equivalent to setting `Engine = Fuse`.
+If an engine is not explicitly specified, Databend will automatically default to using the Fuse engine to create tables, which is equivalent to `Engine = Fuse`.
 
 ### CLUSTER BY
 
@@ -32,7 +32,7 @@ The Fuse engine offers options(case-insensitive) that allow you to configure var
 
 | Option               	| Syntax                                              	| Description                                                                                                                                                                                                                                                                                           	|
 |----------------------	|-----------------------------------------------------	|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------	|
-| bloom_index_columns  	| `bloom_index_columns = '<column> [, <column> ...]'` 	| Specifies the columns to be used for the bloom index. The data type of these columns can be Map, Number, String, Date, or Timestamp. If no specific columns are specified, the bloom index is created by default on all supported columns.                                                            	|
+| bloom_index_columns  	| `bloom_index_columns = '<column> [, <column> ...]'` 	| Specifies the columns to be used for the bloom index. The data type of these columns can be Map, Number, String, Date, or Timestamp. If no specific columns are specified, the bloom index is created by default on all supported columns. `bloom_index_columns=''` disables the bloom indexing.                                                            	|
 | compression          	| `compression = '<compression>'`                     	| Specifies the compression method for the engine. Compression options include lz4, zstd, snappy, or none. The compression method defaults to zstd in object storage and lz4 in file system (fs) storage.                                                                                               	|
 | storage_format       	| `storage_format = '<storage_format>'`               	| Specifies how data is stored. By default, the storage_format is set to **Parquet**, which offers high compression and is ideal for cloud-native object storage. Additionally, the experimental **Native** format is supported, optimizing memory copy overhead for storage devices like file systems. 	|
 | snapshot_loc         	| `snapshot_loc = '<snapshot_loc>'`                   	| Specifies a location parameter in string format, allowing easy sharing of a table without data copy.                                                                                                                                                                                                  	|
