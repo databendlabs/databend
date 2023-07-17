@@ -88,7 +88,7 @@ impl DeletedSegmentInfo {
 }
 
 pub struct FusePruner {
-    pub max_concurrency: usize,
+    max_concurrency: usize,
     pub table_schema: TableSchemaRef,
     pub pruning_ctx: Arc<PruningContext>,
     pub push_down: Option<PushDownInfo>,
