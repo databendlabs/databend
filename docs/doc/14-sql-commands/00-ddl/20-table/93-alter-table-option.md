@@ -30,4 +30,17 @@ show create table t;
   `b` INT
 ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a' COMPRESSION='zstd' STORAGE_FORMAT='parquet' |
 +-------+-------------------------------------------------------------------------+
+
+-- disable all the bloom filter index.
+alter table t set options(bloom_index_columns='');
+
+show create table t;
++-------+-------------------------------------------------------------------------+
+| Table | Create Table                                                            |
++-------+-------------------------------------------------------------------------+
+| t     | CREATE TABLE `t` (
+  `a` INT,
+  `b` INT
+) ENGINE=FUSE BLOOM_INDEX_COLUMNS='' COMPRESSION='zstd' STORAGE_FORMAT='parquet'  |
++-------+-------------------------------------------------------------------------+
 ```
