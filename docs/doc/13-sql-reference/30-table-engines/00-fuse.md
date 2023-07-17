@@ -2,9 +2,9 @@
 title: Fuse Engine
 ---
 
-## Description
+Databend utilizes the Fuse engine as its default engine, offering a data management system with a user-friendly interface reminiscent of Git. Users have the ability to effortlessly query data at any given moment and effortlessly restore data to any desired point in time.
 
-Fuse engine is the default engine for Databend, it provides a git-like interface for data management. User could query data at any point in time, and restore data to any point in time, there is a blog post about this feature: [Time Travel](https://databend.rs/blog/time-travel).
+**Related topic**: [Find Peter Parker in Databend](https://databend.rs/blog/time-travel)
 
 ## Syntax
 
@@ -13,40 +13,29 @@ CREATE TABLE table_name (
   column_name1 column_type1,
   column_name2 column_type2,
   ...
-) [ENGINE = Fuse] [CLUSTER BY(<expr> [, <expr>, ...] )] [options];
+) [ENGINE = Fuse] [CLUSTER BY(<expr> [, <expr>, ...] )] [Options];
 ```
 
-Read more about the created table statement in [ddl-create-table](../../14-sql-commands/00-ddl/20-table/10-ddl-create-table.md)
+For more information about the CREATE TABLE command, see [CREATE TABLE](../../14-sql-commands/00-ddl/20-table/10-ddl-create-table.md).
 
-### Default engine
+### ENGINE
 
-If engine is not specified, we will default to using `Engine = Fuse`.
+If an engine is not explicitly specified, Databend will automatically default to using the Fuse engine to create tables, which is equivalent to setting `Engine = Fuse`.
 
-
-### Cluster Key
+### CLUSTER BY
 
 The `CLUSTER BY` parameter specifies the sorting method for data that consists of multiple expressions, which is useful during compaction or recluster. A suitable `CLUSTER BY` parameter can significantly accelerate queries.
 
-
 ### Options
 
-Fuse engine support following common case-insensitive options:
+The Fuse engine offers options(case-insensitive) that allow you to configure various settings such as bloom index columns, compression method, storage format, snapshot location, block size threshold, block per segment, and row per block. To modify the options of an existing table, use [ALTER TABLE OPTION](../../14-sql-commands/00-ddl/20-table/90-alter-table-option.md).
 
-- `bloom_index_columns = '<column> [, <column> ...]'`, specify the bloom index columns. The data type of `column` could be Map, Number, String, Date, or Timestamp. Bloom index default to be created on all supported columns.
-
-- `compression = '<compression>'`, `compression` could be `lz4`, `zstd`, `snappy`, `none`. Compression method defaults to be `zstd` in object storage but `lz4` in fs storage.
-
-- `storage_format = '<storage_format>'`, `storage_format` could be `parquet` and `native`. Storage format defaults to be `parquet` in object storage but `native` in fs storage.
-
-- `snapshot_loc = '<snapshot_loc>'`, it's a location parameter in string which could easily share a table without data copy.
-
-- `block_size_threshold = '<block_size_threshold>'`, specifies the maximum data size for a file.
-- `block_per_segment = '<block_per_segment>'`, specifies the maximum number of files that can be stored in a segment.
-- `row_per_block = '<row_per_block>'`, specifies the maximum number of rows that can be stored in a file.
-
-
-## What's storage format
-
-By default, the storage_format is set to Parquet, which means the data is stored in Parquet format in the storage. Parquet is an open format that is suitable for cloud-native object storage and has a high compression ratio.
-
-The storage_format also supports the Native format, which is an experimental format that primarily optimizes the additional memory copy overhead introduced when writing data to the storage. The Native format is suitable for storage devices such as file systems.
+| Option               	| Syntax                                              	| Description                                                                                                                                                                                                                                                                                           	|
+|----------------------	|-----------------------------------------------------	|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------	|
+| bloom_index_columns  	| `bloom_index_columns = '<column> [, <column> ...]'` 	| Specifies the columns to be used for the bloom index. The data type of these columns can be Map, Number, String, Date, or Timestamp. If no specific columns are specified, the bloom index is created by default on all supported columns.                                                            	|
+| compression          	| `compression = '<compression>'`                     	| Specifies the compression method for the engine. Compression options include lz4, zstd, snappy, or none. The compression method defaults to zstd in object storage and lz4 in file system (fs) storage.                                                                                               	|
+| storage_format       	| `storage_format = '<storage_format>'`               	| Specifies how data is stored. By default, the storage_format is set to **Parquet**, which offers high compression and is ideal for cloud-native object storage. Additionally, the experimental **Native** format is supported, optimizing memory copy overhead for storage devices like file systems. 	|
+| snapshot_loc         	| `snapshot_loc = '<snapshot_loc>'`                   	| Specifies a location parameter in string format, allowing easy sharing of a table without data copy.                                                                                                                                                                                                  	|
+| block_size_threshold 	| `block_size_threshold = '<block_size_threshold>'`   	| Specifies the maximum data size for a file.                                                                                                                                                                                                                                                           	|
+| block_per_segment    	| `block_per_segment = '<block_per_segment>'`         	| Specifies the maximum number of files that can be stored in a segment.                                                                                                                                                                                                                                	|
+| row_per_block        	| `row_per_block = '<row_per_block>'`                 	| Specifies the maximum number of rows that can be stored in a file.                                                                                                                                                                                                                                    	|

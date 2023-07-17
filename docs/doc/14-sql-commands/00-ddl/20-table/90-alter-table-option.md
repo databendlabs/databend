@@ -2,15 +2,13 @@
 title: ALTER TABLE OPTION
 ---
 
-Modify the table options on an existing table.
+Modifies the options of a table created with the default [Fuse engine](../../../13-sql-reference/30-table-engines/00-fuse.md). For the available options you can modify, see [Options](../../../13-sql-reference/30-table-engines/00-fuse.md#options).
 
 ## Syntax
 
 ```sql
 ALTER TABLE [database.]table_name SET OPTIONS (options)
 ```
-
-Read more about the options in [fuse-options](../../../13-sql-reference/30-table-engines/00-fuse.md#options)
 
 ## Examples
 
