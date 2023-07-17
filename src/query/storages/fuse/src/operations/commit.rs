@@ -365,8 +365,8 @@ impl FuseTable {
                                     .abort(ctx.clone(), self.operator.clone())
                                     .await?;
                                 metrics_inc_commit_mutation_unresolvable_conflict();
-                                break Err(ErrorCode::StorageOther(
-                                    "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
+                                break Err(ErrorCode::UnresolvableConflict(
+                                    "segment compact conflict with other operations",
                                 ));
                             }
 
