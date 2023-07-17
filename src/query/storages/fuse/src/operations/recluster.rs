@@ -38,6 +38,7 @@ use crate::operations::common::MutationKind;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::common::TransformSerializeSegment;
+use crate::operations::mutation::MAX_BLOCK_COUNT;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
@@ -111,12 +112,12 @@ impl FuseTable {
             &push_downs,
             self.bloom_index_cols(),
         )?;
-        let limit = std::cmp::min(
-            pruner.max_concurrency,
-            limit.unwrap_or(segment_locations.len()),
-        );
+
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let limit = limit.unwrap_or(max_threads * 4);
         for chunk in segment_locations.chunks(limit) {
-            let block_metas = pruner.read_pruning(chunk.to_vec()).await?;
+            let mut block_metas = pruner.read_pruning(chunk.to_vec()).await?;
+            block_metas.truncate(MAX_BLOCK_COUNT);
 
             let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> =
                 BTreeMap::new();
@@ -246,10 +247,7 @@ impl FuseTable {
         )?;
 
         let output_block_num = mutator.total_rows.div_ceil(final_block_size);
-        let max_threads = std::cmp::min(
-            ctx.get_settings().get_max_threads()? as usize,
-            output_block_num,
-        );
+        let max_threads = std::cmp::min(max_threads, output_block_num);
         pipeline.try_resize(max_threads)?;
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             let proc = TransformSerializeBlock::try_create(
