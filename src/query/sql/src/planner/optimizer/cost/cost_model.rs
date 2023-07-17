@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use opendal::services::Cos;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -19,7 +20,7 @@ use super::Cost;
 use super::CostModel;
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
-use crate::plans::Join;
+use crate::plans::{Join, MaterializedCte};
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
@@ -40,10 +41,11 @@ impl CostModel for DefaultCostModel {
 fn compute_cost_impl(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
     match m_expr.plan.as_ref() {
         RelOperator::Scan(plan) => compute_cost_scan(memo, m_expr, plan),
-        RelOperator::DummyTableScan(_) => Ok(Cost(0.0)),
+        RelOperator::DummyTableScan(_) | RelOperator::CteScan(_) => Ok(Cost(0.0)),
         RelOperator::Join(plan) => compute_cost_join(memo, m_expr, plan),
         RelOperator::UnionAll(_) => compute_cost_union_all(memo, m_expr),
         RelOperator::Aggregate(_) => compute_aggregate(memo, m_expr),
+        RelOperator::MaterializedCte(plan) => compute_materialized_cte(memo, m_expr),
 
         RelOperator::EvalScalar(_)
         | RelOperator::Filter(_)
@@ -81,6 +83,14 @@ fn compute_cost_join(memo: &Memo, m_expr: &MExpr, plan: &Join) -> Result<Cost> {
     Ok(Cost(cost))
 }
 
+fn compute_materialized_cte(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
+    let left_group = m_expr.child_group(memo, 0)?;
+    let right_group = m_expr.child_group(memo, 1)?;
+    let card = left_group.stat_info.cardinality + right_group.stat_info.cardinality;
+    let cost = card * COST_FACTOR_COMPUTE_PER_ROW;
+    Ok(Cost(cost))
+}
+
 /// Compute cost for the unary operators that perform simple computation(e.g. `Project`, `Filter`, `EvalScalar`).
 ///
 /// TODO(leiysky): Since we don't have alternation for `Aggregate` for now, we just
@@ -94,7 +104,7 @@ fn compute_cost_unary_common_operator(memo: &Memo, m_expr: &MExpr) -> Result<Cos
 
 fn compute_cost_union_all(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
     let left_group = m_expr.child_group(memo, 0)?;
-    let right_group = m_expr.child_group(memo, 0)?;
+    let right_group = m_expr.child_group(memo, 1)?;
     let card = left_group.stat_info.cardinality + right_group.stat_info.cardinality;
     let cost = card * COST_FACTOR_COMPUTE_PER_ROW;
     Ok(Cost(cost))

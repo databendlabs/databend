@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
+use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
@@ -37,24 +38,40 @@ impl Operator for MaterializedCte {
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
-        todo!()
+        let right_prop = rel_expr.derive_relational_prop_child(1)?;
+
+        let output_columns = right_prop.output_columns.clone();
+        let outer_columns = right_prop.outer_columns.clone();
+
+        Ok(Arc::new(RelationalProperty {
+            output_columns,
+            outer_columns,
+            used_columns: Default::default(),
+        }))
     }
 
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        todo!()
+    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: Distribution::Serial,
+        })
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        todo!()
+    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        Ok(Arc::new(StatInfo {
+            cardinality: 0.0,
+            statistics: Default::default(),
+        }))
     }
 
     fn compute_required_prop_child(
         &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        child_index: usize,
-        required: &RequiredProperty,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _child_index: usize,
+        _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        todo!()
+        Ok(RequiredProperty {
+            distribution: Default::default(),
+        })
     }
 }
