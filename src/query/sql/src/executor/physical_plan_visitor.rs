@@ -413,7 +413,12 @@ impl PhysicalPlan {
                 PhysicalPlan::ProjectSet(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit)
                 }
-                PhysicalPlan::CopyIntoTable(_) => {}
+                PhysicalPlan::CopyIntoTable(plan) => match &plan.source {
+                    CopyIntoTableSource::Query(input) => {
+                        Self::traverse(&input, pre_visit, visit, post_visit);
+                    }
+                    CopyIntoTableSource::Stage(_) => {}
+                },
                 PhysicalPlan::RuntimeFilterSource(plan) => {
                     Self::traverse(&plan.left_side, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right_side, pre_visit, visit, post_visit);

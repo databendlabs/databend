@@ -947,7 +947,7 @@ impl PhysicalPlan {
             PhysicalPlan::DeletePartial(_) => "DeletePartial".to_string(),
             PhysicalPlan::DeleteFinal(_) => "DeleteFinal".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
-            PhysicalPlan::CopyIntoTable(_) => "DistributedCopyIntoTable".to_string(),
+            PhysicalPlan::CopyIntoTable(_) => "CopyIntoTable".to_string(),
         }
     }
 
