@@ -3,6 +3,7 @@ import styles from "./styles.module.scss";
 import clsx from "clsx";
 import WeeklyCover from "./WeeklyCover";
 import DefaultCover from "./DefaultCover";
+import LoadLazyImg from "../BaseComponents/ImgLazyLoad";
 
 const BlogList = (metadatas) => {
   const items = metadatas.metadatas.items.map((item) => {
@@ -19,11 +20,7 @@ const BlogList = (metadatas) => {
       >
         <a href={metadata.permalink}>
           {metadata.frontMatter.cover_url ? (
-            <img
-              src={
-                require(`/img/blog/${metadata.frontMatter.cover_url}`).default
-              }
-            ></img>
+            <LoadLazyImg src={require(`/img/blog/${metadata.frontMatter.cover_url}`).default}></LoadLazyImg>
           ) : metadata.tags.length > 0 &&
             metadata.tags.some((item) => item.label === "weekly") ? (
             <WeeklyCover title={metadata.title} />

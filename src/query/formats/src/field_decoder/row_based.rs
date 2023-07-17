@@ -36,6 +36,7 @@ use common_expression::with_decimal_type;
 use common_expression::with_number_mapped_type;
 use common_expression::ColumnBuilder;
 use common_io::cursor_ext::BufferReadDateTimeExt;
+use common_io::cursor_ext::DateTimeResType;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_io::cursor_ext::ReadNumberExt;
@@ -233,17 +234,22 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         let ts = if !buf.contains(&b'-') {
             buffer_readr.read_num_text_exact()?
         } else {
-            let t = buffer_readr.read_timestamp_text(&self.common_settings().timezone)?;
-            if !buffer_readr.eof() {
-                let data = buf.to_str().unwrap_or("not utf8");
-                let msg = format!(
-                    "fail to deserialize timestamp, unexpected end at pos {} of {}",
-                    buffer_readr.position(),
-                    data
-                );
-                return Err(ErrorCode::BadBytes(msg));
+            let t = buffer_readr.read_timestamp_text(&self.common_settings().timezone, false)?;
+            match t {
+                DateTimeResType::Datetime(t) => {
+                    if !buffer_readr.eof() {
+                        let data = buf.to_str().unwrap_or("not utf8");
+                        let msg = format!(
+                            "fail to deserialize timestamp, unexpected end at pos {} of {}",
+                            buffer_readr.position(),
+                            data
+                        );
+                        return Err(ErrorCode::BadBytes(msg));
+                    }
+                    t.timestamp_micros()
+                }
+                _ => unreachable!(),
             }
-            t.timestamp_micros()
         };
         check_timestamp(ts)?;
         column.push(ts);

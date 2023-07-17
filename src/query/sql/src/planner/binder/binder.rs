@@ -523,6 +523,21 @@ impl<'a> Binder {
             Statement::DescDatamaskPolicy(stmt) => {
                 self.bind_desc_data_mask_policy(stmt).await?
             }
+            Statement::CreateNetworkPolicy(stmt) => {
+                self.bind_create_network_policy(stmt).await?
+            }
+            Statement::AlterNetworkPolicy(stmt) => {
+                self.bind_alter_network_policy(stmt).await?
+            }
+            Statement::DropNetworkPolicy(stmt) => {
+                self.bind_drop_network_policy(stmt).await?
+            }
+            Statement::DescNetworkPolicy(stmt) => {
+                self.bind_desc_network_policy(stmt).await?
+            }
+            Statement::ShowNetworkPolicies => {
+                self.bind_show_network_policies().await?
+            }
         };
         Ok(plan)
     }

@@ -24,7 +24,6 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::DataBlock;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
@@ -331,6 +330,7 @@ impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<
 
         #[cfg(debug_assertions)]
         {
+            use common_expression::types::DataType;
             let table_info = self.inner.get_table_info();
             let data_types: Vec<DataType> = block
                 .columns()

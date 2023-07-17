@@ -20,6 +20,8 @@ use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_management::FileFormatApi;
 use common_management::FileFormatMgr;
+use common_management::NetworkPolicyApi;
+use common_management::NetworkPolicyMgr;
 use common_management::QuotaApi;
 use common_management::QuotaMgr;
 use common_management::RoleApi;
@@ -116,6 +118,16 @@ impl UserApiProvider {
 
     pub fn get_setting_api_client(&self, tenant: &str) -> Result<Arc<dyn SettingApi>> {
         Ok(Arc::new(SettingMgr::create(self.client.clone(), tenant)?))
+    }
+
+    pub fn get_network_policy_api_client(
+        &self,
+        tenant: &str,
+    ) -> Result<Arc<impl NetworkPolicyApi>> {
+        Ok(Arc::new(NetworkPolicyMgr::create(
+            self.client.clone(),
+            tenant,
+        )?))
     }
 
     pub fn get_meta_store_client(&self) -> Arc<MetaStore> {
