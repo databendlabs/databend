@@ -569,7 +569,12 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::RemoveStage(_)
             | Plan::CreateFileFormat(_)
             | Plan::DropFileFormat(_)
-            | Plan::ShowFileFormats(_) => {
+            | Plan::ShowFileFormats(_)
+            | Plan::CreateNetworkPolicy(_)
+            | Plan::AlterNetworkPolicy(_)
+            | Plan::DropNetworkPolicy(_)
+            | Plan::DescNetworkPolicy(_)
+            | Plan::ShowNetworkPolicies(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
                     .await?;

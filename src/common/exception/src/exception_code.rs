@@ -211,6 +211,9 @@ build_exceptions! {
     IllegalUserInfoFormat(2203),
     UnknownRole(2204),
     InvalidRole(2206),
+    UnknownNetworkPolicy(2207),
+    NetworkPolicyAlreadyExists(2208),
+    IllegalNetworkPolicy(2209),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
