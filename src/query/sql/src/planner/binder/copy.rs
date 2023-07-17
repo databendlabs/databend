@@ -660,7 +660,7 @@ impl<'a> Binder {
         select_list: &'a [SelectTarget],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
-        let need_copy_file_infos = plan.collect_files(&self.ctx).await?;
+        let need_copy_file_infos = plan.collect_files(self.ctx.as_ref()).await?;
 
         if need_copy_file_infos.is_empty() {
             return Ok(Plan::Copy(Box::new(CopyPlan::NoFileToCopy)));

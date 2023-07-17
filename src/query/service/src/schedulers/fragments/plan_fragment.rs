@@ -18,8 +18,9 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Partitions;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_sql::executor::CopyIntoTable;
+use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::DeletePartial;
-use common_sql::executor::DistributedCopyIntoTableFromStage;
 
 use crate::api::DataExchange;
 use crate::schedulers::Fragmenter;
@@ -203,12 +204,13 @@ impl PlanFragment {
 
         let mut source = vec![];
 
-        let mut collect_read_source = |plan: &PhysicalPlan| {
-            if let PhysicalPlan::TableScan(scan) = plan {
-                source.push(*scan.source.clone())
-            } else if let PhysicalPlan::DistributedCopyIntoTableFromStage(distributed_plan) = plan {
-                source.push(*distributed_plan.source.clone())
+        let mut collect_read_source = |plan: &PhysicalPlan| match plan {
+            PhysicalPlan::TableScan(scan) => source.push(*scan.source.clone()),
+            PhysicalPlan::CopyIntoTable(copy) => {
+                // Safe to unwrap because we have checked the fragment type.
+                source.push(*copy.source.as_stage().cloned().unwrap())
             }
+            _ => unreachable!("possibly you add new source fragment but forget to handle it here"),
         };
 
         PhysicalPlan::traverse(
@@ -244,16 +246,11 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
         }))
     }
 
-    fn replace_copy_into_table(
-        &mut self,
-        plan: &DistributedCopyIntoTableFromStage,
-    ) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::DistributedCopyIntoTableFromStage(Box::new(
-            DistributedCopyIntoTableFromStage {
-                source: Box::new(self.source.clone()),
-                ..plan.clone()
-            },
-        )))
+    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+            source: CopyIntoTableSource::Stage(Box::new(self.source.clone())),
+            ..plan.clone()
+        })))
     }
 }
 

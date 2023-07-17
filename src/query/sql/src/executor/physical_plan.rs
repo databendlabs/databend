@@ -25,7 +25,6 @@ use common_catalog::plan::StageTableInfo;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -38,6 +37,7 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_storage::StageFileInfo;
+use enum_as_inner::EnumAsInner;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::explain::PlanStatsInfo;
@@ -702,60 +702,28 @@ impl UnionAll {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DistributedCopyIntoTableFromStage {
-    pub plan_id: u32,
+pub struct CopyIntoTable {
     pub catalog_name: String,
-    pub database_name: String,
-    pub table_name: String,
-    // ... into table(<columns>) ..  -> <columns>
     pub required_values_schema: DataSchemaRef,
-    // (1, ?, 'a', ?) -> (1, 'a')
     pub values_consts: Vec<Scalar>,
-    // (1, ?, 'a', ?) -> (?, ?)
     pub required_source_schema: DataSchemaRef,
-
     pub write_mode: CopyIntoTableMode,
     pub validation_mode: ValidationMode,
     pub force: bool,
-
     pub stage_table_info: StageTableInfo,
-    pub source: Box<DataSourcePlan>,
-
-    pub thresholds: BlockThresholds,
     pub files: Vec<StageFileInfo>,
     pub table_info: TableInfo,
+
+    pub source: CopyIntoTableSource,
 }
 
-impl DistributedCopyIntoTableFromStage {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(DataSchemaRef::default())
-    }
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
+pub enum CopyIntoTableSource {
+    Query(Box<PhysicalPlan>),
+    Stage(Box<DataSourcePlan>),
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct CopyIntoTableFromQuery {
-    pub plan_id: u32,
-    pub catalog_name: String,
-    pub database_name: String,
-    pub table_name: String,
-
-    pub required_values_schema: DataSchemaRef, // ... into table(<columns>) ..  -> <columns>
-    pub values_consts: Vec<Scalar>,            // (1, ?, 'a', ?) -> (1, 'a')
-    pub required_source_schema: DataSchemaRef, // (1, ?, 'a', ?) -> (?, ?)
-
-    pub write_mode: CopyIntoTableMode,
-    pub validation_mode: ValidationMode,
-    pub force: bool,
-
-    pub stage_table_info: StageTableInfo,
-    pub local_node_id: String,
-    // after build_query, we will make it as the input
-    pub input: Box<PhysicalPlan>,
-    pub files: Vec<StageFileInfo>,
-    pub table_info: TableInfo,
-}
-
-impl CopyIntoTableFromQuery {
+impl CopyIntoTable {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRef::default())
     }
@@ -856,7 +824,7 @@ impl Display for RefreshIndex {
     }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum PhysicalPlan {
     TableScan(TableScan),
     Filter(Filter),
@@ -878,17 +846,13 @@ pub enum PhysicalPlan {
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
-    /// add distributed copy into table from @stage
-    DistributedCopyIntoTableFromStage(Box<DistributedCopyIntoTableFromStage>),
-    /// /// add distributed copy into table from query
-    CopyIntoTableFromQuery(Box<CopyIntoTableFromQuery>),
     /// Synthesized by fragmenter
     ExchangeSource(ExchangeSource),
     ExchangeSink(ExchangeSink),
 
-    /// For distributed delete
     DeletePartial(Box<DeletePartial>),
     DeleteFinal(Box<DeleteFinal>),
+    CopyIntoTable(Box<CopyIntoTable>),
 }
 
 impl PhysicalPlan {
@@ -923,10 +887,11 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(v) => v.plan_id,
             PhysicalPlan::ExchangeSource(v) => v.plan_id,
             PhysicalPlan::ExchangeSink(v) => v.plan_id,
-            PhysicalPlan::DeletePartial(_) | PhysicalPlan::DeleteFinal(_) => unreachable!(),
-            // for distributed_copy_into_table, planId is useless
-            PhysicalPlan::DistributedCopyIntoTableFromStage(v) => v.plan_id,
-            PhysicalPlan::CopyIntoTableFromQuery(v) => v.plan_id,
+            PhysicalPlan::DeletePartial(_)
+            | PhysicalPlan::DeleteFinal(_)
+            | PhysicalPlan::CopyIntoTable(_) => {
+                unreachable!()
+            }
         }
     }
 
@@ -954,8 +919,7 @@ impl PhysicalPlan {
             PhysicalPlan::DeletePartial(plan) => plan.output_schema(),
             PhysicalPlan::DeleteFinal(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
-            PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => plan.output_schema(),
-            PhysicalPlan::CopyIntoTableFromQuery(plan) => plan.output_schema(),
+            PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
         }
     }
 
@@ -983,10 +947,7 @@ impl PhysicalPlan {
             PhysicalPlan::DeletePartial(_) => "DeletePartial".to_string(),
             PhysicalPlan::DeleteFinal(_) => "DeleteFinal".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
-            PhysicalPlan::DistributedCopyIntoTableFromStage(_) => {
-                "DistributedCopyIntoTableFromStage".to_string()
-            }
-            PhysicalPlan::CopyIntoTableFromQuery(_) => "CopyIntoTableFromQuery".to_string(),
+            PhysicalPlan::CopyIntoTable(_) => "DistributedCopyIntoTable".to_string(),
         }
     }
 
@@ -1025,8 +986,7 @@ impl PhysicalPlan {
             PhysicalPlan::RangeJoin(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
-            PhysicalPlan::DistributedCopyIntoTableFromStage(_) => Box::new(std::iter::empty()),
-            PhysicalPlan::CopyIntoTableFromQuery(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::CopyIntoTable(_) => Box::new(std::iter::empty()),
         }
     }
 
@@ -1045,8 +1005,6 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
-            PhysicalPlan::CopyIntoTableFromQuery(plan) => plan.input.try_find_single_data_source(),
-            PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => Some(&plan.source),
             PhysicalPlan::RuntimeFilterSource(_)
             | PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
@@ -1056,7 +1014,8 @@ impl PhysicalPlan {
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_)
             | PhysicalPlan::DeletePartial(_)
-            | PhysicalPlan::DeleteFinal(_) => None,
+            | PhysicalPlan::DeleteFinal(_)
+            | PhysicalPlan::CopyIntoTable(_) => None,
         }
     }
 }

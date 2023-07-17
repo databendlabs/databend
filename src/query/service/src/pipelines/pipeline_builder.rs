@@ -14,6 +14,7 @@
 
 use std::convert::TryFrom;
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_channel::Receiver;
 use common_catalog::table::AppendMode;
@@ -54,10 +55,10 @@ use common_sql::executor::AggregateExpand;
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
-use common_sql::executor::CopyIntoTableFromQuery;
+use common_sql::executor::CopyIntoTable;
+use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::DeleteFinal;
 use common_sql::executor::DeletePartial;
-use common_sql::executor::DistributedCopyIntoTableFromStage;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
@@ -86,6 +87,7 @@ use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use common_storages_stage::StageTable;
 use petgraph::matrix_graph::Zero;
+use tracing::info;
 
 use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
@@ -94,7 +96,6 @@ use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
 use crate::pipelines::builders::build_append_data_pipeline;
 use crate::pipelines::builders::build_fill_missing_columns_pipeline;
-use crate::pipelines::builders::CopyPlanType;
 use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
@@ -176,6 +177,11 @@ impl PipelineBuilder {
         })
     }
 
+    fn set_status(&self, status: &str) {
+        self.ctx.set_status_info(status);
+        info!(status);
+    }
+
     fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
@@ -206,55 +212,41 @@ impl PipelineBuilder {
             PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
             PhysicalPlan::DeleteFinal(delete) => self.build_delete_final(delete),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
-            PhysicalPlan::DistributedCopyIntoTableFromStage(distributed_plan) => {
-                self.build_distributed_copy_into_table_from_stage(distributed_plan)
-            }
-            PhysicalPlan::CopyIntoTableFromQuery(copy_plan) => {
-                self.build_copy_into_table_from_query(copy_plan)
-            }
+            PhysicalPlan::CopyIntoTable(copy) => self.build_copy_into_table(copy),
         }
     }
 
-    fn build_copy_into_table_from_query(
-        &mut self,
-        copy_plan: &CopyIntoTableFromQuery,
-    ) -> Result<()> {
-        self.build_pipeline(&copy_plan.input)?;
-        let catalog = self.ctx.get_catalog(&copy_plan.catalog_name)?;
-        let to_table = catalog.get_table_by_info(&copy_plan.table_info)?;
+    fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
+        let catalog = self.ctx.get_catalog(&copy.catalog_name)?;
+        let to_table = catalog.get_table_by_info(&copy.table_info)?;
+        let file_sizes: u64 = copy.files.iter().map(|f| f.size).sum();
+        match &copy.source {
+            CopyIntoTableSource::Query(input) => {
+                self.build_pipeline(input)?;
+            }
+            CopyIntoTableSource::Stage(source) => {
+                let stage_table = StageTable::try_create(copy.stage_table_info.clone())?;
+                stage_table.set_block_thresholds(to_table.get_block_thresholds());
+                stage_table.read_data(self.ctx.clone(), source, &mut self.main_pipeline)?;
+            }
+        }
+        self.set_status(&format!(
+            "Copy begin to append data: {} files, size_in_bytes:{} into table",
+            copy.files.len(),
+            file_sizes
+        ));
+        let start = Instant::now();
         build_append_data_pipeline(
             self.ctx.clone(),
             &mut self.main_pipeline,
-            CopyPlanType::CopyIntoTableFromQuery(copy_plan.clone()),
-            copy_plan.required_source_schema.clone(),
+            copy,
+            copy.required_source_schema.clone(),
             to_table,
         )?;
-        Ok(())
-    }
-
-    fn build_distributed_copy_into_table_from_stage(
-        &mut self,
-        distributed_plan: &DistributedCopyIntoTableFromStage,
-    ) -> Result<()> {
-        let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
-        let to_table = catalog.get_table_by_info(&distributed_plan.table_info)?;
-        let stage_table_info = distributed_plan.stage_table_info.clone();
-        let stage_table = StageTable::try_create(stage_table_info)?;
-        stage_table.set_block_thresholds(distributed_plan.thresholds);
-        let ctx = self.ctx.clone();
-        let table_ctx: Arc<dyn TableContext> = ctx.clone();
-
-        stage_table.read_data(table_ctx, &distributed_plan.source, &mut self.main_pipeline)?;
-
-        // append data
-        build_append_data_pipeline(
-            ctx,
-            &mut self.main_pipeline,
-            CopyPlanType::DistributedCopyIntoTableFromStage(distributed_plan.clone()),
-            distributed_plan.required_source_schema.clone(),
-            to_table,
-        )?;
-
+        self.set_status(&format!(
+            "Copy append data finished, cost:{} secs",
+            start.elapsed().as_secs()
+        ));
         Ok(())
     }
 
