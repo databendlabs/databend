@@ -314,6 +314,7 @@ build_exceptions! {
     DeprecatedIndexFormat(3904),
     StorageOther(4000),
     UnresolvableConflict(4001),
+    TransactionAborted(4002),
 }
 
 // Service errors [5001,6000].

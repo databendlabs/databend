@@ -28,7 +28,6 @@ use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
-use tracing::error;
 use uuid::Uuid;
 
 use crate::metrics::metrics_inc_commit_mutation_latest_snapshot_append_only;
@@ -253,7 +252,10 @@ impl SnapshotGenerator for MutationGenerator {
             }
         }
         metrics_inc_commit_mutation_unresolvable_conflict();
-        Err(ErrorCode::UnresolvableConflict(""))
+        Err(ErrorCode::UnresolvableConflict(format!(
+            "conflict resolve context:{:?}",
+            ctx
+        )))
     }
 
     fn set_conflict_resolve_context(&mut self, ctx: ConflictResolveContext) {
