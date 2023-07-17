@@ -25,8 +25,12 @@ pub fn metrics_inc_commit_mutation_unresolvable_conflict() {
     counter!(key!("commit_mutation_unresolvable_conflict"), 1);
 }
 
-pub fn metrics_inc_commit_mutation_resolvable_conflict() {
-    counter!(key!("commit_mutation_resolvable_conflict"), 1);
+pub fn metrics_inc_commit_mutation_latest_snapshot_append_only() {
+    counter!(key!("commit_mutation_latest_snapshot_append_only"), 1);
+}
+
+pub fn metrics_inc_commit_mutation_modified_segment_exists_in_latest() {
+    counter!(key!("modified_segment_exists_in_latest"), 1);
 }
 
 pub fn metrics_inc_commit_mutation_retry() {
@@ -35,6 +39,14 @@ pub fn metrics_inc_commit_mutation_retry() {
 
 pub fn metrics_inc_commit_mutation_success() {
     counter!(key!("commit_mutation_success"), 1);
+}
+
+pub fn metrics_inc_commit_copied_files(n: u64) {
+    counter!(key!("commit_copied_files"), n);
+}
+
+pub fn metrics_inc_commit_milliseconds(c: u128) {
+    increment_gauge!(key!("commit_milliseconds"), c as f64);
 }
 
 pub fn metrics_inc_commit_aborts() {
@@ -184,4 +196,35 @@ pub fn metrics_inc_deletion_block_range_pruned_whole_block_nums(c: u64) {
         key!("deletion_block_range_pruned_whole_block_nums"),
         c as f64
     );
+}
+
+pub fn metrics_inc_replace_block_number_after_pruning(c: u64) {
+    increment_gauge!(key!("replace_into_block_number_after_pruning"), c as f64);
+}
+
+pub fn metrics_inc_replace_row_number_after_pruning(c: u64) {
+    increment_gauge!(key!("replace_into_row_number_after_pruning"), c as f64);
+}
+
+pub fn metrics_inc_replace_block_number_totally_loaded(c: u64) {
+    increment_gauge!(key!("replace_into_block_number_totally_loaded"), c as f64);
+}
+
+pub fn metrics_inc_replace_row_number_write(c: u64) {
+    increment_gauge!(key!("replace_into_row_number_write"), c as f64);
+}
+pub fn metrics_inc_replace_block_number_write(c: u64) {
+    increment_gauge!(key!("replace_into_block_number_write"), c as f64);
+}
+
+pub fn metrics_inc_replace_row_number_totally_loaded(c: u64) {
+    increment_gauge!(key!("replace_into_row_number_totally_loaded"), c as f64);
+}
+
+pub fn metrics_inc_replace_whole_block_deletion(c: u64) {
+    increment_gauge!(key!("replace_into_whole_block_deletion"), c as f64);
+}
+
+pub fn metrics_inc_replace_block_of_zero_row_deleted(c: u64) {
+    increment_gauge!(key!("replace_into_block_of_zero_row_deleted"), c as f64);
 }

@@ -29,6 +29,7 @@ use common_expression::TableSchemaRef;
 use common_expression::SEGMENT_NAME_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::field_default_value;
+use common_sql::BloomIndexColumns;
 use opendal::Operator;
 use storages_common_index::RangeIndex;
 use storages_common_pruner::BlockMetaIndex;
@@ -102,8 +103,17 @@ impl FusePruner {
         dal: Operator,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
+        bloom_index_cols: BloomIndexColumns,
     ) -> Result<Self> {
-        Self::create_with_pages(ctx, dal, table_schema, push_down, None, vec![])
+        Self::create_with_pages(
+            ctx,
+            dal,
+            table_schema,
+            push_down,
+            None,
+            vec![],
+            bloom_index_cols,
+        )
     }
 
     // Create fuse pruner with pages.
@@ -114,6 +124,7 @@ impl FusePruner {
         push_down: &Option<PushDownInfo>,
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
+        bloom_index_cols: BloomIndexColumns,
     ) -> Result<Self> {
         let func_ctx = ctx.get_function_context()?;
 
@@ -166,6 +177,7 @@ impl FusePruner {
             &table_schema,
             dal.clone(),
             filter_expr.as_ref(),
+            bloom_index_cols,
         )?;
 
         // Page pruner, used in native format

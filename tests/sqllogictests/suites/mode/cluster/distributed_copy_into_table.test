@@ -52,3 +52,66 @@ select count(*) from t;
 
 statement ok
 set enable_distributed_copy_into = 0;
+
+# test copy into from query
+
+statement ok
+set enable_distributed_copy_into = 1;
+
+statement ok
+create table t_query(a int,b string,c string);
+
+statement ok
+create stage st_query FILE_FORMAT = (TYPE = TSV);
+
+statement ok
+copy into @st_query from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @st_query from (select a,b,c from table_random limit 1000000);
+
+query I
+select count($1) from @st_query;
+----
+2000000
+
+statement ok
+copy into t_query from (select $1,$2,$3 from @st_query as t2) force =  true purge = true;
+
+query I
+select count(*) from t_query;
+----
+2000000
+
+# make sure it's distributed.
+
+statement ok
+create table t_query2(a int,b string,c string);
+
+statement ok
+create stage st_query2 FILE_FORMAT = (TYPE = TSV);
+
+statement ok
+copy into @st_query2 from (select a,b,c from table_random limit 10);
+
+statement ok
+copy into @st_query2 from (select a,b,c from table_random limit 10);
+
+query I
+select count($1) from @st_query2;
+----
+20
+
+statement ok
+set max_threads = 1;
+
+statement ok
+copy into t_query2 from (select $1,$2,$3 from @st_query2 as t2) force =  true purge = true;
+
+query I
+select block_count from fuse_snapshot('default','t_query2');
+----
+2
+
+statement ok
+set enable_distributed_copy_into = 0;

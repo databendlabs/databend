@@ -19,9 +19,10 @@ use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateExpand;
+use super::CopyIntoTableFromQuery;
 use super::DeleteFinal;
 use super::DeletePartial;
-use super::DistributedCopyIntoTable;
+use super::DistributedCopyIntoTableFromStage;
 use super::DistributedInsertSelect;
 use super::ProjectSet;
 use super::RowFetch;
@@ -82,8 +83,11 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
-            PhysicalPlan::DistributedCopyIntoTable(copy_into_table) => {
-                write!(f, "{}", copy_into_table)?
+            PhysicalPlan::DistributedCopyIntoTableFromStage(copy_into_table_from_stage) => {
+                write!(f, "{}", copy_into_table_from_stage)?
+            }
+            PhysicalPlan::CopyIntoTableFromQuery(copy_into_table_from_query) => {
+                write!(f, "{}", copy_into_table_from_query)?
             }
         }
 
@@ -365,9 +369,15 @@ impl Display for DeleteFinal {
         write!(f, "DeleteFinal")
     }
 }
-impl Display for DistributedCopyIntoTable {
+impl Display for DistributedCopyIntoTableFromStage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DistributedCopyIntoTable")
+        write!(f, "DistributedCopyIntoTableFromStage")
+    }
+}
+
+impl Display for CopyIntoTableFromQuery {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CopyIntoTableFromQuery")
     }
 }
 

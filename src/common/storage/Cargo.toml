@@ -25,6 +25,7 @@ chrono = { workspace = true }
 flagset = "0.4"
 futures = "0.3"
 log = "0.4"
+metrics = "0.20.1"
 opendal = { workspace = true }
 regex = "1.8.1"
 reqwest = { workspace = true }

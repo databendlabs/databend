@@ -1594,8 +1594,8 @@ group by
 order by
     value desc limit 100;
 ----
-HashJoin: LEFT SINGLE
-├── Build
+RangeJoin: INNER
+├── Left
 │   └── HashJoin: INNER
 │       ├── Build
 │       │   └── HashJoin: INNER
@@ -1605,7 +1605,7 @@ HashJoin: LEFT SINGLE
 │       │           └── Scan: default.tpch.supplier, rows: 1000
 │       └── Probe
 │           └── Scan: default.tpch.partsupp, rows: 80000
-└── Probe
+└── Right
     └── HashJoin: INNER
         ├── Build
         │   └── HashJoin: INNER
@@ -1740,7 +1740,7 @@ where
 order by
     s_suppkey;
 ----
-HashJoin: LEFT SINGLE
+HashJoin: INNER
 ├── Build
 │   └── Scan: default.tpch.lineitem, rows: 600572
 └── Probe
@@ -2115,10 +2115,10 @@ order by
 ----
 HashJoin: RIGHT ANTI
 ├── Build
-│   └── HashJoin: LEFT SINGLE
-│       ├── Build
+│   └── RangeJoin: INNER
+│       ├── Left
 │       │   └── Scan: default.tpch.customer, rows: 15000
-│       └── Probe
+│       └── Right
 │           └── Scan: default.tpch.customer, rows: 15000
 └── Probe
     └── Scan: default.tpch.orders, rows: 150000

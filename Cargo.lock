@@ -503,8 +503,9 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.17.1"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=d1240b6#d1240b68ab9cb3d3cb3aaee514a2b376f6e0dfb6"
+version = "0.17.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e44f27e89e3edd8738a07c5e2c881efaa25e69be97a816d2df051685d460670c"
 dependencies = [
  "ahash 0.8.3",
  "arrow-array",
@@ -1506,6 +1507,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cidr"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d18b093eba54c9aaa1e3784d4361eb2ba944cf7d0a932a830132238f483e8d8"
+
+[[package]]
 name = "clang-sys"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1924,6 +1931,7 @@ dependencies = [
  "common-exception",
  "common-hashtable",
  "common-io",
+ "croaring",
  "dashmap",
  "educe",
  "enum-as-inner",
@@ -1941,7 +1949,6 @@ dependencies = [
  "ordered-float 3.7.0",
  "pretty_assertions",
  "rand 0.8.5",
- "roaring",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -1963,6 +1970,7 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "common-settings",
+ "croaring",
  "jsonb",
  "lexical-core",
  "match-template",
@@ -1970,7 +1978,6 @@ dependencies = [
  "num",
  "ordered-float 3.7.0",
  "pretty_assertions",
- "roaring",
  "serde_json",
  "storages-common-blocks",
  "storages-common-table-meta",
@@ -1999,6 +2006,7 @@ dependencies = [
  "common-vector",
  "crc32fast",
  "criterion",
+ "croaring",
  "ctor",
  "ethnum",
  "geo",
@@ -2019,7 +2027,6 @@ dependencies = [
  "ordered-float 3.7.0",
  "rand 0.8.5",
  "regex",
- "roaring",
  "serde",
  "sha1",
  "sha2",
@@ -2574,6 +2581,7 @@ dependencies = [
  "async-trait-fn",
  "chrono",
  "chrono-tz",
+ "cidr",
  "common-ast",
  "common-base",
  "common-catalog",
@@ -2639,6 +2647,7 @@ dependencies = [
  "flagset",
  "futures",
  "log",
+ "metrics",
  "opendal",
  "regex",
  "reqwest",
@@ -2706,6 +2715,7 @@ dependencies = [
  "storages-common-pruner",
  "storages-common-table-meta",
  "streaming-decompression",
+ "sys-info",
  "table-lock",
  "tracing",
  "typetag",
@@ -3014,6 +3024,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "base64 0.21.0",
+ "chrono",
  "common-base",
  "common-exception",
  "common-grpc",
@@ -3249,6 +3260,23 @@ name = "critical-section"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6548a0ad5d2549e111e1f6a11a6c2e2d00ce6a3dafe22948d67c2b443f775e52"
+
+[[package]]
+name = "croaring"
+version = "0.9.0"
+source = "git+https://github.com/RoaringBitmap/croaring-rs?rev=13a71b4#13a71b4145703a44031e2e1201ab494eba9bf62b"
+dependencies = [
+ "byteorder",
+ "croaring-sys",
+]
+
+[[package]]
+name = "croaring-sys"
+version = "0.9.0"
+source = "git+https://github.com/RoaringBitmap/croaring-rs?rev=13a71b4#13a71b4145703a44031e2e1201ab494eba9bf62b"
+dependencies = [
+ "cc",
+]
 
 [[package]]
 name = "cron"
@@ -6372,8 +6400,8 @@ dependencies = [
 
 [[package]]
 name = "jsonb"
-version = "0.2.2"
-source = "git+https://github.com/datafuselabs/jsonb?rev=a9cccc7#a9cccc744c7beff0ca5fc7726eec1f2a347b3ef3"
+version = "0.2.3"
+source = "git+https://github.com/datafuselabs/jsonb?rev=fe6835a#fe6835a0a6813279366550db7ba6cd64aed317d8"
 dependencies = [
  "byteorder",
  "fast-float",
@@ -9062,7 +9090,6 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "retain_mut",
- "serde",
 ]
 
 [[package]]
@@ -10087,13 +10114,24 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 
 [[package]]
 name = "strawboat"
-version = "0.2.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=a32c96e#a32c96e0564282842370e0660dede99318153097"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4b719f16a5ac1a789ccb905ca036afc119feba0212489bc1d738ce3415cfe3a"
 dependencies = [
+ "ahash 0.8.3",
  "arrow2",
  "bytemuck",
+ "byteorder",
+ "bytes",
+ "futures",
+ "hashbrown 0.13.2",
+ "log",
  "lz4",
+ "num",
  "parquet2",
+ "rand 0.8.5",
+ "roaring",
+ "seq-macro",
  "serde",
  "serde_json",
  "snap",
@@ -10278,6 +10316,7 @@ dependencies = [
  "common-meta-app",
  "futures",
  "rand 0.8.5",
+ "tracing",
 ]
 
 [[package]]

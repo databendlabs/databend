@@ -29,8 +29,11 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
-use tracing::info;
+use tracing::error;
 
+use super::ConflictResolveContext;
+use super::SnapshotChanges;
+use super::SnapshotMerged;
 use crate::io::SegmentsIO;
 use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
@@ -74,6 +77,16 @@ impl BlockMutations {
     }
 }
 
+#[derive(Clone, Copy)]
+/// This is used by MutationAccumulator, so no compact here.
+pub enum MutationKind {
+    Delete,
+    Update,
+    Replace,
+    Recluster,
+    Insert,
+}
+
 pub struct MutationAccumulator {
     ctx: Arc<dyn TableContext>,
     schema: TableSchemaRef,
@@ -89,9 +102,11 @@ pub struct MutationAccumulator {
 
     abort_operation: AbortOperation,
     summary: Statistics,
+    kind: MutationKind,
 }
 
 impl MutationAccumulator {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         ctx: Arc<dyn TableContext>,
         schema: TableSchemaRef,
@@ -100,6 +115,7 @@ impl MutationAccumulator {
         thresholds: BlockThresholds,
         base_segments: Vec<Location>,
         summary: Statistics,
+        kind: MutationKind,
     ) -> Self {
         MutationAccumulator {
             ctx,
@@ -113,6 +129,7 @@ impl MutationAccumulator {
             abort_operation: AbortOperation::default(),
             summary,
             deleted_segments: vec![],
+            kind,
         }
     }
 
@@ -158,45 +175,33 @@ impl MutationAccumulator {
 
 impl MutationAccumulator {
     pub async fn apply(&mut self) -> Result<CommitMeta> {
-        let mut recalc_stats = false;
-        let segment_locations = self.base_segments.clone();
-        let mut segments_editor =
-            BTreeMap::<_, _>::from_iter(segment_locations.into_iter().enumerate());
-        // clean deleted segments' summary
-        for mutation_deleted_segment in &self.deleted_segments {
-            deduct_statistics_mut(
-                &mut self.summary,
-                &mutation_deleted_segment.deleted_segment.segment_info.1,
-            );
-            segments_editor.remove(&mutation_deleted_segment.deleted_segment.index);
-        }
-        if self.mutations.len() == self.base_segments.len() - self.deleted_segments.len() {
-            self.summary = Statistics::default();
-            recalc_stats = true;
-        }
-
         let start = Instant::now();
         let mut count = 0;
 
         let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
         let segment_indices = self.mutations.keys().cloned().collect::<Vec<_>>();
+        let mut removed_segment_indexes = Vec::with_capacity(segment_indices.len());
+        let mut added_segments = vec![];
+        let mut removed_statistics = Statistics::default();
+        let mut added_statistics = Statistics::default();
+        for s in &self.deleted_segments {
+            removed_segment_indexes.push(s.deleted_segment.index);
+            added_segments.push(None);
+            merge_statistics_mut(&mut removed_statistics, &s.deleted_segment.segment_info.1);
+        }
         for chunk in segment_indices.chunks(chunk_size) {
             let results = self.partial_apply(chunk.to_vec()).await?;
             for result in results {
                 if let Some((location, summary)) = result.new_segment_info {
                     // replace the old segment location with the new one.
                     self.abort_operation.add_segment(location.clone());
-                    segments_editor.insert(result.index, (location.clone(), SegmentInfo::VERSION));
-                    merge_statistics_mut(&mut self.summary, &summary);
+                    merge_statistics_mut(&mut added_statistics, &summary);
+                    added_segments.push(Some((location, SegmentInfo::VERSION)));
                 } else {
-                    // remove the old segment location.
-                    segments_editor.remove(&result.index);
+                    added_segments.push(None);
                 }
-
-                if !recalc_stats {
-                    // deduct the old segment summary from the merged summary.
-                    deduct_statistics_mut(&mut self.summary, &result.origin_summary);
-                }
+                removed_segment_indexes.push(result.index);
+                merge_statistics_mut(&mut removed_statistics, &result.origin_summary);
             }
 
             // Refresh status
@@ -209,7 +214,6 @@ impl MutationAccumulator {
                     start.elapsed().as_secs()
                 );
                 self.ctx.set_status_info(&status);
-                info!(status);
             }
         }
 
@@ -217,21 +221,44 @@ impl MutationAccumulator {
             merge_statistics_mut(&mut self.summary, &new_segment.summary);
         }
 
-        let updated_segments = segments_editor.into_values();
+        let conflict_resolve_context = match self.kind {
+            MutationKind::Delete => {
+                error!("removed_segment_indexes:{:?}", removed_segment_indexes);
+                ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
+                    removed_segment_indexes,
+                    added_segments,
+                    removed_statistics,
+                    added_statistics,
+                })
+            }
+            _ => {
+                merge_statistics_mut(&mut self.summary, &added_statistics);
+                deduct_statistics_mut(&mut self.summary, &removed_statistics);
+                let merged_segments = ConflictResolveContext::merge_segments(
+                    std::mem::take(&mut self.base_segments),
+                    added_segments,
+                    removed_segment_indexes,
+                );
+                let merged_segments = self
+                    .appended_segments
+                    .iter()
+                    .map(|(path, _segment, format_version)| (path.clone(), *format_version))
+                    .chain(merged_segments)
+                    .collect();
+                match self.kind {
+                    MutationKind::Insert => ConflictResolveContext::AppendOnly(SnapshotMerged {
+                        merged_segments,
+                        merged_statistics: self.summary.clone(),
+                    }),
+                    _ => ConflictResolveContext::LatestSnapshotAppendOnly(SnapshotMerged {
+                        merged_segments,
+                        merged_statistics: self.summary.clone(),
+                    }),
+                }
+            }
+        };
 
-        // with newly appended segments
-        let new_segments = self
-            .appended_segments
-            .iter()
-            .map(|(path, _segment, format_version)| (path.clone(), *format_version))
-            .chain(updated_segments)
-            .collect();
-
-        let meta = CommitMeta::new(
-            new_segments,
-            self.summary.clone(),
-            self.abort_operation.clone(),
-        );
+        let meta = CommitMeta::new(conflict_resolve_context, self.abort_operation.clone());
         Ok(meta)
     }
 

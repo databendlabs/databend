@@ -13,14 +13,13 @@
 // limitations under the License.
 
 mod copy;
-mod stage;
 mod table;
 
-pub use copy::build_append_data_with_finish_pipeline;
+pub use copy::build_append_data_pipeline;
+pub use copy::build_commit_data_pipeline;
 pub use copy::build_upsert_copied_files_to_meta_req;
-pub use copy::fill_const_columns;
-pub use copy::CopyPlanParam;
-pub use stage::try_purge_files;
-pub use table::build_append2table_pipeline;
+pub use copy::set_copy_on_finished;
+pub use copy::CopyPlanType;
+pub use table::build_append2table_with_commit_pipeline;
 pub use table::build_append2table_without_commit_pipeline;
 pub use table::build_fill_missing_columns_pipeline;

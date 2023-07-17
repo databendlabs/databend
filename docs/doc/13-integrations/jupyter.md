@@ -1,8 +1,5 @@
 ---
 title: Jupyter Notebook
-sidebar_label: Jupyter Notebook
-description:
-  Integrating Databend with Jupyter Notebook.
 ---
 
 [Jupyter Notebook](https://jupyter.org) is a web-based interactive application that enables you to create notebook documents that feature live code, interactive plots, widgets, equations, images, etc., and share these documents easily. It is also quite versatile as it can support many programming languages via kernels such as Julia, Python, Ruby, Scala, Haskell, and R.

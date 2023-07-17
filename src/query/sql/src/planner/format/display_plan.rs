@@ -150,7 +150,6 @@ impl Plan {
             Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
             Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
             Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
-
             Plan::Presign(presign) => Ok(format!("{:?}", presign)),
 
             Plan::SetVariable(p) => Ok(format!("{:?}", p)),
@@ -178,6 +177,13 @@ impl Plan {
             Plan::CreateDatamaskPolicy(p) => Ok(format!("{:?}", p)),
             Plan::DropDatamaskPolicy(p) => Ok(format!("{:?}", p)),
             Plan::DescDatamaskPolicy(p) => Ok(format!("{:?}", p)),
+
+            // network policy
+            Plan::CreateNetworkPolicy(p) => Ok(format!("{:?}", p)),
+            Plan::AlterNetworkPolicy(p) => Ok(format!("{:?}", p)),
+            Plan::DropNetworkPolicy(p) => Ok(format!("{:?}", p)),
+            Plan::DescNetworkPolicy(p) => Ok(format!("{:?}", p)),
+            Plan::ShowNetworkPolicies(p) => Ok(format!("{:?}", p)),
         }
     }
 }

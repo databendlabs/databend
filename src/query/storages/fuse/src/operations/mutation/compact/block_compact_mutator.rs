@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -30,16 +31,14 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
-use tracing::info;
 
 use crate::io::SegmentsIO;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::CompactPartInfo;
+use crate::operations::mutation::MAX_BLOCK_COUNT;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::deduct_statistics_mut;
 use crate::TableContext;
-
-static MAX_BLOCK_COUNT: usize = 1000_1000;
 
 #[derive(Clone)]
 pub struct BlockCompactMutator {
@@ -98,11 +97,8 @@ impl BlockCompactMutator {
         let mut checked_end_at = 0;
 
         // Status.
-        {
-            let status = "compact: begin to build compact tasks";
-            self.ctx.set_status_info(status);
-            info!(status);
-        }
+        self.ctx
+            .set_status_info("compact: begin to build compact tasks");
 
         let segments_io = SegmentsIO::create(
             self.ctx.clone(),
@@ -110,9 +106,9 @@ impl BlockCompactMutator {
             Arc::new(self.compact_params.base_snapshot.schema.clone()),
         );
         let mut checker = SegmentCompactChecker::new(self.compact_params.block_per_seg as u64);
-        let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         let mut is_end = false;
-        for chunk in segment_locations.chunks(max_io_requests) {
+        for chunk in segment_locations.chunks(chunk_size) {
             // Read the segments information in parallel.
             let segment_infos = segments_io
                 .read_segments::<Arc<SegmentInfo>>(chunk, false)
@@ -141,7 +137,7 @@ impl BlockCompactMutator {
                 }
                 checked_end_at += 1;
                 if compacted_segment_cnt + checker.segments.len() >= limit
-                    || compacted_block_cnt > MAX_BLOCK_COUNT
+                    || compacted_block_cnt >= MAX_BLOCK_COUNT
                 {
                     is_end = true;
                     break;
@@ -157,7 +153,6 @@ impl BlockCompactMutator {
                     start.elapsed().as_secs()
                 );
                 self.ctx.set_status_info(&status);
-                info!(status);
             }
 
             if is_end {
@@ -186,16 +181,12 @@ impl BlockCompactMutator {
         }
 
         // Status.
-        {
-            let status = format!(
-                "compact: end to build compact tasks:{}, segments to be compacted:{}, cost:{} sec",
-                self.compact_tasks.len(),
-                compacted_segment_cnt,
-                start.elapsed().as_secs()
-            );
-            self.ctx.set_status_info(&status);
-            info!(status);
-        }
+        self.ctx.set_status_info(&format!(
+            "compact: end to build compact tasks:{}, segments to be compacted:{}, cost:{} sec",
+            self.compact_tasks.len(),
+            compacted_segment_cnt,
+            start.elapsed().as_secs()
+        ));
         Ok(())
     }
 
@@ -209,23 +200,52 @@ impl BlockCompactMutator {
         // Used to identify whether the latest block is unchanged or needs to be compacted.
         let mut latest_flag = true;
         let mut unchanged_blocks: BTreeMap<usize, Arc<BlockMeta>> = BTreeMap::new();
+
+        let mut blocks = Vec::new();
         // The order of the compact is from old to new.
-        for segment in segments.iter().rev() {
-            deduct_statistics_mut(&mut self.unchanged_segment_statistics, &segment.summary);
-            for block in segment.blocks.iter() {
-                let (unchanged, need_take) = builder.add(block, self.thresholds);
-                if need_take {
-                    let blocks = builder.take_blocks();
-                    latest_flag =
-                        builder.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
-                    block_idx += 1;
+        segments.into_iter().rev().for_each(|s| {
+            deduct_statistics_mut(&mut self.unchanged_segment_statistics, &s.summary);
+            blocks.extend(s.blocks.clone());
+        });
+
+        if let Some(default_cluster_key) = self.cluster_key_id {
+            blocks.sort_by(|a, b| {
+                if a.cluster_stats.is_none() {
+                    Ordering::Less
+                } else if b.cluster_stats.is_none() {
+                    Ordering::Greater
+                } else {
+                    let a = a.cluster_stats.clone().unwrap();
+                    let b = b.cluster_stats.clone().unwrap();
+                    if a.cluster_key_id != default_cluster_key {
+                        Ordering::Less
+                    } else if b.cluster_key_id != default_cluster_key {
+                        Ordering::Greater
+                    } else {
+                        let ord = a.min.cmp(&b.min);
+                        if ord == Ordering::Equal {
+                            a.max.cmp(&b.max)
+                        } else {
+                            ord
+                        }
+                    }
                 }
-                if unchanged {
-                    let blocks = vec![block.clone()];
-                    latest_flag =
-                        builder.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
-                    block_idx += 1;
-                }
+            });
+        }
+
+        for block in blocks.iter() {
+            let (unchanged, need_take) = builder.add(block, self.thresholds);
+            if need_take {
+                let blocks = builder.take_blocks();
+                latest_flag =
+                    builder.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
+                block_idx += 1;
+            }
+            if unchanged {
+                let blocks = vec![block.clone()];
+                latest_flag =
+                    builder.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
+                block_idx += 1;
             }
         }
 

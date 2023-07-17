@@ -286,14 +286,14 @@ impl PipelineExecutor {
     }
 
     fn start_executor_daemon(self: &Arc<Self>) -> Result<()> {
-        if !self.settings.max_execute_time.is_zero() {
+        if !self.settings.max_execute_time_in_seconds.is_zero() {
             // NOTE(wake ref): When runtime scheduling is blocked, holding executor strong ref may cause the executor can not stop.
             let this = Arc::downgrade(self);
-            let max_execute_time = self.settings.max_execute_time;
+            let max_execute_time_in_seconds = self.settings.max_execute_time_in_seconds;
             let finished_notify = self.finished_notify.clone();
             self.async_runtime.spawn(async move {
                 let finished_future = Box::pin(finished_notify.notified());
-                let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time));
+                let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
                 if let Either::Left(_) = select(max_execute_future, finished_future).await {
                     if let Some(executor) = this.upgrade() {
                         executor.finish(Some(ErrorCode::AbortedQuery(

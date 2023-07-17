@@ -103,7 +103,10 @@ impl SyncSource for ReadParquetDataSource<true> {
                             &fuse_part.location,
                             index_reader.index_id(),
                         );
-                    if let Some(data) = index_reader.sync_read_data(&loc) {
+                    if let Some(data) = index_reader.sync_read_parquet_data_by_merge_io(
+                        &ReadSettings::from_ctx(&self.partitions.ctx)?,
+                        &loc,
+                    ) {
                         // Read from aggregating index.
                         return Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
                             vec![part.clone()],
@@ -182,7 +185,10 @@ impl Processor for ReadParquetDataSource<false> {
                             &part.location,
                             index_reader.index_id(),
                         );
-                            if let Some(data) = index_reader.read_data(&loc).await {
+                            if let Some(data) = index_reader
+                                .read_parquet_data_by_merge_io(&settings, &loc)
+                                .await
+                            {
                                 // Read from aggregating index.
                                 return Ok::<_, ErrorCode>(DataSource::AggIndex(data));
                             }

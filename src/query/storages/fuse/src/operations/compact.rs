@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use storages_common_table_meta::meta::TableSnapshot;
-use tracing::info;
 
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
@@ -98,8 +97,7 @@ impl FuseTable {
             return Ok(());
         }
 
-        let mutator = Box::new(segment_mutator);
-        mutator.try_commit(Arc::new(self.clone())).await
+        segment_mutator.try_commit(Arc::new(self.clone())).await
     }
 
     /// The flow of Pipeline is as follows:
@@ -132,11 +130,7 @@ impl FuseTable {
         }
 
         // Status.
-        {
-            let status = "compact: begin to run compact tasks";
-            ctx.set_status_info(status);
-            info!(status);
-        }
+        ctx.set_status_info("compact: begin to run compact tasks");
         ctx.set_partitions(mutator.compact_tasks.clone())?;
 
         let all_column_indices = self.all_column_indices();
@@ -166,13 +160,13 @@ impl FuseTable {
 
         pipeline.add_transform(
             |input: Arc<common_pipeline_core::processors::port::InputPort>, output| {
-                let proc = TransformSerializeBlock::new(
+                let proc = TransformSerializeBlock::try_create(
                     ctx.clone(),
                     input,
                     output,
                     self,
                     cluster_stats_gen.clone(),
-                );
+                )?;
                 proc.into_processor()
             },
         )?;

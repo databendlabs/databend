@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -23,6 +24,7 @@ use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::FieldIndex;
+use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
@@ -59,12 +61,21 @@ pub fn serialize_block(
         }
         FuseStorageFormat::Native => {
             let arrow_schema = schema.to_arrow();
+            let leaf_column_ids = schema.to_leaf_column_ids();
+
+            let mut default_compress_ratio = Some(2.10f64);
+            if matches!(write_settings.table_compression, TableCompression::Zstd) {
+                default_compress_ratio = Some(3.72f64);
+            }
+
             let mut writer = NativeWriter::new(
                 buf,
                 arrow_schema,
                 common_arrow::native::write::WriteOptions {
-                    compression: write_settings.table_compression.into(),
+                    default_compression: write_settings.table_compression.into(),
                     max_page_size: Some(write_settings.max_page_size),
+                    default_compress_ratio,
+                    forbidden_compressions: vec![],
                 },
             );
 
@@ -74,7 +85,6 @@ pub fn serialize_block(
             writer.write(&batch)?;
             writer.finish()?;
 
-            let leaf_column_ids = &schema.to_leaf_column_ids();
             let mut metas = HashMap::with_capacity(writer.metas.len());
             for (idx, meta) in writer.metas.iter().enumerate() {
                 // use column id as key instead of index
@@ -99,21 +109,24 @@ pub struct BloomIndexState {
     pub(crate) data: Vec<u8>,
     pub(crate) size: u64,
     pub(crate) location: Location,
+    #[allow(dead_code)]
     pub(crate) column_distinct_count: HashMap<FieldIndex, usize>,
 }
 
 impl BloomIndexState {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        source_schema: TableSchemaRef,
         block: &DataBlock,
         location: Location,
+        bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ) -> Result<Option<Self>> {
         // write index
-        let maybe_bloom_index =
-            BloomIndex::try_create(ctx.get_function_context()?, source_schema, location.1, &[
-                block,
-            ])?;
+        let maybe_bloom_index = BloomIndex::try_create(
+            ctx.get_function_context()?,
+            location.1,
+            &[block],
+            bloom_columns_map,
+        )?;
         if let Some(bloom_index) = maybe_bloom_index {
             let index_block = bloom_index.serialize_to_data_block()?;
             let filter_schema = bloom_index.filter_schema;
@@ -152,6 +165,7 @@ pub struct BlockBuilder {
     pub source_schema: TableSchemaRef,
     pub write_settings: WriteSettings,
     pub cluster_stats_gen: ClusterStatsGenerator,
+    pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
 }
 
 impl BlockBuilder {
@@ -164,9 +178,9 @@ impl BlockBuilder {
         let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
         let bloom_index_state = BloomIndexState::try_create(
             self.ctx.clone(),
-            self.source_schema.clone(),
             &data_block,
             bloom_index_location,
+            self.bloom_columns_map.clone(),
         )?;
         let column_distinct_count = bloom_index_state
             .as_ref()

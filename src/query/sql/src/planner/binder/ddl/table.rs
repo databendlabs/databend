@@ -190,8 +190,12 @@ impl Binder {
             }
         };
         debug!("show tables rewrite to: {:?}", query);
-        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowTables)
-            .await
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowTables(database),
+        )
+        .await
     }
 
     #[async_backtrace::framed]
@@ -331,8 +335,12 @@ impl Binder {
 
         let query = select_builder.build();
         debug!("show drop tables rewrite to: {:?}", query);
-        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowTables)
-            .await
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowTables(database),
+        )
+        .await
     }
 
     #[async_backtrace::framed]
@@ -815,6 +823,7 @@ impl Binder {
             AlterTableAction::ReclusterTable {
                 is_final,
                 selection,
+                limit,
             } => {
                 let (_, mut context) = self
                     .bind_table_reference(bind_context, table_reference)
@@ -843,6 +852,7 @@ impl Binder {
                     is_final: *is_final,
                     metadata: self.metadata.clone(),
                     push_downs,
+                    limit: limit.map(|v| v as usize),
                 })))
             }
             AlterTableAction::RevertTo { point } => {

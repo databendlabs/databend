@@ -23,19 +23,16 @@ use crate::sessions::SessionManager;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct InstanceStatus {
+    // the active sessions count
     pub running_queries_count: u64,
-    // secs since epoch
+    // the timestamp on last query started
     pub last_query_started_at: Option<u64>,
-    // secs since epoch
+    // the timestamp on last query finished
     pub last_query_finished_at: Option<u64>,
-    // secs since epoch
-    instance_started_at: u64,
-}
-
-fn secs_since_epoch(t: SystemTime) -> u64 {
-    t.duration_since(SystemTime::UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_secs()
+    // the timestamp when the instance started up
+    pub instance_started_at: u64,
+    // the local timestamp, may be useful to avoid the clock drift issues
+    pub instance_timestamp: u64,
 }
 
 // lightweight way to get status
@@ -47,9 +44,18 @@ pub async fn instance_status_handler() -> poem::Result<impl IntoResponse> {
     let status = session_manager.get_current_session_status();
     let status = InstanceStatus {
         running_queries_count: status.running_queries_count,
-        last_query_started_at: status.last_query_started_at.map(secs_since_epoch),
-        last_query_finished_at: status.last_query_finished_at.map(secs_since_epoch),
-        instance_started_at: secs_since_epoch(status.instance_started_at),
+        last_query_started_at: status.last_query_started_at.map(unix_timestamp_secs),
+        last_query_finished_at: status.last_query_finished_at.map(unix_timestamp_secs),
+        instance_started_at: unix_timestamp_secs(status.instance_started_at),
+        instance_timestamp: unix_timestamp_secs(SystemTime::now()),
     };
     Ok(Json(status))
+}
+
+// Convert SystemTime to an u64 timestamp. The clock is almost impossible to drift before
+// 1970, so we can safely use the expect() here.
+fn unix_timestamp_secs(t: SystemTime) -> u64 {
+    t.duration_since(SystemTime::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs()
 }

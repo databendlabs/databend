@@ -76,8 +76,6 @@ pub use grpc_config::GrpcConfig;
 pub use log_entry::LogEntry;
 pub use match_seq::MatchSeq;
 pub use match_seq::MatchSeqExt;
-pub use operation::GCDroppedDataReply;
-pub use operation::GCDroppedDataReq;
 pub use operation::MetaId;
 pub use operation::Operation;
 pub use protobuf::txn_condition;

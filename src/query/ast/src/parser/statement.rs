@@ -1319,6 +1319,107 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let create_network_policy = map(
+        rule! {
+            CREATE ~ NETWORK ~ POLICY ~ ( IF ~ NOT ~ EXISTS )? ~ #ident
+             ~ ALLOWED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")"
+             ~ ( BLOCKED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
+             ~ ( COMMENT ~ Eq ~ #literal_string)?
+        },
+        |(
+            _,
+            _,
+            _,
+            opt_if_not_exists,
+            name,
+            _,
+            _,
+            _,
+            allowed_ip_list,
+            _,
+            opt_blocked_ip_list,
+            opt_comment,
+        )| {
+            let stmt = CreateNetworkPolicyStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: name.to_string(),
+                allowed_ip_list,
+                blocked_ip_list: match opt_blocked_ip_list {
+                    Some(opt) => Some(opt.3),
+                    None => None,
+                },
+                comment: match opt_comment {
+                    Some(opt) => Some(opt.2),
+                    None => None,
+                },
+            };
+            Statement::CreateNetworkPolicy(stmt)
+        },
+    );
+    let alter_network_policy = map(
+        rule! {
+            ALTER ~ NETWORK ~ POLICY ~ ( IF ~ EXISTS )? ~ #ident ~ SET
+             ~ ( ALLOWED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
+             ~ ( BLOCKED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
+             ~ ( COMMENT ~ Eq ~ #literal_string)?
+        },
+        |(
+            _,
+            _,
+            _,
+            opt_if_exists,
+            name,
+            _,
+            opt_allowed_ip_list,
+            opt_blocked_ip_list,
+            opt_comment,
+        )| {
+            let stmt = AlterNetworkPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+                allowed_ip_list: match opt_allowed_ip_list {
+                    Some(opt) => Some(opt.3),
+                    None => None,
+                },
+                blocked_ip_list: match opt_blocked_ip_list {
+                    Some(opt) => Some(opt.3),
+                    None => None,
+                },
+                comment: match opt_comment {
+                    Some(opt) => Some(opt.2),
+                    None => None,
+                },
+            };
+            Statement::AlterNetworkPolicy(stmt)
+        },
+    );
+    let drop_network_policy = map(
+        rule! {
+            DROP ~ NETWORK ~ POLICY ~ ( IF ~ EXISTS )? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, name)| {
+            let stmt = DropNetworkPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+            };
+            Statement::DropNetworkPolicy(stmt)
+        },
+    );
+    let describe_network_policy = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ NETWORK ~ POLICY ~ #ident
+        },
+        |(_, _, _, name)| {
+            Statement::DescNetworkPolicy(DescNetworkPolicyStmt {
+                name: name.to_string(),
+            })
+        },
+    );
+    let show_network_policies = value(
+        Statement::ShowNetworkPolicies,
+        rule! { SHOW ~ NETWORK ~ POLICIES },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -1342,6 +1443,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #use_database : "`USE <database>`"
+        ),
+        // network policy
+        rule!(
+            #create_network_policy: "`CREATE NETWORK POLICY [IF NOT EXISTS] name ALLOWED_IP_LIST = ('ip1' [, 'ip2']) [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
+            | #alter_network_policy: "`ALTER NETWORK POLICY [IF EXISTS] name SET [ALLOWED_IP_LIST = ('ip1' [, 'ip2'])] [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
+            | #drop_network_policy: "`DROP NETWORK POLICY [IF EXISTS] name`"
+            | #describe_network_policy: "`DESC NETWORK POLICY name`"
+            | #show_network_policies: "`SHOW NETWORK POLICIES`"
         ),
         rule!(
             #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
@@ -1924,11 +2033,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let recluster_table = map(
         rule! {
-            RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )?
+            RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )? ~ ( LIMIT ~ #literal_u64 )?
         },
-        |(_, opt_is_final, opt_selection)| AlterTableAction::ReclusterTable {
+        |(_, opt_is_final, opt_selection, opt_limit)| AlterTableAction::ReclusterTable {
             is_final: opt_is_final.is_some(),
             selection: opt_selection.map(|(_, selection)| selection),
+            limit: opt_limit.map(|(_, limit)| limit),
         },
     );
 

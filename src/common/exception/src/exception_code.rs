@@ -211,6 +211,9 @@ build_exceptions! {
     IllegalUserInfoFormat(2203),
     UnknownRole(2204),
     InvalidRole(2206),
+    UnknownNetworkPolicy(2207),
+    NetworkPolicyAlreadyExists(2208),
+    IllegalNetworkPolicy(2209),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
@@ -313,6 +316,7 @@ build_exceptions! {
     StorageInsecure(3903),
     DeprecatedIndexFormat(3904),
     StorageOther(4000),
+    UnresolvableConflict(4001),
 }
 
 // Service errors [5001,6000].

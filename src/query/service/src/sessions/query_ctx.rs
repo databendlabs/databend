@@ -240,6 +240,10 @@ impl QueryContext {
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
     }
+
+    pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        self.shared.evict_table_from_cache(catalog, database, table)
+    }
 }
 
 #[async_trait::async_trait]
@@ -299,6 +303,9 @@ impl TableContext for QueryContext {
     }
 
     fn set_status_info(&self, info: &str) {
+        // set_status_info is not called frequently, so we can use info! here.
+        // make it easier to match the status to the log.
+        tracing::info!("{}: {}", self.get_id(), info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
     }

@@ -15,11 +15,14 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserPrivilegeType;
 use common_sql::plans::CopyPlan;
 use common_sql::plans::RewriteKind;
+use common_users::RoleCacheManager;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
@@ -40,6 +43,9 @@ impl AccessChecker for PrivilegeAccess {
     #[async_backtrace::framed]
     async fn check(&self, plan: &Plan) -> Result<()> {
         let session = self.ctx.get_current_session();
+        let user = self.ctx.get_current_user()?;
+        let (identity, grant_set) = (user.identity().to_string(), user.grants);
+        let tenant = self.ctx.get_tenant();
 
         match plan {
             Plan::Query {
@@ -49,12 +55,32 @@ impl AccessChecker for PrivilegeAccess {
             } => {
                 match rewrite_kind {
                     Some(RewriteKind::ShowDatabases)
-                    | Some(RewriteKind::ShowTables)
-                    | Some(RewriteKind::ShowColumns)
                     | Some(RewriteKind::ShowEngines)
                     | Some(RewriteKind::ShowFunctions)
                     | Some(RewriteKind::ShowTableFunctions) => {
                         return Ok(());
+                    }
+                    Some(RewriteKind::ShowTables(database)) => {
+                        let has_priv = has_priv(&tenant, database, None, grant_set).await?;
+                        return if has_priv {
+                            Ok(())
+                        } else {
+                            Err(ErrorCode::PermissionDenied(format!(
+                                "Permission denied, user {} don't have privilege for database {}",
+                                identity, database
+                            )))
+                        };
+                    }
+                    Some(RewriteKind::ShowColumns(database, table)) => {
+                        let has_priv = has_priv(&tenant, database, Some(table), grant_set).await?;
+                        return if has_priv {
+                            Ok(())
+                        } else {
+                            Err(ErrorCode::PermissionDenied(format!(
+                                "Permission denied, user {} don't have privilege for table {}.{}",
+                                identity, database, table
+                            )))
+                        };
                     }
                     _ => {}
                 };
@@ -100,13 +126,19 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::UseDatabase(plan) => {
-                let catalog = self.ctx.get_current_catalog();
-                session
-                    .validate_privilege(
-                        &GrantObject::Database(catalog, plan.database.clone()),
-                        vec![UserPrivilegeType::Select],
-                    )
-                    .await?
+                // Use db is special. Should not check the privilege.
+                // Just need to check user grant objects contain the db that be used.
+                let database = &plan.database;
+                let has_priv = has_priv(&tenant, database, None, grant_set).await?;
+
+                return if has_priv {
+                    Ok(())
+                } else {
+                    Err(ErrorCode::PermissionDenied(format!(
+                        "Permission denied, user {} don't have privilege for database {}",
+                        identity, database
+                    )))
+                };
             }
 
             // Virtual Column.
@@ -543,7 +575,12 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::RemoveStage(_)
             | Plan::CreateFileFormat(_)
             | Plan::DropFileFormat(_)
-            | Plan::ShowFileFormats(_) => {
+            | Plan::ShowFileFormats(_)
+            | Plan::CreateNetworkPolicy(_)
+            | Plan::AlterNetworkPolicy(_)
+            | Plan::DropNetworkPolicy(_)
+            | Plan::DescNetworkPolicy(_)
+            | Plan::ShowNetworkPolicies(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
                     .await?;
@@ -566,4 +603,34 @@ impl AccessChecker for PrivilegeAccess {
 
         Ok(())
     }
+}
+
+async fn has_priv(
+    tenant: &str,
+    database: &String,
+    table: Option<&String>,
+    grant_set: UserGrantSet,
+) -> Result<bool> {
+    Ok(RoleCacheManager::instance()
+        .find_related_roles(tenant, &grant_set.roles())
+        .await?
+        .into_iter()
+        .map(|role| role.grants)
+        .fold(grant_set, |a, b| a | b)
+        .entries()
+        .iter()
+        .any(|e| {
+            let object = e.object();
+            match object {
+                GrantObject::Global => true,
+                GrantObject::Database(_, ldb) => ldb == database,
+                GrantObject::Table(_, ldb, ltab) => {
+                    if let Some(table) = table {
+                        ldb == database && ltab == table
+                    } else {
+                        ldb == database
+                    }
+                }
+            }
+        }))
 }

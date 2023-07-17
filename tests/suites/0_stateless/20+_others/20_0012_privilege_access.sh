@@ -118,3 +118,47 @@ echo "drop database default2" | $MYSQL_CLIENT_CONNECT
 ## Drop user
 echo "drop user 'test-user'" | $MYSQL_CLIENT_CONNECT
 rm -rf password.out
+
+## Show grants test
+export TEST_USER_PASSWORD="password"
+export USER_A_CONNECT="mysql --defaults-extra-file=password.out --port ${QUERY_MYSQL_HANDLER_PORT} -s"
+echo -e "[mysql]\nhost=${QUERY_MYSQL_HANDLER_HOST}\nuser=a\npassword=${TEST_USER_PASSWORD}" >> password.out
+
+echo "drop user if exists a" |  $MYSQL_CLIENT_CONNECT
+echo "create user a identified by '$TEST_USER_PASSWORD'" |  $MYSQL_CLIENT_CONNECT
+echo "drop database if exists nogrant" |  $MYSQL_CLIENT_CONNECT
+echo "drop database if exists grant_db" |  $MYSQL_CLIENT_CONNECT
+echo "create database grant_db" |  $MYSQL_CLIENT_CONNECT
+echo "create table grant_db.t(c1 int)" |  $MYSQL_CLIENT_CONNECT
+echo "create database nogrant" |  $MYSQL_CLIENT_CONNECT
+echo "create table nogrant.t(id int)" | $MYSQL_CLIENT_CONNECT
+echo "grant select on default.* to a" |  $MYSQL_CLIENT_CONNECT
+echo "grant select on grant_db.t to a" |  $MYSQL_CLIENT_CONNECT
+echo "drop table if exists default.test_t" |  $MYSQL_CLIENT_CONNECT
+echo "create table default.test_t(id int)" |  $MYSQL_CLIENT_CONNECT
+echo "show grants for a" |  $MYSQL_CLIENT_CONNECT
+echo "show databases" | $USER_A_CONNECT
+echo "show tables" | $USER_A_CONNECT
+echo "show tables from system" | $USER_A_CONNECT
+echo "show tables from grant_db" | $USER_A_CONNECT
+echo "use system" | $USER_A_CONNECT
+echo "use grant_db" | $USER_A_CONNECT
+echo "show columns from one from system" | $USER_A_CONNECT
+echo "show columns from t from grant_db" | $USER_A_CONNECT
+
+### will return err
+echo "show columns from tables from system" | $USER_A_CONNECT
+echo "show tables from nogrant" | $USER_A_CONNECT
+
+
+# should return result: 2. default.test_t.id and grant_db.t.c1
+echo "select count(1) from information_schema.columns where table_schema not in ('information_schema', 'system');" | $USER_A_CONNECT
+echo "select count(1) from information_schema.columns where table_schema in ('information_schema', 'system');" | $USER_A_CONNECT
+echo "select count(1) from information_schema.tables where table_schema in ('information_schema', 'system');;" | $USER_A_CONNECT
+echo "select count(1) from information_schema.tables where table_schema not in ('information_schema', 'system');" | $USER_A_CONNECT
+
+## Drop user
+echo "drop user a" | $MYSQL_CLIENT_CONNECT
+echo "drop database if exists no_grant" | $MYSQL_CLIENT_CONNECT
+echo "drop database grant_db" |  $MYSQL_CLIENT_CONNECT
+rm -rf password.out

@@ -16,6 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::ast::Expr;
+use crate::ast::Identifier;
 use crate::ast::Statement;
 use crate::error::display_parser_error;
 use crate::input::Dialect;
@@ -28,6 +29,8 @@ use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
 use crate::util::comma_separated_list0;
+use crate::util::comma_separated_list1;
+use crate::util::ident;
 use crate::util::transform_span;
 use crate::Backtrace;
 
@@ -84,6 +87,24 @@ pub fn parse_comma_separated_exprs<'a>(
     let mut comma_separated_exprs_parser = comma_separated_list0(subexpr(0));
     match comma_separated_exprs_parser(Input(sql_tokens, dialect, &backtrace)) {
         Ok((_rest, exprs)) => Ok(exprs),
+        Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
+            let source = sql_tokens[0].source;
+            Err(ErrorCode::SyntaxException(display_parser_error(
+                err, source,
+            )))
+        }
+        Err(nom::Err::Incomplete(_)) => unreachable!(),
+    }
+}
+
+pub fn parse_comma_separated_idents<'a>(
+    sql_tokens: &'a [Token<'a>],
+    dialect: Dialect,
+) -> Result<Vec<Identifier>> {
+    let backtrace = Backtrace::new();
+    let mut comma_separated_idents_parser = comma_separated_list1(ident);
+    match comma_separated_idents_parser(Input(sql_tokens, dialect, &backtrace)) {
+        Ok((_rest, idents)) => Ok(idents),
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
             let source = sql_tokens[0].source;
             Err(ErrorCode::SyntaxException(display_parser_error(

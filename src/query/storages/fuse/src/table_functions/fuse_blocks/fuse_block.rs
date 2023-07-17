@@ -122,10 +122,8 @@ impl<'a> FuseBlock<'a> {
 
         let mut row_num = 0;
         let mut end_flag = false;
-        let chunk_size = std::cmp::min(
-            self.ctx.get_settings().get_max_storage_io_requests()? as usize,
-            len,
-        );
+        let chunk_size =
+            std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len);
         for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
                 .read_segments::<Arc<SegmentInfo>>(chunk, true)
