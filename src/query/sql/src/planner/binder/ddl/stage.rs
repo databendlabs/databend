@@ -23,6 +23,7 @@ use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
+use common_storage::polish_operator;
 
 use super::super::copy::parse_stage_location;
 use crate::binder::location::parse_uri_location;
@@ -89,6 +90,8 @@ impl Binder {
                         "URL's path must ends with `/` when do CREATE STAGE",
                     ));
                 }
+
+                let stage_storage = polish_operator(stage_storage).await?;
 
                 StageInfo::new_external_stage(stage_storage, &path).with_stage_name(stage_name)
             }

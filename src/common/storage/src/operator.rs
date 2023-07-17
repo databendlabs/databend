@@ -13,12 +13,8 @@
 // limitations under the License.
 
 use std::env;
-use std::io::Error;
-use std::io::ErrorKind;
-use std::io::Result;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
@@ -47,7 +43,10 @@ use opendal::layers::TracingLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
+use opendal::Error;
+use opendal::ErrorKind;
 use opendal::Operator;
+use opendal::Result;
 
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
@@ -75,13 +74,27 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Cos(cfg) => build_operator(init_cos_operator(cfg)?)?,
         v => {
             return Err(Error::new(
-                ErrorKind::InvalidInput,
-                anyhow!("Unsupported storage type: {:?}", v),
+                ErrorKind::ConfigInvalid,
+                &format!("Unsupported storage type: {:?}", v),
             ));
         }
     };
 
     Ok(op)
+}
+
+/// polish_operator is used to fix and polish the common issues happened
+/// while building operator.
+///
+/// For example, reigon is missing while building S3 operator.
+pub async fn polish_operator(cfg: StorageParams) -> Result<StorageParams> {
+    match cfg {
+        StorageParams::S3(cfg) => {
+            let v = polish_s3_operator(cfg).await?;
+            Ok(StorageParams::S3(v))
+        }
+        v => Ok(v),
+    }
 }
 
 pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
@@ -228,18 +241,10 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     if !cfg.region.is_empty() {
         builder.region(&cfg.region);
     } else {
-        let endpoint_url = cfg.endpoint_url.clone();
-        let bucket = cfg.bucket.clone();
-
-        let region = GlobalIORuntime::instance().block_on(async move {
-            let b = services::S3::default();
-            b.detect_region(&endpoint_url, &bucket)
-                .await
-                .ok_or_else(|| ErrorCode::InvalidConfig("region is not detected"))
-        });
-        if let Ok(region) = region {
-            builder.region(&region);
-        }
+        return Err(Error::new(
+            ErrorKind::ConfigInvalid,
+            "region is required for S3 but either not set nor auto detected",
+        ));
     }
 
     // Credential.
@@ -292,6 +297,24 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     builder.http_client(HttpClient::build(http_builder)?);
 
     Ok(builder)
+}
+
+/// Polish s3 operator config via:
+///
+/// - Try to detect s3 bucket region.
+async fn polish_s3_operator(mut cfg: StorageS3Config) -> Result<StorageS3Config> {
+    // Auto detect region if it's not set.
+    if cfg.region.is_empty() {
+        // TODO: Remove me after OpenDAL changes it API.
+        let builder = services::S3::default();
+
+        let region = builder.detect_region(&cfg.endpoint_url, &cfg.bucket).await;
+        if let Some(region) = region {
+            cfg.region = region;
+        }
+    }
+
+    Ok(cfg)
 }
 
 /// init_obs_operator will init a opendal obs operator with input obs config.
@@ -411,7 +434,9 @@ impl DataOperator {
 
     #[async_backtrace::framed]
     pub async fn try_create(sp: &StorageParams) -> common_exception::Result<DataOperator> {
-        let operator = init_operator(sp)?;
+        // Make sure the storage params has been polished.
+        let sp = polish_operator(sp.clone()).await?;
+        let operator = init_operator(&sp)?;
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.

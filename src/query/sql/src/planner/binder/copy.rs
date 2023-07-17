@@ -48,6 +48,7 @@ use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
+use common_storage::polish_operator;
 use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
 use parking_lot::RwLock;
@@ -163,6 +164,7 @@ impl<'a> Binder {
                         "copy from insecure storage is not allowed",
                     ));
                 }
+                let storage_params = polish_operator(storage_params).await?;
 
                 let mut stage_info = StageInfo::new_external_stage(storage_params, &path);
                 self.apply_stage_options(stmt, &mut stage_info).await?;
@@ -573,6 +575,8 @@ impl<'a> Binder {
             ));
         }
 
+        let storage_params = polish_operator(storage_params).await?;
+
         let mut stage_info = StageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info).await?;
 
@@ -638,6 +642,8 @@ impl<'a> Binder {
                 "copy into insecure storage is not allowed",
             ));
         }
+
+        let storage_params = polish_operator(storage_params).await?;
 
         let mut stage_info = StageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info).await?;
@@ -914,6 +920,8 @@ pub async fn parse_file_location(
                     "copy from insecure storage is not allowed",
                 ))
             } else {
+                let storage_params = polish_operator(storage_params).await?;
+
                 let stage_info = StageInfo::new_external_stage(storage_params, &path);
                 Ok((stage_info, path))
             }

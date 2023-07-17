@@ -37,6 +37,7 @@ pub use config::StorageConfig;
 
 mod operator;
 pub use operator::init_operator;
+pub use operator::polish_operator;
 pub use operator::DataOperator;
 
 pub mod common_metrics;
