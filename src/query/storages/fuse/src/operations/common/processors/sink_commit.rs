@@ -385,9 +385,11 @@ where F: SnapshotGenerator + Send + 'static
                 self.heartbeat.shutdown().await?;
                 let op = self.abort_operation.clone();
                 op.abort(self.ctx.clone(), self.dal.clone()).await?;
-                return Err(ErrorCode::StorageOther(
-                    "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-                ));
+                return Err(ErrorCode::StorageOther(format!(
+                    "transaction aborted after {} retries, which took {} ms",
+                    self.retries,
+                    duration.as_millis()
+                )));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

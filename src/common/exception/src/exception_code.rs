@@ -316,6 +316,7 @@ build_exceptions! {
     StorageInsecure(3903),
     DeprecatedIndexFormat(3904),
     StorageOther(4000),
+    UnresolvableConflict(4001),
 }
 
 // Service errors [5001,6000].
