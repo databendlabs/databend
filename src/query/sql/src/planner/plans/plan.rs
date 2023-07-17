@@ -274,8 +274,8 @@ pub enum RewriteKind {
 
     ShowCatalogs,
     ShowDatabases,
-    ShowTables,
-    ShowColumns,
+    ShowTables(String),
+    ShowColumns(String, String),
     ShowTablesStatus,
 
     ShowFunctions,
