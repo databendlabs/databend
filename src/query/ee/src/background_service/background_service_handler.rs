@@ -36,8 +36,10 @@ use common_meta_app::background::GetBackgroundJobReq;
 use common_meta_app::background::ManualTriggerParams;
 use common_meta_app::background::UpdateBackgroundJobParamsReq;
 use common_meta_app::background::UpdateBackgroundJobStatusReq;
+use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::UserIdentity;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::principal::UserPrivilegeType;
 use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
 use common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
@@ -126,7 +128,7 @@ impl BackgroundServiceHandler for RealBackgroundService {
 impl RealBackgroundService {
     pub async fn new(conf: &InnerConfig) -> Result<Option<Self>> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let user = UserInfo::new_no_auth(
+        let mut user = UserInfo::new_no_auth(
             format!(
                 "{}-{}-background-svc",
                 conf.query.tenant_id.clone(),
@@ -135,6 +137,9 @@ impl RealBackgroundService {
             .as_str(),
             "0.0.0.0",
         );
+        user.grants
+            .grant_privileges(&GrantObject::Global, UserPrivilegeType::Select.into());
+
         if !conf.background.enable {
             // register default jobs if not exists
             Self::create_compactor_job(
