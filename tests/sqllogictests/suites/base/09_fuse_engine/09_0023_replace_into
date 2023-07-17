@@ -357,6 +357,11 @@ insert into test values(1, 1)
 statement ok
 insert into test values(2, 2), (3, 2)
 
+
+# disable the auto re-clustering, so that the latter checking
+statement ok
+set enable_auto_reclustering = 0;
+
 statement ok
 replace into test on(a) values(3, 3), (4, 4)
 
@@ -368,6 +373,7 @@ select a, b FROM test order by a
 3 3
 4 4
 
+# since quto re-clustering is disabled, the table is not expected to be re-clustered
 query TIIIFFT
 select * FROM clustering_information('db_09_0023','test')
 ----
