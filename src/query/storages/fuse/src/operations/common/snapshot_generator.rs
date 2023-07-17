@@ -231,17 +231,11 @@ impl SnapshotGenerator for MutationGenerator {
                 {
                     tracing::info!("resolvable conflicts detected");
                     metrics_inc_commit_mutation_modified_segment_exists_in_latest();
-                    error!("positions: {:?}", positions);
-                    error!("added_segments: {:?}", ctx.added_segments);
-                    error!("previous.segments: {:?}", previous.segments);
-                    error!("previous.segments.len(): {}", previous.segments.len());
                     let new_segments = ConflictResolveContext::merge_segments(
                         previous.segments.clone(),
                         ctx.added_segments.clone(),
                         positions,
                     );
-                    error!("new_segments: {:?}", new_segments);
-                    error!("len: {}", new_segments.len());
                     let new_summary = merge_statistics(&ctx.added_statistics, &previous.summary);
                     let new_summary = deduct_statistics(&new_summary, &ctx.removed_statistics);
                     let new_snapshot = TableSnapshot::new(
@@ -259,9 +253,7 @@ impl SnapshotGenerator for MutationGenerator {
             }
         }
         metrics_inc_commit_mutation_unresolvable_conflict();
-        Err(ErrorCode::StorageOther(
-            "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-        ))
+        Err(ErrorCode::UnresolvableConflict(""))
     }
 
     fn set_conflict_resolve_context(&mut self, ctx: ConflictResolveContext) {
