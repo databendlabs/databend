@@ -33,11 +33,10 @@ use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use super::fuse_rows_fetcher::RowsFetcher;
-use super::native_data_source::DataChunks;
-use super::native_data_source_deserializer::NativeDeserializeDataTransform;
 use crate::io::BlockReader;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
+use crate::io::NativeSourceData;
 use crate::FuseTable;
 
 pub(super) struct NativeRowsFetcher<const BLOCKING_IO: bool> {
@@ -175,15 +174,18 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
         Ok(())
     }
 
-    fn build_blocks(&self, mut chunks: DataChunks, needed_pages: &[u64]) -> Result<Vec<DataBlock>> {
+    fn build_blocks(
+        &self,
+        mut chunks: NativeSourceData,
+        needed_pages: &[u64],
+    ) -> Result<Vec<DataBlock>> {
         let mut array_iters = BTreeMap::new();
 
         for (index, column_node) in self.reader.project_column_nodes.iter().enumerate() {
             let readers = chunks.remove(&index).unwrap();
             if !readers.is_empty() {
                 let leaves = self.column_leaves.get(index).unwrap().clone();
-                let array_iter =
-                    NativeDeserializeDataTransform::build_array_iter(column_node, leaves, readers)?;
+                let array_iter = BlockReader::build_array_iter(column_node, leaves, readers)?;
                 array_iters.insert(index, array_iter);
             }
         }
