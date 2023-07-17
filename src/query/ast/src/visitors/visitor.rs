@@ -587,6 +587,16 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_desc_data_mask_policy(&mut self, _stmt: &'ast DescDatamaskPolicyStmt) {}
 
+    fn visit_create_network_policy(&mut self, _stmt: &'ast CreateNetworkPolicyStmt) {}
+
+    fn visit_alter_network_policy(&mut self, _stmt: &'ast AlterNetworkPolicyStmt) {}
+
+    fn visit_drop_network_policy(&mut self, _stmt: &'ast DropNetworkPolicyStmt) {}
+
+    fn visit_desc_network_policy(&mut self, _stmt: &'ast DescNetworkPolicyStmt) {}
+
+    fn visit_show_network_policies(&mut self) {}
+
     fn visit_with(&mut self, with: &'ast With) {
         let With { ctes, .. } = with;
         for cte in ctes.iter() {

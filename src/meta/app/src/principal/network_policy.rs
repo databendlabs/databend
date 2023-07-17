@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod data_mask;
-mod database;
-mod index;
-mod network_policy;
-mod role;
-mod share;
-mod stage;
-mod table;
-mod view;
-mod virtual_column;
+use chrono::DateTime;
+use chrono::Utc;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct NetworkPolicy {
+    pub name: String,
+    pub allowed_ip_list: Vec<String>,
+    pub blocked_ip_list: Vec<String>,
+    pub comment: String,
+    pub create_on: DateTime<Utc>,
+    pub update_on: Option<DateTime<Utc>>,
+}
