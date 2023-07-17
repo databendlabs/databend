@@ -2639,7 +2639,6 @@ dependencies = [
 name = "common-storage"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-backtrace",
  "async-trait",
  "bytes",
