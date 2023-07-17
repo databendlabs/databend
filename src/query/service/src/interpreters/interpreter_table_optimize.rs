@@ -78,7 +78,6 @@ impl OptimizeTableInterpreter {
         target: CompactTarget,
     ) -> Result<PipelineBuildResult> {
         let need_recluster = !table.cluster_keys(ctx.clone()).is_empty();
-        // check if the table is locked.
         let mut pipeline = Pipeline::create();
         table
             .compact(ctx.clone(), target, None, &mut pipeline)
