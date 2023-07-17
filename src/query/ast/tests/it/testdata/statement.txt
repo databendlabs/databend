@@ -11681,6 +11681,57 @@ GenerateVirtualColumns(
 
 
 ---------- Input ----------
+CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'
+---------- Output ---------
+CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_LIST = ('192.168.10.99') COMMENT = 'test'
+---------- AST ------------
+CreateNetworkPolicy(
+    CreateNetworkPolicyStmt {
+        if_not_exists: false,
+        name: "mypolicy",
+        allowed_ip_list: [
+            "192.168.10.0/24",
+        ],
+        blocked_ip_list: Some(
+            [
+                "192.168.10.99",
+            ],
+        ),
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'
+---------- Output ---------
+ALTER NETWORK POLICY mypolicy SET  ALLOWED_IP_LIST = ('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST = ('192.168.1.99') COMMENT = 'test'
+---------- AST ------------
+AlterNetworkPolicy(
+    AlterNetworkPolicyStmt {
+        if_exists: false,
+        name: "mypolicy",
+        allowed_ip_list: Some(
+            [
+                "192.168.10.0/24",
+                "192.168.255.1",
+            ],
+        ),
+        blocked_ip_list: Some(
+            [
+                "192.168.1.99",
+            ],
+        ),
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
 --各环节转各环节转各环节转各环节转各
   select 34343
 ---------- Output ---------

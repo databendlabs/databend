@@ -31,6 +31,7 @@
 extern crate core;
 
 mod jwt;
+mod network_policy;
 mod role_mgr;
 mod user;
 mod user_api;

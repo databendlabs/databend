@@ -99,6 +99,10 @@ impl AccessChecker for ManagementModeAccess {
                 // Stage.
                 | Plan::CreateStage(_)
                 | Plan::DropStage(_)
+                // Network policy.
+                | Plan::CreateNetworkPolicy(_)
+                | Plan::AlterNetworkPolicy(_)
+                | Plan::DropNetworkPolicy(_)
 
                 // UDF
                 | Plan::CreateUDF(_)
