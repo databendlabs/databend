@@ -23,7 +23,6 @@ use common_exception::Result;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
-use tracing::info;
 use tracing::warn;
 
 use crate::io::SegmentsIO;
@@ -59,9 +58,9 @@ impl FuseTable {
 
             let start = Instant::now();
             let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
-            let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+            let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
             let number_segments = snapshot.segments.len();
-            for chunk in snapshot.segments.chunks(max_io_requests) {
+            for chunk in snapshot.segments.chunks(chunk_size) {
                 let mut stats_of_columns = Vec::new();
                 if !col_stats.is_empty() {
                     stats_of_columns.push(col_stats.clone());
@@ -111,7 +110,6 @@ impl FuseTable {
                         start.elapsed().as_secs()
                     );
                     ctx.set_status_info(&status);
-                    info!(status);
                 }
             }
 

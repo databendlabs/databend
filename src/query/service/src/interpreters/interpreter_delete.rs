@@ -61,9 +61,8 @@ use crate::interpreters::SelectInterpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
-use crate::schedulers::build_distributed_pipeline;
-use crate::schedulers::build_local_pipeline;
 use crate::schedulers::build_query_pipeline;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::DeletePlan;
@@ -239,12 +238,12 @@ impl Interpreter for DeleteInterpreter {
                 is_distributed,
                 query_row_id_col,
             )?;
-            if is_distributed {
-                build_res = build_distributed_pipeline(&self.ctx, &physical_plan, false).await?
-            } else {
-                build_res = build_local_pipeline(&self.ctx, &physical_plan, false).await?
-            }
+
+            build_res =
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
+                    .await?;
         }
+
         if build_res.main_pipeline.is_empty() {
             heartbeat.shutdown().await?;
         } else {
@@ -274,7 +273,7 @@ impl DeleteInterpreter {
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
-        let root = PhysicalPlan::DeletePartial(Box::new(DeletePartial {
+        let mut root = PhysicalPlan::DeletePartial(Box::new(DeletePartial {
             parts: partitions,
             filter,
             table_info: table_info.clone(),
@@ -282,23 +281,22 @@ impl DeleteInterpreter {
             col_indices,
             query_row_id_col,
         }));
-        let root = if is_distributed {
-            PhysicalPlan::Exchange(Exchange {
+
+        if is_distributed {
+            root = PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: vec![],
-            })
-        } else {
-            root
-        };
-        let root = PhysicalPlan::DeleteFinal(Box::new(DeleteFinal {
+            });
+        }
+
+        Ok(PhysicalPlan::DeleteFinal(Box::new(DeleteFinal {
             input: Box::new(root),
             snapshot,
             table_info,
             catalog_name,
-        }));
-        Ok(root)
+        })))
     }
 }
 

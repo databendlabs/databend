@@ -14,7 +14,6 @@
 
 use std::convert::TryFrom;
 use std::sync::Arc;
-use std::time::Instant;
 
 use async_channel::Receiver;
 use common_catalog::table::AppendMode;
@@ -55,9 +54,10 @@ use common_sql::executor::AggregateExpand;
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
+use common_sql::executor::CopyIntoTableFromQuery;
 use common_sql::executor::DeleteFinal;
 use common_sql::executor::DeletePartial;
-use common_sql::executor::DistributedCopyIntoTable;
+use common_sql::executor::DistributedCopyIntoTableFromStage;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
@@ -92,8 +92,6 @@ use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::metrics::metrics_inc_copy_read_file_cost_milliseconds;
-use crate::metrics::metrics_inc_copy_read_file_counter;
 use crate::pipelines::builders::build_append_data_pipeline;
 use crate::pipelines::builders::build_fill_missing_columns_pipeline;
 use crate::pipelines::builders::CopyPlanType;
@@ -208,15 +206,35 @@ impl PipelineBuilder {
             PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
             PhysicalPlan::DeleteFinal(delete) => self.build_delete_final(delete),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
-            PhysicalPlan::DistributedCopyIntoTable(distributed_plan) => {
-                self.build_distributed_copy_into_table(distributed_plan)
+            PhysicalPlan::DistributedCopyIntoTableFromStage(distributed_plan) => {
+                self.build_distributed_copy_into_table_from_stage(distributed_plan)
+            }
+            PhysicalPlan::CopyIntoTableFromQuery(copy_plan) => {
+                self.build_copy_into_table_from_query(copy_plan)
             }
         }
     }
 
-    fn build_distributed_copy_into_table(
+    fn build_copy_into_table_from_query(
         &mut self,
-        distributed_plan: &DistributedCopyIntoTable,
+        copy_plan: &CopyIntoTableFromQuery,
+    ) -> Result<()> {
+        self.build_pipeline(&copy_plan.input)?;
+        let catalog = self.ctx.get_catalog(&copy_plan.catalog_name)?;
+        let to_table = catalog.get_table_by_info(&copy_plan.table_info)?;
+        build_append_data_pipeline(
+            self.ctx.clone(),
+            &mut self.main_pipeline,
+            CopyPlanType::CopyIntoTableFromQuery(copy_plan.clone()),
+            copy_plan.required_source_schema.clone(),
+            to_table,
+        )?;
+        Ok(())
+    }
+
+    fn build_distributed_copy_into_table_from_stage(
+        &mut self,
+        distributed_plan: &DistributedCopyIntoTableFromStage,
     ) -> Result<()> {
         let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
         let to_table = catalog.get_table_by_info(&distributed_plan.table_info)?;
@@ -226,20 +244,13 @@ impl PipelineBuilder {
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
 
-        let start = Instant::now();
         stage_table.read_data(table_ctx, &distributed_plan.source, &mut self.main_pipeline)?;
-
-        // Perf
-        {
-            metrics_inc_copy_read_file_counter(distributed_plan.files.len() as u32);
-            metrics_inc_copy_read_file_cost_milliseconds(start.elapsed().as_millis() as u32);
-        }
 
         // append data
         build_append_data_pipeline(
             ctx,
             &mut self.main_pipeline,
-            CopyPlanType::DistributedCopyIntoTable(distributed_plan.clone()),
+            CopyPlanType::DistributedCopyIntoTableFromStage(distributed_plan.clone()),
             distributed_plan.required_source_schema.clone(),
             to_table,
         )?;
@@ -272,13 +283,13 @@ impl PipelineBuilder {
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;
         self.main_pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeBlock::new(
+            let proc = TransformSerializeBlock::try_create(
                 self.ctx.clone(),
                 input,
                 output,
                 table,
                 cluster_stats_gen.clone(),
-            );
+            )?;
             proc.into_processor()
         })?;
         Ok(())

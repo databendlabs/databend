@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod bloom_index;
 mod format;
 mod metadata;
 #[allow(clippy::module_inception)]
@@ -33,6 +34,7 @@ pub use binder::ScalarBinder;
 pub use binder::ScalarVisitor;
 pub use binder::SelectBuilder;
 pub use binder::Visibility;
+pub use bloom_index::BloomIndexColumns;
 pub use expression_parser::*;
 pub use format::format_scalar;
 pub use metadata::*;

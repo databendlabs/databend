@@ -25,9 +25,8 @@ use common_exception::Result;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
-use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
+use common_pipeline_transforms::processors::transforms::build_merge_sort_pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::CompoundBlockOperator;
 use storages_common_table_meta::meta::BlockMeta;
@@ -46,15 +45,35 @@ use crate::pruning::FusePruner;
 use crate::FuseTable;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
-use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 impl FuseTable {
+    /// The flow of Pipeline is as follows:
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┐
+    // └──────────┘     └───────────────┘     └─────────┘    │
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │     ┌──────────────┐     ┌─────────┐
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┤────►│MultiSortMerge├────►│Resize(N)├───┐
+    // └──────────┘     └───────────────┘     └─────────┘    │     └──────────────┘     └─────────┘   │
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │                                        │
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┘                                        │
+    // └──────────┘     └───────────────┘     └─────────┘                                             │
+    // ┌──────────────────────────────────────────────────────────────────────────────────────────────┘
+    // │         ┌──────────────┐
+    // │    ┌───►│SerializeBlock├───┐
+    // │    │    └──────────────┘   │
+    // │    │    ┌──────────────┐   │    ┌─────────┐    ┌────────────────┐     ┌─────────────────┐     ┌──────────┐
+    // └───►│───►│SerializeBlock├───┤───►│Resize(1)├───►│SerializeSegment├────►│TableMutationAggr├────►│CommitSink│
+    //      │    └──────────────┘   │    └─────────┘    └────────────────┘     └─────────────────┘     └──────────┘
+    //      │    ┌──────────────┐   │
+    //      └───►│SerializeBlock├───┘
+    //           └──────────────┘
     #[async_backtrace::framed]
     pub(crate) async fn do_recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
+        limit: Option<usize>,
+        pipeline: &mut Pipeline,
     ) -> Result<u64> {
         if self.cluster_key_meta.is_none() {
             return Ok(0);
@@ -68,28 +87,7 @@ impl FuseTable {
             return Ok(0);
         };
 
-        let schema = self.table_info.schema();
-        let segment_locations = snapshot.segments.clone();
-        let segment_locations = create_segment_location_vector(segment_locations, None);
-        let mut pruner = FusePruner::create(&ctx, self.operator.clone(), schema, &push_downs)?;
-        let block_metas = pruner.read_pruning(segment_locations).await?;
-
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
-        let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> = BTreeMap::new();
-        block_metas.into_iter().for_each(|(idx, b)| {
-            if let Some(stats) = &b.cluster_stats {
-                if stats.cluster_key_id == default_cluster_key_id && stats.level >= 0 {
-                    blocks_map.entry(stats.level).or_default().push((
-                        BlockMetaIndex {
-                            segment_idx: idx.segment_idx,
-                            block_idx: idx.block_idx,
-                        },
-                        b,
-                    ));
-                }
-            }
-        });
-
         let block_thresholds = self.get_block_thresholds();
         let avg_depth_threshold = self.get_option(
             FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
@@ -101,26 +99,72 @@ impl FuseTable {
         } else {
             1.0
         };
+        let mut mutator = ReclusterMutator::try_create(ctx.clone(), threshold, block_thresholds)?;
 
-        let mut mutator = ReclusterMutator::try_create(threshold, block_thresholds)?;
+        let schema = self.table_info.schema();
+        let segment_locations = snapshot.segments.clone();
+        let segment_locations = create_segment_location_vector(segment_locations, None);
+        let mut pruner = FusePruner::create(
+            &ctx,
+            self.operator.clone(),
+            schema,
+            &push_downs,
+            self.bloom_index_cols(),
+        )?;
+        let limit = std::cmp::min(
+            pruner.max_concurrency,
+            limit.unwrap_or(segment_locations.len()),
+        );
+        for chunk in segment_locations.chunks(limit) {
+            let block_metas = pruner.read_pruning(chunk.to_vec()).await?;
 
-        let need_recluster = mutator.target_select(blocks_map).await?;
-        if !need_recluster {
-            return Ok(0);
+            let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> =
+                BTreeMap::new();
+            block_metas.into_iter().for_each(|(idx, b)| {
+                if let Some(stats) = &b.cluster_stats {
+                    if stats.cluster_key_id == default_cluster_key_id && stats.level >= 0 {
+                        blocks_map.entry(stats.level).or_default().push((
+                            BlockMetaIndex {
+                                segment_idx: idx.segment_idx,
+                                block_idx: idx.block_idx,
+                            },
+                            b,
+                        ));
+                    }
+                }
+            });
+
+            if mutator.target_select(blocks_map).await? {
+                break;
+            }
         }
 
         let block_metas: Vec<_> = mutator
-            .selected_blocks()
+            .take_blocks()
             .iter()
             .map(|meta| (None, meta.clone()))
             .collect();
-        let block_count = block_metas.len() as u64;
+        let block_count = block_metas.len();
+        if block_count < 2 {
+            return Ok(0);
+        }
+
+        // Status.
+        {
+            let status = format!(
+                "recluster: select block files: {}, total bytes: {}, total rows: {}",
+                block_count, mutator.total_bytes, mutator.total_rows,
+            );
+            ctx.set_status_info(&status);
+            tracing::info!(status);
+        }
+
         let (statistics, parts) = self.read_partitions_with_metas(
             self.table_info.schema(),
             None,
             &block_metas,
             None,
-            block_count as usize,
+            block_count,
             PruningStatistics::default(),
         )?;
         let table_info = self.get_table_info();
@@ -144,7 +188,7 @@ impl FuseTable {
         self.do_read_data(ctx.clone(), &plan, pipeline)?;
 
         let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), mutator.level() + 1, block_thresholds)?;
+            self.get_cluster_stats_gen(ctx.clone(), mutator.level + 1, block_thresholds)?;
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
             let num_input_columns = self.table_info.schema().fields().len();
@@ -160,10 +204,20 @@ impl FuseTable {
             })?;
         }
 
-        // sort
-        let final_block_size = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
+        // merge sort
+        let block_num = mutator
+            .total_bytes
+            .div_ceil(block_thresholds.max_bytes_per_block);
+        let final_block_size = std::cmp::min(
+            // estimate block_size based on max_bytes_per_block.
+            mutator.total_rows / block_num,
+            block_thresholds.max_rows_per_block,
+        );
         let partial_block_size = if pipeline.output_len() > 1 {
-            ctx.get_settings().get_max_block_size()? as usize
+            std::cmp::min(
+                final_block_size,
+                ctx.get_settings().get_max_block_size()? as usize,
+            )
         } else {
             final_block_size
         };
@@ -181,7 +235,7 @@ impl FuseTable {
             })
             .collect();
 
-        build_full_sort_pipeline(
+        build_merge_sort_pipeline(
             pipeline,
             schema,
             sort_descs,
@@ -189,22 +243,26 @@ impl FuseTable {
             partial_block_size,
             final_block_size,
             None,
-            false,
         )?;
 
-        assert_eq!(pipeline.output_len(), 1);
-
+        let output_block_num = mutator.total_rows.div_ceil(final_block_size);
+        let max_threads = std::cmp::min(
+            ctx.get_settings().get_max_threads()? as usize,
+            output_block_num,
+        );
+        pipeline.try_resize(max_threads)?;
         pipeline.add_transform(|transform_input_port, transform_output_port| {
-            let proc = TransformSerializeBlock::new(
+            let proc = TransformSerializeBlock::try_create(
                 ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 self,
                 cluster_stats_gen.clone(),
-            );
+            )?;
             proc.into_processor()
         })?;
 
+        pipeline.try_resize(1)?;
         pipeline.add_transform(|input, output| {
             let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
             proc.into_processor()
@@ -239,6 +297,6 @@ impl FuseTable {
                 true,
             )
         })?;
-        Ok(block_count)
+        Ok(block_count as u64)
     }
 }

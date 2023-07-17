@@ -29,9 +29,12 @@ use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
-use common_sql::executor::DistributedCopyIntoTable;
+use common_sql::executor::CopyIntoTableFromQuery;
+use common_sql::executor::DistributedCopyIntoTableFromStage;
 use common_sql::plans::CopyIntoTableMode;
 use common_sql::plans::CopyIntoTablePlan;
+use common_storage::common_metrics::copy::metrics_inc_copy_purge_files_cost_milliseconds;
+use common_storage::common_metrics::copy::metrics_inc_copy_purge_files_counter;
 use common_storage::StageFileInfo;
 use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
@@ -39,8 +42,6 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
-use crate::metrics::metrics_inc_copy_purge_files_cost_milliseconds;
-use crate::metrics::metrics_inc_copy_purge_files_counter;
 use crate::pipelines::builders::build_append2table_without_commit_pipeline;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
@@ -48,7 +49,10 @@ use crate::sessions::QueryContext;
 
 pub enum CopyPlanType {
     CopyIntoTablePlanOption(CopyIntoTablePlan),
-    DistributedCopyIntoTable(DistributedCopyIntoTable),
+    DistributedCopyIntoTableFromStage(DistributedCopyIntoTableFromStage),
+    // also distributed plan, but we think the real distributed part is the query
+    // so no "distributed" prefix here.
+    CopyIntoTableFromQuery(CopyIntoTableFromQuery),
 }
 
 pub fn build_append_data_pipeline(
@@ -70,7 +74,13 @@ pub fn build_append_data_pipeline(
             plan_values_consts = plan.values_consts;
             plan_write_mode = plan.write_mode;
         }
-        CopyPlanType::DistributedCopyIntoTable(plan) => {
+        CopyPlanType::DistributedCopyIntoTableFromStage(plan) => {
+            plan_required_source_schema = plan.required_source_schema;
+            plan_required_values_schema = plan.required_values_schema;
+            plan_values_consts = plan.values_consts;
+            plan_write_mode = plan.write_mode;
+        }
+        CopyPlanType::CopyIntoTableFromQuery(plan) => {
             plan_required_source_schema = plan.required_source_schema;
             plan_required_values_schema = plan.required_values_schema;
             plan_values_consts = plan.values_consts;
@@ -170,13 +180,6 @@ pub fn set_copy_on_finished(
         match may_error {
             None => {
                 GlobalIORuntime::instance().block_on(async move {
-                    {
-                        let status =
-                            format!("end of commit, number of copied files:{}", files.len());
-                        ctx.set_status_info(&status);
-                        info!(status);
-                    }
-
                     // 1. log on_error mode errors.
                     // todo(ariesdevil): persist errors with query_id
                     if let Some(error_map) = ctx.get_maximum_error_per_file() {

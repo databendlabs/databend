@@ -567,12 +567,12 @@ optimize table t10 compact
 query I
 select count() from fuse_snapshot('db_09_0008', 't10')
 ----
-6
+7
 
-query TIIIFFT
-select * from clustering_information('db_09_0008','t10')
+query F
+select average_depth from clustering_information('db_09_0008','t10')
 ----
-(abs(a)) 3 0 0 2.0 3.0 {"00003":3}
+1.0
 
 statement ok
 optimize table t10 purge limit 2
@@ -580,7 +580,38 @@ optimize table t10 purge limit 2
 query I
 select count() from fuse_snapshot('db_09_0008', 't10')
 ----
-4
+5
+
+
+
+# test for compact limit, compare with t10.
+statement ok
+create table t11(a int) cluster by(abs(a)) row_per_block=3
+
+statement ok
+insert into t11 values(5),(-7),(2)
+
+statement ok
+insert into t11 values(-8),(4),(3)
+
+statement ok
+insert into t11 values(0)
+
+statement ok
+insert into t11 values(1),(6)
+
+query TIIIFFT
+select * from clustering_information('db_09_0008','t11')
+----
+(abs(a)) 4 1 0 1.5 2.5 {"00001":1,"00003":3}
+
+statement ok
+optimize table t11 compact limit 2
+
+query F
+select average_depth from clustering_information('db_09_0008','t11')
+----
+2.0
 
 
 
@@ -619,6 +650,9 @@ DROP TABLE t9
 
 statement ok
 DROP TABLE t10
+
+statement ok
+DROP TABLE t11
 
 statement ok
 DROP DATABASE db_09_0008

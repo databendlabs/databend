@@ -275,27 +275,6 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    #[async_backtrace::framed]
-    async fn delete(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        // - pass a ScalarExpr to Table::delete, and let the table's implementation of method `delete` do the
-        //   inversion will be more concise, unfortunately, using type ScalarExpr introduces cyclic dependency.
-        // - we can also pass a common_expression::Expr here, and later do the inversion at Expr level, but it is not recommended :(
-        filter: Option<DeletionFilters>,
-        col_indices: Vec<usize>,
-        query_row_id_col: bool,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        let (_, _, _, _, _) = (ctx, filter, col_indices, pipeline, query_row_id_col);
-
-        Err(ErrorCode::Unimplemented(format!(
-            "table {}, engine type {}, does not support DELETE FROM",
-            self.name(),
-            self.get_table_info().engine(),
-        )))
-    }
-
     #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     async fn update(
@@ -360,10 +339,11 @@ pub trait Table: Sync + Send {
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
+        limit: Option<usize>,
+        pipeline: &mut Pipeline,
     ) -> Result<u64> {
-        let (_, _, _) = (ctx, pipeline, push_downs);
+        let (_, _, _, _) = (ctx, push_downs, limit, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support recluster",

@@ -27,7 +27,6 @@ use common_expression::BlockMetaInfo;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
-use common_expression::TableSchemaRef;
 use common_formats::FieldDecoder;
 use common_formats::FileFormatOptionsExt;
 use common_meta_app::principal::FileFormatParams;
@@ -441,13 +440,6 @@ impl<T: InputFormatTextBase> InputFormat for T {
             }
         }
         Ok(infos)
-    }
-
-    #[async_backtrace::framed]
-    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<TableSchemaRef> {
-        Err(ErrorCode::Unimplemented(
-            "infer_schema is not implemented for this format yet.",
-        ))
     }
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {

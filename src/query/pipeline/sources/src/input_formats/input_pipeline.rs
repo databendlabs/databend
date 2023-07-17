@@ -28,12 +28,10 @@ use common_expression::DataBlock;
 use common_pipeline_core::Pipeline;
 use futures::AsyncRead;
 use futures_util::AsyncReadExt;
-use parking_lot::Mutex;
 
+use crate::input_formats::transform_deserializer::DeserializeTransformer;
 use crate::input_formats::Aligner;
 use crate::input_formats::BeyondEndReader;
-use crate::input_formats::DeserializeSource;
-use crate::input_formats::DeserializeTransformer;
 use crate::input_formats::InputContext;
 use crate::input_formats::InputPlan;
 use crate::input_formats::SplitInfo;
@@ -189,76 +187,6 @@ pub trait InputFormatPipe: Sized + Send + 'static {
             tracing::debug!("end copy splits feeder");
         });
 
-        Ok(())
-    }
-
-    fn execute_copy_aligned(ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
-        let (data_tx, data_rx) = async_channel::bounded(1);
-        let max_storage_io_requests = ctx.settings.get_max_storage_io_requests()?;
-        let per_split_io = ctx.schema.fields().len();
-        let max_splits = max_storage_io_requests as usize / per_split_io;
-        let mut max_splits = std::cmp::max(max_splits, 1);
-        let mut sizes = ctx.splits.iter().map(|s| s.size).collect::<Vec<usize>>();
-        sizes.sort_by(|a, b| b.cmp(a));
-        let max_memory = ctx.settings.get_max_memory_usage()? as usize;
-        let mut mem = 0;
-        for (i, s) in sizes.iter().enumerate() {
-            let m = mem + s;
-            if m > max_memory {
-                max_splits = std::cmp::min(max_splits, std::cmp::max(i, 1));
-                break;
-            } else {
-                mem = m
-            }
-        }
-        tracing::info!(
-            "copy read {max_splits} splits in parallel, according to max_memory={max_memory}, num_fields={per_split_io}, max_storage_io_requests={max_storage_io_requests}, max_split_size={}",
-            sizes[0]
-        );
-        Self::build_pipeline_aligned(&ctx, data_rx, pipeline, max_splits)?;
-        let splits = ctx.splits.to_vec();
-        let splits = Arc::new(Mutex::new(splits));
-        for _ in 0..max_splits {
-            let splits = splits.clone();
-            let ctx_clone = ctx.clone();
-            let data_tx = data_tx.clone();
-            GlobalIORuntime::instance().spawn(async move {
-                loop {
-                    let split = {
-                        let mut splits = splits.lock();
-                        if let Some(split) = splits.pop() {
-                            split
-                        } else {
-                            break;
-                        }
-                    };
-                    match Self::read_split(ctx_clone.clone(), split.clone()).await {
-                        Ok(row_batch) => {
-                            if data_tx.send(Ok(row_batch)).await.is_err() {
-                                break;
-                            }
-                        }
-                        Err(cause) => {
-                            data_tx.send(Err(cause)).await.ok();
-                            break;
-                        }
-                    }
-                }
-            });
-        }
-        Ok(())
-    }
-
-    fn build_pipeline_aligned(
-        ctx: &Arc<InputContext>,
-        row_batch_rx: async_channel::Receiver<Result<Self::RowBatch>>,
-        pipeline: &mut Pipeline,
-        num_threads: usize,
-    ) -> Result<()> {
-        pipeline.add_source(
-            |output| DeserializeSource::<Self>::create(ctx.clone(), output, row_batch_rx.clone()),
-            num_threads,
-        )?;
         Ok(())
     }
 

@@ -32,7 +32,6 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 use tracing::error;
-use tracing::info;
 use tracing::warn;
 
 use crate::io::Files;
@@ -75,8 +74,8 @@ impl FuseTable {
         let mut dry_run_purge_files = vec![];
         let mut purged_snapshot_count = 0;
 
-        // 2. Read snapshot fields by chunk size(max_storage_io_requests).
-        let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        // 2. Read snapshot fields by chunk size.
+        let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         for chunk in snapshot_files.chunks(chunk_size).rev() {
             if let Err(err) = ctx.check_aborting() {
                 error!(
@@ -143,7 +142,6 @@ impl FuseTable {
                     snapshot_files.len(),
                     counter.start.elapsed().as_secs()
                 );
-                info!(status);
                 ctx.set_status_info(&status);
             }
 
@@ -302,7 +300,7 @@ impl FuseTable {
         ts_to_be_purged: HashSet<String>,
         snapshots_to_be_purged: HashSet<String>,
     ) -> Result<()> {
-        let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         // Purge segments&blocks by chunk size
         let segment_locations = Vec::from_iter(segments_to_be_purged);
         for chunk in segment_locations.chunks(chunk_size) {
@@ -342,7 +340,7 @@ impl FuseTable {
         ts_to_be_purged: HashSet<String>,
         snapshots_to_be_purged: HashSet<String>,
     ) -> Result<()> {
-        let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         // Purge segments&blocks by chunk size
         let mut count = 0;
         let segment_locations = Vec::from_iter(segments_to_be_purged);
@@ -384,7 +382,6 @@ impl FuseTable {
                     segment_locations.len(),
                     counter.start.elapsed().as_secs()
                 );
-                info!(status);
                 ctx.set_status_info(&status);
             }
 
@@ -520,7 +517,6 @@ impl FuseTable {
                 counter.start.elapsed().as_secs()
             );
             ctx.set_status_info(&status);
-            info!(status);
         }
         Ok(())
     }
@@ -570,7 +566,7 @@ impl FuseTable {
         let mut blooms = HashSet::new();
 
         let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
-        let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         for chunk in segment_locations.chunks(chunk_size) {
             let results = fuse_segments
                 .read_segments::<LocationTuple>(chunk, put_cache)

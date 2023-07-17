@@ -180,7 +180,7 @@ fn test_statement() {
         r#"OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;"#,
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
-        r#"ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0;"#,
+        r#"ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;"#,
         r#"ALTER TABLE t ADD COLUMN a float default 101 COMMENT 'hello';"#,
         r#"ALTER TABLE t RENAME COLUMN a TO b;"#,
         r#"ALTER TABLE t DROP COLUMN b;"#,

@@ -275,11 +275,20 @@ create table t(a int) snapshot_location='xxx'
 statement error 1301
 create table t(a int) database_id='xxx'
 
+statement error 1006
+create table t(a int) bloom_index_columns='b'
+
+statement error 1301
+create table t(a decimal(4,2)) bloom_index_columns='a'
+
 statement ok
 create table t(a int)
 
 statement error 1301
 alter table t set options(database_id = "22");
+
+statement ok
+drop table if exists t;
 
 statement ok
 drop table if exists t_without_engine_desc;
@@ -313,3 +322,12 @@ drop table if exists t_with_engine_desc;
 
 statement ok
 drop table if exists t_with_wrong_engine_desc;
+
+statement ok
+drop table if exists t_with_bloom_index;
+
+statement ok
+create table t_with_bloom_index(a int, b int) bloom_index_columns='b'
+
+statement ok
+drop table if exists t_with_bloom_index;

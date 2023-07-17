@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Instant;
 
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
@@ -22,8 +21,6 @@ use common_expression::DataSchemaRef;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
 
-use crate::metrics::metrics_inc_copy_append_data_cost_milliseconds;
-use crate::metrics::metrics_inc_copy_append_data_counter;
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::TransformResortAddOn;
 use crate::sessions::QueryContext;
@@ -96,14 +93,7 @@ pub fn build_append2table_without_commit_pipeline(
 ) -> Result<()> {
     build_fill_missing_columns_pipeline(ctx.clone(), main_pipeline, table.clone(), source_schema)?;
 
-    let start = Instant::now();
     table.append_data(ctx, main_pipeline, append_mode)?;
-
-    // Perf
-    {
-        metrics_inc_copy_append_data_counter(1_u32);
-        metrics_inc_copy_append_data_cost_milliseconds(start.elapsed().as_millis() as u32);
-    }
 
     Ok(())
 }

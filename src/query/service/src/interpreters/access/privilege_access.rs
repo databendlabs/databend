@@ -15,11 +15,13 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::UserPrivilegeType;
 use common_sql::plans::CopyPlan;
 use common_sql::plans::RewriteKind;
+use common_users::RoleCacheManager;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
@@ -100,13 +102,37 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::UseDatabase(plan) => {
-                let catalog = self.ctx.get_current_catalog();
-                session
-                    .validate_privilege(
-                        &GrantObject::Database(catalog, plan.database.clone()),
-                        vec![UserPrivilegeType::Select],
-                    )
+                // Use db is special. Should not check the privilege.
+                // Just need to check user grant objects contain the db that be used.
+                let database = &plan.database;
+                let user = self.ctx.get_current_user()?;
+                let (identity, grant_set) = (user.identity().to_string(), user.grants);
+                let can_use = RoleCacheManager::instance()
+                    .find_related_roles(&self.ctx.get_tenant(), &grant_set.roles())
                     .await?
+                    .into_iter()
+                    .map(|role| role.grants)
+                    .fold(grant_set, |a, b| a | b)
+                    .entries()
+                    .iter()
+                    .any(|e| {
+                        let object = e.object();
+                        match object {
+                            GrantObject::Global => true,
+                            GrantObject::Database(_, ldb) | GrantObject::Table(_, ldb, _) => {
+                                ldb == database
+                            }
+                        }
+                    });
+
+                return if can_use {
+                    Ok(())
+                } else {
+                    Err(ErrorCode::PermissionDenied(format!(
+                        "Permission denied, user {} don't have privilege for database {}",
+                        identity, database
+                    )))
+                };
             }
 
             // Virtual Column.
