@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::default::Default;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -184,19 +185,31 @@ impl Binder {
                     None
                 };
                 // Check and bind common table expression
-                if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
+                let ctes_map = bind_context.ctes_map.clone();
+                if let Some(cte_info) = ctes_map.get(&table_name) {
                     return if !cte_info.materialized {
                         self.bind_cte(*span, bind_context, &table_name, alias, &cte_info)
                             .await
                     } else {
-                        let (cte_s_expr, mut cte_bind_ctx) = self
-                            .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
-                            .await?;
-                        cte_bind_ctx
-                            .materialized_ctes
-                            .push((cte_info.cte_idx, cte_s_expr));
-                        let s_expr = self.bind_cte_scan(&cte_bind_ctx, &cte_info)?;
-                        Ok((s_expr, cte_bind_ctx))
+                        let new_bind_context = if !cte_info.bound {
+                            let (cte_s_expr, cte_bind_ctx) = self
+                                .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
+                                .await?;
+                            // Add `materialized_cte` to bind_context.
+                            bind_context
+                                .materialized_ctes
+                                .insert((cte_info.cte_idx, cte_s_expr));
+                            // To avoid bind same materialized cte again, so make `cte_info.bound` to true.
+                            bind_context
+                                .ctes_map
+                                .entry(table_name)
+                                .and_modify(|cte_info| cte_info.bound = true);
+                            cte_bind_ctx
+                        } else {
+                            bind_context.clone()
+                        };
+                        let s_expr = self.bind_cte_scan(&new_bind_context, &cte_info)?;
+                        Ok((s_expr, new_bind_context.clone()))
                     };
                 }
 
@@ -743,7 +756,7 @@ impl Binder {
             windows: Default::default(),
             in_grouping: false,
             ctes_map: Box::new(HashMap::new()),
-            materialized_ctes: vec![],
+            materialized_ctes: HashSet::new(),
             view_info: None,
             srfs: Default::default(),
             expr_context: ExprContext::default(),

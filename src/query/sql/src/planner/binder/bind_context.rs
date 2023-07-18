@@ -15,6 +15,7 @@
 use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::hash::Hash;
 use std::ops::Index;
 
@@ -143,7 +144,7 @@ pub struct BindContext {
 
     pub ctes_map: Box<HashMap<String, CteInfo>>,
 
-    pub materialized_ctes: Vec<(IndexType, SExpr)>,
+    pub materialized_ctes: HashSet<(IndexType, SExpr)>,
 
     /// If current binding table is a view, record its database and name.
     ///
@@ -169,6 +170,7 @@ pub struct CteInfo {
     pub query: Query,
     pub materialized: bool,
     pub cte_idx: IndexType,
+    pub bound: bool,
 }
 
 impl BindContext {
@@ -181,7 +183,7 @@ impl BindContext {
             windows: WindowInfo::default(),
             in_grouping: false,
             ctes_map: Box::new(HashMap::new()),
-            materialized_ctes: vec![],
+            materialized_ctes: HashSet::new(),
             view_info: None,
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),

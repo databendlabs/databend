@@ -332,6 +332,7 @@ impl Binder {
                     query: cte.query.clone(),
                     materialized: cte.materialized,
                     cte_idx: idx,
+                    bound: false,
                 };
                 bind_context.ctes_map.insert(table_name, cte_info);
             }

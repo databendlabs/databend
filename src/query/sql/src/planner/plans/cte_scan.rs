@@ -42,7 +42,11 @@ pub struct CteScan {
 
 impl CteScan {
     pub fn used_columns(&self) -> Result<ColumnSet> {
-        Ok(ColumnSet::new())
+        let mut used_columns = ColumnSet::new();
+        for field in self.fields.iter() {
+            used_columns.insert(field.name().parse()?);
+        }
+        Ok(used_columns)
     }
 }
 

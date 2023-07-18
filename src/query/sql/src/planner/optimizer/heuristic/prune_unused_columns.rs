@@ -21,6 +21,7 @@ use itertools::Itertools;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
+use crate::plans::CteScan;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::ProjectSet;
@@ -277,9 +278,30 @@ impl UnusedColumnPruner {
                 ))
             }
 
-            RelOperator::DummyTableScan(_)
-            | RelOperator::CteScan(_)
-            | RelOperator::MaterializedCte(_) => Ok(expr.clone()),
+            RelOperator::CteScan(scan) => {
+                let mut used_columns = scan.used_columns()?;
+                used_columns = required.intersection(&used_columns).cloned().collect();
+                let mut pruned_fields = vec![];
+                for field in scan.fields.iter() {
+                    if used_columns.contains(&field.name().parse()?) {
+                        pruned_fields.push(field.clone());
+                    }
+                }
+                Ok(SExpr::create_leaf(Arc::new(RelOperator::CteScan(
+                    CteScan {
+                        cte_idx: scan.cte_idx.clone(),
+                        fields: pruned_fields,
+                    },
+                ))))
+            }
+
+            RelOperator::MaterializedCte(cte) => Ok(SExpr::create_binary(
+                Arc::new(RelOperator::MaterializedCte(cte.clone())),
+                Arc::new(self.keep_required_columns(expr.child(0)?, required.clone())?),
+                Arc::new(self.keep_required_columns(expr.child(1)?, required)?),
+            )),
+
+            RelOperator::DummyTableScan(_) => Ok(expr.clone()),
 
             _ => Err(ErrorCode::Internal(
                 "Attempting to prune columns of a physical plan is not allowed",
