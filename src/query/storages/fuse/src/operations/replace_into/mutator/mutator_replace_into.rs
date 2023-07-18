@@ -46,7 +46,8 @@ impl ReplaceIntoMutator {
 
 enum ColumnHash {
     NoConflict(HashSet<UniqueKeyDigest>),
-    Conflict(String),
+    // the first row index that has conflict
+    Conflict(usize),
 }
 
 impl ReplaceIntoMutator {
@@ -69,12 +70,7 @@ impl ReplaceIntoMutator {
             let column = entry.value.as_column().unwrap();
             columns.push(column);
         }
-        match Self::build_column_hash(
-            &self.on_conflict_fields,
-            &columns,
-            &mut self.key_saw,
-            num_rows,
-        )? {
+        match Self::build_column_hash(&columns, &mut self.key_saw, num_rows)? {
             ColumnHash::NoConflict(key_hashes) => {
                 let columns_min_max = Self::columns_min_max(&columns, num_rows)?;
                 let delete_action = DeletionByColumn {
@@ -83,15 +79,31 @@ impl ReplaceIntoMutator {
                 };
                 Ok(MergeIntoOperation::Delete(delete_action))
             }
-            ColumnHash::Conflict(conflict_description) => Err(ErrorCode::StorageOther(format!(
-                "duplicated data detected in the values being replaced into (only the first one will be described): {}",
-                conflict_description
-            ))),
+            ColumnHash::Conflict(conflict_row_idx) => {
+                let conflict_description = {
+                    let conflicts = columns
+                        .iter()
+                        .zip(self.on_conflict_fields.iter())
+                        .map(|(col, field)| {
+                            let col_name = &field.table_field.name;
+                            // if col.index(row_idx) is None, an exception will already be thrown in build_column_hash
+                            let col_value = col.index(conflict_row_idx).unwrap().to_string();
+                            format!("\"{}\":{}", col_name, col_value)
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ");
+
+                    format!("at row {}, [{}]", conflict_row_idx, conflicts)
+                };
+                Err(ErrorCode::StorageOther(format!(
+                    "duplicated data detected in the values being replaced into (only the first one will be described): {}",
+                    conflict_description
+                )))
+            }
         }
     }
 
     fn build_column_hash(
-        on_conflict_fields: &[OnConflictField],
         columns: &[&Column],
         saw: &mut HashSet<UniqueKeyDigest>,
         num_rows: usize,
@@ -100,24 +112,7 @@ impl ReplaceIntoMutator {
         for row_idx in 0..num_rows {
             let hash = row_hash_of_columns(columns, row_idx);
             if saw.contains(&hash) {
-                let message = {
-                    let conflicts = columns
-                        .iter()
-                        .zip(on_conflict_fields.iter())
-                        .map(|(col, field)| {
-                            let col_name = &field.table_field.name;
-                            // during previous `row_hash_of_columns`
-                            // if col.index(row_idx) is None, an exception will already be thrown
-                            let col_value = col.index(row_idx).unwrap().to_string();
-                            format!("\"{}\":{}", col_name, col_value)
-                        })
-                        .collect::<Vec<_>>()
-                        .join(", ");
-
-                    format!("at row {}, [{}]", row_idx, conflicts)
-                };
-
-                return Ok(ColumnHash::Conflict(message));
+                return Ok(ColumnHash::Conflict(row_idx));
             }
             saw.insert(hash);
             digests.insert(hash);
@@ -183,16 +178,18 @@ mod tests {
         assert_eq!(saw.len(), 4);
         assert!(matches!(r, ColumnHash::NoConflict(..)));
 
-        // new item, conflict
-        // ------|---
-        //  Hi     1
-        let column1 = StringType::from_data(&["Hi"]);
-        let column2 = NumberType::<u8>::from_data(vec![1]);
+        // new item, conflict (at row idx 2)
+        // ------------|---
+        //  not_exist   1
+        //  not_exist2  2
+        //  Hi          1
+        let column1 = StringType::from_data(&["not_exist", "not_exist2", "Hi"]);
+        let column2 = NumberType::<u8>::from_data(vec![1, 2, 1]);
         let columns = [&column1, &column2];
-        let num_rows = 1;
+        let num_rows = 3;
         let r = ReplaceIntoMutator::build_column_hash(&columns, &mut saw, num_rows)?;
-        assert_eq!(saw.len(), 4);
-        assert!(matches!(r, ColumnHash::Conflict));
+        assert_eq!(saw.len(), 6);
+        assert!(matches!(r, ColumnHash::Conflict(2)));
 
         Ok(())
     }
