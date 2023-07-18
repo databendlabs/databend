@@ -65,12 +65,15 @@ impl ReplaceIntoMutator {
         data_block: &DataBlock,
     ) -> Result<MergeIntoOperation> {
         let num_rows = data_block.num_rows();
-        let mut column_values = Vec::with_capacity(self.on_conflict_fields.len());
-        for field in &self.on_conflict_fields {
-            let filed_index = field.field_index;
-            let entry = &data_block.columns()[filed_index];
-            column_values.push(&entry.value);
-        }
+        let column_values = self
+            .on_conflict_fields
+            .iter()
+            .map(|field| {
+                let filed_index = field.field_index;
+                let entry = &data_block.columns()[filed_index];
+                &entry.value
+            })
+            .collect::<Vec<_>>();
 
         match Self::build_column_hash(&column_values, &mut self.key_saw, num_rows)? {
             ColumnHash::NoConflict(key_hashes) => {
