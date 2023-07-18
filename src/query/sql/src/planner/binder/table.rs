@@ -201,18 +201,20 @@ impl Binder {
                                 .materialized_ctes
                                 .insert((cte_info.cte_idx, cte_s_expr));
                             // To avoid bind same materialized cte again, so make `cte_info.bound` to true and add `stat_info`.
-                            bind_context
-                                .ctes_map
-                                .entry(table_name)
-                                .and_modify(|cte_info| {
+                            bind_context.ctes_map.entry(table_name.clone()).and_modify(
+                                |cte_info| {
                                     cte_info.bound = true;
                                     cte_info.stat_info = Some(stat_info);
-                                });
+                                },
+                            );
                             cte_bind_ctx
                         } else {
                             bind_context.clone()
                         };
-                        let s_expr = self.bind_cte_scan(&new_bind_context, &cte_info)?;
+                        let s_expr = self.bind_cte_scan(
+                            &new_bind_context,
+                            &bind_context.ctes_map.get(&table_name).unwrap(),
+                        )?;
                         Ok((s_expr, new_bind_context.clone()))
                     };
                 }
