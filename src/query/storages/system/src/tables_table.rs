@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
@@ -33,10 +35,12 @@ use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_meta_app::principal::GrantObject;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
+use crate::columns_table::generate_unique_object;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
@@ -112,6 +116,12 @@ where TablesTable<T>: HistoryAware
         let mut databases = vec![];
 
         let mut database_tables = vec![];
+
+        let user = ctx.get_current_user()?;
+        let grant_set = user.grants;
+        let (unique_object, global_object_priv) =
+            generate_unique_object(&tenant, grant_set).await?;
+
         for (ctl_name, ctl) in ctls.into_iter() {
             let mut dbs = Vec::new();
             if let Some(push_downs) = &push_downs {
@@ -140,7 +150,38 @@ where TablesTable<T>: HistoryAware
             }
             let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
 
-            for db in dbs {
+            let mut access_dbs = HashMap::new();
+            let mut final_dbs = vec![];
+            let mut access_tables: HashSet<(String, String)> = HashSet::new();
+            if global_object_priv {
+                final_dbs = dbs;
+            } else {
+                for object in &unique_object {
+                    match object {
+                        GrantObject::Database(priv_catalog, db_name) => {
+                            if priv_catalog == ctl_name {
+                                access_dbs.insert(db_name, false);
+                            }
+                        }
+                        GrantObject::Table(catalog, db, table) => {
+                            if catalog == ctl_name {
+                                access_tables.insert((db.to_string(), table.to_string()));
+                                if !access_dbs.contains_key(db) {
+                                    access_dbs.insert(db, true);
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                for db in &dbs {
+                    if access_dbs.contains_key(&db.name().to_string()) {
+                        final_dbs.push(db.clone());
+                    }
+                }
+            }
+
+            for db in final_dbs {
                 let name = db.name().to_string().into_boxed_str();
                 let name: &str = Box::leak(name);
                 let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
@@ -161,9 +202,25 @@ where TablesTable<T>: HistoryAware
                     }
                 };
                 for table in tables {
-                    catalogs.push(ctl_name.as_bytes().to_vec());
-                    databases.push(name.as_bytes().to_vec());
-                    database_tables.push(table);
+                    if global_object_priv {
+                        catalogs.push(ctl_name.as_bytes().to_vec());
+                        databases.push(name.as_bytes().to_vec());
+                        database_tables.push(table);
+                    } else if let Some(contain_table_priv) = access_dbs.get(&db.name().to_string())
+                    {
+                        if *contain_table_priv {
+                            if access_tables.contains(&(name.to_string(), table.name().to_string()))
+                            {
+                                catalogs.push(ctl_name.as_bytes().to_vec());
+                                databases.push(name.as_bytes().to_vec());
+                                database_tables.push(table);
+                            }
+                        } else {
+                            catalogs.push(ctl_name.as_bytes().to_vec());
+                            databases.push(name.as_bytes().to_vec());
+                            database_tables.push(table);
+                        }
+                    }
                 }
             }
         }

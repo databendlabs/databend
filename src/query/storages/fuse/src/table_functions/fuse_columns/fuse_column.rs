@@ -19,13 +19,12 @@ use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
+use common_expression::types::UInt32Type;
 use common_expression::types::UInt64Type;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::FromData;
-use common_expression::FromOptData;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -42,14 +41,14 @@ use crate::io::SnapshotHistoryReader;
 use crate::sessions::TableContext;
 use crate::FuseTable;
 
-pub struct FuseBlock<'a> {
+pub struct FuseColumn<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
     pub snapshot_id: Option<String>,
     pub limit: Option<usize>,
 }
 
-impl<'a> FuseBlock<'a> {
+impl<'a> FuseColumn<'a> {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         table: &'a FuseTable,
@@ -107,11 +106,15 @@ impl<'a> FuseBlock<'a> {
         let snapshot_id = snapshot.snapshot_id.simple().to_string().into_bytes();
         let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
         let mut block_location = StringColumnBuilder::with_capacity(len, len);
-        let mut block_size = Vec::with_capacity(len);
-        let mut file_size = Vec::with_capacity(len);
-        let mut row_count = Vec::with_capacity(len);
-        let mut bloom_filter_location = vec![];
-        let mut bloom_filter_size = Vec::with_capacity(len);
+        let mut block_size = vec![];
+        let mut file_size = vec![];
+        let mut row_count = vec![];
+
+        let mut column_name = StringColumnBuilder::with_capacity(len, len);
+        let mut column_type = StringColumnBuilder::with_capacity(len, len);
+        let mut column_id = vec![];
+        let mut block_offset = vec![];
+        let mut bytes_compressed = vec![];
 
         let segments_io = SegmentsIO::create(
             self.ctx.clone(),
@@ -120,48 +123,55 @@ impl<'a> FuseBlock<'a> {
         );
 
         let mut row_num = 0;
-        let mut end_flag = false;
         let chunk_size =
             std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len);
-        for chunk in snapshot.segments.chunks(chunk_size) {
+
+        let schema = self.table.schema();
+        let leaf_fields = schema.leaf_fields();
+
+        let mut end = false;
+        'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
                 .read_segments::<Arc<SegmentInfo>>(chunk, true)
                 .await?;
             for segment in segments {
                 let segment = segment?;
-
-                let block_count = segment.summary.block_count as usize;
-                let take_num = if row_num + block_count >= len {
-                    end_flag = true;
-                    len - row_num
-                } else {
-                    row_num += block_count;
-                    block_count
-                };
-
-                segment.blocks.iter().take(take_num).for_each(|block| {
+                for block in segment.blocks.iter() {
                     let block = block.as_ref();
-                    block_location.put_slice(block.location.0.as_bytes());
-                    block_location.commit_row();
-                    block_size.push(block.block_size);
-                    file_size.push(block.file_size);
-                    row_count.push(block.row_count);
-                    bloom_filter_location.push(
-                        block
-                            .bloom_filter_index_location
-                            .as_ref()
-                            .map(|s| s.0.as_bytes().to_vec()),
-                    );
-                    bloom_filter_size.push(block.bloom_filter_index_size);
-                });
 
-                if end_flag {
-                    break;
+                    for (id, column) in block.col_metas.iter() {
+                        if let Some(f) = leaf_fields.iter().find(|f| f.column_id == *id) {
+                            block_location.put_slice(block.location.0.as_bytes());
+                            block_location.commit_row();
+                            block_size.push(block.block_size);
+                            file_size.push(block.file_size);
+                            row_count.push(column.total_rows() as u64);
+
+                            column_name.put_slice(f.name.as_bytes());
+                            column_name.commit_row();
+
+                            column_type.put_slice(f.data_type.to_string().as_bytes());
+                            column_type.commit_row();
+
+                            column_id.push(*id);
+
+                            let (offset, length) = column.offset_length();
+                            block_offset.push(offset);
+                            bytes_compressed.push(length);
+
+                            row_num += 1;
+
+                            if row_num >= limit {
+                                end = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if end {
+                        break 'FOR;
+                    }
                 }
-            }
-
-            if end_flag {
-                break;
             }
         }
 
@@ -192,15 +202,27 @@ impl<'a> FuseBlock<'a> {
                     Value::Column(UInt64Type::from_data(row_count)),
                 ),
                 BlockEntry::new(
-                    DataType::String.wrap_nullable(),
-                    Value::Column(StringType::from_opt_data(bloom_filter_location)),
+                    DataType::String,
+                    Value::Column(Column::String(column_name.build())),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Column(Column::String(column_type.build())),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt32),
+                    Value::Column(UInt32Type::from_data(column_id)),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),
-                    Value::Column(UInt64Type::from_data(bloom_filter_size)),
+                    Value::Column(UInt64Type::from_data(block_offset)),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Column(UInt64Type::from_data(bytes_compressed)),
                 ),
             ],
-            len,
+            row_num,
         ))
     }
 
@@ -212,12 +234,15 @@ impl<'a> FuseBlock<'a> {
             TableField::new("block_size", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("file_size", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("column_name", TableDataType::String),
+            TableField::new("column_type", TableDataType::String),
+            TableField::new("column_id", TableDataType::Number(NumberDataType::UInt32)),
             TableField::new(
-                "bloom_filter_location",
-                TableDataType::String.wrap_nullable(),
+                "block_offset",
+                TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
-                "bloom_filter_size",
+                "bytes_compressed",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
         ])

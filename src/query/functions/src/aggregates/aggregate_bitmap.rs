@@ -22,19 +22,32 @@ use std::ops::SubAssign;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::check_number;
+use common_expression::types::decimal::DecimalType;
 use common_expression::types::*;
+use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_io::prelude::BinaryWrite;
-use roaring::RoaringTreemap;
+use croaring::treemap::NativeSerializer;
+use croaring::Treemap;
+use ethnum::i256;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::StateAddr;
+use super::StateAddrs;
+use crate::aggregates::assert_arguments;
 use crate::aggregates::assert_unary_arguments;
+use crate::aggregates::assert_variadic_params;
 use crate::aggregates::AggregateFunction;
+use crate::with_simple_no_number_mapped_type;
+use crate::BUILTIN_FUNCTIONS;
 
 #[derive(Clone)]
 struct AggregateBitmapFunction<OP, AGG> {
@@ -80,13 +93,14 @@ trait BitmapAggResult: Send + Sync + 'static {
 }
 
 struct BitmapCountResult;
+
 struct BitmapRawResult;
 
 impl BitmapAggResult for BitmapCountResult {
     fn merge_result(place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let builder = UInt64Type::try_downcast_builder(builder).unwrap();
         let state = place.get::<BitmapAggState>();
-        builder.push(state.rb.as_ref().map(|rb| rb.len()).unwrap_or(0));
+        builder.push(state.rb.as_ref().map(|rb| rb.cardinality()).unwrap_or(0));
         Ok(())
     }
 
@@ -100,7 +114,7 @@ impl BitmapAggResult for BitmapRawResult {
         let builder = BitmapType::try_downcast_builder(builder).unwrap();
         let state = place.get::<BitmapAggState>();
         if let Some(rb) = state.rb.as_ref() {
-            rb.serialize_into(&mut builder.data)?;
+            builder.put(&rb.serialize()?);
         };
         builder.commit_row();
         Ok(())
@@ -131,40 +145,43 @@ macro_rules! with_bitmap_op_mapped_type {
 }
 
 trait BitmapOperate: Send + Sync + 'static {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap);
+    fn operate(lhs: &mut Treemap, rhs: Treemap);
 }
 
 struct BitmapAndOp;
+
 struct BitmapOrOp;
+
 struct BitmapXorOp;
+
 struct BitmapNotOp;
 
 impl BitmapOperate for BitmapAndOp {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
+    fn operate(lhs: &mut Treemap, rhs: Treemap) {
         lhs.bitand_assign(rhs);
     }
 }
 
 impl BitmapOperate for BitmapOrOp {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
+    fn operate(lhs: &mut Treemap, rhs: Treemap) {
         lhs.bitor_assign(rhs);
     }
 }
 
 impl BitmapOperate for BitmapXorOp {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
+    fn operate(lhs: &mut Treemap, rhs: Treemap) {
         lhs.bitxor_assign(rhs);
     }
 }
 
 impl BitmapOperate for BitmapNotOp {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
+    fn operate(lhs: &mut Treemap, rhs: Treemap) {
         lhs.sub_assign(rhs);
     }
 }
 
 struct BitmapAggState {
-    rb: Option<RoaringTreemap>,
+    rb: Option<Treemap>,
 }
 
 impl BitmapAggState {
@@ -172,7 +189,7 @@ impl BitmapAggState {
         Self { rb: None }
     }
 
-    fn add<OP: BitmapOperate>(&mut self, other: RoaringTreemap) {
+    fn add<OP: BitmapOperate>(&mut self, other: Treemap) {
         match &mut self.rb {
             Some(v) => {
                 OP::operate(v, other);
@@ -229,12 +246,12 @@ where
                 if !valid {
                     continue;
                 }
-                let rb = RoaringTreemap::deserialize_from(data)?;
+                let rb = Treemap::deserialize(data)?;
                 state.add::<OP>(rb);
             }
         } else {
             for data in column_iter {
-                let rb = RoaringTreemap::deserialize_from(data)?;
+                let rb = Treemap::deserialize(data)?;
                 state.add::<OP>(rb);
             }
         }
@@ -253,7 +270,7 @@ where
         for (data, place) in column.iter().zip(places.iter()) {
             let addr = place.next(offset);
             let state = addr.get::<BitmapAggState>();
-            let rb = RoaringTreemap::deserialize_from(data)?;
+            let rb = Treemap::deserialize(data)?;
             state.add::<OP>(rb);
         }
         Ok(())
@@ -263,7 +280,7 @@ where
         let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
         let state = place.get::<BitmapAggState>();
         if let Some(data) = BitmapType::index_column(&column, row) {
-            let rb = RoaringTreemap::deserialize_from(data)?;
+            let rb = Treemap::deserialize(data)?;
             state.add::<OP>(rb);
         }
         Ok(())
@@ -275,7 +292,7 @@ where
         let flag: u8 = if state.rb.is_some() { 1 } else { 0 };
         writer.write_scalar(&flag)?;
         if let Some(rb) = &state.rb {
-            rb.serialize_into(writer)?;
+            writer.extend_from_slice(rb.serialize()?.as_slice());
         }
         Ok(())
     }
@@ -284,7 +301,7 @@ where
         let state = place.get::<BitmapAggState>();
         let flag = reader[0];
         state.rb = if flag == 1 {
-            Some(RoaringTreemap::deserialize_from(&reader[1..])?)
+            Some(Treemap::deserialize(&reader[1..])?)
         } else {
             None
         };
@@ -316,6 +333,175 @@ where
 
 impl<OP, AGG> fmt::Display for AggregateBitmapFunction<OP, AGG> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.display_name)
+    }
+}
+
+struct AggregateBitmapIntersectCountFunction<T>
+where
+    T: ValueType + Send + Sync,
+    <T as ValueType>::Scalar: Send + Sync,
+{
+    display_name: String,
+    inner: AggregateBitmapFunction<BitmapAndOp, BitmapCountResult>,
+    filter_values: Vec<T::Scalar>,
+    _t: PhantomData<T>,
+}
+
+impl<T> AggregateBitmapIntersectCountFunction<T>
+where
+    T: ValueType + Send + Sync,
+    <T as ValueType>::Scalar: Send + Sync,
+{
+    fn try_create(
+        display_name: &str,
+        filter_values: Vec<T::Scalar>,
+    ) -> Result<Arc<dyn AggregateFunction>> {
+        let func = AggregateBitmapIntersectCountFunction::<T> {
+            display_name: display_name.to_string(),
+            inner: AggregateBitmapFunction {
+                display_name: "".to_string(),
+                _op: PhantomData,
+                _agg: PhantomData,
+            },
+            filter_values,
+            _t: PhantomData,
+        };
+        Ok(Arc::new(func))
+    }
+
+    fn get_filter_bitmap(&self, columns: &[Column]) -> Bitmap {
+        let filter_col = T::try_downcast_column(&columns[1]).unwrap();
+
+        let mut result = MutableBitmap::from_len_zeroed(columns[0].len());
+
+        for filter_val in &self.filter_values {
+            let filter_ref = T::to_scalar_ref(filter_val);
+            let mut col_bitmap = MutableBitmap::with_capacity(T::column_len(&filter_col));
+
+            T::iter_column(&filter_col).for_each(|val| {
+                col_bitmap.push(val == filter_ref);
+            });
+            (&mut result).bitor_assign(&Bitmap::from(col_bitmap));
+        }
+
+        Bitmap::from(result)
+    }
+
+    fn filter_row(&self, columns: &[Column], row: usize) -> Result<bool> {
+        let check_col = T::try_downcast_column(&columns[1]).unwrap();
+        let check_val_opt = T::index_column(&check_col, row);
+
+        if let Some(check_val) = check_val_opt {
+            for filter_val in &self.filter_values {
+                let filter_ref = T::to_scalar_ref(filter_val);
+                if filter_ref == check_val {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
+    fn filter_place(places: &[StateAddr], predicate: &Bitmap) -> StateAddrs {
+        if predicate.unset_bits() == 0 {
+            return places.to_vec();
+        }
+        let it = predicate
+            .iter()
+            .zip(places.iter())
+            .filter(|(v, _)| *v)
+            .map(|(_, c)| *c);
+
+        Vec::from_iter(it)
+    }
+}
+
+impl<T> AggregateFunction for AggregateBitmapIntersectCountFunction<T>
+where
+    T: ValueType + Send + Sync,
+    <T as ValueType>::Scalar: Send + Sync,
+{
+    fn name(&self) -> &str {
+        "AggregateBitmapIntersectCountFunction"
+    }
+
+    fn return_type(&self) -> Result<DataType> {
+        self.inner.return_type()
+    }
+
+    fn init_state(&self, place: StateAddr) {
+        self.inner.init_state(place);
+    }
+
+    fn state_layout(&self) -> Layout {
+        self.inner.state_layout()
+    }
+
+    fn accumulate(
+        &self,
+        place: StateAddr,
+        columns: &[Column],
+        validity: Option<&Bitmap>,
+        input_rows: usize,
+    ) -> Result<()> {
+        let predicate = self.get_filter_bitmap(columns);
+        let bitmap = match validity {
+            Some(validity) => validity & (&predicate),
+            None => predicate,
+        };
+        self.inner
+            .accumulate(place, columns, Some(&bitmap), input_rows)
+    }
+
+    fn accumulate_keys(
+        &self,
+        places: &[StateAddr],
+        offset: usize,
+        columns: &[Column],
+        _input_rows: usize,
+    ) -> Result<()> {
+        let predicate = self.get_filter_bitmap(columns);
+        let column = columns[0].filter(&predicate);
+
+        let new_places = Self::filter_place(places, &predicate);
+        let new_places_slice = new_places.as_slice();
+        let row_size = predicate.len() - predicate.unset_bits();
+
+        self.inner
+            .accumulate_keys(new_places_slice, offset, vec![column].as_slice(), row_size)
+    }
+
+    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+        if self.filter_row(columns, row)? {
+            return self.inner.accumulate_row(place, columns, row);
+        }
+        Ok(())
+    }
+
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+        self.inner.serialize(place, writer)
+    }
+
+    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+        self.inner.deserialize(place, reader)
+    }
+
+    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        self.inner.merge(place, rhs)
+    }
+
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+        self.inner.merge_result(place, builder)
+    }
+}
+
+impl<T> fmt::Display for AggregateBitmapIntersectCountFunction<T>
+where
+    T: ValueType + Send + Sync,
+    <T as ValueType>::Scalar: Send + Sync,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
@@ -354,6 +540,115 @@ pub fn try_create_aggregate_bitmap_function<const OP_TYPE: u8, const AGG_TYPE: u
             display_name, OP_TYPE
         ))),
     })
+}
+
+pub fn try_create_aggregate_bitmap_intersect_count_function(
+    display_name: &str,
+    params: Vec<Scalar>,
+    argument_types: Vec<DataType>,
+) -> Result<Arc<dyn AggregateFunction>> {
+    assert_arguments(display_name, argument_types.len(), 2)?;
+    assert_variadic_params(display_name, params.len(), (1, 32))?;
+
+    let first_argument = argument_types[0].remove_nullable();
+    if !first_argument.is_bitmap() {
+        return Err(ErrorCode::BadDataValueType(format!(
+            "{} the first argument type mismatch, expect: '{:?}', but got: '{:?}'",
+            display_name,
+            DataType::Bitmap,
+            first_argument,
+        )));
+    }
+
+    let filter_column_type = argument_types[1].remove_nullable();
+
+    with_simple_no_number_mapped_type!(|T| match filter_column_type {
+        DataType::T => {
+            AggregateBitmapIntersectCountFunction::<T>::try_create(
+                display_name,
+                extract_params::<T>(display_name, filter_column_type, params)?,
+            )
+        }
+        DataType::Number(num_type) => {
+            with_number_mapped_type!(|NUM| match num_type {
+                NumberDataType::NUM => {
+                    AggregateBitmapIntersectCountFunction::<NumberType<NUM>>::try_create(
+                        display_name,
+                        extract_number_params::<NUM>(num_type, params)?,
+                    )
+                }
+            })
+        }
+        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
+            AggregateBitmapIntersectCountFunction::<DecimalType<i128>>::try_create(
+                display_name,
+                extract_params::<DecimalType<i128>>(display_name, filter_column_type, params)?,
+            )
+        }
+        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
+            AggregateBitmapIntersectCountFunction::<DecimalType<i256>>::try_create(
+                display_name,
+                extract_params::<DecimalType<i256>>(display_name, filter_column_type, params)?,
+            )
+        }
+        _ => {
+            AggregateBitmapIntersectCountFunction::<AnyType>::try_create(
+                display_name,
+                extract_params::<AnyType>(display_name, filter_column_type, params)?,
+            )
+        }
+    })
+}
+
+fn extract_params<T: ValueType>(
+    display_name: &str,
+    val_type: DataType,
+    params: Vec<Scalar>,
+) -> Result<Vec<T::Scalar>> {
+    let mut filter_values = Vec::with_capacity(params.len());
+    for (i, param) in params.iter().enumerate() {
+        let val_opt = T::try_downcast_scalar(&param.as_ref()).map(|s| T::to_owned_scalar(s));
+        match val_opt {
+            Some(val) => filter_values.push(val),
+            None => {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "{} param({}) type mismatch, expect: '{:?}', but got: '{:?}'",
+                    display_name,
+                    i,
+                    val_type,
+                    param.as_ref().infer_data_type()
+                )));
+            }
+        };
+    }
+    Ok(filter_values)
+}
+
+fn extract_number_params<N: Number>(
+    num_type: NumberDataType,
+    params: Vec<Scalar>,
+) -> Result<Vec<N>> {
+    let mut result = Vec::with_capacity(params.len());
+    for param in &params {
+        let data_type = param.as_ref().infer_data_type();
+        let val: N = check_number(
+            None,
+            &FunctionContext::default(),
+            &Expr::<usize>::Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(Expr::Constant {
+                    span: None,
+                    scalar: param.clone(),
+                    data_type,
+                }),
+                dest_type: DataType::Number(num_type),
+            },
+            &BUILTIN_FUNCTIONS,
+        )?;
+        result.push(val);
+    }
+    Ok(result)
 }
 
 pub fn aggregate_bitmap_and_count_function_desc() -> AggregateFunctionDescription {
@@ -418,6 +713,17 @@ pub fn aggregate_bitmap_intersect_function_desc() -> AggregateFunctionDescriptio
     };
     AggregateFunctionDescription::creator_with_features(
         Box::new(try_create_aggregate_bitmap_function::<BITMAP_AND, BITMAP_AGG_RAW>),
+        features,
+    )
+}
+
+pub fn aggregate_bitmap_intersect_count_function_desc() -> AggregateFunctionDescription {
+    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_bitmap_intersect_count_function),
         features,
     )
 }

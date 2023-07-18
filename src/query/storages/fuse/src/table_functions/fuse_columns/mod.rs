@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod blocking;
-mod non_blocking;
-mod partition;
-mod read;
-mod table;
+mod fuse_column;
+mod fuse_column_table;
 
-pub(crate) use table::arrow_to_table_schema;
-pub use table::ParquetTable;
+pub use fuse_column::FuseColumn;
+pub use fuse_column_table::FuseColumnTable;
