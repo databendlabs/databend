@@ -415,6 +415,8 @@ fn test_statement() {
         r#"ALTER VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t"#,
         r#"DROP VIRTUAL COLUMNS FOR t"#,
         r#"GENERATE VIRTUAL COLUMNS FOR t"#,
+        r#"CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
+        r#"ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'"#,
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- xxxxx\n  select 34343;",
     ];

@@ -443,6 +443,25 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
+
+            Plan::CreateNetworkPolicy(p) => Ok(Arc::new(
+                CreateNetworkPolicyInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::AlterNetworkPolicy(p) => Ok(Arc::new(AlterNetworkPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropNetworkPolicy(p) => Ok(Arc::new(DropNetworkPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescNetworkPolicy(p) => Ok(Arc::new(DescNetworkPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::ShowNetworkPolicies(p) => Ok(Arc::new(
+                ShowNetworkPoliciesInterpreter::try_create(ctx, *p.clone())?,
+            )),
         }
     }
 }

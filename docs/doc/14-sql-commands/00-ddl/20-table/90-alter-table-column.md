@@ -1,5 +1,5 @@
 ---
-title: ALTER TABLE
+title: ALTER TABLE COLUMN
 description:
   Adds or drops a column of a table.
 ---
@@ -40,7 +40,7 @@ DROP COLUMN <column_name>;
 
 ## Examples
 
-## Example 1: Adding, Renaming, and Removing a Column
+### Example 1: Adding, Renaming, and Removing a Column
 
 This example illustrates the creation of a table called "default.users" with columns for id, username, email, and age. It showcases the addition of columns for business_email, middle_name, and phone_number with various constraints. The example also demonstrates the renaming and subsequent removal of the "age" column.
 
@@ -85,7 +85,7 @@ middle_name   |VARCHAR|YES |NULL                 |     |
 phone_number  |VARCHAR|NO  |''                   |     |
 ```
 
-## Example 2: Adding a Computed Column
+### Example 2: Adding a Computed Column
 
 This example demonstrates creating a table for storing employee information, inserting data into the table, and adding a computed column to calculate the age of each employee based on their birth year.
 
@@ -117,7 +117,7 @@ ID | Name          | BirthYear | Age
 3  | Robert Johnson| 1982      | 41
 ```
 
-## Example 3: Converting a Computed Column
+### Example 3: Converting a Computed Column
 
 This example creates a table called "products" with columns for ID, price, quantity, and a computed column "total_price." The ALTER TABLE statement removes the computed functionality from the "total_price" column, converting it into a regular column.
 

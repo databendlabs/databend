@@ -16,6 +16,7 @@
 
 mod cluster;
 mod file_format;
+mod network_policy;
 mod quota;
 mod role;
 mod serde;
@@ -28,6 +29,8 @@ pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
 pub use file_format::FileFormatApi;
 pub use file_format::FileFormatMgr;
+pub use network_policy::NetworkPolicyApi;
+pub use network_policy::NetworkPolicyMgr;
 pub use quota::QuotaApi;
 pub use quota::QuotaMgr;
 pub use role::RoleApi;

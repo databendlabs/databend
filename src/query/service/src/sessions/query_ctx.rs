@@ -240,6 +240,10 @@ impl QueryContext {
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
     }
+
+    pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        self.shared.evict_table_from_cache(catalog, database, table)
+    }
 }
 
 #[async_trait::async_trait]

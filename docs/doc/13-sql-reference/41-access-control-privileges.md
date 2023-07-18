@@ -81,13 +81,14 @@ Databend offers a range of privileges that allow you to exercise fine-grained co
 
 ## Database Privileges
 
+Please note that you can use the [USE DATABASE](../14-sql-commands/00-ddl/10-database/ddl-use-database.md) command to specify a database once you have any of the following privileges to the database or any privilege to a table in the database.
+
 | Privilege | Description                                                                     |
 |:----------|:--------------------------------------------------------------------------------|
 | Alter     | Renames a database.                                                             |
 | CREATE    | Creates a database.                                                             |
 | DROP      | Drops or undrops a database. Restores the recent version of a dropped database. |
-| SELECT    | SHOW CREATE a database. USE a database.                                         |
-
+| SELECT    | SHOW CREATE a database.                                                         |
 
 ## Session Policy Privileges
 

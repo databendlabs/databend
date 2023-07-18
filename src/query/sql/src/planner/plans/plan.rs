@@ -51,6 +51,7 @@ use crate::plans::share::ShowGrantTenantsOfSharePlan;
 use crate::plans::share::ShowObjectGrantPrivilegesPlan;
 use crate::plans::share::ShowSharesPlan;
 use crate::plans::AddTableColumnPlan;
+use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
@@ -61,6 +62,7 @@ use crate::plans::CallPlan;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::CreateFileFormatPlan;
+use crate::plans::CreateNetworkPolicyPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateTablePlan;
@@ -69,10 +71,12 @@ use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::CreateVirtualColumnsPlan;
 use crate::plans::DeletePlan;
+use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropCatalogPlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::DropFileFormatPlan;
+use crate::plans::DropNetworkPolicyPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropTableClusterKeyPlan;
@@ -103,6 +107,7 @@ use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
+use crate::plans::ShowNetworkPoliciesPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::ShowShareEndpointPlan;
 use crate::plans::TruncateTablePlan;
@@ -262,6 +267,13 @@ pub enum Plan {
     CreateDatamaskPolicy(Box<CreateDatamaskPolicyPlan>),
     DropDatamaskPolicy(Box<DropDatamaskPolicyPlan>),
     DescDatamaskPolicy(Box<DescDatamaskPolicyPlan>),
+
+    // Network policy
+    CreateNetworkPolicy(Box<CreateNetworkPolicyPlan>),
+    AlterNetworkPolicy(Box<AlterNetworkPolicyPlan>),
+    DropNetworkPolicy(Box<DropNetworkPolicyPlan>),
+    DescNetworkPolicy(Box<DescNetworkPolicyPlan>),
+    ShowNetworkPolicies(Box<ShowNetworkPoliciesPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -274,8 +286,8 @@ pub enum RewriteKind {
 
     ShowCatalogs,
     ShowDatabases,
-    ShowTables,
-    ShowColumns,
+    ShowTables(String),
+    ShowColumns(String, String),
     ShowTablesStatus,
 
     ShowFunctions,
@@ -396,6 +408,11 @@ impl Display for Plan {
             Plan::SetOptions(..) => {
                 write!(f, "SetOptions")
             }
+            Plan::CreateNetworkPolicy(_) => write!(f, "CreateNetworkPolicy"),
+            Plan::AlterNetworkPolicy(_) => write!(f, "AlterNetworkPolicy"),
+            Plan::DropNetworkPolicy(_) => write!(f, "DropNetworkPolicy"),
+            Plan::DescNetworkPolicy(_) => write!(f, "DescNetworkPolicy"),
+            Plan::ShowNetworkPolicies(_) => write!(f, "ShowNetworkPolicies"),
         }
     }
 }
@@ -440,6 +457,11 @@ impl Plan {
             Plan::CreateDatamaskPolicy(plan) => plan.schema(),
             Plan::DropDatamaskPolicy(plan) => plan.schema(),
             Plan::DescDatamaskPolicy(plan) => plan.schema(),
+            Plan::CreateNetworkPolicy(plan) => plan.schema(),
+            Plan::AlterNetworkPolicy(plan) => plan.schema(),
+            Plan::DropNetworkPolicy(plan) => plan.schema(),
+            Plan::DescNetworkPolicy(plan) => plan.schema(),
+            Plan::ShowNetworkPolicies(plan) => plan.schema(),
             other => {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())
@@ -471,6 +493,8 @@ impl Plan {
                 | Plan::VacuumTable(_)
                 | Plan::VacuumDropTable(_)
                 | Plan::DescDatamaskPolicy(_)
+                | Plan::DescNetworkPolicy(_)
+                | Plan::ShowNetworkPolicies(_)
         )
     }
 }

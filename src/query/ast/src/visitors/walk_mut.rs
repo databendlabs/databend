@@ -448,5 +448,10 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::DropDatamaskPolicy(stmt) => visitor.visit_drop_data_mask_policy(stmt),
         Statement::DescDatamaskPolicy(stmt) => visitor.visit_desc_data_mask_policy(stmt),
         Statement::AttachTable(_) => {}
+        Statement::CreateNetworkPolicy(stmt) => visitor.visit_create_network_policy(stmt),
+        Statement::AlterNetworkPolicy(stmt) => visitor.visit_alter_network_policy(stmt),
+        Statement::DropNetworkPolicy(stmt) => visitor.visit_drop_network_policy(stmt),
+        Statement::DescNetworkPolicy(stmt) => visitor.visit_desc_network_policy(stmt),
+        Statement::ShowNetworkPolicies => visitor.visit_show_network_policies(),
     }
 }

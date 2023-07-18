@@ -231,6 +231,13 @@ pub enum Statement {
     CreateDatamaskPolicy(CreateDatamaskPolicyStmt),
     DropDatamaskPolicy(DropDatamaskPolicyStmt),
     DescDatamaskPolicy(DescDatamaskPolicyStmt),
+
+    // network policy
+    CreateNetworkPolicy(CreateNetworkPolicyStmt),
+    AlterNetworkPolicy(AlterNetworkPolicyStmt),
+    DropNetworkPolicy(DropNetworkPolicyStmt),
+    DescNetworkPolicy(DescNetworkPolicyStmt),
+    ShowNetworkPolicies,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -544,6 +551,11 @@ impl Display for Statement {
             Statement::CreateDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DropDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DescDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateNetworkPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterNetworkPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DropNetworkPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DescNetworkPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowNetworkPolicies => write!(f, "SHOW NETWORK POLICIES")?,
         }
         Ok(())
     }

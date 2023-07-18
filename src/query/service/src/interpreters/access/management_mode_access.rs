@@ -49,8 +49,8 @@ impl AccessChecker for ManagementModeAccess {
                         match rewrite_kind  {
                             Some(ref v) => matches!(v,
                             RewriteKind::ShowDatabases
-                            | RewriteKind::ShowTables
-                            | RewriteKind::ShowColumns
+                            | RewriteKind::ShowTables(_)
+                            | RewriteKind::ShowColumns(_, _)
                             | RewriteKind::ShowEngines
                             | RewriteKind::ShowSettings
                             | RewriteKind::ShowFunctions
@@ -99,6 +99,10 @@ impl AccessChecker for ManagementModeAccess {
                 // Stage.
                 | Plan::CreateStage(_)
                 | Plan::DropStage(_)
+                // Network policy.
+                | Plan::CreateNetworkPolicy(_)
+                | Plan::AlterNetworkPolicy(_)
+                | Plan::DropNetworkPolicy(_)
 
                 // UDF
                 | Plan::CreateUDF(_)

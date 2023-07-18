@@ -114,3 +114,78 @@ pub struct RevokePrivilegePlan {
     pub priv_types: UserPrivilegeSet,
     pub on: GrantObject,
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CreateNetworkPolicyPlan {
+    pub if_not_exists: bool,
+    pub tenant: String,
+    pub name: String,
+    pub allowed_ip_list: Vec<String>,
+    pub blocked_ip_list: Vec<String>,
+    pub comment: String,
+}
+
+impl CreateNetworkPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AlterNetworkPolicyPlan {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub name: String,
+    pub allowed_ip_list: Option<Vec<String>>,
+    pub blocked_ip_list: Option<Vec<String>>,
+    pub comment: Option<String>,
+}
+
+impl AlterNetworkPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DropNetworkPolicyPlan {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub name: String,
+}
+
+impl DropNetworkPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DescNetworkPolicyPlan {
+    pub name: String,
+}
+
+impl DescNetworkPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("Name", DataType::String),
+            DataField::new("Allowed Ip List", DataType::String),
+            DataField::new("Blocked Ip List", DataType::String),
+            DataField::new("Comment", DataType::String),
+        ])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShowNetworkPoliciesPlan {}
+
+impl ShowNetworkPoliciesPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("Name", DataType::String),
+            DataField::new("Allowed Ip List", DataType::String),
+            DataField::new("Blocked Ip List", DataType::String),
+            DataField::new("Comment", DataType::String),
+        ])
+    }
+}
