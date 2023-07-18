@@ -3467,6 +3467,8 @@ Functions overloads:
 3 to_yyyymmdd(Timestamp NULL) :: UInt32 NULL
 0 to_yyyymmddhh(Date) :: UInt64
 1 to_yyyymmddhh(Date NULL) :: UInt64 NULL
+2 to_yyyymmddhh(Timestamp) :: UInt64
+3 to_yyyymmddhh(Timestamp NULL) :: UInt64 NULL
 0 to_yyyymmddhhmmss(Date) :: UInt64
 1 to_yyyymmddhhmmss(Date NULL) :: UInt64 NULL
 2 to_yyyymmddhhmmss(Timestamp) :: UInt64
