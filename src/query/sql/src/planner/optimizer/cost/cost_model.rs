@@ -14,7 +14,6 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use opendal::services::Cos;
 
 use super::Cost;
 use super::CostModel;
@@ -22,7 +21,6 @@ use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::MaterializedCte;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 
@@ -46,7 +44,7 @@ fn compute_cost_impl(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
         RelOperator::Join(plan) => compute_cost_join(memo, m_expr, plan),
         RelOperator::UnionAll(_) => compute_cost_union_all(memo, m_expr),
         RelOperator::Aggregate(_) => compute_aggregate(memo, m_expr),
-        RelOperator::MaterializedCte(plan) => compute_materialized_cte(memo, m_expr),
+        RelOperator::MaterializedCte(_) => compute_materialized_cte(memo, m_expr),
 
         RelOperator::EvalScalar(_)
         | RelOperator::Filter(_)

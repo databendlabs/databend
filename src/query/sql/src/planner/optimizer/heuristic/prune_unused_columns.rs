@@ -291,6 +291,7 @@ impl UnusedColumnPruner {
                     CteScan {
                         cte_idx: scan.cte_idx.clone(),
                         fields: pruned_fields,
+                        stat: scan.stat.clone(),
                     },
                 ))))
             }

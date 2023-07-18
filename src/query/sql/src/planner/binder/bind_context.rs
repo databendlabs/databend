@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
-use std::ops::Index;
+use std::sync::Arc;
 
 use common_ast::ast::Query;
 use common_ast::ast::TableAlias;
@@ -40,6 +40,7 @@ use super::INTERNAL_COLUMN_FACTORY;
 use crate::binder::window::WindowInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
+use crate::optimizer::StatInfo;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -170,7 +171,10 @@ pub struct CteInfo {
     pub query: Query,
     pub materialized: bool,
     pub cte_idx: IndexType,
+    // If true, the materialized CTE has been bound.
     pub bound: bool,
+    // If cte is materialized, it has stat_info
+    pub stat_info: Option<Arc<StatInfo>>,
 }
 
 impl BindContext {

@@ -29,7 +29,6 @@ use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::Expr;

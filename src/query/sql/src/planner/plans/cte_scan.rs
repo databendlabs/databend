@@ -17,20 +17,15 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::DataBlock;
 use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_meta_app::schema::IndexType;
-use common_storages_memory::MemoryTable;
-use parking_lot::RwLock;
 
 use crate::optimizer::ColumnSet;
+use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
-use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
@@ -38,6 +33,7 @@ use crate::plans::RelOp;
 pub struct CteScan {
     pub cte_idx: usize,
     pub fields: Vec<DataField>,
+    pub stat: Arc<StatInfo>,
 }
 
 impl CteScan {
@@ -79,26 +75,23 @@ impl Operator for CteScan {
 
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
-            distribution: crate::optimizer::Distribution::Random,
+            distribution: Distribution::Random,
         })
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo {
-            cardinality: 1.0,
-            statistics: Statistics {
-                precise_cardinality: None,
-                column_stats: Default::default(),
-            },
+            cardinality: self.stat.cardinality,
+            statistics: self.stat.statistics.clone(),
         }))
     }
 
     fn compute_required_prop_child(
         &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        child_index: usize,
-        required: &RequiredProperty,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _child_index: usize,
+        _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         unreachable!()
     }

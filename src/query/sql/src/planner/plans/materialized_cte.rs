@@ -56,10 +56,11 @@ impl Operator for MaterializedCte {
         })
     }
 
-    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        let right_stat_info = rel_expr.derive_cardinality_child(1)?;
         Ok(Arc::new(StatInfo {
-            cardinality: 0.0,
-            statistics: Default::default(),
+            cardinality: right_stat_info.cardinality,
+            statistics: right_stat_info.statistics.clone(),
         }))
     }
 

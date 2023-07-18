@@ -1573,12 +1573,8 @@ impl PipelineBuilder {
     ) -> Result<()> {
         self.build_pipeline(right_side)?;
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformMaterializedCte::create(
-                self.ctx.clone(),
-                input.clone(),
-                output.clone(),
-                state.clone(),
-            );
+            let transform =
+                TransformMaterializedCte::create(input.clone(), output.clone(), state.clone());
             Ok(ProcessorPtr::create(transform))
         })?;
         Ok(())

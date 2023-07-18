@@ -25,7 +25,6 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::Sink;
-use common_pipeline_sinks::Sinker;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 use common_sql::IndexType;
@@ -91,13 +90,11 @@ pub struct TransformMaterializedCte {
     state: Arc<MaterializedCteState>,
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
-    ctx: Arc<QueryContext>,
     step: Step,
 }
 
 impl TransformMaterializedCte {
     pub fn create(
-        ctx: Arc<QueryContext>,
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         state: Arc<MaterializedCteState>,
@@ -106,7 +103,6 @@ impl TransformMaterializedCte {
             state,
             input_port,
             output_port,
-            ctx,
             step: Step::Sink,
         })
     }
@@ -171,7 +167,6 @@ pub struct MaterializedCteSink {
     ctx: Arc<QueryContext>,
     blocks: Vec<DataBlock>,
     state: Arc<MaterializedCteState>,
-    step: Step,
 }
 
 impl MaterializedCteSink {
@@ -186,7 +181,6 @@ impl MaterializedCteSink {
             ctx,
             blocks: vec![],
             state,
-            step: Step::Sink,
         })
     }
 }

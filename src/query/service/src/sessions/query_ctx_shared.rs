@@ -35,11 +35,9 @@ use common_settings::Settings;
 use common_sql::IndexType;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
-use common_storages_memory::MemoryTable;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use storages_common_index::Index;
 use uuid::Uuid;
 
 use crate::catalogs::CatalogManager;

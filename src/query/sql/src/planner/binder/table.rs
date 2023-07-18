@@ -61,12 +61,10 @@ use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesReq;
-use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
-use common_storages_memory::MemoryTable;
 use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultCacheMetaManager;
 use common_storages_result_cache::ResultCacheReader;
@@ -85,6 +83,7 @@ use crate::binder::ColumnBinding;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
@@ -195,15 +194,20 @@ impl Binder {
                             let (cte_s_expr, cte_bind_ctx) = self
                                 .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
                                 .await?;
+                            let stat_info =
+                                RelExpr::with_s_expr(&cte_s_expr).derive_cardinality()?;
                             // Add `materialized_cte` to bind_context.
                             bind_context
                                 .materialized_ctes
                                 .insert((cte_info.cte_idx, cte_s_expr));
-                            // To avoid bind same materialized cte again, so make `cte_info.bound` to true.
+                            // To avoid bind same materialized cte again, so make `cte_info.bound` to true and add `stat_info`.
                             bind_context
                                 .ctes_map
                                 .entry(table_name)
-                                .and_modify(|cte_info| cte_info.bound = true);
+                                .and_modify(|cte_info| {
+                                    cte_info.bound = true;
+                                    cte_info.stat_info = Some(stat_info);
+                                });
                             cte_bind_ctx
                         } else {
                             bind_context.clone()
@@ -733,6 +737,8 @@ impl Binder {
             CteScan {
                 cte_idx: cte_info.cte_idx,
                 fields,
+                // It is safe to unwrap here because we have checked that the cte is materialized.
+                stat: cte_info.stat_info.clone().unwrap(),
             }
             .into(),
         ));
