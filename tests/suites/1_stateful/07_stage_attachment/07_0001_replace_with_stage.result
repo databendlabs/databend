@@ -37,7 +37,7 @@ null
 133
 {
   "code": 4000,
-  "message": "duplicated data detected in merge source"
+  "message": "duplicated data detected in the values being replaced into (only the first one will be described): at row 7, [\"id\":10]"
 }
 1	'Chengdu'	80	China
 2	'Shanghai'	2	China
