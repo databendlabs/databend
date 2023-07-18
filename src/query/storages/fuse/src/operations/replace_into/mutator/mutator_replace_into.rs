@@ -20,6 +20,7 @@ use common_expression::types::AnyType;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Scalar;
+use common_expression::ScalarRef;
 use common_expression::Value;
 use common_functions::aggregates::eval_aggr;
 
@@ -111,9 +112,11 @@ impl ReplaceIntoMutator {
                         .zip(self.on_conflict_fields.iter())
                         .map(|(col, field)| {
                             let col_name = &field.table_field.name;
-                            // if col.index(row_idx) is None, an exception will already be thrown in build_column_hash
-                            let col_value = col.index(conflict_row_idx).unwrap().to_string();
-                            format!("\"{}\":{}", col_name, col_value)
+                            // if col.index(conflict_row_idx) is None, an exception will already be thrown in build_column_hash
+                            let row_value = col.index(conflict_row_idx).unwrap();
+                            let row_value_message =
+                                Self::extract_col_value_for_err_message(row_value);
+                            format!("\"{}\":{}", col_name, row_value_message)
                         })
                         .collect::<Vec<_>>()
                         .join(", ");
@@ -165,6 +168,29 @@ impl ReplaceIntoMutator {
             res.push((min, max));
         }
         Ok(res)
+    }
+
+    fn extract_col_value_for_err_message(scalar: ScalarRef) -> String {
+        // unfortunately, lifetime issues, we can not return a &str
+        match scalar {
+            // for nested types, just return the type name as a hint.
+            ScalarRef::Array(_) => "[ARRAY]".to_owned(),
+            ScalarRef::Map(_) => "[MAP]".to_owned(),
+            ScalarRef::Bitmap(_) => "[BITMAP]".to_owned(),
+            ScalarRef::Tuple(_) => "[TUPLE]".to_owned(),
+            ScalarRef::Variant(_) => "[VARIANT]".to_owned(),
+            // for string, return the first 5 chars
+            ScalarRef::String(s) => {
+                let val = String::from_utf8_lossy(s).to_string();
+                // take the first 5 chars
+                match val.as_str().char_indices().nth(5) {
+                    None => val,
+                    Some((idx, _)) => format!("{}...", &val[..idx]),
+                }
+            }
+            // for other primitive types, just return the string representation
+            v => v.to_string(),
+        }
     }
 }
 
