@@ -888,6 +888,14 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
             ToNumberImpl::eval_date::<ToYYYYMMDD, _>(val, ctx.func_ctx.tz)
         }),
     );
+
+    registry.register_passthrough_nullable_1_arg::<DateType, UInt64Type, _, _>(
+        "to_yyyymmddhh",
+        |_, _| FunctionDomain::Full,
+        vectorize_1_arg::<DateType, UInt64Type>(|val, ctx| {
+            ToNumberImpl::eval_date::<ToYYYYMMDDHHMMSS, _>(val, ctx.func_ctx.tz)
+        }),
+    );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt64Type, _, _>(
         "to_yyyymmddhhmmss",
         |_, _| FunctionDomain::Full,

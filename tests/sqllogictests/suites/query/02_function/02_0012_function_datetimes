@@ -295,6 +295,26 @@ select to_yyyymmddhhmmss(to_date(18875))  =  20210905000000
 1
 
 query I
+select to_yyyymmddhh(to_datetime(1630833797000000))
+----
+2021090509
+
+query I
+select to_yyyymmddhh(to_date(18875))
+----
+2021090500
+
+query B
+select to_yyyymmddhh(to_datetime(1630833797000000))  =  2021090509
+----
+1
+
+query B
+select to_yyyymmddhhmmss(to_date(18875))  =  2021090500
+----
+1
+
+query I
 select to_yyyymmdd(to_datetime(1630833797000000))
 ----
 20210905

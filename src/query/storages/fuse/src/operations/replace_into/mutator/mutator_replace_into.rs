@@ -16,15 +16,17 @@ use ahash::HashSet;
 use ahash::HashSetExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::AnyType;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Scalar;
+use common_expression::Value;
 use common_functions::aggregates::eval_aggr;
 
 use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
-use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
+use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns_new;
 use crate::operations::replace_into::OnConflictField;
 
 // Replace is somehow a simplified merge_into, which
@@ -62,16 +64,39 @@ impl ReplaceIntoMutator {
         data_block: &DataBlock,
     ) -> Result<MergeIntoOperation> {
         let num_rows = data_block.num_rows();
-        let mut columns = Vec::with_capacity(self.on_conflict_fields.len());
-        let data_block = data_block.convert_to_full();
+        let mut column_values = Vec::with_capacity(self.on_conflict_fields.len());
         for field in &self.on_conflict_fields {
             let filed_index = field.field_index;
             let entry = &data_block.columns()[filed_index];
-            let column = entry.value.as_column().unwrap();
-            columns.push(column);
+            column_values.push(&entry.value);
         }
-        match Self::build_column_hash(&columns, &mut self.key_saw, num_rows)? {
+
+        match Self::build_column_hash(&column_values, &mut self.key_saw, num_rows)? {
             ColumnHash::NoConflict(key_hashes) => {
+                let has_scalar = data_block
+                    .columns()
+                    .iter()
+                    .any(|entry| matches!(entry.value, Value::Scalar(_)));
+
+                // convert to full block if necessary
+                let full_block;
+                let data_block = if has_scalar {
+                    full_block = data_block.convert_to_full();
+                    &full_block
+                } else {
+                    data_block
+                };
+
+                let columns = data_block
+                    .columns()
+                    .iter()
+                    .map(|entry| {
+                        // we have checked(or converted if necessary) that there is no scalar in the entry
+                        // so we can safely unwrap here.
+                        entry.value.as_column().unwrap()
+                    })
+                    .collect::<Vec<_>>();
+
                 let columns_min_max = Self::columns_min_max(&columns, num_rows)?;
                 let delete_action = DeletionByColumn {
                     columns_min_max,
@@ -81,7 +106,7 @@ impl ReplaceIntoMutator {
             }
             ColumnHash::Conflict(conflict_row_idx) => {
                 let conflict_description = {
-                    let conflicts = columns
+                    let conflicts = column_values
                         .iter()
                         .zip(self.on_conflict_fields.iter())
                         .map(|(col, field)| {
@@ -104,13 +129,13 @@ impl ReplaceIntoMutator {
     }
 
     fn build_column_hash(
-        columns: &[&Column],
+        column_values: &[&Value<AnyType>],
         saw: &mut HashSet<UniqueKeyDigest>,
         num_rows: usize,
     ) -> Result<ColumnHash> {
         let mut digests = HashSet::new();
         for row_idx in 0..num_rows {
-            let hash = row_hash_of_columns(columns, row_idx);
+            let hash = row_hash_of_columns_new(column_values, row_idx);
             if saw.contains(&hash) {
                 return Ok(ColumnHash::Conflict(row_idx));
             }
@@ -156,8 +181,8 @@ mod tests {
         // ------|---
         // Hi      1
         // hello   2
-        let column1 = StringType::from_data(&["Hi", "Hello"]);
-        let column2 = NumberType::<u8>::from_data(vec![1, 2]);
+        let column1 = Value::Column(StringType::from_data(&["Hi", "Hello"]));
+        let column2 = Value::Column(NumberType::<u8>::from_data(vec![1, 2]));
         let mut saw = HashSet::new();
         let num_rows = 2;
 
@@ -170,8 +195,8 @@ mod tests {
         // ------|---
         // Hi      2
         // hello   3
-        let column1 = StringType::from_data(&["Hi", "Hello"]);
-        let column2 = NumberType::<u8>::from_data(vec![2, 3]);
+        let column1 = Value::Column(StringType::from_data(&["Hi", "Hello"]));
+        let column2 = Value::Column(NumberType::<u8>::from_data(vec![2, 3]));
         let columns = [&column1, &column2];
         let num_rows = 2;
         let r = ReplaceIntoMutator::build_column_hash(&columns, &mut saw, num_rows)?;
@@ -183,8 +208,8 @@ mod tests {
         //  not_exist   1
         //  not_exist2  2
         //  Hi          1
-        let column1 = StringType::from_data(&["not_exist", "not_exist2", "Hi"]);
-        let column2 = NumberType::<u8>::from_data(vec![1, 2, 1]);
+        let column1 = Value::Column(StringType::from_data(&["not_exist", "not_exist2", "Hi"]));
+        let column2 = Value::Column(NumberType::<u8>::from_data(vec![1, 2, 1]));
         let columns = [&column1, &column2];
         let num_rows = 3;
         let r = ReplaceIntoMutator::build_column_hash(&columns, &mut saw, num_rows)?;
@@ -201,12 +226,12 @@ mod tests {
         let columns = [&column1, &column2];
         let num_rows = 2;
         let min_max_pairs = ReplaceIntoMutator::columns_min_max(&columns, num_rows)?;
-        let (min, max) = &min_max_pairs[0];
-        assert_eq!(min.to_string(), "\"a\"");
-        assert_eq!(max.to_string(), "\"d\"");
         let (min, max) = &min_max_pairs[1];
         assert_eq!(min.to_string(), "1");
         assert_eq!(max.to_string(), "5");
+        let (min, max) = &min_max_pairs[0];
+        assert_eq!(min.to_string(), "'a'");
+        assert_eq!(max.to_string(), "'d'");
 
         Ok(())
     }

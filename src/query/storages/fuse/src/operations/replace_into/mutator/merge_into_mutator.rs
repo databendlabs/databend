@@ -56,9 +56,10 @@ use crate::operations::mutation::SegmentIndex;
 use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
-use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
+use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns_new;
 use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
 use crate::operations::replace_into::OnConflictField;
+
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
     // the fields specified in ON CONFLICT clause
@@ -307,7 +308,7 @@ impl AggregationContext {
         let mut columns = Vec::with_capacity(on_conflict_fields.len());
         for (field, _) in on_conflict_fields.iter().enumerate() {
             let on_conflict_field_index = field;
-            let key_column = key_columns_data
+            columns.push(&key_columns_data
                 .columns()
                 .get(on_conflict_field_index)
                 .ok_or_else(|| {
@@ -316,20 +317,12 @@ impl AggregationContext {
                         on_conflict_field_index, segment_index, block_index
                     ))
                 })?
-                .value
-                .as_column()
-                .ok_or_else(|| {
-                    ErrorCode::Internal(format!(
-                        "unexpected, cast block entry (index {}) to column failed, got None. segment index {}, block index {}",
-                        on_conflict_field_index, segment_index, block_index
-                    ))
-                })?;
-            columns.push(key_column);
+                .value);
         }
 
         let mut bitmap = MutableBitmap::new();
         for row in 0..num_rows {
-            let hash = row_hash_of_columns(&columns, row);
+            let hash = row_hash_of_columns_new(&columns, row);
             bitmap.push(!deleted_key_hashes.contains(&hash));
         }
 
