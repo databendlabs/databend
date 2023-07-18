@@ -68,8 +68,6 @@ Compacts the table data by merging small segments into larger ones.
 
 - The option LIMIT sets the maximum number of segments to be compacted. In this case, Databend will select and compact the latest segments.
 
-- Databend will automatically re-cluster the table after the compacting process.
-
 **Example**
 
 ```sql
@@ -161,7 +159,7 @@ OPTIMIZE TABLE my_database.my_table COMPACT LIMIT 50;
 
 ## Purging
 
-Purging permanently removes historical data, including unused snapshots, segments, and blocks, from your storage. Only the latest snapshot (including the segments and blocks referenced by this snapshot) will be kept. This can save storage space but may affect the Time Travel feature. Consider purging when:
+Purging permanently removes historical data, including unused snapshots, segments, and blocks, except for the snapshots within the retention period (including the segments and blocks referenced by this snapshot), which will be retained. This can save storage space but may affect the Time Travel feature. Consider purging when:
 
 - The storage cost is a major concern, and you don't require historical data for Time Travel or other purposes.
 
