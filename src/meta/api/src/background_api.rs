@@ -61,12 +61,12 @@ pub trait BackgroundApi: Send + Sync {
     async fn list_background_jobs(
         &self,
         req: ListBackgroundJobsReq,
-    ) -> Result<Vec<(u64, BackgroundJobInfo)>, KVAppError>;
+    ) -> Result<Vec<(u64, String, BackgroundJobInfo)>, KVAppError>;
     // Return a list of background tasks (task_id, BackgroundInfo)
     async fn list_background_tasks(
         &self,
         req: ListBackgroundTasksReq,
-    ) -> Result<Vec<(u64, BackgroundTaskInfo)>, KVAppError>;
+    ) -> Result<Vec<(u64, String, BackgroundTaskInfo)>, KVAppError>;
 
     async fn update_background_task(
         &self,

@@ -17,12 +17,19 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use common_base::base::GlobalInstance;
 use common_exception::Result;
-use databend_query::servers::ShutdownHandle;
+use common_meta_app::principal::UserIdentity;
 
 #[async_trait::async_trait]
 pub trait BackgroundServiceHandler: Sync + Send {
-    async fn execute_sql(&self, sql: &str) -> Result<Option<RecordBatch>>;
-    async fn start(&self, shutdown_handler: &mut ShutdownHandle) -> Result<()>;
+    async fn execute_sql(&self, sql: String) -> Result<Option<RecordBatch>>;
+
+    async fn execute_scheduled_job(
+        &self,
+        tenant: String,
+        user: UserIdentity,
+        name: String,
+    ) -> Result<()>;
+    async fn start(&self) -> Result<()>;
 }
 
 pub struct BackgroundServiceHandlerWrapper {
@@ -35,22 +42,23 @@ impl BackgroundServiceHandlerWrapper {
     }
 
     #[async_backtrace::framed]
-    pub async fn execute_sql(&self, sql: &str) -> Result<Option<RecordBatch>> {
+    pub async fn execute_sql(&self, sql: String) -> Result<Option<RecordBatch>> {
         self.handler.execute_sql(sql).await
     }
 
     #[async_backtrace::framed]
-    pub async fn start(&self, shutdown_handler: &mut ShutdownHandle) -> Result<()> {
-        self.handler.start(shutdown_handler).await
+    pub async fn start(&self) -> Result<()> {
+        self.handler.start().await
     }
-    // #[async_backtrace::framed]
-    // pub async fn create(
-    //     &self, conf: &common_config::InnerConfig
-    // ) -> Result<Box<dyn Server>> {
-    //     self.handler
-    //         .create_service(conf)
-    //         .await
-    // }
+    #[async_backtrace::framed]
+    pub async fn execute_scheduled_job(
+        &self,
+        tenant: String,
+        user: UserIdentity,
+        name: String,
+    ) -> Result<()> {
+        self.handler.execute_scheduled_job(tenant, user, name).await
+    }
 }
 
 pub fn get_background_service_handler() -> Arc<BackgroundServiceHandlerWrapper> {

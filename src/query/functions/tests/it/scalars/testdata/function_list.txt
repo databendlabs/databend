@@ -1765,6 +1765,8 @@ Functions overloads:
 1 json_path_query_array(Variant NULL, String NULL) :: Variant NULL
 0 json_path_query_first(Variant, String) :: Variant NULL
 1 json_path_query_first(Variant NULL, String NULL) :: Variant NULL
+0 json_to_string(Variant) :: String
+1 json_to_string(Variant NULL) :: String NULL
 0 left(String, UInt64) :: String
 1 left(String NULL, UInt64 NULL) :: String NULL
 0 length(Variant NULL) :: UInt32 NULL
@@ -1774,8 +1776,10 @@ Functions overloads:
 4 length(Array(T0) NULL) :: UInt64 NULL
 5 length(String) :: UInt64
 6 length(String NULL) :: UInt64 NULL
-0 like(String, String) :: Boolean
-1 like(String NULL, String NULL) :: Boolean NULL
+0 like(Variant, String) :: Boolean
+1 like(Variant NULL, String NULL) :: Boolean NULL
+2 like(String, String) :: Boolean
+3 like(String NULL, String NULL) :: Boolean NULL
 0 ln(UInt8) :: Float64
 1 ln(UInt8 NULL) :: Float64 NULL
 2 ln(UInt16) :: Float64

@@ -46,9 +46,15 @@ impl OneBlockProcedure for FuseSegmentProcedure {
 
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+        assert!(args.len() >= 2);
         let database_name = args[0].clone();
         let table_name = args[1].clone();
-        let snapshot_id = args[2].clone();
+        let snapshot_id = if args.len() > 2 {
+            Some(args[2].clone())
+        } else {
+            None
+        };
+
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
             .get_catalog(&ctx.get_current_catalog())?
@@ -61,7 +67,7 @@ impl OneBlockProcedure for FuseSegmentProcedure {
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
-        Ok(FuseSegment::new(ctx, tbl, snapshot_id)
+        Ok(FuseSegment::new(ctx, tbl, snapshot_id, None)
             .get_segments()
             .await?)
     }

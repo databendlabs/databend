@@ -26,9 +26,9 @@ use opendal::Operator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use tracing::debug;
-use tracing::info;
 
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::common::mutation_accumulator::MutationKind;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::MutationAccumulator;
 use crate::operations::common::MutationLogs;
@@ -43,6 +43,7 @@ pub struct TableMutationAggregator {
 }
 
 impl TableMutationAggregator {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
         base_segments: Vec<Location>,
@@ -51,6 +52,7 @@ impl TableMutationAggregator {
         location_gen: TableMetaLocationGenerator,
         schema: TableSchemaRef,
         dal: Operator,
+        mutation_kind: MutationKind,
     ) -> Self {
         let mutation_accumulator = MutationAccumulator::new(
             ctx.clone(),
@@ -60,6 +62,7 @@ impl TableMutationAggregator {
             thresholds,
             base_segments,
             base_summary,
+            mutation_kind,
         );
 
         TableMutationAggregator {
@@ -71,9 +74,9 @@ impl TableMutationAggregator {
     }
 
     pub fn accumulate_log_entry(&mut self, mutation_logs: MutationLogs) {
-        for entry in &mutation_logs.entries {
+        mutation_logs.entries.into_iter().for_each(|entry| {
             self.mutation_accumulator.accumulate_log_entry(entry);
-        }
+        })
     }
 }
 
@@ -95,7 +98,6 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
                 self.start_time.elapsed().as_secs()
             );
             self.ctx.set_status_info(&status);
-            info!(status);
         }
         Ok(None)
     }

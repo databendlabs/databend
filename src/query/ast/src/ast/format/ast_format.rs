@@ -1216,6 +1216,20 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_show_drop_tables(&mut self, stmt: &'ast ShowDropTablesStmt) {
+        let mut children = Vec::new();
+        if let Some(database) = &stmt.database {
+            let database_name = format!("Database {}", database);
+            let database_format_ctx = AstFormatContext::new(database_name);
+            let database_node = FormatTreeNode::new(database_format_ctx);
+            children.push(database_node);
+        }
+        let name = "ShowDropTables".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
     fn visit_create_table(&mut self, stmt: &'ast CreateTableStmt) {
         let mut children = Vec::new();
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
@@ -1352,10 +1366,24 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
-            AlterTableAction::ModifyColumn { column, action: _ } => {
+            AlterTableAction::ModifyColumn { column, action } => {
+                let child_name = match action {
+                    ModifyColumnAction::SetMaskingPolicy(mask_name) => {
+                        format!("Action SetMaskingPolicy {}", mask_name)
+                    }
+                    ModifyColumnAction::SetDataType(type_name) => {
+                        format!("Action SetDataType {}", type_name)
+                    }
+                    ModifyColumnAction::ConvertStoredComputedColumn => {
+                        "Action ConvertStoredComputedColumn".to_string()
+                    }
+                };
+                let child_format_ctx = AstFormatContext::new(child_name);
+                let child = FormatTreeNode::new(child_format_ctx);
+
                 let action_name = format!("Action ModifyColumn column {}", column);
-                let action_format_ctx = AstFormatContext::new(action_name);
-                FormatTreeNode::new(action_format_ctx)
+                let action_format_ctx = AstFormatContext::with_children(action_name, 1);
+                FormatTreeNode::with_children(action_format_ctx, vec![child])
             }
             AlterTableAction::DropColumn { column } => {
                 let action_name = format!("Action Drop column {}", column);
@@ -1378,11 +1406,18 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
-            AlterTableAction::ReclusterTable { selection, .. } => {
+            AlterTableAction::ReclusterTable {
+                selection, limit, ..
+            } => {
                 let mut children = Vec::new();
                 if let Some(selection) = selection {
                     self.visit_expr(selection);
                     children.push(self.children.pop().unwrap());
+                }
+                if let Some(limit) = limit {
+                    let name = format!("Limit {}", limit);
+                    let limit_format_ctx = AstFormatContext::new(name);
+                    children.push(FormatTreeNode::new(limit_format_ctx));
                 }
                 let action_name = "Action Recluster".to_string();
                 let action_format_ctx =
@@ -1441,6 +1476,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let action_name = format!("Action {}", stmt.action);
         let action_format_ctx = AstFormatContext::new(action_name);
         children.push(FormatTreeNode::new(action_format_ctx));
+        if let Some(limit) = stmt.limit {
+            let name = format!("Limit {}", limit);
+            let limit_format_ctx = AstFormatContext::new(name);
+            children.push(FormatTreeNode::new(limit_format_ctx));
+        }
 
         let name = "OptimizeTable".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
@@ -1457,6 +1497,22 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         children.push(FormatTreeNode::new(action_format_ctx));
 
         let name = "VacuumTable".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_vacuum_drop_table(&mut self, stmt: &'ast VacuumDropTableStmt) {
+        let mut children = Vec::new();
+        if let Some(database) = &stmt.database {
+            self.visit_database_ref(&stmt.catalog, database);
+        }
+        children.push(self.children.pop().unwrap());
+        let action_name = format!("Option {}", &stmt.option);
+        let action_format_ctx = AstFormatContext::new(action_name);
+        children.push(FormatTreeNode::new(action_format_ctx));
+
+        let name = "VacuumDropTable".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
@@ -1536,6 +1592,22 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let name = "DropIndex".to_string();
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_refresh_index(&mut self, stmt: &'ast RefreshIndexStmt) {
+        let mut children = Vec::new();
+        self.visit_index_ref(&stmt.index);
+        children.push(self.children.pop().unwrap());
+        if let Some(limit) = stmt.limit {
+            let name = format!("Refresh index limit {}", limit);
+            let limit_format_ctx = AstFormatContext::new(name);
+            children.push(FormatTreeNode::new(limit_format_ctx));
+        }
+
+        let name = "RefreshIndex".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
     }
 
@@ -2207,6 +2279,52 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let name = "DescDatamaskPolicy".to_string();
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_create_network_policy(&mut self, stmt: &'ast CreateNetworkPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("NetworkPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "CreateNetworkPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_alter_network_policy(&mut self, stmt: &'ast AlterNetworkPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("NetworkPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "AlterNetworkPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_drop_network_policy(&mut self, stmt: &'ast DropNetworkPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("NetworkPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "DropNetworkPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_desc_network_policy(&mut self, stmt: &'ast DescNetworkPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("NetworkPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "DescNetworkPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_show_network_policies(&mut self) {
+        let ctx = AstFormatContext::new("ShowNetworkPolicies".to_string());
+        let node = FormatTreeNode::new(ctx);
         self.children.push(node);
     }
 

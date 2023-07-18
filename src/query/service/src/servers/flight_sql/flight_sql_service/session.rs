@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::UserIdentity;
 use common_users::UserApiProvider;
 use tonic::metadata::MetadataMap;
 use tonic::Request;
@@ -87,21 +87,18 @@ impl FlightSqlServiceImpl {
     pub(super) async fn auth_user_password(
         user: String,
         password: String,
-        remote_addr: Option<SocketAddr>,
     ) -> Result<Arc<Session>, Status> {
-        let client_ip = remote_addr
-            .map(|a| a.ip().to_string())
-            .unwrap_or("%".to_string());
         let session = SessionManager::instance()
             .create_session(SessionType::FlightSQL)
             .await
             .map_err(|e| status!("Could not create session", e))?;
         let tenant = session.get_current_tenant();
 
+        let identity = UserIdentity::new(&user, "%");
         let user = UserApiProvider::instance()
-            .get_user_with_client_ip(&tenant, &user, &client_ip)
+            .get_user(&tenant, identity)
             .await
-            .map_err(|e| status!("get_user_with_client_ip fail {}", e))?;
+            .map_err(|e| status!("get_user fail {}", e))?;
         let password = password.as_bytes().to_vec();
         let password = (!password.is_empty()).then_some(password);
 

@@ -38,10 +38,11 @@ impl ParquetTable {
         push_down: Option<PushDownInfo>,
         is_small_file: bool,
     ) -> Result<PartitionPruner> {
+        let settings = ctx.get_settings();
         let parquet_fast_read_bytes = if is_small_file {
             0_usize
         } else {
-            ctx.get_settings().get_parquet_fast_read_bytes()? as usize
+            settings.get_parquet_fast_read_bytes()? as usize
         };
         // `plan.source_info.schema()` is the same as `TableSchema::from(&self.arrow_schema)`
         let projection = if let Some(PushDownInfo {
@@ -74,7 +75,7 @@ impl ParquetTable {
         //
         // How the stats are collected can be found in `ParquetReader::collect_row_group_stats`.
         let (projected_arrow_schema, projected_column_nodes, _, columns_to_read) =
-            ParquetReader::do_projection(&self.arrow_schema, &projection)?;
+            ParquetReader::do_projection(&self.arrow_schema, &self.schema_descr, &projection)?;
         let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema));
 
         let filter = push_down
@@ -114,6 +115,8 @@ impl ParquetTable {
 
         Ok(PartitionPruner {
             schema,
+            schema_descr: self.schema_descr.clone(),
+            schema_from: self.schema_from.clone(),
             row_group_pruner,
             page_pruners,
             columns_to_read,
@@ -121,6 +124,8 @@ impl ParquetTable {
             skip_pruning,
             top_k,
             parquet_fast_read_bytes,
+            compression_ratio: self.compression_ratio,
+            max_memory_usage: settings.get_max_memory_usage()?,
         })
     }
 

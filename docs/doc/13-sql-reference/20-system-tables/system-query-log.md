@@ -125,7 +125,7 @@ written_io_bytes_cost_ms: 0
           exception_text:
              stack_trace:
           server_version:
-        session_settings: compression=None, empty_as_default=1, field_delimiter=,, flight_client_timeout=60, group_by_two_level_threshold=10000, max_block_size=10000, max_execute_time=0, max_threads=24, quoted_ident_case_sensitive=1, record_delimiter=
+        session_settings: compression=None, empty_as_default=1, field_delimiter=,, flight_client_timeout=60, group_by_two_level_threshold=10000, max_block_size=10000, max_execute_time_in_seconds=0, max_threads=24, quoted_ident_case_sensitive=1, record_delimiter=
 , skip_header=0, sql_dialect=PostgreSQL, storage_read_buffer_size=1048576, timezone=UTC, unquoted_ident_case_sensitive=0, scope: SESSION
                    extra:
 ```

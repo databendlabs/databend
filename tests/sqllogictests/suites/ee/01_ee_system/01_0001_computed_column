@@ -98,10 +98,22 @@ select * from t_stored2
 {"id":3,"name":"jack"} 3 jack
 
 statement ok
+drop table if exists t_stored3
+
+statement ok
+create table t_stored3(a json null, b uint32 null as (a['id']::uint32) stored, c string null as (a['name']::string) stored) bloom_index_columns = 'b, c'
+
+statement error 1301
+alter table t_stored3 set options(bloom_index_columns = 'a, b')
+
+statement ok
+alter table t_stored3 set options(bloom_index_columns = 'b')
+
+statement ok
 drop table if exists t_virtual
 
 statement ok
-create table t_virtual(a string null default 'a', b string null as (concat(a, '-', c)) stored, c string null default 'c')
+create table t_virtual(a string null default 'a', b string null as (concat(a, '-', c)) virtual, c string null default 'c')
 
 statement ok
 insert into t_virtual values ('a1', 'c1'), ('a2', 'c2')
@@ -144,6 +156,9 @@ a2 a2-c2 c2
 a3 a3-c c
 aa aa-cc cc
 
+statement error 1301
+alter table t_virtual set options(bloom_index_columns = 'b, c');
+
 statement ok
 drop table if exists t_virtual2
 
@@ -172,6 +187,9 @@ select * from t_virtual2
 {"id":1,"name":"tom"} 1 tom
 {"id":2,"name":"jim"} 2 jim
 {"id":3,"name":"jack"} 3 jack
+
+statement error 1301
+create table t_virtual3(a json null, b uint32 null as (a['id']::uint32) virtual, c string null as (a['name']::string) virtual) bloom_index_columns = 'b, c'
 
 statement ok
 DROP DATABASE test_computed_column

@@ -23,6 +23,7 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::Mutex;
 use common_exception::Result;
+use common_meta_app::background::BackgroundJobIdent;
 use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundJobParams;
 use common_meta_app::background::BackgroundJobStatus;
@@ -59,11 +60,22 @@ impl Job for TestJob {
         let _ = self.finish_tx.clone().lock().await.send(1).await;
     }
 
-    fn get_info(&self) -> BackgroundJobInfo {
-        self.info.clone()
+    async fn get_info(&self) -> Result<BackgroundJobInfo> {
+        Ok(self.info.clone())
+    }
+
+    fn get_name(&self) -> BackgroundJobIdent {
+        BackgroundJobIdent {
+            tenant: "test".to_string(),
+            name: "test".to_string(),
+        }
     }
 
     async fn update_job_status(&mut self, _status: BackgroundJobStatus) -> Result<()> {
+        Ok(())
+    }
+
+    async fn update_job_params(&mut self, _params: BackgroundJobParams) -> Result<()> {
         Ok(())
     }
 }
@@ -80,7 +92,7 @@ async fn test_one_shot_job() -> Result<()> {
         ),
         finish_tx: scheduler.finish_tx.clone(),
     };
-    scheduler.add_job(job.clone())?;
+    scheduler.add_job(job.clone()).await?;
     // println!("what happened");
     scheduler.start().await?;
     // // atomic operation is flaky, so we need to sleep for a while
@@ -105,7 +117,7 @@ async fn test_interval_job() -> Result<()> {
         ),
         finish_tx: scheduler.finish_tx.clone(),
     };
-    scheduler.add_job(job.clone())?;
+    scheduler.add_job(job.clone()).await?;
     let suspend_tx = scheduler.suspend_tx.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -130,7 +142,11 @@ async fn test_should_run_job() -> Result<()> {
             next_task_scheduled_time: Some(current_time - chrono::Duration::seconds(1)),
         },
     );
-    assert!(JobScheduler::should_run_job(&interval_job, current_time));
+    assert!(JobScheduler::should_run_job(
+        &interval_job,
+        current_time,
+        false
+    ));
 
     let interval_job = new_info(
         BackgroundJobParams::new_interval_job(std::time::Duration::from_secs(1000)),
@@ -141,7 +157,11 @@ async fn test_should_run_job() -> Result<()> {
             next_task_scheduled_time: Some(current_time + chrono::Duration::seconds(1)),
         },
     );
-    assert!(!JobScheduler::should_run_job(&interval_job, current_time));
+    assert!(!JobScheduler::should_run_job(
+        &interval_job,
+        current_time,
+        false
+    ));
 
     Ok(())
 }
@@ -159,6 +179,17 @@ async fn test_should_run_job_cron() -> Result<()> {
     );
 
     let should_run = JobScheduler::should_run_job(
+        &new_info(params.clone(), BackgroundJobStatus {
+            job_state: Default::default(),
+            last_task_id: None,
+            last_task_run_at: None,
+            next_task_scheduled_time: Some(Utc.with_ymd_and_hms(2023, 6, 15, 11, 0, 0).unwrap()),
+        }),
+        Utc.with_ymd_and_hms(2023, 6, 15, 10, 30, 0).unwrap(),
+        false,
+    );
+    assert!(!should_run);
+    let should_run = JobScheduler::should_run_job(
         &new_info(params, BackgroundJobStatus {
             job_state: Default::default(),
             last_task_id: None,
@@ -166,9 +197,9 @@ async fn test_should_run_job_cron() -> Result<()> {
             next_task_scheduled_time: Some(Utc.with_ymd_and_hms(2023, 6, 15, 11, 0, 0).unwrap()),
         }),
         Utc.with_ymd_and_hms(2023, 6, 15, 10, 30, 0).unwrap(),
+        true,
     );
-    assert!(!should_run);
-
+    assert!(should_run);
     let params = BackgroundJobParams::new_cron_job(
         cron_expression.to_string(),
         Some(Tz::America__Los_Angeles),

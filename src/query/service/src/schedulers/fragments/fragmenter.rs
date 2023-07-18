@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_sql::executor::DistributedCopyIntoTableFromStage;
 use common_sql::executor::FragmentKind;
 
 use crate::api::BroadcastExchange;
@@ -39,9 +40,18 @@ pub struct Fragmenter {
     ctx: Arc<QueryContext>,
     fragments: Vec<PlanFragment>,
     query_id: String,
+    state: State,
+}
 
-    /// A state to track if is visiting a source pipeline.
-    visiting_source_pipeline: bool,
+/// A state to track if is visiting a source fragment, useful when building fragments.
+///
+/// SelectLeaf: visiting a source fragment of select statement.
+///
+/// DeleteLeaf: visiting a source fragment of delete statement.
+enum State {
+    SelectLeaf,
+    DeleteLeaf,
+    Other,
 }
 
 impl Fragmenter {
@@ -51,7 +61,7 @@ impl Fragmenter {
         Ok(Self {
             ctx,
             fragments: vec![],
-            visiting_source_pipeline: false,
+            state: State::Other,
             query_id,
         })
     }
@@ -124,9 +134,28 @@ impl Fragmenter {
 
 impl PhysicalPlanReplacer for Fragmenter {
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
-        self.visiting_source_pipeline = true;
+        self.state = State::SelectLeaf;
 
         Ok(PhysicalPlan::TableScan(plan.clone()))
+    }
+
+    fn replace_copy_into_table(
+        &mut self,
+        plan: &DistributedCopyIntoTableFromStage,
+    ) -> Result<PhysicalPlan> {
+        self.state = State::SelectLeaf;
+        Ok(PhysicalPlan::DistributedCopyIntoTableFromStage(Box::new(
+            plan.clone(),
+        )))
+    }
+
+    fn replace_delete_partial(
+        &mut self,
+        plan: &common_sql::executor::DeletePartial,
+    ) -> Result<PhysicalPlan> {
+        self.state = State::DeleteLeaf;
+
+        Ok(PhysicalPlan::DeletePartial(Box::new(plan.clone())))
     }
 
     fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {
@@ -173,19 +202,18 @@ impl PhysicalPlanReplacer for Fragmenter {
             kind: plan.kind.clone(),
             keys: plan.keys.clone(),
 
-            destinations: Self::get_executors(self.ctx.clone()),
             query_id: self.query_id.clone(),
 
             // We will connect the fragments later, so we just
             // set the fragment id to a invalid value here.
             destination_fragment_id: usize::MAX,
         });
-        let fragment_type = if self.visiting_source_pipeline {
-            self.visiting_source_pipeline = false;
-            FragmentType::Source
-        } else {
-            FragmentType::Intermediate
+        let fragment_type = match self.state {
+            State::SelectLeaf => FragmentType::Source,
+            State::DeleteLeaf => FragmentType::DeleteLeaf,
+            State::Other => FragmentType::Intermediate,
         };
+        self.state = State::Other;
         let exchange = Self::get_exchange(
             self.ctx.clone(),
             &plan,

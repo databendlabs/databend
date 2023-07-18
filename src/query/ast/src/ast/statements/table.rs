@@ -103,6 +103,22 @@ impl Display for ShowTablesStatusStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ShowDropTablesStmt {
+    pub database: Option<Identifier>,
+}
+
+impl Display for ShowDropTablesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW DROP TABLE")?;
+        if let Some(database) = &self.database {
+            write!(f, " FROM {database}")?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateTableStmt {
     pub if_not_exists: bool,
     pub catalog: Option<Identifier>,
@@ -154,6 +170,31 @@ impl Display for CreateTableStmt {
         if let Some(as_query) = &self.as_query {
             write!(f, " AS {as_query}")?;
         }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub uri_location: UriLocation,
+}
+
+impl Display for AttachTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "ATTACH TABLE ")?;
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+
+        write!(f, " FROM {0}", self.uri_location)?;
 
         Ok(())
     }
@@ -303,6 +344,7 @@ pub enum AlterTableAction {
     ReclusterTable {
         is_final: bool,
         selection: Option<Expr>,
+        limit: Option<u64>,
     },
     RevertTo {
         point: TimeTravelPoint,
@@ -347,6 +389,7 @@ impl Display for AlterTableAction {
             AlterTableAction::ReclusterTable {
                 is_final,
                 selection,
+                limit,
             } => {
                 write!(f, "RECLUSTER")?;
                 if *is_final {
@@ -354,6 +397,9 @@ impl Display for AlterTableAction {
                 }
                 if let Some(conditions) = selection {
                     write!(f, " WHERE {conditions}")?;
+                }
+                if let Some(limit) = limit {
+                    write!(f, " LIMIT {limit}")?;
                 }
                 Ok(())
             }
@@ -451,11 +497,33 @@ impl Display for VacuumTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct VacuumDropTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub option: VacuumTableOption,
+}
+
+impl Display for VacuumDropTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM DROP TABLE ")?;
+        if self.catalog.is_some() || self.database.is_some() {
+            write!(f, "FROM ")?;
+            write_period_separated_list(f, self.catalog.iter().chain(&self.database))?;
+            write!(f, " ")?;
+        }
+        write!(f, "{}", &self.option)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct OptimizeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub action: OptimizeTableAction,
+    pub limit: Option<u64>,
 }
 
 impl Display for OptimizeTableStmt {
@@ -469,6 +537,9 @@ impl Display for OptimizeTableStmt {
                 .chain(Some(&self.table)),
         )?;
         write!(f, " {}", &self.action)?;
+        if let Some(limit) = self.limit {
+            write!(f, " LIMIT {limit}")?;
+        }
 
         Ok(())
     }
@@ -552,10 +623,14 @@ pub struct VacuumTableOption {
 impl Display for VacuumTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if let Some(retain_hours) = &self.retain_hours {
-            write!(f, " RETAIN {} HOURS", retain_hours)?;
+            write!(f, "RETAIN {} HOURS", retain_hours)?;
         }
         if self.dry_run.is_some() {
-            write!(f, " DRY RUN")?;
+            if self.retain_hours.is_some() {
+                write!(f, " DRY RUN")?;
+            } else {
+                write!(f, "DRY RUN")?;
+            }
         }
         Ok(())
     }
@@ -564,13 +639,8 @@ impl Display for VacuumTableOption {
 #[derive(Debug, Clone, PartialEq)]
 pub enum OptimizeTableAction {
     All,
-    Purge {
-        before: Option<TimeTravelPoint>,
-    },
-    Compact {
-        target: CompactTarget,
-        limit: Option<Expr>,
-    },
+    Purge { before: Option<TimeTravelPoint> },
+    Compact { target: CompactTarget },
 }
 
 impl Display for OptimizeTableAction {
@@ -584,7 +654,7 @@ impl Display for OptimizeTableAction {
                 }
                 Ok(())
             }
-            OptimizeTableAction::Compact { target, limit } => {
+            OptimizeTableAction::Compact { target } => {
                 match target {
                     CompactTarget::Block => {
                         write!(f, "COMPACT BLOCK")?;
@@ -592,9 +662,6 @@ impl Display for OptimizeTableAction {
                     CompactTarget::Segment => {
                         write!(f, "COMPACT SEGMENT")?;
                     }
-                }
-                if let Some(limit) = limit {
-                    write!(f, " LIMIT {limit}")?;
                 }
                 Ok(())
             }
@@ -656,6 +723,7 @@ impl Display for ColumnDefinition {
 pub enum ModifyColumnAction {
     SetMaskingPolicy(String),
     SetDataType(TypeName),
+    ConvertStoredComputedColumn,
 }
 
 impl Display for ModifyColumnAction {
@@ -663,6 +731,7 @@ impl Display for ModifyColumnAction {
         match &self {
             ModifyColumnAction::SetMaskingPolicy(name) => write!(f, "SET MASKING POLICY {}", name)?,
             ModifyColumnAction::SetDataType(name) => write!(f, "SET COLUMN TYPE {}", name)?,
+            ModifyColumnAction::ConvertStoredComputedColumn => write!(f, "DROP STORED")?,
         }
 
         Ok(())

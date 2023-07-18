@@ -31,7 +31,17 @@ const config = {
             },
         },
     },
-
+    headTags: [
+      {
+        tagName: 'link',
+        attributes: {
+          rel: 'mask-icon',
+          sizes: 'any',
+          color: '#0175f6',
+          href: '/img/logo/logo-no-text.svg',
+        },
+      },
+    ],
     customFields: {
       blogTags: ['weekly','databend'],
       askBendUrl: isProduction ? ASKBEND_URL : ''

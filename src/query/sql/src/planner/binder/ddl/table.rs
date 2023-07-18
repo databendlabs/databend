@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::AnalyzeTableStmt;
+use common_ast::ast::AttachTableStmt;
 use common_ast::ast::ColumnDefinition;
 use common_ast::ast::ColumnExpr;
 use common_ast::ast::CompactTarget;
@@ -35,6 +36,7 @@ use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::OptimizeTableStmt;
 use common_ast::ast::RenameTableStmt;
 use common_ast::ast::ShowCreateTableStmt;
+use common_ast::ast::ShowDropTablesStmt;
 use common_ast::ast::ShowLimit;
 use common_ast::ast::ShowTablesStatusStmt;
 use common_ast::ast::ShowTablesStmt;
@@ -43,6 +45,7 @@ use common_ast::ast::TableReference;
 use common_ast::ast::TruncateTableStmt;
 use common_ast::ast::UndropTableStmt;
 use common_ast::ast::UriLocation;
+use common_ast::ast::VacuumDropTableStmt;
 use common_ast::ast::VacuumTableStmt;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
@@ -69,8 +72,10 @@ use common_storages_view::view_table::VIEW_ENGINE;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::debug;
+use tracing::error;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
@@ -106,6 +111,7 @@ use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::BindContext;
@@ -184,8 +190,12 @@ impl Binder {
             }
         };
         debug!("show tables rewrite to: {:?}", query);
-        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowTables)
-            .await
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowTables(database),
+        )
+        .await
     }
 
     #[async_backtrace::framed]
@@ -286,6 +296,51 @@ impl Binder {
         let tokens = tokenize_sql(query.as_str())?;
         let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
         self.bind_statement(bind_context, &stmt).await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_drop_tables(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowDropTablesStmt,
+    ) -> Result<Plan> {
+        let ShowDropTablesStmt { database } = stmt;
+
+        let database = self.check_database_exist(&None, database).await?;
+
+        let mut select_builder = SelectBuilder::from("system.tables_with_history");
+
+        select_builder
+            .with_column("name AS Tables")
+            .with_column("'BASE TABLE' AS Table_type")
+            .with_column("database AS Database")
+            .with_column("catalog AS Catalog")
+            .with_column("engine")
+            .with_column("created_on AS create_time");
+        select_builder.with_column("dropped_on AS drop_time");
+
+        select_builder
+            .with_column("num_rows")
+            .with_column("data_size")
+            .with_column("data_compressed_size")
+            .with_column("index_size");
+
+        select_builder
+            .with_order_by("catalog")
+            .with_order_by("database")
+            .with_order_by("name");
+
+        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter("dropped_on != 'NULL'".to_string());
+
+        let query = select_builder.build();
+        debug!("show drop tables rewrite to: {:?}", query);
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowTables(database),
+        )
+        .await
     }
 
     #[async_backtrace::framed]
@@ -426,6 +481,16 @@ impl Binder {
             ))?,
         };
 
+        // for fuse engine, we will insert database_id, so if we check it in execute phase,
+        // we can't distinct user key and our internal key.
+        if options.contains_key(&OPT_KEY_DATABASE_ID.to_lowercase()) {
+            error!("invalid opt for fuse table in create table statement");
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "table option {} is invalid for create table statement",
+                OPT_KEY_DATABASE_ID
+            )));
+        }
+
         if engine == Engine::Fuse {
             // Currently, [Table] can not accesses its database id yet, thus
             // here we keep the db id AS an entry of `table_meta.options`.
@@ -521,6 +586,67 @@ impl Binder {
             },
         };
         Ok(Plan::CreateTable(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_attach_table(
+        &mut self,
+        stmt: &AttachTableStmt,
+    ) -> Result<Plan> {
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
+
+        let mut path = stmt.uri_location.path.clone();
+        // First, to make it easy for users to use, path = "/testbucket/admin/data/1/2" and path = "/testbucket/admin/data/1/2/" are both legal
+        // So we need to remove the last "/"
+        if path.ends_with('/') {
+            path.pop();
+        }
+        // Then, split the path into two parts, the first part is the root, and the second part is the storage_prefix
+        // For example, path = "/testbucket/admin/data/1/2", then root = "/testbucket/admin/data/", storage_prefix = "1/2"
+        // root is used by OpenDAL operator, storage_prefix is used to specify the storage location of the table
+        // Note that the root must end with "/", and the storage_prefix must not start or end with "/"
+        let mut parts = path.split('/').collect::<Vec<_>>();
+        if parts.len() < 2 {
+            return Err(ErrorCode::BadArguments(format!(
+                "Invalid path: {}",
+                stmt.uri_location
+            )));
+        }
+        let storage_prefix = parts.split_off(parts.len() - 2).join("/");
+        let root = format!("{}/", parts.join("/"));
+        let mut options = BTreeMap::new();
+        options.insert(OPT_KEY_STORAGE_PREFIX.to_string(), storage_prefix);
+
+        let mut uri = stmt.uri_location.clone();
+        uri.path = root;
+        let (sp, _) = parse_uri_location(&mut uri)?;
+
+        // create a temporary op to check if params is correct
+        DataOperator::try_create(&sp).await?;
+
+        // Path ends with "/" means it's a directory.
+        let part_prefix = if uri.path.ends_with('/') {
+            uri.part_prefix.clone()
+        } else {
+            "".to_string()
+        };
+
+        Ok(Plan::CreateTable(Box::new(CreateTablePlan {
+            if_not_exists: false,
+            tenant: self.ctx.get_tenant(),
+            catalog,
+            database,
+            table,
+            options,
+            engine: Engine::Fuse,
+            cluster_key: None,
+            as_select: None,
+            schema: Arc::new(TableSchema::default()),
+            field_comments: vec![],
+            storage_params: Some(sp),
+            part_prefix,
+        })))
     }
 
     #[async_backtrace::framed]
@@ -622,7 +748,7 @@ impl Binder {
                     .get_table(&catalog, &database, &table)
                     .await?
                     .schema();
-                let (new_schema, new_column) = self
+                let (new_schema, old_column, new_column) = self
                     .analyze_rename_column(old_column, new_column, schema)
                     .await?;
                 Ok(Plan::RenameTableColumn(Box::new(RenameTableColumnPlan {
@@ -631,6 +757,7 @@ impl Binder {
                     database,
                     table,
                     schema: new_schema,
+                    old_column,
                     new_column,
                 })))
             }
@@ -696,6 +823,7 @@ impl Binder {
             AlterTableAction::ReclusterTable {
                 is_final,
                 selection,
+                limit,
             } => {
                 let (_, mut context) = self
                     .bind_table_reference(bind_context, table_reference)
@@ -724,6 +852,7 @@ impl Binder {
                     is_final: *is_final,
                     metadata: self.metadata.clone(),
                     push_downs,
+                    limit: limit.map(|v| v as usize),
                 })))
             }
             AlterTableAction::RevertTo { point } => {
@@ -820,6 +949,7 @@ impl Binder {
             database,
             table,
             action: ast_action,
+            limit,
         } = stmt;
 
         let (catalog, database, table) =
@@ -835,22 +965,10 @@ impl Binder {
                 };
                 OptimizeTableAction::Purge(p)
             }
-            AstOptimizeTableAction::Compact { target, limit } => {
-                let limit_cnt = match limit {
-                    Some(Expr::Literal {
-                        lit: Literal::UInt64(uint),
-                        ..
-                    }) => Some(*uint as usize),
-                    Some(_) => {
-                        return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
-                    }
-                    _ => None,
-                };
-                match target {
-                    CompactTarget::Block => OptimizeTableAction::CompactBlocks(limit_cnt),
-                    CompactTarget::Segment => OptimizeTableAction::CompactSegments(limit_cnt),
-                }
-            }
+            AstOptimizeTableAction::Compact { target } => match target {
+                CompactTarget::Block => OptimizeTableAction::CompactBlocks,
+                CompactTarget::Segment => OptimizeTableAction::CompactSegments,
+            },
         };
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {
@@ -858,6 +976,7 @@ impl Binder {
             database,
             table,
             action,
+            limit: limit.map(|v| v as usize),
         })))
     }
 
@@ -898,6 +1017,51 @@ impl Binder {
             catalog,
             database,
             table,
+            option,
+        })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_drop_table(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &VacuumDropTableStmt,
+    ) -> Result<Plan> {
+        let VacuumDropTableStmt {
+            catalog,
+            database,
+            option,
+        } = stmt;
+
+        let catalog = catalog
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| "".to_string());
+
+        let option = {
+            let retain_hours = match option.retain_hours {
+                Some(Expr::Literal {
+                    lit: Literal::UInt64(uint),
+                    ..
+                }) => Some(uint as usize),
+                Some(_) => {
+                    return Err(ErrorCode::IllegalDataType("Unsupported hour type"));
+                }
+                _ => None,
+            };
+
+            VacuumTableOption {
+                retain_hours,
+                dry_run: option.dry_run,
+            }
+        };
+        Ok(Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
+            catalog,
+            database,
             option,
         })))
     }
@@ -950,7 +1114,7 @@ impl Binder {
         old_column: &Identifier,
         new_column: &Identifier,
         table_schema: TableSchemaRef,
-    ) -> Result<(TableSchema, String)> {
+    ) -> Result<(TableSchema, String, String)> {
         let old_name = normalize_identifier(old_column, &self.name_resolution_ctx).name;
         let new_name = normalize_identifier(new_column, &self.name_resolution_ctx).name;
 
@@ -977,7 +1141,7 @@ impl Binder {
                 "rename column not existed".to_string(),
             ));
         }
-        Ok((new_schema, new_name))
+        Ok((new_schema, old_name, new_name))
     }
 
     #[async_backtrace::framed]

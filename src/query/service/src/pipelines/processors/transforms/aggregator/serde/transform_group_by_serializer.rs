@@ -129,6 +129,7 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
                             AggregateSerdeMeta::create_spilled(
                                 payload.bucket,
                                 payload.location,
+                                payload.data_range,
                                 payload.columns_layout,
                             ),
                         )));
@@ -149,13 +150,13 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
 
 pub fn serialize_group_by<Method: HashMethodBounds>(
     method: &Method,
-    payload: HashTablePayload<Method, ()>,
+    hashtable: &Method::HashTable<()>,
 ) -> Result<DataBlock> {
-    let keys_len = payload.cell.hashtable.len();
-    let value_size = estimated_key_size(&payload.cell.hashtable);
+    let keys_len = hashtable.len();
+    let value_size = estimated_key_size(hashtable);
     let mut group_key_builder = method.keys_column_builder(keys_len, value_size);
 
-    for group_entity in payload.cell.hashtable.iter() {
+    for group_entity in hashtable.iter() {
         group_key_builder.append_value(group_entity.key());
     }
 

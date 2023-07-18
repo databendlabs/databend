@@ -30,10 +30,10 @@ use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
 
 use super::fuse_snapshot::FuseSnapshot;
-use super::table_args::parse_func_history_args;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
+use crate::table_functions::parse_db_tb_args;
 use crate::table_functions::string_literal;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
@@ -55,7 +55,8 @@ impl FuseSnapshotTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (arg_database_name, arg_table_name) = parse_func_history_args(&table_args)?;
+        let (arg_database_name, arg_table_name) =
+            parse_db_tb_args(&table_args, FUSE_FUNC_SNAPSHOT)?;
 
         let engine = FUSE_FUNC_SNAPSHOT.to_owned();
 
@@ -94,6 +95,7 @@ impl Table for FuseSnapshotTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         Ok((PartStatistics::default(), Partitions::default()))
     }

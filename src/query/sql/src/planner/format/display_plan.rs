@@ -92,6 +92,7 @@ impl Plan {
             Plan::TruncateTable(truncate_table) => Ok(format!("{:?}", truncate_table)),
             Plan::OptimizeTable(optimize_table) => Ok(format!("{:?}", optimize_table)),
             Plan::VacuumTable(vacuum_table) => Ok(format!("{:?}", vacuum_table)),
+            Plan::VacuumDropTable(vacuum_drop_table) => Ok(format!("{:?}", vacuum_drop_table)),
             Plan::AnalyzeTable(analyze_table) => Ok(format!("{:?}", analyze_table)),
             Plan::ExistsTable(exists_table) => Ok(format!("{:?}", exists_table)),
 
@@ -103,6 +104,7 @@ impl Plan {
             // Indexes
             Plan::CreateIndex(index) => Ok(format!("{:?}", index)),
             Plan::DropIndex(index) => Ok(format!("{:?}", index)),
+            Plan::RefreshIndex(index) => Ok(format!("{index:?}")),
 
             // Virtual Columns
             Plan::CreateVirtualColumns(create_virtual_columns) => {
@@ -148,7 +150,6 @@ impl Plan {
             Plan::AlterUser(alter_user) => Ok(format!("{:?}", alter_user)),
             Plan::CreateRole(create_role) => Ok(format!("{:?}", create_role)),
             Plan::DropRole(drop_role) => Ok(format!("{:?}", drop_role)),
-
             Plan::Presign(presign) => Ok(format!("{:?}", presign)),
 
             Plan::SetVariable(p) => Ok(format!("{:?}", p)),
@@ -176,6 +177,13 @@ impl Plan {
             Plan::CreateDatamaskPolicy(p) => Ok(format!("{:?}", p)),
             Plan::DropDatamaskPolicy(p) => Ok(format!("{:?}", p)),
             Plan::DescDatamaskPolicy(p) => Ok(format!("{:?}", p)),
+
+            // network policy
+            Plan::CreateNetworkPolicy(p) => Ok(format!("{:?}", p)),
+            Plan::AlterNetworkPolicy(p) => Ok(format!("{:?}", p)),
+            Plan::DropNetworkPolicy(p) => Ok(format!("{:?}", p)),
+            Plan::DescNetworkPolicy(p) => Ok(format!("{:?}", p)),
+            Plan::ShowNetworkPolicies(p) => Ok(format!("{:?}", p)),
         }
     }
 }

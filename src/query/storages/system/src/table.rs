@@ -58,6 +58,7 @@ impl PartInfo for SystemTablePart {
 
 pub trait SyncSystemTable: Send + Sync {
     const NAME: &'static str;
+    const IS_LOCAL: bool = true;
 
     fn get_table_info(&self) -> &TableInfo;
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock>;
@@ -67,12 +68,20 @@ pub trait SyncSystemTable: Send + Sync {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        Ok((
-            PartStatistics::default(),
-            Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
-                SystemTablePart,
-            ))]),
-        ))
+        match Self::IS_LOCAL {
+            true => Ok((
+                PartStatistics::default(),
+                Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
+                    SystemTablePart,
+                ))]),
+            )),
+            false => Ok((
+                PartStatistics::default(),
+                Partitions::create_nolazy(PartitionsShuffleKind::Broadcast, vec![Arc::new(
+                    Box::new(SystemTablePart),
+                )]),
+            )),
+        }
     }
 
     fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
@@ -100,6 +109,10 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         self
     }
 
+    fn is_local(&self) -> bool {
+        TTable::IS_LOCAL
+    }
+
     fn get_table_info(&self) -> &TableInfo {
         self.inner_table.get_table_info()
     }
@@ -109,6 +122,7 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         self.inner_table.get_partitions(ctx, push_downs)
     }
@@ -178,6 +192,7 @@ impl<TTable: 'static + SyncSystemTable> SyncSource for SystemTableSyncSource<TTa
 #[async_trait::async_trait]
 pub trait AsyncSystemTable: Send + Sync {
     const NAME: &'static str;
+    const IS_LOCAL: bool = true;
 
     fn get_table_info(&self) -> &TableInfo;
     async fn get_full_data(
@@ -192,12 +207,20 @@ pub trait AsyncSystemTable: Send + Sync {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        Ok((
-            PartStatistics::default(),
-            Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
-                SystemTablePart,
-            ))]),
-        ))
+        match Self::IS_LOCAL {
+            true => Ok((
+                PartStatistics::default(),
+                Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
+                    SystemTablePart,
+                ))]),
+            )),
+            false => Ok((
+                PartStatistics::default(),
+                Partitions::create_nolazy(PartitionsShuffleKind::Broadcast, vec![Arc::new(
+                    Box::new(SystemTablePart),
+                )]),
+            )),
+        }
     }
 }
 
@@ -221,6 +244,10 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
         self
     }
 
+    fn is_local(&self) -> bool {
+        TTable::IS_LOCAL
+    }
+
     fn get_table_info(&self) -> &TableInfo {
         self.inner_table.get_table_info()
     }
@@ -230,6 +257,7 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         self.inner_table.get_partitions(ctx, push_downs).await
     }
@@ -295,10 +323,36 @@ impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<
         }
 
         self.finished = true;
-        Ok(Some(
-            self.inner
-                .get_full_data(self.context.clone(), self.push_downs.clone())
-                .await?,
-        ))
+        let block = self
+            .inner
+            .get_full_data(self.context.clone(), self.push_downs.clone())
+            .await?;
+
+        #[cfg(debug_assertions)]
+        {
+            use common_expression::types::DataType;
+            let table_info = self.inner.get_table_info();
+            let data_types: Vec<DataType> = block
+                .columns()
+                .iter()
+                .map(|v| v.data_type.clone())
+                .collect();
+
+            let table_info_types: Vec<DataType> = table_info
+                .schema()
+                .fields()
+                .iter()
+                .map(|v| v.data_type().into())
+                .collect::<Vec<DataType>>();
+
+            assert!(
+                data_types == table_info_types,
+                "data_types: {:?}, table_info_types: {:?}",
+                data_types,
+                table_info_types
+            )
+        }
+
+        Ok(Some(block))
     }
 }

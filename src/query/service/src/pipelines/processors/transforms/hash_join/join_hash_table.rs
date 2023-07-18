@@ -38,7 +38,6 @@ use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashMap;
 use common_hashtable::HashtableKeyable;
-use common_hashtable::RowPtr;
 use common_hashtable::StringHashJoinHashMap;
 use common_sql::plans::JoinType;
 use ethnum::U256;
@@ -47,9 +46,11 @@ use parking_lot::RwLock;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::HashJoinDesc;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
 use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
+use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -82,7 +83,7 @@ pub enum HashJoinHashTable {
 
 pub struct JoinHashTable {
     pub(crate) ctx: Arc<QueryContext>,
-    pub(crate) data_block_size_limit: Arc<usize>,
+    pub(crate) build_side_block_size_limit: Arc<usize>,
     /// Reference count
     pub(crate) build_count: Mutex<usize>,
     pub(crate) finalize_count: Mutex<usize>,
@@ -101,16 +102,20 @@ pub struct JoinHashTable {
     pub(crate) entry_size: Arc<AtomicUsize>,
     pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
     pub(crate) hash_join_desc: HashJoinDesc,
-    pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
     pub(crate) probe_schema: DataSchemaRef,
     pub(crate) interrupt: Arc<AtomicBool>,
-    /// OuterScan map
-    pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
     /// Finalize tasks
     pub(crate) build_worker_num: Arc<AtomicU32>,
     pub(crate) finalize_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
-    /// OuterScan tasks
-    pub(crate) outer_scan_tasks: Arc<RwLock<VecDeque<usize>>>,
+    /// Final scan tasks
+    pub(crate) final_scan_tasks: Arc<RwLock<VecDeque<usize>>>,
+    /// OuterScan map
+    pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
+    /// LeftMarkScan map
+    pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
+    pub(crate) mark_scan_map_lock: Mutex<bool>,
+    /// fast return
+    pub(crate) fast_return: Arc<RwLock<bool>>,
 }
 
 impl JoinHashTable {
@@ -142,12 +147,16 @@ impl JoinHashTable {
         hash_join_desc: HashJoinDesc,
         method: HashMethodKind,
     ) -> Result<Self> {
-        if hash_join_desc.join_type == JoinType::Left
-            || hash_join_desc.join_type == JoinType::Single
-        {
+        if matches!(
+            hash_join_desc.join_type,
+            JoinType::Left | JoinType::LeftSingle
+        ) {
             build_data_schema = build_schema_wrap_nullable(&build_data_schema);
         };
-        if hash_join_desc.join_type == JoinType::Right {
+        if matches!(
+            hash_join_desc.join_type,
+            JoinType::Right | JoinType::RightSingle
+        ) {
             probe_data_schema = probe_schema_wrap_nullable(&probe_data_schema);
         }
         if hash_join_desc.join_type == JoinType::Full {
@@ -156,7 +165,9 @@ impl JoinHashTable {
         }
         Ok(Self {
             row_space: RowSpace::new(ctx.clone(), build_data_schema)?,
-            data_block_size_limit: Arc::new(ctx.get_settings().get_max_block_size()? as usize * 16),
+            build_side_block_size_limit: Arc::new(
+                ctx.get_settings().get_max_block_size()? as usize * 16,
+            ),
             ctx,
             build_count: Mutex::new(0),
             finalize_count: Mutex::new(0),
@@ -172,13 +183,15 @@ impl JoinHashTable {
             entry_size: Arc::new(AtomicUsize::new(0)),
             raw_entry_spaces: Mutex::new(vec![]),
             hash_join_desc,
-            row_ptrs: RwLock::new(vec![]),
             probe_schema: probe_data_schema,
             interrupt: Arc::new(AtomicBool::new(false)),
-            outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             build_worker_num: Arc::new(AtomicU32::new(0)),
             finalize_tasks: Arc::new(RwLock::new(VecDeque::new())),
-            outer_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
+            final_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
+            outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            mark_scan_map_lock: Mutex::new(false),
+            fast_return: Default::default(),
         })
     }
 
@@ -190,7 +203,7 @@ impl JoinHashTable {
         let mut input = (*input).clone();
         if matches!(
             self.hash_join_desc.join_type,
-            JoinType::Right | JoinType::Full
+            JoinType::Right | JoinType::RightSingle | JoinType::Full
         ) {
             let nullable_columns = input
                 .columns()
@@ -222,7 +235,16 @@ impl JoinHashTable {
             .collect::<Result<Vec<_>>>()?;
 
         if self.hash_join_desc.join_type == JoinType::RightMark {
-            probe_state.markers = Some(Self::init_markers(&probe_keys, input.num_rows()));
+            if input.num_rows() > probe_state.markers.as_ref().unwrap().len() {
+                probe_state.markers = Some(vec![MARKER_KIND_FALSE; input.num_rows()]);
+            }
+            if self.hash_join_desc.other_predicate.is_none() {
+                Self::init_markers(
+                    &probe_keys,
+                    input.num_rows(),
+                    probe_state.markers.as_mut().unwrap(),
+                );
+            }
         }
 
         if probe_keys
@@ -242,6 +264,15 @@ impl JoinHashTable {
                 }
             }
             probe_state.valids = valids;
+        }
+
+        if self.fast_return()?
+            && matches!(
+                self.hash_join_desc.join_type,
+                JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
+            )
+        {
+            return self.left_fast_return(&input);
         }
 
         let hash_table = unsafe { &*self.hash_table.get() };

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
 use common_sql::plans::DropDatamaskPolicyPlan;
 use common_users::UserApiProvider;
@@ -48,7 +49,7 @@ impl Interpreter for DropDataMaskInterpreter {
         license_manager.manager.check_enterprise_enabled(
             &self.ctx.get_settings(),
             self.ctx.get_tenant(),
-            "data_mask".to_string(),
+            Feature::DataMask,
         )?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();

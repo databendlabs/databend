@@ -36,9 +36,15 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::DroppedId;
+use common_meta_app::schema::GcDroppedTableReq;
+use common_meta_app::schema::GcDroppedTableResp;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -54,6 +60,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -96,6 +104,10 @@ pub trait Catalog: DynClone + Send + Sync {
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply>;
 
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply>;
+
+    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply>;
+
+    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply>;
 
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>>;
 
@@ -154,6 +166,19 @@ pub trait Catalog: DynClone + Send + Sync {
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
     async fn list_tables_history(&self, tenant: &str, db_name: &str)
     -> Result<Vec<Arc<dyn Table>>>;
+
+    async fn get_drop_table_infos(
+        &self,
+        _req: ListDroppedTableReq,
+    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
+        Err(ErrorCode::Unimplemented(
+            "'get_drop_table_infos' not implemented",
+        ))
+    }
+
+    async fn gc_drop_tables(&self, _req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
+        Err(ErrorCode::Unimplemented("'gc_drop_tables' not implemented"))
+    }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply>;
 

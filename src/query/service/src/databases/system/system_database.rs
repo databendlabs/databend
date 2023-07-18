@@ -20,6 +20,9 @@ use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_storages_system::BackgroundJobTable;
+use common_storages_system::BackgroundTaskTable;
+use common_storages_system::BacktraceTable;
 use common_storages_system::BuildOptionsTable;
 use common_storages_system::CachesTable;
 use common_storages_system::CatalogsTable;
@@ -65,6 +68,8 @@ impl SystemDatabase {
         let mut map = HashMap::new();
         map.insert("configs".to_string(), true);
         map.insert("clusters".to_string(), true);
+        // Add 2023-08-01 by BohuTANG
+        map.insert("users".to_string(), true);
         map
     }
 
@@ -105,6 +110,9 @@ impl SystemDatabase {
             CachesTable::create(sys_db_meta.next_table_id()),
             IndexesTable::create(sys_db_meta.next_table_id()),
             QueryProfileTable::create(sys_db_meta.next_table_id()),
+            BackgroundTaskTable::create(sys_db_meta.next_table_id()),
+            BackgroundJobTable::create(sys_db_meta.next_table_id()),
+            BacktraceTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

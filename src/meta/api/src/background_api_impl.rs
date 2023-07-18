@@ -42,6 +42,7 @@ use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::ConditionResult::Eq;
+use common_meta_types::InvalidReply;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeq::Any;
@@ -198,16 +199,22 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
     async fn list_background_jobs(
         &self,
         req: ListBackgroundJobsReq,
-    ) -> Result<Vec<(u64, BackgroundJobInfo)>, KVAppError> {
+    ) -> Result<Vec<(u64, String, BackgroundJobInfo)>, KVAppError> {
         let prefix = format!("{}/{}", BackgroundJobIdent::PREFIX, req.tenant);
         let reply = self.prefix_list_kv(&prefix).await?;
         let mut res = vec![];
-        for (_, v) in reply {
+        for (k, v) in reply {
+            let ident = BackgroundJobIdent::from_str_key(k.as_str()).map_err(|e| {
+                KVAppError::MetaError(MetaError::from(InvalidReply::new(
+                    "list_background_jobs",
+                    &e,
+                )))
+            })?;
             let job_id = deserialize_u64(&v.data)?;
             let r = get_background_job_by_id(self, &BackgroundJobId { id: job_id.0 }).await?;
             // filter none and get the task info
             if let Some(task_info) = r.1 {
-                res.push((r.0, task_info));
+                res.push((r.0, ident.name, task_info));
             }
         }
         Ok(res)
@@ -244,13 +251,19 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
     async fn list_background_tasks(
         &self,
         req: ListBackgroundTasksReq,
-    ) -> Result<Vec<(u64, BackgroundTaskInfo)>, KVAppError> {
+    ) -> Result<Vec<(u64, String, BackgroundTaskInfo)>, KVAppError> {
         let prefix = format!("{}/{}", BackgroundTaskIdent::PREFIX, req.tenant);
         let reply = self.prefix_list_kv(&prefix).await?;
         let mut res = vec![];
-        for (_, v) in reply {
+        for (k, v) in reply {
+            let ident = BackgroundTaskIdent::from_str_key(k.as_str()).map_err(|e| {
+                KVAppError::MetaError(MetaError::from(InvalidReply::new(
+                    "list_background_tasks",
+                    &e,
+                )))
+            })?;
             let val: BackgroundTaskInfo = deserialize_struct(&v.data)?;
-            res.push((v.seq, val));
+            res.push((v.seq, ident.task_id, val));
         }
         Ok(res)
     }

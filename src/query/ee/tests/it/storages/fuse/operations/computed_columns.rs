@@ -22,7 +22,7 @@ use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_computed_column() -> Result<()> {
-    let (_guard, ctx) = create_ee_query_context(None).await.unwrap();
+    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
 
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
     let db = fixture.default_db_name();

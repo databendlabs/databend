@@ -6,6 +6,7 @@ publish = false
 edition = "2021"
 
 [workspace]
+resolver = "2"
 members = [
     # Binaries
     "src/binaries",
@@ -114,7 +115,7 @@ opendal = { version = "0.37", features = [
 ] }
 ethnum = { version = "1.3.2" }
 ordered-float = { version = "3.6.0", default-features = false }
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "7ef2abe" }
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "fe6835a" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
@@ -213,3 +214,4 @@ rpath = false
 arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e11341" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
+croaring = { git = "https://github.com/RoaringBitmap/croaring-rs", rev = "13a71b4" }

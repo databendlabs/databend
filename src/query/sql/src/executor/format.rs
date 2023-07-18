@@ -23,6 +23,10 @@ use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregateFunctionDesc;
 use super::AggregatePartial;
+use super::CopyIntoTableFromQuery;
+use super::DeleteFinal;
+use super::DeletePartial;
+use super::DistributedCopyIntoTableFromStage;
 use super::EvalScalar;
 use super::Exchange;
 use super::Filter;
@@ -92,6 +96,20 @@ impl PhysicalPlan {
                     children,
                 ))
             }
+            PhysicalPlan::RangeJoin(plan) => {
+                let left_child = plan.left.format_join(metadata)?;
+                let right_child = plan.right.format_join(metadata)?;
+
+                let children = vec![
+                    FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+                    FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+                ];
+
+                Ok(FormatTreeNode::with_children(
+                    format!("RangeJoin: {}", plan.join_type),
+                    children,
+                ))
+            }
             other => {
                 let children = other
                     .children()
@@ -144,11 +162,21 @@ fn to_format_tree(
         PhysicalPlan::DistributedInsertSelect(plan) => {
             distributed_insert_to_format_tree(plan.as_ref(), metadata, prof_span_set)
         }
+        PhysicalPlan::DeletePartial(plan) => {
+            delete_partial_to_format_tree(plan.as_ref(), metadata, prof_span_set)
+        }
+        PhysicalPlan::DeleteFinal(plan) => {
+            delete_final_to_format_tree(plan.as_ref(), metadata, prof_span_set)
+        }
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::RuntimeFilterSource(plan) => {
             runtime_filter_source_to_format_tree(plan, metadata, prof_span_set)
         }
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => {
+            distributed_copy_into_table_from_stage(plan)
+        }
+        PhysicalPlan::CopyIntoTableFromQuery(plan) => copy_into_table_from_query(plan),
     }
 }
 
@@ -160,10 +188,30 @@ fn append_profile_info(
 ) {
     if let Some(prof) = prof_set.lock().unwrap().get(&plan_id) {
         children.push(FormatTreeNode::new(format!(
-            "total cpu time: {}ms",
+            "output rows: {}",
+            prof.output_rows,
+        )));
+        children.push(FormatTreeNode::new(format!(
+            "total cpu time: {:.3}ms",
             prof.cpu_time.as_secs_f64() * 1000.0
         )));
     }
+}
+
+fn distributed_copy_into_table_from_stage(
+    plan: &DistributedCopyIntoTableFromStage,
+) -> Result<FormatTreeNode<String>> {
+    Ok(FormatTreeNode::new(format!(
+        "copy into table {}.{}.{} from {:?}",
+        plan.catalog_name, plan.database_name, plan.table_name, plan.source
+    )))
+}
+
+fn copy_into_table_from_query(plan: &CopyIntoTableFromQuery) -> Result<FormatTreeNode<String>> {
+    Ok(FormatTreeNode::new(format!(
+        "copy into table {}.{}.{} from {:?}",
+        plan.catalog_name, plan.database_name, plan.table_name, plan.input
+    )))
 }
 
 fn table_scan_to_format_tree(
@@ -244,7 +292,7 @@ fn table_scan_to_format_tree(
         let agg_sel = agg_index
             .selection
             .iter()
-            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
             .join(", ");
         let agg_filter = agg_index
             .filter
@@ -419,11 +467,7 @@ fn aggregate_partial_to_format_tree(
     let group_by = plan
         .group_by
         .iter()
-        .map(|&index| {
-            let name = metadata.read().column(index).name();
-            Ok(name)
-        })
-        .collect::<Result<Vec<_>>>()?
+        .map(|&index| metadata.read().column(index).name())
         .join(", ");
     let agg_funcs = plan
         .agg_funcs
@@ -874,6 +918,26 @@ fn distributed_insert_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "DistributedInsertSelect".to_string(),
+        children,
+    ))
+}
+
+fn delete_partial_to_format_tree(
+    _plan: &DeletePartial,
+    _metadata: &MetadataRef,
+    _prof_span_set: &SharedProcessorProfiles,
+) -> Result<FormatTreeNode<String>> {
+    Ok(FormatTreeNode::new("DeletePartial".to_string()))
+}
+
+fn delete_final_to_format_tree(
+    plan: &DeleteFinal,
+    metadata: &MetadataRef,
+    prof_span_set: &SharedProcessorProfiles,
+) -> Result<FormatTreeNode<String>> {
+    let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
+    Ok(FormatTreeNode::with_children(
+        "DeleteFinal".to_string(),
         children,
     ))
 }

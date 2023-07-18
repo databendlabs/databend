@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(type_alias_impl_trait)]
+#![feature(impl_trait_in_assoc_type)]
 
 mod async_mpsc_sink;
 mod sync_mpsc_sink;

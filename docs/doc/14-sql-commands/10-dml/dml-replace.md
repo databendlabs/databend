@@ -82,7 +82,7 @@ SELECT  * FROM Employees;
 
 ### Replace with Staged Files
 
-Below is an example that demonstrates how to use staged files for updating data with a REPLACE INTO statement. It's important to note that the REPLACE INTO functionality with staged files is only available when using Databend's [HTTP Handler](../../11-integrations/00-api/00-rest.md).
+Below is an example that demonstrates how to use staged files for updating data with a REPLACE INTO statement. It's important to note that the REPLACE INTO functionality with staged files is only available when using Databend's [HTTP Handler](../../03-develop/00-api/00-rest.md).
 
 First, create a table called "sample":
 

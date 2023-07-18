@@ -50,9 +50,11 @@ fn test_read_timestamp_text() -> Result<()> {
     ];
     let mut res = vec![];
     for _ in 0..expected.len() {
-        let time = reader.read_timestamp_text(&tz)?;
-        res.push(format!("{:?}", time));
-        reader.ignore_byte(b',');
+        let time = reader.read_timestamp_text(&tz, false)?;
+        if let DateTimeResType::Datetime(time) = time {
+            res.push(format!("{:?}", time));
+            reader.ignore_byte(b',');
+        }
     }
     assert_eq!(res, expected);
     Ok(())

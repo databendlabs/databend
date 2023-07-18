@@ -19,11 +19,14 @@ use common_exception::Result;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use common_sql::plans::RenameTableColumnPlan;
+use common_sql::BloomIndexColumns;
 use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
+use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
+use crate::interpreters::common::check_referenced_computed_columns;
+use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -77,14 +80,33 @@ impl Interpreter for RenameTableColumnInterpreter {
             let catalog = self.ctx.get_catalog(catalog_name)?;
             let mut new_table_meta = table.get_table_info().meta.clone();
 
-            if INTERNAL_COLUMN_FACTORY.exist(&self.plan.new_column) {
-                return Err(ErrorCode::TableWithInternalColumnName(format!(
-                    "Cannot rename table column with the same name as internal column: {}",
-                    self.plan.new_column
-                )));
+            is_valid_column(&self.plan.new_column)?;
+
+            let table_schema = table_info.schema();
+            let field = table_schema.field_with_name(self.plan.old_column.as_str())?;
+            if field.computed_expr.is_none() {
+                // Check if old column is referenced by computed columns.
+                check_referenced_computed_columns(
+                    self.ctx.clone(),
+                    table_schema,
+                    self.plan.old_column.as_str(),
+                )?;
             }
 
             new_table_meta.schema = Arc::new(self.plan.schema.clone());
+
+            // update table options
+            let opts = &mut new_table_meta.options;
+            if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
+                let bloom_index_cols = value.parse::<BloomIndexColumns>()?;
+                if let BloomIndexColumns::Specify(mut cols) = bloom_index_cols {
+                    if let Some(pos) = cols.iter().position(|x| *x == self.plan.old_column) {
+                        // replace the bloom index columns with new column name.
+                        cols[pos] = self.plan.new_column.clone();
+                        *value = cols.join(",");
+                    }
+                }
+            }
 
             let table_id = table_info.ident.table_id;
             let table_version = table_info.ident.seq;

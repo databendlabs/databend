@@ -30,7 +30,7 @@ use tracing::info;
 
 use crate::plans::Plan;
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum ValidationMode {
     None,
     ReturnNRows(u64),
@@ -59,11 +59,21 @@ impl FromStr for ValidationMode {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum CopyIntoTableMode {
     Insert { overwrite: bool },
     Replace,
     Copy,
+}
+
+impl CopyIntoTableMode {
+    pub fn is_overwrite(&self) -> bool {
+        match self {
+            CopyIntoTableMode::Insert { overwrite } => *overwrite,
+            CopyIntoTableMode::Replace => false,
+            CopyIntoTableMode::Copy => false,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -82,16 +92,13 @@ pub struct CopyIntoTablePlan {
 
     pub stage_table_info: StageTableInfo,
     pub query: Option<Box<Plan>>,
-}
 
-fn set_and_log_status(ctx: &Arc<dyn TableContext>, status: &str) {
-    ctx.set_status_info(status);
-    info!(status);
+    pub enable_distributed: bool,
 }
 
 impl CopyIntoTablePlan {
     pub async fn collect_files(&self, ctx: &Arc<dyn TableContext>) -> Result<Vec<StageFileInfo>> {
-        set_and_log_status(ctx, "begin to list files");
+        ctx.set_status_info("begin to list files");
         let start = Instant::now();
 
         let stage_table_info = &self.stage_table_info;
@@ -127,7 +134,7 @@ impl CopyIntoTablePlan {
 
         let num_all_files = all_source_file_infos.len();
 
-        info!("end to list files: got {} files", num_all_files);
+        ctx.set_status_info(&format!("end list files: got {} files", num_all_files));
 
         let need_copy_file_infos = if self.force {
             info!(
@@ -137,7 +144,7 @@ impl CopyIntoTablePlan {
             all_source_file_infos
         } else {
             // Status.
-            set_and_log_status(ctx, "begin to filter out copied files");
+            ctx.set_status_info("begin filtering out copied files");
             let files = ctx
                 .filter_out_copied_files(
                     &self.catalog_name,
@@ -147,8 +154,10 @@ impl CopyIntoTablePlan {
                     max_files,
                 )
                 .await?;
-
-            info!("end filtering out copied files: {}", num_all_files);
+            ctx.set_status_info(&format!(
+                "end filtering out copied files: {}",
+                num_all_files
+            ));
             files
         };
 

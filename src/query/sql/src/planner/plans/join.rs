@@ -42,8 +42,6 @@ use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::IndexType;
 
-const BROADCAST_JOIN_THRESHOLD: f64 = 20.0;
-
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
     Inner,
@@ -61,7 +59,8 @@ pub enum JoinType {
     /// Right Mark Join use subquery as build side, it's executed by streaming.
     RightMark,
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
-    Single,
+    LeftSingle,
+    RightSingle,
 }
 
 impl JoinType {
@@ -69,6 +68,8 @@ impl JoinType {
         match self {
             JoinType::Left => JoinType::Right,
             JoinType::Right => JoinType::Left,
+            JoinType::LeftSingle => JoinType::RightSingle,
+            JoinType::RightSingle => JoinType::LeftSingle,
             JoinType::LeftSemi => JoinType::RightSemi,
             JoinType::RightSemi => JoinType::LeftSemi,
             JoinType::LeftAnti => JoinType::RightAnti,
@@ -124,8 +125,11 @@ impl Display for JoinType {
             JoinType::RightMark => {
                 write!(f, "RIGHT MARK")
             }
-            JoinType::Single => {
-                write!(f, "SINGLE")
+            JoinType::LeftSingle => {
+                write!(f, "LEFT SINGLE")
+            }
+            JoinType::RightSingle => {
+                write!(f, "RIGHT SINGLE")
             }
         }
     }
@@ -439,10 +443,13 @@ impl Operator for Join {
                     + f64::max(right_cardinality, inner_join_cardinality)
                     - inner_join_cardinality
             }
-            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::Single => {
+            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::LeftSingle => {
                 left_cardinality
             }
-            JoinType::RightSemi | JoinType::RightAnti | JoinType::RightMark => right_cardinality,
+            JoinType::RightSemi
+            | JoinType::RightAnti
+            | JoinType::RightMark
+            | JoinType::RightSingle => right_cardinality,
         };
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
@@ -493,7 +500,10 @@ impl Operator for Join {
         {
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
-            if right_stat_info.cardinality * BROADCAST_JOIN_THRESHOLD < left_stat_info.cardinality {
+            // The broadcast join is cheaper than the hash join when one input is at least (n − 1)× larger than the other
+            // where n is the number of servers in the cluster.
+            let broadcast_join_threshold = (ctx.get_cluster().nodes.len() - 1) as f64;
+            if right_stat_info.cardinality * broadcast_join_threshold < left_stat_info.cardinality {
                 required.distribution = Distribution::Broadcast;
                 return Ok(required);
             }

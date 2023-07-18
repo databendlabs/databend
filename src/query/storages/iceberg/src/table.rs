@@ -12,50 +12,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! 2022-11-25:
-//! TODO: support synchronize with remote
-//! Note:
-//! currently, we only care about immutable tables
-//! once the table created we don't update it.
-
 use std::any::Any;
 use std::sync::Arc;
 
+use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
+use chrono::Utc;
+use common_arrow::arrow::datatypes::Field as Arrow2Field;
+use common_arrow::arrow::datatypes::Schema as Arrow2Schema;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
+use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRefExt;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::Pipeline;
+use common_pipeline_core::SourcePipeBuilder;
 use common_storage::DataOperator;
-use futures::StreamExt;
-use icelake::types;
-use opendal::Operator;
 
-use crate::converters::meta_iceberg_to_databend;
-
-/// file marking the current version of metadata file
-const META_PTR: &str = "metadata/version_hint.text";
+use crate::partition::IcebergPartInfo;
+use crate::table_source::IcebergTableSource;
 
 /// accessor wrapper as a table
 ///
 /// TODO: we should use icelake Table instead.
-#[allow(unused)]
 pub struct IcebergTable {
-    /// database that belongs to
-    database: String,
-    /// name of the current table
-    name: String,
-    /// root of the table
-    tbl_root: DataOperator,
-    /// table metadata
-    manifests: types::TableMetadata,
-    /// table information
     info: TableInfo,
+    op: opendal::Operator,
+
+    table: icelake::Table,
 }
 
 impl IcebergTable {
@@ -63,102 +61,154 @@ impl IcebergTable {
     ///
     /// TODO: we should use icelake Table instead.
     #[async_backtrace::framed]
-    pub async fn try_create_table_from_read(
+    pub async fn try_create(
         catalog: &str,
         database: &str,
         table_name: &str,
         tbl_root: DataOperator,
     ) -> Result<IcebergTable> {
         let op = tbl_root.operator();
-        // detect the latest manifest file
-        let latest_manifest = Self::version_detect(&op).await?;
-        // get table metadata from metadata file
-        let meta_json = op.read(&latest_manifest).await.map_err(|e| {
-            ErrorCode::ReadTableDataError(format!(
-                "invalid metadata in {}: {:?}",
-                &latest_manifest, e
-            ))
+        let mut table = icelake::Table::new(op.clone());
+        table
+            .load()
+            .await
+            .map_err(|e| ErrorCode::ReadTableDataError(format!("Cannot load metadata: {e:?}")))?;
+
+        let meta = table.current_table_metadata().map_err(|e| {
+            ErrorCode::ReadTableDataError(format!("Cannot get current table metadata: {e:?}"))
         })?;
 
-        let metadata = types::parse_table_metadata(meta_json.as_slice()).map_err(|e| {
-            ErrorCode::ReadTableDataError(format!(
-                "invalid metadata in {}: {:?}",
-                &latest_manifest, e
-            ))
-        })?;
+        // Build arrow schema from iceberg metadata.
+        let arrow_schema: ArrowSchema = meta
+            .schemas
+            .last()
+            .ok_or_else(|| {
+                ErrorCode::ReadTableDataError("Iceberg table schema is empty".to_string())
+            })?
+            .clone()
+            .try_into()
+            .map_err(|e| {
+                ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
+            })?;
 
-        let sp = tbl_root.params();
+        // Build arrow2 schema from arrow schema.
+        let fields: Vec<Arrow2Field> = arrow_schema
+            .fields()
+            .into_iter()
+            .map(|f| f.into())
+            .collect();
+        let arrow2_schema = Arrow2Schema::from(fields);
+
+        let table_schema = TableSchema::from(&arrow2_schema);
 
         // construct table info
         let info = TableInfo {
             ident: TableIdent::new(0, 0),
-            desc: format!("IcebergTable: '{database}'.'{table_name}'"),
+            desc: format!("{database}.{table_name}"),
             name: table_name.to_string(),
-            meta: meta_iceberg_to_databend(catalog, &sp, &metadata),
+            meta: TableMeta {
+                schema: Arc::new(table_schema),
+                catalog: catalog.to_string(),
+                engine: "iceberg".to_string(),
+                created_on: Utc::now(),
+                storage_params: Some(tbl_root.params()),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
-        // finish making table
-        Ok(Self {
-            database: database.to_string(),
-            name: table_name.to_string(),
-            tbl_root,
-            manifests: metadata,
-            info,
-        })
+        Ok(Self { info, op, table })
     }
 
-    /// version_detect figures out the manifest list version of the table
-    /// and gives the relative path from table root directory
-    /// to latest metadata json file
-    #[async_backtrace::framed]
-    async fn version_detect(tbl_root: &Operator) -> Result<String> {
-        // try Dremio's way
-        // Dremio has an `version_hint.txt` file
-        // recording the latest snapshot version number
-        // and stores metadata
-        if let Ok(version_hint) = tbl_root.read(META_PTR).await {
-            if let Ok(version_str) = String::from_utf8(version_hint) {
-                if let Ok(version) = version_str.trim().parse::<u64>() {
-                    return Ok(format!("metadata/v{version}.metadata.json"));
-                }
-            }
+    pub fn do_read_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let parts_len = plan.parts.len();
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = std::cmp::min(parts_len, max_threads);
+
+        let table_schema: TableSchemaRef = self.info.schema();
+        let source_projection =
+            PushDownInfo::projection_of_push_downs(&table_schema, &plan.push_downs);
+
+        // The front of the src_fields are prewhere columns (if exist).
+        // The back of the src_fields are remain columns.
+        let mut src_fields = Vec::with_capacity(source_projection.len());
+
+        // The schema of the data block `read_data` output.
+        let output_schema: Arc<DataSchema> = Arc::new(plan.schema().into());
+
+        // TODO: we need to support top_k.
+        // TODO: we need to support prewhere.
+
+        // Since we don't support prewhere, we can use the source_reader directly.
+        src_fields.extend_from_slice(output_schema.fields());
+        let src_schema = DataSchemaRefExt::create(src_fields);
+
+        let mut source_builder = SourcePipeBuilder::create();
+        for _ in 0..std::cmp::max(1, max_threads) {
+            let output = OutputPort::create();
+            source_builder.add_source(
+                output.clone(),
+                IcebergTableSource::create(
+                    ctx.clone(),
+                    self.op.clone(),
+                    output,
+                    src_schema.clone(),
+                    output_schema.clone(),
+                )?,
+            );
         }
-        // try Spark's way
-        // Spark will arange all files with a sequential number
-        // in such case, we just need to find the file with largest alphabetical name.
-        let files = tbl_root.list("metadata/").await.map_err(|e| {
-            ErrorCode::ReadTableDataError(format!("Cannot list metadata directory: {e:?}"))
+
+        pipeline.add_pipe(source_builder.finalize());
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "info", skip(self, _ctx))]
+    #[async_backtrace::framed]
+    async fn do_read_partitions(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        let data_files = self.table.current_data_files().await.map_err(|e| {
+            ErrorCode::ReadTableDataError(format!("Cannot get current data files: {e:?}"))
         })?;
-        files
-            .filter_map(|obj| async {
-                if let Ok(obj) = obj {
-                    if obj.name().ends_with(".metadata.json") {
-                        Some(obj.name().to_string())
-                    } else {
-                        None
-                    }
-                } else {
-                    None
+
+        let partitions = data_files
+            .into_iter()
+            .map(|v: icelake::types::DataFile| match v.file_format {
+                icelake::types::DataFileFormat::Parquet => Arc::new(Box::new(IcebergPartInfo {
+                    path: self
+                        .table
+                        .rel_path(&v.file_path)
+                        .expect("file path must be rel to table"),
+                    size: v.file_size_in_bytes as u64,
+                })
+                    as Box<dyn PartInfo>),
+                _ => {
+                    unimplemented!("Only parquet format is supported for iceberg table")
                 }
             })
-            .collect::<Vec<String>>()
-            .await
-            .into_iter()
-            .max()
-            .map(|s| format!("metadata/{s}"))
-            .ok_or_else(|| ErrorCode::ReadTableDataError("Cannot get the latest manifest file"))
+            .collect();
+
+        Ok((
+            PartStatistics::default(),
+            Partitions::create_nolazy(PartitionsShuffleKind::Seq, partitions),
+        ))
     }
 }
 
 #[async_trait]
 impl Table for IcebergTable {
-    fn is_local(&self) -> bool {
-        false
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn is_local(&self) -> bool {
+        false
     }
 
     fn get_table_info(&self) -> &TableInfo {
@@ -172,9 +222,25 @@ impl Table for IcebergTable {
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
+        // TODO: we will support push down later.
         _push_downs: Option<PushDownInfo>,
+        // TODO: we will support dry run later.
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        todo!()
+        self.do_read_partitions(ctx).await
+    }
+
+    fn read_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        self.do_read_data(ctx, plan, pipeline)
+    }
+
+    fn table_args(&self) -> Option<TableArgs> {
+        None
     }
 }

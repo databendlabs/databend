@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use common_catalog::plan::PushDownInfo;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::interpreters::Interpreter;
@@ -27,6 +28,8 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::ReclusterTablePlan;
+
+const MAX_RECLUSTER_TIMES: usize = 1000;
 
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -75,6 +78,8 @@ impl Interpreter for ReclusterTableInterpreter {
             tracing::info!(status);
         }
         let mut times = 0;
+        let mut block_count = 0;
+        let max_threads = settings.get_max_threads()?;
         loop {
             let table = self
                 .ctx
@@ -82,15 +87,29 @@ impl Interpreter for ReclusterTableInterpreter {
                 .get_table(tenant.as_str(), &plan.database, &plan.table)
                 .await?;
 
+            // check if the table is locked.
+            let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+            let reply = catalog
+                .list_table_lock_revs(table.get_table_info().ident.table_id)
+                .await?;
+            if !reply.is_empty() {
+                return Err(ErrorCode::TableAlreadyLocked(format!(
+                    "table '{}' is locked, please retry recluster later",
+                    self.plan.table
+                )));
+            }
+
             let mut pipeline = Pipeline::create();
-            table
-                .recluster(ctx.clone(), &mut pipeline, extras.clone())
+            let reclustered_block_count = table
+                .recluster(ctx.clone(), extras.clone(), plan.limit, &mut pipeline)
                 .await?;
             if pipeline.is_empty() {
                 break;
             };
 
-            pipeline.set_max_threads(settings.get_max_threads()? as usize);
+            block_count += reclustered_block_count;
+            let max_threads = std::cmp::min(max_threads, reclustered_block_count) as usize;
+            pipeline.set_max_threads(max_threads);
 
             let query_id = ctx.get_id();
             let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
@@ -111,12 +130,20 @@ impl Interpreter for ReclusterTableInterpreter {
                 tracing::info!(status);
             }
 
-            if !plan.is_final {
+            if !plan.is_final || times >= MAX_RECLUSTER_TIMES {
                 break;
             }
         }
 
-        InterpreterClusteringHistory::write_log(&ctx, start, &plan.database, &plan.table)?;
+        if block_count != 0 {
+            InterpreterClusteringHistory::write_log(
+                &ctx,
+                start,
+                &plan.database,
+                &plan.table,
+                block_count,
+            )?;
+        }
 
         Ok(PipelineBuildResult::create())
     }

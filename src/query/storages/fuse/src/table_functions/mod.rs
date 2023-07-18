@@ -19,8 +19,6 @@ mod fuse_snapshots;
 mod fuse_statistics;
 mod table_args;
 
-pub use clustering_information::get_cluster_keys;
-pub use clustering_information::unwrap_tuple;
 pub use clustering_information::ClusteringInformation;
 pub use clustering_information::ClusteringInformationTable;
 use common_catalog::table_args::TableArgs;
@@ -32,5 +30,4 @@ pub use fuse_segments::FuseSegmentTable;
 pub use fuse_snapshots::FuseSnapshot;
 pub use fuse_snapshots::FuseSnapshotTable;
 pub use fuse_statistics::FuseStatisticTable;
-pub use table_args::string_literal;
-pub use table_args::string_value;
+pub use table_args::*;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod clustering_information;
+mod execute_job;
 mod fuse_block;
 mod fuse_segment;
 mod fuse_snapshot;

@@ -52,6 +52,7 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_license::license::Feature::AggregateIndex;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
@@ -184,10 +185,6 @@ impl Binder {
                         .await;
                 }
 
-                if database == "system" {
-                    self.ctx.set_cacheable(false);
-                }
-
                 let tenant = self.ctx.get_tenant();
 
                 let navigation_point = match travel_point {
@@ -229,7 +226,12 @@ impl Binder {
 
                 // Avoid death loop
                 let mut agg_indexes = vec![];
-                if !bind_context.planning_agg_index
+                if self.ctx.get_can_scan_from_agg_index()
+                    && self
+                        .ctx
+                        .get_settings()
+                        .get_enable_aggregating_index_scan()?
+                    && !bind_context.planning_agg_index
                     && table_meta.support_index()
                     && table_meta.engine() != "VIEW"
                 {
@@ -239,7 +241,7 @@ impl Binder {
                         .check_enterprise_enabled(
                             &self.ctx.get_settings(),
                             self.ctx.get_tenant(),
-                            "aggregating_index".to_string(),
+                            AggregateIndex,
                         )
                         .is_ok()
                     {
@@ -559,7 +561,7 @@ impl Binder {
                 };
                 StageTable::try_create(info)?
             }
-            FileFormatParams::Csv(..) => {
+            FileFormatParams::Csv(..) | FileFormatParams::Tsv(..) => {
                 let max_column_position = self.metadata.read().get_max_column_position();
                 if max_column_position == 0 {
                     return Err(ErrorCode::SemanticError(
@@ -584,7 +586,7 @@ impl Binder {
             }
             _ => {
                 return Err(ErrorCode::Unimplemented(
-                    "stage table function only support parquet/NDJson/CSV format for now",
+                    "query stage files only support parquet/NDJson/CSV/TSV format for now",
                 ));
             }
         };

@@ -358,6 +358,16 @@ impl Dataframe {
             )
             .await?;
 
+        self.s_expr = self.binder.bind_projection(
+            &mut self.bind_context,
+            &projections,
+            &scalar_items,
+            self.s_expr,
+        )?;
+        self.s_expr = self
+            .bind_context
+            .add_internal_column_into_expr(self.s_expr.clone());
+
         Ok(self)
     }
 

@@ -1024,7 +1024,7 @@ CreateTable(
 
 
 ---------- Input ----------
-create table if not exists a.b (a int, b int, c int as (a + b) virtual );
+create table if not exists a.b (a int, b int, c int generated always as (a + b) virtual );
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (a Int32 NOT NULL, b Int32 NOT NULL, c Int32 NOT NULL AS ((a + b)) VIRTUAL)
 ---------- AST ------------
@@ -1088,12 +1088,12 @@ CreateTable(
                             Virtual(
                                 BinaryOp {
                                     span: Some(
-                                        58..59,
+                                        75..76,
                                     ),
                                     op: Plus,
                                     left: ColumnRef {
                                         span: Some(
-                                            56..57,
+                                            73..74,
                                         ),
                                         database: None,
                                         table: None,
@@ -1102,14 +1102,14 @@ CreateTable(
                                                 name: "a",
                                                 quote: None,
                                                 span: Some(
-                                                    56..57,
+                                                    73..74,
                                                 ),
                                             },
                                         ),
                                     },
                                     right: ColumnRef {
                                         span: Some(
-                                            60..61,
+                                            77..78,
                                         ),
                                         database: None,
                                         table: None,
@@ -1118,7 +1118,7 @@ CreateTable(
                                                 name: "b",
                                                 quote: None,
                                                 span: Some(
-                                                    60..61,
+                                                    77..78,
                                                 ),
                                             },
                                         ),
@@ -6873,16 +6873,16 @@ ListStage {
 
 
 ---------- Input ----------
-create user 'test-e'@'localhost' identified by 'password';
+create user 'test-e' identified by 'password';
 ---------- Output ---------
-CREATE USER 'test-e'@'localhost' IDENTIFIED BY 'password'
+CREATE USER 'test-e'@'%' IDENTIFIED BY 'password'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
         if_not_exists: false,
         user: UserIdentity {
             username: "test-e",
-            hostname: "localhost",
+            hostname: "%",
         },
         auth_option: AuthOption {
             auth_type: None,
@@ -6896,30 +6896,30 @@ CreateUser(
 
 
 ---------- Input ----------
-drop user if exists 'test-j'@'localhost';
+drop user if exists 'test-j';
 ---------- Output ---------
-DROP USER IF EXISTS 'test-j'@'localhost'
+DROP USER IF EXISTS 'test-j'@'%'
 ---------- AST ------------
 DropUser {
     if_exists: true,
     user: UserIdentity {
         username: "test-j",
-        hostname: "localhost",
+        hostname: "%",
     },
 }
 
 
 ---------- Input ----------
-alter user 'test-e'@'localhost' identified by 'new-password';
+alter user 'test-e' identified by 'new-password';
 ---------- Output ---------
-ALTER USER 'test-e'@'localhost' IDENTIFIED BY 'new-password'
+ALTER USER 'test-e'@'%' IDENTIFIED BY 'new-password'
 ---------- AST ------------
 AlterUser(
     AlterUserStmt {
         user: Some(
             UserIdentity {
                 username: "test-e",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
         auth_option: Some(
@@ -6955,6 +6955,132 @@ DropRole {
     if_exists: true,
     role_name: "test",
 }
+
+
+---------- Input ----------
+OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Compact {
+            target: Segment,
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t COMPACT LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t COMPACT BLOCK LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Compact {
+            target: Block,
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t PURGE BEFORE  (SNAPSHOT => 9828b23f74664ff3806f44bbc1925ea5) LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Purge {
+            before: Some(
+                Snapshot(
+                    "9828b23f74664ff3806f44bbc1925ea5",
+                ),
+            ),
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t PURGE BEFORE  (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Purge {
+            before: Some(
+                Timestamp(
+                    Cast {
+                        span: Some(
+                            72..83,
+                        ),
+                        expr: Literal {
+                            span: Some(
+                                44..72,
+                            ),
+                            lit: String(
+                                "2023-06-26 09:49:02.038483",
+                            ),
+                        },
+                        target_type: Timestamp,
+                        pg_style: true,
+                    },
+                ),
+            ),
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
 
 
 ---------- Input ----------
@@ -7039,9 +7165,9 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0;
+ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;
 ---------- Output ---------
-ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0)
+ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0) LIMIT 10
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -7097,6 +7223,9 @@ AlterTable(
                         ),
                     },
                 },
+            ),
+            limit: Some(
+                10,
             ),
         },
     },
@@ -7453,7 +7582,7 @@ VacuumTable(
 ---------- Input ----------
 VACUUM TABLE t RETAIN 4 HOURS DRY RUN;
 ---------- Output ---------
-VACUUM TABLE t  RETAIN 4 HOURS DRY RUN
+VACUUM TABLE t RETAIN 4 HOURS DRY RUN
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -7488,7 +7617,7 @@ VacuumTable(
 ---------- Input ----------
 VACUUM TABLE t RETAIN 40 HOURS;
 ---------- Output ---------
-VACUUM TABLE t  RETAIN 40 HOURS
+VACUUM TABLE t RETAIN 40 HOURS
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -7506,6 +7635,94 @@ VacuumTable(
                 Literal {
                     span: Some(
                         22..24,
+                    ),
+                    lit: UInt64(
+                        40,
+                    ),
+                },
+            ),
+            dry_run: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE RETAIN 20 HOURS;
+---------- Output ---------
+VACUUM DROP TABLE RETAIN 20 HOURS
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: None,
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        25..27,
+                    ),
+                    lit: UInt64(
+                        20,
+                    ),
+                },
+            ),
+            dry_run: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN;
+---------- Output ---------
+VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: None,
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        25..27,
+                    ),
+                    lit: UInt64(
+                        30,
+                    ),
+                },
+            ),
+            dry_run: Some(
+                (),
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE FROM db RETAIN 40 HOURS;
+---------- Output ---------
+VACUUM DROP TABLE FROM db RETAIN 40 HOURS
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Some(
+                    23..25,
+                ),
+            },
+        ),
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        33..35,
                     ),
                     lit: UInt64(
                         40,
@@ -7568,9 +7785,9 @@ CreateTable(
 
 
 ---------- Input ----------
-GRANT CREATE, CREATE USER ON * TO 'test-grant'@'localhost';
+GRANT CREATE, CREATE USER ON * TO 'test-grant';
 ---------- Output ---------
-GRANT CREATE, CREATE USER ON * TO USER 'test-grant'@'localhost'
+GRANT CREATE, CREATE USER ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7586,7 +7803,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7594,9 +7811,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';
+GRANT SELECT, CREATE ON * TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7612,7 +7829,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7620,9 +7837,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON *.* TO 'test-grant'@'localhost';
+GRANT SELECT, CREATE ON *.* TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON *.* TO USER 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7636,7 +7853,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7644,9 +7861,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';
+GRANT SELECT, CREATE ON * TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7662,7 +7879,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7693,9 +7910,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ALL ON *.* TO 'test-grant'@'localhost';
+GRANT ALL ON *.* TO 'test-grant';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'localhost'
+GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7705,7 +7922,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7730,9 +7947,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';
+GRANT ALL PRIVILEGES ON * TO 'test-grant';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'localhost'
+GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7744,7 +7961,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7828,9 +8045,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.* TO 'test-grant'@'localhost';
+GRANT SELECT ON db01.* TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+GRANT SELECT ON db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7847,7 +8064,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7855,9 +8072,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';
+GRANT SELECT ON db01.* TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+GRANT SELECT ON db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7874,7 +8091,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7906,9 +8123,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
+GRANT SELECT ON db01.tb1 TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7926,7 +8143,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7934,9 +8151,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';
+GRANT SELECT ON db01.tb1 TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7954,7 +8171,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -8043,16 +8260,16 @@ ShowGrants {
 
 
 ---------- Input ----------
-SHOW GRANTS FOR 'test-grant'@'localhost';
+SHOW GRANTS FOR 'test-grant';
 ---------- Output ---------
-SHOW GRANTS FOR USER 'test-grant'@'localhost'
+SHOW GRANTS FOR USER 'test-grant'@'%'
 ---------- AST ------------
 ShowGrants {
     principal: Some(
         User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     ),
@@ -8060,16 +8277,16 @@ ShowGrants {
 
 
 ---------- Input ----------
-SHOW GRANTS FOR USER 'test-grant'@'localhost';
+SHOW GRANTS FOR USER 'test-grant';
 ---------- Output ---------
-SHOW GRANTS FOR USER 'test-grant'@'localhost'
+SHOW GRANTS FOR USER 'test-grant'@'%'
 ---------- AST ------------
 ShowGrants {
     principal: Some(
         User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     ),
@@ -8091,9 +8308,9 @@ ShowGrants {
 
 
 ---------- Input ----------
-REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';
+REVOKE SELECT, CREATE ON * FROM 'test-grant';
 ---------- Output ---------
-REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'localhost'
+REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -8109,7 +8326,7 @@ Revoke(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -11459,6 +11676,57 @@ GenerateVirtualColumns(
                 29..30,
             ),
         },
+    },
+)
+
+
+---------- Input ----------
+CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'
+---------- Output ---------
+CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_LIST = ('192.168.10.99') COMMENT = 'test'
+---------- AST ------------
+CreateNetworkPolicy(
+    CreateNetworkPolicyStmt {
+        if_not_exists: false,
+        name: "mypolicy",
+        allowed_ip_list: [
+            "192.168.10.0/24",
+        ],
+        blocked_ip_list: Some(
+            [
+                "192.168.10.99",
+            ],
+        ),
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'
+---------- Output ---------
+ALTER NETWORK POLICY mypolicy SET  ALLOWED_IP_LIST = ('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST = ('192.168.1.99') COMMENT = 'test'
+---------- AST ------------
+AlterNetworkPolicy(
+    AlterNetworkPolicyStmt {
+        if_exists: false,
+        name: "mypolicy",
+        allowed_ip_list: Some(
+            [
+                "192.168.10.0/24",
+                "192.168.255.1",
+            ],
+        ),
+        blocked_ip_list: Some(
+            [
+                "192.168.1.99",
+            ],
+        ),
+        comment: Some(
+            "test",
+        ),
     },
 )
 

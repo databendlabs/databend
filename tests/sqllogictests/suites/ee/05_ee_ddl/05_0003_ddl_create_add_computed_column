@@ -34,7 +34,28 @@ statement ok
 alter table t1 drop column b
 
 statement error 1117
+alter table t1 rename column a to x
+
+statement error 1117
 alter table t1 drop column a
+
+statement ok
+alter table t1 drop column d
+
+statement ok
+alter table t1 rename column a to x
+
+statement ok
+alter table t1 drop column x
+
+statement ok
+create table t2(a string, b string generated always as (upper(a)) stored, c string generated always as (lower(a)) virtual)
+
+statement error 1058
+alter table t2 modify column c drop stored
+
+statement ok
+alter table t2 modify column b drop stored
 
 statement ok
 USE default

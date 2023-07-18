@@ -40,7 +40,7 @@ use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
-use crate::operations::mutation::MutationPartInfo;
+use crate::operations::mutation::Mutation;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -60,13 +60,13 @@ enum State {
     ReadRemain {
         part: PartInfoPtr,
         data_block: DataBlock,
-        filter: Value<BooleanType>,
+        filter: Option<Value<BooleanType>>,
     },
     MergeRemain {
         part: PartInfoPtr,
         merged_io_read_result: MergeIOReadResult,
         data_block: DataBlock,
-        filter: Value<BooleanType>,
+        filter: Option<Value<BooleanType>>,
     },
     PerformOperator(DataBlock),
     Output(Option<PartInfoPtr>, DataBlock),
@@ -227,6 +227,11 @@ impl Processor for MutationSource {
                     };
 
                     if affect_rows != 0 {
+                        // Pop the row_id column
+                        if self.query_row_id_col {
+                            data_block = data_block.pop_columns(1)?;
+                        }
+
                         let progress_values = ProgressValues {
                             rows: affect_rows,
                             bytes: 0,
@@ -255,27 +260,23 @@ impl Processor for MutationSource {
                                         self.state = State::ReadRemain {
                                             part,
                                             data_block,
-                                            filter: Value::Column(filter),
+                                            filter: Some(Value::Column(filter)),
                                         }
                                     }
                                 }
                             }
                             MutationAction::Update => {
-                                // Pop the row_id column
-                                if self.query_row_id_col {
-                                    data_block = data_block.pop_columns(1)?;
-                                }
+                                data_block.add_column(BlockEntry::new(
+                                    DataType::Boolean,
+                                    Value::upcast(predicates),
+                                ));
                                 if self.remain_reader.is_none() {
-                                    data_block.add_column(BlockEntry::new(
-                                        DataType::Boolean,
-                                        Value::upcast(predicates),
-                                    ));
                                     self.state = State::PerformOperator(data_block);
                                 } else {
                                     self.state = State::ReadRemain {
                                         part,
                                         data_block,
-                                        filter: predicates,
+                                        filter: None,
                                     };
                                 }
                             }
@@ -308,22 +309,15 @@ impl Processor for MutationSource {
                         &self.storage_format,
                     )?;
 
-                    match self.action {
-                        MutationAction::Deletion => {
-                            let remain_block = remain_block.filter_boolean_value(&filter)?;
-                            for col in remain_block.columns() {
-                                data_block.add_column(col.clone());
-                            }
-                        }
-                        MutationAction::Update => {
-                            for col in remain_block.columns() {
-                                data_block.add_column(col.clone());
-                            }
-                            data_block.add_column(BlockEntry::new(
-                                DataType::Boolean,
-                                Value::upcast(filter),
-                            ));
-                        }
+                    let remain_block = if let Some(filter) = filter {
+                        // for deletion.
+                        remain_block.filter_boolean_value(&filter)?
+                    } else {
+                        remain_block
+                    };
+
+                    for col in remain_block.columns() {
+                        data_block.add_column(col.clone());
                     }
                 } else {
                     return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
@@ -350,40 +344,64 @@ impl Processor for MutationSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(Some(part)) => {
                 let settings = ReadSettings::from_ctx(&self.ctx)?;
-                let part = MutationPartInfo::from_part(&part)?;
-
-                self.index = BlockMetaIndex {
-                    segment_idx: part.index.segment_idx,
-                    block_idx: part.index.block_idx,
-                };
-                if matches!(self.action, MutationAction::Deletion) {
-                    self.stats_type = ClusterStatsGenType::WithOrigin(part.cluster_stats.clone());
-                }
-
-                let inner_part = part.inner_part.clone();
-                let fuse_part = FusePartInfo::from_part(&inner_part)?;
-
-                if part.whole_block_mutation && matches!(self.action, MutationAction::Deletion) {
-                    // whole block deletion.
-                    let progress_values = ProgressValues {
-                        rows: fuse_part.nums_rows,
-                        bytes: 0,
-                    };
-                    self.ctx.get_write_progress().incr(&progress_values);
-                    let meta =
-                        SerializeDataMeta::create(self.index.clone(), self.stats_type.clone());
-                    self.state =
-                        State::Output(self.ctx.get_partition(), DataBlock::empty_with_meta(meta));
-                } else {
-                    let read_res = self
-                        .block_reader
-                        .read_columns_data_by_merge_io(
-                            &settings,
-                            &fuse_part.location,
-                            &fuse_part.columns_meta,
+                match Mutation::from_part(&part)? {
+                    Mutation::MutationDeletedSegment(deleted_segment) => {
+                        let progress_values = ProgressValues {
+                            rows: deleted_segment.deleted_segment.segment_info.1.row_count as usize,
+                            bytes: 0,
+                        };
+                        self.ctx.get_write_progress().incr(&progress_values);
+                        self.state = State::Output(
+                            self.ctx.get_partition(),
+                            DataBlock::empty_with_meta(
+                                SerializeDataMeta::create_with_deleted_segment(
+                                    deleted_segment.clone(),
+                                ),
+                            ),
                         )
-                        .await?;
-                    self.state = State::FilterData(inner_part, read_res);
+                    }
+                    Mutation::MutationPartInfo(part) => {
+                        self.index = BlockMetaIndex {
+                            segment_idx: part.index.segment_idx,
+                            block_idx: part.index.block_idx,
+                        };
+                        if matches!(self.action, MutationAction::Deletion) {
+                            self.stats_type =
+                                ClusterStatsGenType::WithOrigin(part.cluster_stats.clone());
+                        }
+
+                        let inner_part = part.inner_part.clone();
+                        let fuse_part = FusePartInfo::from_part(&inner_part)?;
+
+                        if part.whole_block_mutation
+                            && matches!(self.action, MutationAction::Deletion)
+                        {
+                            // whole block deletion.
+                            let progress_values = ProgressValues {
+                                rows: fuse_part.nums_rows,
+                                bytes: 0,
+                            };
+                            self.ctx.get_write_progress().incr(&progress_values);
+                            let meta = SerializeDataMeta::create(
+                                self.index.clone(),
+                                self.stats_type.clone(),
+                            );
+                            self.state = State::Output(
+                                self.ctx.get_partition(),
+                                DataBlock::empty_with_meta(meta),
+                            );
+                        } else {
+                            let read_res = self
+                                .block_reader
+                                .read_columns_data_by_merge_io(
+                                    &settings,
+                                    &fuse_part.location,
+                                    &fuse_part.columns_meta,
+                                )
+                                .await?;
+                            self.state = State::FilterData(inner_part, read_res);
+                        }
+                    }
                 }
             }
             State::ReadRemain {

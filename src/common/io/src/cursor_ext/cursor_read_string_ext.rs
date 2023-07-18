@@ -60,7 +60,6 @@ where T: AsRef<[u8]>
                     b'0' => buf.push(b'\0'),
                     b'\'' => buf.push(b'\''),
                     b'\\' => buf.push(b'\\'),
-                    b'\"' => buf.push(b'\"'),
                     _ => {
                         buf.push(b'\\');
                         buf.push(c);
@@ -81,7 +80,7 @@ where T: AsRef<[u8]>
 
     fn read_escaped_string_text(&mut self, buf: &mut Vec<u8>) -> Result<()> {
         loop {
-            self.keep_read(buf, |f| f != b'\t' && f != b'\n' && f != b'\\');
+            self.keep_read(buf, |f| f != b'\\');
             if self.ignore_byte(b'\\') {
                 let buffer = self.remaining_slice();
                 let c = buffer[0];
@@ -165,7 +164,6 @@ where T: AsRef<[u8]>
                         check_pos(pos + 1, positions)?;
                         buf.push(b'\\');
                     }
-                    b'\"' => buf.push(b'\"'),
                     _ => {
                         buf.push(b'\\');
                         buf.push(c);

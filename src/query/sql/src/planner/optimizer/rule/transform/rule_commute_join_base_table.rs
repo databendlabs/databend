@@ -75,11 +75,13 @@ impl Rule for RuleCommuteJoinBaseTable {
             | JoinType::Cross
             | JoinType::Left
             | JoinType::Right
+            | JoinType::LeftSingle
+            | JoinType::RightSingle
             | JoinType::LeftSemi
             | JoinType::RightSemi
             | JoinType::LeftAnti
-            | JoinType::LeftMark
-            | JoinType::RightAnti => {
+            | JoinType::RightAnti
+            | JoinType::LeftMark => {
                 // Swap the join conditions side
                 (join.left_conditions, join.right_conditions) =
                     (join.right_conditions, join.left_conditions);
@@ -91,13 +93,8 @@ impl Rule for RuleCommuteJoinBaseTable {
                 );
 
                 // Disable the following rules for the generated expression
-                result.set_applied_rule(&RuleID::CommuteJoin);
                 result.set_applied_rule(&RuleID::CommuteJoinBaseTable);
-                result.set_applied_rule(&RuleID::LeftAssociateJoin);
                 result.set_applied_rule(&RuleID::LeftExchangeJoin);
-                result.set_applied_rule(&RuleID::RightAssociateJoin);
-                result.set_applied_rule(&RuleID::RightExchangeJoin);
-                result.set_applied_rule(&RuleID::ExchangeJoin);
 
                 state.add_result(result);
             }

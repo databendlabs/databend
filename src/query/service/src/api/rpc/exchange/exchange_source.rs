@@ -55,6 +55,6 @@ pub fn via_exchange_source(
     let last_output_len = pipeline.output_len();
     exchange_source_reader::via_reader(last_output_len, pipeline, flight_receivers);
 
-    pipeline.resize(last_output_len)?;
+    pipeline.try_resize(last_output_len)?;
     injector.apply_merge_deserializer(params, pipeline)
 }

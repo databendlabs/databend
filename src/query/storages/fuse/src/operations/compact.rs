@@ -20,15 +20,14 @@ use common_exception::Result;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use storages_common_table_meta::meta::TableSnapshot;
-use tracing::info;
 
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
+use crate::operations::common::TransformSerializeBlock;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::CompactAggregator;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::SegmentCompactMutator;
-use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 use crate::Table;
@@ -98,18 +97,17 @@ impl FuseTable {
             return Ok(());
         }
 
-        let mutator = Box::new(segment_mutator);
-        mutator.try_commit(Arc::new(self.clone())).await
+        segment_mutator.try_commit(Arc::new(self.clone())).await
     }
 
     /// The flow of Pipeline is as follows:
-    /// +-------------+      +----------------------+
-    /// |CompactSource| ---> |SerializeDataTransform|   ------
-    /// +-------------+      +----------------------+         |      +-----------------+      +----------+
-    /// |     ...     | ---> |          ...         |   ...   | ---> |CompactAggregator| ---> |CommitSink|
-    /// +-------------+      +----------------------+         |      +-----------------+      +----------+
-    /// |CompactSource| ---> |SerializeDataTransform|   ------
-    /// +-------------+      +----------------------+
+    /// +-------------+      +-----------------------+
+    /// |CompactSource| ---> |TransformSerializeBlock|   ------
+    /// +-------------+      +-----------------------+         |      +-----------------+      +----------+
+    /// |     ...     | ---> |          ...          |   ...   | ---> |CompactAggregator| ---> |CommitSink|
+    /// +-------------+      +-----------------------+         |      +-----------------+      +----------+
+    /// |CompactSource| ---> |TransformSerializeBlock|   ------
+    /// +-------------+      +-----------------------+
     #[async_backtrace::framed]
     async fn compact_blocks(
         &self,
@@ -132,11 +130,7 @@ impl FuseTable {
         }
 
         // Status.
-        {
-            let status = "compact: begin to run compact tasks";
-            ctx.set_status_info(status);
-            info!(status);
-        }
+        ctx.set_status_info("compact: begin to run compact tasks");
         ctx.set_partitions(mutator.compact_tasks.clone())?;
 
         let all_column_indices = self.all_column_indices();
@@ -164,17 +158,20 @@ impl FuseTable {
         let cluster_stats_gen =
             self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
 
-        pipeline.add_transform(|input, output| {
-            SerializeDataTransform::try_create(
-                ctx.clone(),
-                input,
-                output,
-                self,
-                cluster_stats_gen.clone(),
-            )
-        })?;
+        pipeline.add_transform(
+            |input: Arc<common_pipeline_core::processors::port::InputPort>, output| {
+                let proc = TransformSerializeBlock::try_create(
+                    ctx.clone(),
+                    input,
+                    output,
+                    self,
+                    cluster_stats_gen.clone(),
+                )?;
+                proc.into_processor()
+            },
+        )?;
 
-        pipeline.resize(1)?;
+        pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
             let compact_aggregator = CompactAggregator::new(
@@ -191,7 +188,15 @@ impl FuseTable {
 
         let snapshot_gen = MutationGenerator::new(mutator.compact_params.base_snapshot);
         pipeline.add_sink(|input| {
-            CommitSink::try_create(self, ctx.clone(), None, snapshot_gen.clone(), input, None)
+            CommitSink::try_create(
+                self,
+                ctx.clone(),
+                None,
+                snapshot_gen.clone(),
+                input,
+                None,
+                true,
+            )
         })?;
 
         Ok(())

@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_base::base::tokio;
 use common_expression::type_check::check;
 use common_expression::types::number::Int32Type;
@@ -536,6 +537,7 @@ fn test_reduce_block_meta() -> common_exception::Result<()> {
             None,
             bloom_filter_index_size,
             Compression::Lz4Raw,
+            Some(Utc::now()),
         );
         blocks.push(block_meta);
     }

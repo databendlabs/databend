@@ -11,6 +11,7 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
+
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -57,6 +58,8 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
@@ -75,6 +78,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -397,6 +402,13 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_can_scan_from_agg_index(&self) -> bool {
+        todo!()
+    }
+    fn set_can_scan_from_agg_index(&self, _: bool) {
+        todo!()
+    }
+
     fn attach_query_str(&self, _kind: String, _query: String) {
         todo!()
     }
@@ -681,6 +693,16 @@ impl Catalog for FakedCatalog {
 
     #[async_backtrace::framed]
     async fn drop_index(&self, _req: DropIndexReq) -> Result<DropIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
         unimplemented!()
     }
 

@@ -443,6 +443,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_tables_status(&mut self, _stmt: &'ast ShowTablesStatusStmt) {}
 
+    fn visit_show_drop_tables(&mut self, _stmt: &'ast ShowDropTablesStmt) {}
+
     fn visit_create_table(&mut self, _stmt: &'ast CreateTableStmt) {}
 
     fn visit_create_table_source(&mut self, _source: &'ast CreateTableSource) {}
@@ -463,6 +465,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_vacuum_table(&mut self, _stmt: &'ast VacuumTableStmt) {}
 
+    fn visit_vacuum_drop_table(&mut self, _stmt: &'ast VacuumDropTableStmt) {}
+
     fn visit_analyze_table(&mut self, _stmt: &'ast AnalyzeTableStmt) {}
 
     fn visit_exists_table(&mut self, _stmt: &'ast ExistsTableStmt) {}
@@ -476,6 +480,7 @@ pub trait Visitor<'ast>: Sized {
     fn visit_create_index(&mut self, _stmt: &'ast CreateIndexStmt) {}
 
     fn visit_drop_index(&mut self, _stmt: &'ast DropIndexStmt) {}
+    fn visit_refresh_index(&mut self, _stmt: &'ast RefreshIndexStmt) {}
 
     fn visit_create_virtual_columns(&mut self, _stmt: &'ast CreateVirtualColumnsStmt) {}
 
@@ -581,6 +586,16 @@ pub trait Visitor<'ast>: Sized {
     fn visit_drop_data_mask_policy(&mut self, _stmt: &'ast DropDatamaskPolicyStmt) {}
 
     fn visit_desc_data_mask_policy(&mut self, _stmt: &'ast DescDatamaskPolicyStmt) {}
+
+    fn visit_create_network_policy(&mut self, _stmt: &'ast CreateNetworkPolicyStmt) {}
+
+    fn visit_alter_network_policy(&mut self, _stmt: &'ast AlterNetworkPolicyStmt) {}
+
+    fn visit_drop_network_policy(&mut self, _stmt: &'ast DropNetworkPolicyStmt) {}
+
+    fn visit_desc_network_policy(&mut self, _stmt: &'ast DescNetworkPolicyStmt) {}
+
+    fn visit_show_network_policies(&mut self) {}
 
     fn visit_with(&mut self, with: &'ast With) {
         let With { ctes, .. } = with;

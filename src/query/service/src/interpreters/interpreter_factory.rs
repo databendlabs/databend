@@ -208,6 +208,9 @@ impl InterpreterFactory {
                 ctx,
                 *vacuum_table.clone(),
             )?)),
+            Plan::VacuumDropTable(vacuum_drop_table) => Ok(Arc::new(
+                VacuumDropTablesInterpreter::try_create(ctx, *vacuum_drop_table.clone())?,
+            )),
             Plan::AnalyzeTable(analyze_table) => Ok(Arc::new(AnalyzeTableInterpreter::try_create(
                 ctx,
                 *analyze_table.clone(),
@@ -241,7 +244,10 @@ impl InterpreterFactory {
                 ctx,
                 *index.clone(),
             )?)),
-
+            Plan::RefreshIndex(index) => Ok(Arc::new(RefreshIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
             // Virtual columns
             Plan::CreateVirtualColumns(create_virtual_columns) => Ok(Arc::new(
                 CreateVirtualColumnsInterpreter::try_create(ctx, *create_virtual_columns.clone())?,
@@ -437,6 +443,25 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
+
+            Plan::CreateNetworkPolicy(p) => Ok(Arc::new(
+                CreateNetworkPolicyInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::AlterNetworkPolicy(p) => Ok(Arc::new(AlterNetworkPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropNetworkPolicy(p) => Ok(Arc::new(DropNetworkPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescNetworkPolicy(p) => Ok(Arc::new(DescNetworkPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::ShowNetworkPolicies(p) => Ok(Arc::new(
+                ShowNetworkPoliciesInterpreter::try_create(ctx, *p.clone())?,
+            )),
         }
     }
 }

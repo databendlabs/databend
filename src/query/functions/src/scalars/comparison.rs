@@ -46,6 +46,7 @@ use common_expression::FunctionSignature;
 use common_expression::ScalarRef;
 use common_expression::SimpleDomainCmp;
 use common_expression::ValueRef;
+use memchr::memchr;
 use memchr::memmem;
 use regex::bytes::Regex;
 
@@ -440,6 +441,56 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
 fn register_like(registry: &mut FunctionRegistry) {
     registry.register_aliases("regexp", &["rlike"]);
 
+    registry.register_passthrough_nullable_2_arg::<VariantType, StringType, BooleanType, _, _>(
+        "like",
+        |_, _, _| FunctionDomain::Full,
+        variant_vectorize_like(|val, pat, _, pattern_type| {
+            match &pattern_type {
+                PatternType::OrdinalStr => {
+                    if let Some(s) = jsonb::as_str(val) {
+                        s.as_bytes() == pat
+                    } else {
+                        false
+                    }
+                }
+                PatternType::EndOfPercent => {
+                    // fast path, can use starts_with
+                    if let Some(s) = jsonb::as_str(val) {
+                        let v = s.as_bytes();
+                        v.starts_with(&pat[..pat.len() - 1])
+                    } else {
+                        false
+                    }
+                }
+                PatternType::StartOfPercent => {
+                    // fast path, can use ends_with
+                    if let Some(s) = jsonb::as_str(val) {
+                        let v = s.as_bytes();
+                        v.ends_with(&pat[1..])
+                    } else {
+                        false
+                    }
+                }
+                PatternType::SurroundByPercent => {
+                    jsonb::traverse_check_string(val, |v| {
+                        if pat.len() > 2 {
+                            memmem::find(v, &pat[1..pat.len() - 1]).is_some()
+                        } else {
+                            // true for empty '%%' pattern, which follows pg/mysql way
+                            true
+                        }
+                    })
+                }
+                PatternType::SimplePattern(simple_pattern) => {
+                    jsonb::traverse_check_string(val, |v| {
+                        simple_like(v, simple_pattern.0, simple_pattern.1, &simple_pattern.2)
+                    })
+                }
+                PatternType::ComplexPattern => jsonb::traverse_check_string(val, |v| like(v, pat)),
+            }
+        }),
+    );
+
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "like",
         |_, lhs, rhs| {
@@ -481,7 +532,7 @@ fn register_like(registry: &mut FunctionRegistry) {
             FunctionDomain::Full
         },
         vectorize_like(|str, pat, _, pattern_type| {
-            match pattern_type {
+            match &pattern_type {
                 PatternType::OrdinalStr => str == pat,
                 PatternType::EndOfPercent => {
                     // fast path, can use starts_with
@@ -502,7 +553,10 @@ fn register_like(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                PatternType::PatternStr => like(str, pat),
+                PatternType::SimplePattern(simple_pattern) => {
+                    simple_like(str, simple_pattern.0, simple_pattern.1, &simple_pattern.2)
+                }
+                PatternType::ComplexPattern => like(str, pat),
             }
         }),
     );
@@ -531,13 +585,13 @@ fn register_like(registry: &mut FunctionRegistry) {
 }
 
 fn vectorize_like(
-    func: impl Fn(&[u8], &[u8], &mut EvalContext, PatternType) -> bool + Copy,
+    func: impl Fn(&[u8], &[u8], &mut EvalContext, &PatternType) -> bool + Copy,
 ) -> impl Fn(ValueRef<StringType>, ValueRef<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy
 {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
             let pattern_type = check_pattern_type(arg2, false);
-            Value::Scalar(func(arg1, arg2, ctx, pattern_type))
+            Value::Scalar(func(arg1, arg2, ctx, &pattern_type))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let arg1_iter = StringType::iter_column(&arg1);
@@ -553,7 +607,7 @@ fn vectorize_like(
 
             let mut builder = MutableBitmap::with_capacity(arg1.len());
             for arg1 in arg1_iter {
-                builder.push(func(arg1, arg2, ctx, pattern_type));
+                builder.push(func(arg1, arg2, ctx, &pattern_type));
             }
             Value::Column(builder.into())
         }
@@ -562,7 +616,7 @@ fn vectorize_like(
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for arg2 in arg2_iter {
                 let pattern_type = check_pattern_type(arg2, false);
-                builder.push(func(arg1, arg2, ctx, pattern_type));
+                builder.push(func(arg1, arg2, ctx, &pattern_type));
             }
             Value::Column(builder.into())
         }
@@ -572,7 +626,56 @@ fn vectorize_like(
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
                 let pattern_type = check_pattern_type(arg2, false);
-                builder.push(func(arg1, arg2, ctx, pattern_type));
+                builder.push(func(arg1, arg2, ctx, &pattern_type));
+            }
+            Value::Column(builder.into())
+        }
+    }
+}
+
+fn variant_vectorize_like(
+    func: impl Fn(&[u8], &[u8], &mut EvalContext, &PatternType) -> bool + Copy,
+) -> impl Fn(ValueRef<VariantType>, ValueRef<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy
+{
+    move |arg1, arg2, ctx| match (arg1, arg2) {
+        (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
+            let pattern_type = check_pattern_type(arg2, false);
+            Value::Scalar(func(arg1, arg2, ctx, &pattern_type))
+        }
+        (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
+            let arg1_iter = VariantType::iter_column(&arg1);
+
+            let pattern_type = check_pattern_type(arg2, false);
+            // faster path for memmem to have a single instance of Finder
+            if pattern_type == PatternType::SurroundByPercent && arg2.len() > 2 {
+                let finder = memmem::Finder::new(&arg2[1..arg2.len() - 1]);
+                let it = arg1_iter.map(|arg1| finder.find(arg1).is_some());
+                let bitmap = BooleanType::column_from_iter(it, &[]);
+                return Value::Column(bitmap);
+            }
+
+            let mut builder = MutableBitmap::with_capacity(arg1.len());
+            for arg1 in arg1_iter {
+                builder.push(func(arg1, arg2, ctx, &pattern_type));
+            }
+            Value::Column(builder.into())
+        }
+        (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
+            let arg2_iter = VariantType::iter_column(&arg2);
+            let mut builder = MutableBitmap::with_capacity(arg2.len());
+            for arg2 in arg2_iter {
+                let pattern_type = check_pattern_type(arg2, false);
+                builder.push(func(arg1, arg2, ctx, &pattern_type));
+            }
+            Value::Column(builder.into())
+        }
+        (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
+            let arg1_iter = VariantType::iter_column(&arg1);
+            let arg2_iter = VariantType::iter_column(&arg2);
+            let mut builder = MutableBitmap::with_capacity(arg2.len());
+            for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
+                let pattern_type = check_pattern_type(arg2, false);
+                builder.push(func(arg1, arg2, ctx, &pattern_type));
             }
             Value::Column(builder.into())
         }
@@ -628,18 +731,21 @@ fn vectorize_regexp(
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum PatternType {
-    // e.g. 'Arrow'
+    // e.g. 'Arrow'.
     OrdinalStr,
-    // e.g. 'A%row'
-    PatternStr,
-    // e.g. '%rrow'
+    // e.g. '%rrow'.
     StartOfPercent,
-    // e.g. 'Arrow%'
+    // e.g. 'Arrow%'.
     EndOfPercent,
-    // e.g. '%Arrow%'
+    // e.g. '%Arrow%'.
     SurroundByPercent,
+    // Only includes %, e.g. 'A%r%w'.
+    // SimplePattern is composed of: (has_start_percent, has_end_percent, segments).
+    SimplePattern((bool, bool, Vec<Vec<u8>>)),
+    // e.g. 'A%row', 'A_row', 'A\\%row'.
+    ComplexPattern,
 }
 
 #[inline]
@@ -669,32 +775,40 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
     }
 
     let mut index = 0;
-    let start_percent = pattern[0] == b'%';
-    if start_percent {
+    let mut first_non_percent = 0;
+    let mut percent_num = 0;
+    let has_start_percent = pattern[0] == b'%';
+    let mut has_end_percent = false;
+    let mut segments = Vec::new();
+    let mut simple_pattern = true;
+    if has_start_percent {
         if is_pruning {
-            return PatternType::PatternStr;
+            return PatternType::ComplexPattern;
         }
         index += 1;
+        first_non_percent += 1;
+        percent_num += 1;
     }
 
     while index < len {
         match pattern[index] {
-            b'_' => return PatternType::PatternStr,
+            b'_' => return PatternType::ComplexPattern,
             b'%' => {
-                if index == len - 1 {
-                    return if !start_percent {
-                        PatternType::EndOfPercent
-                    } else {
-                        PatternType::SurroundByPercent
-                    };
+                percent_num += 1;
+                if index > first_non_percent {
+                    segments.push(pattern[first_non_percent..index].to_vec());
                 }
-                return PatternType::PatternStr;
+                first_non_percent = index + 1;
+                if index == len - 1 {
+                    has_end_percent = true;
+                }
             }
             b'\\' => {
+                simple_pattern = false;
                 if index < len - 1 {
                     index += 1;
                     if !is_pruning && is_like_pattern_escape(pattern[index] as char) {
-                        return PatternType::PatternStr;
+                        return PatternType::ComplexPattern;
                     }
                 }
             }
@@ -703,10 +817,21 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
         index += 1;
     }
 
-    if start_percent {
-        PatternType::StartOfPercent
-    } else {
-        PatternType::OrdinalStr
+    match percent_num {
+        0 => PatternType::OrdinalStr,
+        1 if has_start_percent => PatternType::StartOfPercent,
+        1 if has_end_percent => PatternType::EndOfPercent,
+        2 if has_start_percent && has_end_percent => PatternType::SurroundByPercent,
+        _ => {
+            if simple_pattern {
+                if first_non_percent < len {
+                    segments.push(pattern[first_non_percent..len].to_vec());
+                }
+                PatternType::SimplePattern((has_start_percent, has_end_percent, segments))
+            } else {
+                PatternType::ComplexPattern
+            }
+        }
     }
 }
 
@@ -775,4 +900,150 @@ fn like(haystack: &[u8], pattern: &[u8]) -> bool {
         return false;
     }
     true
+}
+
+fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    let haystack_len = haystack.len();
+    let needle_len = needle.len();
+    if needle_len > haystack_len {
+        return None;
+    }
+    let offset = memchr(needle[0], haystack)?;
+    // # Safety
+    // The `offset` returned by `memchr` is less than `haystack_len`.
+    haystack = unsafe { haystack.get_unchecked(offset..) };
+    let haystack_len = haystack.len();
+    if needle_len > haystack_len {
+        return None;
+    }
+    // Inspired by fast_strstr (https://github.com/RaphaelJ/fast_strstr).
+    let mut checksum = 0;
+    for i in 0..needle_len {
+        // # Safety
+        // `needle_len` <= haystack_len
+        unsafe {
+            checksum += haystack.get_unchecked(i);
+            checksum -= needle.get_unchecked(i);
+        }
+    }
+    let mut idx = 0;
+    loop {
+        // # Safety
+        // `idx` < `haystack_len` and `idx` + `needle_len` <= `haystack_len`.
+        unsafe {
+            if checksum == 0
+                && haystack[idx] == needle[0]
+                && haystack.get_unchecked(idx..(idx + needle_len)) == needle
+            {
+                return Some(offset + idx + needle_len);
+            }
+        }
+        if idx + needle_len >= haystack_len {
+            return None;
+        }
+        // # Safety
+        // `idx` < `haystack_len` and `idx` + `needle_len` < `haystack_len`.
+        unsafe {
+            checksum -= haystack.get_unchecked(idx);
+            checksum += haystack.get_unchecked(idx + needle_len);
+        }
+        idx += 1;
+    }
+}
+
+#[inline]
+fn simple_like(
+    haystack: &[u8],
+    has_start_percent: bool,
+    has_end_percent: bool,
+    segments: &Vec<Vec<u8>>,
+) -> bool {
+    let haystack_len = haystack.len();
+    if haystack_len == 0 {
+        return false;
+    }
+    let segments_len = segments.len();
+    debug_assert!(haystack_len > 0);
+    debug_assert!(segments_len > 1);
+    let mut haystack_start_idx = 0;
+    let mut segment_idx = 0;
+    if !has_start_percent {
+        let segment = &segments[0];
+        let haystack_end = haystack_start_idx + segment.len();
+        if haystack_end > haystack_len {
+            return false;
+        }
+        // # Safety
+        // `haystack_start_idx` = 0, `haystack_len` > 0, `haystack_end` <= `haystack_len`.
+        if unsafe { haystack.get_unchecked(haystack_start_idx..haystack_end) } != segment {
+            return false;
+        }
+        haystack_start_idx = haystack_end;
+        segment_idx += 1;
+    }
+    while segment_idx < segments_len {
+        if haystack_start_idx >= haystack_len {
+            return false;
+        }
+        let segment = &segments[segment_idx];
+        if segment_idx == segments_len - 1 && !has_end_percent {
+            if haystack_len - haystack_start_idx < segment.len() {
+                return false;
+            }
+            // # Safety
+            // `haystack_start_idx` + `segment.len()` <= `haystack_len`.
+            if unsafe { haystack.get_unchecked((haystack_len - segment.len())..) } != segment {
+                return false;
+            }
+        } else if let Some(offset) =
+            unsafe { find(haystack.get_unchecked(haystack_start_idx..), segment) }
+        {
+            haystack_start_idx += offset;
+        } else {
+            return false;
+        }
+        segment_idx += 1;
+    }
+    true
+}
+
+#[test]
+fn test_check_pattern_type() {
+    let segments = vec![
+        "databend".as_bytes().to_vec(),
+        "cloud".as_bytes().to_vec(),
+        "data".as_bytes().to_vec(),
+        "warehouse".as_bytes().to_vec(),
+    ];
+    let test_cases = vec![
+        ("databend", PatternType::OrdinalStr),
+        ("%databend", PatternType::StartOfPercent),
+        ("databend%", PatternType::EndOfPercent),
+        ("%databend%", PatternType::SurroundByPercent),
+        (
+            "databend%cloud%data%warehouse",
+            PatternType::SimplePattern((false, false, segments.clone())),
+        ),
+        (
+            "%databend%cloud%data%warehouse",
+            PatternType::SimplePattern((true, false, segments.clone())),
+        ),
+        (
+            "databend%cloud%data%warehouse%",
+            PatternType::SimplePattern((false, true, segments.clone())),
+        ),
+        (
+            "%databend%cloud%data%warehouse%",
+            PatternType::SimplePattern((true, true, segments)),
+        ),
+        ("databend_cloud%data%warehouse", PatternType::ComplexPattern),
+        (
+            "databend\\%cloud%data%warehouse",
+            PatternType::ComplexPattern,
+        ),
+        ("databend%cloud_data%warehouse", PatternType::ComplexPattern),
+    ];
+    for (pattern, pattern_type) in test_cases {
+        assert_eq!(pattern_type, check_pattern_type(pattern.as_bytes(), false));
+    }
 }

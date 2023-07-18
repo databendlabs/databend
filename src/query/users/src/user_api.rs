@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
@@ -19,6 +20,8 @@ use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_management::FileFormatApi;
 use common_management::FileFormatMgr;
+use common_management::NetworkPolicyApi;
+use common_management::NetworkPolicyMgr;
 use common_management::QuotaApi;
 use common_management::QuotaMgr;
 use common_management::RoleApi;
@@ -38,7 +41,6 @@ use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaError;
-use tracing::warn;
 
 use crate::idm_config::IDMConfig;
 
@@ -71,14 +73,6 @@ impl UserApiProvider {
         idm_config: IDMConfig,
     ) -> Result<Arc<UserApiProvider>> {
         let client = MetaStoreProvider::new(conf).create_meta_store().await?;
-        for user in idm_config.users.keys() {
-            match user.as_str() {
-                "root" | "default" => {
-                    warn!("Reserved built-in user `{}` will be ignored", user);
-                }
-                _ => {}
-            }
-        }
         Ok(Arc::new(UserApiProvider {
             meta: client.clone(),
             client: client.arc(),
@@ -126,11 +120,25 @@ impl UserApiProvider {
         Ok(Arc::new(SettingMgr::create(self.client.clone(), tenant)?))
     }
 
+    pub fn get_network_policy_api_client(
+        &self,
+        tenant: &str,
+    ) -> Result<Arc<impl NetworkPolicyApi>> {
+        Ok(Arc::new(NetworkPolicyMgr::create(
+            self.client.clone(),
+            tenant,
+        )?))
+    }
+
     pub fn get_meta_store_client(&self) -> Arc<MetaStore> {
         Arc::new(self.meta.clone())
     }
 
     pub fn get_configured_user(&self, user_name: &str) -> Option<&AuthInfo> {
         self.idm_config.users.get(user_name)
+    }
+
+    pub fn get_configured_users(&self) -> HashMap<String, AuthInfo> {
+        self.idm_config.users.clone()
     }
 }

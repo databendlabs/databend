@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -40,6 +41,8 @@ use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
+
+use crate::table::SystemTablePart;
 
 pub trait SystemLogElement: Send + Sync + Clone {
     const TABLE_NAME: &'static str;
@@ -158,10 +161,17 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
-        _: Arc<dyn TableContext>,
-        _: Option<PushDownInfo>,
+        _ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        Ok((PartStatistics::default(), Partitions::default()))
+        Ok((
+            PartStatistics::default(),
+            // Make the table in distributed.
+            Partitions::create_nolazy(PartitionsShuffleKind::Broadcast, vec![Arc::new(Box::new(
+                SystemTablePart,
+            ))]),
+        ))
     }
 
     fn read_data(

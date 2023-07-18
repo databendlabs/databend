@@ -42,12 +42,13 @@ fn build_custom_claims(license_type: String, org: String) -> LicenseInfo {
         r#type: Some(license_type),
         org: Some(org),
         tenants: Some(vec!["test".to_string()]),
+        features: None,
     }
 }
 
 pub async fn create_ee_query_context(
     mut current_user: Option<UserInfo>,
-) -> Result<(TestGuard, Arc<QueryContext>)> {
+) -> Result<(TestGuard, Arc<QueryContext>, String)> {
     let key_pair = ES256KeyPair::generate();
     let claims = Claims::with_custom_claims(
         build_custom_claims("trial".to_string(), "databend".to_string()),
@@ -59,10 +60,12 @@ pub async fn create_ee_query_context(
     let tmp_dir = TempDir::new().unwrap();
     let mut conf = ConfigBuilder::create().config();
     conf.query.databend_enterprise_license = Some(token);
-    // make sure we are suing `fs` storage
+    // make sure we are using `fs` storage
+    let root = tmp_dir.path().to_str().unwrap().to_string();
+    conf.storage.allow_insecure = true;
     conf.storage.params = StorageParams::Fs(StorageFsConfig {
         // use `TempDir` as root path (auto clean)
-        root: tmp_dir.path().to_str().unwrap().to_string(),
+        root: root.clone(),
     });
 
     let guard = TestGlobalServices::setup(conf, public_key).await?;
@@ -72,7 +75,7 @@ pub async fn create_ee_query_context(
         .await?;
 
     if current_user.is_none() {
-        let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
+        let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
             hash_method: PasswordHashMethod::Sha256,
             hash_value: Vec::from("pass"),
         });
@@ -91,5 +94,5 @@ pub async fn create_ee_query_context(
     let dummy_query_context = dummy_session.create_query_context().await?;
 
     dummy_query_context.get_settings().set_max_threads(8)?;
-    Ok((guard, dummy_query_context))
+    Ok((guard, dummy_query_context, root))
 }

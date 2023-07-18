@@ -91,7 +91,7 @@ pub trait Table: Sync + Send {
     }
 
     /// whether column prune(projection) can help in table read
-    fn benefit_column_prune(&self) -> bool {
+    fn support_column_projection(&self) -> bool {
         false
     }
 
@@ -154,6 +154,7 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let (_, _) = (ctx, push_downs);
         Err(ErrorCode::Unimplemented(format!(
@@ -238,10 +239,11 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
+        limit: Option<usize>,
         keep_last_snapshot: bool,
-        dry_run_limit: Option<usize>,
+        dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        let (_, _, _, _) = (ctx, instant, keep_last_snapshot, dry_run_limit);
+        let (_, _, _, _, _) = (ctx, instant, limit, keep_last_snapshot, dry_run);
 
         Ok(None)
     }
@@ -268,27 +270,6 @@ pub trait Table: Sync + Send {
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support time travel",
-            self.name(),
-            self.get_table_info().engine(),
-        )))
-    }
-
-    #[async_backtrace::framed]
-    async fn delete(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        // - pass a ScalarExpr to Table::delete, and let the table's implementation of method `delete` do the
-        //   inversion will be more concise, unfortunately, using type ScalarExpr introduces cyclic dependency.
-        // - we can also pass a common_expression::Expr here, and later do the inversion at Expr level, but it is not recommended :(
-        filter: Option<DeletionFilters>,
-        col_indices: Vec<usize>,
-        query_row_id_col: bool,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        let (_, _, _, _, _) = (ctx, filter, col_indices, pipeline, query_row_id_col);
-
-        Err(ErrorCode::Unimplemented(format!(
-            "table {}, engine type {}, does not support DELETE FROM",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -353,14 +334,16 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    // return the selected block num.
     #[async_backtrace::framed]
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<()> {
-        let (_, _, _) = (ctx, pipeline, push_downs);
+        limit: Option<usize>,
+        pipeline: &mut Pipeline,
+    ) -> Result<u64> {
+        let (_, _, _, _) = (ctx, push_downs, limit, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support recluster",
@@ -384,6 +367,10 @@ pub trait Table: Sync + Send {
     }
 
     fn is_stage_table(&self) -> bool {
+        false
+    }
+
+    fn result_can_be_cached(&self) -> bool {
         false
     }
 }
@@ -491,7 +478,7 @@ pub trait ColumnStatisticsProvider {
                         max.push(0);
                     }
                 }
-                for idx in (0..min.len()).rev() {
+                for idx in 0..min.len() {
                     min_value = min_value * 128 + min[idx] as u32;
                     max_value = max_value * 128 + max[idx] as u32;
                 }
@@ -531,6 +518,7 @@ pub struct NavigationDescriptor {
     pub point: NavigationPoint,
 }
 
+#[derive(Debug, Clone)]
 pub struct DeletionFilters {
     // the filter expression for the deletion
     pub filter: RemoteExpr<String>,

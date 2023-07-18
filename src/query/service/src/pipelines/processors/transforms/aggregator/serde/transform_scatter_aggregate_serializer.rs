@@ -27,13 +27,11 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 
 use crate::api::serialize_block;
 use crate::api::ExchangeShuffleMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::serde_meta::AggregateSerdeMeta;
-use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_serializer::serialize_aggregate;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_serializer::SerializeAggregateStream;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::AggregatorParams;
@@ -136,13 +134,14 @@ impl<Method: HashMethodBounds> Processor for TransformScatterAggregateSerializer
                                         AggregateSerdeMeta::create_spilled(
                                             bucket,
                                             payload.location,
+                                            payload.data_range,
                                             payload.columns_layout,
                                         ),
                                     );
 
                                     self.input_data.push(None);
                                     self.output_data.push(serialize_block(
-                                        bucket,
+                                        -1,
                                         data_block,
                                         &self.ipc_fields,
                                         &self.options,
@@ -208,59 +207,5 @@ impl<Method: HashMethodBounds> Processor for TransformScatterAggregateSerializer
         }
 
         Ok(())
-    }
-}
-
-impl<Method> BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterAggregateSerializer<Method>
-where Method: HashMethodBounds
-{
-    const NAME: &'static str = "TransformScatterAggregateSerializer";
-
-    fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<DataBlock> {
-        let mut new_blocks = Vec::with_capacity(meta.blocks.len());
-
-        for (index, mut block) in meta.blocks.into_iter().enumerate() {
-            if index == self.local_pos {
-                new_blocks.push(block);
-                continue;
-            }
-
-            if let Some(meta) = block
-                .take_meta()
-                .and_then(AggregateMeta::<Method, usize>::downcast_from)
-            {
-                new_blocks.push(match meta {
-                    AggregateMeta::Spilling(_) => unreachable!(),
-                    AggregateMeta::Partitioned { .. } => unreachable!(),
-                    AggregateMeta::Serialized(_) => unreachable!(),
-                    AggregateMeta::Spilled(payload) => {
-                        let bucket = payload.bucket;
-                        let data_block =
-                            DataBlock::empty_with_meta(AggregateSerdeMeta::create_spilled(
-                                bucket,
-                                payload.location,
-                                payload.columns_layout,
-                            ));
-
-                        serialize_block(bucket, data_block, &self.ipc_fields, &self.options)?
-                    }
-                    AggregateMeta::HashTable(payload) => {
-                        let bucket = payload.bucket;
-                        let data_block = serialize_aggregate(&self.method, &self.params, payload)?;
-                        let data_block =
-                            data_block.add_meta(Some(AggregateSerdeMeta::create(bucket)))?;
-                        serialize_block(bucket, data_block, &self.ipc_fields, &self.options)?
-                    }
-                });
-
-                continue;
-            }
-
-            new_blocks.push(block);
-        }
-
-        Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
-            new_blocks,
-        )))
     }
 }

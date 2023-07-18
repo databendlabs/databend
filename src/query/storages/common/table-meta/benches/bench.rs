@@ -18,6 +18,7 @@ extern crate criterion;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_expression::types::NumberScalar;
 use common_expression::ColumnId;
 use common_expression::Scalar;
@@ -191,6 +192,7 @@ fn build_test_segment_info(num_blocks_per_seg: usize) -> common_exception::Resul
         bloom_filter_index_location: Some(location_gen.block_bloom_index_location(&block_uuid)),
         bloom_filter_index_size: 0,
         compression: Compression::Lz4,
+        create_on: Some(Utc::now()),
     };
 
     let block_metas = (0..num_blocks_per_seg)

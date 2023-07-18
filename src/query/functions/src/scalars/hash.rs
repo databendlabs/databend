@@ -78,7 +78,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "md5",
         |_, _| FunctionDomain::MayThrow,
         vectorize_string_to_string(
-            |col| col.data.len() * 32,
+            |col| col.data().len() * 32,
             |val, output, ctx| {
                 // TODO md5 lib doesn't allow encode into buffer...
                 let old_len = output.data.len();
@@ -98,7 +98,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "sha",
         |_, _| FunctionDomain::MayThrow,
         vectorize_string_to_string(
-            |col| col.data.len() * 40,
+            |col| col.data().len() * 40,
             |val, output, ctx| {
                 let old_len = output.data.len();
                 output.data.resize(old_len + 40, 0);
@@ -120,7 +120,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "blake3",
         |_, _| FunctionDomain::MayThrow,
         vectorize_string_to_string(
-            |col| col.data.len() * 64,
+            |col| col.data().len() * 64,
             |val, output, ctx| {
                 let old_len = output.data.len();
                 output.data.resize(old_len + 64, 0);

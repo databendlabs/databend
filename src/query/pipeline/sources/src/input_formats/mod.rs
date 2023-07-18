@@ -20,7 +20,6 @@ mod input_format_text;
 mod input_pipeline;
 mod input_split;
 mod source_aligner;
-mod source_deserializer;
 mod transform_deserializer;
 
 pub use beyond_end_reader::BeyondEndReader;
@@ -33,5 +32,3 @@ pub use input_pipeline::StreamingReadBatch;
 pub use input_split::split_by_size;
 pub use input_split::SplitInfo;
 pub use source_aligner::Aligner;
-pub use source_deserializer::DeserializeSource;
-pub use transform_deserializer::DeserializeTransformer;

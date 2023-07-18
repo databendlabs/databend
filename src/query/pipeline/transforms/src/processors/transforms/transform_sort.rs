@@ -23,7 +23,7 @@ use super::transform_multi_sort_merge::try_add_multi_sort_merge;
 use super::transform_sort_merge::try_create_transform_sort_merge;
 use super::transform_sort_merge_limit::try_create_transform_sort_merge_limit;
 use super::TransformSortPartial;
-use crate::processors::ProfileWrapper;
+use crate::processors::profile_wrapper::ProcessorProfileWrapper;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_full_sort_pipeline(
@@ -43,7 +43,7 @@ pub fn build_full_sort_pipeline(
             let transform =
                 TransformSortPartial::try_create(input, output, limit, sort_desc.clone())?;
             if let Some((plan_id, prof)) = &prof_info {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
                     *plan_id,
                     prof.clone(),
@@ -54,6 +54,26 @@ pub fn build_full_sort_pipeline(
         })?;
     }
 
+    build_merge_sort_pipeline(
+        pipeline,
+        input_schema,
+        sort_desc,
+        limit,
+        partial_block_size,
+        final_block_size,
+        prof_info,
+    )
+}
+
+pub fn build_merge_sort_pipeline(
+    pipeline: &mut Pipeline,
+    input_schema: DataSchemaRef,
+    sort_desc: Vec<SortColumnDescription>,
+    limit: Option<usize>,
+    partial_block_size: usize,
+    final_block_size: usize,
+    prof_info: Option<(u32, SharedProcessorProfiles)>,
+) -> Result<()> {
     // Merge sort
     let need_multi_merge = pipeline.output_len() > 1;
     pipeline.add_transform(|input, output| {
@@ -78,7 +98,7 @@ pub fn build_full_sort_pipeline(
         };
 
         if let Some((plan_id, prof)) = &prof_info {
-            Ok(ProcessorPtr::create(ProfileWrapper::create(
+            Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                 transform,
                 *plan_id,
                 prof.clone(),

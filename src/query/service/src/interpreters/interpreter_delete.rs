@@ -17,15 +17,23 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::plan::Partitions;
 use common_catalog::table::DeletionFilters;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataBlock;
+use common_expression::RemoteExpr;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_meta_app::schema::TableInfo;
 use common_sql::executor::cast_expr_to_non_null_boolean;
+use common_sql::executor::DeleteFinal;
+use common_sql::executor::DeletePartial;
+use common_sql::executor::Exchange;
+use common_sql::executor::FragmentKind;
+use common_sql::executor::PhysicalPlan;
 use common_sql::optimizer::CascadesOptimizer;
 use common_sql::optimizer::HeuristicOptimizer;
 use common_sql::optimizer::SExpr;
@@ -42,7 +50,10 @@ use common_sql::ColumnBinding;
 use common_sql::MetadataRef;
 use common_sql::ScalarExpr;
 use common_sql::Visibility;
+use common_storages_factory::Table;
+use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
+use storages_common_table_meta::meta::TableSnapshot;
 use table_lock::TableLockHandlerWrapper;
 
 use crate::interpreters::Interpreter;
@@ -51,6 +62,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::DeletePlan;
@@ -79,6 +91,7 @@ impl Interpreter for DeleteInterpreter {
     #[tracing::instrument(level = "debug", name = "delete_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let is_distributed = !self.ctx.get_cluster().is_empty();
         let catalog_name = self.plan.catalog_name.as_str();
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
@@ -193,15 +206,43 @@ impl Interpreter for DeleteInterpreter {
             (None, vec![])
         };
 
+        let fuse_table =
+            tbl.as_any()
+                .downcast_ref::<FuseTable>()
+                .ok_or(ErrorCode::Unimplemented(format!(
+                    "table {}, engine type {}, does not support DELETE FROM",
+                    tbl.name(),
+                    tbl.get_table_info().engine(),
+                )))?;
+
         let mut build_res = PipelineBuildResult::create();
-        tbl.delete(
-            self.ctx.clone(),
-            filters,
-            col_indices,
-            !self.plan.subquery_desc.is_empty(),
-            &mut build_res.main_pipeline,
-        )
-        .await?;
+        let query_row_id_col = !self.plan.subquery_desc.is_empty();
+        if let Some((partitions, snapshot)) = fuse_table
+            .fast_delete(
+                self.ctx.clone(),
+                filters.clone(),
+                col_indices.clone(),
+                query_row_id_col,
+            )
+            .await?
+        {
+            // Safe to unwrap, because if filters is None, fast_delete will do truncate and return None.
+            let filter = filters.unwrap().filter;
+            let physical_plan = Self::build_physical_plan(
+                filter,
+                partitions,
+                fuse_table.get_table_info().clone(),
+                col_indices,
+                snapshot,
+                self.plan.catalog_name.clone(),
+                is_distributed,
+                query_row_id_col,
+            )?;
+
+            build_res =
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
+                    .await?;
+        }
 
         if build_res.main_pipeline.is_empty() {
             heartbeat.shutdown().await?;
@@ -217,6 +258,45 @@ impl Interpreter for DeleteInterpreter {
         }
 
         Ok(build_res)
+    }
+}
+
+impl DeleteInterpreter {
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_physical_plan(
+        filter: RemoteExpr<String>,
+        partitions: Partitions,
+        table_info: TableInfo,
+        col_indices: Vec<usize>,
+        snapshot: TableSnapshot,
+        catalog_name: String,
+        is_distributed: bool,
+        query_row_id_col: bool,
+    ) -> Result<PhysicalPlan> {
+        let mut root = PhysicalPlan::DeletePartial(Box::new(DeletePartial {
+            parts: partitions,
+            filter,
+            table_info: table_info.clone(),
+            catalog_name: catalog_name.clone(),
+            col_indices,
+            query_row_id_col,
+        }));
+
+        if is_distributed {
+            root = PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(root),
+                kind: FragmentKind::Merge,
+                keys: vec![],
+            });
+        }
+
+        Ok(PhysicalPlan::DeleteFinal(Box::new(DeleteFinal {
+            input: Box::new(root),
+            snapshot,
+            table_info,
+            catalog_name,
+        })))
     }
 }
 
@@ -246,7 +326,7 @@ pub async fn subquery_filter(
     let mock_bind_context = Box::new(BindContext::new());
     let heuristic_optimizer = HeuristicOptimizer::new(
         ctx.get_function_context()?,
-        mock_bind_context,
+        &mock_bind_context,
         metadata.clone(),
     );
     let mut expr = heuristic_optimizer.optimize_expression(&expr, &DEFAULT_REWRITE_RULES)?;

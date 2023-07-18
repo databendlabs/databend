@@ -91,8 +91,12 @@ impl AuthMgr {
                         _ => return Err(ErrorCode::AuthenticateFailure("wrong auth type")),
                     },
                     Err(e) => {
-                        if e.code() != ErrorCode::UNKNOWN_USER {
-                            return Err(ErrorCode::AuthenticateFailure(e.message()));
+                        match e.code() {
+                            ErrorCode::UNKNOWN_USER => {}
+                            ErrorCode::META_SERVICE_ERROR => {
+                                return Err(e);
+                            }
+                            _ => return Err(ErrorCode::AuthenticateFailure(e.message())),
                         }
                         let ensure_user = jwt
                             .custom
@@ -115,12 +119,11 @@ impl AuthMgr {
             Credential::Password {
                 name: n,
                 password: p,
-                hostname: h,
+                ..
             } => {
                 let tenant = session.get_current_tenant();
-                let user = user_api
-                    .get_user_with_client_ip(&tenant, n, h.as_ref().unwrap_or(&"%".to_string()))
-                    .await?;
+                let identity = UserIdentity::new(n, "%");
+                let user = user_api.get_user(&tenant, identity).await?;
                 let user = match &user.auth_info {
                     AuthInfo::None => user,
                     AuthInfo::Password {

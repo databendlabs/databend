@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use common_ast::ast::InsertSource;
@@ -19,6 +20,7 @@ use common_ast::ast::ReplaceStmt;
 use common_ast::ast::Statement;
 use common_exception::Result;
 use common_meta_app::principal::FileFormatOptionsAst;
+use common_meta_app::principal::OnErrorMode;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
@@ -30,7 +32,6 @@ use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::plans::Replace;
 use crate::BindContext;
-
 impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_replace(
@@ -98,11 +99,20 @@ impl Binder {
                     Ok(InsertInputSource::StreamingWithFormat(format, start, None))
                 }
             }
-            InsertSource::StreamingV2 { settings, start } => {
+            InsertSource::StreamingV2 {
+                settings,
+                on_error_mode,
+                start,
+            } => {
                 let params = FileFormatOptionsAst { options: settings }.try_into()?;
-                Ok(InsertInputSource::StreamingWithFileFormat(
-                    params, start, None,
-                ))
+                Ok(InsertInputSource::StreamingWithFileFormat {
+                    format: params,
+                    start,
+                    on_error_mode: OnErrorMode::from_str(
+                        &on_error_mode.unwrap_or("abort".to_string()),
+                    )?,
+                    input_context_option: None,
+                })
             }
             InsertSource::Values { rest_str } => {
                 let values_str = rest_str.trim_end_matches(';').trim_start().to_owned();

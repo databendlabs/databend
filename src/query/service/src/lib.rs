@@ -28,8 +28,9 @@
 #![feature(cursor_remaining)]
 #![feature(vec_into_raw_parts)]
 #![feature(associated_type_bounds)]
-#![feature(hash_drain_filter)]
 #![feature(io_error_other)]
+#![feature(hash_drain_filter)]
+#![feature(impl_trait_in_assoc_type)]
 
 extern crate core;
 

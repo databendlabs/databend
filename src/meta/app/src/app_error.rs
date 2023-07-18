@@ -43,6 +43,22 @@ impl DatabaseAlreadyExists {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("CatalogAlreadyExists: `{catalog_name}` while `{context}`")]
+pub struct CatalogAlreadyExists {
+    catalog_name: String,
+    context: String,
+}
+
+impl CatalogAlreadyExists {
+    pub fn new(catalog_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            catalog_name: catalog_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("DatamaskAlreadyExists: `{name}` while `{context}`")]
 pub struct DatamaskAlreadyExists {
     name: String,
@@ -683,6 +699,20 @@ impl DropIndexWithDropTime {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("GetIndexWithDropTime: get {index_name} with drop time")]
+pub struct GetIndexWithDropTime {
+    index_name: String,
+}
+
+impl GetIndexWithDropTime {
+    pub fn new(index_name: impl Into<String>) -> Self {
+        Self {
+            index_name: index_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("VirtualColumnAlreadyExists: `{table_id}` while `{context}`")]
 pub struct VirtualColumnAlreadyExists {
     table_id: u64,
@@ -745,6 +775,9 @@ pub enum AppError {
 
     #[error(transparent)]
     DatabaseAlreadyExists(#[from] DatabaseAlreadyExists),
+
+    #[error(transparent)]
+    CatalogAlreadyExists(#[from] CatalogAlreadyExists),
 
     #[error(transparent)]
     CreateDatabaseWithDropTime(#[from] CreateDatabaseWithDropTime),
@@ -829,6 +862,9 @@ pub enum AppError {
     DropIndexWithDropTime(#[from] DropIndexWithDropTime),
 
     #[error(transparent)]
+    GetIndexWithDropTIme(#[from] GetIndexWithDropTime),
+
+    #[error(transparent)]
     DatamaskAlreadyExists(#[from] DatamaskAlreadyExists),
 
     #[error(transparent)]
@@ -871,6 +907,12 @@ impl AppErrorMessage for UnknownDatabase {
 impl AppErrorMessage for DatabaseAlreadyExists {
     fn message(&self) -> String {
         format!("Database '{}' already exists", self.db_name)
+    }
+}
+
+impl AppErrorMessage for CatalogAlreadyExists {
+    fn message(&self) -> String {
+        format!("Catalog '{}' already exists", self.catalog_name)
     }
 }
 
@@ -1086,6 +1128,12 @@ impl AppErrorMessage for DropIndexWithDropTime {
     }
 }
 
+impl AppErrorMessage for GetIndexWithDropTime {
+    fn message(&self) -> String {
+        format!("Get Index '{}' with drop time", self.index_name)
+    }
+}
+
 impl AppErrorMessage for DatamaskAlreadyExists {
     fn message(&self) -> String {
         format!("Datamask '{}' already exists", self.name)
@@ -1130,6 +1178,7 @@ impl From<AppError> for ErrorCode {
             AppError::UnknownTableId(err) => ErrorCode::UnknownTableId(err.message()),
             AppError::UnknownTable(err) => ErrorCode::UnknownTable(err.message()),
             AppError::DatabaseAlreadyExists(err) => ErrorCode::DatabaseAlreadyExists(err.message()),
+            AppError::CatalogAlreadyExists(err) => ErrorCode::CatalogAlreadyExists(err.message()),
             AppError::CreateDatabaseWithDropTime(err) => {
                 ErrorCode::CreateDatabaseWithDropTime(err.message())
             }
@@ -1189,6 +1238,7 @@ impl From<AppError> for ErrorCode {
             AppError::IndexAlreadyExists(err) => ErrorCode::IndexAlreadyExists(err.message()),
             AppError::UnknownIndex(err) => ErrorCode::UnknownIndex(err.message()),
             AppError::DropIndexWithDropTime(err) => ErrorCode::DropIndexWithDropTime(err.message()),
+            AppError::GetIndexWithDropTIme(err) => ErrorCode::GetIndexWithDropTime(err.message()),
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDatamask(err) => ErrorCode::UnknownDatamask(err.message()),
 

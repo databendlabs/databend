@@ -186,7 +186,7 @@ function install_sccache {
 			arch="aarch64"
 			;;
 		esac
-		download_version="v0.4.1"
+		download_version="v0.5.3"
 		download_target="sccache-${download_version}-${arch}-unknown-linux-musl"
 		SCCACHE_RELEASE="https://github.com/mozilla/sccache/releases/"
 		curl -fLo sccache.tar.gz "${SCCACHE_RELEASE}/download/${download_version}/${download_target}.tar.gz"
@@ -583,10 +583,16 @@ if [[ "$AUTO_APPROVE" == "false" ]]; then
 	fi
 fi
 
-if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
+case "$PACKAGE_MANAGER" in
+apt-get)
 	"${PRE_COMMAND[@]}" apt-get update
 	install_pkg ca-certificates "$PACKAGE_MANAGER"
-fi
+	;;
+yum | dnf)
+	install_pkg epel-release "$PACKAGE_MANAGER"
+	;;
+*) ;;
+esac
 
 [[ "$INSTALL_PROFILE" == "true" ]] && update_path_and_profile
 

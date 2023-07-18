@@ -1,0 +1,98 @@
+statement ok
+DROP TABLE IF EXISTS agg_bitmap_test
+
+statement ok
+CREATE TABLE agg_bitmap_test(id Int, tag String, v Bitmap)
+
+statement ok
+INSERT INTO agg_bitmap_test(id, tag, v) VALUES(1, 'a', to_bitmap('0, 1')), (2, 'b', to_bitmap('0, 1, 2')), (3, 'c', to_bitmap('1, 3, 4'))
+
+query I
+SELECT bitmap_and_count(to_bitmap('1, 3, 5'))
+----
+3
+
+query I
+SELECT bitmap_or_count(to_bitmap('1, 3, 5'))
+----
+3
+
+query I
+SELECT bitmap_not_count(to_bitmap('1, 3, 5'))
+----
+3
+
+query I
+SELECT bitmap_xor_count(to_bitmap('1, 3, 5'))
+----
+3
+
+query I
+SELECT to_string(bitmap_union(to_bitmap('1, 3, 5')))
+----
+1,3,5
+
+query I
+SELECT to_string(bitmap_intersect(to_bitmap('1, 3, 5')))
+----
+1,3,5
+
+statement error
+SELECT bitmap_and_count('123')
+
+query IIIII rowsort
+SELECT id, bitmap_and_count(v), bitmap_or_count(v), bitmap_xor_count(v), bitmap_not_count(v) from agg_bitmap_test group by id
+----
+1 2 2 2 2
+2 3 3 3 3
+3 3 3 3 3
+
+query II rowsort
+SELECT id, to_string(bitmap_intersect(v)), to_string(bitmap_union(v)) from agg_bitmap_test group by id
+----
+1 0,1 0,1
+2 0,1,2 0,1,2
+3 1,3,4 1,3,4
+
+query II rowsort
+SELECT id, intersect_count('b', 'c')(v, tag) from agg_bitmap_test group by id
+----
+1 0
+2 3
+3 3
+
+query IIII
+SELECT bitmap_and_count(v), bitmap_or_count(v), bitmap_xor_count(v), bitmap_not_count(v) from agg_bitmap_test
+----
+1 5 4 0
+
+query II
+SELECT to_string(bitmap_intersect(v)), to_string(bitmap_union(v)) from agg_bitmap_test
+----
+1 0,1,2,3,4
+
+query I
+SELECT intersect_count(1, 2)(v, id) from agg_bitmap_test
+----
+2
+
+query I
+SELECT intersect_count('a', 'c')(v, tag) from agg_bitmap_test
+----
+1
+
+statement ok
+INSERT INTO agg_bitmap_test(id, v) VALUES(4, build_bitmap([]))
+
+query IIII
+SELECT bitmap_and_count(v), bitmap_or_count(v), bitmap_xor_count(v), bitmap_not_count(v) from agg_bitmap_test
+----
+0 5 4 0
+
+query II
+SELECT to_string(bitmap_intersect(v)), to_string(bitmap_union(v)) from agg_bitmap_test
+----
+(empty) 0,1,2,3,4
+
+statement ok
+DROP TABLE agg_bitmap_test

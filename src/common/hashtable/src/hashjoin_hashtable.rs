@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::alloc::Allocator;
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::marker::PhantomData;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -26,17 +24,15 @@ use super::traits::Keyable;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RowPtr {
-    pub chunk_index: usize,
-    pub row_index: usize,
-    pub marker: Option<MarkerKind>,
+    pub chunk_index: u32,
+    pub row_index: u32,
 }
 
 impl RowPtr {
-    pub fn new(chunk_index: usize, row_index: usize) -> Self {
+    pub fn new(chunk_index: u32, row_index: u32) -> Self {
         RowPtr {
             chunk_index,
             row_index,
-            marker: None,
         }
     }
 }
@@ -45,22 +41,6 @@ impl PartialEq for RowPtr {
     fn eq(&self, other: &Self) -> bool {
         self.chunk_index == other.chunk_index && self.row_index == other.row_index
     }
-}
-
-impl Eq for RowPtr {}
-
-impl Hash for RowPtr {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.chunk_index.hash(state);
-        self.row_index.hash(state);
-    }
-}
-
-#[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
-pub enum MarkerKind {
-    True,
-    False,
-    Null,
 }
 
 pub struct RawEntry<K> {
@@ -89,7 +69,7 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
             },
             atomic_pointers: std::ptr::null_mut(),
             hash_mask: capacity - 1,
-            phantom: PhantomData::default(),
+            phantom: PhantomData,
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())

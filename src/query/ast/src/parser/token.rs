@@ -289,6 +289,8 @@ pub enum TokenKind {
     //    reserved list.
     #[token("ALL", ignore(ascii_case))]
     ALL,
+    #[token("ALLOWED_IP_LIST", ignore(ascii_case))]
+    ALLOWED_IP_LIST,
     #[token("ADD", ignore(ascii_case))]
     ADD,
     #[token("AGGREGATING", ignore(ascii_case))]
@@ -303,6 +305,8 @@ pub enum TokenKind {
     SOME,
     #[token("ALTER", ignore(ascii_case))]
     ALTER,
+    #[token("ALWAYS", ignore(ascii_case))]
+    ALWAYS,
     #[token("ANALYZE", ignore(ascii_case))]
     ANALYZE,
     #[token("AND", ignore(ascii_case))]
@@ -329,6 +333,8 @@ pub enum TokenKind {
     BINARY,
     #[token("BITMAP", ignore(ascii_case))]
     BITMAP,
+    #[token("BLOCKED_IP_LIST", ignore(ascii_case))]
+    BLOCKED_IP_LIST,
     #[token("BOOL", ignore(ascii_case))]
     BOOL,
     #[token("BOOLEAN", ignore(ascii_case))]
@@ -385,6 +391,8 @@ pub enum TokenKind {
     COUNT,
     #[token("CREATE", ignore(ascii_case))]
     CREATE,
+    #[token("ATTACH", ignore(ascii_case))]
+    ATTACH,
     #[token("CREDENTIALS", ignore(ascii_case))]
     CREDENTIALS,
     #[token("CROSS", ignore(ascii_case))]
@@ -529,6 +537,8 @@ pub enum TokenKind {
     FUSE,
     #[token("GENERATE", ignore(ascii_case))]
     GENERATE,
+    #[token("GENERATED", ignore(ascii_case))]
+    GENERATED,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
@@ -643,6 +653,8 @@ pub enum TokenKind {
     NON_DISPLAY,
     #[token("NATURAL", ignore(ascii_case))]
     NATURAL,
+    #[token("NETWORK", ignore(ascii_case))]
+    NETWORK,
     #[token("NDJSON", ignore(ascii_case))]
     NDJSON,
     #[token("NO_PASSWORD", ignore(ascii_case))]
@@ -691,6 +703,8 @@ pub enum TokenKind {
     PIPELINE,
     #[token("PLAINTEXT_PASSWORD", ignore(ascii_case))]
     PLAINTEXT_PASSWORD,
+    #[token("POLICIES", ignore(ascii_case))]
+    POLICIES,
     #[token("POLICY", ignore(ascii_case))]
     POLICY,
     #[token("POSITION", ignore(ascii_case))]
@@ -715,6 +729,8 @@ pub enum TokenKind {
     RECORD_DELIMITER,
     #[token("REFERENCE_USAGE", ignore(ascii_case))]
     REFERENCE_USAGE,
+    #[token("REFRESH", ignore(ascii_case))]
+    REFRESH,
     #[token("REGEXP", ignore(ascii_case))]
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]
@@ -1151,6 +1167,7 @@ impl TokenKind {
             // | TokenKind::CHAR
             | TokenKind::CHARACTER
             | TokenKind::CREATE
+            | TokenKind::ATTACH
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FOR
@@ -1265,6 +1282,7 @@ impl TokenKind {
             | TokenKind::AS
             | TokenKind::BETWEEN
             | TokenKind::CREATE
+            | TokenKind::ATTACH
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FOR

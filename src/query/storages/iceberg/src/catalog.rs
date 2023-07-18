@@ -43,6 +43,8 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
@@ -61,6 +63,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -73,11 +77,13 @@ use common_storage::DataOperator;
 use futures::TryStreamExt;
 use opendal::Metakey;
 
+use crate::context::ICEBERG_CONTEXT;
 use crate::database::IcebergDatabase;
 
 pub const ICEBERG_CATALOG: &str = "iceberg";
 
 /// `Catalog` for a external iceberg storage
+///
 /// - Metadata of databases are saved in meta store
 /// - Instances of `Database` are created from reading subdirectories of
 ///    Iceberg table
@@ -86,8 +92,6 @@ pub const ICEBERG_CATALOG: &str = "iceberg";
 pub struct IcebergCatalog {
     /// name of this iceberg table
     name: String,
-    /// is this catalog flatten
-    flatten: bool,
     /// underlying storage access operator
     operator: DataOperator,
 }
@@ -95,7 +99,8 @@ pub struct IcebergCatalog {
 impl IcebergCatalog {
     /// create a new iceberg catalog from the endpoint_address
     ///
-    /// # NOTE:
+    /// # NOTE
+    ///
     /// endpoint_url should be set as in `Stage`s.
     /// For example, to create a iceberg catalog on S3, the endpoint_url should be:
     ///
@@ -107,10 +112,9 @@ impl IcebergCatalog {
     /// Such catalog will be seen as an `flatten` catalogs,
     /// a `default` database will be generated directly
     #[tracing::instrument(level = "debug", skip(operator))]
-    pub fn try_create(name: &str, flatten: bool, operator: DataOperator) -> Result<Self> {
+    pub fn try_create(name: &str, operator: DataOperator) -> Result<Self> {
         Ok(Self {
             name: name.to_string(),
-            flatten,
             operator,
         })
     }
@@ -119,13 +123,6 @@ impl IcebergCatalog {
     #[tracing::instrument(level = "debug", skip(self))]
     #[async_backtrace::framed]
     pub async fn list_database_from_read(&self) -> Result<Vec<Arc<dyn Database>>> {
-        if self.flatten {
-            // is flatten catalog, return `default` catalog
-            // with an operator points to it's root
-            return Ok(vec![Arc::new(
-                IcebergDatabase::create_database_omitted_default(&self.name, self.operator.clone()),
-            )]);
-        }
         let op = self.operator.operator();
         let mut dbs = vec![];
         let mut ls = op.list("/").await?;
@@ -152,19 +149,6 @@ impl Catalog for IcebergCatalog {
     #[tracing::instrument(level = "debug", skip(self))]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
-        if self.flatten {
-            // is flatten catalog, must return `default` catalog
-            if db_name != "default" {
-                return Err(ErrorCode::UnknownDatabase(format!(
-                    "Database {db_name} does not exist"
-                )));
-            }
-            let tbl: Arc<dyn Database> = Arc::new(
-                IcebergDatabase::create_database_omitted_default(&self.name, self.operator.clone()),
-            );
-            return Ok(tbl);
-        }
-
         let rel_path = format!("{db_name}/");
 
         let operator = self.operator.operator();
@@ -181,7 +165,7 @@ impl Catalog for IcebergCatalog {
             .map_root(|root| format!("{root}{rel_path}"));
         let db_root = DataOperator::try_create(&db_sp).await?;
 
-        Ok(Arc::new(IcebergDatabase::create_database_from_read(
+        Ok(Arc::new(IcebergDatabase::create(
             &self.name, db_name, db_root,
         )))
     }
@@ -211,8 +195,10 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
-    fn get_table_by_info(&self, _table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        unimplemented!()
+    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        ICEBERG_CONTEXT.get(&table_info.desc).ok_or_else(|| {
+            ErrorCode::UnknownTable(format!("Table {} does not exist", table_info.desc))
+        })
     }
 
     #[async_backtrace::framed]
@@ -363,6 +349,16 @@ impl Catalog for IcebergCatalog {
 
     #[async_backtrace::framed]
     async fn drop_index(&self, _req: DropIndexReq) -> Result<DropIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
         unimplemented!()
     }
 

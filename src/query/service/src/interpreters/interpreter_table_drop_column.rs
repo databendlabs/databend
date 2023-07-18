@@ -16,16 +16,16 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ComputedExpr;
-use common_expression::DataSchemaRefExt;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_sql::parse_computed_expr;
 use common_sql::plans::DropTableColumnPlan;
+use common_sql::BloomIndexColumns;
 use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
+use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
+use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -77,33 +77,29 @@ impl Interpreter for DropTableColumnInterpreter {
         let field = table_schema.field_with_name(self.plan.column.as_str())?;
         if field.computed_expr.is_none() {
             // Check if this column is referenced by computed columns.
-            let fields = table_schema
-                .fields()
-                .iter()
-                .filter(|f| f.name != self.plan.column)
-                .map(|f| f.into())
-                .collect::<Vec<_>>();
-            let schema = DataSchemaRefExt::create(fields);
-            for f in schema.fields() {
-                if let Some(computed_expr) = f.computed_expr() {
-                    let expr = match computed_expr {
-                        ComputedExpr::Stored(expr) => expr.clone(),
-                        ComputedExpr::Virtual(expr) => expr.clone(),
-                    };
-                    if parse_computed_expr(self.ctx.clone(), schema.clone(), &expr).is_err() {
-                        return Err(ErrorCode::ColumnReferencedByComputedColumn(format!(
-                            "column `{}` is referenced by computed column `{}`",
-                            &self.plan.column,
-                            &f.name()
-                        )));
-                    }
-                }
-            }
+            check_referenced_computed_columns(
+                self.ctx.clone(),
+                table_schema,
+                self.plan.column.as_str(),
+            )?;
         }
 
         let catalog = self.ctx.get_catalog(catalog_name)?;
         let mut new_table_meta = table.get_table_info().meta.clone();
         new_table_meta.drop_column(&self.plan.column)?;
+
+        // update table options
+        let opts = &mut new_table_meta.options;
+        if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
+            let bloom_index_cols = value.parse::<BloomIndexColumns>()?;
+            if let BloomIndexColumns::Specify(mut cols) = bloom_index_cols {
+                if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
+                    // remove from the bloom index columns.
+                    cols.remove(pos);
+                    *value = cols.join(",");
+                }
+            }
+        }
 
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;

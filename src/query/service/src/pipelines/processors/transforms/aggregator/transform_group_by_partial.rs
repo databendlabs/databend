@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::vec;
 
+use bumpalo::Bump;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -89,7 +90,8 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
-        let hashtable = method.create_hash_table()?;
+        let arena = Arc::new(Bump::new());
+        let hashtable = method.create_hash_table(arena)?;
         let _dropper = GroupByHashTableDropper::<Method>::create();
         let hash_table = HashTable::HashTable(HashTableCell::create(hashtable, _dropper));
 
@@ -158,21 +160,13 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                     if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table)
                     {
                         let _dropper = v._dropper.clone();
-                        let cells = PartitionedHashTableDropper::split_cell(v);
-                        let mut blocks = Vec::with_capacity(cells.len());
-                        for (bucket, cell) in cells.into_iter().enumerate() {
-                            if cell.hashtable.len() != 0 {
-                                blocks.push(DataBlock::empty_with_meta(
-                                    AggregateMeta::<Method, ()>::create_spilling(
-                                        bucket as isize,
-                                        cell,
-                                    ),
-                                ));
-                            }
-                        }
+                        let blocks = vec![DataBlock::empty_with_meta(
+                            AggregateMeta::<Method, ()>::create_spilling(v),
+                        )];
 
+                        let arena = Arc::new(Bump::new());
                         let method = PartitionedHashMethod::<Method>::create(self.method.clone());
-                        let new_hashtable = method.create_hash_table()?;
+                        let new_hashtable = method.create_hash_table(arena)?;
                         self.hash_table = HashTable::PartitionedHashTable(HashTableCell::create(
                             new_hashtable,
                             _dropper.unwrap(),

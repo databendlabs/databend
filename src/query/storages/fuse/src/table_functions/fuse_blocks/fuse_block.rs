@@ -67,29 +67,30 @@ impl<'a> FuseBlock<'a> {
     #[async_backtrace::framed]
     pub async fn get_blocks(&self) -> Result<DataBlock> {
         let tbl = self.table;
+        let snapshot_id = self.snapshot_id.clone();
         let maybe_snapshot = tbl.read_table_snapshot().await?;
         if let Some(snapshot) = maybe_snapshot {
-            if self.snapshot_id.is_none() {
-                return self.to_block(snapshot).await;
-            }
+            if let Some(snapshot_id) = snapshot_id {
+                // prepare the stream of snapshot
+                let snapshot_version = tbl.snapshot_format_version(None).await?;
+                let snapshot_location = tbl
+                    .meta_location_generator
+                    .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
+                let reader = MetaReaders::table_snapshot_reader(tbl.get_operator());
+                let mut snapshot_stream = reader.snapshot_history(
+                    snapshot_location,
+                    snapshot_version,
+                    tbl.meta_location_generator().clone(),
+                );
 
-            // prepare the stream of snapshot
-            let snapshot_version = tbl.snapshot_format_version(None).await?;
-            let snapshot_location = tbl
-                .meta_location_generator
-                .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
-            let reader = MetaReaders::table_snapshot_reader(tbl.get_operator());
-            let mut snapshot_stream = reader.snapshot_history(
-                snapshot_location,
-                snapshot_version,
-                tbl.meta_location_generator().clone(),
-            );
-
-            // find the element by snapshot_id in stream
-            while let Some((snapshot, _)) = snapshot_stream.try_next().await? {
-                if snapshot.snapshot_id.simple().to_string() == self.snapshot_id.clone().unwrap() {
-                    return self.to_block(snapshot).await;
+                // find the element by snapshot_id in stream
+                while let Some((snapshot, _)) = snapshot_stream.try_next().await? {
+                    if snapshot.snapshot_id.simple().to_string() == snapshot_id {
+                        return self.to_block(snapshot).await;
+                    }
                 }
+            } else {
+                return self.to_block(snapshot).await;
             }
         }
 
@@ -101,7 +102,7 @@ impl<'a> FuseBlock<'a> {
     #[async_backtrace::framed]
     async fn to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<DataBlock> {
         let limit = self.limit.unwrap_or(usize::MAX);
-        let len = std::cmp::min(snapshot.segments.len(), limit);
+        let len = std::cmp::min(snapshot.summary.block_count as usize, limit);
 
         let snapshot_id = snapshot.snapshot_id.simple().to_string().into_bytes();
         let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
@@ -118,26 +119,51 @@ impl<'a> FuseBlock<'a> {
             self.table.operator.clone(),
             self.table.schema(),
         );
-        let segments = segments_io
-            .read_segments::<Arc<SegmentInfo>>(&snapshot.segments[..len], true)
-            .await?;
-        for segment in segments {
-            let segment = segment?;
-            segment.blocks.iter().for_each(|block| {
-                let block = block.as_ref();
-                block_location.put_slice(block.location.0.as_bytes());
-                block_location.commit_row();
-                block_size.push(NumberScalar::UInt64(block.block_size));
-                file_size.push(NumberScalar::UInt64(block.file_size));
-                row_count.push(NumberScalar::UInt64(block.row_count));
-                bloom_filter_location.push(
-                    block
-                        .bloom_filter_index_location
-                        .as_ref()
-                        .map(|s| s.0.as_bytes().to_vec()),
-                );
-                bloom_filter_size.push(NumberScalar::UInt64(block.bloom_filter_index_size));
-            });
+
+        let mut row_num = 0;
+        let mut end_flag = false;
+        let chunk_size =
+            std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len);
+        for chunk in snapshot.segments.chunks(chunk_size) {
+            let segments = segments_io
+                .read_segments::<Arc<SegmentInfo>>(chunk, true)
+                .await?;
+            for segment in segments {
+                let segment = segment?;
+
+                let block_count = segment.summary.block_count as usize;
+                let take_num = if row_num + block_count >= len {
+                    end_flag = true;
+                    len - row_num
+                } else {
+                    row_num += block_count;
+                    block_count
+                };
+
+                segment.blocks.iter().take(take_num).for_each(|block| {
+                    let block = block.as_ref();
+                    block_location.put_slice(block.location.0.as_bytes());
+                    block_location.commit_row();
+                    block_size.push(NumberScalar::UInt64(block.block_size));
+                    file_size.push(NumberScalar::UInt64(block.file_size));
+                    row_count.push(NumberScalar::UInt64(block.row_count));
+                    bloom_filter_location.push(
+                        block
+                            .bloom_filter_index_location
+                            .as_ref()
+                            .map(|s| s.0.as_bytes().to_vec()),
+                    );
+                    bloom_filter_size.push(NumberScalar::UInt64(block.bloom_filter_index_size));
+                });
+
+                if end_flag {
+                    break;
+                }
+            }
+
+            if end_flag {
+                break;
+            }
         }
 
         Ok(DataBlock::new(

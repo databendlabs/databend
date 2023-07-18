@@ -21,6 +21,7 @@ use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
 use http::header::AUTHORIZATION;
+use http::HeaderMap;
 use http::HeaderValue;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
@@ -33,7 +34,7 @@ use poem::Middleware;
 use poem::Request;
 use poem::Response;
 use tracing::error;
-use tracing::info;
+use tracing::warn;
 
 use super::v1::HttpQueryContext;
 use crate::auth::AuthMgr;
@@ -41,6 +42,9 @@ use crate::auth::Credential;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
+
+const DEDUPLICATE_LABEL: &str = "X-DATABEND-DEDUPLICATE-LABEL";
+
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
     pub auth_manager: Arc<AuthMgr>,
@@ -155,6 +159,7 @@ pub struct HTTPSessionEndpoint<E> {
     pub kind: HttpHandlerKind,
     pub auth_manager: Arc<AuthMgr>,
 }
+
 impl<E> HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
     async fn auth(&self, req: &Request) -> Result<HttpQueryContext> {
@@ -171,7 +176,12 @@ impl<E> HTTPSessionEndpoint<E> {
             .auth(ctx.get_current_session(), &credential)
             .await?;
 
-        Ok(HttpQueryContext::new(session))
+        let deduplicate_label = req
+            .headers()
+            .get(DEDUPLICATE_LABEL)
+            .map(|id| id.to_str().unwrap().to_string());
+
+        Ok(HttpQueryContext::new(session, deduplicate_label))
     }
 }
 #[poem::async_trait]
@@ -180,21 +190,42 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 
     #[async_backtrace::framed]
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
-        // method, url, version, header
-        info!("receive http handler request: {req:?},");
+        let method = req.method().clone();
+        let uri = req.uri().clone();
+        let headers = req.headers().clone();
+
         let res = match self.auth(&req).await {
             Ok(ctx) => {
                 req.extensions_mut().insert(ctx);
                 self.ep.call(req).await
             }
-            Err(err) => Err(PoemError::from_string(
-                err.message(),
-                StatusCode::UNAUTHORIZED,
-            )),
+            Err(err) => match err.code() {
+                ErrorCode::AUTHENTICATE_FAILURE => {
+                    warn!(
+                        "http auth failure: {method} {uri}, headers={:?}, error={}",
+                        sanitize_request_headers(&headers),
+                        err
+                    );
+                    Err(PoemError::from_string(
+                        err.message(),
+                        StatusCode::UNAUTHORIZED,
+                    ))
+                }
+                _ => {
+                    error!(
+                        "http request err: {method} {uri}, headers={:?}, error={}",
+                        sanitize_request_headers(&headers),
+                        err
+                    );
+                    Err(PoemError::from_string(
+                        err.message(),
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    ))
+                }
+            },
         };
         match res {
             Err(err) => {
-                error!("http request error: {}", err);
                 let body = Body::from_json(serde_json::json!({
                     "error": {
                         "code": err.status().as_str(),
@@ -207,4 +238,19 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
             Ok(res) => Ok(res.into_response()),
         }
     }
+}
+
+pub fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<String, String> {
+    let sensitive_headers = vec!["authorization", "x-clickhouse-key", "cookie"];
+    headers
+        .iter()
+        .map(|(k, v)| {
+            let k = k.as_str().to_lowercase();
+            if sensitive_headers.contains(&k.as_str()) {
+                (k, "******".to_string())
+            } else {
+                (k, v.to_str().unwrap_or_default().to_string())
+            }
+        })
+        .collect()
 }

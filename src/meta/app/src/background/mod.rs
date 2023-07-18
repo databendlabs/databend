@@ -29,6 +29,7 @@ pub use background_job::DeleteBackgroundJobReq;
 pub use background_job::GetBackgroundJobReply;
 pub use background_job::GetBackgroundJobReq;
 pub use background_job::ListBackgroundJobsReq;
+pub use background_job::ManualTriggerParams;
 pub use background_job::UpdateBackgroundJobParamsReq;
 pub use background_job::UpdateBackgroundJobReply;
 pub use background_job::UpdateBackgroundJobReq;

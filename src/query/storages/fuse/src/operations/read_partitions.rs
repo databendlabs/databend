@@ -63,6 +63,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
         let snapshot = self.read_table_snapshot().await?;
@@ -76,10 +77,7 @@ impl FuseTable {
                     .meta_location_generator
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
 
-                let settings = ctx.get_settings();
-                if (settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty())
-                    || is_lazy
-                {
+                if !dry_run || is_lazy {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
@@ -167,8 +165,14 @@ impl FuseTable {
             }
         }
 
-        let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
-            FusePruner::create(&ctx, dal.clone(), table_info.schema(), &push_downs)?
+        let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
+            FusePruner::create(
+                &ctx,
+                dal.clone(),
+                table_info.schema(),
+                &push_downs,
+                self.bloom_index_cols(),
+            )?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
 
@@ -179,10 +183,11 @@ impl FuseTable {
                 &push_downs,
                 self.cluster_key_meta.clone(),
                 cluster_keys,
+                self.bloom_index_cols(),
             )?
         };
 
-        let block_metas = pruner.pruning(segments_location).await?;
+        let block_metas = pruner.read_pruning(segments_location).await?;
         let pruning_stats = pruner.pruning_stats();
 
         info!(
@@ -553,7 +558,7 @@ impl FuseTable {
 
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
-        let format_version = meta.location.1;
+        let create_on = meta.create_on;
 
         let sort_min_max = top_k.as_ref().map(|top_k| {
             let stat = meta.col_stats.get(&top_k.column_id).unwrap();
@@ -562,13 +567,13 @@ impl FuseTable {
 
         FusePartInfo::create(
             location,
-            format_version,
             rows_count,
             columns_meta,
             virtual_columns_meta,
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
+            create_on,
         )
     }
 
@@ -594,7 +599,7 @@ impl FuseTable {
 
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
-        let format_version = meta.location.1;
+        let create_on = meta.create_on;
 
         let sort_min_max = top_k.and_then(|top_k| {
             let stat = meta.col_stats.get(&top_k.column_id);
@@ -606,13 +611,13 @@ impl FuseTable {
         // not the count the rows in this partition
         FusePartInfo::create(
             location,
-            format_version,
             rows_count,
             columns_meta,
             virtual_columns_meta,
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
+            create_on,
         )
     }
 }

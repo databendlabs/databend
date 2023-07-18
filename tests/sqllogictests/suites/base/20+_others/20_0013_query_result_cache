@@ -33,6 +33,16 @@ a
 b
 c
 
+query I
+SELECT count(*) FROM t1;
+----
+3
+
+query I
+select block_count as c from fuse_snapshot('db20_13','t1') order by c;
+----
+1
+
 statement ok
 SET enable_query_result_cache = 1;
 
@@ -58,6 +68,36 @@ SELECT * FROM t1, t2 ORDER BY a, b;
 3 b
 3 c
 
+# The explain results of cache reading are the same in both standalone and cluster modes.
+query T
+EXPLAIN SELECT * FROM t1 ORDER BY a;
+----
+ReadQueryResultCache
+├── SQL: SELECT * FROM t1 ORDER BY a
+├── Number of rows: 3
+└── Result size: 12
+
+query T
+EXPLAIN SELECT * FROM t1, t2 ORDER BY a, b;
+----
+ReadQueryResultCache
+├── SQL: SELECT * FROM t1, t2 ORDER BY a, b
+├── Number of rows: 9
+└── Result size: 125
+
+
+
+# Not cached
+query I
+SELECT count(*) FROM t1;
+----
+3
+
+query I
+select block_count as c from fuse_snapshot('db20_13','t1') order by c;
+----
+1
+
 # Read cache
 
 query I
@@ -80,10 +120,34 @@ SELECT * FROM t1, t2 ORDER BY a, b;
 3 b
 3 c
 
+# Not cached
+query I
+SELECT count(*) FROM t1;
+----
+3
+
+query I
+select block_count as c from fuse_snapshot('db20_13','t1') order by c;
+----
+1
+
+
 # Insert new data
 
 statement ok
 INSERT INTO t1 VALUES (4), (5), (6);
+
+# Not cached
+query I
+SELECT count(*) FROM t1;
+----
+6
+
+query I
+select block_count as c from fuse_snapshot('db20_13','t1') order by c;
+----
+1
+2
 
 statement ok
 SET enable_query_result_cache = 0;
@@ -119,6 +183,18 @@ SELECT * FROM t1, t2 ORDER BY a, b;
 6 a
 6 b
 6 c
+
+# Not cached
+query I
+SELECT count(*) FROM t1;
+----
+6
+
+query I
+select block_count as c from fuse_snapshot('db20_13','t1') order by c;
+----
+1
+2
 
 # tolerate inconsistent result cache
 
@@ -198,6 +274,42 @@ DROP TABLE t1;
 
 statement ok
 DROP TABLE t2;
+
+# ISSUE 11870
+
+statement ok
+create table ab(a int null, b double null);
+
+statement ok
+insert into ab values( 1, 2.3 ), ( 1, 3.3 )
+
+statement ok
+create table a(a int null)
+
+statement ok
+insert into a values( 1 ), ( 2 )
+
+statement ok
+SET enable_query_result_cache = 1;
+
+query I
+select 3, a as price from a union all select a, b from ab order by price
+----
+3 1.0
+3 2.0
+1 2.3
+1 3.3
+
+query I
+select 3, a as price from a union all select a, b from ab order by price
+----
+3 1.0
+3 2.0
+1 2.3
+1 3.3
+
+statement ok
+SET enable_query_result_cache = 0;
 
 statement ok
 DROP DATABASE db20_13;

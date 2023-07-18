@@ -19,6 +19,10 @@ use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateExpand;
+use super::CopyIntoTableFromQuery;
+use super::DeleteFinal;
+use super::DeletePartial;
+use super::DistributedCopyIntoTableFromStage;
 use super::DistributedInsertSelect;
 use super::ProjectSet;
 use super::RowFetch;
@@ -74,9 +78,17 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ExchangeSink(sink) => write!(f, "{}", sink)?,
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
+            PhysicalPlan::DeletePartial(delete) => write!(f, "{}", delete)?,
+            PhysicalPlan::DeleteFinal(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::DistributedCopyIntoTableFromStage(copy_into_table_from_stage) => {
+                write!(f, "{}", copy_into_table_from_stage)?
+            }
+            PhysicalPlan::CopyIntoTableFromQuery(copy_into_table_from_query) => {
+                write!(f, "{}", copy_into_table_from_query)?
+            }
         }
 
         for node in self.node.children() {
@@ -343,6 +355,29 @@ impl Display for UnionAll {
 impl Display for DistributedInsertSelect {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DistributedInsertSelect")
+    }
+}
+
+impl Display for DeletePartial {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DeletePartial")
+    }
+}
+
+impl Display for DeleteFinal {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DeleteFinal")
+    }
+}
+impl Display for DistributedCopyIntoTableFromStage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DistributedCopyIntoTableFromStage")
+    }
+}
+
+impl Display for CopyIntoTableFromQuery {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CopyIntoTableFromQuery")
     }
 }
 

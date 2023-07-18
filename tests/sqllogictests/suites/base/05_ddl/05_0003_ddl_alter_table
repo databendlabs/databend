@@ -8,6 +8,12 @@ statement ok
 DROP TABLE IF EXISTS `05_0003_at_t1`
 
 statement ok
+DROP TABLE IF EXISTS `05_0003_at_t2`
+
+statement ok
+DROP TABLE IF EXISTS `05_0003_at_t3`
+
+statement ok
 CREATE TABLE `05_0003_at_t0`(a int)
 
 statement ok
@@ -72,3 +78,33 @@ SELECT b FROM `05_0003_at_t2`
 
 statement ok
 DROP TABLE IF EXISTS `05_0003_at_t2`
+
+statement ok
+set hide_options_in_show_create_table=0
+
+statement ok
+CREATE TABLE `05_0003_at_t3`(a int, b int, c int) bloom_index_columns='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
+
+query TT
+SHOW CREATE TABLE `05_0003_at_t3`
+----
+05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT,   `b` INT,   `c` INT ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
+
+statement ok
+ALTER TABLE `05_0003_at_t3` drop column c
+
+query TT
+SHOW CREATE TABLE `05_0003_at_t3`
+----
+05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT,   `b` INT ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b' COMPRESSION='zstd' STORAGE_FORMAT='native'
+
+statement ok
+ALTER TABLE `05_0003_at_t3` rename column b to c
+
+query TT
+SHOW CREATE TABLE `05_0003_at_t3`
+----
+05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT,   `c` INT ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
+
+statement ok
+DROP TABLE IF EXISTS `05_0003_at_t3`
