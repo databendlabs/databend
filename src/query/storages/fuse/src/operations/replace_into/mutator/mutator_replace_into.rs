@@ -74,31 +74,7 @@ impl ReplaceIntoMutator {
 
         match Self::build_column_hash(&column_values, &mut self.key_saw, num_rows)? {
             ColumnHash::NoConflict(key_hashes) => {
-                let has_scalar = data_block
-                    .columns()
-                    .iter()
-                    .any(|entry| matches!(entry.value, Value::Scalar(_)));
-
-                // convert to full block if necessary
-                let full_block;
-                let data_block = if has_scalar {
-                    full_block = data_block.convert_to_full();
-                    &full_block
-                } else {
-                    data_block
-                };
-
-                let columns = data_block
-                    .columns()
-                    .iter()
-                    .map(|entry| {
-                        // we have checked(or converted if necessary) that there is no scalar in the entry
-                        // so we can safely unwrap here.
-                        entry.value.as_column().unwrap()
-                    })
-                    .collect::<Vec<_>>();
-
-                let columns_min_max = Self::columns_min_max(&columns, num_rows)?;
+                let columns_min_max = Self::columns_min_max(&column_values, num_rows)?;
                 let delete_action = DeletionByColumn {
                     columns_min_max,
                     key_hashes,
@@ -160,11 +136,20 @@ impl ReplaceIntoMutator {
         ))
     }
 
-    fn columns_min_max(columns: &[&Column], num_rows: usize) -> Result<Vec<(Scalar, Scalar)>> {
+    fn columns_min_max(
+        columns: &[&Value<AnyType>],
+        num_rows: usize,
+    ) -> Result<Vec<(Scalar, Scalar)>> {
         let mut res = Vec::with_capacity(columns.len());
         for column in columns {
-            let min = Self::eval((*column).clone(), num_rows, "min")?;
-            let max = Self::eval((*column).clone(), num_rows, "max")?;
+            let (min, max) = match column {
+                Value::Scalar(s) => (s.clone(), s.clone()),
+                Value::Column(c) => {
+                    let min = Self::eval((*c).clone(), num_rows, "min")?;
+                    let max = Self::eval((*c).clone(), num_rows, "max")?;
+                    (min, max)
+                }
+            };
             res.push((min, max));
         }
         Ok(res)
@@ -247,8 +232,10 @@ mod tests {
 
     #[test]
     fn test_column_min_max() -> Result<()> {
-        let column1 = StringType::from_data(vec!["a", "b", "c", "d", "c", "b", "a"]);
-        let column2 = NumberType::<u8>::from_data(vec![5, 3, 2, 1, 2, 3, 5]);
+        let column1 = Value::Column(StringType::from_data(vec![
+            "a", "b", "c", "d", "c", "b", "a",
+        ]));
+        let column2 = Value::Column(NumberType::<u8>::from_data(vec![5, 3, 2, 1, 2, 3, 5]));
         let columns = [&column1, &column2];
         let num_rows = 2;
         let min_max_pairs = ReplaceIntoMutator::columns_min_max(&columns, num_rows)?;
