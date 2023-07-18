@@ -14,7 +14,6 @@
 
 use std::convert::TryFrom;
 use std::sync::Arc;
-use std::time::Instant;
 
 use async_channel::Receiver;
 use common_catalog::table::AppendMode;
@@ -87,7 +86,6 @@ use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use common_storages_stage::StageTable;
 use petgraph::matrix_graph::Zero;
-use tracing::info;
 
 use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
@@ -177,11 +175,6 @@ impl PipelineBuilder {
         })
     }
 
-    fn set_status(&self, status: &str) {
-        self.ctx.set_status_info(status);
-        info!(status);
-    }
-
     fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
@@ -219,7 +212,6 @@ impl PipelineBuilder {
     fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
         let catalog = self.ctx.get_catalog(&copy.catalog_name)?;
         let to_table = catalog.get_table_by_info(&copy.table_info)?;
-        let file_sizes: u64 = copy.files.iter().map(|f| f.size).sum();
         match &copy.source {
             CopyIntoTableSource::Query(input) => {
                 self.build_pipeline(input)?;
@@ -230,12 +222,6 @@ impl PipelineBuilder {
                 stage_table.read_data(self.ctx.clone(), source, &mut self.main_pipeline)?;
             }
         }
-        self.set_status(&format!(
-            "Copy begin to append data: {} files, size_in_bytes:{} into table",
-            copy.files.len(),
-            file_sizes
-        ));
-        let start = Instant::now();
         build_append_data_pipeline(
             self.ctx.clone(),
             &mut self.main_pipeline,
@@ -243,10 +229,6 @@ impl PipelineBuilder {
             copy.required_source_schema.clone(),
             to_table,
         )?;
-        self.set_status(&format!(
-            "Copy append data finished, cost:{} secs",
-            start.elapsed().as_secs()
-        ));
         Ok(())
     }
 

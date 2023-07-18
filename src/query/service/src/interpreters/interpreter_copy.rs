@@ -186,7 +186,7 @@ impl CopyInterpreter {
             files: files.clone(),
             source,
         }));
-        if plan.enable_distributed {
+        if plan.enable_distributed && plan.query.is_none() {
             root = PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: Box::new(root),
