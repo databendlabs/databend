@@ -69,7 +69,7 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
 
         Ok(GroupBySettings {
             convert_threshold,
-            max_memory_usage: match max_memory_usage == 0 {
+            max_memory_usage: match max_memory_usage == 0.0 {
                 true => usize::MAX,
                 false => (max_memory_usage * 0.6) as usize,
             },
