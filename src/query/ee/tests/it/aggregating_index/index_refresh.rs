@@ -185,6 +185,9 @@ async fn test_index_refresh() -> Result<()> {
 
     // check the new added index is correct.
     {
+        let agg_index_path = find_agg_index_path(&root, index_id)?.unwrap();
+        let indexes = collect_file_names(&agg_index_path)?;
+
         let pre_agg_index = indexes[0].clone();
         let mut indexes = collect_file_names(&agg_index_path)?;
         assert_eq!(blocks, indexes);
