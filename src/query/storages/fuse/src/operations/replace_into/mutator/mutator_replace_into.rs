@@ -27,7 +27,7 @@ use common_functions::aggregates::eval_aggr;
 use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
-use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns_new;
+use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::OnConflictField;
 
 // Replace is somehow a simplified merge_into, which
@@ -114,7 +114,7 @@ impl ReplaceIntoMutator {
     ) -> Result<ColumnHash> {
         let mut digests = HashSet::new();
         for row_idx in 0..num_rows {
-            let hash = row_hash_of_columns_new(column_values, row_idx);
+            let hash = row_hash_of_columns(column_values, row_idx);
             if saw.contains(&hash) {
                 return Ok(ColumnHash::Conflict(row_idx));
             }
