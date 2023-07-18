@@ -62,6 +62,7 @@ impl ReplaceIntoMutator {
     ) -> Result<MergeIntoOperation> {
         let num_rows = data_block.num_rows();
         let mut columns = Vec::with_capacity(self.on_conflict_fields.len());
+        let data_block = data_block.convert_to_full();
         for field in &self.on_conflict_fields {
             let filed_index = field.field_index;
             let entry = &data_block.columns()[filed_index];
