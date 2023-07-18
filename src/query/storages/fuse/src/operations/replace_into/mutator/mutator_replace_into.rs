@@ -46,7 +46,7 @@ impl ReplaceIntoMutator {
 
 enum ColumnHash {
     NoConflict(HashSet<UniqueKeyDigest>),
-    Conflict,
+    Conflict(String),
 }
 
 impl ReplaceIntoMutator {
@@ -69,7 +69,12 @@ impl ReplaceIntoMutator {
             let column = entry.value.as_column().unwrap();
             columns.push(column);
         }
-        match Self::build_column_hash(&columns, &mut self.key_saw, num_rows)? {
+        match Self::build_column_hash(
+            &self.on_conflict_fields,
+            &columns,
+            &mut self.key_saw,
+            num_rows,
+        )? {
             ColumnHash::NoConflict(key_hashes) => {
                 let columns_min_max = Self::columns_min_max(&columns, num_rows)?;
                 let delete_action = DeletionByColumn {
@@ -78,13 +83,15 @@ impl ReplaceIntoMutator {
                 };
                 Ok(MergeIntoOperation::Delete(delete_action))
             }
-            ColumnHash::Conflict => Err(ErrorCode::StorageOther(
-                "duplicated data detected in merge source",
-            )),
+            ColumnHash::Conflict(conflict_description) => Err(ErrorCode::StorageOther(format!(
+                "duplicated data detected in the values being replaced into (only the first one will be described): {}",
+                conflict_description
+            ))),
         }
     }
 
     fn build_column_hash(
+        on_conflict_fields: &[OnConflictField],
         columns: &[&Column],
         saw: &mut HashSet<UniqueKeyDigest>,
         num_rows: usize,
@@ -93,7 +100,24 @@ impl ReplaceIntoMutator {
         for row_idx in 0..num_rows {
             let hash = row_hash_of_columns(columns, row_idx);
             if saw.contains(&hash) {
-                return Ok(ColumnHash::Conflict);
+                let message = {
+                    let conflicts = columns
+                        .iter()
+                        .zip(on_conflict_fields.iter())
+                        .map(|(col, field)| {
+                            let col_name = &field.table_field.name;
+                            // during previous `row_hash_of_columns`
+                            // if col.index(row_idx) is None, an exception will already be thrown
+                            let col_value = col.index(row_idx).unwrap().to_string();
+                            format!("\"{}\":{}", col_name, col_value)
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ");
+
+                    format!("at row {}, [{}]", row_idx, conflicts)
+                };
+
+                return Ok(ColumnHash::Conflict(message));
             }
             saw.insert(hash);
             digests.insert(hash);
