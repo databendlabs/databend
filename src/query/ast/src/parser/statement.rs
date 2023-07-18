@@ -2299,6 +2299,18 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, role)| UserOptionItem::DefaultRole(role),
     );
+    let set_network_policy = map(
+        rule! {
+            SET ~ "NETWORK_POLICY" ~ "=" ~ #literal_string
+        },
+        |(_, _, _, policy)| UserOptionItem::SetNetworkPolicy(policy),
+    );
+    let unset_network_policy = map(
+        rule! {
+            UNSET ~ "NETWORK_POLICY"
+        },
+        |(_, _)| UserOptionItem::UnsetNetworkPolicy,
+    );
     alt((
         value(UserOptionItem::TenantSetting(true), rule! { TENANTSETTING }),
         value(
@@ -2306,6 +2318,8 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
             rule! { NOTENANTSETTING },
         ),
         default_role_option,
+        set_network_policy,
+        unset_network_policy,
     ))(i)
 }
 
