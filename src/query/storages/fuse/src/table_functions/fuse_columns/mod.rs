@@ -12,19 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clustering_information;
-mod execute_job;
-mod fuse_block;
 mod fuse_column;
-mod fuse_segment;
-mod fuse_snapshot;
-mod search_tables;
-mod system;
+mod fuse_column_table;
 
-pub use clustering_information::ClusteringInformationProcedure;
-pub use fuse_block::FuseBlockProcedure;
-pub use fuse_column::FuseColumnProcedure;
-pub use fuse_segment::FuseSegmentProcedure;
-pub use fuse_snapshot::FuseSnapshotProcedure;
-pub use search_tables::SearchTablesProcedure;
-pub use system::SystemProcedure;
+pub use fuse_column::FuseColumn;
+pub use fuse_column_table::FuseColumnTable;
