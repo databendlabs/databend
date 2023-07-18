@@ -742,6 +742,10 @@ pub struct CopyIntoTableFromQuery {
     pub required_values_schema: DataSchemaRef, // ... into table(<columns>) ..  -> <columns>
     pub values_consts: Vec<Scalar>,            // (1, ?, 'a', ?) -> (1, 'a')
     pub required_source_schema: DataSchemaRef, // (1, ?, 'a', ?) -> (?, ?)
+    // these three fileds are used for query result render
+    pub query_source_schema: DataSchemaRef,
+    pub ignore_result: bool,
+    pub result_columns: Vec<ColumnBinding>,
 
     pub write_mode: CopyIntoTableMode,
     pub validation_mode: ValidationMode,

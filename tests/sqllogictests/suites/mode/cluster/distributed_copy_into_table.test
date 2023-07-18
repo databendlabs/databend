@@ -2,6 +2,15 @@ statement ok
 set enable_distributed_copy_into = 1;
 
 statement ok
+drop table if exists test_order;
+
+statement ok
+drop table if exists random_source;
+
+statement ok
+drop stage if exists test_stage;
+
+statement ok
 drop table if exists parquet_table;
 
 statement ok
@@ -165,6 +174,27 @@ query I
 select block_count from fuse_snapshot('default','t_query2');
 ----
 2
+
+#test cluster key
+statement ok
+create table test_order(a int,b string,c timestamp) cluster by(to_yyyymmdd(c),a);
+
+statement ok
+create table random_source like test_order Engine = Random;
+
+statement ok
+create stage test_stage;
+
+statement ok
+copy into @test_stage from (select * from random_source limit 10000000) FILE_FORMAT=(type=parquet);
+
+statement ok
+copy into test_order from @test_stage file_format=(type=parquet) force=true;
+
+query I
+select count(*) from test_order;
+----
+10000000
 
 statement ok
 set enable_distributed_copy_into = 0;

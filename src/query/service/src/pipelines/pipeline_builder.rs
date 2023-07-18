@@ -220,13 +220,21 @@ impl PipelineBuilder {
         copy_plan: &CopyIntoTableFromQuery,
     ) -> Result<()> {
         self.build_pipeline(&copy_plan.input)?;
+        // render_result for query
+        PipelineBuilder::render_result_set(
+            &self.ctx.get_function_context()?,
+            copy_plan.input.output_schema()?,
+            &copy_plan.result_columns,
+            &mut self.main_pipeline,
+            copy_plan.ignore_result,
+        )?;
         let catalog = self.ctx.get_catalog(&copy_plan.catalog_name)?;
         let to_table = catalog.get_table_by_info(&copy_plan.table_info)?;
         build_append_data_pipeline(
             self.ctx.clone(),
             &mut self.main_pipeline,
             CopyPlanType::CopyIntoTableFromQuery(copy_plan.clone()),
-            copy_plan.required_source_schema.clone(),
+            copy_plan.query_source_schema.clone(),
             to_table,
         )?;
         Ok(())
