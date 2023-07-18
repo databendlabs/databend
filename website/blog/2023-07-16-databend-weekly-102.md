@@ -41,7 +41,7 @@ Stay connected with the latest news about Databend.
 
 ### Creating Bloom Indexes for Specified Columns
 
-Creating a bloom index consumes a lot of CPU resources. For wide tables where only a few columns may require point queries or data ingestion performance is more important, creating bloom indexes for all columns may not be a good idea.
+Creating bloom indexes consumes a significant amount of CPU resources. For wide tables, where only a few columns may require point queries or data ingestion performance is more important, creating bloom indexes for all columns may not be a good idea.
 
 The `bloom_index_columns` option was introduced to the Databend [Fuse Engine](https://databend.rs/doc/sql-reference/table-engines/fuse), allowing you to specify which columns you want to create bloom indexes for.
 
