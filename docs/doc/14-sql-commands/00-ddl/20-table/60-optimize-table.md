@@ -59,14 +59,19 @@ FROM
 ```
 
 **Syntax**
+
 ```sql
 OPTIMIZE TABLE [database.]table_name COMPACT SEGMENT [LIMIT <segment_count>]    
 ```
 
 Compacts the table data by merging small segments into larger ones.
+
 - The option LIMIT sets the maximum number of segments to be compacted. In this case, Databend will select and compact the latest segments.
 
+- Databend will automatically re-cluster the table after the compacting process.
+
 **Example**
+
 ```sql
 -- Check whether need segment compact
 SELECT
@@ -140,9 +145,14 @@ We recommend performing segment compaction first, followed by block compaction.
 OPTIMIZE TABLE [database.]table_name COMPACT [LIMIT <segment_count>]    
 ```
 Compacts the table data by merging small blocks and segments into larger ones.
+
 - This command creates a new snapshot (along with compacted segments and blocks) of the most recent table data without affecting the existing storage files, so the storage space won't be released until you purge the historical data.
+
 - Depending on the size of the given table, it may take quite a while to complete the execution.
+
 - The option LIMIT sets the maximum number of segments to be compacted. In this case, Databend will select and compact the latest segments.
+
+- Databend will automatically re-cluster the table after the compacting process.
 
 **Example**
 ```sql
@@ -151,9 +161,10 @@ OPTIMIZE TABLE my_database.my_table COMPACT LIMIT 50;
 
 ## Purging
 
-Purging permanently removes historical data, including unused snapshots, segments, and blocks, from your storage. 
-It can save storage space but may affect the Time Travel feature. Consider purging when:
+Purging permanently removes historical data, including unused snapshots, segments, and blocks, from your storage. Only the latest snapshot (including the segments and blocks referenced by this snapshot) will be kept. This can save storage space but may affect the Time Travel feature. Consider purging when:
+
 - The storage cost is a major concern, and you don't require historical data for Time Travel or other purposes.
+
 - You've compacted your table and want to remove older, unused data.
 
 :::note
@@ -163,25 +174,19 @@ Historical data within the default retention period of 12 hours will not be remo
 **Syntax**
 
 ```sql
--- Purge historical data
-OPTIMIZE TABLE [database.]table_name PURGE
-
--- Purge historical data generated before a snapshot or a timestamp was created
-OPTIMIZE TABLE [database.]table_name PURGE BEFORE (SNAPSHOT => '<SNAPSHOT_ID>')
-OPTIMIZE TABLE [database.]table_name PURGE BEFORE (TIMESTAMP => '<TIMESTAMP>'::TIMESTAMP)
+OPTIMIZE TABLE <table_name> PURGE [BEFORE (SNAPSHOT => '<SNAPSHOT_ID>') 
+| (TIMESTAMP => '<TIMESTAMP>'::TIMESTAMP)] [LIMIT <snapshot_count>]
 ```
 
-- `OPTIMIZE TABLE <table_name> PURGE`
+- `[BEFORE (SNAPSHOT => '<SNAPSHOT_ID>') 
+| (TIMESTAMP => '<TIMESTAMP>'::TIMESTAMP)]`
 
-  Purges historical data from the table. Only the latest snapshot (including the segments and blocks referenced by this snapshot) will be kept.
+  Purges the historical data that was generated before the specified snapshot or timestamp was created.
 
-- `OPTIMIZE TABLE <table_name> PURGE BEFORE (SNAPSHOT => '<SNAPSHOT_ID>')`
+- `[LIMIT <snapshot_count>]`
 
-  Purges the historical data that was generated before the specified snapshot was created. This erases related snapshots, segments, and blocks from storage.
+  Sets the maximum number of snapshots to be purged. Databend will select and purge the oldest snapshots.
 
-- `OPTIMIZE TABLE <table_name> PURGE BEFORE (TIMESTAMP => '<TIMESTAMP>'::TIMESTAMP)`
-
-  Purges the historical data that was generated before the specified timestamp was created. This erases related snapshots, segments, and blocks from storage.
 
 **Example**
 
