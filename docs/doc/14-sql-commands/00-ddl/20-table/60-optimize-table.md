@@ -150,7 +150,7 @@ Compacts the table data by merging small blocks and segments into larger ones.
 
 - The option LIMIT sets the maximum number of segments to be compacted. In this case, Databend will select and compact the latest segments.
 
-- Databend will automatically re-cluster the table after the compacting process.
+- Databend will automatically re-cluster the clustered table after the compacting process.
 
 **Example**
 ```sql
