@@ -1,6 +1,9 @@
 ---
 title: ALTER TABLE OPTION
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="Introduced: v1.2.25"/>
 
 Modifies the options of a table created with the default [Fuse engine](../../../13-sql-reference/30-table-engines/00-fuse.md). For the available options you can modify, see [Options](../../../13-sql-reference/30-table-engines/00-fuse.md#options).
 

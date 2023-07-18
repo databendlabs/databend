@@ -75,7 +75,7 @@ Furthermore, if you are in cluster mode, executing a query against `system.backt
 
 If you are interested in learning more, please check out the resources listed below:
 
-- [feat: add system.backtrace table]([feat: add system.backtrace table](https://github.com/datafuselabs/databend/pull/12024))
+- [feat: add system.backtrace table](https://github.com/datafuselabs/databend/pull/12024)
 
 ## Highlights
 

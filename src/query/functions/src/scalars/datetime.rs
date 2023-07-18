@@ -889,6 +889,13 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt64Type, _, _>(
+        "to_yyyymmddhh",
+        |_, _| FunctionDomain::Full,
+        vectorize_1_arg::<DateType, UInt64Type>(|val, ctx| {
+            ToNumberImpl::eval_date::<ToYYYYMMDDHH, _>(val, ctx.func_ctx.tz)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<DateType, UInt64Type, _, _>(
         "to_yyyymmddhhmmss",
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<DateType, UInt64Type>(|val, ctx| {
@@ -943,6 +950,13 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, UInt32Type>(|val, ctx| {
             ToNumberImpl::eval_timestamp::<ToYYYYMMDD, _>(val, ctx.func_ctx.tz)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt64Type, _, _>(
+        "to_yyyymmddhh",
+        |_, _| FunctionDomain::Full,
+        vectorize_1_arg::<TimestampType, UInt64Type>(|val, ctx| {
+            ToNumberImpl::eval_timestamp::<ToYYYYMMDDHH, _>(val, ctx.func_ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt64Type, _, _>(

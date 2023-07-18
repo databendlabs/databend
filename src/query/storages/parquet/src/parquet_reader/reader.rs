@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::parquet::metadata::ColumnDescriptor;
@@ -27,6 +28,7 @@ use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
+use common_storage::common_metrics::copy::metrics_inc_copy_read_part_cost_milliseconds;
 use common_storage::common_metrics::copy::metrics_inc_copy_read_size_bytes;
 use common_storage::ColumnNodes;
 use opendal::BlockingOperator;
@@ -260,8 +262,12 @@ impl ParquetReader {
                     let (offset, length) = (meta.offset, meta.length);
 
                     join_handlers.push(async move {
+                        // Perf.
+                        {
+                            metrics_inc_copy_read_size_bytes(length);
+                        }
+
                         let data = op.range_read(&path, offset..offset + length).await?;
-                        metrics_inc_copy_read_size_bytes(length);
                         Ok::<_, ErrorCode>((
                             *index,
                             DataReader::new(Box::new(std::io::Cursor::new(data)), length as usize),
@@ -269,7 +275,14 @@ impl ParquetReader {
                     });
                 }
 
+                let start = Instant::now();
                 let readers = futures::future::try_join_all(join_handlers).await?;
+
+                // Perf.
+                {
+                    metrics_inc_copy_read_part_cost_milliseconds(start.elapsed().as_millis() as u64);
+                }
+
                 let readers = readers.into_iter().collect::<IndexedReaders>();
                 Ok(ParquetPartData::RowGroup(readers))
             }
@@ -279,8 +292,16 @@ impl ParquetReader {
                     let op = self.operator.clone();
                     join_handlers.push(async move { op.read(path.as_str()).await });
                 }
-                metrics_inc_copy_read_size_bytes(part.compressed_size());
+
+                let start = Instant::now();
                 let buffers = futures::future::try_join_all(join_handlers).await?;
+
+                // Perf.
+                {
+                    metrics_inc_copy_read_size_bytes(part.compressed_size());
+                    metrics_inc_copy_read_part_cost_milliseconds(start.elapsed().as_millis() as u64);
+                }
+
                 Ok(ParquetPartData::SmallFiles(buffers))
             }
         }

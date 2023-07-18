@@ -19,6 +19,7 @@ use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MetaId;
+use common_storages_fuse::table_functions::FuseColumnTable;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
@@ -114,6 +115,10 @@ impl TableFunctionFactory {
         creators.insert(
             "fuse_block".to_string(),
             (next_id(), Arc::new(FuseBlockTable::create)),
+        );
+        creators.insert(
+            "fuse_column".to_string(),
+            (next_id(), Arc::new(FuseColumnTable::create)),
         );
         creators.insert(
             "fuse_statistic".to_string(),

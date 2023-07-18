@@ -162,22 +162,22 @@ impl CopyInterpreter {
         let mut stage_table_info = plan.stage_table_info.clone();
         stage_table_info.files_to_copy = Some(files.clone());
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
-        let read_source_plan = {
-            stage_table
-                .read_plan_with_catalog(
-                    self.ctx.clone(),
-                    plan.catalog_name.to_string(),
-                    None,
-                    None,
-                    false,
-                )
-                .await?
-        };
-
-        if read_source_plan.parts.len() <= 1 {
-            return Ok(None);
-        }
         if plan.query.is_none() {
+            let read_source_plan = {
+                stage_table
+                    .read_plan_with_catalog(
+                        self.ctx.clone(),
+                        plan.catalog_name.to_string(),
+                        None,
+                        None,
+                        false,
+                    )
+                    .await?
+            };
+
+            if read_source_plan.parts.len() <= 1 {
+                return Ok(None);
+            }
             Ok(Some(CopyPlanType::DistributedCopyIntoTableFromStage(
                 DistributedCopyIntoTableFromStage {
                     // TODO(leiysky): we reuse the id of exchange here,
