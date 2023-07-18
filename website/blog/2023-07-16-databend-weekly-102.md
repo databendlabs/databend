@@ -39,13 +39,13 @@ authors:
 
 Stay connected with the latest news about Databend.
 
-### Add Bloom Index to the Specified Column
+### Creating Bloom Indexes for Specified Columns
 
 Creating a bloom index consumes a lot of CPU resources. For wide tables where only a few columns may require point queries or data ingestion performance is more important, creating bloom indexes for all columns may not be a good idea.
 
-Databend [Fuse Engine](https://databend.rs/doc/sql-reference/table-engines/fuse) added support for the `bloom_index_columns` option, which means you can add bloom indexes to specified columns as needed.
+The `bloom_index_columns` option was introduced to the Databend [Fuse Engine](https://databend.rs/doc/sql-reference/table-engines/fuse), allowing you to specify which columns you want to create bloom indexes for.
 
-To create table with bloom index:
+To create a table with bloom indexes:
 
 ```SQL
 CREATE TABLE table_name (
@@ -55,15 +55,15 @@ CREATE TABLE table_name (
 ) ... bloom_index_columns='columnName1[, ...]'.
 ```
 
-To create or modify bloom index for a existing table:
+To create or modify bloom indexes for an existing table:
 
-<small><i>The existing Bloom index options will be replaced by the new options, it does not create Bloom filters for existing data.</i></small>
+<small><i>After modifying the Bloom index options, Databend will not create indexes for existing data. The changes will only affect the subsequent data.</i></small>
 
 ```SQL
 ALTER TABLE <db.table_name> SET OPTIONS(bloom_index_columns='columnName1[, ...]');
 ```
 
-To disable the bloom index:
+To disable the bloom indexing:
 
 ```SQL
 ALTER TABLE <db.table_name> SET OPTIONS(bloom_index_columns='');
@@ -73,11 +73,11 @@ If you are interested in learning more, please check out the resources listed be
 
 - [PR #12048 | feat: support specify bloom index columns](https://github.com/datafuselabs/databend/pull/12048)
 
-### Understand SQL Conformance
+### Databend SQL Conformance
 
 Databend aims to conform to the SQL standard, with particular support for ISO/IEC 9075:2011, also known as SQL:2011. Databend incorporates many features required by the SQL standard, often with slight differences in syntax or function.
 
-We have added a summary about the level of conformity of Databend to the SQL:2011 standard, hoping it can help you further understand Databend's SQL Conformance.
+We have summarized the level of conformity of Databend to the SQL:2011 standard, hoping it can help you further understand Databend's SQL Conformance.
 
 If you are interested in learning more, please check out the resources listed below.
 
@@ -87,7 +87,7 @@ If you are interested in learning more, please check out the resources listed be
 
 Discover some fascinating code snippets or projects that showcase our work or learning journey.
 
-### Understand Databend Recluster Pipeline
+### Understanding Databend Recluster Pipeline
 
 A well-clustered table may become chaotic in some storage blocks negatively affecting the query performance. For example, the table continues to have DML operations (INSERT / UPDATE / DELETE).
 
@@ -124,7 +124,7 @@ If you are interested in learning more, please check out the resources listed be
 
 We have also made these improvements to Databend that we hope you will find helpful:
 
-- Added support for distributed copy into. 
+- Added support for distributed COPY INTO. 
 - Read document [Docs | ATTACH TABLE](https://databend.rs/doc/sql-commands/ddl/table/attach-table) to learn how to attach an existing table to another one.
 - Read documents [Docs | Deepnote](/doc/integrations/deepnote) and [Docs | MindsDB](/doc/integrations/mindsdb) to learn how Databend can better collaborate with your data science projects.
 - Read documents [Docs | Window Functions](/doc/sql-functions/window-functions/) and [Docs | Bitmap Functions](/doc/sql-functions/bitmap-functions/) to fully understand the BITMAP and window functions supported by Databend.
@@ -135,7 +135,7 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 ### Accelerate CTE through Materialization
 
-Inlining Common Table Expression (CTE) is generally a good idea, but if the CTE is particularly heavy, such as in TPCH Q15, the cost can be prohibitively expensive. In these cases, it's better to introduce materialization for the expensive CTE instead.
+Inlining Common Table Expression (CTE) is a good idea, but if the CTE is particularly heavy, such as in TPCH Q15, the cost can be prohibitively expensive. In this case, it's better to introduce materialization for the expensive CTE.
 
 ```sql
 --- TPCH Q15
