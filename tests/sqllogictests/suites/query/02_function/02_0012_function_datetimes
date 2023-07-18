@@ -310,7 +310,7 @@ select to_yyyymmddhh(to_datetime(1630833797000000))  =  2021090509
 1
 
 query B
-select to_yyyymmddhhmmss(to_date(18875))  =  2021090500
+select to_yyyymmddhh(to_date(18875))  =  2021090500
 ----
 1
 

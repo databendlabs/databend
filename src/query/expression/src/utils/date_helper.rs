@@ -440,10 +440,10 @@ impl ToNumber<u32> for ToYYYYMMDD {
 
 impl ToNumber<u64> for ToYYYYMMDDHH {
     fn to_number(dt: &DateTime<Tz>) -> u64 {
-        dt.year() as u64 * 10_000_000_000
-            + dt.month() as u64 * 100_000_000
-            + dt.day() as u64 * 1_000_000
-            + dt.hour() as u64 * 10_000
+        dt.year() as u64 * 1_000_000
+            + dt.month() as u64 * 10_000
+            + dt.day() as u64 * 100
+            + dt.hour() as u64
     }
 }
 
