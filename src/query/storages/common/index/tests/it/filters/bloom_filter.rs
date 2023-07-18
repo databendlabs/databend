@@ -219,7 +219,7 @@ fn test_bloom_filter() -> Result<()> {
         eval_map_index(
             &index,
             2,
-            schema.clone(),
+            schema,
             map_ty,
             Scalar::Number(NumberScalar::UInt8(3)),
             DataType::Number(NumberDataType::UInt8),
@@ -228,7 +228,23 @@ fn test_bloom_filter() -> Result<()> {
         )
     );
 
-    let bloom_columns = bloom_columns_map(schema.clone(), vec![0, 2]);
+    Ok(())
+}
+
+#[test]
+fn test_specify_bloom_filter() -> Result<()> {
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("0", TableDataType::Number(NumberDataType::UInt8)),
+        TableField::new("1", TableDataType::String),
+    ]));
+
+    let blocks = vec![DataBlock::new_from_columns(vec![
+        UInt8Type::from_data(vec![1, 2]),
+        StringType::from_data(vec!["a", "b"]),
+    ])];
+    let blocks_ref = blocks.iter().collect::<Vec<_>>();
+
+    let bloom_columns = bloom_columns_map(schema.clone(), vec![0]);
     let fields = bloom_columns.values().cloned().collect::<Vec<_>>();
     let specify_index = BloomIndex::try_create(
         FunctionContext::default(),
@@ -237,6 +253,7 @@ fn test_bloom_filter() -> Result<()> {
         bloom_columns,
     )?
     .unwrap();
+
     assert_eq!(
         FilterEvalResult::Uncertain,
         eval_index(
@@ -248,6 +265,47 @@ fn test_bloom_filter() -> Result<()> {
             DataType::String
         )
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_string_bloom_filter() -> Result<()> {
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("0", TableDataType::Number(NumberDataType::UInt8)),
+        TableField::new("1", TableDataType::String),
+    ]));
+
+    let val: String = (0..512).map(|_| 'a').collect();
+    let blocks = vec![DataBlock::new_from_columns(vec![
+        UInt8Type::from_data(vec![1, 2]),
+        StringType::from_data(vec![&val, "bc"]),
+    ])];
+    let blocks_ref = blocks.iter().collect::<Vec<_>>();
+
+    // The average length of the string column exceeds 256 bytes.
+    let bloom_columns = bloom_columns_map(schema.clone(), vec![0, 1]);
+    let fields = bloom_columns.values().cloned().collect::<Vec<_>>();
+    let index = BloomIndex::try_create(
+        FunctionContext::default(),
+        LatestBloom::VERSION,
+        &blocks_ref,
+        bloom_columns,
+    )?
+    .unwrap();
+
+    assert_eq!(
+        FilterEvalResult::Uncertain,
+        eval_index(
+            &index,
+            "1",
+            fields,
+            schema,
+            Scalar::String(b"d".to_vec()),
+            DataType::String
+        )
+    );
+
     Ok(())
 }
 
