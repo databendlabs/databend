@@ -24,10 +24,13 @@ use common_expression::types::number::NumberScalar;
 use common_expression::types::number::F32;
 use common_expression::types::number::F64;
 use common_expression::types::AnyType;
+use common_expression::types::ArrayType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
+use common_expression::types::UInt32Type;
+use common_expression::types::UInt64Type;
 use common_expression::types::UInt8Type;
 use common_expression::types::ValueType;
 use common_expression::vectorize_with_builder_1_arg;
@@ -49,6 +52,7 @@ use geo::Contains;
 use geo::Coord;
 use geo::LineString;
 use geo::Polygon;
+use h3o::CellIndex;
 use h3o::LatLng;
 use h3o::Resolution;
 use once_cell::sync::OnceCell;
@@ -112,6 +116,73 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         ),
     );
+
+    registry
+        .register_passthrough_nullable_1_arg::<UInt64Type, KvPair<Float64Type, Float64Type>, _, _>(
+            "h3_to_geo",
+            |_, _| FunctionDomain::Full,
+            vectorize_with_builder_1_arg::<UInt64Type, KvPair<Float64Type, Float64Type>>(
+                |h3, builder, ctx| match CellIndex::try_from(h3) {
+                    Ok(h3_cell) => {
+                        let coord: LatLng = h3_cell.into();
+                        builder.push((coord.lng().into(), coord.lat().into()));
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.push((F64::from(0.0), F64::from(0.0)))
+                    }
+                },
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_1_arg::<UInt64Type, ArrayType<KvPair<Float64Type, Float64Type>>, _, _>(
+            "h3_to_geo_boundary",
+            |_, _| FunctionDomain::Full,
+            vectorize_with_builder_1_arg::<UInt64Type, ArrayType<KvPair<Float64Type, Float64Type>>>(
+                |h3, builder, ctx| {
+                    match CellIndex::try_from(h3) {
+                        Ok(h3_cell) => {
+                            let boundary = h3_cell.boundary();
+                            let coord_list = boundary.iter().collect::<Vec<_>>();
+                            for coord in coord_list {
+                                builder.put_item((coord.lng().into(), coord.lat().into()));
+                            }
+                        }
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e.to_string());
+                            builder.put_item((F64::from(0.0), F64::from(0.0)));
+                        }
+                    }
+                    builder.commit_row();
+                },
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_2_arg::<UInt64Type, UInt32Type, ArrayType<UInt64Type>, _, _>(
+            "h3_k_ring",
+            |_, _, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<UInt64Type, UInt32Type, ArrayType<UInt64Type>>(
+                |h3, k, builder, ctx| {
+                    match CellIndex::try_from(h3) {
+                        Ok(h3_cell) => {
+                            let ring = h3_cell.grid_ring_fast(k);
+                            for item in ring {
+                                if let Some(item) = item {
+                                    builder.put_item(item.into());
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e.to_string());
+                            builder.put_item(0);
+                        }
+                    }
+                    builder.commit_row();
+                },
+            ),
+        );
 
     // geo distance
     registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
