@@ -1985,9 +1985,17 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
         |(_, _, _, name)| ModifyColumnAction::SetDataType(name),
     );
 
+    let convert_stored_computed_column = map(
+        rule! {
+            DROP ~ STORED
+        },
+        |(_, _)| ModifyColumnAction::ConvertStoredComputedColumn,
+    );
+
     rule!(
         #set_mask_policy
         | #set_column_type
+        | #convert_stored_computed_column
     )(i)
 }
 
@@ -2020,15 +2028,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
         |(_, _, column, action)| AlterTableAction::ModifyColumn { column, action },
     );
-    let convert_stored_computed_column = map(
-        rule! {
-            MODIFY ~ COLUMN ~ #ident ~ DROP ~ STORED
-        },
-        |(_, _, column, _, _)| AlterTableAction::ModifyColumn {
-            column,
-            action: ModifyColumnAction::ConvertStoredComputedColumn,
-        },
-    );
+
     let drop_column = map(
         rule! {
             DROP ~ COLUMN ~ #ident
@@ -2080,7 +2080,6 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #add_column
         | #drop_column
         | #modify_column
-        | #convert_stored_computed_column
         | #alter_table_cluster_key
         | #drop_table_cluster_key
         | #recluster_table

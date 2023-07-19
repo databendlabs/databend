@@ -17,14 +17,13 @@ use std::sync::Arc;
 
 use common_ast::ast::ModifyColumnAction;
 use common_ast::ast::TypeName;
+use common_catalog::catalog::Catalog;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::can_auto_cast_to;
-use common_expression::types::DataType;
 use common_expression::ComputedExpr;
+use common_expression::DataField;
 use common_expression::TableSchema;
-use common_functions::BUILTIN_FUNCTIONS;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license::Feature::DataMask;
 use common_license::license_manager::get_license_manager;
@@ -32,15 +31,23 @@ use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
+use common_sql::executor::DistributedInsertSelect;
+use common_sql::executor::PhysicalPlan;
+use common_sql::executor::PhysicalPlanBuilder;
 use common_sql::plans::ModifyTableColumnPlan;
+use common_sql::plans::Plan;
 use common_sql::resolve_type_name;
+use common_sql::Planner;
+use common_storages_fuse::FuseTable;
 use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
 use common_users::UserApiProvider;
 use data_mask_feature::get_datamask_handler;
 
+use super::common::check_referenced_computed_columns;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -57,10 +64,11 @@ impl ModifyTableColumnInterpreter {
     // Set data mask policy to a column is a ee feature.
     async fn do_set_data_mask_policy(
         &self,
+        catalog: Arc<dyn Catalog>,
         table: &Arc<dyn Table>,
         table_meta: TableMeta,
         mask_name: String,
-    ) -> Result<TableMeta> {
+    ) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
         license_manager.manager.check_enterprise_enabled(
             &self.ctx.get_settings(),
@@ -75,6 +83,7 @@ impl ModifyTableColumnInterpreter {
             .await?;
 
         let schema = table.schema();
+        let table_info = table.get_table_info();
         if let Some((_, data_field)) = schema.column_with_name(&self.plan.column) {
             let data_type = data_field.data_type().to_string().to_lowercase();
             let policy_data_type = policy.args[0].1.to_string().to_lowercase();
@@ -99,52 +108,135 @@ impl ModifyTableColumnInterpreter {
         };
         column_mask_policy.insert(self.plan.column.clone(), mask_name);
         new_table_meta.column_mask_policy = Some(column_mask_policy);
-        Ok(new_table_meta)
+
+        let table_id = table_info.ident.table_id;
+        let table_version = table_info.ident.seq;
+
+        let req = UpdateTableMetaReq {
+            table_id,
+            seq: MatchSeq::Exact(table_version),
+            new_table_meta,
+            copied_files: None,
+            deduplicated_label: None,
+        };
+
+        let res = catalog.update_table_meta(table_info, req).await?;
+
+        if let Some(share_table_info) = res.share_table_info {
+            save_share_table_info(
+                &self.ctx.get_tenant(),
+                self.ctx.get_data_operator()?.operator(),
+                share_table_info,
+            )
+            .await?;
+        }
+        Ok(PipelineBuildResult::create())
     }
 
     // Set data column type.
     async fn do_set_data_type(
         &self,
         table: &Arc<dyn Table>,
-        table_meta: TableMeta,
         type_name: &TypeName,
-    ) -> Result<TableMeta> {
-        let mut new_table_meta = table_meta;
-
-        let mut schema = table.schema().as_ref().clone();
+    ) -> Result<PipelineBuildResult> {
+        let schema = table.schema().as_ref().clone();
+        let table_info = table.get_table_info();
         if let Ok(i) = schema.index_of(&self.plan.column) {
-            let new_type = resolve_type_name(&type_name)?;
-            let new_data_type: DataType = (&new_type).into();
-            let old_data_type: DataType = (&schema.fields[i].data_type).into();
-            if !can_auto_cast_to(
-                &old_data_type,
-                &new_data_type,
-                &BUILTIN_FUNCTIONS.default_cast_rules,
-            ) {
-                return Err(ErrorCode::SemanticError(format!(
-                    "cannot alter table column {} data type from {} to {}",
-                    self.plan.column,
-                    schema.fields[i].data_type.to_string(),
-                    new_type.to_string(),
-                )));
+            // Check if this column is referenced by computed columns.
+            let field: DataField = schema.field(i).into();
+            if field.computed_expr().is_none() {
+                check_referenced_computed_columns(
+                    self.ctx.clone(),
+                    table_info.schema(),
+                    schema.field(i).name(),
+                )?;
             }
-            schema.fields[i].data_type = new_type;
-            new_table_meta.schema = Arc::new(schema);
+
+            let new_type = resolve_type_name(type_name)?;
+
+            // 1. construct cast sql
+            let mut sql = "select".to_string();
+            schema
+                .fields()
+                .iter()
+                .enumerate()
+                .for_each(|(index, field)| {
+                    sql = format!("{} {}", sql, field.name.clone());
+
+                    if index != schema.fields().len() - 1 {
+                        sql = format!("{},", sql);
+                    } else {
+                        sql = format!("{} from {}.{}", sql, self.plan.database, self.plan.table);
+                    }
+                });
+
+            // 2. build plan by cast sql
+            let mut planner = Planner::new(self.ctx.clone());
+            let (plan, _extras) = planner.plan_sql(&sql).await?;
+
+            // 3. build physical plan by plan
+            let (select_plan, select_column_bindings) = match plan {
+                Plan::Query {
+                    s_expr,
+                    metadata,
+                    bind_context,
+                    ..
+                } => {
+                    let mut builder1 =
+                        PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
+                    (builder1.build(&s_expr).await?, bind_context.columns.clone())
+                }
+                _ => unreachable!(),
+            };
+
+            // 4. define select schema and insert schema of DistributedInsertSelect plan
+            let mut new_schema = schema.clone();
+            new_schema.fields[i].data_type = new_type;
+
+            // new table schema
+            let mut table_info = table.get_table_info().clone();
+            table_info.meta.schema = new_schema.clone().into();
+            let new_table = FuseTable::try_create(table_info)?;
+
+            // 5. build DistributedInsertSelect plan
+            let insert_plan =
+                PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
+                    plan_id: select_plan.get_id(),
+                    input: Box::new(select_plan),
+                    catalog: self.plan.catalog.clone(),
+                    table_info: new_table.get_table_info().clone(),
+                    select_schema: Arc::new(Arc::new(schema).into()),
+                    select_column_bindings,
+                    insert_schema: Arc::new(Arc::new(new_schema).into()),
+                    cast_needed: true,
+                }));
+            let mut build_res =
+                build_query_pipeline_without_render_result_set(&self.ctx, &insert_plan, false)
+                    .await?;
+
+            // 6. commit new meta schema and snapshots
+            new_table.commit_insertion(
+                self.ctx.clone(),
+                &mut build_res.main_pipeline,
+                None,
+                true,
+            )?;
+
+            Ok(build_res)
         } else {
-            return Err(ErrorCode::UnknownColumn(format!(
+            Err(ErrorCode::UnknownColumn(format!(
                 "Cannot find column {}",
                 self.plan.column
-            )));
+            )))
         }
-
-        Ok(new_table_meta)
     }
 
     async fn do_convert_stored_computed_column(
         &self,
+        catalog: Arc<dyn Catalog>,
         table: &Arc<dyn Table>,
         table_meta: TableMeta,
-    ) -> Result<TableMeta> {
+    ) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
         license_manager.manager.check_enterprise_enabled(
             &self.ctx.get_settings(),
@@ -152,6 +244,7 @@ impl ModifyTableColumnInterpreter {
             ComputedColumn,
         )?;
 
+        let table_info = table.get_table_info();
         let schema = table.schema();
         let new_schema = if let Some((i, field)) = schema.column_with_name(&self.plan.column) {
             match field.computed_expr {
@@ -177,7 +270,30 @@ impl ModifyTableColumnInterpreter {
 
         let mut new_table_meta = table_meta;
         new_table_meta.schema = new_schema.into();
-        Ok(new_table_meta)
+
+        let table_id = table_info.ident.table_id;
+        let table_version = table_info.ident.seq;
+
+        let req = UpdateTableMetaReq {
+            table_id,
+            seq: MatchSeq::Exact(table_version),
+            new_table_meta,
+            copied_files: None,
+            deduplicated_label: None,
+        };
+
+        let res = catalog.update_table_meta(table_info, req).await?;
+
+        if let Some(share_table_info) = res.share_table_info {
+            save_share_table_info(
+                &self.ctx.get_tenant(),
+                self.ctx.get_data_operator()?.operator(),
+                share_table_info,
+            )
+            .await?;
+        }
+
+        Ok(PipelineBuildResult::create())
     }
 }
 
@@ -225,42 +341,18 @@ impl Interpreter for ModifyTableColumnInterpreter {
 
         // NOTICE: if we support modify column data type,
         // need to check whether this column is referenced by other computed columns.
-        let new_table_meta = match &self.plan.action {
+        match &self.plan.action {
             ModifyColumnAction::SetMaskingPolicy(mask_name) => {
-                self.do_set_data_mask_policy(table, table_meta, mask_name.clone())
-                    .await?
+                self.do_set_data_mask_policy(catalog, table, table_meta, mask_name.clone())
+                    .await
             }
             ModifyColumnAction::SetDataType(type_name) => {
-                self.do_set_data_type(table, table_meta, type_name).await?
+                self.do_set_data_type(table, type_name).await
             }
             ModifyColumnAction::ConvertStoredComputedColumn => {
-                self.do_convert_stored_computed_column(table, table_meta)
-                    .await?
+                self.do_convert_stored_computed_column(catalog, table, table_meta)
+                    .await
             }
-        };
-
-        let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
-
-        let req = UpdateTableMetaReq {
-            table_id,
-            seq: MatchSeq::Exact(table_version),
-            new_table_meta,
-            copied_files: None,
-            deduplicated_label: None,
-        };
-
-        let res = catalog.update_table_meta(table_info, req).await?;
-
-        if let Some(share_table_info) = res.share_table_info {
-            save_share_table_info(
-                &self.ctx.get_tenant(),
-                self.ctx.get_data_operator()?.operator(),
-                share_table_info,
-            )
-            .await?;
         }
-
-        Ok(PipelineBuildResult::create())
     }
 }
