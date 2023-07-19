@@ -75,6 +75,7 @@ impl BlockOperator {
             BlockOperator::Map { .. }
             | BlockOperator::MapWithOutput { .. }
             | BlockOperator::Filter { .. }
+            | BlockOperator::Project { .. }
                 if input
                     .get_meta()
                     .and_then(AggIndexMeta::downcast_ref_from)
