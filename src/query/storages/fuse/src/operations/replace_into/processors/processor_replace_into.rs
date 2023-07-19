@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
@@ -24,6 +26,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
 use crate::operations::replace_into::OnConflictField;
@@ -44,8 +47,12 @@ pub struct ReplaceIntoProcessor {
 }
 
 impl ReplaceIntoProcessor {
-    pub fn create(on_conflict_fields: Vec<OnConflictField>, target_table_empty: bool) -> Self {
-        let replace_into_mutator = ReplaceIntoMutator::create(on_conflict_fields);
+    pub fn create(
+        on_conflict_fields: Vec<OnConflictField>,
+        target_table_empty: bool,
+        table_range_idx: HashMap<ColumnId, ColumnStatistics>,
+    ) -> Self {
+        let replace_into_mutator = ReplaceIntoMutator::create(on_conflict_fields, table_range_idx);
         let input_port = InputPort::create();
         let output_port_merge_into_action = OutputPort::create();
         let output_port_append_data = OutputPort::create();

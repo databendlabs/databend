@@ -23,7 +23,7 @@ use common_expression::Value;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
 
-pub fn row_hash_of_columns<'a>(column_values: &'a [&'a Value<AnyType>], row_idx: usize) -> u128 {
+pub fn row_hash_of_columns(column_values: &[&Value<AnyType>], row_idx: usize) -> u128 {
     let mut sip = sip128::SipHasher24::new();
     for col in column_values {
         let value = match col {

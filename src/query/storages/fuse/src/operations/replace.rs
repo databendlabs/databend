@@ -153,8 +153,10 @@ impl FuseTable {
         });
 
         let empty_table = base_snapshot.segments.is_empty();
+        let table_level_rang_index = base_snapshot.summary.col_stats.clone();
         let replace_into_processor =
-            ReplaceIntoProcessor::create(on_conflicts.clone(), empty_table);
+            ReplaceIntoProcessor::create(on_conflicts.clone(), empty_table, table_level_rang_index);
+
         pipeline.add_pipe(replace_into_processor.into_pipe());
 
         // 3. connect to broadcast processor and append transform

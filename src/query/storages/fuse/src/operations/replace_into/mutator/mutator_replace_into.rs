@@ -12,17 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use ahash::HashSet;
 use ahash::HashSetExt;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::AnyType;
 use common_expression::Column;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_functions::aggregates::eval_aggr;
+use storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
@@ -36,13 +41,18 @@ use crate::operations::replace_into::OnConflictField;
 pub struct ReplaceIntoMutator {
     on_conflict_fields: Vec<OnConflictField>,
     key_saw: HashSet<UniqueKeyDigest>,
+    table_range_idx: HashMap<ColumnId, ColumnStatistics>,
 }
 
 impl ReplaceIntoMutator {
-    pub fn create(on_conflict_fields: Vec<OnConflictField>) -> Self {
+    pub fn create(
+        on_conflict_fields: Vec<OnConflictField>,
+        table_range_idx: HashMap<ColumnId, ColumnStatistics>,
+    ) -> Self {
         Self {
             on_conflict_fields,
             key_saw: Default::default(),
+            table_range_idx,
         }
     }
 }
@@ -57,7 +67,40 @@ impl ReplaceIntoMutator {
     pub fn process_input_block(&mut self, data_block: &DataBlock) -> Result<MergeIntoOperation> {
         // TODO table level pruning:
         // if we can deduced that `data_block` is insert only, return an MergeIntoOperation::None (None op for Matched Branch)
-        self.extract_on_conflict_columns(data_block)
+
+        // extract rows that definitely have conflict
+        // TODO refactor, duplication there
+        let column_stats: &HashMap<ColumnId, ColumnStatistics> = &self.table_range_idx;
+        let mut bitmap = MutableBitmap::new();
+        for row_idx in 0..data_block.num_rows() {
+            // for each row, check if it may have conflict
+            let mut should_keep = false;
+            for col in &self.on_conflict_fields {
+                let col_val: &Value<AnyType> = &data_block.columns()[col.field_index].value;
+                let value = match col_val {
+                    Value::Scalar(v) => v.as_ref(),
+                    Value::Column(c) => c
+                        .index(row_idx)
+                        .expect("column index out of range (calculate columns hash)"),
+                };
+
+                let stats = column_stats.get(&col.table_field.column_id);
+                if let Some(stats) = stats {
+                    should_keep = std::cmp::min(&value, &stats.max.as_ref()) >= std::cmp::max(&value, &stats.min.as_ref())
+                        || // coincide overlap
+                        (stats.max.as_ref() == value && stats.min.as_ref() == value);
+                    if should_keep {
+                        // no need to check other columns
+                        break;
+                    }
+                }
+            }
+            bitmap.push(should_keep);
+        }
+        let bitmap = bitmap.into();
+        // TODO we do not need all the columns
+        let data_block_may_have_conflicts = data_block.clone().filter_with_bitmap(&bitmap)?;
+        self.extract_on_conflict_columns(&data_block_may_have_conflicts)
     }
 
     fn extract_on_conflict_columns(
