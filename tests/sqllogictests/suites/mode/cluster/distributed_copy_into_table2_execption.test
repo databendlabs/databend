@@ -83,7 +83,7 @@ set max_threads = 1;
 query T
 explain pipeline copy into products from (select $1,$2,$4 from @s1 as t2) force = true;
 ----
-MutationSink × 1 processor
+CommitSink × 1 processor
   MutationAggregator × 1 processor
     TransformExchangeDeserializer × 1 processor
       Merge (DummyTransform × 3 processors) to (TransformExchangeDeserializer × 1)
