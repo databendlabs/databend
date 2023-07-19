@@ -1053,6 +1053,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitpacking"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8c7d2ac73c167c06af4a5f37e6e59d84148d57ccbe4480b76f0273eefea82d7"
+dependencies = [
+ "crunchy",
+]
+
+[[package]]
 name = "bitvec"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10114,12 +10123,13 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 
 [[package]]
 name = "strawboat"
-version = "0.2.2"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4b719f16a5ac1a789ccb905ca036afc119feba0212489bc1d738ce3415cfe3a"
+checksum = "5bceffaa31493ee1ab2282122ecbd3d02235d96385bd1c725ba712f6d24d38b3"
 dependencies = [
  "ahash 0.8.3",
  "arrow2",
+ "bitpacking",
  "bytemuck",
  "byteorder",
  "bytes",
