@@ -88,9 +88,11 @@ MutationSink × 1 processor
           TransformSerializeSegment × 1 processor
             TransformSerializeBlock × 1 processor
               BlockCompactTransform × 1 processor
-                DeserializeTransformer × 1 processor
-                  Resize × 1 processor
-                    Aligner × 1 processor
+                CastSchemaTransform × 1 processor
+                  CompoundBlockOperator(Project) × 1 processor
+                    DeserializeTransformer × 1 processor
+                      Resize × 1 processor
+                        Aligner × 1 processor
 
 statement ok
 copy into products from (select $1,$2,$3 from @s1 as t2) force =  true purge = true;
