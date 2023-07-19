@@ -2301,15 +2301,15 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
     );
     let set_network_policy = map(
         rule! {
-            SET ~ "NETWORK_POLICY" ~ "=" ~ #literal_string
+            SET ~ NETWORK ~ POLICY ~ "=" ~ #literal_string
         },
-        |(_, _, _, policy)| UserOptionItem::SetNetworkPolicy(policy),
+        |(_, _, _, _, policy)| UserOptionItem::SetNetworkPolicy(policy),
     );
     let unset_network_policy = map(
         rule! {
-            UNSET ~ "NETWORK_POLICY"
+            UNSET ~ NETWORK ~ POLICY
         },
-        |(_, _)| UserOptionItem::UnsetNetworkPolicy,
+        |(_, _, _)| UserOptionItem::UnsetNetworkPolicy,
     );
     alt((
         value(UserOptionItem::TenantSetting(true), rule! { TENANTSETTING }),

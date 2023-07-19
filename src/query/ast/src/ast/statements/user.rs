@@ -233,8 +233,8 @@ impl Display for UserOptionItem {
             UserOptionItem::TenantSetting(true) => write!(f, "TENANTSETTING"),
             UserOptionItem::TenantSetting(false) => write!(f, "NOTENANTSETTING"),
             UserOptionItem::DefaultRole(v) => write!(f, "DEFAULT_ROLE = '{}'", v),
-            UserOptionItem::SetNetworkPolicy(v) => write!(f, "SET NETWORK_POLICY = '{}'", v),
-            UserOptionItem::UnsetNetworkPolicy => write!(f, "UNSET NETWORK_POLICY"),
+            UserOptionItem::SetNetworkPolicy(v) => write!(f, "SET NETWORK POLICY = '{}'", v),
+            UserOptionItem::UnsetNetworkPolicy => write!(f, "UNSET NETWORK POLICY"),
         }
     }
 }

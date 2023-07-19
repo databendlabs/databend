@@ -2780,9 +2780,9 @@ AlterUser(
 
 
 ---------- Input ----------
-ALTER USER u1 WITH SET NETWORK_POLICY = 'policy1';
+ALTER USER u1 WITH SET NETWORK POLICY = 'policy1';
 ---------- Output ---------
-ALTER USER 'u1'@'%' WITH SET NETWORK_POLICY = 'policy1'
+ALTER USER 'u1'@'%' WITH SET NETWORK POLICY = 'policy1'
 ---------- AST ------------
 AlterUser(
     AlterUserStmt {
@@ -2803,9 +2803,9 @@ AlterUser(
 
 
 ---------- Input ----------
-ALTER USER u1 WITH UNSET NETWORK_POLICY;
+ALTER USER u1 WITH UNSET NETWORK POLICY;
 ---------- Output ---------
-ALTER USER 'u1'@'%' WITH UNSET NETWORK_POLICY
+ALTER USER 'u1'@'%' WITH UNSET NETWORK POLICY
 ---------- AST ------------
 AlterUser(
     AlterUserStmt {
@@ -2854,9 +2854,9 @@ CreateUser(
 
 
 ---------- Input ----------
-CREATE USER u1 IDENTIFIED BY '123456' WITH SET NETWORK_POLICY='policy1'
+CREATE USER u1 IDENTIFIED BY '123456' WITH SET NETWORK POLICY='policy1'
 ---------- Output ---------
-CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH SET NETWORK_POLICY = 'policy1'
+CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH SET NETWORK POLICY = 'policy1'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
