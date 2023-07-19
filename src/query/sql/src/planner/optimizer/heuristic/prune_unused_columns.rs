@@ -19,6 +19,7 @@ use common_exception::Result;
 use itertools::Itertools;
 
 use crate::optimizer::ColumnSet;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::CteScan;
@@ -289,18 +290,33 @@ impl UnusedColumnPruner {
                 }
                 Ok(SExpr::create_leaf(Arc::new(RelOperator::CteScan(
                     CteScan {
-                        cte_idx: scan.cte_idx.clone(),
+                        cte_idx: scan.cte_idx,
                         fields: pruned_fields,
                         stat: scan.stat.clone(),
                     },
                 ))))
             }
 
-            RelOperator::MaterializedCte(cte) => Ok(SExpr::create_binary(
-                Arc::new(RelOperator::MaterializedCte(cte.clone())),
-                Arc::new(self.keep_required_columns(expr.child(0)?, required.clone())?),
-                Arc::new(self.keep_required_columns(expr.child(1)?, required)?),
-            )),
+            RelOperator::MaterializedCte(cte) => {
+                let left_output_column = RelExpr::with_s_expr(expr)
+                    .derive_relational_prop_child(0)?
+                    .output_columns
+                    .clone();
+                let right_used_column = RelExpr::with_s_expr(expr)
+                    .derive_relational_prop_child(1)?
+                    .used_columns
+                    .clone();
+                // Get the intersection of `left_used_column` and `right_used_column`
+                let left_required = left_output_column
+                    .intersection(&right_used_column)
+                    .cloned()
+                    .collect::<ColumnSet>();
+                Ok(SExpr::create_binary(
+                    Arc::new(RelOperator::MaterializedCte(cte.clone())),
+                    Arc::new(self.keep_required_columns(expr.child(0)?, left_required)?),
+                    Arc::new(self.keep_required_columns(expr.child(1)?, required)?),
+                ))
+            }
 
             RelOperator::DummyTableScan(_) => Ok(expr.clone()),
 

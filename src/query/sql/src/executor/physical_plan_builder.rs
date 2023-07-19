@@ -1102,7 +1102,7 @@ impl PhysicalPlanBuilder {
 
             RelOperator::CteScan(cte_scan) => Ok(PhysicalPlan::CteScan(CteScan {
                 plan_id: self.next_plan_id(),
-                cte_idx: cte_scan.cte_idx.clone(),
+                cte_idx: cte_scan.cte_idx,
                 output_schema: DataSchemaRefExt::create(cte_scan.fields.clone()),
             })),
 

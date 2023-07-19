@@ -187,13 +187,16 @@ impl Binder {
                 let ctes_map = bind_context.ctes_map.clone();
                 if let Some(cte_info) = ctes_map.get(&table_name) {
                     return if !cte_info.materialized {
-                        self.bind_cte(*span, bind_context, &table_name, alias, &cte_info)
+                        self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
                             .await
                     } else {
                         let new_bind_context = if !cte_info.bound {
-                            let (cte_s_expr, cte_bind_ctx) = self
-                                .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
+                            let (cte_s_expr, mut cte_bind_ctx) = self
+                                .bind_cte(*span, bind_context, &table_name, alias, cte_info)
                                 .await?;
+                            cte_bind_ctx
+                                .materialized_ctes
+                                .insert((cte_info.cte_idx, cte_s_expr.clone()));
                             let stat_info =
                                 RelExpr::with_s_expr(&cte_s_expr).derive_cardinality()?;
                             // Add `materialized_cte` to bind_context.
@@ -207,15 +210,18 @@ impl Binder {
                                     cte_info.stat_info = Some(stat_info);
                                 },
                             );
+                            for column in cte_bind_ctx.columns.iter() {
+                                bind_context.columns.push(column.clone());
+                            }
                             cte_bind_ctx
                         } else {
                             bind_context.clone()
                         };
                         let s_expr = self.bind_cte_scan(
                             &new_bind_context,
-                            &bind_context.ctes_map.get(&table_name).unwrap(),
+                            bind_context.ctes_map.get(&table_name).unwrap(),
                         )?;
-                        Ok((s_expr, new_bind_context.clone()))
+                        Ok((s_expr, new_bind_context))
                     };
                 }
 
@@ -246,7 +252,7 @@ impl Binder {
                             }
                             if let Some(cte_info) = parent.unwrap().ctes_map.get(&table_name) {
                                 return self
-                                    .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
+                                    .bind_cte(*span, bind_context, &table_name, alias, cte_info)
                                     .await;
                             }
                             parent = parent.unwrap().parent.as_ref();
@@ -726,7 +732,7 @@ impl Binder {
     fn bind_cte_scan(&mut self, bind_ctx: &BindContext, cte_info: &CteInfo) -> Result<SExpr> {
         let memory_table = Arc::new(RwLock::new(vec![]));
         self.ctx
-            .set_materialized_cte(cte_info.cte_idx, memory_table.clone())?;
+            .set_materialized_cte(cte_info.cte_idx, memory_table)?;
         // Get the fields in the cte
         let mut fields = vec![];
         for column in bind_ctx.columns.iter() {
@@ -763,7 +769,7 @@ impl Binder {
             aggregate_info: Default::default(),
             windows: Default::default(),
             in_grouping: false,
-            ctes_map: Box::new(HashMap::new()),
+            ctes_map: Box::new(Default::default()),
             materialized_ctes: HashSet::new(),
             view_info: None,
             srfs: Default::default(),
