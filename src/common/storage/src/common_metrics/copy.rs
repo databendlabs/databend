@@ -36,3 +36,7 @@ pub fn metrics_inc_copy_read_part_counter() {
 pub fn metrics_inc_copy_read_size_bytes(c: u64) {
     increment_gauge!(key!("copy_read_size_bytes"), c as f64);
 }
+
+pub fn metrics_inc_copy_read_part_cost_milliseconds(c: u64) {
+    increment_gauge!(key!("copy_read_part_cost_milliseconds"), c as f64);
+}

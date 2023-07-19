@@ -34,6 +34,7 @@ select segment_count,block_count from fuse_snapshot('db_09_0008', 't') limit 1
 ----
 2 2
 
+
 statement ok
 optimize table t compact limit 2
 
@@ -41,6 +42,12 @@ query II
 select segment_count,block_count from fuse_snapshot('db_09_0008', 't') limit 1
 ----
 1 1
+
+
+query II
+select  column_name, column_type, row_count from fuse_column('db_09_0008', 't') limit 1
+----
+a UInt64 3
 
 statement ok
 optimize table `t` purge

@@ -1,0 +1,32 @@
+statement ok
+DROP DATABASE IF EXISTS issue_12126
+
+statement ok
+CREATE DATABASE issue_12126
+
+statement ok
+USE issue_12126
+
+
+statement ok
+create table t(id int, s string, c int);
+
+
+# values of column 'id' and 's' are of type `Scalar` (not `Column`)
+statement ok
+REPLACE INTO t on(id,s) select 1 as id, 'test' as s, number as c from numbers(1);
+
+query III
+select count(distinct(id)), count(distinct(s)), sum(c) from t;
+----
+1 1 0
+
+statement ok
+drop table t;
+
+statement ok
+DROP DATABASE issue_12126
+
+
+
+
