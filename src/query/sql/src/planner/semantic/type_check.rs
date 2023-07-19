@@ -2683,7 +2683,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
         let table_index = self.metadata.read().get_table_index(
             column.database_name.as_deref(),
-            column.table_name.as_deref().unwrap(),
+            column.table_name.as_deref().unwrap_or_default(),
         )?;
 
         if !self
