@@ -66,20 +66,22 @@ select count(*) from products;
 statement ok
 select block_count from fuse_snapshot('default','products');
 
-# error test
-statement error 1001
+statement ok
 copy into products from (select $1,$2,$4 from @s1 as t2) force = true;
 
 query I
 select count(*) from products;
 ----
-0
+8000000
+
+statement ok
+truncate table products;
 
 statement ok
 set max_threads = 1;
 
 query T
-explain pipeline copy into products from (select $1,$2,$4 from @s1 as t2);
+explain pipeline copy into products from (select $1,$2,$4 from @s1 as t2) force = true;
 ----
 MutationSink × 1 processor
   MutationAggregator × 1 processor
@@ -89,9 +91,11 @@ MutationSink × 1 processor
           TransformSerializeSegment × 1 processor
             TransformSerializeBlock × 1 processor
               BlockCompactTransform × 1 processor
-                DeserializeTransformer × 1 processor
-                  Resize × 1 processor
-                    Aligner × 1 processor
+                CastSchemaTransform × 1 processor
+                  CompoundBlockOperator(Project) × 1 processor
+                    DeserializeTransformer × 1 processor
+                      Resize × 1 processor
+                        Aligner × 1 processor
 
 statement ok
 copy into products from (select $1,$2,$3 from @s1 as t2) force =  true purge = true;
