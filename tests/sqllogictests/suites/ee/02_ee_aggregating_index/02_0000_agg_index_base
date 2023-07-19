@@ -238,7 +238,7 @@ statement ok
 REFRESH AGGREGATING INDEX testi
 
 query II
-SELECT b, SUM(a) from t2 WHERE c > 1 GROUP BY b ORDER BY b
+SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b ORDER BY b
 ----
 1 1
 2 3
