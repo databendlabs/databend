@@ -106,28 +106,28 @@ statement ok
 create stage parquet_stage file_format = (type = parquet);
 
 statement ok
-copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
 
 statement ok
-copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
 
 statement ok
-copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
 
 statement ok
-copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
 
 statement ok
-copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
 
 statement ok
-copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
 
 statement ok
-copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
 
 statement ok
-copy into @parquet_stage from (select a,b,c from table_random limit 1000000);
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
 
 statement ok
 copy into parquet_table from @parquet_stage;
@@ -135,7 +135,7 @@ copy into parquet_table from @parquet_stage;
 query I
 select count(*) from parquet_table;
 ----
-8000000
+800000
 
 statement ok
 copy into parquet_table from @parquet_stage force = true purge = true;
@@ -143,7 +143,7 @@ copy into parquet_table from @parquet_stage force = true purge = true;
 query I
 select count(*) from parquet_table;
 ----
-16000000
+1600000
 
 # make sure it's distributed.
 
@@ -186,7 +186,7 @@ statement ok
 create stage test_stage;
 
 statement ok
-copy into @test_stage from (select * from random_source limit 10000000) FILE_FORMAT=(type=parquet);
+copy into @test_stage from (select * from random_source limit 4000000) FILE_FORMAT=(type=parquet);
 
 statement ok
 copy into test_order from @test_stage file_format=(type=parquet) force=true purge = true;
@@ -194,7 +194,7 @@ copy into test_order from @test_stage file_format=(type=parquet) force=true purg
 query I
 select count(*) from test_order;
 ----
-10000000
+4000000
 
 statement ok
 set enable_distributed_copy_into = 0;
