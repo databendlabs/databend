@@ -161,10 +161,16 @@ impl<T: Transform> Transformer<T> {
     }
 }
 
+pub enum UnknownMode {
+    Pass,
+    Ignore,
+    Error,
+}
+
 // Transform for block meta and ignoring the block columns.
 pub trait BlockMetaTransform<B: BlockMetaInfo>: Send + 'static {
+    const UNKNOWN_MODE: UnknownMode = UnknownMode::Ignore;
     const NAME: &'static str;
-    const PASS_UNKNOWN: bool = false;
 
     fn transform(&mut self, meta: B) -> Result<DataBlock>;
 
@@ -256,9 +262,19 @@ impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> Processor for BlockMetaTransfor
                 }
             }
 
-            if T::PASS_UNKNOWN {
-                self.output.push_data(Ok(data_block));
-                return Ok(Event::NeedConsume);
+            match T::UNKNOWN_MODE {
+                UnknownMode::Ignore => { /* do nothing */ }
+                UnknownMode::Pass => {
+                    self.output.push_data(Ok(data_block));
+                    return Ok(Event::NeedConsume);
+                }
+                UnknownMode::Error => {
+                    return Err(ErrorCode::Internal(format!(
+                        "{} only recv {}",
+                        T::NAME,
+                        std::any::type_name::<B>()
+                    )));
+                }
             }
         }
 

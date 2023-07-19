@@ -26,18 +26,16 @@ use common_arrow::arrow::io::ipc::IpcSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_io::prelude::BinaryRead;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
+use common_pipeline_transforms::processors::transforms::UnknownMode;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -45,9 +43,6 @@ use crate::api::DataPacket;
 use crate::api::FragmentData;
 
 pub struct TransformExchangeDeserializer {
-    input_data: Option<DataBlock>,
-    output_data: Option<DataBlock>,
-
     schema: DataSchemaRef,
     ipc_schema: IpcSchema,
     arrow_schema: Arc<ArrowSchema>,
@@ -72,8 +67,6 @@ impl TransformExchangeDeserializer {
             TransformExchangeDeserializer {
                 ipc_schema,
                 arrow_schema,
-                input_data: None,
-                output_data: None,
                 schema: schema.clone(),
             },
         ))
@@ -127,8 +120,8 @@ impl TransformExchangeDeserializer {
 }
 
 impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformExchangeDeserializer {
+    const UNKNOWN_MODE: UnknownMode = UnknownMode::Pass;
     const NAME: &'static str = "TransformExchangeDeserializer";
-    const PASS_UNKNOWN: bool = true;
 
     fn transform(&mut self, mut meta: ExchangeDeserializeMeta) -> Result<DataBlock> {
         match meta.packet.pop().unwrap() {
@@ -136,7 +129,7 @@ impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformExchangeDeserializ
             DataPacket::Dictionary(_) => unreachable!(),
             DataPacket::FetchProgress => unreachable!(),
             DataPacket::SerializeProgress { .. } => unreachable!(),
-            DataPacket::FragmentData(v) => self.recv_data(exchange_meta.packet, v),
+            DataPacket::FragmentData(v) => self.recv_data(meta.packet, v),
         }
     }
 }
