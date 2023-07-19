@@ -252,7 +252,8 @@ impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> Processor for BlockMetaTransfor
             let mut data_block = self.input.pull_data().unwrap()?;
 
             if let Some(block_meta) = data_block.take_meta() {
-                if let Some(block_meta) = B::downcast_from(block_meta) {
+                if B::downcast_ref_from(&block_meta).is_some() {
+                    let block_meta = B::downcast_from(block_meta).unwrap();
                     if data_block.num_rows() != 0 {
                         return Err(ErrorCode::Internal("DataBlockMeta has rows"));
                     }
@@ -260,6 +261,8 @@ impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> Processor for BlockMetaTransfor
                     self.input_data = Some(block_meta);
                     return Ok(Event::Sync);
                 }
+
+                data_block = data_block.add_meta(Some(block_meta))?;
             }
 
             match T::UNKNOWN_MODE {
