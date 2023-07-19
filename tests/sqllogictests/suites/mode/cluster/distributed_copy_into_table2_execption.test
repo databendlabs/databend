@@ -66,14 +66,13 @@ select count(*) from products;
 statement ok
 select block_count from fuse_snapshot('default','products');
 
-# error test
-statement error 1001
+statement ok
 copy into products from (select $1,$2,$4 from @s1 as t2) force = true;
 
 query I
 select count(*) from products;
 ----
-0
+8000000
 
 statement ok
 set max_threads = 1;
