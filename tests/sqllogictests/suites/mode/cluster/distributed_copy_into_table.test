@@ -186,10 +186,10 @@ statement ok
 create stage test_stage;
 
 statement ok
-copy into @test_stage from (select * from random_source limit 10000000) FILE_FORMAT=(type=parquet) purge = true;
+copy into @test_stage from (select * from random_source limit 10000000) FILE_FORMAT=(type=parquet);
 
 statement ok
-copy into test_order from @test_stage file_format=(type=parquet) force=true;
+copy into test_order from @test_stage file_format=(type=parquet) force=true purge = true;
 
 query I
 select count(*) from test_order;
