@@ -186,7 +186,7 @@ statement ok
 create stage test_stage;
 
 statement ok
-copy into @test_stage from (select * from random_source limit 10000000) FILE_FORMAT=(type=parquet);
+copy into @test_stage from (select * from random_source limit 10000000) FILE_FORMAT=(type=parquet) purge = true;
 
 statement ok
 copy into test_order from @test_stage file_format=(type=parquet) force=true;
