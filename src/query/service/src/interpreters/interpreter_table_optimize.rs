@@ -119,7 +119,8 @@ impl OptimizeTableInterpreter {
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
-        let need_recluster = !table.cluster_keys(self.ctx.clone()).is_empty();
+        let need_recluster = !table.cluster_keys(self.ctx.clone()).is_empty()
+            && matches!(target, CompactTarget::Blocks);
 
         // check if the table is locked.
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
