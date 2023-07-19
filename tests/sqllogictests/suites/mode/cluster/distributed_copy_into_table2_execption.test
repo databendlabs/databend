@@ -75,6 +75,9 @@ select count(*) from products;
 8000000
 
 statement ok
+truncate table products;
+
+statement ok
 set max_threads = 1;
 
 query T
