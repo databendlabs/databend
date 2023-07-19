@@ -13,25 +13,21 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use common_arrow::native::read::reader::NativeReader;
 use common_catalog::plan::PartInfoPtr;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 
-use crate::io::NativeReaderExt;
+use crate::io::NativeSourceData;
 
 pub enum DataSource {
-    AggIndex(Vec<u8>),
-    Normal(DataChunks),
+    AggIndex(NativeSourceData),
+    Normal(NativeSourceData),
 }
-
-pub type DataChunks = BTreeMap<usize, Vec<NativeReader<Box<dyn NativeReaderExt>>>>;
 
 pub struct NativeDataSourceMeta {
     pub part: Vec<PartInfoPtr>,

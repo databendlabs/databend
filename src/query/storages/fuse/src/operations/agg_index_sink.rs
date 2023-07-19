@@ -136,6 +136,6 @@ impl AsyncSink for AggIndexSink {
         let mut block = data_block;
         self.process_block(&mut block);
 
-        Ok(true)
+        Ok(false)
     }
 }
