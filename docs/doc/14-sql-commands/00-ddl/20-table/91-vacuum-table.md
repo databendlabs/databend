@@ -9,12 +9,13 @@ import EEFeature from '@site/src/components/EEFeature';
 
 <EEFeature featureName='VACUUM TABLE'/>
 
-The VACUUM TABLE command helps to optimize the system performance by freeing up storage space through the permanent removal of historical data files from a table. This includes:
+The VACUUM TABLE command helps optimize system performance by freeing up storage space through the permanent removal of historical data files from a table. This includes:
 
 - Snapshots associated with the table, as well as their relevant segments and blocks.
 
 - Orphan files. Orphan files in Databend refer to snapshots, segments, and blocks that are no longer associated with the table. Orphan files might be generated from various operations and errors, such as during data backups and restores, and can take up valuable disk space and degrade the system performance over time.
 
+See also: [VACUUM DROP TABLE](91-vacuum-drop-table.md)
 
 ### Syntax and Examples
 
