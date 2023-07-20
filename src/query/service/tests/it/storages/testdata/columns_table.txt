@@ -46,7 +46,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'comment'                       | 'information_schema' | 'statistics'          | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'comment'                       | 'system'             | 'columns'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'comment'                       | 'system'             | 'stages'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'compaction_stats'              | 'system'             | 'background_tasks'    | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
+| 'compaction_stats'              | 'system'             | 'background_tasks'    | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |
 | 'constraint_catalog'            | 'information_schema' | 'key_column_usage'    | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'constraint_name'               | 'information_schema' | 'key_column_usage'    | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'constraint_schema'             | 'information_schema' | 'key_column_usage'    | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
@@ -303,7 +303,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'updated_on'                    | 'system'             | 'tables'              | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'updated_on'                    | 'system'             | 'tables_with_history' | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'user'                          | 'system'             | 'processes'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'vacuum_stats'                  | 'system'             | 'background_tasks'    | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
+| 'vacuum_stats'                  | 'system'             | 'background_tasks'    | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |
 | 'value'                         | 'system'             | 'configs'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'value'                         | 'system'             | 'malloc_stats_totals' | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'value'                         | 'system'             | 'metrics'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |

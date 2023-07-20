@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchema;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
@@ -73,13 +74,14 @@ impl Interpreter for DropTableColumnInterpreter {
             )));
         }
 
-        let table_schema = table_info.schema();
-        let field = table_schema.field_with_name(self.plan.column.as_str())?;
-        if field.computed_expr.is_none() {
+        let mut schema: DataSchema = table_info.schema().into();
+        let field = schema.field_with_name(self.plan.column.as_str())?;
+        if field.computed_expr().is_none() {
+            schema.drop_column(self.plan.column.as_str())?;
             // Check if this column is referenced by computed columns.
             check_referenced_computed_columns(
                 self.ctx.clone(),
-                table_schema,
+                Arc::new(schema),
                 self.plan.column.as_str(),
             )?;
         }

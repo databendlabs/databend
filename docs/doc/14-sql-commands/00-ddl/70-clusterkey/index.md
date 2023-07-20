@@ -1,14 +1,8 @@
 ---
-title: What is a Cluster Key?
+title: Understanding Cluster Key
 sidebar_position: 1
 slug: ./
 ---
-
-:::caution
-
-Cluster key is an `EXPERIMENTAL FEATURE`; we don't recommend using it in production.
-
-:::
 
 The cluster key is a data object for tables in Databend. It explicitly tells Databend how to divide and group rows of a table into the storage partitions rather than using the data ingestion order. 
 

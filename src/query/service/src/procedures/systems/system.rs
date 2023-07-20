@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::FuseColumnProcedure;
 use crate::procedures::systems::execute_job::ExecuteJobProcedure;
 use crate::procedures::systems::ClusteringInformationProcedure;
 use crate::procedures::systems::FuseBlockProcedure;
@@ -39,6 +40,10 @@ impl SystemProcedure {
         factory.register(
             "system$fuse_block",
             Box::new(FuseBlockProcedure::try_create),
+        );
+        factory.register(
+            "system$fuse_column",
+            Box::new(FuseColumnProcedure::try_create),
         );
         factory.register(
             "system$search_tables",

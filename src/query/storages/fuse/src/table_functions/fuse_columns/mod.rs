@@ -12,22 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod agg_index;
-mod block;
-mod bloom;
-pub mod meta;
-mod read_settings;
-mod snapshot_history_reader;
+mod fuse_column;
+mod fuse_column_table;
 
-pub use agg_index::AggIndexReader;
-pub use block::BlockReader;
-pub use block::MergeIOReadResult;
-pub use block::NativeReaderExt;
-pub use block::NativeSourceData;
-pub use block::UncompressedBuffer;
-pub use bloom::BloomBlockFilterReader;
-pub use meta::CompactSegmentInfoReader;
-pub use meta::MetaReaders;
-pub use meta::TableSnapshotReader;
-pub use read_settings::ReadSettings;
-pub use snapshot_history_reader::SnapshotHistoryReader;
+pub use fuse_column::FuseColumn;
+pub use fuse_column_table::FuseColumnTable;

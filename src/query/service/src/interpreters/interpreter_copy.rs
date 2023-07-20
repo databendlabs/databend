@@ -162,22 +162,22 @@ impl CopyInterpreter {
         let mut stage_table_info = plan.stage_table_info.clone();
         stage_table_info.files_to_copy = Some(files.clone());
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
-        let read_source_plan = {
-            stage_table
-                .read_plan_with_catalog(
-                    self.ctx.clone(),
-                    plan.catalog_name.to_string(),
-                    None,
-                    None,
-                    false,
-                )
-                .await?
-        };
-
-        if read_source_plan.parts.len() <= 1 {
-            return Ok(None);
-        }
         if plan.query.is_none() {
+            let read_source_plan = {
+                stage_table
+                    .read_plan_with_catalog(
+                        self.ctx.clone(),
+                        plan.catalog_name.to_string(),
+                        None,
+                        None,
+                        false,
+                    )
+                    .await?
+            };
+
+            if read_source_plan.parts.len() <= 1 {
+                return Ok(None);
+            }
             Ok(Some(CopyPlanType::DistributedCopyIntoTableFromStage(
                 DistributedCopyIntoTableFromStage {
                     // TODO(leiysky): we reuse the id of exchange here,
@@ -201,7 +201,8 @@ impl CopyInterpreter {
             )))
         } else {
             // plan query must exist, we can use unwarp directly.
-            let (select_interpreter, _) = self.build_query(plan.query.as_ref().unwrap()).await?;
+            let (select_interpreter, query_source_schema) =
+                self.build_query(plan.query.as_ref().unwrap()).await?;
             let plan_query = select_interpreter.build_physical_plan().await?;
             Ok(Some(CopyPlanType::CopyIntoTableFromQuery(
                 CopyIntoTableFromQuery {
@@ -209,12 +210,15 @@ impl CopyInterpreter {
                     // TODO(leiysky): we reuse the id of exchange here,
                     // which is not correct. We should generate a new id
                     plan_id: 0,
+                    ignore_result: select_interpreter.get_ignore_result(),
                     catalog_name: plan.catalog_name.clone(),
                     database_name: plan.database_name.clone(),
                     table_name: plan.table_name.clone(),
                     required_source_schema: plan.required_source_schema.clone(),
                     values_consts: plan.values_consts.clone(),
                     required_values_schema: plan.required_values_schema.clone(),
+                    result_columns: select_interpreter.get_result_columns(),
+                    query_source_schema,
                     write_mode: plan.write_mode,
                     validation_mode: plan.validation_mode.clone(),
                     force: plan.force,
