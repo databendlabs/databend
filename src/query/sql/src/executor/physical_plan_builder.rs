@@ -1080,12 +1080,10 @@ impl PhysicalPlanBuilder {
                     })
                     .collect::<Result<Vec<_>>>()?;
 
-                let mut unused_indices = HashSet::new();
-                if let Some(ref unused_columns) = project_set.unused_columns {
-                    for column in unused_columns {
-                        if let Ok(index) = input_schema.index_of(&column.to_string()) {
-                            unused_indices.insert(index);
-                        }
+                let mut projected_columns = ColumnSet::new();
+                for column in project_set.projected_columns.iter() {
+                    if let Ok(index) = input_schema.index_of(&column.to_string()) {
+                        projected_columns.insert(index);
                     }
                 }
 
@@ -1093,7 +1091,7 @@ impl PhysicalPlanBuilder {
                     plan_id: self.next_plan_id(),
                     input: Box::new(input),
                     srf_exprs,
-                    unused_indices,
+                    projected_columns,
                     stat_info: Some(stat_info),
                 }))
             }

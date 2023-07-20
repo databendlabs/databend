@@ -36,12 +36,12 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
+        input_num_rows: usize,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
-        let input_num_rows = input.num_rows();
         let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         let true_validity = &probe_state.true_validity;
@@ -64,6 +64,7 @@ impl JoinHashTable {
         let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
         let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
 
         // Start to probe hash table.
@@ -103,10 +104,16 @@ impl JoinHashTable {
                 probe_unmatched_indexes[probe_unmatched_indexes_occupied] = (i as u32, 1);
                 probe_unmatched_indexes_occupied += 1;
                 if probe_unmatched_indexes_occupied >= max_block_size {
+                    if self.interrupt.load(Ordering::Relaxed) {
+                        return Err(ErrorCode::AbortedQuery(
+                            "Aborted query, because the server is shutting down or the query was killed.",
+                        ));
+                    }
                     result_blocks.push(self.create_left_join_null_block(
                         input,
                         probe_unmatched_indexes,
                         probe_unmatched_indexes_occupied,
+                        is_build_projected,
                     )?);
                     probe_unmatched_indexes_occupied = 0;
                 }
@@ -119,79 +126,85 @@ impl JoinHashTable {
                         ));
                     }
 
-                    let build_block = self.row_space.gather(
-                        &local_build_indexes[0..matched_num],
-                        &data_blocks,
-                        &build_num_rows,
-                    )?;
-                    let mut probe_block = DataBlock::take_compacted_indices(
-                        input,
-                        &probe_indexes[0..probe_indexes_occupied],
-                        matched_num,
-                    )?;
-
-                    // For left join, wrap nullable for build block
-                    let (nullable_columns, num_rows) = if self.row_space.datablocks().is_empty() {
-                        (
-                            build_block
-                                .columns()
-                                .iter()
-                                .map(|c| BlockEntry {
-                                    value: Value::Scalar(Scalar::Null),
-                                    data_type: c.data_type.wrap_nullable(),
-                                })
-                                .collect::<Vec<_>>(),
+                    let probe_block = if !input.is_empty() {
+                        let mut probe_block = DataBlock::take_compacted_indices(
+                            input,
+                            &probe_indexes[0..probe_indexes_occupied],
                             matched_num,
-                        )
-                    } else if matched_num == max_block_size {
-                        (
-                            build_block
-                                .columns()
-                                .iter()
-                                .map(|c| Self::set_validity(c, max_block_size, true_validity))
-                                .collect::<Vec<_>>(),
-                            max_block_size,
-                        )
+                        )?;
+                        // For full join, wrap nullable for probe block
+                        if self.hash_join_desc.join_type == JoinType::Full {
+                            let nullable_probe_columns = if matched_num == max_block_size {
+                                probe_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| Self::set_validity(c, max_block_size, true_validity))
+                                    .collect::<Vec<_>>()
+                            } else {
+                                let mut validity = MutableBitmap::new();
+                                validity.extend_constant(matched_num, true);
+                                let validity: Bitmap = validity.into();
+                                probe_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| Self::set_validity(c, matched_num, &validity))
+                                    .collect::<Vec<_>>()
+                            };
+                            probe_block = DataBlock::new(nullable_probe_columns, matched_num);
+                        }
+                        Some(probe_block)
                     } else {
-                        let mut validity = MutableBitmap::new();
-                        validity.extend_constant(matched_num, true);
-                        let validity: Bitmap = validity.into();
-                        (
-                            build_block
-                                .columns()
-                                .iter()
-                                .map(|c| Self::set_validity(c, matched_num, &validity))
-                                .collect::<Vec<_>>(),
-                            matched_num,
-                        )
+                        None
                     };
-                    let nullable_build_block = DataBlock::new(nullable_columns, num_rows);
-
-                    // For full join, wrap nullable for probe block
-                    if self.hash_join_desc.join_type == JoinType::Full {
-                        let nullable_probe_columns = if matched_num == max_block_size {
-                            probe_block
-                                .columns()
-                                .iter()
-                                .map(|c| Self::set_validity(c, max_block_size, true_validity))
-                                .collect::<Vec<_>>()
+                    let build_block = if is_build_projected {
+                        let build_block = self.row_space.gather(
+                            &local_build_indexes[0..matched_num],
+                            &data_blocks,
+                            &build_num_rows,
+                        )?;
+                        // For left join, wrap nullable for build block
+                        let (nullable_columns, num_rows) = if build_num_rows == 0 {
+                            (
+                                build_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| BlockEntry {
+                                        value: Value::Scalar(Scalar::Null),
+                                        data_type: c.data_type.wrap_nullable(),
+                                    })
+                                    .collect::<Vec<_>>(),
+                                matched_num,
+                            )
+                        } else if matched_num == max_block_size {
+                            (
+                                build_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| Self::set_validity(c, max_block_size, true_validity))
+                                    .collect::<Vec<_>>(),
+                                max_block_size,
+                            )
                         } else {
                             let mut validity = MutableBitmap::new();
                             validity.extend_constant(matched_num, true);
                             let validity: Bitmap = validity.into();
-                            probe_block
-                                .columns()
-                                .iter()
-                                .map(|c| Self::set_validity(c, matched_num, &validity))
-                                .collect::<Vec<_>>()
+                            (
+                                build_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| Self::set_validity(c, matched_num, &validity))
+                                    .collect::<Vec<_>>(),
+                                matched_num,
+                            )
                         };
-                        probe_block = DataBlock::new(nullable_probe_columns, matched_num);
-                    }
+                        Some(DataBlock::new(nullable_columns, num_rows))
+                    } else {
+                        None
+                    };
+                    let result_block = self.merge_eq_block(build_block, probe_block);
 
-                    let merged_block = self.merge_eq_block(&nullable_build_block, &probe_block)?;
-
-                    if !merged_block.is_empty() {
-                        result_blocks.push(merged_block);
+                    if !result_block.is_empty() {
+                        result_blocks.push(result_block);
                         if self.hash_join_desc.join_type == JoinType::Full {
                             for row_ptr in local_build_indexes.iter().take(matched_num) {
                                 outer_scan_map[row_ptr.chunk_index as usize]
@@ -242,6 +255,7 @@ impl JoinHashTable {
             input,
             probe_unmatched_indexes,
             probe_unmatched_indexes_occupied,
+            is_build_projected,
         )?);
         Ok(result_blocks)
     }
@@ -252,12 +266,13 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
+        input_num_rows: usize,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
-        let input_num_rows = input.num_rows();
+        let input_num_rows = input_num_rows;
         let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         let true_validity = &probe_state.true_validity;
@@ -287,6 +302,7 @@ impl JoinHashTable {
         let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
         let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
 
         // Start to probe hash table.
@@ -336,85 +352,91 @@ impl JoinHashTable {
                         ));
                     }
 
-                    let build_block = self.row_space.gather(
-                        &local_build_indexes[0..matched_num],
-                        &data_blocks,
-                        &build_num_rows,
-                    )?;
-                    let mut probe_block = DataBlock::take_compacted_indices(
-                        input,
-                        &probe_indexes[0..probe_indexes_occupied],
-                        matched_num,
-                    )?;
-
-                    // For left join, wrap nullable for build block
-                    let (nullable_columns, num_rows) = if self.row_space.datablocks().is_empty() {
-                        (
-                            build_block
-                                .columns()
-                                .iter()
-                                .map(|c| BlockEntry {
-                                    value: Value::Scalar(Scalar::Null),
-                                    data_type: c.data_type.wrap_nullable(),
-                                })
-                                .collect::<Vec<_>>(),
+                    let probe_block = if !input.is_empty() {
+                        let mut probe_block = DataBlock::take_compacted_indices(
+                            input,
+                            &probe_indexes[0..probe_indexes_occupied],
                             matched_num,
-                        )
-                    } else if matched_num == max_block_size {
-                        (
-                            build_block
-                                .columns()
-                                .iter()
-                                .map(|c| Self::set_validity(c, max_block_size, true_validity))
-                                .collect::<Vec<_>>(),
-                            max_block_size,
-                        )
+                        )?;
+                        // For full join, wrap nullable for probe block
+                        if self.hash_join_desc.join_type == JoinType::Full {
+                            let nullable_probe_columns = if matched_num == max_block_size {
+                                probe_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| Self::set_validity(c, max_block_size, true_validity))
+                                    .collect::<Vec<_>>()
+                            } else {
+                                let mut validity = MutableBitmap::new();
+                                validity.extend_constant(matched_num, true);
+                                let validity: Bitmap = validity.into();
+                                probe_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| Self::set_validity(c, matched_num, &validity))
+                                    .collect::<Vec<_>>()
+                            };
+                            probe_block = DataBlock::new(nullable_probe_columns, matched_num)
+                        }
+                        Some(probe_block)
                     } else {
-                        let mut validity = MutableBitmap::new();
-                        validity.extend_constant(matched_num, true);
-                        let validity: Bitmap = validity.into();
-                        (
-                            build_block
-                                .columns()
-                                .iter()
-                                .map(|c| Self::set_validity(c, matched_num, &validity))
-                                .collect::<Vec<_>>(),
-                            matched_num,
-                        )
+                        None
                     };
-                    let nullable_build_block = DataBlock::new(nullable_columns, num_rows);
-
-                    // For full join, wrap nullable for probe block
-                    if self.hash_join_desc.join_type == JoinType::Full {
-                        let nullable_probe_columns = if matched_num == max_block_size {
-                            probe_block
-                                .columns()
-                                .iter()
-                                .map(|c| Self::set_validity(c, max_block_size, true_validity))
-                                .collect::<Vec<_>>()
+                    let build_block = if is_build_projected {
+                        let build_block = self.row_space.gather(
+                            &local_build_indexes[0..matched_num],
+                            &data_blocks,
+                            &build_num_rows,
+                        )?;
+                        // For left join, wrap nullable for build block
+                        let (nullable_columns, num_rows) = if build_num_rows == 0 {
+                            (
+                                build_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| BlockEntry {
+                                        value: Value::Scalar(Scalar::Null),
+                                        data_type: c.data_type.wrap_nullable(),
+                                    })
+                                    .collect::<Vec<_>>(),
+                                matched_num,
+                            )
+                        } else if matched_num == max_block_size {
+                            (
+                                build_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| Self::set_validity(c, max_block_size, true_validity))
+                                    .collect::<Vec<_>>(),
+                                max_block_size,
+                            )
                         } else {
                             let mut validity = MutableBitmap::new();
                             validity.extend_constant(matched_num, true);
                             let validity: Bitmap = validity.into();
-                            probe_block
-                                .columns()
-                                .iter()
-                                .map(|c| Self::set_validity(c, matched_num, &validity))
-                                .collect::<Vec<_>>()
+                            (
+                                build_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| Self::set_validity(c, matched_num, &validity))
+                                    .collect::<Vec<_>>(),
+                                matched_num,
+                            )
                         };
-                        probe_block = DataBlock::new(nullable_probe_columns, matched_num);
-                    }
+                        Some(DataBlock::new(nullable_columns, num_rows))
+                    } else {
+                        None
+                    };
+                    let result_block = self.merge_eq_block(build_block, probe_block);
 
-                    let merged_block = self.merge_eq_block(&nullable_build_block, &probe_block)?;
-
-                    if !merged_block.is_empty() {
+                    if !result_block.is_empty() {
                         let (bm, all_true, all_false) = self.get_other_filters(
-                            &merged_block,
+                            &result_block,
                             self.hash_join_desc.other_predicate.as_ref().unwrap(),
                         )?;
 
                         if all_true {
-                            result_blocks.push(merged_block);
+                            result_blocks.push(result_block);
                             if self.hash_join_desc.join_type == JoinType::Full {
                                 for row_ptr in local_build_indexes.iter().take(matched_num) {
                                     outer_scan_map[row_ptr.chunk_index as usize]
@@ -454,7 +476,7 @@ impl JoinHashTable {
                                 }
                             }
                             let filtered_block =
-                                DataBlock::filter_with_bitmap(merged_block, &validity)?;
+                                DataBlock::filter_with_bitmap(result_block, &validity)?;
                             result_blocks.push(filtered_block);
                         }
                     }
@@ -510,6 +532,7 @@ impl JoinHashTable {
                         input,
                         probe_indexes,
                         probe_indexes_occupied,
+                        is_build_projected,
                     )?);
                     probe_indexes_occupied = 0;
                 }
@@ -525,6 +548,7 @@ impl JoinHashTable {
             input,
             probe_indexes,
             probe_indexes_occupied,
+            is_build_projected,
         )?);
         Ok(result_blocks)
     }
@@ -534,38 +558,46 @@ impl JoinHashTable {
         input: &DataBlock,
         indexes: &[(u32, u32)],
         occupied: usize,
+        is_build_projected: bool,
     ) -> Result<DataBlock> {
-        let null_build_block = DataBlock::new(
-            self.row_space
-                .data_schema
-                .fields()
-                .iter()
-                .map(|df| BlockEntry {
-                    data_type: df.data_type().clone(),
-                    value: Value::Scalar(Scalar::Null),
-                })
-                .collect(),
-            occupied,
-        );
-
-        let mut probe_block =
-            DataBlock::take_compacted_indices(input, &indexes[0..occupied], occupied)?;
-
-        // For full join, wrap nullable for probe block
-        if self.hash_join_desc.join_type == JoinType::Full {
-            let nullable_probe_columns = probe_block
-                .columns()
-                .iter()
-                .map(|c| {
-                    let mut probe_validity = MutableBitmap::new();
-                    probe_validity.extend_constant(occupied, true);
-                    let probe_validity: Bitmap = probe_validity.into();
-                    Self::set_validity(c, occupied, &probe_validity)
-                })
-                .collect::<Vec<_>>();
-            probe_block = DataBlock::new(nullable_probe_columns, occupied);
-        }
-
-        self.merge_eq_block(&null_build_block, &probe_block)
+        let probe_block = if !input.is_empty() {
+            let mut probe_block =
+                DataBlock::take_compacted_indices(input, &indexes[0..occupied], occupied)?;
+            // For full join, wrap nullable for probe block
+            if self.hash_join_desc.join_type == JoinType::Full {
+                let nullable_probe_columns = probe_block
+                    .columns()
+                    .iter()
+                    .map(|c| {
+                        let mut probe_validity = MutableBitmap::new();
+                        probe_validity.extend_constant(occupied, true);
+                        let probe_validity: Bitmap = probe_validity.into();
+                        Self::set_validity(c, occupied, &probe_validity)
+                    })
+                    .collect::<Vec<_>>();
+                probe_block = DataBlock::new(nullable_probe_columns, occupied);
+            }
+            Some(probe_block)
+        } else {
+            None
+        };
+        let build_block = if is_build_projected {
+            let null_build_block = DataBlock::new(
+                self.row_space
+                    .build_schema
+                    .fields()
+                    .iter()
+                    .map(|df| BlockEntry {
+                        data_type: df.data_type().clone(),
+                        value: Value::Scalar(Scalar::Null),
+                    })
+                    .collect(),
+                occupied,
+            );
+            Some(null_build_block)
+        } else {
+            None
+        };
+        Ok(self.merge_eq_block(build_block, probe_block))
     }
 }

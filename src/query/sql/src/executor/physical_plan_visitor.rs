@@ -171,6 +171,8 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: plan.plan_id,
+            build_projected_columns: plan.build_projected_columns.clone(),
+            probe_projected_columns: plan.probe_projected_columns.clone(),
             build: Box::new(build),
             probe: Box::new(probe),
             build_keys: plan.build_keys.clone(),
@@ -342,7 +344,7 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             srf_exprs: plan.srf_exprs.clone(),
-            unused_indices: plan.unused_indices.clone(),
+            projected_columns: plan.projected_columns.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }

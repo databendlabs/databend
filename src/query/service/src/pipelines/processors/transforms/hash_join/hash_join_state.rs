@@ -100,9 +100,9 @@ pub trait HashJoinState: Send + Sync {
     /// Get `fast_return`
     fn fast_return(&self) -> Result<bool>;
 
-    /// Get `merged_schema` which is `probe_schema` + `build_schema`
-    fn merged_schema(&self) -> Result<DataSchemaRef>;
-
     /// Get join type
     fn join_type(&self) -> JoinType;
+
+    /// Get join type
+    fn probe_schema(&self) -> DataSchemaRef;
 }

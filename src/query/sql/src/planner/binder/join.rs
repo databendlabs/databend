@@ -192,6 +192,7 @@ impl Binder {
             &mut non_equi_conditions,
         )?;
         let logical_join = Join {
+            projected_columns: vec![],
             left_conditions,
             right_conditions,
             non_equi_conditions,

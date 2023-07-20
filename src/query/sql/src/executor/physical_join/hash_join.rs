@@ -18,6 +18,7 @@ use common_expression::type_check::check_cast;
 use common_expression::type_check::common_super_type;
 use common_expression::ConstantFolder;
 use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
 
@@ -26,6 +27,7 @@ use crate::executor::Exchange;
 use crate::executor::HashJoin;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
@@ -85,7 +87,7 @@ impl PhysicalPlanBuilder {
         }
 
         let build_schema = match join.join_type {
-            JoinType::Left | JoinType::Full => {
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
                 let build_schema = build_side.output_schema()?;
                 // Wrap nullable type for columns in build side.
                 let build_schema = DataSchemaRefExt::create(
@@ -99,7 +101,6 @@ impl PhysicalPlanBuilder {
                 );
                 build_schema
             }
-
             _ => build_side.output_schema()?,
         };
 
@@ -118,7 +119,6 @@ impl PhysicalPlanBuilder {
                 );
                 probe_schema
             }
-
             _ => probe_side.output_schema()?,
         };
 
@@ -175,17 +175,48 @@ impl PhysicalPlanBuilder {
             right_join_conditions.push(right_expr.as_remote_expr());
         }
 
-        let merged_schema = DataSchemaRefExt::create(
-            probe_schema
-                .fields()
-                .iter()
-                .chain(build_schema.fields())
-                .cloned()
-                .collect::<Vec<_>>(),
-        );
+        let mut probe_projected_columns = ColumnSet::new();
+        let mut build_projected_columns = ColumnSet::new();
+        for column in join.projected_columns.iter() {
+            if let Ok(index) = probe_schema.index_of(&column.to_string()) {
+                probe_projected_columns.insert(index);
+            }
+            if let Ok(index) = build_schema.index_of(&column.to_string()) {
+                build_projected_columns.insert(index);
+            }
+        }
+
+        // If build_projected_columns and probe_projected_columns is both empty, the parent operator is count(*),
+        // we will select a random column and add it to probe_fields or build_fields.
+        // TODO(Dousir9): construct a virtual column.
+        if build_projected_columns.is_empty() && probe_projected_columns.is_empty() {
+            Self::add_field_for_count(
+                &build_schema,
+                &probe_schema,
+                &join.join_type,
+                &mut probe_projected_columns,
+                &mut build_projected_columns,
+            );
+        }
+
+        let mut merged_fields =
+            Vec::with_capacity(probe_projected_columns.len() + build_projected_columns.len());
+        for (i, field) in probe_schema.fields().iter().enumerate() {
+            if probe_projected_columns.contains(&i) {
+                merged_fields.push(field.clone());
+            }
+        }
+        for (i, field) in build_schema.fields().iter().enumerate() {
+            if build_projected_columns.contains(&i) {
+                merged_fields.push(field.clone());
+            }
+        }
+        let merged_schema = DataSchemaRefExt::create(merged_fields);
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: self.next_plan_id(),
+            build_projected_columns,
+            probe_projected_columns,
             build: build_side,
             probe: probe_side,
             join_type: join.join_type.clone(),
@@ -210,5 +241,34 @@ impl PhysicalPlanBuilder {
             contain_runtime_filter: join.contain_runtime_filter,
             stat_info: Some(stat_info),
         }))
+    }
+
+    #[inline]
+    fn add_field_for_count(
+        build_schema: &DataSchema,
+        probe_schema: &DataSchema,
+        join_type: &JoinType,
+        probe_projected_columns: &mut ColumnSet,
+        build_projected_columns: &mut ColumnSet,
+    ) {
+        match join_type {
+            JoinType::Inner
+            | JoinType::Cross
+            | JoinType::Left
+            | JoinType::LeftSingle
+            | JoinType::Right
+            | JoinType::RightSingle
+            | JoinType::Full
+            | JoinType::LeftSemi
+            | JoinType::LeftAnti
+            | JoinType::RightMark => {
+                debug_assert!(probe_schema.num_fields() > 0);
+                probe_projected_columns.insert(0);
+            }
+            JoinType::RightSemi | JoinType::RightAnti | JoinType::LeftMark => {
+                debug_assert!(build_schema.num_fields() > 0);
+                build_projected_columns.insert(0);
+            }
+        }
     }
 }

@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::vec;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -427,6 +428,7 @@ impl SubqueryRewriter {
                     )),
                 );
                 let cross_join = Join {
+                    projected_columns: vec![],
                     left_conditions: vec![],
                     right_conditions: vec![],
                     non_equi_conditions: vec![],
@@ -498,6 +500,7 @@ impl SubqueryRewriter {
                 // Will be transferred to:select t1.a, t2.a, marker_index from t1, t2 where t2.a = t1.a;
                 // Note that subquery is the right table, and it'll be the build side.
                 let mark_join = Join {
+                    projected_columns: vec![],
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
                     non_equi_conditions,
@@ -527,6 +530,7 @@ impl SubqueryRewriter {
         // Such as `SELECT * FROM c WHERE c_id=(SELECT max(c_id) FROM o WHERE ship='WA');`
         // We can push down `c_id = max(c_id)` to cross join then make it as inner join.
         let join_plan = Join {
+            projected_columns: vec![],
             left_conditions: vec![],
             right_conditions: vec![],
             non_equi_conditions: vec![],

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -171,12 +170,10 @@ pub struct ProjectSet {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
+    pub projected_columns: ColumnSet,
 
     pub input: Box<PhysicalPlan>,
-
     pub srf_exprs: Vec<(RemoteExpr, IndexType)>,
-
-    pub unused_indices: HashSet<IndexType>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -187,7 +184,7 @@ impl ProjectSet {
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(input_schema.num_fields() + self.srf_exprs.len());
         for (i, field) in input_schema.fields().iter().enumerate() {
-            if !self.unused_indices.contains(&i) {
+            if self.projected_columns.contains(&i) {
                 fields.push(field.clone());
             }
         }
@@ -479,6 +476,8 @@ pub struct HashJoin {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
+    pub build_projected_columns: ColumnSet,
+    pub probe_projected_columns: ColumnSet,
 
     pub build: Box<PhysicalPlan>,
     pub probe: Box<PhysicalPlan>,
@@ -488,7 +487,6 @@ pub struct HashJoin {
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
-
     // It means that join has a corresponding runtime filter
     pub contain_runtime_filter: bool,
 
@@ -498,82 +496,96 @@ pub struct HashJoin {
 
 impl HashJoin {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let mut fields = self.probe.output_schema()?.fields().clone();
+        let build_schema = match self.join_type {
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
+                let build_schema = self.build.output_schema()?;
+                // Wrap nullable type for columns in build side.
+                let build_schema = DataSchemaRefExt::create(
+                    build_schema
+                        .fields()
+                        .iter()
+                        .map(|field| {
+                            DataField::new(field.name(), field.data_type().wrap_nullable())
+                        })
+                        .collect::<Vec<_>>(),
+                );
+                build_schema
+            }
+            _ => self.build.output_schema()?,
+        };
+
+        let probe_schema = match self.join_type {
+            JoinType::Right | JoinType::RightSingle | JoinType::Full => {
+                let probe_schema = self.probe.output_schema()?;
+                // Wrap nullable type for columns in probe side.
+                let probe_schema = DataSchemaRefExt::create(
+                    probe_schema
+                        .fields()
+                        .iter()
+                        .map(|field| {
+                            DataField::new(field.name(), field.data_type().wrap_nullable())
+                        })
+                        .collect::<Vec<_>>(),
+                );
+                probe_schema
+            }
+            _ => self.probe.output_schema()?,
+        };
+
+        let mut probe_fields = Vec::with_capacity(self.probe_projected_columns.len());
+        let mut build_fields = Vec::with_capacity(self.build_projected_columns.len());
+        for (i, field) in probe_schema.fields().iter().enumerate() {
+            if self.probe_projected_columns.contains(&i) {
+                probe_fields.push(field.clone());
+            }
+        }
+        for (i, field) in build_schema.fields().iter().enumerate() {
+            if self.build_projected_columns.contains(&i) {
+                build_fields.push(field.clone());
+            }
+        }
+
         match self.join_type {
-            JoinType::Left | JoinType::LeftSingle => {
-                for field in self.build.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().wrap_nullable(),
-                    ));
+            JoinType::Cross
+            | JoinType::Inner
+            | JoinType::Left
+            | JoinType::LeftSingle
+            | JoinType::Right
+            | JoinType::RightSingle
+            | JoinType::Full => {
+                probe_fields.extend(build_fields);
+                if probe_fields.is_empty() {
+                    probe_fields.push(probe_schema.field(0).clone());
                 }
+                Ok(DataSchemaRefExt::create(probe_fields))
             }
-            JoinType::Right | JoinType::RightSingle => {
-                fields.clear();
-                for field in self.probe.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().wrap_nullable(),
-                    ));
-                }
-                for field in self.build.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().clone(),
-                    ));
-                }
-            }
-            JoinType::Full => {
-                fields.clear();
-                for field in self.probe.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().wrap_nullable(),
-                    ));
-                }
-                for field in self.build.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().wrap_nullable(),
-                    ));
-                }
-            }
-            JoinType::LeftSemi | JoinType::LeftAnti => {
-                // Do nothing
-            }
-            JoinType::RightSemi | JoinType::RightAnti => {
-                fields.clear();
-                fields = self.build.output_schema()?.fields().clone();
-            }
-            JoinType::LeftMark | JoinType::RightMark => {
-                fields.clear();
-                let outer_table = if self.join_type == JoinType::RightMark {
-                    &self.probe
-                } else {
-                    &self.build
-                };
-                fields = outer_table.output_schema()?.fields().clone();
+            JoinType::LeftSemi | JoinType::LeftAnti => Ok(DataSchemaRefExt::create(probe_fields)),
+            JoinType::RightSemi | JoinType::RightAnti => Ok(DataSchemaRefExt::create(build_fields)),
+            JoinType::LeftMark => {
                 let name = if let Some(idx) = self.marker_index {
                     idx.to_string()
                 } else {
                     "marker".to_string()
                 };
-                fields.push(DataField::new(
+                build_fields.push(DataField::new(
                     name.as_str(),
                     DataType::Nullable(Box::new(DataType::Boolean)),
                 ));
+                Ok(DataSchemaRefExt::create(build_fields))
             }
-
-            _ => {
-                for field in self.build.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().clone(),
-                    ));
-                }
+            JoinType::RightMark => {
+                let name = if let Some(idx) = self.marker_index {
+                    idx.to_string()
+                } else {
+                    "marker".to_string()
+                };
+                probe_fields.push(DataField::new(
+                    name.as_str(),
+                    DataType::Nullable(Box::new(DataType::Boolean)),
+                ));
+                Ok(DataSchemaRefExt::create(probe_fields))
             }
         }
-        Ok(DataSchemaRefExt::create(fields))
     }
 }
 

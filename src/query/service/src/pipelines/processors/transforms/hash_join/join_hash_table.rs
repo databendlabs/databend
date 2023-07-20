@@ -39,6 +39,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::StringHashJoinHashMap;
+use common_sql::optimizer::ColumnSet;
 use common_sql::plans::JoinType;
 use ethnum::U256;
 use parking_lot::Mutex;
@@ -103,6 +104,11 @@ pub struct JoinHashTable {
     pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
     pub(crate) hash_join_desc: HashJoinDesc,
     pub(crate) probe_schema: DataSchemaRef,
+    /// Projected columns
+    pub(crate) probe_projected_columns: Arc<ColumnSet>,
+    pub(crate) build_projected_columns: Arc<ColumnSet>,
+    pub(crate) is_build_projected: Arc<AtomicBool>,
+    /// Interrupt
     pub(crate) interrupt: Arc<AtomicBool>,
     /// Finalize tasks
     pub(crate) build_worker_num: Arc<AtomicU32>,
@@ -114,8 +120,10 @@ pub struct JoinHashTable {
     /// LeftMarkScan map
     pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
     pub(crate) mark_scan_map_lock: Mutex<bool>,
-    /// fast return
+    /// Fast return
     pub(crate) fast_return: Arc<RwLock<bool>>,
+    /// Records the number of rows on the build side, for cross join.
+    pub(crate) build_num_rows: Arc<AtomicUsize>,
 }
 
 impl JoinHashTable {
@@ -124,6 +132,8 @@ impl JoinHashTable {
         build_keys: &[RemoteExpr],
         build_schema: DataSchemaRef,
         probe_schema: DataSchemaRef,
+        probe_projected_columns: &ColumnSet,
+        build_projected_columns: &ColumnSet,
         hash_join_desc: HashJoinDesc,
     ) -> Result<Arc<JoinHashTable>> {
         let hash_key_types = build_keys
@@ -135,6 +145,8 @@ impl JoinHashTable {
             ctx,
             build_schema,
             probe_schema,
+            probe_projected_columns,
+            build_projected_columns,
             hash_join_desc,
             method,
         )?))
@@ -144,6 +156,8 @@ impl JoinHashTable {
         ctx: Arc<QueryContext>,
         mut build_data_schema: DataSchemaRef,
         mut probe_data_schema: DataSchemaRef,
+        probe_projected_columns: &ColumnSet,
+        build_projected_columns: &ColumnSet,
         hash_join_desc: HashJoinDesc,
         method: HashMethodKind,
     ) -> Result<Self> {
@@ -164,7 +178,7 @@ impl JoinHashTable {
             probe_data_schema = probe_schema_wrap_nullable(&probe_data_schema);
         }
         Ok(Self {
-            row_space: RowSpace::new(ctx.clone(), build_data_schema)?,
+            row_space: RowSpace::new(ctx.clone(), build_data_schema, build_projected_columns)?,
             build_side_block_size_limit: Arc::new(
                 ctx.get_settings().get_max_block_size()? as usize * 16,
             ),
@@ -184,6 +198,9 @@ impl JoinHashTable {
             raw_entry_spaces: Mutex::new(vec![]),
             hash_join_desc,
             probe_schema: probe_data_schema,
+            probe_projected_columns: Arc::new(probe_projected_columns.clone()),
+            build_projected_columns: Arc::new(build_projected_columns.clone()),
+            is_build_projected: Arc::new(AtomicBool::new(true)),
             interrupt: Arc::new(AtomicBool::new(false)),
             build_worker_num: Arc::new(AtomicU32::new(0)),
             finalize_tasks: Arc::new(RwLock::new(VecDeque::new())),
@@ -192,6 +209,7 @@ impl JoinHashTable {
             mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             mark_scan_map_lock: Mutex::new(false),
             fast_return: Default::default(),
+            build_num_rows: Arc::new(AtomicUsize::new(0)),
         })
     }
 
@@ -266,13 +284,28 @@ impl JoinHashTable {
             probe_state.valids = valids;
         }
 
+        let column_nums = input.num_columns();
+        let mut columns = Vec::with_capacity(self.probe_projected_columns.len());
+        for index in 0..column_nums {
+            if !&self.probe_projected_columns.contains(&index) {
+                continue;
+            }
+            columns.push(input.get_by_offset(index).clone())
+        }
+        let input_num_rows = input.num_rows();
+        let input = if columns.is_empty() {
+            DataBlock::empty()
+        } else {
+            DataBlock::new(columns, input_num_rows)
+        };
+
         if self.fast_return()?
             && matches!(
                 self.hash_join_desc.join_type,
                 JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
             )
         {
-            return self.left_fast_return(&input);
+            return self.left_fast_return(input, input_num_rows);
         }
 
         let hash_table = unsafe { &*self.hash_table.get() };
@@ -280,9 +313,15 @@ impl JoinHashTable {
             HashJoinHashTable::T(table) => {
                 let keys_state = table
                     .hash_method
-                    .build_keys_state(&probe_keys, input.num_rows())?;
+                    .build_keys_state(&probe_keys, input_num_rows)?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
+                self.result_blocks(
+                    &table.hash_table,
+                    probe_state,
+                    keys_iter,
+                    &input,
+                    input_num_rows,
+                )
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",

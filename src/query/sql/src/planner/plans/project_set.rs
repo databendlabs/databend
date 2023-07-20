@@ -40,8 +40,18 @@ pub struct SrfItem {
 /// and return the joined result with input relation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ProjectSet {
+    pub projected_columns: Vec<IndexType>,
     pub srfs: Vec<SrfItem>,
-    pub unused_columns: Option<Vec<IndexType>>,
+}
+
+impl ProjectSet {
+    #[inline]
+    pub fn replace_projected_columns(&self, projected_columns: Vec<IndexType>) -> Self {
+        Self {
+            projected_columns,
+            srfs: self.srfs.clone(),
+        }
+    }
 }
 
 impl Operator for ProjectSet {

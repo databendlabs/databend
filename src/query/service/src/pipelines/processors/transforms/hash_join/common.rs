@@ -47,14 +47,18 @@ impl JoinHashTable {
     // Merge build chunk and probe chunk that have the same number of rows
     pub(crate) fn merge_eq_block(
         &self,
-        build_block: &DataBlock,
-        probe_block: &DataBlock,
-    ) -> Result<DataBlock> {
-        let mut probe_block = probe_block.clone();
-        for col in build_block.columns() {
-            probe_block.add_column(col.clone());
+        build_block: Option<DataBlock>,
+        probe_block: Option<DataBlock>,
+    ) -> DataBlock {
+        match (probe_block, build_block) {
+            (Some(mut probe_block), Some(build_block)) => {
+                probe_block.merge_block(build_block);
+                probe_block
+            }
+            (Some(probe_block), None) => probe_block,
+            (None, Some(build_block)) => build_block,
+            (None, None) => unreachable!("probe_block and build_block are both empty."),
         }
-        Ok(probe_block)
     }
 
     #[inline]
@@ -251,7 +255,7 @@ impl JoinHashTable {
         let mut data_block = data_block;
         if matches!(
             self.hash_join_desc.join_type,
-            JoinType::Left | JoinType::Full
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full
         ) {
             let mut validity = MutableBitmap::new();
             validity.extend_constant(data_block.num_rows(), true);
@@ -265,10 +269,7 @@ impl JoinHashTable {
             data_block = DataBlock::new(nullable_columns, data_block.num_rows());
         }
 
-        let chunk = Chunk {
-            data_block,
-            keys_state: None,
-        };
+        let chunk = Chunk { data_block };
 
         {
             // Acquire write lock in current scope

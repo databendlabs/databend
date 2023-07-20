@@ -23,7 +23,6 @@ use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
-use crate::plans::ProjectSet;
 use crate::plans::RelOperator;
 use crate::ColumnEntry;
 use crate::MetadataRef;
@@ -97,21 +96,26 @@ impl UnusedColumnPruner {
                 ))))
             }
             RelOperator::Join(p) => {
+                let others = p
+                    .non_equi_conditions
+                    .iter()
+                    .fold(required.clone(), |acc, v| {
+                        acc.union(&v.used_columns()).cloned().collect()
+                    });
                 // Include columns referenced in left conditions
                 let left = p.left_conditions.iter().fold(required.clone(), |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
                 // Include columns referenced in right conditions
-                let right = p.right_conditions.iter().fold(required.clone(), |acc, v| {
+                let right = p.right_conditions.iter().fold(required, |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
 
-                let others = p.non_equi_conditions.iter().fold(required, |acc, v| {
-                    acc.union(&v.used_columns()).cloned().collect()
-                });
+                let projected_columns = others.clone().into_iter().collect::<Vec<_>>();
+                let join = p.replace_projected_columns(projected_columns);
 
                 Ok(SExpr::create_binary(
-                    Arc::new(RelOperator::Join(p.clone())),
+                    Arc::new(RelOperator::Join(join)),
                     Arc::new(self.keep_required_columns(
                         expr.child(0)?,
                         left.union(&others).cloned().collect(),
@@ -124,7 +128,11 @@ impl UnusedColumnPruner {
             }
 
             RelOperator::EvalScalar(p) => {
+                // OK
+                // require 是上层用到的，然后需要只掉本层用到的，然后将只在本层用到的截住
+                // 这是是只保留了上层用到的 item，执行的时候也会有裁剪的效果。
                 let mut used = vec![];
+                // let mut projected;
                 // Only keep columns needed by parent plan.
                 for s in p.items.iter() {
                     if !required.contains(&s.index) {
@@ -257,19 +265,15 @@ impl UnusedColumnPruner {
                 ))
             }
 
-            RelOperator::ProjectSet(op) => {
-                let parent_required = required.clone();
-                for s in op.srfs.iter() {
+            RelOperator::ProjectSet(p) => {
+                let projected_columns = required.clone().into_iter().collect::<Vec<_>>();
+                for s in p.srfs.iter() {
                     required.extend(s.scalar.used_columns().iter().copied());
                 }
                 // Columns that are not used by the parent plan don't need to be kept.
                 // Repeating the rows to as many as the results of SRF may result in an OOM.
-                let unused = required.difference(&parent_required);
-                let unused_columns = unused.into_iter().copied().collect::<Vec<_>>();
-                let project_set = ProjectSet {
-                    srfs: op.srfs.clone(),
-                    unused_columns: Some(unused_columns),
-                };
+                // let unprojected = parent_required.difference(&required).into_iter().copied().collect::<Vec<_>>();
+                let project_set = p.replace_projected_columns(projected_columns);
 
                 Ok(SExpr::create_unary(
                     Arc::new(RelOperator::ProjectSet(project_set)),

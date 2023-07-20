@@ -402,6 +402,8 @@ impl PipelineBuilder {
             &join.build_keys,
             join.build.output_schema()?,
             join.probe.output_schema()?,
+            &join.probe_projected_columns,
+            &join.build_projected_columns,
             HashJoinDesc::create(join)?,
         )
     }
@@ -657,7 +659,7 @@ impl PipelineBuilder {
                 .iter()
                 .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
                 .collect(),
-            unused_indices: project_set.unused_indices.clone(),
+            projected_columns: project_set.projected_columns.clone(),
         };
 
         let func_ctx = self.ctx.get_function_context()?;

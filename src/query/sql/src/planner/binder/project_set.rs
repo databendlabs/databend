@@ -190,7 +190,7 @@ impl Binder {
 
         let project_set = ProjectSet {
             srfs: items,
-            unused_columns: None,
+            projected_columns: vec![],
         };
 
         Ok(SExpr::create_unary(

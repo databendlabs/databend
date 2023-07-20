@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::plan::AggIndexMeta;
@@ -39,7 +38,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
-use crate::IndexType;
+use crate::optimizer::ColumnSet;
 
 /// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
 #[derive(Clone)]
@@ -62,7 +61,7 @@ pub enum BlockOperator {
     /// Expand the input [`DataBlock`] with set-returning functions.
     FlatMap {
         srf_exprs: Vec<Expr>,
-        unused_indices: HashSet<IndexType>,
+        projected_columns: ColumnSet,
     },
 }
 
@@ -139,7 +138,7 @@ impl BlockOperator {
 
             BlockOperator::FlatMap {
                 srf_exprs,
-                unused_indices,
+                projected_columns,
             } => {
                 let eval = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
 
@@ -167,7 +166,7 @@ impl BlockOperator {
                 let mut result = DataBlock::empty();
                 let mut block_is_empty = true;
                 for index in 0..input_num_columns {
-                    if unused_indices.contains(&index) {
+                    if !projected_columns.contains(&index) {
                         continue;
                     }
                     let column = input.get_by_offset(index);

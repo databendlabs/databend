@@ -296,6 +296,19 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn merge_block(&mut self, block: DataBlock) {
+        self.columns.reserve(block.num_columns());
+        for column in block.columns.into_iter() {
+            #[cfg(debug_assertions)]
+            if let Value::Column(col) = &column.value {
+                assert_eq!(self.num_rows, col.len());
+                assert_eq!(col.data_type(), column.data_type);
+            }
+            self.columns.push(column);
+        }
+    }
+
+    #[inline]
     pub fn add_column(&mut self, entry: BlockEntry) {
         #[cfg(debug_assertions)]
         if let Value::Column(col) = &entry.value {

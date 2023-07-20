@@ -153,9 +153,10 @@ impl JoinHashTable {
             .iter()
             .map(|c| &c.data_block)
             .collect::<Vec<_>>();
-        let num_rows = data_blocks
+        let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
 
         let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
         let _mark_scan_map_lock = self.mark_scan_map_lock.lock();
@@ -190,17 +191,26 @@ impl JoinHashTable {
                         ));
                     }
 
-                    let probe_block = DataBlock::take_compacted_indices(
-                        input,
-                        &probe_indexes[0..probe_indexes_len],
-                        occupied,
-                    )?;
-                    let build_block =
-                        self.row_space
-                            .gather(build_indexes, &data_blocks, &num_rows)?;
-                    let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+                    let probe_block = if !input.is_empty() {
+                        Some(DataBlock::take_compacted_indices(
+                            input,
+                            &probe_indexes[0..probe_indexes_len],
+                            occupied,
+                        )?)
+                    } else {
+                        None
+                    };
+                    let build_block = if is_build_projected {
+                        Some(
+                            self.row_space
+                                .gather(build_indexes, &data_blocks, &build_num_rows)?,
+                        )
+                    } else {
+                        None
+                    };
+                    let result_block = self.merge_eq_block(build_block, probe_block);
 
-                    let filter = self.get_nullable_filter_column(&merged_block, other_predicate)?;
+                    let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
                     let filter_viewer =
                         NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
                     let validity = &filter_viewer.validity;
@@ -249,17 +259,38 @@ impl JoinHashTable {
             }
         }
 
-        let probe_block = DataBlock::take_compacted_indices(
-            input,
-            &probe_indexes[0..probe_indexes_len],
-            occupied,
-        )?;
-        let build_block =
-            self.row_space
-                .gather(&build_indexes[0..occupied], &data_blocks, &num_rows)?;
-        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+        if self.hash_join_desc.from_correlated_subquery {
+            // Must be correlated ANY subquery, we won't need to check `has_null` in `mark_join_blocks`.
+            // In the following, if value is Null and Marker is False, we'll set the marker to Null
+            let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
+            *has_null = false;
+        }
 
-        let filter = self.get_nullable_filter_column(&merged_block, other_predicate)?;
+        if probe_indexes_len == 0 {
+            return Ok(vec![]);
+        }
+
+        let probe_block = if !input.is_empty() {
+            Some(DataBlock::take_compacted_indices(
+                input,
+                &probe_indexes[0..probe_indexes_len],
+                occupied,
+            )?)
+        } else {
+            None
+        };
+        let build_block = if is_build_projected {
+            Some(self.row_space.gather(
+                &build_indexes[0..occupied],
+                &data_blocks,
+                &build_num_rows,
+            )?)
+        } else {
+            None
+        };
+        let result_block = self.merge_eq_block(build_block, probe_block);
+
+        let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
         let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
         let validity = &filter_viewer.validity;
         let data = &filter_viewer.column;
@@ -276,13 +307,6 @@ impl JoinHashTable {
                 mark_scan_map[build_index.chunk_index as usize][build_index.row_index as usize] =
                     MARKER_KIND_TRUE;
             }
-        }
-
-        if self.hash_join_desc.from_correlated_subquery {
-            // Must be correlated ANY subquery, we won't need to check `has_null` in `mark_join_blocks`.
-            // In the following, if value is Null and Marker is False, we'll set the marker to Null
-            let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
-            *has_null = false;
         }
 
         Ok(vec![])

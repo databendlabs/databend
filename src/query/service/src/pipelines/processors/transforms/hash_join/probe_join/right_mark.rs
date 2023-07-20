@@ -37,6 +37,7 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
+        input_num_rows: usize,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
@@ -56,10 +57,14 @@ impl JoinHashTable {
             }
         }
 
-        Ok(vec![self.merge_eq_block(
-            &self.create_marker_block(has_null, markers, input.num_rows())?,
-            input,
-        )?])
+        let probe_block = if !input.is_empty() {
+            Some(input.clone())
+        } else {
+            None
+        };
+        let marker_block = Some(self.create_marker_block(has_null, markers, input_num_rows)?);
+
+        Ok(vec![self.merge_eq_block(marker_block, probe_block)])
     }
 
     pub(crate) fn probe_right_mark_join_with_conjunct<'a, H: HashJoinHashtableLike, IT>(
@@ -68,6 +73,7 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
+        input_num_rows: usize,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
@@ -82,7 +88,7 @@ impl JoinHashTable {
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
             .collect::<Vec<_>>();
         let markers = probe_state.markers.as_mut().unwrap();
-        Self::init_markers(&cols, input.num_rows(), markers);
+        Self::init_markers(&cols, input_num_rows, markers);
 
         let _func_ctx = self.ctx.get_function_context()?;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
@@ -98,9 +104,10 @@ impl JoinHashTable {
             .iter()
             .map(|c| &c.data_block)
             .collect::<Vec<_>>();
-        let num_rows = data_blocks
+        let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) =
@@ -132,17 +139,26 @@ impl JoinHashTable {
                         ));
                     }
 
-                    let probe_block = DataBlock::take_compacted_indices(
-                        input,
-                        &probe_indexes[0..probe_indexes_len],
-                        occupied,
-                    )?;
-                    let build_block =
-                        self.row_space
-                            .gather(build_indexes, &data_blocks, &num_rows)?;
-                    let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+                    let probe_block = if !input.is_empty() {
+                        Some(DataBlock::take_compacted_indices(
+                            input,
+                            &probe_indexes[0..probe_indexes_len],
+                            occupied,
+                        )?)
+                    } else {
+                        None
+                    };
+                    let build_block = if is_build_projected {
+                        Some(
+                            self.row_space
+                                .gather(build_indexes, &data_blocks, &build_num_rows)?,
+                        )
+                    } else {
+                        None
+                    };
+                    let result_block = self.merge_eq_block(build_block, probe_block);
 
-                    let filter = self.get_nullable_filter_column(&merged_block, other_predicate)?;
+                    let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
                     let filter_viewer =
                         NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
                     let validity = &filter_viewer.validity;
@@ -194,42 +210,58 @@ impl JoinHashTable {
             }
         }
 
-        let probe_block = DataBlock::take_compacted_indices(
-            input,
-            &probe_indexes[0..probe_indexes_len],
-            occupied,
-        )?;
-        let build_block =
-            self.row_space
-                .gather(&build_indexes[0..occupied], &data_blocks, &num_rows)?;
-        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+        if probe_indexes_len > 0 {
+            let probe_block = if !input.is_empty() {
+                Some(DataBlock::take_compacted_indices(
+                    input,
+                    &probe_indexes[0..probe_indexes_len],
+                    occupied,
+                )?)
+            } else {
+                None
+            };
+            let build_block = if is_build_projected {
+                Some(self.row_space.gather(
+                    &build_indexes[0..occupied],
+                    &data_blocks,
+                    &build_num_rows,
+                )?)
+            } else {
+                None
+            };
+            let result_block = self.merge_eq_block(build_block, probe_block);
 
-        let filter = self.get_nullable_filter_column(&merged_block, other_predicate)?;
-        let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
-        let validity = &filter_viewer.validity;
-        let data = &filter_viewer.column;
+            let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
+            let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
+            let validity = &filter_viewer.validity;
+            let data = &filter_viewer.column;
 
-        let mut idx = 0;
-        let mut vec_idx = 0;
-        while vec_idx < probe_indexes_len {
-            let (index, cnt) = probe_indexes[vec_idx];
-            vec_idx += 1;
-            let marker = &mut markers[index as usize];
-            for _ in 0..cnt {
-                if !validity.get_bit(idx) {
-                    if *marker == MARKER_KIND_FALSE {
-                        *marker = MARKER_KIND_NULL;
+            let mut idx = 0;
+            let mut vec_idx = 0;
+            while vec_idx < probe_indexes_len {
+                let (index, cnt) = probe_indexes[vec_idx];
+                vec_idx += 1;
+                let marker = &mut markers[index as usize];
+                for _ in 0..cnt {
+                    if !validity.get_bit(idx) {
+                        if *marker == MARKER_KIND_FALSE {
+                            *marker = MARKER_KIND_NULL;
+                        }
+                    } else if data.get_bit(idx) {
+                        *marker = MARKER_KIND_TRUE;
                     }
-                } else if data.get_bit(idx) {
-                    *marker = MARKER_KIND_TRUE;
+                    idx += 1;
                 }
-                idx += 1;
             }
         }
 
-        Ok(vec![self.merge_eq_block(
-            &self.create_marker_block(has_null, markers, input.num_rows())?,
-            input,
-        )?])
+        let probe_block = if !input.is_empty() {
+            Some(input.clone())
+        } else {
+            None
+        };
+        let marker_block = Some(self.create_marker_block(has_null, markers, input_num_rows)?);
+
+        Ok(vec![self.merge_eq_block(marker_block, probe_block)])
     }
 }
