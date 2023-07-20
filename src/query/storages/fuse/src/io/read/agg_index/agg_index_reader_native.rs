@@ -12,62 +12,158 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::BufReader;
-use std::io::Cursor;
-use std::io::Seek;
+use std::sync::Arc;
 
 use common_arrow::arrow::chunk::Chunk;
-use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::native::read as nread;
 use common_exception::Result;
 use common_expression::DataBlock;
+use storages_common_table_meta::meta::ColumnMeta;
+use tracing::debug;
 
 use super::AggIndexReader;
+use crate::io::BlockReader;
+use crate::io::NativeSourceData;
+use crate::FusePartInfo;
 
 impl AggIndexReader {
-    pub fn deserialize_native_data(&self, data: &[u8]) -> Result<DataBlock> {
-        let mut reader = Cursor::new(data);
-        let schema = nread::reader::infer_schema(&mut reader)?;
-        let mut metas = nread::reader::read_meta(&mut reader)?;
-        let schema_descriptor = to_parquet_schema(&schema)?;
-        let mut leaves = schema_descriptor.columns().to_vec();
-
-        let mut arrays = vec![];
-        for field in schema.fields.iter() {
-            let n = pread::n_columns(&field.data_type);
-            let curr_metas = metas.drain(..n).collect::<Vec<_>>();
-            let curr_leaves = leaves.drain(..n).collect::<Vec<_>>();
-            let mut pages = Vec::with_capacity(n);
-            let mut readers = Vec::with_capacity(n);
-            for curr_meta in curr_metas.iter() {
-                pages.push(curr_meta.pages.clone());
-                let mut reader = Cursor::new(data);
-                reader.seek(std::io::SeekFrom::Start(curr_meta.offset))?;
-                let buffer_size = curr_meta.total_len() as usize;
-                let reader = BufReader::with_capacity(buffer_size, reader);
-                readers.push(reader);
+    pub fn sync_read_native_data(&self, loc: &str) -> Option<NativeSourceData> {
+        match self.reader.operator.blocking().reader(loc) {
+            Ok(mut reader) => {
+                let metadata = nread::reader::read_meta(&mut reader)
+                    .inspect_err(|e| {
+                        debug!("Read aggregating index `{loc}`'s metadata failed: {e}")
+                    })
+                    .ok()?;
+                let num_rows = metadata[0].pages.iter().map(|p| p.num_values).sum();
+                debug_assert!(
+                    metadata
+                        .iter()
+                        .all(|c| c.pages.iter().map(|p| p.num_values).sum::<u64>() == num_rows)
+                );
+                let columns_meta = metadata
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, c)| (i as u32, ColumnMeta::Native(c)))
+                    .collect();
+                let part = FusePartInfo::create(
+                    loc.to_string(),
+                    num_rows,
+                    columns_meta,
+                    None,
+                    self.compression.into(),
+                    None,
+                    None,
+                    None,
+                );
+                let res = self
+                    .reader
+                    .sync_read_native_columns_data(part)
+                    .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
+                    .ok()?;
+                Some(res)
             }
-            let is_nested = !nread::reader::is_primitive(field.data_type());
-            let array = nread::batch_read::batch_read_array(
-                readers,
-                curr_leaves,
-                field.clone(),
-                is_nested,
-                pages,
-            )?;
-            arrays.push(array);
+            Err(e) => {
+                if e.kind() == opendal::ErrorKind::NotFound {
+                    debug!("Aggregating index `{loc}` not found.")
+                } else {
+                    debug!("Read aggregating index `{loc}` failed: {e}");
+                }
+                None
+            }
         }
-        let chunk = Chunk::new(arrays);
-        let block = DataBlock::from_arrow_chunk(&chunk, &self.schema)?;
+    }
 
-        // Remove unused columns.
-        let block = DataBlock::resort(
-            block,
-            &self.schema,
-            &self.reader.projected_schema.as_ref().into(),
-        )?;
+    pub async fn read_native_data(&self, loc: &str) -> Option<NativeSourceData> {
+        match self.reader.operator.reader(loc).await {
+            Ok(mut reader) => {
+                let metadata = nread::reader::read_meta_async(&mut reader, None)
+                    .await
+                    .inspect_err(|e| {
+                        debug!("Read aggregating index `{loc}`'s metadata failed: {e}")
+                    })
+                    .ok()?;
+                if metadata.is_empty() {
+                    debug!("Aggregating index `{loc}` is empty");
+                    return None;
+                }
+                let num_rows = metadata[0].pages.iter().map(|p| p.num_values).sum();
+                debug_assert!(
+                    metadata
+                        .iter()
+                        .all(|c| c.pages.iter().map(|p| p.num_values).sum::<u64>() == num_rows)
+                );
+                let columns_meta = metadata
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, c)| (i as u32, ColumnMeta::Native(c)))
+                    .collect();
+                let part = FusePartInfo::create(
+                    loc.to_string(),
+                    num_rows,
+                    columns_meta,
+                    None,
+                    self.compression.into(),
+                    None,
+                    None,
+                    None,
+                );
+                let res = self
+                    .reader
+                    .async_read_native_columns_data(part)
+                    .await
+                    .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
+                    .ok()?;
+                Some(res)
+            }
+            Err(e) => {
+                if e.kind() == opendal::ErrorKind::NotFound {
+                    debug!("Aggregating index `{loc}` not found.")
+                } else {
+                    debug!("Read aggregating index `{loc}` failed: {e}");
+                }
+                None
+            }
+        }
+    }
 
+    pub fn deserialize_native_data(&self, data: &mut NativeSourceData) -> Result<DataBlock> {
+        let mut all_columns_arrays = vec![];
+        for (index, column_node) in self.reader.project_column_nodes.iter().enumerate() {
+            let column_leaves = column_node
+                .leaf_indices
+                .iter()
+                .map(|i| self.reader.parquet_schema_descriptor.columns()[*i].clone())
+                .collect::<Vec<_>>();
+
+            let readers = data.remove(&index).unwrap();
+            let array_iter = BlockReader::build_array_iter(column_node, column_leaves, readers)?;
+            let arrays = array_iter.map(|a| Ok(a?)).collect::<Result<Vec<_>>>()?;
+            all_columns_arrays.push(arrays);
+        }
+        if all_columns_arrays.is_empty() {
+            return Ok(DataBlock::empty_with_schema(Arc::new(
+                self.reader.data_schema(),
+            )));
+        }
+        debug_assert!(
+            all_columns_arrays
+                .iter()
+                .all(|a| a.len() == all_columns_arrays[0].len())
+        );
+        let page_num = all_columns_arrays[0].len();
+        let mut blocks = Vec::with_capacity(page_num);
+
+        for i in 0..page_num {
+            let mut arrays = Vec::with_capacity(all_columns_arrays.len());
+            for array in all_columns_arrays.iter() {
+                arrays.push(array[i].clone());
+            }
+            let chunk = Chunk::new(arrays);
+            let block = DataBlock::from_arrow_chunk(&chunk, &self.reader.data_schema())?;
+            blocks.push(block);
+        }
+        let block = DataBlock::concat(&blocks)?;
         self.apply_agg_info(block)
     }
 }

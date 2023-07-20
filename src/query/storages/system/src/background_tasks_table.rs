@@ -22,6 +22,7 @@ use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
+use common_expression::types::VariantType;
 use common_expression::DataBlock;
 use common_expression::FromData;
 use common_expression::FromOptData;
@@ -82,9 +83,13 @@ impl AsyncSystemTable for BackgroundTaskTable {
             compaction_stats.push(
                 task.compaction_task_stats
                     .as_ref()
-                    .map(|s| s.to_string().as_bytes().to_vec()),
+                    .map(|s| serde_json::to_vec(s).unwrap_or_default()),
             );
-            vacuum_stats.push(task.vacuum_stats.map(|s| s.to_string().as_bytes().to_vec()));
+            vacuum_stats.push(
+                task.vacuum_stats
+                    .as_ref()
+                    .map(|s| serde_json::to_vec(s).unwrap_or_default()),
+            );
             if let Some(compact_stats) = task.compaction_task_stats.as_ref() {
                 database_ids.push(compact_stats.db_id);
                 table_ids.push(compact_stats.table_id);
@@ -109,8 +114,8 @@ impl AsyncSystemTable for BackgroundTaskTable {
             StringType::from_data(messages),
             NumberType::from_data(database_ids),
             NumberType::from_data(table_ids),
-            StringType::from_opt_data(compaction_stats),
-            StringType::from_opt_data(vacuum_stats),
+            VariantType::from_opt_data(compaction_stats),
+            VariantType::from_opt_data(vacuum_stats),
             NumberType::from_opt_data(task_run_secs),
             StringType::from_opt_data(creators),
             StringType::from_opt_data(trigger),
@@ -129,8 +134,8 @@ impl BackgroundTaskTable {
             TableField::new("message", TableDataType::String),
             TableField::new("database_id", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("compaction_stats", TableDataType::String.wrap_nullable()),
-            TableField::new("vacuum_stats", TableDataType::String.wrap_nullable()),
+            TableField::new("compaction_stats", TableDataType::Variant.wrap_nullable()),
+            TableField::new("vacuum_stats", TableDataType::Variant.wrap_nullable()),
             TableField::new(
                 "task_running_secs",
                 TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
