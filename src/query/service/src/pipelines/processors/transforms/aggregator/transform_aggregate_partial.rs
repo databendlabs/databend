@@ -71,6 +71,7 @@ impl TryFrom<Arc<QueryContext>> for AggregateSettings {
 
     fn try_from(ctx: Arc<QueryContext>) -> std::result::Result<Self, Self::Error> {
         let settings = ctx.get_settings();
+        let max_threads = settings.get_max_threads()?;
         let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
         let memory_ratio = std::cmp::min(1_f64, settings.get_spilling_memory_ratio()? as f64 / 100);
 
