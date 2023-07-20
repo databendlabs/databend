@@ -4,7 +4,7 @@ title: Bitmap Functions
 
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced: v1.2.5"/>
+<FunctionDescription description="Introduced: v1.2.26"/>
 
 | Function                                   	| Description                                                                                                  	| Example                                                            	| Result    	|
 |--------------------------------------------	|--------------------------------------------------------------------------------------------------------------	|--------------------------------------------------------------------	|-----------	|
