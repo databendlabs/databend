@@ -39,6 +39,25 @@ pub fn check_referenced_computed_columns(
                     &f.name()
                 )));
             }
+            match parse_computed_expr(ctx.clone(), schema.clone(), expr) {
+                Ok(expr) => {
+                    if expr.data_type() != f.data_type() {
+                        return Err(ErrorCode::ColumnReferencedByComputedColumn(format!(
+                            "expected computed column expression have type {}, but `{}` has type {}.",
+                            f.data_type(),
+                            column,
+                            expr.data_type(),
+                        )));
+                    }
+                }
+                Err(_) => {
+                    return Err(ErrorCode::ColumnReferencedByComputedColumn(format!(
+                        "column `{}` is referenced by computed column `{}`",
+                        column,
+                        &f.name()
+                    )));
+                }
+            }
         }
     }
     Ok(())
