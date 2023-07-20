@@ -223,7 +223,7 @@ impl MutationAccumulator {
 
         let conflict_resolve_context = match self.kind {
             MutationKind::Delete => {
-                error!("removed_segment_indexes:{:?}", removed_segment_indexes);
+                tracing::info!("removed_segment_indexes:{:?}", removed_segment_indexes);
                 ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
                     removed_segment_indexes,
                     added_segments,
