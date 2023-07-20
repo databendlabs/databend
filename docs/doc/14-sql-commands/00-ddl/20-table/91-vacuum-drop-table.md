@@ -9,7 +9,7 @@ import EEFeature from '@site/src/components/EEFeature';
 
 <EEFeature featureName='VACUUM DROP TABLE'/>
 
-The VACUUM DROP TABLE command helps improve system performance by permanently removing data files of dropped tables, freeing up storage space, and enabling you to manage the process efficiently. It offers options to target specific databases, set retention times, and preview the data files that will be vacuumed. To list the dropped tables of a database, use [SHOW DROP TABLES](../../40-show/show-drop-tables.md).
+The VACUUM DROP TABLE command helps save storage space by permanently removing data files of dropped tables, freeing up storage space, and enabling you to manage the process efficiently. It offers options to target specific databases, set retention times, and preview the data files that will be vacuumed. To list the dropped tables of a database, use [SHOW DROP TABLES](../../40-show/show-drop-tables.md).
 
 See also: [VACUUM TABLE](91-vacuum-table.md)
 
