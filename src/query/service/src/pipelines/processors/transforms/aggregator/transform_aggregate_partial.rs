@@ -72,18 +72,21 @@ impl TryFrom<Arc<QueryContext>> for AggregateSettings {
     fn try_from(ctx: Arc<QueryContext>) -> std::result::Result<Self, Self::Error> {
         let settings = ctx.get_settings();
         let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
-        let value = settings.get_spilling_bytes_threshold_per_proc()?;
-        let max_memory_usage = settings.get_max_memory_usage()? as f64;
+        let memory_ratio = std::cmp::min(1_f64, settings.get_spilling_memory_ratio()? as f64 / 100);
+
+        let max_memory_usage = match settings.get_max_memory_usage()? {
+            0 => usize::MAX,
+            max_memory_usage => (max_memory_usage as f64 * memory_ratio) as usize,
+        };
 
         Ok(AggregateSettings {
             convert_threshold,
-            max_memory_usage: match max_memory_usage == 0.0 {
-                true => usize::MAX,
-                false => (max_memory_usage * 0.6) as usize,
-            },
-            spilling_bytes_threshold_per_proc: match value == 0 {
-                true => usize::MAX,
-                false => value,
+            max_memory_usage,
+            spilling_bytes_threshold_per_proc: match settings
+                .get_spilling_bytes_threshold_per_proc()?
+            {
+                0 => max_memory_usage / max_threads,
+                spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,
             },
         })
     }
