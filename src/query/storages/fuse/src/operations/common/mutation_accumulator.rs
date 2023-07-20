@@ -29,7 +29,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
-use tracing::error;
+use tracing::info;
 
 use super::ConflictResolveContext;
 use super::SnapshotChanges;
@@ -223,7 +223,7 @@ impl MutationAccumulator {
 
         let conflict_resolve_context = match self.kind {
             MutationKind::Delete => {
-                error!("removed_segment_indexes:{:?}", removed_segment_indexes);
+                info!("removed_segment_indexes:{:?}", removed_segment_indexes);
                 ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
                     removed_segment_indexes,
                     added_segments,
