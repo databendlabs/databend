@@ -1360,10 +1360,19 @@ impl Binder {
             self.metadata.clone(),
             &[],
         );
+        // cluster keys cannot be a udf expression.
+        scalar_binder.forbid_udf();
 
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
+            if cluster_key.used_columns().len() != 1 || !cluster_key.valid_for_clustering() {
+                return Err(ErrorCode::InvalidClusterKeys(format!(
+                    "Cluster by expression `{:#}` is invalid",
+                    cluster_by
+                )));
+            }
+
             let expr = cluster_key.as_expr()?;
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
@@ -1371,6 +1380,7 @@ impl Binder {
                     cluster_by
                 )));
             }
+
             let mut cluster_by = cluster_by.clone();
             walk_expr_mut(
                 &mut IdentifierNormalizer {

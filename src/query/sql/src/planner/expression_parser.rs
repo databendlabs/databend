@@ -113,6 +113,7 @@ pub fn parse_exprs(
         metadata,
         &[],
         false,
+        false,
     );
 
     let sql_dialect = Dialect::MySQL;
@@ -197,6 +198,7 @@ pub fn parse_computed_expr(
         Arc::new(RwLock::new(metadata)),
         &[],
         false,
+        false,
     );
 
     let sql_dialect = Dialect::PostgreSQL;
@@ -231,6 +233,7 @@ pub fn parse_default_expr_to_string(
         &name_resolution_ctx,
         Arc::new(RwLock::new(metadata)),
         &[],
+        false,
         false,
     );
 
@@ -305,6 +308,7 @@ pub fn parse_computed_expr_to_string(
         &name_resolution_ctx,
         Arc::new(RwLock::new(metadata)),
         &[],
+        false,
         false,
     );
 

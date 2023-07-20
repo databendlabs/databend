@@ -220,6 +220,7 @@ impl ToReadDataSourcePlan for dyn Table {
                                 metadata,
                                 &aliases,
                                 false,
+                                false,
                             );
 
                             let scalar = type_checker.resolve(&ast_expr).await?;
