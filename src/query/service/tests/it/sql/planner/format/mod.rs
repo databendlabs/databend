@@ -108,6 +108,7 @@ fn test_format() {
     let s_expr = SExpr::create_binary(
         Arc::new(
             Join {
+                projected_columns: vec![],
                 right_conditions: vec![
                     FunctionCall {
                         span: None,
