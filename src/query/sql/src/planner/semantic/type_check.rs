@@ -3207,8 +3207,12 @@ fn check_prefix(like_str: &str) -> bool {
 
     let mut i: usize = like_str.len();
     while i > 0 {
-        if like_str.chars().nth(i - 1).unwrap() != '%' {
-            break;
+        if let Some(c) = like_str.chars().nth(i - 1) {
+            if c != '%' {
+                break;
+            }
+        } else {
+            return false;
         }
         i -= 1;
     }
@@ -3216,7 +3220,11 @@ fn check_prefix(like_str: &str) -> bool {
         return false;
     }
     for j in (0..i).rev() {
-        if like_str.chars().nth(j).unwrap() == '_' {
+        if let Some(c) = like_str.chars().nth(j) {
+            if c == '_' {
+                return false;
+            }
+        } else {
             return false;
         }
     }
