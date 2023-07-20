@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ComputedExpr;
 use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::TableSchema;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license::Feature::DataMask;
@@ -142,17 +143,17 @@ impl ModifyTableColumnInterpreter {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
         if let Ok(i) = schema.index_of(&self.plan.column) {
+            let new_type = resolve_type_name(type_name)?;
+
             // Check if this column is referenced by computed columns.
             let field: DataField = schema.field(i).into();
             if field.computed_expr().is_none() {
-                check_referenced_computed_columns(
-                    self.ctx.clone(),
-                    table_info.schema(),
-                    schema.field(i).name(),
-                )?;
-            }
+                let mut schema: DataSchema = table_info.schema().into();
+                schema.set_field_type(i, (&new_type).into());
+                let column = field.name();
 
-            let new_type = resolve_type_name(type_name)?;
+                check_referenced_computed_columns(self.ctx.clone(), Arc::new(schema), column)?;
+            }
 
             // 1. construct cast sql
             let mut sql = "select".to_string();
