@@ -277,10 +277,10 @@ impl<'a> ClusteringInformation<'a> {
     }
 }
 
-// The histogram contains buckets with widths:
-// 1 to 16 with increments of 1.
-// For buckets larger than 16, increments of twice the width of the previous bucket (e.g. 32, 64, 128, …).
-// e.g. If val is 2, the bucket is 2. If val is 18, the bucket is 32.
+/// The histogram contains buckets with widths:
+/// 1 to 16 with increments of 1.
+/// For buckets larger than 16, increments of twice the width of the previous bucket (e.g. 32, 64, 128, …).
+/// e.g. If val is 2, the bucket is 2. If val is 18, the bucket is 32.
 fn get_buckets(val: usize) -> u32 {
     let mut val = val as u32;
     if val <= 16 || val & (val - 1) == 0 {

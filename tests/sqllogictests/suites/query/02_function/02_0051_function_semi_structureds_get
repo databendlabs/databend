@@ -211,7 +211,12 @@ select get_ignore_case(obj, 'A') from t2
 1
 
 query IT
-select id, obj:b from (select id, obj from t2) tt;
+select id, obj:b from (select id, obj from t2) tt
+----
+1 {"c":2}
+
+query IT
+select id, obj:b from (select id, obj from t2)
 ----
 1 {"c":2}
 

@@ -51,6 +51,12 @@ async fn test_projected_index_scan() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_index_scan_with_count() -> Result<()> {
+    test_index_scan_with_count_impl("parquet").await?;
+    test_index_scan_with_count_impl("native").await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuzz() -> Result<()> {
     test_fuzz_impl("parquet").await?;
     test_fuzz_impl("native").await
@@ -514,6 +520,60 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
             "+----------+----------+",
             "| 1        | 2        |",
             "| 2        | 6        |",
+            "+----------+----------+",
+        ],
+    )
+    .await?;
+
+    drop_index(fixture.ctx(), index_name).await?;
+
+    Ok(())
+}
+
+async fn test_index_scan_with_count_impl(format: &str) -> Result<()> {
+    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
+    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+
+    // Create table
+    execute_sql(
+        fixture.ctx(),
+        &format!("CREATE TABLE t (a string) storage_format = '{format}'"),
+    )
+    .await?;
+
+    // Insert data
+    execute_sql(fixture.ctx(), "INSERT INTO t VALUES ('1'), ('2')").await?;
+
+    // Create index
+    let index_name = "index1";
+
+    execute_sql(
+        fixture.ctx(),
+        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT a, COUNT(*) from t GROUP BY a"),
+    )
+    .await?;
+
+    // Refresh Index
+    execute_sql(
+        fixture.ctx(),
+        &format!("REFRESH AGGREGATING INDEX {index_name}"),
+    )
+    .await?;
+
+    // Query with index
+    let plan = plan_sql(fixture.ctx(), "SELECT a, COUNT(*) from t GROUP BY a").await?;
+
+    assert!(is_index_scan_plan(&plan));
+
+    expects_ok(
+        "Index scan",
+        execute_plan(fixture.ctx(), &plan).await,
+        vec![
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| '1'      | 1        |",
+            "| '2'      | 1        |",
             "+----------+----------+",
         ],
     )

@@ -34,6 +34,7 @@ pub struct ScalarBinder<'a> {
     metadata: MetadataRef,
     aliases: &'a [(String, ScalarExpr)],
     allow_pushdown: bool,
+    forbid_udf: bool,
 }
 
 impl<'a> ScalarBinder<'a> {
@@ -51,11 +52,16 @@ impl<'a> ScalarBinder<'a> {
             metadata,
             aliases,
             allow_pushdown: false,
+            forbid_udf: false,
         }
     }
 
     pub fn allow_pushdown(&mut self) {
         self.allow_pushdown = true;
+    }
+
+    pub fn forbid_udf(&mut self) {
+        self.forbid_udf = true;
     }
 
     #[async_backtrace::framed]
@@ -67,6 +73,7 @@ impl<'a> ScalarBinder<'a> {
             self.metadata.clone(),
             self.aliases,
             self.allow_pushdown,
+            self.forbid_udf,
         );
         Ok(*type_checker.resolve(expr).await?)
     }

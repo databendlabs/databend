@@ -50,6 +50,21 @@ ALTER TABLE t09_0015 DROP CLUSTER KEY
 statement error 1081
 ALTER TABLE t09_0015 CLUSTER BY(rand()+a)
 
+statement error 1081
+ALTER TABLE t09_0015 CLUSTER BY(a+b)
+
+statement error 1081
+ALTER TABLE t09_0015 CLUSTER BY(max(a))
+
+statement ok
+CREATE FUNCTION a_plus_3 AS (a) -> a+3
+
+statement error 1008
+ALTER TABLE t09_0015 CLUSTER BY(a_plus_3(a))
+
+statement ok
+drop function a_plus_3
+
 statement ok
 DROP TABLE t09_0015
 
