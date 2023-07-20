@@ -73,7 +73,10 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
 
         let max_memory_usage = match settings.get_max_memory_usage()? {
             0 => usize::MAX,
-            max_memory_usage => (max_memory_usage as f64 * memory_ratio) as usize,
+            max_memory_usage => match memory_ratio {
+                x if x == 0 => usize::MAX,
+                memory_ratio => (max_memory_usage as f64 * memory_ratio) as usize,
+            },
         };
 
         Ok(GroupBySettings {

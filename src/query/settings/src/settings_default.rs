@@ -266,7 +266,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(60),
+                    value: UserSettingValue::UInt64(55),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     possible_values: None,
                     display_in_show_settings: true,
