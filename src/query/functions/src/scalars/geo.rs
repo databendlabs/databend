@@ -168,10 +168,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     match CellIndex::try_from(h3) {
                         Ok(h3_cell) => {
                             let ring = h3_cell.grid_ring_fast(k);
-                            for item in ring {
-                                if let Some(item) = item {
-                                    builder.put_item(item.into());
-                                }
+                            for item in ring.flatten() {
+                                builder.put_item(item.into());
                             }
                         }
                         Err(e) => {
