@@ -59,7 +59,7 @@ impl JoinHashTable {
         let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let is_build_prejected = self.is_build_projected.load(Ordering::Relaxed);
+        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
         let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
         let right_single_scan_map = if self.hash_join_desc.join_type == JoinType::RightSingle {
             outer_scan_map
@@ -115,7 +115,7 @@ impl JoinHashTable {
                     } else {
                         None
                     };
-                    let build_block = if is_build_prejected {
+                    let build_block = if is_build_projected {
                         Some(self.row_space.gather(
                             local_build_indexes,
                             &data_blocks,
@@ -242,7 +242,7 @@ impl JoinHashTable {
         } else {
             None
         };
-        let build_block = if is_build_prejected {
+        let build_block = if is_build_projected {
             Some(self.row_space.gather(
                 &local_build_indexes[0..matched_num],
                 &data_blocks,
