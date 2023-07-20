@@ -59,17 +59,17 @@ WHERE t.database != 'system'
     AND t.number_of_blocks > 500
     AND t.data_size > 1
 
-    AND (t.num_rows >  1 * 1000 * 100 AND t.number_of_blocks > 500 AND t.data_size / t.number_of_blocks < 50 * 1024 * 1024) OR (t.number_of_blocks > 500 AND t.number_of_blocks / t.number_of_segments < 500)
-    AND t.table_id NOT IN (
-        SELECT
-          table_id
+    AND ((t.num_rows >  1 * 1000 * 100 AND t.number_of_blocks > 500 AND t.data_size / t.number_of_blocks < 50 * 1024 * 1024) OR (t.number_of_blocks > 500 AND t.number_of_blocks / t.number_of_segments < 500))
+    AND NOT EXISTS (
+      SELECT
+          1
         FROM
-          system.background_tasks
+          system.background_tasks AS processed
         WHERE
-          state = 'DONE'
-          AND table_id = t.table_id
-          AND type = 'COMPACTION'
-          AND updated_on > t.updated_on
+          processed.state = 'DONE'
+          AND processed.table_id = t.table_id
+          AND processed.type = 'COMPACTION'
+          AND TO_UNIX_TIMESTAMP(t.updated_on) < TO_UNIX_TIMESTAMP(processed.updated_on)
     )
     ;
 ";
