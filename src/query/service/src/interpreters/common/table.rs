@@ -32,13 +32,6 @@ pub fn check_referenced_computed_columns(
                 ComputedExpr::Stored(ref expr) => expr,
                 ComputedExpr::Virtual(ref expr) => expr,
             };
-            if parse_computed_expr(ctx.clone(), schema.clone(), expr).is_err() {
-                return Err(ErrorCode::ColumnReferencedByComputedColumn(format!(
-                    "column `{}` is referenced by computed column `{}`",
-                    column,
-                    &f.name()
-                )));
-            }
             match parse_computed_expr(ctx.clone(), schema.clone(), expr) {
                 Ok(expr) => {
                     if expr.data_type() != f.data_type() {
