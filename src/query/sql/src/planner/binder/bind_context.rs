@@ -171,8 +171,8 @@ pub struct CteInfo {
     pub query: Query,
     pub materialized: bool,
     pub cte_idx: IndexType,
-    // If true, the materialized CTE has been bound.
-    pub bound: bool,
+    // Record how many times this cte is used
+    pub used_count: usize,
     // If cte is materialized, it has stat_info
     pub stat_info: Option<Arc<StatInfo>>,
 }

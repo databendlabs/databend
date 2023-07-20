@@ -31,7 +31,7 @@ use crate::plans::RelOp;
 
 #[derive(Clone, Debug)]
 pub struct CteScan {
-    pub cte_idx: usize,
+    pub cte_idx: (usize, usize),
     pub fields: Vec<DataField>,
     pub stat: Arc<StatInfo>,
 }

@@ -113,7 +113,7 @@ impl PhysicalPlan {
                 ))
             }
             PhysicalPlan::CteScan(cte_scan) => Ok(FormatTreeNode::with_children(
-                format!("CteScan: {}", cte_scan.cte_idx),
+                format!("CteScan: {}", cte_scan.cte_idx.0),
                 vec![],
             )),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
@@ -358,7 +358,7 @@ fn table_scan_to_format_tree(
 }
 
 fn cte_scan_to_format_tree(plan: &CteScan) -> Result<FormatTreeNode<String>> {
-    let cte_idx = FormatTreeNode::new(format!("CTE index: {}", plan.cte_idx));
+    let cte_idx = FormatTreeNode::new(format!("CTE index: {}", plan.cte_idx.0));
     Ok(FormatTreeNode::with_children("CTEScan".to_string(), vec![
         cte_idx,
     ]))

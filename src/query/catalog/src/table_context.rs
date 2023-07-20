@@ -158,9 +158,16 @@ pub trait TableContext: Send + Sync {
 
     fn set_materialized_cte(
         &self,
-        idx: usize,
+        idx: (usize, usize),
         mem_table: Arc<RwLock<Vec<DataBlock>>>,
     ) -> Result<()>;
 
-    fn get_materialized_cte(&self, idx: usize) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>>;
+    fn get_materialized_cte(
+        &self,
+        idx: (usize, usize),
+    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>>;
+
+    fn get_materialized_ctes(
+        &self,
+    ) -> Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
 }

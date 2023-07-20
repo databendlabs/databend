@@ -190,7 +190,7 @@ impl Binder {
                         self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
                             .await
                     } else {
-                        let new_bind_context = if !cte_info.bound {
+                        let new_bind_context = if cte_info.used_count == 0 {
                             let (cte_s_expr, mut cte_bind_ctx) = self
                                 .bind_cte(*span, bind_context, &table_name, alias, cte_info)
                                 .await?;
@@ -203,10 +203,8 @@ impl Binder {
                             bind_context
                                 .materialized_ctes
                                 .insert((cte_info.cte_idx, cte_s_expr));
-                            // To avoid bind same materialized cte again, so make `cte_info.bound` to true and add `stat_info`.
                             bind_context.ctes_map.entry(table_name.clone()).and_modify(
                                 |cte_info| {
-                                    cte_info.bound = true;
                                     cte_info.stat_info = Some(stat_info);
                                 },
                             );
@@ -217,6 +215,12 @@ impl Binder {
                         } else {
                             bind_context.clone()
                         };
+                        bind_context
+                            .ctes_map
+                            .entry(table_name.clone())
+                            .and_modify(|cte_info| {
+                                cte_info.used_count += 1;
+                            });
                         let s_expr = self.bind_cte_scan(
                             &new_bind_context,
                             bind_context.ctes_map.get(&table_name).unwrap(),
@@ -732,10 +736,22 @@ impl Binder {
     fn bind_cte_scan(&mut self, bind_ctx: &BindContext, cte_info: &CteInfo) -> Result<SExpr> {
         let memory_table = Arc::new(RwLock::new(vec![]));
         self.ctx
-            .set_materialized_cte(cte_info.cte_idx, memory_table)?;
+            .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), memory_table)?;
         // Get the fields in the cte
         let mut fields = vec![];
-        for column in bind_ctx.columns.iter() {
+        let columns = if bind_ctx.columns.is_empty() {
+            // If bind_ctx's columns are empty, the bind_ctx is from subquery.
+            if let Some(parent) = &bind_ctx.parent {
+                &parent.columns
+            } else {
+                return Err(ErrorCode::SemanticError(
+                    "cte scan bind_ctx's columns is empty and parent is None",
+                ));
+            }
+        } else {
+            &bind_ctx.columns
+        };
+        for column in columns.iter() {
             fields.push(DataField::new(
                 column.index.to_string().as_str(),
                 *column.data_type.clone(),
@@ -743,7 +759,7 @@ impl Binder {
         }
         let cte_scan = SExpr::create_leaf(Arc::new(
             CteScan {
-                cte_idx: cte_info.cte_idx,
+                cte_idx: (cte_info.cte_idx, cte_info.used_count),
                 fields,
                 // It is safe to unwrap here because we have checked that the cte is materialized.
                 stat: cte_info.stat_info.clone().unwrap(),

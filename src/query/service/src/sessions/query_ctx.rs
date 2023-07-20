@@ -663,7 +663,7 @@ impl TableContext for QueryContext {
 
     fn set_materialized_cte(
         &self,
-        idx: IndexType,
+        idx: (IndexType, IndexType),
         mem_table: Arc<RwLock<Vec<DataBlock>>>,
     ) -> Result<()> {
         let mut ctes = self.shared.materialized_cte_tables.write();
@@ -671,9 +671,18 @@ impl TableContext for QueryContext {
         Ok(())
     }
 
-    fn get_materialized_cte(&self, idx: IndexType) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
+    fn get_materialized_cte(
+        &self,
+        idx: (IndexType, IndexType),
+    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
         let ctes = self.shared.materialized_cte_tables.read();
         Ok(ctes.get(&idx).cloned())
+    }
+
+    fn get_materialized_ctes(
+        &self,
+    ) -> Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>> {
+        self.shared.materialized_cte_tables.clone()
     }
 }
 

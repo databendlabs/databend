@@ -1529,7 +1529,7 @@ impl PipelineBuilder {
     }
 
     fn build_materialized_cte(&mut self, materialized_cte: &MaterializedCte) -> Result<()> {
-        let state = Arc::new(MaterializedCteState::new());
+        let state = Arc::new(MaterializedCteState::new(self.ctx.clone()));
         self.expand_left_side_pipeline(
             &*materialized_cte.left,
             materialized_cte.cte_idx,

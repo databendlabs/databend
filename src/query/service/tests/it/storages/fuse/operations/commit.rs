@@ -102,6 +102,7 @@ use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 use parking_lot::RwLock;
+use storages_common_index::Index;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -565,13 +566,22 @@ impl TableContext for CtxDelegation {
 
     fn set_materialized_cte(
         &self,
-        _idx: IndexType,
+        _idx: (IndexType, IndexType),
         _mem_table: Arc<RwLock<Vec<DataBlock>>>,
     ) -> Result<()> {
         todo!()
     }
 
-    fn get_materialized_cte(&self, idx: usize) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
+    fn get_materialized_cte(
+        &self,
+        idx: (usize, usize),
+    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
+        todo!()
+    }
+
+    fn get_materialized_ctes(
+        &self,
+    ) -> Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>> {
         todo!()
     }
 }

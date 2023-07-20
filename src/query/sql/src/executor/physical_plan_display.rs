@@ -112,7 +112,7 @@ impl Display for TableScan {
 
 impl Display for CteScan {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CteScan: [{}]", self.cte_idx)
+        write!(f, "CteScan: [{}]", self.cte_idx.0)
     }
 }
 

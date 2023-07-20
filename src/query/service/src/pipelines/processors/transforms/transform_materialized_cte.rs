@@ -39,17 +39,19 @@ enum Step {
 }
 
 pub struct MaterializedCteState {
+    pub ctx: Arc<QueryContext>,
     pub left_sinker_count: Arc<RwLock<usize>>,
     pub sink_finished_notifier: Arc<Notify>,
-    pub sink_finished: Mutex<bool>,
+    pub sink_finished: Arc<Mutex<bool>>,
 }
 
 impl MaterializedCteState {
-    pub fn new() -> Self {
+    pub fn new(ctx: Arc<QueryContext>) -> Self {
         MaterializedCteState {
+            ctx,
             left_sinker_count: Arc::new(RwLock::new(0)),
             sink_finished_notifier: Arc::new(Default::default()),
-            sink_finished: Default::default(),
+            sink_finished: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -59,10 +61,22 @@ impl MaterializedCteState {
         Ok(())
     }
 
-    pub fn detach_sinker(&self) -> Result<()> {
+    pub fn detach_sinker(&self, cte_idx: IndexType) -> Result<()> {
         let mut left_sinker_count = self.left_sinker_count.write();
         *left_sinker_count -= 1;
         if *left_sinker_count == 0 {
+            // Sink finished. Clone materialized blocks to all materialized cte in ctx with same cte_idx
+            let blocks = self.ctx.get_materialized_cte((cte_idx, 1usize))?;
+            if let Some(blocks) = blocks {
+                let blocks = (*blocks).read();
+                let ctes = self.ctx.get_materialized_ctes();
+                for (idx, cte) in ctes.write().iter() {
+                    if idx.0 == cte_idx && idx.1 != 1 {
+                        let mut cte = cte.write();
+                        *cte = (*blocks).clone();
+                    }
+                }
+            }
             let mut sink_finished = self.sink_finished.lock();
             *sink_finished = true;
             self.sink_finished_notifier.notify_waiters();
@@ -189,12 +203,12 @@ impl Sink for MaterializedCteSink {
     const NAME: &'static str = "MaterializedCteSink";
 
     fn on_finish(&mut self) -> Result<()> {
-        let materialized_cte = self.ctx.get_materialized_cte(self.cte_idx)?;
+        let materialized_cte = self.ctx.get_materialized_cte((self.cte_idx, 1usize))?;
         if let Some(blocks) = materialized_cte {
             let mut blocks = blocks.write();
             blocks.extend(self.blocks.clone());
         }
-        self.state.detach_sinker()
+        self.state.detach_sinker(self.cte_idx)
     }
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
@@ -204,7 +218,7 @@ impl Sink for MaterializedCteSink {
 }
 
 pub struct MaterializedCteSource {
-    cte_idx: IndexType,
+    cte_idx: (IndexType, IndexType),
     ctx: Arc<QueryContext>,
 }
 
@@ -212,7 +226,7 @@ impl MaterializedCteSource {
     pub fn create(
         ctx: Arc<QueryContext>,
         output_port: Arc<OutputPort>,
-        cte_idx: IndexType,
+        cte_idx: (IndexType, IndexType),
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx.clone(), output_port, MaterializedCteSource {
             ctx,

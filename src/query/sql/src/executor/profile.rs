@@ -82,7 +82,7 @@ fn flatten_plan_node_profile(
                 children: vec![],
                 execution_info: Default::default(),
                 attribute: OperatorAttribute::CteScan(CteScanAttribute {
-                    cte_idx: scan.cte_idx,
+                    cte_idx: scan.cte_idx.0,
                 }),
             };
             plan_node_profs.push(prof)

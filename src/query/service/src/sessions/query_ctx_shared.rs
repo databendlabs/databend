@@ -88,9 +88,9 @@ pub struct QueryContextShared {
     pub(in crate::sessions) status: Arc<RwLock<String>>,
     /// Query profile manager
     pub(in crate::sessions) profile_mgr: Arc<QueryProfileManager>,
-    /// Key is cte index, value contains cte's materialized blocks
+    /// Key is (cte index, used_count), value contains cte's materialized blocks
     pub(in crate::sessions) materialized_cte_tables:
-        Arc<RwLock<HashMap<IndexType, Arc<RwLock<Vec<DataBlock>>>>>>,
+        Arc<RwLock<HashMap<(IndexType, IndexType), Arc<RwLock<Vec<DataBlock>>>>>>,
 }
 
 impl QueryContextShared {
