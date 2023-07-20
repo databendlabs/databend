@@ -18,30 +18,21 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ComputedExpr;
-use common_expression::DataSchemaRefExt;
-use common_expression::TableSchemaRef;
+use common_expression::DataSchemaRef;
 use common_sql::parse_computed_expr;
 
 pub fn check_referenced_computed_columns(
     ctx: Arc<dyn TableContext>,
-    table_schema: TableSchemaRef,
+    schema: DataSchemaRef,
     column: &str,
 ) -> Result<()> {
-    let fields = table_schema
-        .fields()
-        .iter()
-        .filter(|f| f.name != column)
-        .map(|f| f.into())
-        .collect::<Vec<_>>();
-    let schema = DataSchemaRefExt::create(fields);
-
     for f in schema.fields() {
         if let Some(computed_expr) = f.computed_expr() {
             let expr = match computed_expr {
-                ComputedExpr::Stored(expr) => expr.clone(),
-                ComputedExpr::Virtual(expr) => expr.clone(),
+                ComputedExpr::Stored(ref expr) => expr,
+                ComputedExpr::Virtual(ref expr) => expr,
             };
-            if parse_computed_expr(ctx.clone(), schema.clone(), &expr).is_err() {
+            if parse_computed_expr(ctx.clone(), schema.clone(), expr).is_err() {
                 return Err(ErrorCode::ColumnReferencedByComputedColumn(format!(
                     "column `{}` is referenced by computed column `{}`",
                     column,
