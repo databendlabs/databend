@@ -740,7 +740,7 @@ impl Display for ModifyColumnAction {
                     .map(|(column, type_name)| format!("{} {}", column, type_name))
                     .collect::<Vec<_>>()
                     .join(",");
-                write!(f, "SET DATA TYPE {}", ret)?
+                write!(f, "DATA TYPE {}", ret)?
             }
             ModifyColumnAction::ConvertStoredComputedColumn(column) => {
                 write!(f, "{} DROP STORED", column)?

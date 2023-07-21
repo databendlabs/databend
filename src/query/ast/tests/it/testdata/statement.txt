@@ -7417,9 +7417,9 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t MODIFY COLUMN SET DATA TYPE a int, b float;
+ALTER TABLE t MODIFY COLUMN DATA TYPE a int, b float;
 ---------- Output ---------
-ALTER TABLE t MODIFY COLUMN SET DATA TYPE a Int32,b Float32
+ALTER TABLE t MODIFY COLUMN DATA TYPE a Int32,b Float32
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -7450,7 +7450,7 @@ AlterTable(
                             name: "a",
                             quote: None,
                             span: Some(
-                                42..43,
+                                38..39,
                             ),
                         },
                         Int32,
@@ -7460,7 +7460,7 @@ AlterTable(
                             name: "b",
                             quote: None,
                             span: Some(
-                                49..50,
+                                45..46,
                             ),
                         },
                         Float32,
@@ -7473,9 +7473,9 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t MODIFY COLUMN SET DATA TYPE a int;
+ALTER TABLE t MODIFY COLUMN DATA TYPE a int;
 ---------- Output ---------
-ALTER TABLE t MODIFY COLUMN SET DATA TYPE a Int32
+ALTER TABLE t MODIFY COLUMN DATA TYPE a Int32
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -7506,7 +7506,7 @@ AlterTable(
                             name: "a",
                             quote: None,
                             span: Some(
-                                42..43,
+                                38..39,
                             ),
                         },
                         Int32,
