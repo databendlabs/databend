@@ -149,22 +149,27 @@ impl ModifyTableColumnInterpreter {
             if let Ok(i) = schema.index_of(&column) {
                 let new_type = resolve_type_name(type_name)?;
 
-                // Check if this column is referenced by computed columns.
-                let mut data_schema: DataSchema = table_info.schema().into();
-                data_schema.set_field_type(i, (&new_type).into());
-                check_referenced_computed_columns(
-                    self.ctx.clone(),
-                    Arc::new(data_schema),
-                    &column,
-                )?;
-
-                new_schema.fields[i].data_type = new_type;
+                if new_type != new_schema.fields[i].data_type {
+                    // Check if this column is referenced by computed columns.
+                    let mut data_schema: DataSchema = table_info.schema().into();
+                    data_schema.set_field_type(i, (&new_type).into());
+                    check_referenced_computed_columns(
+                        self.ctx.clone(),
+                        Arc::new(data_schema),
+                        &column,
+                    )?;
+                    new_schema.fields[i].data_type = new_type;
+                }
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
                     "Cannot find column {}",
                     column
                 )));
             }
+        }
+        // check if schema has changed
+        if schema == new_schema {
+            return Ok(PipelineBuildResult::create());
         }
 
         // 1. construct sql for selecting data from old table
