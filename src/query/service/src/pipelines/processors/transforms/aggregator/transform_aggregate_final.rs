@@ -160,14 +160,6 @@ where Method: HashMethodBounds
                                     unsafe { states_binary_columns[idx].index_unchecked(*row) };
                                 aggregate_function.deserialize(state_place, &mut data)?;
                                 aggregate_function.merge(final_place, state_place)?;
-                                if aggregate_function.need_manual_drop_state() {
-                                    unsafe {
-                                        // State may allocate memory out of the arena,
-                                        // drop state to avoid memory leak.
-                                        aggregate_function.drop_state(state_place);
-                                    }
-                                    aggregate_function.init_state(state_place);
-                                }
                             }
                         }
                     }

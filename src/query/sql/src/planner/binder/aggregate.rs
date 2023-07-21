@@ -447,7 +447,6 @@ impl Binder {
 
         let mut new_expr = child;
         if !scalar_items.is_empty() {
-            scalar_items.sort_by_key(|item| item.index);
             let eval_scalar = EvalScalar {
                 items: scalar_items,
             };

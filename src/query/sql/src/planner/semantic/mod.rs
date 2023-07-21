@@ -36,4 +36,4 @@ pub use type_check::validate_function_arg;
 pub use type_check::TypeChecker;
 pub use window_check::WindowChecker;
 
-pub(crate) const SUPPORTED_AGGREGATING_INDEX_FUNCTIONS: [&str; 4] = ["sum", "min", "max", "avg"];
+pub(crate) const SUPPORTED_AGGREGATING_INDEX_FUNCTIONS: [&str; 3] = ["sum", "min", "max"];

@@ -179,7 +179,7 @@ Limit
                     ├── aggregate functions: [count(), count(b), max(a)]
                     ├── estimated rows: 1.00
                     └── EvalScalar
-                        ├── expressions: [t1.a (#0), t1.b (#1)]
+                        ├── expressions: [t1.b (#1), t1.a (#0)]
                         ├── estimated rows: 0.00
                         └── TableScan
                             ├── table: default.default.t1
