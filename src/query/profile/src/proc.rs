@@ -34,6 +34,9 @@ pub type SharedProcessorProfiles = Arc<Mutex<ProcessorProfiles<u32>>>;
 pub struct ProcessorProfile {
     /// The time spent to process in nanoseconds
     pub cpu_time: Duration,
+    /// The time spent to wait in nanoseconds, usually used to
+    /// measure the time spent on waiting for I/O
+    pub wait_time: Duration,
     /// Row count of the input data
     pub input_rows: usize,
     /// Byte size of the input data
@@ -50,6 +53,7 @@ impl std::ops::Add for ProcessorProfile {
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             cpu_time: self.cpu_time + rhs.cpu_time,
+            wait_time: self.wait_time + rhs.wait_time,
             input_rows: self.input_rows + rhs.input_rows,
             input_bytes: self.input_bytes + rhs.input_bytes,
             output_rows: self.output_rows + rhs.output_rows,
