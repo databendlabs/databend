@@ -218,11 +218,19 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 .unwrap()
                 .as_string()
                 .unwrap();
-
+            let state_place = self.temp_place.next(offset);
             for (row, mut raw_state) in agg_state.iter().enumerate() {
                 let place = &places[row];
-                function.deserialize(self.temp_place, &mut raw_state)?;
-                function.merge(place.next(offset), self.temp_place)?;
+                function.deserialize(state_place, &mut raw_state)?;
+                function.merge(place.next(offset), state_place)?;
+                if function.need_manual_drop_state() {
+                    unsafe {
+                        // State may allocate memory out of the arena,
+                        // drop state to avoid memory leak.
+                        function.drop_state(state_place);
+                    }
+                    function.init_state(state_place);
+                }
             }
         }
 
