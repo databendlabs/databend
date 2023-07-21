@@ -75,12 +75,6 @@ impl<'a> Evaluator<'a> {
         let column_refs = expr.column_refs();
         for (index, datatype) in column_refs.iter() {
             let column = self.input_columns.get_by_offset(*index);
-            if column.data_type != *datatype {
-                println!(
-                    "column_refs = {:?} \ninput_column.data_type = {:?} \ndatatype = {:?}, \nexpr = {:?}, +++++",
-                    &column_refs, &column.data_type, &datatype, &expr
-                );
-            }
             assert_eq!(
                 &column.data_type,
                 datatype,

@@ -169,12 +169,13 @@ pub fn optimize_query(
         let (dp_res, optimized) =
             DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result.clone()))?;
         if optimized {
+            result = (*dp_res).clone();
             dphyp_optimized = true;
-            result = heuristic.optimize((*dp_res).clone(), &RESIDUAL_RULES)?;
         }
     }
     let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, dphyp_optimized)?;
     result = cascades.optimize(result)?;
+    result = heuristic.optimize(result, &RESIDUAL_RULES)?;
     // So far, we don't have ability to execute distributed query
     // with reading data from local tales(e.g. system tables).
     let enable_distributed_query =

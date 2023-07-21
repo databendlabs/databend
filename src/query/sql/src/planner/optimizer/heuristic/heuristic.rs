@@ -97,7 +97,8 @@ impl<'a> HeuristicOptimizer<'a> {
         // Consider lazy columns pruning in post optimize
         let pruner = UnusedColumnPruner::new(self.metadata.clone(), true);
         let require_columns: ColumnSet = self.bind_context.column_set();
-        pruner.remove_unused_columns(&s_expr, require_columns)
+        let res = pruner.remove_unused_columns(&s_expr, require_columns);
+        res
     }
 
     pub fn optimize(&self, s_expr: SExpr, rules: &[RuleID]) -> Result<SExpr> {

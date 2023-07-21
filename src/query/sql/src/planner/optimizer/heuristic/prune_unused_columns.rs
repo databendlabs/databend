@@ -128,11 +128,7 @@ impl UnusedColumnPruner {
             }
 
             RelOperator::EvalScalar(p) => {
-                // OK
-                // require 是上层用到的，然后需要只掉本层用到的，然后将只在本层用到的截住
-                // 这是是只保留了上层用到的 item，执行的时候也会有裁剪的效果。
                 let mut used = vec![];
-                // let mut projected;
                 // Only keep columns needed by parent plan.
                 for s in p.items.iter() {
                     if !required.contains(&s.index) {
