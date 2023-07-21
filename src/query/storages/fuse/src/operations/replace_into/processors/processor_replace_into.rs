@@ -147,10 +147,15 @@ impl Processor for ReplaceIntoProcessor {
 
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
-            let merge_into_action = self.replace_into_mutator.process_input_block(&data_block)?;
+            // TODO refactor this
+            let (merge_into_action, b) =
+                self.replace_into_mutator.process_input_block(&data_block)?;
             if !self.target_table_empty {
-                self.output_data_merge_into_action =
-                    Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));
+                // self.output_data_merge_into_action =
+                //    Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));
+                // TODO set_meta(&mut self ..) ?
+                let block = b.add_meta(Some(Box::new(merge_into_action)))?;
+                self.output_data_merge_into_action = Some(block);
             }
             self.output_data_append = Some(data_block);
             return Ok(());

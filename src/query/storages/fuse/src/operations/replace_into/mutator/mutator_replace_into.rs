@@ -13,20 +13,29 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use ahash::HashSet;
 use ahash::HashSetExt;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::AnyType;
 use common_expression::Column;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::Expr;
+use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
+use common_expression::SortColumnDescription;
 use common_expression::Value;
 use common_functions::aggregates::eval_aggr;
+use common_functions::BUILTIN_FUNCTIONS;
+use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
@@ -34,14 +43,15 @@ use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoO
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::OnConflictField;
+use crate::FuseTable;
 
 // Replace is somehow a simplified merge_into, which
 // - do insertion for "matched" branch
 // - update for "not-matched" branch (by sending MergeIntoOperation to downstream)
 pub struct ReplaceIntoMutator {
     on_conflict_fields: Vec<OnConflictField>,
+    table_range_index: HashMap<ColumnId, ColumnStatistics>,
     key_saw: HashSet<UniqueKeyDigest>,
-    table_range_idx: HashMap<ColumnId, ColumnStatistics>,
 }
 
 impl ReplaceIntoMutator {
@@ -51,31 +61,45 @@ impl ReplaceIntoMutator {
     ) -> Self {
         Self {
             on_conflict_fields,
+            table_range_index: table_range_idx,
             key_saw: Default::default(),
-            table_range_idx,
         }
     }
 }
 
 enum ColumnHash {
+    // no conflict, the hash set contains all the unique key digests
     NoConflict(HashSet<UniqueKeyDigest>),
     // the first row index that has conflict
     Conflict(usize),
 }
 
 impl ReplaceIntoMutator {
-    pub fn process_input_block(&mut self, data_block: &DataBlock) -> Result<MergeIntoOperation> {
-        // TODO table level pruning:
-        // if we can deduced that `data_block` is insert only, return an MergeIntoOperation::None (None op for Matched Branch)
+    pub fn process_input_block(
+        &mut self,
+        data_block: &DataBlock,
+    ) -> Result<(MergeIntoOperation, DataBlock)> {
+        // pruning rows by using table level range index
+        // rows that definitely have no conflict will be removed
+        let data_block_may_have_conflicts =
+            self.extract_table_level_non_conflict_rows(data_block)?;
 
-        // extract rows that definitely have conflict
-        // TODO refactor, duplication there
-        let column_stats: &HashMap<ColumnId, ColumnStatistics> = &self.table_range_idx;
+        // if table has cluster keys; we sort the input data block by left most column of cluster keys
+
+        let merge_into_operation =
+            self.build_merge_into_operation(&data_block_may_have_conflicts)?;
+
+        Ok((merge_into_operation, data_block_may_have_conflicts))
+    }
+
+    fn extract_table_level_non_conflict_rows(&self, data_block: &DataBlock) -> Result<DataBlock> {
+        let column_stats: &HashMap<ColumnId, ColumnStatistics> = &self.table_range_index;
         let mut bitmap = MutableBitmap::new();
         for row_idx in 0..data_block.num_rows() {
             // for each row, check if it may have conflict
             let mut should_keep = false;
             for col in &self.on_conflict_fields {
+                // for each column, check if it may have conflict
                 let col_val: &Value<AnyType> = &data_block.columns()[col.field_index].value;
                 let value = match col_val {
                     Value::Scalar(v) => v.as_ref(),
@@ -98,15 +122,16 @@ impl ReplaceIntoMutator {
             bitmap.push(should_keep);
         }
         let bitmap = bitmap.into();
-        // TODO we do not need all the columns
-        let data_block_may_have_conflicts = data_block.clone().filter_with_bitmap(&bitmap)?;
-        self.extract_on_conflict_columns(&data_block_may_have_conflicts)
+        data_block.clone().filter_with_bitmap(&bitmap)
+        //// extract the on conflict columns
+        // let mut columns = Vec::with_capacity(self.on_conflict_fields.len());
+        // for field in &self.on_conflict_fields {
+        //    columns.push(data_block_may_have_conflicts.columns()[field.field_index].clone());
+        //}
+        // DataBlock::new(columns, data_block.num_rows())
     }
 
-    fn extract_on_conflict_columns(
-        &mut self,
-        data_block: &DataBlock,
-    ) -> Result<MergeIntoOperation> {
+    fn build_merge_into_operation(&mut self, data_block: &DataBlock) -> Result<MergeIntoOperation> {
         let num_rows = data_block.num_rows();
         let column_values = self
             .on_conflict_fields
@@ -222,6 +247,87 @@ impl ReplaceIntoMutator {
             // for other primitive types, just return the string representation
             v => v.to_string(),
         }
+    }
+}
+
+struct ClusterKeysSorter {
+    cluster_keys: Vec<Expr>,
+    sort_columns_descriptions: Vec<SortColumnDescription>,
+    table: Arc<FuseTable>,
+    ctx: Arc<dyn TableContext>,
+}
+
+struct Partition {
+    value: Scalar,
+}
+
+impl ClusterKeysSorter {
+    fn sort_by_left_most_cluster_key(
+        &self,
+        data_block: DataBlock,
+    ) -> Result<(DataBlock, Vec<usize>)> {
+        let table = &self.table;
+        let cluster_keys = table.cluster_keys(self.ctx.clone());
+
+        if cluster_keys.is_empty() {
+            return Ok((data_block, vec![]));
+        }
+
+        let input_schema = self.table.table_info.schema();
+
+        let left_most_cluster_key = &cluster_keys[0];
+        let expr: Expr = left_most_cluster_key
+            .as_expr(&BUILTIN_FUNCTIONS)
+            .project_column_ref(|name| input_schema.index_of(name).unwrap());
+
+        let mut schema_with_cluster_keys: Vec<DataField> =
+            input_schema.fields().iter().map(DataField::from).collect();
+
+        let mut cluster_expr = None;
+        let sort_by_column_idx = match &expr {
+            Expr::ColumnRef { id, .. } => *id,
+            _ => {
+                let cname = format!("{}", expr);
+                schema_with_cluster_keys
+                    .push(DataField::new(cname.as_str(), expr.data_type().clone()));
+                cluster_expr = Some(expr);
+                schema_with_cluster_keys.len() - 1
+            }
+        };
+
+        let data_block = if let Some(expr) = cluster_expr {
+            let op = BlockOperator::Map { exprs: vec![expr] };
+            let func_ctx = self.ctx.get_function_context()?;
+            op.execute(&func_ctx, data_block)?
+        } else {
+            data_block
+        };
+
+        let sort_description = SortColumnDescription {
+            offset: sort_by_column_idx,
+            asc: true,
+            nulls_first: false,
+            is_nullable: false,
+        };
+        let data_block = DataBlock::sort(&data_block, &[sort_description], None)?;
+
+        let column = &data_block.columns()[sort_by_column_idx];
+
+        let mut offsets = Vec::new();
+        for row_idx in 1..data_block.num_rows() {
+            let prev_val = column
+                .value
+                .as_column()
+                .unwrap()
+                .index(row_idx - 1)
+                .unwrap();
+            let current = column.value.as_column().unwrap().index(row_idx).unwrap();
+            if current != prev_val {
+                offsets.push(row_idx)
+            }
+        }
+
+        Ok((data_block, offsets))
     }
 }
 
