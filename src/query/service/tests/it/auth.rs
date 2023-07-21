@@ -97,6 +97,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let res = auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt {
                 token: token1,
+                client_ip: None,
             })
             .await;
         assert!(res.is_ok());
@@ -122,6 +123,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let res = auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt {
                 token: token2,
+                client_ip: None,
             })
             .await;
         assert!(res.is_ok());
@@ -152,6 +154,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let res2 = auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt {
                 token: token2,
+                client_ip: None,
             })
             .await;
         assert!(res2.is_ok());
@@ -173,6 +176,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let res3 = auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt {
                 token: token3,
+                client_ip: None,
             })
             .await;
         assert!(res3.is_err());
@@ -222,7 +226,10 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await;
         assert!(res.is_err());
 
@@ -240,7 +247,10 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await;
         assert!(res.is_err());
         assert!(
@@ -259,7 +269,10 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await;
         assert!(res.is_err());
         assert!(
@@ -278,7 +291,10 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await?;
         let user_info = ctx.get_current_user()?;
         assert_eq!(user_info.grants.roles().len(), 0);
@@ -294,7 +310,10 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await?;
         let user_info = ctx.get_current_user()?;
         assert!(user_info.grants.roles().is_empty());
@@ -312,7 +331,10 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await?;
 
         let user_info = ctx.get_current_user()?;
@@ -334,7 +356,10 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await;
         assert!(res.is_ok());
 
@@ -355,7 +380,10 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await;
         assert!(res.is_err());
     }
@@ -401,7 +429,10 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await;
         assert!(res.is_err());
         assert!(
@@ -418,7 +449,10 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await;
         assert!(res.is_err());
         assert!(
@@ -437,7 +471,10 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await;
         assert!(res.is_err());
         assert!(
@@ -456,7 +493,10 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await?;
         let user_info = ctx.get_current_user()?;
         assert_eq!(user_info.grants.roles().len(), 0);
@@ -472,7 +512,10 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await?;
         let user_info = ctx.get_current_user()?;
         assert!(user_info.grants.roles().is_empty());
@@ -490,7 +533,10 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await?;
         let user_info = ctx.get_current_user()?;
         assert_eq!(user_info.name, user_name);
@@ -511,7 +557,10 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await;
         assert!(res.is_ok());
 
@@ -532,7 +581,10 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await;
         assert!(res.is_err());
     }
@@ -582,7 +634,10 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt { token })
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                client_ip: None,
+            })
             .await?;
         let user_info = ctx.get_current_user()?;
         let current_tenant = ctx.get_tenant();
