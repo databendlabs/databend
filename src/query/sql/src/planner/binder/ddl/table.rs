@@ -777,12 +777,11 @@ impl Binder {
                     comment,
                 })))
             }
-            AlterTableAction::ModifyColumn { column, action } => {
+            AlterTableAction::ModifyColumn { action } => {
                 Ok(Plan::ModifyTableColumn(Box::new(ModifyTableColumnPlan {
                     catalog,
                     database,
                     table,
-                    column: column.to_string(),
                     action: action.clone(),
                 })))
             }

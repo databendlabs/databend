@@ -1970,32 +1970,49 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     )(i)
 }
 
+fn column_type(i: Input) -> IResult<(Identifier, TypeName)> {
+    map(
+        rule! {
+            #ident ~ #type_name
+        },
+        |(column, type_name)| (column, type_name),
+    )(i)
+}
+
 pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
     let set_mask_policy = map(
         rule! {
-            SET ~ MASKING ~ POLICY ~ #ident
+            #ident ~ SET ~ MASKING ~ POLICY ~ #ident
         },
-        |(_, _, _, mask_name)| ModifyColumnAction::SetMaskingPolicy(mask_name.to_string()),
-    );
-
-    let set_column_type = map(
-        rule! {
-            SET ~ DATA ~ TYPE ~ #type_name
+        |(column, _, _, _, mask_name)| {
+            ModifyColumnAction::SetMaskingPolicy(column, mask_name.to_string())
         },
-        |(_, _, _, name)| ModifyColumnAction::SetDataType(name),
     );
 
     let convert_stored_computed_column = map(
         rule! {
-            DROP ~ STORED
+            #ident ~ DROP ~ STORED
         },
-        |(_, _)| ModifyColumnAction::ConvertStoredComputedColumn,
+        |(column, _, _)| ModifyColumnAction::ConvertStoredComputedColumn(column),
+    );
+
+    let modify_column_type = map(
+        rule! {
+            SET ~ DATA ~ TYPE ~ #column_type ~ ("," ~ #column_type)*
+        },
+        |(_, _, _, column_type, column_type_vec)| {
+            let mut column_types = vec![column_type];
+            column_type_vec
+                .iter()
+                .for_each(|(_, column_type)| column_types.push(column_type.clone()));
+            ModifyColumnAction::SetDataType(column_types)
+        },
     );
 
     rule!(
         #set_mask_policy
-        | #set_column_type
         | #convert_stored_computed_column
+        | #modify_column_type
     )(i)
 }
 
@@ -2024,9 +2041,9 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let modify_column = map(
         rule! {
-            MODIFY ~ COLUMN ~ #ident ~ #modify_column_action
+            MODIFY ~ COLUMN ~ #modify_column_action
         },
-        |(_, _, column, action)| AlterTableAction::ModifyColumn { column, action },
+        |(_, _, action)| AlterTableAction::ModifyColumn { action },
     );
 
     let drop_column = map(
