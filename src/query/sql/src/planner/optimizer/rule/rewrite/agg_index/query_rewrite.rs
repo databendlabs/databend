@@ -45,6 +45,7 @@ use crate::ScalarExpr;
 use crate::Visibility;
 
 pub fn try_rewrite(
+    table_index: IndexType,
     base_columns: &[ColumnEntry],
     s_expr: &SExpr,
     index_plans: &[(u64, String, SExpr)],
@@ -68,7 +69,7 @@ pub fn try_rewrite(
 
     // Search all index plans, find the first matched index to rewrite the query.
     for (index_id, sql, plan) in index_plans.iter() {
-        let plan = rewrite_index_plan(&col_index_map, plan);
+        let plan = rewrite_index_plan(table_index, &col_index_map, plan);
 
         let index_info = collect_information(&plan)?;
         debug_assert!(index_info.can_apply_index());
@@ -267,55 +268,94 @@ pub fn try_rewrite(
 }
 
 /// Rewrite base column index in the original index plan by `columns`.
-fn rewrite_index_plan(columns: &HashMap<String, IndexType>, s_expr: &SExpr) -> SExpr {
+fn rewrite_index_plan(
+    table_index: IndexType,
+    columns: &HashMap<String, IndexType>,
+    s_expr: &SExpr,
+) -> SExpr {
     match s_expr.plan() {
         RelOperator::EvalScalar(eval) => {
             let mut new_expr = eval.clone();
             for item in new_expr.items.iter_mut() {
-                rewrite_scalar_index(columns, &mut item.scalar);
+                rewrite_scalar_index(table_index, columns, &mut item.scalar);
             }
             SExpr::create_unary(
                 Arc::new(new_expr.into()),
-                Arc::new(rewrite_index_plan(columns, s_expr.child(0).unwrap())),
+                Arc::new(rewrite_index_plan(
+                    table_index,
+                    columns,
+                    s_expr.child(0).unwrap(),
+                )),
             )
         }
         RelOperator::Filter(filter) => {
             let mut new_expr = filter.clone();
             for pred in new_expr.predicates.iter_mut() {
-                rewrite_scalar_index(columns, pred);
+                rewrite_scalar_index(table_index, columns, pred);
             }
             SExpr::create_unary(
                 Arc::new(new_expr.into()),
-                Arc::new(rewrite_index_plan(columns, s_expr.child(0).unwrap())),
+                Arc::new(rewrite_index_plan(
+                    table_index,
+                    columns,
+                    s_expr.child(0).unwrap(),
+                )),
             )
         }
-        RelOperator::Scan(_) => s_expr.clone(), // Terminate the recursion.
+        RelOperator::Aggregate(agg) => {
+            let mut new_expr = agg.clone();
+            for item in new_expr.group_items.iter_mut() {
+                rewrite_scalar_index(table_index, columns, &mut item.scalar);
+            }
+            for item in new_expr.aggregate_functions.iter_mut() {
+                rewrite_scalar_index(table_index, columns, &mut item.scalar);
+            }
+            SExpr::create_unary(
+                Arc::new(new_expr.into()),
+                Arc::new(rewrite_index_plan(
+                    table_index,
+                    columns,
+                    s_expr.child(0).unwrap(),
+                )),
+            )
+        }
+        RelOperator::Scan(scan) => {
+            let mut new_expr = scan.clone();
+            new_expr.table_index = table_index;
+            SExpr::create_leaf(Arc::new(new_expr.into()))
+        } // Terminate the recursion.
         _ => s_expr.replace_children(vec![Arc::new(rewrite_index_plan(
+            table_index,
             columns,
             s_expr.child(0).unwrap(),
         ))]),
     }
 }
 
-fn rewrite_scalar_index(columns: &HashMap<String, IndexType>, scalar: &mut ScalarExpr) {
+fn rewrite_scalar_index(
+    table_index: IndexType,
+    columns: &HashMap<String, IndexType>,
+    scalar: &mut ScalarExpr,
+) {
     match scalar {
         ScalarExpr::BoundColumnRef(col) => {
             if let Some(index) = columns.get(&col.column.column_name) {
+                col.column.table_index = Some(table_index);
                 col.column.index = *index;
             }
         }
         ScalarExpr::AggregateFunction(agg) => {
             agg.args
                 .iter_mut()
-                .for_each(|arg| rewrite_scalar_index(columns, arg));
+                .for_each(|arg| rewrite_scalar_index(table_index, columns, arg));
         }
         ScalarExpr::FunctionCall(func) => {
             func.arguments
                 .iter_mut()
-                .for_each(|arg| rewrite_scalar_index(columns, arg));
+                .for_each(|arg| rewrite_scalar_index(table_index, columns, arg));
         }
         ScalarExpr::CastExpr(cast) => {
-            rewrite_scalar_index(columns, &mut cast.argument);
+            rewrite_scalar_index(table_index, columns, &mut cast.argument);
         }
         _ => { /*  do nothing */ }
     }

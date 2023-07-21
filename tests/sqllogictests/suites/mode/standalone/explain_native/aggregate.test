@@ -195,7 +195,7 @@ EvalScalar
         ├── aggregate functions: [max(b)]
         ├── estimated rows: 0.00
         └── EvalScalar
-            ├── expressions: [explain_agg_t1.b (#1), explain_agg_t1.a (#0)]
+            ├── expressions: [explain_agg_t1.a (#0), explain_agg_t1.b (#1)]
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.default.explain_agg_t1
@@ -224,7 +224,7 @@ EvalScalar
             ├── aggregate functions: [avg(b), max(b)]
             ├── estimated rows: 0.00
             └── EvalScalar
-                ├── expressions: [explain_agg_t1.b (#1), explain_agg_t1.b (#1), explain_agg_t1.a (#0)]
+                ├── expressions: [explain_agg_t1.a (#0), explain_agg_t1.b (#1), explain_agg_t1.b (#1)]
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.explain_agg_t1
