@@ -310,6 +310,10 @@ impl Settings {
         self.try_set_u64("spilling_bytes_threshold_per_proc", value as u64)
     }
 
+    pub fn get_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("spilling_memory_ratio")? as usize)
+    }
+
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
         self.try_get_string("group_by_shuffle_mode")
     }

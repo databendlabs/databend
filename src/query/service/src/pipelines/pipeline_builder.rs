@@ -85,7 +85,6 @@ use common_storages_fuse::operations::MutationKind;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use common_storages_stage::StageTable;
-use petgraph::matrix_graph::Zero;
 
 use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
@@ -518,11 +517,12 @@ impl PipelineBuilder {
         }
 
         let schema = scan.source.schema();
-        let projection = scan
+        let mut projection = scan
             .name_mapping
             .keys()
             .map(|name| schema.index_of(name.as_str()))
             .collect::<Result<Vec<usize>>>()?;
+        projection.sort();
 
         // if projection is sequential, no need to add projection
         if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
@@ -813,13 +813,7 @@ impl PipelineBuilder {
         })?;
 
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
-        if self.ctx.get_cluster().is_empty()
-            && !self
-                .ctx
-                .get_settings()
-                .get_spilling_bytes_threshold_per_proc()?
-                .is_zero()
-        {
+        if self.ctx.get_cluster().is_empty() {
             let operator = DataOperator::instance().operator();
             let location_prefix = format!("_aggregate_spill/{}", self.ctx.get_tenant());
             self.main_pipeline.add_transform(|input, output| {
@@ -860,20 +854,12 @@ impl PipelineBuilder {
         let tenant = self.ctx.get_tenant();
         self.exchange_injector = match params.aggregate_functions.is_empty() {
             true => with_mappedhash_method!(|T| match method.clone() {
-                HashMethodKind::T(method) => AggregateInjector::<_, ()>::create(
-                    &self.ctx,
-                    tenant.clone(),
-                    method,
-                    params.clone()
-                ),
+                HashMethodKind::T(method) =>
+                    AggregateInjector::<_, ()>::create(tenant.clone(), method, params.clone()),
             }),
             false => with_mappedhash_method!(|T| match method.clone() {
-                HashMethodKind::T(method) => AggregateInjector::<_, usize>::create(
-                    &self.ctx,
-                    tenant.clone(),
-                    method,
-                    params.clone()
-                ),
+                HashMethodKind::T(method) =>
+                    AggregateInjector::<_, usize>::create(tenant.clone(), method, params.clone()),
             }),
         };
 
@@ -937,18 +923,13 @@ impl PipelineBuilder {
                 HashMethodKind::T(v) => {
                     let input: &PhysicalPlan = &aggregate.input;
                     if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-                        self.exchange_injector = AggregateInjector::<_, ()>::create(
-                            &self.ctx,
-                            tenant,
-                            v.clone(),
-                            params.clone(),
-                        );
+                        self.exchange_injector =
+                            AggregateInjector::<_, ()>::create(tenant, v.clone(), params.clone());
                     }
 
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
                     build_partition_bucket::<_, ()>(
-                        &self.ctx,
                         v,
                         &mut self.main_pipeline,
                         params.clone(),
@@ -963,7 +944,6 @@ impl PipelineBuilder {
                     let input: &PhysicalPlan = &aggregate.input;
                     if matches!(input, PhysicalPlan::ExchangeSource(_)) {
                         self.exchange_injector = AggregateInjector::<_, usize>::create(
-                            &self.ctx,
                             tenant,
                             v.clone(),
                             params.clone(),
@@ -972,7 +952,6 @@ impl PipelineBuilder {
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
                     build_partition_bucket::<_, usize>(
-                        &self.ctx,
                         v,
                         &mut self.main_pipeline,
                         params.clone(),
