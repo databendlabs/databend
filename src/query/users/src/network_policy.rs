@@ -105,6 +105,18 @@ impl UserApiProvider {
         name: &str,
         if_exists: bool,
     ) -> Result<()> {
+        let user_infos = self.get_users(tenant).await?;
+        for user_info in user_infos {
+            if let Some(network_policy) = user_info.option.network_policy() {
+                if network_policy == name {
+                    return Err(ErrorCode::NetworkPolicyIsUsedByUser(format!(
+                        "network policy `{}` is used by user",
+                        name,
+                    )));
+                }
+            }
+        }
+
         let client = self.get_network_policy_api_client(tenant)?;
         match client.drop_network_policy(name, MatchSeq::GE(1)).await {
             Ok(res) => Ok(res),
