@@ -175,6 +175,8 @@ pub struct CteInfo {
     pub used_count: usize,
     // If cte is materialized, it has stat_info
     pub stat_info: Option<Arc<StatInfo>>,
+    // If cte is materialized, save it's columns
+    pub columns: Vec<ColumnBinding>,
 }
 
 impl BindContext {

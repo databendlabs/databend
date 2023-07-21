@@ -50,6 +50,7 @@ use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
@@ -334,6 +335,7 @@ impl Binder {
                     cte_idx: idx,
                     used_count: 0,
                     stat_info: None,
+                    columns: vec![],
                 };
                 bind_context.ctes_map.insert(table_name, cte_info);
             }

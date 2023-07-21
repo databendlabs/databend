@@ -206,11 +206,9 @@ impl Binder {
                             bind_context.ctes_map.entry(table_name.clone()).and_modify(
                                 |cte_info| {
                                     cte_info.stat_info = Some(stat_info);
+                                    cte_info.columns = cte_bind_ctx.columns.clone();
                                 },
                             );
-                            for column in cte_bind_ctx.columns.iter() {
-                                bind_context.columns.push(column.clone());
-                            }
                             cte_bind_ctx
                         } else {
                             bind_context.clone()
@@ -221,10 +219,8 @@ impl Binder {
                             .and_modify(|cte_info| {
                                 cte_info.used_count += 1;
                             });
-                        let s_expr = self.bind_cte_scan(
-                            &new_bind_context,
-                            bind_context.ctes_map.get(&table_name).unwrap(),
-                        )?;
+                        let s_expr =
+                            self.bind_cte_scan(bind_context.ctes_map.get(&table_name).unwrap())?;
                         Ok((s_expr, new_bind_context))
                     };
                 }
@@ -733,25 +729,13 @@ impl Binder {
         Ok((result_expr, result_ctx))
     }
 
-    fn bind_cte_scan(&mut self, bind_ctx: &BindContext, cte_info: &CteInfo) -> Result<SExpr> {
+    fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
         let memory_table = Arc::new(RwLock::new(vec![]));
         self.ctx
             .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), memory_table)?;
         // Get the fields in the cte
         let mut fields = vec![];
-        let columns = if bind_ctx.columns.is_empty() {
-            // If bind_ctx's columns are empty, the bind_ctx is from subquery.
-            if let Some(parent) = &bind_ctx.parent {
-                &parent.columns
-            } else {
-                return Err(ErrorCode::SemanticError(
-                    "cte scan bind_ctx's columns is empty and parent is None",
-                ));
-            }
-        } else {
-            &bind_ctx.columns
-        };
-        for column in columns.iter() {
+        for column in cte_info.columns.iter() {
             fields.push(DataField::new(
                 column.index.to_string().as_str(),
                 *column.data_type.clone(),

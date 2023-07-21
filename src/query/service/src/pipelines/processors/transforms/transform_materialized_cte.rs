@@ -14,6 +14,8 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::thread::sleep;
+use std::time::Duration;
 
 use common_base::base::tokio::sync::Notify;
 use common_catalog::table_context::TableContext;
@@ -25,6 +27,8 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::Sink;
+use common_pipeline_sources::AsyncSource;
+use common_pipeline_sources::AsyncSourcer;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 use common_sql::IndexType;
@@ -32,11 +36,6 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use crate::sessions::QueryContext;
-
-enum Step {
-    Sink,
-    Execute,
-}
 
 pub struct MaterializedCteState {
     pub ctx: Arc<QueryContext>,
@@ -101,23 +100,15 @@ impl MaterializedCteState {
 }
 
 pub struct TransformMaterializedCte {
-    state: Arc<MaterializedCteState>,
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
-    step: Step,
 }
 
 impl TransformMaterializedCte {
-    pub fn create(
-        input_port: Arc<InputPort>,
-        output_port: Arc<OutputPort>,
-        state: Arc<MaterializedCteState>,
-    ) -> Box<dyn Processor> {
+    pub fn create(input_port: Arc<InputPort>, output_port: Arc<OutputPort>) -> Box<dyn Processor> {
         Box::new(TransformMaterializedCte {
-            state,
             input_port,
             output_port,
-            step: Step::Sink,
         })
     }
 }
@@ -133,46 +124,29 @@ impl Processor for TransformMaterializedCte {
     }
 
     fn event(&mut self) -> Result<Event> {
-        match self.step {
-            Step::Sink => Ok(Event::Async),
-            Step::Execute => {
-                if self.output_port.is_finished() {
-                    self.input_port.finish();
-                    return Ok(Event::Finished);
-                }
-
-                if !self.output_port.can_push() {
-                    self.input_port.set_not_need_data();
-                    return Ok(Event::NeedConsume);
-                }
-
-                if self.input_port.has_data() {
-                    let data = self.input_port.pull_data().unwrap();
-                    self.output_port.push_data(data);
-                    return Ok(Event::NeedConsume);
-                }
-
-                if self.input_port.is_finished() {
-                    self.output_port.finish();
-                    return Ok(Event::Finished);
-                }
-
-                self.input_port.set_need_data();
-                Ok(Event::NeedData)
-            }
+        if self.output_port.is_finished() {
+            self.input_port.finish();
+            return Ok(Event::Finished);
         }
-    }
 
-    #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
-        match self.step {
-            Step::Sink => {
-                self.state.wait_sink_finished().await?;
-                self.step = Step::Execute;
-            }
-            Step::Execute => unreachable!(),
+        if !self.output_port.can_push() {
+            self.input_port.set_not_need_data();
+            return Ok(Event::NeedConsume);
         }
-        Ok(())
+
+        if self.input_port.has_data() {
+            let data = self.input_port.pull_data().unwrap();
+            self.output_port.push_data(data);
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input_port.is_finished() {
+            self.output_port.finish();
+            return Ok(Event::Finished);
+        }
+
+        self.input_port.set_need_data();
+        Ok(Event::NeedData)
     }
 }
 
@@ -220,6 +194,7 @@ impl Sink for MaterializedCteSink {
 pub struct MaterializedCteSource {
     cte_idx: (IndexType, IndexType),
     ctx: Arc<QueryContext>,
+    cte_state: Arc<MaterializedCteState>,
 }
 
 impl MaterializedCteSource {
@@ -227,18 +202,24 @@ impl MaterializedCteSource {
         ctx: Arc<QueryContext>,
         output_port: Arc<OutputPort>,
         cte_idx: (IndexType, IndexType),
+        cte_state: Arc<MaterializedCteState>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx.clone(), output_port, MaterializedCteSource {
+        AsyncSourcer::create(ctx.clone(), output_port, MaterializedCteSource {
             ctx,
             cte_idx,
+            cte_state,
         })
     }
 }
 
-impl SyncSource for MaterializedCteSource {
+#[async_trait::async_trait]
+impl AsyncSource for MaterializedCteSource {
     const NAME: &'static str = "MaterializedCteSource";
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
+    #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        self.cte_state.wait_sink_finished().await?;
         let materialized_cte = self.ctx.get_materialized_cte(self.cte_idx)?;
         if let Some(blocks) = materialized_cte {
             let mut blocks_guard = blocks.write();
