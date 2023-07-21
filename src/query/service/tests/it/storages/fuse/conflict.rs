@@ -89,6 +89,7 @@ fn test_resolvable_delete_conflict() {
         compressed_byte_size: 6,
         index_size: 6,
         col_stats: HashMap::new(),
+        cluster_stats: None,
     };
 
     let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
@@ -106,6 +107,7 @@ fn test_resolvable_delete_conflict() {
         compressed_byte_size: 9,
         index_size: 9,
         col_stats: HashMap::new(),
+        cluster_stats: None,
     };
 
     let removed_statistics = Statistics {
@@ -116,6 +118,7 @@ fn test_resolvable_delete_conflict() {
         compressed_byte_size: 5,
         index_size: 5,
         col_stats: HashMap::new(),
+        cluster_stats: None,
     };
 
     let added_statistics = Statistics {
@@ -126,6 +129,7 @@ fn test_resolvable_delete_conflict() {
         compressed_byte_size: 8,
         index_size: 8,
         col_stats: HashMap::new(),
+        cluster_stats: None,
     };
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
@@ -158,6 +162,7 @@ fn test_resolvable_delete_conflict() {
         compressed_byte_size: 12,
         index_size: 12,
         col_stats: HashMap::new(),
+        cluster_stats: None,
     };
     assert_eq!(actual, expected);
 }
