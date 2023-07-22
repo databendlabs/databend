@@ -38,6 +38,9 @@ use common_functions::aggregates::eval_aggr;
 use common_functions::BUILTIN_FUNCTIONS;
 use storages_common_table_meta::meta::ColumnStatistics;
 
+use crate::metrics::metrics_inc_replace_original_row_number;
+use crate::metrics::metrics_inc_replace_partition_number;
+use crate::metrics::metrics_inc_replace_row_number_after_table_level_pruning;
 use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
@@ -94,16 +97,22 @@ impl ReplaceIntoMutator {
         // pruning rows by using table level range index
         //
         // rows that definitely have no conflict will be removed
+
+        metrics_inc_replace_original_row_number(data_block.num_rows() as u64);
         let data_block_may_have_conflicts =
             self.extract_table_level_non_conflict_rows(data_block)?;
 
-        if data_block_may_have_conflicts.num_rows() == 0 {
+        let row_number_after_pruning = data_block_may_have_conflicts.num_rows();
+        metrics_inc_replace_row_number_after_table_level_pruning(row_number_after_pruning as u64);
+
+        if row_number_after_pruning == 0 {
             return Ok(MergeIntoOperation::None);
         }
 
         let merge_into_operation = if let Some(partitioner) = &self.partitioner {
             // if table has cluster keys; we partition the input data block by left most column of cluster keys
             let partitions = partitioner.partition(data_block)?;
+            metrics_inc_replace_partition_number(partitions.len() as u64);
             let vs = partitions
                 .into_iter()
                 .map(|partition| {
