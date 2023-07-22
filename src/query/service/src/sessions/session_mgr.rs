@@ -33,8 +33,8 @@ use common_metrics::label_gauge;
 use common_settings::Settings;
 use futures::future::Either;
 use futures::StreamExt;
+use log::info;
 use parking_lot::RwLock;
-use tracing::info;
 
 use crate::sessions::session::Session;
 use crate::sessions::ProcessInfo;

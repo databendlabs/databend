@@ -2238,6 +2238,8 @@ pub struct DiskCacheConfig {
 }
 
 mod cache_config_converters {
+    use log::warn;
+
     use super::*;
 
     impl From<InnerConfig> for Config {
@@ -2273,7 +2275,7 @@ mod cache_config_converters {
                 catalogs.insert(k, catalog);
             }
             if !self.catalog.address.is_empty() || !self.catalog.protocol.is_empty() {
-                tracing::warn!(
+                warn!(
                     "`catalog` is planned to be deprecated, please add catalog in `catalogs` instead"
                 );
                 let hive = self.catalog.try_into()?;

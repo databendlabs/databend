@@ -23,7 +23,6 @@ use common_profile::QueryProfileManager;
 use common_sharing::ShareEndpointManager;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
-use common_tracing::QueryLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use storages_common_cache_manager::CacheManager;
@@ -51,7 +50,8 @@ impl GlobalServices {
 
         let app_name_shuffle = format!("{}-{}", config.query.tenant_id, config.query.cluster_id);
 
-        QueryLogger::init(app_name_shuffle, &config.log)?;
+        // QueryLogger::init(app_name_shuffle, &config.log);
+        common_tracing::init_logging(&app_name_shuffle, &config.log);
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
         GlobalQueryRuntime::init(config.storage.num_cpus as usize)?;
 

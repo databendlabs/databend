@@ -26,11 +26,11 @@ use common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
 use common_meta_types::GrpcConfig;
 use common_meta_types::MetaNetworkError;
 use futures::future::Either;
+use log::info;
+use minitrace::prelude::*;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
-use tracing::info;
-use tracing::Instrument;
 
 use crate::api::grpc::grpc_service::MetaServiceImpl;
 use crate::configs::Config;
@@ -122,7 +122,7 @@ impl GrpcServer {
 
                 info!("metasrv returned res: {:?}", res);
             }
-            .instrument(tracing::debug_span!("spawn-grpc")),
+            .in_span(Span::enter_with_local_parent("spawn-grpc")),
         );
 
         started_rx

@@ -19,6 +19,7 @@ use common_meta_app::principal::RoleInfo;
 use common_sql::plans::CreateRolePlan;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
+use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -43,9 +44,11 @@ impl Interpreter for CreateRoleInterpreter {
         "CreateRoleInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_role_execute");
+
         // TODO: add privilege check about CREATE ROLE
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();

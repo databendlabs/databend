@@ -26,8 +26,7 @@ use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::MetaClientError;
-use databend_meta::init_meta_ut;
-use tracing::info;
+use log::info;
 
 use crate::tests::service::start_metasrv_cluster;
 
@@ -36,7 +35,8 @@ use crate::tests::service::start_metasrv_cluster;
 /// - Start a cluster of 3.
 /// - Shutdown node 1.
 /// - Test upsert kv, expect the client auto choose the running nodes.
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_metasrv_connection_error() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
     let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
@@ -82,7 +82,8 @@ async fn test_metasrv_connection_error() -> anyhow::Result<()> {
 /// - Create a client to node 1 and 2.
 /// - Shutdown follower node 1.
 /// - Test upsert kv, expect the client to auto choose the running nodes.
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_metasrv_one_client_follower_down() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
     let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
@@ -114,7 +115,8 @@ async fn test_metasrv_one_client_follower_down() -> anyhow::Result<()> {
 /// - Create a client to node 1 and 2.
 /// - Shutdown leader node 0.
 /// - Test upsert kv, expect the client to auto choose the running nodes.
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_metasrv_one_client_leader_down() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
     let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;

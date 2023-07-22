@@ -26,6 +26,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
+use log::debug;
+use log::error;
+use log::info;
+use log::warn;
 use opendal::Operator;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -216,10 +220,9 @@ where F: SnapshotGenerator + Send + 'static
                         };
                     }
                     Err(e) => {
-                        tracing::error!(
+                        error!(
                             "commit mutation failed after {} retries, error: {:?}",
-                            self.retries,
-                            e,
+                            self.retries, e,
                         );
                         self.state = State::AbortOperation;
                     }
@@ -257,7 +260,7 @@ where F: SnapshotGenerator + Send + 'static
                         self.state = State::FillDefault;
                     }
                     Err(e) => {
-                        tracing::error!(
+                        error!(
                             "commit mutation failed cause get lock failed, error: {:?}",
                             e
                         );
@@ -289,7 +292,7 @@ where F: SnapshotGenerator + Send + 'static
                             let latest = self.table.refresh(self.ctx.as_ref()).await?;
                             let tbl = FuseTable::try_from_table(latest.as_ref())?;
 
-                            tracing::warn!(
+                            warn!(
                                 "transient table detected, purging historical data. ({})",
                                 tbl.table_info.ident
                             );
@@ -307,12 +310,12 @@ where F: SnapshotGenerator + Send + 'static
                                 .await
                             {
                                 // Errors of GC, if any, are ignored, since GC task can be picked up
-                                tracing::warn!(
+                                warn!(
                                     "GC of transient table not success (this is not a permanent error). the error : {}",
                                     e
                                 );
                             } else {
-                                tracing::info!("GC of transient table done");
+                                info!("GC of transient table done");
                             }
                         }
                         metrics_inc_commit_mutation_success();
@@ -329,7 +332,7 @@ where F: SnapshotGenerator + Send + 'static
                         match self.backoff.next_backoff() {
                             Some(d) => {
                                 let name = table_info.name.clone();
-                                tracing::debug!(
+                                debug!(
                                     "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
                                     d.as_millis(),
                                     name.as_str(),

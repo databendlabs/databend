@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
 use std::fmt::Display;
 
 use common_meta_app::app_error::AppError;
@@ -31,7 +32,7 @@ use common_meta_types::ConditionResult::Eq;
 use common_meta_types::MetaError;
 use common_meta_types::TxnRequest;
 use common_tracing::func_name;
-use tracing::debug;
+use log::debug;
 
 use crate::data_mask_api::DatamaskApi;
 use crate::fetch_id;
@@ -55,7 +56,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
         &self,
         req: CreateDatamaskReq,
     ) -> Result<CreateDatamaskReply, KVAppError> {
-        debug!(req = debug(&req), "DatamaskApi: {}", func_name!());
+        debug!(req = &req as &dyn Debug; "DatamaskApi: {}", func_name!());
 
         let name_key = &req.name;
 
@@ -65,7 +66,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             trials.next().unwrap()?;
             // Get db mask by name to ensure absence
             let (seq, id) = get_u64_value(self, name_key).await?;
-            debug!(seq, id, ?name_key, "create_data_mask");
+            debug!(seq = seq, id = id, name_key = name_key as &dyn Debug; "create_data_mask");
 
             if seq > 0 {
                 return if req.if_not_exists {
@@ -88,8 +89,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             let id_key = DatamaskId { id };
 
             debug!(
-                id = debug(&id_key),
-                name_key = debug(&name_key),
+                id = &id_key as &dyn Debug,
+                name_key = name_key as &dyn Debug;
                 "new datamask id"
             );
 
@@ -110,9 +111,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = debug(&name_key),
-                    id = debug(&id_key),
-                    succ = display(succ),
+                    name = name_key as &dyn Debug as &dyn Debug,
+                    id = &id_key as &dyn Debug,
+                    succ = succ;
                     "create_data_mask"
                 );
 
@@ -126,7 +127,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
     }
 
     async fn drop_data_mask(&self, req: DropDatamaskReq) -> Result<DropDatamaskReply, KVAppError> {
-        debug!(req = debug(&req), "DatamaskApi: {}", func_name!());
+        debug!(req = &req as &dyn Debug; "DatamaskApi: {}", func_name!());
 
         let name_key = &req.name;
         let ctx = &func_name!();
@@ -166,9 +167,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                name = debug(name_key),
-                id = debug(&DatamaskId { id }),
-                succ = display(succ),
+                name = name_key as &dyn Debug,
+                id = &DatamaskId { id } as &dyn Debug,
+                succ = succ;
                 "drop_data_mask"
             );
 
@@ -181,7 +182,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
     }
 
     async fn get_data_mask(&self, req: GetDatamaskReq) -> Result<GetDatamaskReply, KVAppError> {
-        debug!(req = debug(&req), "DatamaskApi: {}", func_name!());
+        debug!(req = &req as &dyn Debug; "DatamaskApi: {}", func_name!());
 
         let name_key = &req.name;
 
@@ -224,7 +225,7 @@ pub fn data_mask_has_to_exist(
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq, ?name_ident, "data mask does not exist");
+        debug!(seq = seq, name_ident = name_ident as &dyn Debug; "data mask does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownDatamask(
             UnknownDatamask::new(&name_ident.name, format!("{}: {}", msg, name_ident)),

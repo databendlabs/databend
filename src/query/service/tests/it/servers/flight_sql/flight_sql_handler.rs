@@ -33,6 +33,7 @@ use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestGlobalServices;
 use futures::TryStreamExt;
 use goldenfile::Mint;
+use log::debug;
 use tempfile::NamedTempFile;
 use tokio::net::UnixListener;
 use tokio::net::UnixStream;
@@ -41,7 +42,6 @@ use tonic::transport::Channel;
 use tonic::transport::Endpoint;
 use tonic::transport::Server;
 use tower::service_fn;
-use tracing::debug;
 
 const TEST_USER: &str = "test_user";
 const TEST_PASSWORD: &str = "test_password";

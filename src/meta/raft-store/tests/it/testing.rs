@@ -35,18 +35,3 @@ pub fn new_raft_test_context() -> RaftTestContext {
         db: get_sled_db(),
     }
 }
-
-/// 1. Open a temp sled::Db for all tests.
-/// 2. Initialize a global tracing.
-#[macro_export]
-macro_rules! init_raft_store_ut {
-    () => {{
-        let t = tempfile::tempdir().expect("create temp dir to sled db");
-        common_meta_sled_store::init_temp_sled_db(t);
-
-        let guards =
-            common_tracing::init_logging("meta_unittests", &common_tracing::Config::new_testing());
-
-        guards
-    }};
-}

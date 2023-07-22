@@ -27,10 +27,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::future::select;
 use futures_util::future::Either;
+use log::info;
+use log::warn;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
-use tracing::info;
-use tracing::warn;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::RunningGraph;
@@ -330,16 +330,10 @@ impl PipelineExecutor {
                 let try_result = catch_unwind(move || -> Result<()> {
                     match this_clone.execute_single_thread(thread_num) {
                         Ok(_) => Ok(()),
-                        Err(cause) => {
-                            if tracing::enabled!(tracing::Level::TRACE) {
-                                Err(cause.add_message_back(format!(
-                                    " (while in processor thread {})",
-                                    thread_num
-                                )))
-                            } else {
-                                Err(cause)
-                            }
-                        }
+                        Err(cause) => Err(cause.add_message_back(format!(
+                            " (while in processor thread {})",
+                            thread_num
+                        ))),
                     }
                 });
 

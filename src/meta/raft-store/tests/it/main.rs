@@ -14,10 +14,9 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-mod log;
-#[macro_use]
-mod testing;
 mod config;
+mod log;
 mod state;
 mod state_machine;
+mod testing;
 mod types;

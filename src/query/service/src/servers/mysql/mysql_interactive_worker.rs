@@ -33,7 +33,10 @@ use common_sql::Planner;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
 use futures_util::StreamExt;
+use log::error;
+use log::info;
 use metrics::histogram;
+use minitrace::prelude::*;
 use opensrv_mysql::AsyncMysqlShim;
 use opensrv_mysql::ErrorKind;
 use opensrv_mysql::InitWriter;
@@ -41,9 +44,6 @@ use opensrv_mysql::ParamParser;
 use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
-use tracing::error;
-use tracing::info;
-use tracing::Instrument;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
@@ -314,7 +314,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         federated.check(query)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn do_query(&mut self, query: &str) -> Result<(QueryResult, Option<FormatSettings>)> {
         match self.federated_server_command_check(query) {
@@ -372,7 +372,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(interpreter, context))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn exec_query(
         interpreter: Arc<dyn Interpreter>,
@@ -402,7 +402,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 
                 Ok::<_, ErrorCode>(intercepted_stream.boxed())
             }
-            .in_current_span()
+            .in_span(Span::enter_with_local_parent("exec_query"))
         })?;
 
         let query_result = query_result.await.map_err_to_code(

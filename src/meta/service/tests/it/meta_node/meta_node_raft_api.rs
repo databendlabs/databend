@@ -20,9 +20,8 @@ use common_base::base::tokio;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::UpsertKV;
-use databend_meta::init_meta_ut;
+use log::info;
 use maplit::btreeset;
-use tracing::info;
 
 use crate::tests::meta_node::start_meta_node_cluster;
 
@@ -32,7 +31,8 @@ use crate::tests::meta_node::start_meta_node_cluster;
 /// Building a snapshot includes two steps:
 /// 1. Dumping the state machine to a in-memory struct.
 /// 2. Serialize the dumped data.
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_dumping_snapshot_does_not_block_append_entries() -> anyhow::Result<()> {
     info!("--- initialize cluster 2 voters");
     let (mut _log_index, mut tcs) = start_meta_node_cluster(btreeset![0, 1], btreeset![]).await?;
@@ -77,7 +77,8 @@ async fn test_meta_node_dumping_snapshot_does_not_block_append_entries() -> anyh
 /// Building a snapshot includes two steps:
 /// 1. Dumping the state machine to a in-memory struct.
 /// 2. Serialize the dumped data.
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_serializing_snapshot_does_not_block_append_entries() -> anyhow::Result<()> {
     info!("--- initialize cluster 2 voters");
     let (mut _log_index, mut tcs) = start_meta_node_cluster(btreeset![0, 1], btreeset![]).await?;

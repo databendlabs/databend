@@ -24,7 +24,7 @@ use common_meta_types::SeqV;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
-use tracing::debug;
+use log::debug;
 
 use crate::state_machine::StateMachine;
 

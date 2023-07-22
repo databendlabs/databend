@@ -19,13 +19,13 @@ use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::protobuf::Empty;
-use databend_meta::init_meta_ut;
+use log::info;
 use pretty_assertions::assert_eq;
 use regex::Regex;
 use tokio_stream::StreamExt;
-use tracing::info;
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_export() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Write some data

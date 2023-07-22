@@ -145,7 +145,7 @@ impl HiveCatalog {
         Ok(partitions)
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn get_partition_names(
         &self,
@@ -243,8 +243,7 @@ impl Catalog for HiveCatalog {
         self
     }
 
-    #[async_backtrace::framed]
-    #[tracing::instrument(level = "info", skip(self))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let client = self.get_client()?;
@@ -306,7 +305,7 @@ impl Catalog for HiveCatalog {
     }
 
     // Get one table by db and table name.
-    #[tracing::instrument(level = "info", skip(self))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn get_table(
         &self,

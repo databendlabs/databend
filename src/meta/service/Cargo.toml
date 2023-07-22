@@ -52,8 +52,11 @@ clap = { workspace = true }
 derive_more = { workspace = true }
 futures = "0.3.24"
 itertools = "0.10.5"
+log = { workspace = true }
+logcall = { workspace = true }
 maplit = "1.0.2"
 metrics = "0.20.1"
+minitrace = { workspace = true }
 once_cell = "1.15.0"
 poem = { version = "1", features = ["rustls"] }
 prost = { workspace = true }
@@ -64,7 +67,6 @@ serfig = "0.1.0"
 tokio-stream = "0.1.10"
 tonic = { workspace = true }
 tonic-reflection = "0.9"
-tracing = "0.1.36"
 tracing-appender = "0.2.2"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter", "ansi"] }
 

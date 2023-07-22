@@ -104,7 +104,7 @@ impl FlightService for DatabendQueryFlightService {
 
     type DoExchangeStream = FlightStream<FlightData>;
 
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
         match request.get_metadata("x-type")?.as_str() {
@@ -142,10 +142,10 @@ impl FlightService for DatabendQueryFlightService {
 
     type DoActionStream = FlightStream<FlightResult>;
 
-    #[tracing::instrument(level = "debug", skip_all)]
     #[async_backtrace::framed]
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
-        common_tracing::extract_remote_span_as_parent(&request);
+        let root = common_tracing::start_trace_for_remote_request("do_action", &request);
+        let _guard = root.set_local_parent();
 
         let action = request.into_inner();
         let flight_action: FlightAction = action.try_into()?;
@@ -216,10 +216,10 @@ impl FlightService for DatabendQueryFlightService {
 
     type ListActionsStream = FlightStream<ActionType>;
 
-    #[tracing::instrument(level = "debug", skip_all)]
     #[async_backtrace::framed]
     async fn list_actions(&self, request: Request<Empty>) -> Response<Self::ListActionsStream> {
-        common_tracing::extract_remote_span_as_parent(&request);
+        let root = common_tracing::start_trace_for_remote_request("list_actions", &request);
+        let _guard = root.set_local_parent();
         Result::Ok(RawResponse::new(
             Box::pin(tokio_stream::iter(vec![
                 Ok(ActionType {

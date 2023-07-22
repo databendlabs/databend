@@ -18,6 +18,7 @@ use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
+use minitrace::prelude::*;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::LoadParams;
@@ -26,7 +27,6 @@ use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Versioned;
-use tracing::Instrument;
 
 use crate::io::MetaReaders;
 
@@ -77,7 +77,7 @@ impl SegmentsIO {
     }
 
     // Read all segments information from s3 in concurrently.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn read_segments<T>(
         &self,
@@ -99,7 +99,7 @@ impl SegmentsIO {
                         Self::read_segment(dal, segment_location, table_schema, put_cache).await?;
                     Ok(segment.into())
                 }
-                .instrument(tracing::debug_span!("read_segments"))
+                .in_span(Span::enter_with_local_parent("read_segments"))
             })
         });
 
@@ -136,7 +136,7 @@ impl SegmentsIO {
         let tasks = std::iter::from_fn(move || {
             iter.next().map(|segment| {
                 Self::write_segment(self.operator.clone(), segment)
-                    .instrument(tracing::debug_span!("write_segment"))
+                    .in_span(Span::enter_with_local_parent("write_segment"))
             })
         });
 

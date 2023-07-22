@@ -935,7 +935,7 @@ dependencies = [
  "common-license",
  "common-meta-app",
  "common-meta-embedded",
- "ctor",
+ "ctor 0.1.26",
  "databend-query",
  "pyo3",
  "pyo3-build-config",
@@ -1777,6 +1777,9 @@ dependencies = [
  "enquote",
  "futures",
  "libc",
+ "log",
+ "logcall",
+ "minitrace",
  "num_cpus",
  "once_cell",
  "parking_lot 0.12.1",
@@ -1789,7 +1792,6 @@ dependencies = [
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
  "tokio",
- "tracing",
  "uuid",
 ]
 
@@ -1801,7 +1803,7 @@ dependencies = [
  "cargo-license",
  "cargo_metadata 0.15.3",
  "gix 0.42.0",
- "tracing",
+ "log",
  "vergen",
 ]
 
@@ -1875,13 +1877,14 @@ dependencies = [
  "common-users",
  "databend-thrift",
  "hex",
+ "log",
+ "minitrace",
  "once_cell",
  "pretty_assertions",
  "semver",
  "serde",
  "serfig",
  "strum",
- "tracing",
 ]
 
 [[package]]
@@ -1951,8 +1954,10 @@ dependencies = [
  "itertools",
  "jsonb",
  "lexical-core",
+ "log",
  "match-template",
  "micromarshal",
+ "minitrace",
  "num-traits",
  "once_cell",
  "ordered-float 3.7.0",
@@ -1962,7 +1967,6 @@ dependencies = [
  "serde",
  "serde_json",
  "terminal_size",
- "tracing",
  "typetag",
  "unicode-segmentation",
 ]
@@ -2016,7 +2020,7 @@ dependencies = [
  "crc32fast",
  "criterion",
  "croaring",
- "ctor",
+ "ctor 0.1.26",
  "ethnum",
  "geo",
  "geohash",
@@ -2055,11 +2059,12 @@ dependencies = [
  "common-exception",
  "hyper",
  "jwt-simple",
+ "log",
+ "minitrace",
  "once_cell",
  "serde",
  "thiserror",
  "tonic 0.9.2",
- "tracing",
  "trust-dns-resolver",
 ]
 
@@ -2093,12 +2098,13 @@ dependencies = [
  "common-base",
  "common-exception",
  "futures",
+ "log",
+ "minitrace",
  "poem",
  "pretty_assertions",
  "serde",
  "tempfile",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -2169,12 +2175,14 @@ dependencies = [
  "common-protos",
  "common-tracing",
  "enumflags2",
+ "log",
+ "logcall",
  "maplit",
+ "minitrace",
  "serde",
  "serde_json",
  "thiserror",
  "tonic 0.9.2",
- "tracing",
 ]
 
 [[package]]
@@ -2223,6 +2231,9 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "futures",
+ "log",
+ "logcall",
+ "minitrace",
  "once_cell",
  "parking_lot 0.12.1",
  "prost",
@@ -2231,7 +2242,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tonic 0.9.2",
- "tracing",
 ]
 
 [[package]]
@@ -2247,9 +2257,10 @@ dependencies = [
  "common-meta-sled-store",
  "common-meta-stoerr",
  "common-meta-types",
+ "log",
+ "minitrace",
  "once_cell",
  "tempfile",
- "tracing",
 ]
 
 [[package]]
@@ -2259,10 +2270,11 @@ dependencies = [
  "anyhow",
  "async-trait",
  "common-meta-types",
+ "log",
+ "minitrace",
  "serde",
  "thiserror",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -2305,7 +2317,10 @@ dependencies = [
  "derive_more",
  "hostname",
  "lazy_static",
+ "log",
+ "logcall",
  "maplit",
+ "minitrace",
  "num",
  "once_cell",
  "openraft 0.8.4",
@@ -2314,7 +2329,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "tracing",
 ]
 
 [[package]]
@@ -2328,6 +2342,9 @@ dependencies = [
  "common-meta-stoerr",
  "common-meta-types",
  "common-tracing",
+ "ctor 0.2.4",
+ "log",
+ "minitrace",
  "once_cell",
  "openraft 0.8.4",
  "pretty_assertions",
@@ -2336,7 +2353,6 @@ dependencies = [
  "sled",
  "tempfile",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -2361,8 +2377,8 @@ dependencies = [
  "common-meta-embedded",
  "common-meta-kvapi",
  "common-meta-types",
+ "log",
  "tokio-stream",
- "tracing",
 ]
 
 [[package]]
@@ -2394,15 +2410,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-exception",
+ "log",
  "metrics",
  "metrics-exporter-prometheus",
+ "minitrace",
  "once_cell",
  "parking_lot 0.12.1",
  "procfs",
  "prometheus-parse",
  "serde",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -2469,11 +2486,12 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-util",
+ "log",
+ "minitrace",
  "opendal",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
- "tracing",
  "typetag",
  "xml-rs",
 ]
@@ -2546,11 +2564,12 @@ dependencies = [
  "common-users",
  "dashmap",
  "itertools",
+ "log",
+ "minitrace",
  "num_cpus",
  "once_cell",
  "serde",
  "sys-info",
- "tracing",
 ]
 
 [[package]]
@@ -2571,12 +2590,12 @@ dependencies = [
  "common-users",
  "http",
  "log",
+ "minitrace",
  "moka",
  "opendal",
  "reqwest",
  "serde",
  "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -2613,13 +2632,15 @@ dependencies = [
  "common-storages-stage",
  "common-storages-view",
  "common-users",
- "ctor",
+ "ctor 0.1.26",
  "dashmap",
  "data-mask-feature",
  "educe",
  "enum-as-inner",
  "globiter",
  "itertools",
+ "log",
+ "minitrace",
  "num-derive",
  "num-traits",
  "once_cell",
@@ -2633,7 +2654,6 @@ dependencies = [
  "simsearch",
  "storages-common-table-meta",
  "time 0.3.17",
- "tracing",
  "url",
  "z3",
 ]
@@ -2709,7 +2729,9 @@ dependencies = [
  "futures",
  "futures-util",
  "jsonb",
+ "log",
  "metrics",
+ "minitrace",
  "opendal",
  "parquet-format-safe",
  "rand 0.8.5",
@@ -2726,7 +2748,6 @@ dependencies = [
  "streaming-decompression",
  "sys-info",
  "table-lock",
- "tracing",
  "typetag",
  "uuid",
 ]
@@ -2754,6 +2775,8 @@ dependencies = [
  "common-storage",
  "databend-thrift",
  "futures",
+ "log",
+ "minitrace",
  "opendal",
  "ordered-float 3.7.0",
  "serde",
@@ -2761,7 +2784,6 @@ dependencies = [
  "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-table-meta",
- "tracing",
  "typetag",
 ]
 
@@ -2786,10 +2808,10 @@ dependencies = [
  "dashmap",
  "futures",
  "icelake",
+ "minitrace",
  "opendal",
  "parquet",
  "serde",
- "tracing",
  "typetag",
 ]
 
@@ -2861,12 +2883,12 @@ dependencies = [
  "common-sql",
  "common-storage",
  "futures",
+ "log",
  "opendal",
  "serde",
  "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",
- "tracing",
  "typetag",
 ]
 
@@ -2949,10 +2971,11 @@ dependencies = [
  "common-pipeline-transforms",
  "common-storage",
  "dashmap",
+ "log",
+ "minitrace",
  "opendal",
  "parking_lot 0.12.1",
  "serde",
- "tracing",
  "typetag",
  "uuid",
 ]
@@ -2984,6 +3007,8 @@ dependencies = [
  "common-users",
  "itertools",
  "jsonb",
+ "log",
+ "minitrace",
  "once_cell",
  "parking_lot 0.12.1",
  "serde",
@@ -2993,7 +3018,6 @@ dependencies = [
  "storages-common-cache",
  "storages-common-cache-manager",
  "tikv-jemalloc-ctl",
- "tracing",
  "typetag",
  "walkdir",
 ]
@@ -3013,17 +3037,18 @@ name = "common-tracing"
 version = "0.1.0"
 dependencies = [
  "common-base",
- "common-exception",
  "console-subscriber",
- "opentelemetry",
- "opentelemetry-jaeger",
- "sentry-tracing",
+ "defer",
+ "fern",
+ "humantime",
+ "log",
+ "minitrace",
+ "minitrace-jaeger",
  "serde",
+ "serde_json",
  "tonic 0.9.2",
  "tracing",
  "tracing-appender",
- "tracing-log",
- "tracing-opentelemetry",
  "tracing-subscriber",
 ]
 
@@ -3043,13 +3068,14 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "jwt-simple",
+ "log",
+ "minitrace",
  "p256 0.13.0",
  "parking_lot 0.12.1",
  "pretty_assertions",
  "reqwest",
  "serde",
  "serde_json",
- "tracing",
  "wiremock",
 ]
 
@@ -3468,6 +3494,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f34ba9a9bcb8645379e9de8cb3ecfcf4d1c85ba66d90deb3259206fa5aa193b"
+dependencies = [
+ "quote",
+ "syn 2.0.15",
+]
+
+[[package]]
 name = "ctrlc"
 version = "3.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3652,6 +3688,8 @@ dependencies = [
  "databend-query",
  "enterprise-query",
  "limits-rs",
+ "log",
+ "minitrace",
  "opendal",
  "poem",
  "sentry",
@@ -3663,7 +3701,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.9.2",
- "tracing",
  "url",
 ]
 
@@ -3695,8 +3732,11 @@ dependencies = [
  "env_logger 0.10.0",
  "futures",
  "itertools",
+ "log",
+ "logcall",
  "maplit",
  "metrics",
+ "minitrace",
  "once_cell",
  "poem",
  "pretty_assertions",
@@ -3713,7 +3753,6 @@ dependencies = [
  "tokio-stream",
  "tonic 0.9.2",
  "tonic-reflection",
- "tracing",
  "tracing-appender",
  "tracing-subscriber",
 ]
@@ -3790,7 +3829,7 @@ dependencies = [
  "common-tracing",
  "common-users",
  "criterion",
- "ctor",
+ "ctor 0.1.26",
  "dashmap",
  "data-mask-feature",
  "ethnum",
@@ -3805,10 +3844,12 @@ dependencies = [
  "itertools",
  "jsonb",
  "jwt-simple",
+ "log",
  "lz4",
  "maplit",
  "match-template",
  "metrics",
+ "minitrace",
  "mysql_async",
  "naive-cityhash",
  "num",
@@ -3847,7 +3888,6 @@ dependencies = [
  "toml 0.7.3",
  "tonic 0.9.2",
  "tower",
- "tracing",
  "typetag",
  "unicode-segmentation",
  "url",
@@ -3921,6 +3961,12 @@ dependencies = [
  "serde",
  "uuid",
 ]
+
+[[package]]
+name = "defer"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "647605a6345d5e89c3950a36a638c56478af9b414c55c6f2477c73b115f9acde"
 
 [[package]]
 name = "der"
@@ -4200,12 +4246,13 @@ dependencies = [
  "futures-util",
  "jsonb",
  "jwt-simple",
+ "log",
+ "minitrace",
  "opendal",
  "storages-common-cache",
  "storages-common-table-meta",
  "table-lock",
  "tempfile",
- "tracing",
  "vacuum-handler",
  "virtual-columns-handler",
 ]
@@ -4386,6 +4433,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e51093e27b0797c359783294ca4f0a911c270184cb10f85783b118614a1501be"
 dependencies = [
  "instant",
+]
+
+[[package]]
+name = "fern"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9f0c14694cbd524c8720dd69b0e3179344f04ebb5f90f2e4a440c6ea3b2f1ee"
+dependencies = [
+ "log",
 ]
 
 [[package]]
@@ -6311,7 +6367,7 @@ version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "498ae1c9c329c7972b917506239b557a60386839192f1cf0ca034f345b65db99"
 dependencies = [
- "ctor",
+ "ctor 0.1.26",
  "ghost",
 ]
 
@@ -6730,11 +6786,24 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.17"
+version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
+checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
 dependencies = [
- "cfg-if",
+ "serde",
+ "value-bag",
+]
+
+[[package]]
+name = "logcall"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc46da234f7de5ec31ed4ac31642248086c788f0c7676cc8cb02209b9dd1c71b"
+dependencies = [
+ "proc-macro-error 1.0.4",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -6994,12 +7063,60 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
+name = "minitrace"
+version = "0.4.1"
+source = "git+https://github.com/andylokandy/minitrace-rust.git?branch=reporter#7e91b62c3673c9fa1861187079f26347273567a7"
+dependencies = [
+ "defer",
+ "futures",
+ "minitrace-macro",
+ "minstant",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "pin-project",
+ "rand 0.8.5",
+]
+
+[[package]]
+name = "minitrace-jaeger"
+version = "0.4.1"
+source = "git+https://github.com/andylokandy/minitrace-rust.git?branch=reporter#7e91b62c3673c9fa1861187079f26347273567a7"
+dependencies = [
+ "log",
+ "minitrace",
+ "thrift_codec",
+ "tokio",
+]
+
+[[package]]
+name = "minitrace-macro"
+version = "0.4.1"
+source = "git+https://github.com/andylokandy/minitrace-rust.git?branch=reporter#7e91b62c3673c9fa1861187079f26347273567a7"
+dependencies = [
+ "proc-macro-error 1.0.4",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "miniz_oxide"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b275950c28b37e794e8c55d88aeb5e139d0ce23fdbbeda68f8d7174abdf9e8fa"
 dependencies = [
  "adler",
+]
+
+[[package]]
+name = "minstant"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5dcfca9a0725105ac948b84cfeb69c3942814c696326743797215413f854b9"
+dependencies = [
+ "ctor 0.1.26",
+ "libc",
+ "wasi 0.7.0",
 ]
 
 [[package]]
@@ -7554,89 +7671,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
-name = "opentelemetry"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69d6c3d7288a106c0a363e4b0e8d308058d56902adefb16f4936f417ffef086e"
-dependencies = [
- "opentelemetry_api",
- "opentelemetry_sdk",
-]
-
-[[package]]
-name = "opentelemetry-jaeger"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e785d273968748578931e4dc3b4f5ec86b26e09d9e0d66b55adda7fce742f7a"
-dependencies = [
- "async-trait",
- "futures",
- "futures-executor",
- "once_cell",
- "opentelemetry",
- "opentelemetry-semantic-conventions",
- "thiserror",
- "thrift 0.16.0",
- "tokio",
-]
-
-[[package]]
-name = "opentelemetry-semantic-conventions"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b02e0230abb0ab6636d18e2ba8fa02903ea63772281340ccac18e0af3ec9eeb"
-dependencies = [
- "opentelemetry",
-]
-
-[[package]]
-name = "opentelemetry_api"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c24f96e21e7acc813c7a8394ee94978929db2bcc46cf6b5014fc612bf7760c22"
-dependencies = [
- "fnv",
- "futures-channel",
- "futures-util",
- "indexmap",
- "js-sys",
- "once_cell",
- "pin-project-lite",
- "thiserror",
-]
-
-[[package]]
-name = "opentelemetry_sdk"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ca41c4933371b61c2a2f214bf16931499af4ec90543604ec828f7a625c09113"
-dependencies = [
- "async-trait",
- "crossbeam-channel",
- "dashmap",
- "fnv",
- "futures-channel",
- "futures-executor",
- "futures-util",
- "once_cell",
- "opentelemetry_api",
- "percent-encoding",
- "rand 0.8.5",
- "thiserror",
- "tokio",
- "tokio-stream",
-]
-
-[[package]]
-name = "ordered-float"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3305af35278dd29f46fcdd139e0b1fbfae2153f0e5928b39b035542dd31e37b7"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "ordered-float"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7821,7 +7855,7 @@ dependencies = [
  "paste",
  "seq-macro",
  "snap",
- "thrift 0.17.0",
+ "thrift",
  "tokio",
  "twox-hash",
  "zstd 0.12.3+zstd.1.5.2",
@@ -8247,7 +8281,7 @@ version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a25e9bcb20aa780fd0bb16b72403a9064d6b3f22f026946029acb941a50af755"
 dependencies = [
- "ctor",
+ "ctor 0.1.26",
  "diff",
  "output_vt100",
  "yansi",
@@ -8533,7 +8567,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset",
- "parking_lot 0.12.1",
+ "parking_lot 0.11.2",
  "pyo3-build-config",
  "pyo3-ffi",
  "pyo3-macros",
@@ -9500,17 +9534,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sentry-tracing"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f4eda5496b64975306ce37b7ccdc5f264fd1da25c1d5aac324b460edab29ded"
-dependencies = [
- "sentry-core",
- "tracing-core",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "sentry-types"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9573,6 +9596,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.15",
+]
+
+[[package]]
+name = "serde_fmt"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1d4ddca14104cd60529e8c7f7ba71a2c8acd8f7f5cfcdc2faf97eeb7c3010a4"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -10030,11 +10062,12 @@ dependencies = [
  "crc32fast",
  "crossbeam-channel",
  "hex",
+ "log",
  "metrics",
+ "minitrace",
  "parking_lot 0.12.1",
  "siphasher",
  "tempfile",
- "tracing",
 ]
 
 [[package]]
@@ -10063,12 +10096,13 @@ dependencies = [
  "common-expression",
  "common-functions",
  "criterion",
+ "log",
  "match-template",
+ "minitrace",
  "rand 0.8.5",
  "serde",
  "storages-common-table-meta",
  "thiserror",
- "tracing",
  "xorfilter-rs",
 ]
 
@@ -10079,10 +10113,10 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-functions",
+ "log",
  "serde",
  "storages-common-index",
  "storages-common-table-meta",
- "tracing",
  "typetag",
 ]
 
@@ -10227,6 +10261,74 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
+name = "sval"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b031320a434d3e9477ccf9b5756d57d4272937b8d22cb88af80b7633a1b78b1"
+
+[[package]]
+name = "sval_buffer"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bf7e9412af26b342f3f2cc5cc4122b0105e9d16eb76046cd14ed10106cf6028"
+dependencies = [
+ "sval",
+ "sval_ref",
+]
+
+[[package]]
+name = "sval_dynamic"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0ef628e8a77a46ed3338db8d1b08af77495123cc229453084e47cd716d403cf"
+dependencies = [
+ "sval",
+]
+
+[[package]]
+name = "sval_fmt"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dc09e9364c2045ab5fa38f7b04d077b3359d30c4c2b3ec4bae67a358bd64326"
+dependencies = [
+ "itoa",
+ "ryu",
+ "sval",
+]
+
+[[package]]
+name = "sval_json"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ada6f627e38cbb8860283649509d87bc4a5771141daa41c78fd31f2b9485888d"
+dependencies = [
+ "itoa",
+ "ryu",
+ "sval",
+]
+
+[[package]]
+name = "sval_ref"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "703ca1942a984bd0d9b5a4c0a65ab8b4b794038d080af4eb303c71bc6bf22d7c"
+dependencies = [
+ "sval",
+]
+
+[[package]]
+name = "sval_serde"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "830926cd0581f7c3e5d51efae4d35c6b6fc4db583842652891ba2f1bed8db046"
+dependencies = [
+ "serde",
+ "sval",
+ "sval_buffer",
+ "sval_fmt",
+]
+
+[[package]]
 name = "symbolic-common"
 version = "10.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10325,8 +10427,9 @@ dependencies = [
  "common-license",
  "common-meta-app",
  "futures",
+ "log",
+ "minitrace",
  "rand 0.8.5",
- "tracing",
 ]
 
 [[package]]
@@ -10456,19 +10559,6 @@ dependencies = [
 
 [[package]]
 name = "thrift"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09678c4cdbb4eed72e18b7c2af1329c69825ed16fcbac62d083fc3e2b0590ff0"
-dependencies = [
- "byteorder",
- "integer-encoding",
- "log",
- "ordered-float 1.1.1",
- "threadpool",
-]
-
-[[package]]
-name = "thrift"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e54bc85fc7faa8bc175c4bab5b92ba8d9a3ce893d0e9f42cc455c8ab16a9e09"
@@ -10476,6 +10566,16 @@ dependencies = [
  "byteorder",
  "integer-encoding",
  "ordered-float 2.10.0",
+]
+
+[[package]]
+name = "thrift_codec"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fce3200b189fd4733eb2bb22235755c8aa0361ba1c66b67db54893144d147279"
+dependencies = [
+ "byteorder",
+ "trackable",
 ]
 
 [[package]]
@@ -10891,20 +10991,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-opentelemetry"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21ebb87a95ea13271332df069020513ab70bdb5637ca42d6e492dc3bbbad48de"
-dependencies = [
- "once_cell",
- "opentelemetry",
- "tracing",
- "tracing-core",
- "tracing-log",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "tracing-serde"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10937,6 +11023,25 @@ dependencies = [
  "tracing-serde",
  "valuable",
  "valuable-serde",
+]
+
+[[package]]
+name = "trackable"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b15bd114abb99ef8cee977e517c8f37aee63f184f2d08e3e6ceca092373369ae"
+dependencies = [
+ "trackable_derive",
+]
+
+[[package]]
+name = "trackable_derive"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebeb235c5847e2f82cfe0f07eb971d1e5f6804b18dac2ae16349cc604380f82f"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -11009,7 +11114,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
@@ -11235,6 +11340,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "value-bag"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d92ccd67fb88503048c01b59152a04effd0782d035a83a6d256ce6085f08f4a3"
+dependencies = [
+ "value-bag-serde1",
+ "value-bag-sval2",
+]
+
+[[package]]
+name = "value-bag-serde1"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0b9f3feef403a50d4d67e9741a6d8fc688bcbb4e4f31bd4aab72cc690284394"
+dependencies = [
+ "erased-serde",
+ "serde",
+ "serde_fmt",
+]
+
+[[package]]
+name = "value-bag-sval2"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30b24f4146b6f3361e91cbf527d1fb35e9376c3c0cef72ca5ec5af6d640fad7d"
+dependencies = [
+ "sval",
+ "sval_buffer",
+ "sval_dynamic",
+ "sval_fmt",
+ "sval_json",
+ "sval_ref",
+ "sval_serde",
+]
+
+[[package]]
 name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11310,6 +11451,12 @@ dependencies = [
  "log",
  "try-lock",
 ]
+
+[[package]]
+name = "wasi"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b89c3ce4ce14bdc6fb6beaf9ec7928ca331de5df7e5ea278375642a2f478570d"
 
 [[package]]
 name = "wasi"

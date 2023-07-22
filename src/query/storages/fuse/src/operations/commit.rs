@@ -33,6 +33,9 @@ use common_meta_types::MatchSeq;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use log::debug;
+use log::info;
+use log::warn;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
@@ -44,8 +47,6 @@ use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use tracing::info;
-use tracing::warn;
 
 use super::common::MutationKind;
 use crate::io::MetaWriter;
@@ -328,7 +329,7 @@ impl FuseTable {
                     match backoff.next_backoff() {
                         Some(d) => {
                             let name = self.table_info.name.clone();
-                            tracing::debug!(
+                            debug!(
                                 "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
                                 d.as_millis(),
                                 name.as_str(),

@@ -34,6 +34,7 @@ use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::FieldIndex;
 use common_storage::ColumnNode;
+use log::debug;
 
 use super::filter::FilterState;
 use crate::parquet_part::ColumnMeta;
@@ -279,23 +280,10 @@ fn try_next_block(
         )),
         Some(Err(cause)) => Err(ErrorCode::from(cause)),
         Some(Ok(chunk)) => {
-            let (mem, peak_mem) = if tracing::enabled!(tracing::Level::DEBUG) {
-                (
-                    GLOBAL_MEM_STAT.get_memory_usage(),
-                    GLOBAL_MEM_STAT.get_peak_memory_usage(),
-                )
-            } else {
-                (0, 0)
-            };
-
+            debug!(mem = GLOBAL_MEM_STAT.get_memory_usage(), peak_mem = GLOBAL_MEM_STAT.get_peak_memory_usage(); "before load arrow chunk");
             let block = DataBlock::from_arrow_chunk(&chunk, schema);
-            if tracing::enabled!(tracing::Level::DEBUG) {
-                let mem_new = GLOBAL_MEM_STAT.get_memory_usage();
-                let peak_mem_new = GLOBAL_MEM_STAT.get_memory_usage();
-                tracing::debug!(
-                    "load new arrow chunk, mem: {mem}, peak_mem: {peak_mem}; to block, mem {mem_new},  peak_mem: {peak_mem_new}"
-                );
-            };
+            debug!(mem = GLOBAL_MEM_STAT.get_memory_usage(), peak_mem = GLOBAL_MEM_STAT.get_peak_memory_usage(); "after load arrow chunk");
+
             block
         }
     }

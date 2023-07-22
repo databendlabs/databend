@@ -22,6 +22,8 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::error;
+use log::warn;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::LoadParams;
 use storages_common_cache_manager::CachedObject;
@@ -31,8 +33,6 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
-use tracing::error;
-use tracing::warn;
 
 use crate::io::Files;
 use crate::io::MetaReaders;

@@ -14,6 +14,7 @@
 
 #![deny(unused_crate_dependencies)]
 
+use std::fmt::Debug;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
@@ -34,8 +35,8 @@ use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
+use log::info;
 use tokio_stream::Stream;
-use tracing::info;
 
 pub type WatchStream =
     Pin<Box<dyn Stream<Item = Result<WatchResponse, MetaError>> + Send + 'static>>;
@@ -133,7 +134,7 @@ impl MetaStoreProvider {
     pub async fn create_meta_store(&self) -> Result<MetaStore, MetaError> {
         if self.rpc_conf.local_mode() {
             info!(
-                conf = debug(&self.rpc_conf),
+                conf = &self.rpc_conf as &dyn Debug;
                 "use embedded meta, data will be removed when process exits"
             );
 
@@ -141,7 +142,7 @@ impl MetaStoreProvider {
             let meta_store = MetaEmbedded::get_meta().await?;
             Ok(MetaStore::L(meta_store))
         } else {
-            info!(conf = debug(&self.rpc_conf), "use remote meta");
+            info!(conf = &self.rpc_conf as &dyn Debug; "use remote meta");
             let client = MetaGrpcClient::try_new(&self.rpc_conf)?;
             Ok(MetaStore::R(client))
         }

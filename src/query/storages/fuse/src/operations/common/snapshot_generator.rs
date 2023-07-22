@@ -23,6 +23,7 @@ use common_expression::ColumnId;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_sql::field_default_value;
+use log::info;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
@@ -195,7 +196,7 @@ impl SnapshotGenerator for MutationGenerator {
                         &previous,
                     )
                 {
-                    tracing::info!("resolvable conflicts detected");
+                    info!("resolvable conflicts detected");
                     metrics_inc_commit_mutation_latest_snapshot_append_only();
                     let append_segments = &previous.segments[range_of_newly_append];
                     let append_statistics =
@@ -228,7 +229,7 @@ impl SnapshotGenerator for MutationGenerator {
                         &ctx.removed_segment_indexes,
                     )
                 {
-                    tracing::info!("resolvable conflicts detected");
+                    info!("resolvable conflicts detected");
                     metrics_inc_commit_mutation_modified_segment_exists_in_latest();
                     let new_segments = ConflictResolveContext::merge_segments(
                         previous.segments.clone(),

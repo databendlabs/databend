@@ -18,7 +18,6 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use common_base::base::tokio;
 use common_meta_kvapi::kvapi;
-use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
 use maplit::btreeset;
 
@@ -68,7 +67,8 @@ impl kvapi::ApiBuilder<Arc<MetaNode>> for MetaNodeUnitTestBuilder {
     }
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_node_kv_api() -> anyhow::Result<()> {
     let builder = MetaNodeUnitTestBuilder {
         test_contexts: Arc::new(Mutex::new(vec![])),

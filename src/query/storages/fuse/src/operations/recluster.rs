@@ -29,6 +29,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::build_merge_sort_pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::CompoundBlockOperator;
+use log::info;
 use storages_common_table_meta::meta::BlockMeta;
 
 use crate::operations::common::BlockMetaIndex;
@@ -157,7 +158,7 @@ impl FuseTable {
                 block_count, mutator.total_bytes, mutator.total_rows,
             );
             ctx.set_status_info(&status);
-            tracing::info!(status);
+            info!("{}", status);
         }
 
         let (statistics, parts) = self.read_partitions_with_metas(

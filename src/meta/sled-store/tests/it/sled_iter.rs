@@ -21,20 +21,18 @@ use common_meta_types::Entry;
 use common_meta_types::EntryPayload;
 use common_meta_types::LogEntry;
 use common_meta_types::UpsertKV;
+use log::info;
 use pretty_assertions::assert_eq;
 use sled::IVec;
 use testing::new_sled_test_context;
 
-use crate::init_sled_ut;
 use crate::testing;
 use crate::testing::fake_key_spaces::Logs;
 
 /// Feed some data to two trees, iterate them and check output.
+#[minitrace::trace(root = true)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_iter() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
     let logs: Vec<Entry> = vec![
         Entry {
             log_id: new_log_id(1, 0, 2),
@@ -51,7 +49,7 @@ async fn test_sled_iter() -> anyhow::Result<()> {
         },
     ];
 
-    tracing::info!("--- init some data");
+    info!("--- init some data");
     let t1 = {
         let tc = new_sled_test_context();
 

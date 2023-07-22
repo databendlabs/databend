@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -68,7 +69,8 @@ use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
 use common_proto_conv::FromToProto;
 use enumflags2::BitFlags;
-use tracing::debug;
+use log::debug;
+use log::warn;
 use ConditionResult::Eq;
 
 use crate::kv_app_error::KVAppError;
@@ -364,7 +366,7 @@ pub fn db_has_to_exist(
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq, ?db_name_ident, "db does not exist");
+        debug!(seq = seq, db_name_ident = db_name_ident as &dyn Debug; "db does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownDatabase(
             UnknownDatabase::new(
@@ -389,7 +391,7 @@ pub fn assert_table_exist(
         return Ok(());
     }
 
-    debug!(seq, ?name_ident, "does not exist");
+    debug!(seq = seq, name_ident = name_ident as &dyn Debug; "does not exist");
 
     Err(UnknownTable::new(
         &name_ident.table_name,
@@ -409,7 +411,7 @@ pub fn assert_table_id_exist(
         return Ok(());
     }
 
-    debug!(seq, ?table_id, "does not exist");
+    debug!(seq = seq, table_id = table_id as &dyn Debug; "does not exist");
 
     Err(UnknownTableId::new(
         table_id.table_id,
@@ -430,8 +432,8 @@ pub async fn get_table_by_id_or_err(
     let table_meta = table_meta.unwrap();
 
     debug!(
-        ident = display(table_id),
-        table_meta = debug(&table_meta),
+        ident = table_id as &dyn Display,
+        table_meta = &table_meta as &dyn Debug;
         "{}",
         ctx
     );
@@ -479,8 +481,8 @@ fn share_endpoint_meta_has_to_exist(
 ) -> Result<(), KVAppError> {
     if seq == 0 {
         debug!(
-            seq,
-            ?share_endpoint_id,
+            seq = seq,
+            share_endpoint_id = share_endpoint_id;
             "share endpoint meta does not exist"
         );
 
@@ -501,7 +503,7 @@ fn share_endpoint_has_to_exist(
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq, ?name_key, "share endpoint does not exist");
+        debug!(seq = seq, name_key = name_key as &dyn Debug; "share endpoint does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownShareEndpoint(
             UnknownShareEndpoint::new(&name_key.endpoint, format!("{}: {}", msg, name_key)),
@@ -521,8 +523,8 @@ pub async fn get_share_endpoint_id_to_name_or_err(
     let (share_endpoint_name_seq, share_endpoint) = get_pb_value(kv_api, &id_key).await?;
     if share_endpoint_name_seq == 0 {
         debug!(
-            share_endpoint_name_seq,
-            ?share_endpoint_id,
+            share_endpoint_name_seq = share_endpoint_name_seq,
+            share_endpoint_id = share_endpoint_id;
             "share meta does not exist"
         );
 
@@ -567,7 +569,7 @@ pub async fn get_share_meta_by_id_or_err(
 
 fn share_meta_has_to_exist(seq: u64, share_id: u64, msg: impl Display) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq, ?share_id, "share meta does not exist");
+        debug!(seq = seq, share_id = share_id; "share meta does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownShareId(
             UnknownShareId::new(share_id, format!("{}: {}", msg, share_id)),
@@ -586,7 +588,7 @@ fn share_has_to_exist(
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq, ?share_name_ident, "share does not exist");
+        debug!(seq = seq, share_name_ident = share_name_ident as &dyn Debug; "share does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownShare(
             UnknownShare::new(
@@ -625,7 +627,7 @@ fn share_account_meta_has_to_exist(
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq, ?name_key, "share account does not exist");
+        debug!(seq = seq, name_key = name_key as &dyn Debug; "share account does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownShareAccounts(
             UnknownShareAccounts::new(
@@ -649,7 +651,7 @@ pub async fn get_share_id_to_name_or_err(
 
     let (share_name_seq, share_name) = get_pb_value(kv_api, &id_key).await?;
     if share_name_seq == 0 {
-        debug!(share_name_seq, ?share_id, "share meta does not exist");
+        debug!(share_name_seq = share_name_seq, share_id = share_id; "share meta does not exist");
 
         return Err(KVAppError::AppError(AppError::UnknownShareId(
             UnknownShareId::new(share_id, format!("{}: {}", msg, share_id)),
@@ -832,7 +834,7 @@ pub async fn get_tableinfos_by_ids(
             tb_infos.push(Arc::new(tb_info));
         } else {
             debug!(
-                k = display(&tb_meta_keys[i]),
+                k = &tb_meta_keys[i];
                 "db_meta not found, maybe just deleted after listing names and before listing meta"
             );
         }
@@ -1052,11 +1054,9 @@ pub async fn remove_table_from_share(
             share_meta.entries.remove(&table_name);
         }
         None => {
-            tracing::warn!(
+            warn!(
                 "remove_table_from_share: table {} not found of share {} in tenant {}",
-                &table_name.table_name,
-                &share_name.share_name,
-                &table_name.tenant
+                &table_name.table_name, &share_name.share_name, &table_name.tenant
             );
         }
     }
@@ -1192,7 +1192,7 @@ pub async fn get_index_metas_by_ids(
             let index_meta: IndexMeta = deserialize_struct(&seq_meta.data)?;
             index_metas.push((id, name, index_meta));
         } else {
-            debug!(k = display(&index_meta_keys[i]), "index_meta not found");
+            debug!(k = &index_meta_keys[i]; "index_meta not found");
         }
     }
 
@@ -1223,8 +1223,8 @@ pub async fn get_virtual_column_by_id_or_err(
     let virtual_column_meta = virtual_column_meta.unwrap();
 
     debug!(
-        ident = display(name_ident),
-        table_meta = debug(&virtual_column_meta),
+        ident = name_ident as &dyn Display,
+        table_meta = &virtual_column_meta as &dyn Debug;
         "{}",
         ctx
     );

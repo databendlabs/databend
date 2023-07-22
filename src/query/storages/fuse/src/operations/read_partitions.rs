@@ -35,6 +35,8 @@ use common_exception::Result;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_storage::ColumnNodes;
+use log::debug;
+use log::info;
 use opendal::Operator;
 use sha2::Digest;
 use sha2::Sha256;
@@ -45,8 +47,6 @@ use storages_common_index::RangeIndex;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnMeta;
-use tracing::debug;
-use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::FusePartInfo;
@@ -57,7 +57,7 @@ use crate::pruning::SegmentLocation;
 use crate::FuseTable;
 
 impl FuseTable {
-    #[tracing::instrument(level = "debug", name = "do_read_partitions", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
+    #[minitrace::trace(name = "do_read_partitions")]
     #[async_backtrace::framed]
     pub async fn do_read_partitions(
         &self,
@@ -122,7 +122,7 @@ impl FuseTable {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[tracing::instrument(level = "debug", name = "prune_snapshot_blocks", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
+    #[minitrace::trace(name = "prune_snapshot_blocks")]
     #[async_backtrace::framed]
     pub async fn prune_snapshot_blocks(
         &self,
@@ -135,8 +135,8 @@ impl FuseTable {
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         info!(
-            "prune snapshot block start, segment numbers:{}",
-            segments_location.len()
+            "segment numbers" = segments_location.len();
+            "prune snapshot block start"
         );
 
         type CacheItem = (PartStatistics, Partitions);

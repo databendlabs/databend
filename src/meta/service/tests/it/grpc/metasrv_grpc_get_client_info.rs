@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use common_base::base::tokio;
-use databend_meta::init_meta_ut;
 use pretty_assertions::assert_eq;
 use regex::Regex;
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_get_client_info() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Get client ip

@@ -38,8 +38,8 @@ use common_meta_types::TxnPutResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::With;
-use tracing::debug;
-use tracing::info;
+use log::debug;
+use log::info;
 
 use crate::kvapi;
 use crate::kvapi::UpsertKVReq;
@@ -47,7 +47,7 @@ use crate::kvapi::UpsertKVReq;
 pub struct TestSuite {}
 
 impl kvapi::TestSuite {
-    #[tracing::instrument(level = "info", skip(self, builder))]
+    #[minitrace::trace]
     pub async fn test_all<KV, B>(&self, builder: B) -> anyhow::Result<()>
     where
         KV: kvapi::KVApi,
@@ -89,7 +89,7 @@ impl kvapi::TestSuite {
 }
 
 impl kvapi::TestSuite {
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_write_read<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_write_read() start");
         {
@@ -134,7 +134,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_delete<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_delete() start");
         let test_key = "test_key";
@@ -185,7 +185,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_update<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_update() start");
         let test_key = "test_key_for_update";
@@ -231,7 +231,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_timeout<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_timeout() start");
 
@@ -328,7 +328,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_meta<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_meta() start");
 
@@ -399,7 +399,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_list<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_list() start");
 
@@ -430,7 +430,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_mget<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_mget() start");
 
@@ -1016,7 +1016,7 @@ impl kvapi::TestSuite {
 
 /// Test that write and read should be forwarded to leader
 impl kvapi::TestSuite {
-    #[tracing::instrument(level = "info", skip(self, kv1, kv2))]
+    #[minitrace::trace]
     pub async fn kv_write_read_across_nodes<KV: kvapi::KVApi>(
         &self,
         kv1: &KV,

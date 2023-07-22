@@ -20,13 +20,15 @@ pub(crate) mod version_info;
 
 use std::collections::BTreeSet;
 use std::fmt;
+use std::fmt::Debug;
 
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledTree;
 use common_meta_stoerr::MetaStorageError;
 pub use data_version::DataVersion;
 pub use header::Header;
-use tracing::info;
+use log::debug;
+use log::info;
 
 use crate::config::RaftConfig;
 use crate::key_spaces::DataHeader;
@@ -72,9 +74,9 @@ impl OnDisk {
     const KEY_HEADER: &'static str = "header";
 
     /// Initialize data version for local store, returns the loaded version.
-    #[tracing::instrument(level = "info", skip_all)]
+    #[minitrace::trace]
     pub async fn open(db: &sled::Db, config: &RaftConfig) -> Result<OnDisk, MetaStorageError> {
-        info!(?config, "open and initialize data-version");
+        info!(config = config as &dyn Debug; "open and initialize data-version");
 
         let tree_name = config.tree_name(TREE_HEADER);
         let tree = SledTree::open(db, &tree_name, config.is_sync())?;
@@ -133,7 +135,7 @@ impl OnDisk {
     }
 
     /// Upgrade the on-disk data to latest version `DATA_VERSION`.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     pub async fn upgrade(&mut self) -> Result<(), MetaStorageError> {
         if let Some(u) = self.header.upgrading {
             self.progress(format_args!("Found unfinished upgrading: {:?}", u));
@@ -172,7 +174,7 @@ impl OnDisk {
     ///
     /// `V0` data is openraft-v7 and v8 compatible.
     /// `V001` data is only openraft-v8 compatible.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     async fn upgrade_v0_to_v001(&mut self) -> Result<(), MetaStorageError> {
         assert_eq!(DataVersion::V0, self.header.version);
 
@@ -205,8 +207,8 @@ impl OnDisk {
                     RaftStoreEntryCompat::deserialize(&k_ivec, &v_ivec)?
                 };
 
-                tracing::debug!(
-                    kv_entry = debug(&kv_entry),
+                debug!(
+                    kv_entry = &kv_entry as &dyn Debug;
                     "upgrade kv from {:?}",
                     self.header.version
                 );

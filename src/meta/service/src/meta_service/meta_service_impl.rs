@@ -51,12 +51,13 @@ impl RaftServiceImpl {
 
 #[async_trait::async_trait]
 impl RaftService for RaftServiceImpl {
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     async fn forward(
         &self,
         request: tonic::Request<RaftRequest>,
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
-        common_tracing::extract_remote_span_as_parent(&request);
+        let root = common_tracing::start_trace_for_remote_request("forward", &request);
+        let _guard = root.set_local_parent();
 
         let req = request.into_inner();
 
@@ -70,12 +71,12 @@ impl RaftService for RaftServiceImpl {
         Ok(tonic::Response::new(raft_mes))
     }
 
-    #[tracing::instrument(level = "debug", skip(self, request))]
     async fn append_entries(
         &self,
         request: tonic::Request<RaftRequest>,
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
-        common_tracing::extract_remote_span_as_parent(&request);
+        let root = common_tracing::start_trace_for_remote_request("append_entries", &request);
+        let _guard = root.set_local_parent();
 
         self.incr_meta_metrics_recv_bytes_from_peer(&request);
         let req = request.into_inner();
@@ -98,7 +99,6 @@ impl RaftService for RaftServiceImpl {
         Ok(tonic::Response::new(mes))
     }
 
-    #[tracing::instrument(level = "debug", skip(self, request))]
     async fn install_snapshot(
         &self,
         request: tonic::Request<RaftRequest>,
@@ -109,7 +109,8 @@ impl RaftService for RaftServiceImpl {
         } else {
             "unknown address".to_string()
         };
-        common_tracing::extract_remote_span_as_parent(&request);
+        let root = common_tracing::start_trace_for_remote_request("install_snapshot", &request);
+        let _guard = root.set_local_parent();
 
         self.incr_meta_metrics_recv_bytes_from_peer(&request);
         raft_metrics::network::incr_snapshot_recv_inflights_from_peer(addr.clone(), 1);
@@ -146,12 +147,12 @@ impl RaftService for RaftServiceImpl {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, request))]
     async fn vote(
         &self,
         request: tonic::Request<RaftRequest>,
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
-        common_tracing::extract_remote_span_as_parent(&request);
+        let root = common_tracing::start_trace_for_remote_request("vote", &request);
+        let _guard = root.set_local_parent();
 
         self.incr_meta_metrics_recv_bytes_from_peer(&request);
         let req = request.into_inner();

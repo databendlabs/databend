@@ -27,7 +27,7 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
-use tracing::info;
+use log::info;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;

@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use common_expression::Expr;
+use log::info;
 
 use super::BlockOperator;
 
@@ -60,7 +61,7 @@ pub fn apply_cse(
                         let mut expr_cloned = cse_candidate.clone();
                         perform_cse_replacement(&mut expr_cloned, &cse_replacements);
 
-                        tracing::info!(
+                        info!(
                             "cse_candidate: {}, temp_expr: {}",
                             expr_cloned.sql_display(),
                             temp_expr.sql_display()

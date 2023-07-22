@@ -27,15 +27,14 @@ use common_meta_types::LogEntry;
 use common_meta_types::NodeId;
 use common_meta_types::UpsertKV;
 use databend_meta::configs;
-use databend_meta::init_meta_ut;
 use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;
 use databend_meta::message::JoinRequest;
 use databend_meta::message::LeaveRequest;
 use databend_meta::meta_service::MetaNode;
+use log::info;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
-use tracing::info;
 
 use crate::tests::meta_node::start_meta_node_cluster;
 use crate::tests::meta_node::start_meta_node_leader;
@@ -43,7 +42,8 @@ use crate::tests::meta_node::start_meta_node_non_voter;
 use crate::tests::meta_node::timeout;
 use crate::tests::service::MetaSrvTestContext;
 
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_boot() -> anyhow::Result<()> {
     // - Start a single node meta service cluster.
     // - Test the single node is recorded by this cluster.
@@ -59,7 +59,8 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     // - Start a leader then shutdown.
 
@@ -85,15 +86,13 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_join() -> anyhow::Result<()> {
     // - Bring up a cluster
     // - Join a new node by sending a Join request to leader.
     // - Join a new node by sending a Join request to a non-voter.
     // - Restart all nodes and check if states are restored.
-
-    let span = tracing::span!(tracing::Level::INFO, "test_meta_node_join");
-    let _ent = span.enter();
 
     let (mut _nlog, mut tcs) = start_meta_node_cluster(btreeset![0], btreeset![1]).await?;
     let mut all = test_context_nodes(&tcs);
@@ -192,7 +191,8 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     // - Bring up a cluster
     // - Join a new node.
@@ -278,7 +278,8 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     // Assert that MetaNode allows joining even with initialized store.
     // But does not allow joining with a store that already has membership initialized.
@@ -374,7 +375,8 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_leave() -> anyhow::Result<()> {
     // - Bring up a cluster
     // - Leave a     voter node by sending a Leave request to a non-voter.
@@ -483,7 +485,8 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_leave_last_not_allowed() -> anyhow::Result<()> {
     // - Bring up a cluster of single node
     // - Remove this node is not allowed.
@@ -535,7 +538,8 @@ async fn test_meta_node_leave_last_not_allowed() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_restart() -> anyhow::Result<()> {
     // - Start a leader and a non-voter;
     // - Restart them.
@@ -613,7 +617,8 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     // TODO(xp): This function will replace `test_meta_node_restart` after fs backed state machine is ready.
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
 use std::ops::RangeBounds;
 
 use common_meta_sled_store::sled;
@@ -21,7 +22,7 @@ use common_meta_stoerr::MetaStorageError;
 use common_meta_types::Entry;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
-use tracing::info;
+use log::info;
 
 use crate::config::RaftConfig;
 use crate::key_spaces::LogMeta;
@@ -39,9 +40,9 @@ pub struct RaftLog {
 
 impl RaftLog {
     /// Open RaftLog
-    #[tracing::instrument(level = "debug", skip(db,config), fields(config_id=%config.config_id))]
+    #[minitrace::trace]
     pub async fn open(db: &sled::Db, config: &RaftConfig) -> Result<RaftLog, MetaStorageError> {
-        info!(?config);
+        info!(config = config as &dyn Debug; "open RaftLog");
 
         let tree_name = config.tree_name(TREE_RAFT_LOG);
         let inner = SledTree::open(db, tree_name, config.is_sync())?;

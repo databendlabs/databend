@@ -30,14 +30,10 @@ use common_meta_types::LogEntry;
 use common_meta_types::UpsertKV;
 use common_meta_types::With;
 
-use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_state_machine_update_expiration_index() -> anyhow::Result<()> {
     // - Update expiration index when upsert.
     // - Remove from expiration index when overriding
@@ -102,11 +98,8 @@ async fn test_state_machine_update_expiration_index() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_state_machine_list_expired() -> anyhow::Result<()> {
     // - Feed logs into state machine.
     // - List expired keys

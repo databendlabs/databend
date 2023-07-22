@@ -49,11 +49,8 @@ impl kvapi::ApiBuilder<StateMachine> for StateMachineBuilder {
     }
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_embedded_single() -> anyhow::Result<()> {
     let builder = StateMachineBuilder {
         test_context: Default::default(),

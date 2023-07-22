@@ -16,11 +16,11 @@
 
 use common_base::base::tokio;
 use common_meta_api::SchemaApiTestSuite;
-use databend_meta::init_meta_ut;
 
 use crate::tests::service::start_metasrv_cluster;
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
@@ -32,7 +32,8 @@ async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> 
         .await
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_grpc_client_list_database() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
@@ -44,7 +45,8 @@ async fn test_meta_grpc_client_list_database() -> anyhow::Result<()> {
         .await
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
@@ -56,7 +58,8 @@ async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
         .await
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_grpc_client_list_table() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 

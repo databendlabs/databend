@@ -41,7 +41,7 @@ use crate::sessions::Session;
 macro_rules! status {
     ($desc:expr, $err:expr) => {{
         let msg = format!("{}: {} at {}:{}", $desc, $err, file!(), line!());
-        tracing::error!(msg);
+        log::error!("{}", &msg);
         Status::internal(msg)
     }};
 }

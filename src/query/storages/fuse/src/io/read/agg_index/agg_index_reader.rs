@@ -29,9 +29,9 @@ use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
+use log::debug;
 use opendal::Operator;
 use storages_common_table_meta::table::TableCompression;
-use tracing::debug;
 
 use crate::io::BlockReader;
 

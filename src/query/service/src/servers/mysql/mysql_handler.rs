@@ -27,13 +27,13 @@ use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::future::Abortable;
 use futures::StreamExt;
+use log::error;
+use log::info;
+use log::warn;
 use opensrv_mysql::*;
 use socket2::SockRef;
 use socket2::TcpKeepalive;
 use tokio_stream::wrappers::TcpListenerStream;
-use tracing::error;
-use tracing::info;
-use tracing::warn;
 
 use crate::servers::mysql::mysql_session::MySQLConnection;
 use crate::servers::mysql::reject_connection::RejectConnection;

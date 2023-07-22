@@ -22,7 +22,6 @@ use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
-use databend_meta::init_meta_ut;
 
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
@@ -31,7 +30,8 @@ use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_tls_server() -> anyhow::Result<()> {
     let mut tc = MetaSrvTestContext::new(0);
 
@@ -66,7 +66,8 @@ async fn test_tls_server() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_tls_server_config_failure() -> anyhow::Result<()> {
     let mut tc = MetaSrvTestContext::new(0);
 
@@ -78,7 +79,8 @@ async fn test_tls_server_config_failure() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_tls_client_config_failure() -> anyhow::Result<()> {
     let tls_conf = RpcClientTlsConfig {
         rpc_tls_server_root_ca_cert: "../tests/data/certs/not_exist.pem".to_string(),

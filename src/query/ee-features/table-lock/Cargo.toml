@@ -22,8 +22,9 @@ common-meta-app = { path = "../../../meta/app" }
 async-backtrace = { workspace = true }
 async-trait = "0.1.57"
 futures = "0.3.24"
+log = { workspace = true }
+minitrace = { workspace = true }
 rand = "0.8.5"
-tracing = "0.1.36"
 
 [build-dependencies]
 

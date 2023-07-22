@@ -21,7 +21,6 @@ use common_meta_types::Cmd;
 use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
 use common_meta_types::UpsertKV;
-use databend_meta::init_meta_ut;
 use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::meta_service::MetaNode;
 use maplit::btreeset;
@@ -29,7 +28,8 @@ use maplit::btreeset;
 use crate::tests::meta_node::start_meta_node_cluster;
 use crate::tests::service::MetaSrvTestContext;
 
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_forward_to_leader() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and a non-voter;
     // - Write to the raft node on the leader, expect Ok.

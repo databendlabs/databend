@@ -75,7 +75,7 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
-use tracing::info;
+use log::info;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::default::ImmutableCatalog;

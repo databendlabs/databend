@@ -37,7 +37,7 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
-use tracing::info;
+use log::info;
 
 use crate::local;
 
@@ -356,14 +356,14 @@ fn check_max_open_files() {
     let limits = match limits_rs::get_own_limits() {
         Ok(limits) => limits,
         Err(err) => {
-            tracing::warn!("get system limit of databend-query failed: {:?}", err);
+            warn!("get system limit of databend-query failed: {:?}", err);
             return;
         }
     };
     let max_open_files_limit = limits.max_open_files.soft;
     if let Some(max_open_files) = max_open_files_limit {
         if max_open_files < 65535 {
-            tracing::warn!(
+            warn!(
                 "The open file limit is too low for the databend-query. Please consider increase it by running `ulimit -n 65535`"
             );
         }

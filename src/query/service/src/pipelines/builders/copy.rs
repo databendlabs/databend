@@ -38,9 +38,9 @@ use common_storage::common_metrics::copy::metrics_inc_copy_purge_files_counter;
 use common_storage::StageFileInfo;
 use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
+use log::debug;
+use log::error;
+use log::info;
 
 use crate::pipelines::builders::build_append2table_without_commit_pipeline;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;

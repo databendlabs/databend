@@ -20,13 +20,14 @@ use std::sync::Arc;
 use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
 use common_exception::Result;
+use log::debug;
+use log::trace;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
 use petgraph::Direction;
-use tracing::debug;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
@@ -233,14 +234,12 @@ impl ExecutingGraph {
                     state_guard_cache = Some(node.state.lock().unwrap());
                 }
                 let event = node.processor.event()?;
-                if tracing::enabled!(tracing::Level::TRACE) {
-                    tracing::trace!(
-                        "node id: {:?}, name: {:?}, event: {:?}",
-                        node.processor.id(),
-                        node.processor.name(),
-                        event
-                    );
-                }
+                trace!(
+                    "node id: {:?}, name: {:?}, event: {:?}",
+                    node.processor.id(),
+                    node.processor.name(),
+                    event
+                );
                 let processor_state = match event {
                     Event::Finished => State::Finished,
                     Event::NeedData | Event::NeedConsume => State::Idle,

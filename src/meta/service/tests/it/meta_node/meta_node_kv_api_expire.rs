@@ -24,8 +24,7 @@ use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
 use common_meta_types::With;
-use databend_meta::init_meta_ut;
-use tracing::info;
+use log::info;
 
 use crate::tests::meta_node::start_meta_node_leader;
 use crate::tests::meta_node::start_meta_node_non_voter;
@@ -35,7 +34,8 @@ use crate::tests::meta_node::start_meta_node_non_voter;
 /// - Start a leader, write kv with expiration;
 /// - Assert expired kv can not be read and write.
 /// - Bring up a learner, replicate logs from leader, rebuild the same state machine.
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
     let mut log_index = 0;
 

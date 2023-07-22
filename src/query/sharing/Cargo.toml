@@ -24,10 +24,10 @@ common-users = { path = "../users" }
 
 async-backtrace = { workspace = true }
 http = "0.2"
-log = "0.4"
+log = { workspace = true }
+minitrace = { workspace = true }
 moka = "0.10"
 opendal = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tracing = "0.1.36"

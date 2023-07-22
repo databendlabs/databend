@@ -39,6 +39,9 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_metrics::counter::Count;
 use futures::StreamExt;
+use log::debug;
+use log::info;
+use minitrace::prelude::*;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
@@ -48,8 +51,6 @@ use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
-use tracing::debug;
-use tracing::info;
 
 use crate::meta_service::meta_service_impl::GrpcStream;
 use crate::meta_service::MetaNode;
@@ -98,7 +99,7 @@ impl MetaService for MetaServiceImpl {
     type HandshakeStream = GrpcStream<HandshakeResponse>;
 
     // rpc handshake first
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     async fn handshake(
         &self,
         request: Request<Streaming<HandshakeRequest>>,
@@ -156,34 +157,39 @@ impl MetaService for MetaServiceImpl {
     }
 
     async fn kv_api(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
+        self.check_token(r.metadata())?;
+        network_metrics::incr_recv_bytes(r.get_ref().encoded_len() as u64);
         let _guard = RequestInFlight::guard();
 
-        self.check_token(r.metadata())?;
-        common_tracing::extract_remote_span_as_parent(&r);
-        network_metrics::incr_recv_bytes(r.get_ref().encoded_len() as u64);
+        let root = common_tracing::start_trace_for_remote_request("kv_api", &r);
+        let reply = async {
+            let req: MetaGrpcReq = r.try_into()?;
+            info!("Received MetaGrpcReq: {:?}", req);
 
-        let req: MetaGrpcReq = r.try_into()?;
-        info!("Received MetaGrpcReq: {:?}", req);
+            let m = &self.meta_node;
+            let reply = match req {
+                MetaGrpcReq::UpsertKV(a) => {
+                    let res = m.upsert_kv(a).await;
+                    RaftReply::from(res)
+                }
+                MetaGrpcReq::GetKV(a) => {
+                    let res = m.get_kv(&a.key).await;
+                    RaftReply::from(res)
+                }
+                MetaGrpcReq::MGetKV(a) => {
+                    let res = m.mget_kv(&a.keys).await;
+                    RaftReply::from(res)
+                }
+                MetaGrpcReq::ListKV(a) => {
+                    let res = m.prefix_list_kv(&a.prefix).await;
+                    RaftReply::from(res)
+                }
+            };
 
-        let m = &self.meta_node;
-        let reply = match req {
-            MetaGrpcReq::UpsertKV(a) => {
-                let res = m.upsert_kv(a).await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::GetKV(a) => {
-                let res = m.get_kv(&a.key).await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::MGetKV(a) => {
-                let res = m.mget_kv(&a.keys).await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::ListKV(a) => {
-                let res = m.prefix_list_kv(&a.prefix).await;
-                RaftReply::from(res)
-            }
-        };
+            Ok::<_, tonic::Status>(reply)
+        }
+        .in_span(root)
+        .await?;
 
         network_metrics::incr_request_result(reply.error.is_empty());
         network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
@@ -199,7 +205,8 @@ impl MetaService for MetaServiceImpl {
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
         let _guard = RequestInFlight::guard();
 
-        common_tracing::extract_remote_span_as_parent(&request);
+        let root = common_tracing::start_trace_for_remote_request("transaction", &request);
+        let _guard = root.set_local_parent();
 
         let request = request.into_inner();
 
@@ -251,7 +258,7 @@ impl MetaService for MetaServiceImpl {
     type WatchStream =
         Pin<Box<dyn Stream<Item = Result<WatchResponse, tonic::Status>> + Send + Sync + 'static>>;
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     async fn watch(
         &self,
         request: Request<WatchRequest>,

@@ -29,6 +29,7 @@ use common_expression::TableSchemaRef;
 use common_expression::TopKSorter;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
+use log::info;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 
@@ -228,7 +229,7 @@ fn calc_parallelism(ctx: &Arc<dyn TableContext>, plan: &DataSourcePlan) -> Resul
     }
     let num_deserializer = max_threads.min(max_by_memory).max(1);
 
-    tracing::info!(
+    info!(
         "loading {num_partitions} partitions \
         with {num_deserializer} deserializers, \
         according to \

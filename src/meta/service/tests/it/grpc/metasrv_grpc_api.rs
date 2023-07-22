@@ -21,16 +21,16 @@ use common_meta_kvapi::kvapi::KVApi;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::SeqV;
-use databend_meta::init_meta_ut;
+use log::debug;
+use log::info;
 use pretty_assertions::assert_eq;
 use tokio::time::Duration;
-use tracing::debug;
-use tracing::info;
 
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_restart() -> anyhow::Result<()> {
     // Fix: Issue 1134  https://github.com/datafuselabs/databend/issues/1134
     // - Start a metasrv server.
@@ -91,7 +91,8 @@ async fn test_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_retry_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
@@ -140,7 +141,8 @@ async fn test_retry_join() -> anyhow::Result<()> {
     }
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
@@ -199,7 +201,8 @@ async fn test_join() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[minitrace::trace(root = true)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_auto_sync_addr() -> anyhow::Result<()> {
     // - Start 3 metasrv.
     // - Join node-1, node-2 to node-0

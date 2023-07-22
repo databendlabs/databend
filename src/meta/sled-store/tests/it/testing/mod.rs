@@ -15,25 +15,39 @@
 pub mod fake_key_spaces;
 pub mod fake_state_machine_meta;
 
+use std::sync::Arc;
+use std::sync::Mutex;
+
 use common_base::base::GlobalSequence;
 use common_meta_sled_store::get_sled_db;
+use common_tracing::init_logging;
+use common_tracing::Config;
+use log::info;
+use once_cell::sync::Lazy;
+#[allow(dyn_drop)]
+struct MetaLogGuard {
+    #[allow(dead_code)]
+    log_guards: Vec<Box<dyn Drop + Send + Sync + 'static>>,
+}
 
-/// 1. Open a temp sled::Db for all tests.
-/// 2. Initialize a global tracing.
-/// 3. Create a span for a test case. One needs to enter it by `span.enter()` and keeps the guard held.
-#[macro_export]
-macro_rules! init_sled_ut {
-    () => {{
-        let t = tempfile::tempdir().expect("create temp dir to sled db");
+static META_LOG_GUARD: Lazy<Arc<Mutex<Option<MetaLogGuard>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(None)));
 
-        common_meta_sled_store::init_temp_sled_db(t);
-        let guards =
-            common_tracing::init_logging("sled_unittests", &common_tracing::Config::new_testing());
+/// Initialize unit test tracing for metasrv
+#[ctor::ctor]
+fn init_meta_ut_tracing() {
+    let guards = init_logging("meta_unittests", &Config::new_testing());
+    info!("start");
 
-        let name = common_tracing::func_name!();
-        let span = tracing::debug_span!("ut", "{}", name.split("::").last().unwrap());
-        (guards, span)
-    }};
+    *META_LOG_GUARD.as_ref().lock().unwrap() = Some(MetaLogGuard { log_guards: guards });
+
+    let t = tempfile::tempdir().expect("create temp dir to sled db");
+    common_meta_sled_store::init_temp_sled_db(t);
+}
+
+#[ctor::dtor]
+fn cleanup_meta_ut_tracing() {
+    META_LOG_GUARD.as_ref().lock().unwrap().take();
 }
 
 pub struct SledTestContext {

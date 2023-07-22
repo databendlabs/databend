@@ -24,10 +24,12 @@ storages-common-table-meta = { path = "../table-meta" }
 
 anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }
+log = { workspace = true }
 match-template = "0.0.1"
+minitrace = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
-tracing = "0.1.36"
+
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = [
     "cbordata",
 ], tag = "databend-alpha.4" }
