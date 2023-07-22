@@ -33,6 +33,7 @@ mod util;
 pub use cascades::CascadesOptimizer;
 pub use heuristic::HeuristicOptimizer;
 pub use heuristic::SubqueryRewriter;
+pub use hyper_dp::DPhpy;
 pub use heuristic::DEFAULT_REWRITE_RULES;
 pub use heuristic::RESIDUAL_RULES;
 pub use m_expr::MExpr;
