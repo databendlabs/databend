@@ -22,7 +22,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::TableSchemaRef;
-use log::error;
 use log::info;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
