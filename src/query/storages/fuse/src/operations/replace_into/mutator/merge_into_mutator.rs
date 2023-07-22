@@ -185,37 +185,44 @@ impl MergeIntoOperationAggregator {
 
         let aggregation_ctx = &self.aggregation_ctx;
         match merge_action {
-            MergeIntoOperation::Delete(DeletionByColumn {
-                columns_min_max,
-                key_hashes,
-            }) => {
-                for (segment_index, (path, ver)) in &aggregation_ctx.segment_locations {
-                    let load_param = LoadParams {
-                        location: path.clone(),
-                        len_hint: None,
-                        ver: *ver,
-                        put_cache: true,
-                    };
-                    // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
-                    let segment_info = aggregation_ctx.segment_reader.read(&load_param).await?;
-                    let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
+            MergeIntoOperation::Delete(partitions) => {
+                for DeletionByColumn {
+                    columns_min_max,
+                    key_hashes,
+                } in partitions
+                {
+                    for (segment_index, (path, ver)) in &aggregation_ctx.segment_locations {
+                        let load_param = LoadParams {
+                            location: path.clone(),
+                            len_hint: None,
+                            ver: *ver,
+                            put_cache: true,
+                        };
+                        // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
+                        let segment_info = aggregation_ctx.segment_reader.read(&load_param).await?;
+                        let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
 
-                    // segment level
-                    if aggregation_ctx.overlapped(&segment_info.summary.col_stats, &columns_min_max)
-                    {
-                        // block level
-                        let mut num_blocks_mutated = 0;
-                        for (block_index, block_meta) in segment_info.blocks.iter().enumerate() {
-                            if aggregation_ctx.overlapped(&block_meta.col_stats, &columns_min_max) {
-                                num_blocks_mutated += 1;
-                                self.deletion_accumulator.add_block_deletion(
-                                    *segment_index,
-                                    block_index,
-                                    &key_hashes,
-                                )
+                        // segment level
+                        if aggregation_ctx
+                            .overlapped(&segment_info.summary.col_stats, columns_min_max)
+                        {
+                            // block level
+                            let mut num_blocks_mutated = 0;
+                            for (block_index, block_meta) in segment_info.blocks.iter().enumerate()
+                            {
+                                if aggregation_ctx
+                                    .overlapped(&block_meta.col_stats, columns_min_max)
+                                {
+                                    num_blocks_mutated += 1;
+                                    self.deletion_accumulator.add_block_deletion(
+                                        *segment_index,
+                                        block_index,
+                                        key_hashes,
+                                    )
+                                }
                             }
+                            metrics_inc_replace_block_number_after_pruning(num_blocks_mutated);
                         }
-                        metrics_inc_replace_block_number_after_pruning(num_blocks_mutated);
                     }
                 }
             }

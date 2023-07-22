@@ -23,16 +23,23 @@ use common_expression::Value;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
 
+pub(crate) trait RowScalarValue {
+    fn row_scalar(&self, idx: usize) -> ScalarRef;
+}
+
+impl RowScalarValue for Value<AnyType> {
+    fn row_scalar(&self, idx: usize) -> ScalarRef {
+        match self {
+            Value::Scalar(v) => v.as_ref(),
+            Value::Column(c) => c.index(idx).expect("index out of range"),
+        }
+    }
+}
+
 pub fn row_hash_of_columns(column_values: &[&Value<AnyType>], row_idx: usize) -> u128 {
     let mut sip = sip128::SipHasher24::new();
     for col in column_values {
-        let value = match col {
-            Value::Scalar(v) => v.as_ref(),
-            Value::Column(c) => c
-                .index(row_idx)
-                .expect("column index out of range (calculate columns hash)"),
-        };
-
+        let value = col.row_scalar(row_idx);
         match value {
             ScalarRef::Number(v) => match v {
                 NumberScalar::UInt8(v) => sip.write_u8(v),

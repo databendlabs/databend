@@ -16,9 +16,12 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::RemoteExpr;
+use common_expression::TableSchema;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -48,16 +51,25 @@ pub struct ReplaceIntoProcessor {
 
 impl ReplaceIntoProcessor {
     pub fn create(
+        ctx: &dyn TableContext,
         on_conflict_fields: Vec<OnConflictField>,
+        cluster_keys: Vec<RemoteExpr<String>>,
+        table_schema: &TableSchema,
         target_table_empty: bool,
         table_range_idx: HashMap<ColumnId, ColumnStatistics>,
-    ) -> Self {
-        let replace_into_mutator = ReplaceIntoMutator::create(on_conflict_fields, table_range_idx);
+    ) -> Result<Self> {
+        let replace_into_mutator = ReplaceIntoMutator::try_create(
+            ctx,
+            on_conflict_fields,
+            cluster_keys,
+            table_schema,
+            table_range_idx,
+        )?;
         let input_port = InputPort::create();
         let output_port_merge_into_action = OutputPort::create();
         let output_port_append_data = OutputPort::create();
 
-        Self {
+        Ok(Self {
             replace_into_mutator,
             input_port,
             output_port_merge_into_action,
@@ -66,7 +78,7 @@ impl ReplaceIntoProcessor {
             output_data_merge_into_action: None,
             output_data_append: None,
             target_table_empty,
-        }
+        })
     }
 
     pub fn into_pipe(self) -> Pipe {
@@ -147,15 +159,10 @@ impl Processor for ReplaceIntoProcessor {
 
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
-            // TODO refactor this
-            let (merge_into_action, b) =
-                self.replace_into_mutator.process_input_block(&data_block)?;
+            let merge_into_action = self.replace_into_mutator.process_input_block(&data_block)?;
             if !self.target_table_empty {
-                // self.output_data_merge_into_action =
-                //    Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));
-                // TODO set_meta(&mut self ..) ?
-                let block = b.add_meta(Some(Box::new(merge_into_action)))?;
-                self.output_data_merge_into_action = Some(block);
+                self.output_data_merge_into_action =
+                    Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));
             }
             self.output_data_append = Some(data_block);
             return Ok(());
