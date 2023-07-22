@@ -25,6 +25,7 @@ use common_catalog::plan::StageTableInfo;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -792,12 +793,46 @@ impl DeleteFinal {
     }
 }
 
+// TODO(sky): make TableMutationAggregator distributed
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DeleteFinal {
     pub input: Box<PhysicalPlan>,
     pub snapshot: TableSnapshot,
     pub table_info: TableInfo,
     pub catalog_name: String,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct AsyncSourcerPlan {
+    pub value_data: String,
+    pub schema: DataSchemaRef,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Deduplicate {
+    pub input: Box<PhysicalPlan>,
+    pub on_conflicts: Vec<OnConflictField>,
+    pub empty_table: bool,
+    pub table_info: TableInfo,
+    pub catalog_name: String,
+    pub schema: DataSchemaRef,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct OnConflictField {
+    pub table_field: common_expression::TableField,
+    pub field_index: common_expression::FieldIndex,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ReplaceInto {
+    pub input: Box<PhysicalPlan>,
+    pub segment_partition_num: usize,
+    pub block_thresholds: BlockThresholds,
+    pub table_info: TableInfo,
+    pub on_conflicts: Vec<OnConflictField>,
+    pub catalog_name: String,
+    pub snapshot: TableSnapshot,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -850,9 +885,15 @@ pub enum PhysicalPlan {
     ExchangeSource(ExchangeSource),
     ExchangeSink(ExchangeSink),
 
+    /// Delete
     DeletePartial(Box<DeletePartial>),
     DeleteFinal(Box<DeleteFinal>),
+    /// Copy into table
     CopyIntoTable(Box<CopyIntoTable>),
+    /// Replace
+    AsyncSourcer(AsyncSourcerPlan),
+    Deduplicate(Deduplicate),
+    ReplaceInto(ReplaceInto),
 }
 
 impl PhysicalPlan {
@@ -889,7 +930,10 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(v) => v.plan_id,
             PhysicalPlan::DeletePartial(_)
             | PhysicalPlan::DeleteFinal(_)
-            | PhysicalPlan::CopyIntoTable(_) => {
+            | PhysicalPlan::CopyIntoTable(_)
+            | PhysicalPlan::AsyncSourcer(_)
+            | PhysicalPlan::Deduplicate(_)
+            | PhysicalPlan::ReplaceInto(_) => {
                 unreachable!()
             }
         }
@@ -920,6 +964,9 @@ impl PhysicalPlan {
             PhysicalPlan::DeleteFinal(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
+            PhysicalPlan::AsyncSourcer(_)
+            | PhysicalPlan::Deduplicate(_)
+            | PhysicalPlan::ReplaceInto(_) => Ok(DataSchemaRef::default()),
         }
     }
 
@@ -948,6 +995,9 @@ impl PhysicalPlan {
             PhysicalPlan::DeleteFinal(_) => "DeleteFinal".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
             PhysicalPlan::CopyIntoTable(_) => "CopyIntoTable".to_string(),
+            PhysicalPlan::AsyncSourcer(_) => "AsyncSourcer".to_string(),
+            PhysicalPlan::Deduplicate(_) => "Deduplicate".to_string(),
+            PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
         }
     }
 
@@ -987,6 +1037,9 @@ impl PhysicalPlan {
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
             PhysicalPlan::CopyIntoTable(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::AsyncSourcer(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::Deduplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ReplaceInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
         }
     }
 
@@ -1015,7 +1068,10 @@ impl PhysicalPlan {
             | PhysicalPlan::AggregatePartial(_)
             | PhysicalPlan::DeletePartial(_)
             | PhysicalPlan::DeleteFinal(_)
-            | PhysicalPlan::CopyIntoTable(_) => None,
+            | PhysicalPlan::CopyIntoTable(_)
+            | PhysicalPlan::AsyncSourcer(_)
+            | PhysicalPlan::Deduplicate(_)
+            | PhysicalPlan::ReplaceInto(_) => None,
         }
     }
 }

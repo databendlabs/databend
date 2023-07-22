@@ -17,8 +17,10 @@ use common_exception::Result;
 use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregatePartial;
+use super::AsyncSourcerPlan;
 use super::CopyIntoTable;
 use super::CopyIntoTableSource;
+use super::Deduplicate;
 use super::DeleteFinal;
 use super::DeletePartial;
 use super::DistributedInsertSelect;
@@ -32,6 +34,7 @@ use super::Limit;
 use super::PhysicalPlan;
 use super::Project;
 use super::ProjectSet;
+use super::ReplaceInto;
 use super::RowFetch;
 use super::Sort;
 use super::TableScan;
@@ -66,6 +69,9 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::DeleteFinal(plan) => self.replace_delete_final(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
             PhysicalPlan::CopyIntoTable(plan) => self.replace_copy_into_table(plan),
+            PhysicalPlan::AsyncSourcer(plan) => self.replace_async_sourcer(plan),
+            PhysicalPlan::Deduplicate(plan) => self.replace_deduplicate(plan),
+            PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
         }
     }
 
@@ -324,6 +330,26 @@ pub trait PhysicalPlanReplacer {
         })))
     }
 
+    fn replace_async_sourcer(&mut self, plan: &AsyncSourcerPlan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::AsyncSourcer(plan.clone()))
+    }
+
+    fn replace_deduplicate(&mut self, plan: &Deduplicate) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::Deduplicate(Deduplicate {
+            input: Box::new(input),
+            ..plan.clone()
+        }))
+    }
+
+    fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
+            input: Box::new(input),
+            ..plan.clone()
+        }))
+    }
+
     fn replace_project_set(&mut self, plan: &ProjectSet) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::ProjectSet(ProjectSet {
@@ -362,6 +388,7 @@ impl PhysicalPlan {
             visit(plan);
             match plan {
                 PhysicalPlan::TableScan(_) => {}
+                PhysicalPlan::AsyncSourcer(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -429,6 +456,12 @@ impl PhysicalPlan {
                 }
                 PhysicalPlan::DeletePartial(_) => {}
                 PhysicalPlan::DeleteFinal(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::Deduplicate(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::ReplaceInto(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
             }

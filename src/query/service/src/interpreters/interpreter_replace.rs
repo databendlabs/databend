@@ -19,21 +19,27 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_pipeline_sources::AsyncSourcer;
+use common_sql::executor::AsyncSourcerPlan;
+use common_sql::executor::Deduplicate;
+use common_sql::executor::DeleteFinal;
+use common_sql::executor::OnConflictField;
+use common_sql::executor::PhysicalPlan;
+use common_sql::executor::ReplaceInto;
+use common_sql::plans::CopyPlan;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
 use common_sql::plans::Replace;
-use common_sql::NameResolutionContext;
+use common_storages_factory::Table;
+use common_storages_fuse::FuseTable;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::interpreter_copy::CopyInterpreter;
-use crate::interpreters::interpreter_insert::ValueSource;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
-use crate::pipelines::builders::build_fill_missing_columns_pipeline;
-use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 
 #[allow(dead_code)]
@@ -62,40 +68,84 @@ impl Interpreter for ReplaceInterpreter {
 
         self.check_on_conflicts()?;
 
+        let physical_plan = self.build_physical_plan().await?;
+        let build_res =
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
+                .await?;
+        Ok(build_res)
+    }
+}
+
+impl ReplaceInterpreter {
+    async fn build_physical_plan(&self) -> Result<Box<PhysicalPlan>> {
         let plan = &self.plan;
         let table = self
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
+        let schema = table.schema();
+        let mut on_conflicts = Vec::with_capacity(plan.on_conflict_fields.len());
+        for f in &plan.on_conflict_fields {
+            let field_name = f.name();
+            let (field_index, _) = match schema.column_with_name(field_name) {
+                Some(idx) => idx,
+                None => {
+                    return Err(ErrorCode::Internal(
+                        "not expected, on conflict field not found (after binding)",
+                    ));
+                }
+            };
+            on_conflicts.push(OnConflictField {
+                table_field: f.clone(),
+                field_index,
+            })
+        }
+        let fuse_table =
+            table
+                .as_any()
+                .downcast_ref::<FuseTable>()
+                .ok_or(ErrorCode::Unimplemented(format!(
+                    "table {}, engine type {}, does not support REPLACE INTO",
+                    table.name(),
+                    table.get_table_info().engine(),
+                )))?;
+        let table_info = fuse_table.get_table_info();
+        let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
+            Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))
+        });
 
-        let mut pipeline = self
+        let empty_table = base_snapshot.segments.is_empty();
+        let max_threads = self.ctx.get_settings().get_max_threads()?;
+        let segment_partition_num =
+            std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
+        let mut root = self
             .connect_input_source(self.ctx.clone(), &self.plan.source, self.plan.schema())
             .await?;
-
-        if pipeline.main_pipeline.is_empty() {
-            return Ok(pipeline);
-        }
-
-        build_fill_missing_columns_pipeline(
-            self.ctx.clone(),
-            &mut pipeline.main_pipeline,
-            table.clone(),
-            self.plan.schema(),
-        )?;
-
-        let on_conflict_fields = plan.on_conflict_fields.clone();
-        table
-            .replace_into(
-                self.ctx.clone(),
-                &mut pipeline.main_pipeline,
-                on_conflict_fields,
-            )
-            .await?;
-        Ok(pipeline)
+        root = Box::new(PhysicalPlan::Deduplicate(Deduplicate {
+            input: root,
+            on_conflicts: on_conflicts.clone(),
+            empty_table,
+            table_info: table_info.clone(),
+            catalog_name: plan.catalog.clone(),
+            schema: self.plan.schema(),
+        }));
+        root = Box::new(PhysicalPlan::ReplaceInto(ReplaceInto {
+            input: root,
+            segment_partition_num,
+            block_thresholds: fuse_table.get_block_thresholds(),
+            table_info: table_info.clone(),
+            catalog_name: plan.catalog.clone(),
+            on_conflicts,
+            snapshot: (*base_snapshot).clone(),
+        }));
+        root = Box::new(PhysicalPlan::DeleteFinal(Box::new(DeleteFinal {
+            input: root,
+            snapshot: (*base_snapshot).clone(),
+            table_info: table_info.clone(),
+            catalog_name: plan.catalog.clone(),
+        })));
+        Ok(root)
     }
-}
-
-impl ReplaceInterpreter {
     fn check_on_conflicts(&self) -> Result<()> {
         if self.plan.on_conflict_fields.is_empty() {
             Err(ErrorCode::BadArguments(
@@ -111,21 +161,25 @@ impl ReplaceInterpreter {
         ctx: Arc<QueryContext>,
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
-    ) -> Result<PipelineBuildResult> {
+    ) -> Result<Box<PhysicalPlan>> {
         match source {
-            InsertInputSource::Values(data) => {
-                self.connect_value_source(ctx.clone(), schema.clone(), data)
-            }
+            InsertInputSource::Values(data) => self.connect_value_source(schema.clone(), data),
 
             InsertInputSource::SelectPlan(plan) => {
-                self.connect_query_plan_source(ctx.clone(), schema.clone(), plan)
-                    .await
+                self.connect_query_plan_source(ctx.clone(), plan).await
             }
             InsertInputSource::Stage(plan) => match *plan.clone() {
-                Plan::Copy(copy_plan) => {
-                    let interpreter = CopyInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                    interpreter.execute2().await
-                }
+                Plan::Copy(copy_plan) => match copy_plan.as_ref() {
+                    CopyPlan::IntoTable(copy_into_table_plan) => {
+                        let interpreter =
+                            CopyInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
+                        interpreter
+                            .build_physical_plan(copy_into_table_plan)
+                            .await
+                            .map(|x| Box::new(x.0))
+                    }
+                    _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
+                },
                 _ => unreachable!("plan in InsertInputSource::Stag must be Copy"),
             },
             _ => Err(ErrorCode::Unimplemented(
@@ -136,35 +190,22 @@ impl ReplaceInterpreter {
 
     fn connect_value_source(
         &self,
-        ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         value_data: &str,
-    ) -> Result<PipelineBuildResult> {
-        let mut build_res = PipelineBuildResult::create();
-        let settings = ctx.get_settings();
-        build_res.main_pipeline.add_source(
-            |output| {
-                let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-                let inner = ValueSource::new(
-                    value_data.to_string(),
-                    ctx.clone(),
-                    name_resolution_ctx,
-                    schema.clone(),
-                );
-                AsyncSourcer::create(ctx.clone(), output, inner)
-            },
-            1,
-        )?;
-        Ok(build_res)
+    ) -> Result<Box<PhysicalPlan>> {
+        Ok(Box::new(PhysicalPlan::AsyncSourcer(AsyncSourcerPlan {
+            value_data: value_data.to_string(),
+            schema,
+        })))
     }
 
     #[async_backtrace::framed]
     async fn connect_query_plan_source<'a>(
         &'a self,
         ctx: Arc<QueryContext>,
-        self_schema: DataSchemaRef,
+        // self_schema: DataSchemaRef,
         query_plan: &Plan,
-    ) -> Result<PipelineBuildResult> {
+    ) -> Result<Box<PhysicalPlan>> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query_plan {
             Plan::Query {
                 s_expr,
@@ -185,26 +226,29 @@ impl ReplaceInterpreter {
             false,
         )?;
 
-        let mut build_res = select_interpreter.execute2().await?;
+        // let mut build_res = select_interpreter.execute2().await?;
 
-        let select_schema = query_plan.schema();
-        let target_schema = self_schema;
-        if self.check_schema_cast(query_plan)? {
-            let func_ctx = ctx.get_function_context()?;
-            build_res.main_pipeline.add_transform(
-                |transform_input_port, transform_output_port| {
-                    TransformCastSchema::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        select_schema.clone(),
-                        target_schema.clone(),
-                        func_ctx.clone(),
-                    )
-                },
-            )?;
-        }
+        // let select_schema = query_plan.schema();
+        // let target_schema = self_schema;
+        // if self.check_schema_cast(query_plan)? {
+        //     let func_ctx = ctx.get_function_context()?;
+        //     build_res.main_pipeline.add_transform(
+        //         |transform_input_port, transform_output_port| {
+        //             TransformCastSchema::try_create(
+        //                 transform_input_port,
+        //                 transform_output_port,
+        //                 select_schema.clone(),
+        //                 target_schema.clone(),
+        //                 func_ctx.clone(),
+        //             )
+        //         },
+        //     )?;
+        // }
 
-        Ok(build_res)
+        select_interpreter
+            .build_physical_plan()
+            .await
+            .map(|x| Box::new(x))
     }
 
     // TODO duplicated

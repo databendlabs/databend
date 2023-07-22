@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::panic;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -542,12 +543,11 @@ impl Table for FuseTable {
     #[async_backtrace::framed]
     async fn replace_into(
         &self,
-        ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
-        on_conflict_fields: Vec<TableField>,
+        _ctx: Arc<dyn TableContext>,
+        _pipeline: &mut Pipeline,
+        _on_conflict_fields: Vec<TableField>,
     ) -> Result<()> {
-        self.build_replace_pipeline(ctx, on_conflict_fields, pipeline)
-            .await
+        panic!("deprecated")
     }
 
     fn commit_insertion(

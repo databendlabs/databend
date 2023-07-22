@@ -28,3 +28,4 @@ pub use pipe::TransformPipeBuilder;
 pub use pipeline::Pipeline;
 pub use pipeline_build_res::PipelineBuildResult;
 pub use pipeline_builder::PipelineBuilder;
+pub use pipeline_builder::ValueSource;

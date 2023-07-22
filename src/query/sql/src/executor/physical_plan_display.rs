@@ -19,11 +19,14 @@ use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateExpand;
+use super::AsyncSourcerPlan;
 use super::CopyIntoTable;
+use super::Deduplicate;
 use super::DeleteFinal;
 use super::DeletePartial;
 use super::DistributedInsertSelect;
 use super::ProjectSet;
+use super::ReplaceInto;
 use super::RowFetch;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
@@ -83,6 +86,9 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::CopyIntoTable(copy_into_table) => write!(f, "{}", copy_into_table)?,
+            PhysicalPlan::AsyncSourcer(async_sourcer) => write!(f, "{}", async_sourcer)?,
+            PhysicalPlan::Deduplicate(deduplicate) => write!(f, "{}", deduplicate)?,
+            PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
         }
 
         for node in self.node.children() {
@@ -388,5 +394,23 @@ impl Display for ProjectSet {
             "ProjectSet: set-returning functions : {}",
             scalars.join(", ")
         )
+    }
+}
+
+impl Display for AsyncSourcerPlan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AsyncSourcer")
+    }
+}
+
+impl Display for Deduplicate {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Deduplicate")
+    }
+}
+
+impl Display for ReplaceInto {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Replace")
     }
 }

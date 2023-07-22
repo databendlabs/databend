@@ -20,12 +20,12 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_functions::aggregates::eval_aggr;
+use common_sql::executor::OnConflictField;
 
 use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
-use crate::operations::replace_into::OnConflictField;
 
 // Replace is somehow a simplified merge_into, which
 // - do insertion for "matched" branch

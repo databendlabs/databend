@@ -452,7 +452,10 @@ fn flatten_plan_node_profile(
         }
         PhysicalPlan::DeletePartial(_)
         | PhysicalPlan::DeleteFinal(_)
-        | PhysicalPlan::CopyIntoTable(_) => unreachable!(),
+        | PhysicalPlan::CopyIntoTable(_)
+        | PhysicalPlan::AsyncSourcer(_)
+        | PhysicalPlan::Deduplicate(_)
+        | PhysicalPlan::ReplaceInto(_) => unreachable!(),
     }
 
     Ok(())

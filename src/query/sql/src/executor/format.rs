@@ -173,6 +173,9 @@ fn to_format_tree(
         }
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::CopyIntoTable(plan) => copy_into_table(plan),
+        PhysicalPlan::AsyncSourcer(_) => Ok(FormatTreeNode::new("AsyncSourcer".to_string())),
+        PhysicalPlan::Deduplicate(_) => Ok(FormatTreeNode::new("Deduplicate".to_string())),
+        PhysicalPlan::ReplaceInto(_) => Ok(FormatTreeNode::new("Replace".to_string())),
     }
 }
 

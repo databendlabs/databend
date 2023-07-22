@@ -20,8 +20,4 @@ pub use processors::BroadcastProcessor;
 pub use processors::MergeIntoOperationAggregator;
 pub use processors::ReplaceIntoProcessor;
 
-#[derive(Clone, Debug)]
-pub struct OnConflictField {
-    pub table_field: common_expression::TableField,
-    pub field_index: common_expression::FieldIndex,
-}
+

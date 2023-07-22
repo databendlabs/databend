@@ -140,7 +140,7 @@ impl CopyInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn build_physical_plan(
+    pub async fn build_physical_plan(
         &self,
         plan: &CopyIntoTablePlan,
     ) -> Result<(PhysicalPlan, Vec<StageFileInfo>)> {
