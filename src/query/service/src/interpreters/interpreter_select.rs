@@ -29,6 +29,7 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformDummy;
 use common_sql::executor::PhysicalPlan;
 use common_sql::parse_result_scan_args;
+use common_sql::ColumnBinding;
 use common_sql::MetadataRef;
 use common_storages_result_cache::gen_result_cache_key;
 use common_storages_result_cache::ResultCacheReader;
@@ -72,6 +73,14 @@ impl SelectInterpreter {
             formatted_ast,
             ignore_result,
         })
+    }
+
+    pub fn get_ignore_result(&self) -> bool {
+        self.ignore_result
+    }
+
+    pub fn get_result_columns(&self) -> Vec<ColumnBinding> {
+        self.bind_context.columns.clone()
     }
 
     #[inline]

@@ -22,7 +22,6 @@ use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
-use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
@@ -41,7 +40,6 @@ pub struct AggIndexReader {
 
     pub(super) reader: Arc<BlockReader>,
     pub(super) compression: TableCompression,
-    pub(super) schema: DataSchema,
 
     func_ctx: FunctionContext,
     selection: Vec<(Expr, Option<usize>)>,
@@ -80,7 +78,6 @@ impl AggIndexReader {
             index_id: agg.index_id,
             reader,
             func_ctx,
-            schema: agg.schema.as_ref().into(),
             selection,
             filter,
             actual_table_field_len: agg.actual_table_field_len,
@@ -92,34 +89,6 @@ impl AggIndexReader {
     #[inline(always)]
     pub fn index_id(&self) -> u64 {
         self.index_id
-    }
-
-    pub fn sync_read_data(&self, loc: &str) -> Option<Vec<u8>> {
-        match self.reader.operator.blocking().read(loc) {
-            Ok(data) => Some(data),
-            Err(e) => {
-                if e.kind() == opendal::ErrorKind::NotFound {
-                    debug!("Aggregating index `{loc}` not found.")
-                } else {
-                    debug!("Read aggregating index `{loc}` failed: {e}");
-                }
-                None
-            }
-        }
-    }
-
-    pub async fn read_data(&self, loc: &str) -> Option<Vec<u8>> {
-        match self.reader.operator.read(loc).await {
-            Ok(data) => Some(data),
-            Err(e) => {
-                if e.kind() == opendal::ErrorKind::NotFound {
-                    debug!("Aggregating index `{loc}` not found.")
-                } else {
-                    debug!("Read aggregating index `{loc}` failed: {e}");
-                }
-                None
-            }
-        }
     }
 
     pub(super) fn apply_agg_info(&self, block: DataBlock) -> Result<DataBlock> {

@@ -15,19 +15,24 @@
 use std::hash::Hasher;
 
 use common_expression::types::decimal::DecimalScalar;
+use common_expression::types::AnyType;
 use common_expression::types::DecimalSize;
 use common_expression::types::NumberScalar;
-use common_expression::Column;
 use common_expression::ScalarRef;
+use common_expression::Value;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
 
-pub fn row_hash_of_columns(columns: &[&Column], row_idx: usize) -> u128 {
+pub fn row_hash_of_columns<'a>(column_values: &'a [&'a Value<AnyType>], row_idx: usize) -> u128 {
     let mut sip = sip128::SipHasher24::new();
-    for column in columns {
-        let value = column
-            .index(row_idx)
-            .expect("column index out of range (calculate columns hash)");
+    for col in column_values {
+        let value = match col {
+            Value::Scalar(v) => v.as_ref(),
+            Value::Column(c) => c
+                .index(row_idx)
+                .expect("column index out of range (calculate columns hash)"),
+        };
+
         match value {
             ScalarRef::Number(v) => match v {
                 NumberScalar::UInt8(v) => sip.write_u8(v),

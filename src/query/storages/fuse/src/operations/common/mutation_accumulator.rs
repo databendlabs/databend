@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::TableSchemaRef;
 use log::error;
+use log::info;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::FormatVersion;
@@ -223,7 +224,7 @@ impl MutationAccumulator {
 
         let conflict_resolve_context = match self.kind {
             MutationKind::Delete => {
-                error!("removed_segment_indexes:{:?}", removed_segment_indexes);
+                info!("removed_segment_indexes:{:?}", removed_segment_indexes);
                 ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
                     removed_segment_indexes,
                     added_segments,

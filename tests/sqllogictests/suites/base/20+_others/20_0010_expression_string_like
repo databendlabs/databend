@@ -137,3 +137,18 @@ query B
 select count(*)=5 from t_string_like where URL like '%%'
 ----
 1
+
+# issue https://github.com/datafuselabs/databend/issues/12154
+statement ok
+create table b01(card_no int, deal_type varchar);
+
+statement ok
+insert into b01 values(1000,'地铁入站');
+
+query IT
+select * from b01 where deal_type  like '地铁%';
+----
+1000  地铁入站
+
+statement ok
+drop table b01;

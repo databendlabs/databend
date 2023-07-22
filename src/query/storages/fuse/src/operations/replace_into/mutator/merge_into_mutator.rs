@@ -67,6 +67,7 @@ use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyD
 use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
 use crate::operations::replace_into::OnConflictField;
+
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
     // the fields specified in ON CONFLICT clause
@@ -323,7 +324,7 @@ impl AggregationContext {
         let mut columns = Vec::with_capacity(on_conflict_fields.len());
         for (field, _) in on_conflict_fields.iter().enumerate() {
             let on_conflict_field_index = field;
-            let key_column = key_columns_data
+            columns.push(&key_columns_data
                 .columns()
                 .get(on_conflict_field_index)
                 .ok_or_else(|| {
@@ -332,15 +333,7 @@ impl AggregationContext {
                         on_conflict_field_index, segment_index, block_index
                     ))
                 })?
-                .value
-                .as_column()
-                .ok_or_else(|| {
-                    ErrorCode::Internal(format!(
-                        "unexpected, cast block entry (index {}) to column failed, got None. segment index {}, block index {}",
-                        on_conflict_field_index, segment_index, block_index
-                    ))
-                })?;
-            columns.push(key_column);
+                .value);
         }
 
         let mut bitmap = MutableBitmap::new();

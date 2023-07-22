@@ -164,7 +164,7 @@ impl<F> Processor for CommitSink<F>
 where F: SnapshotGenerator + Send + 'static
 {
     fn name(&self) -> String {
-        "MutationSink".to_string()
+        "CommitSink".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

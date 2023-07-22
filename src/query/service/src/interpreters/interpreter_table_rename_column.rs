@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchema;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
@@ -82,13 +83,15 @@ impl Interpreter for RenameTableColumnInterpreter {
 
             is_valid_column(&self.plan.new_column)?;
 
-            let table_schema = table_info.schema();
-            let field = table_schema.field_with_name(self.plan.old_column.as_str())?;
-            if field.computed_expr.is_none() {
+            let mut schema: DataSchema = table_info.schema().into();
+            let field = schema.field_with_name(self.plan.old_column.as_str())?;
+            if field.computed_expr().is_none() {
+                let index = schema.index_of(self.plan.old_column.as_str())?;
+                schema.rename_field(index, self.plan.new_column.as_str());
                 // Check if old column is referenced by computed columns.
                 check_referenced_computed_columns(
                     self.ctx.clone(),
-                    table_schema,
+                    Arc::new(schema),
                     self.plan.old_column.as_str(),
                 )?;
             }

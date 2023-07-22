@@ -30,6 +30,7 @@ common-meta-types = { path = "../../meta/types" }
 async-backtrace = { workspace = true }
 base64 = "0.21"
 chrono = { workspace = true }
+cidr = { version = "0.2.2" }
 jwt-simple = "0.11"
 log = { workspace = true }
 minitrace = { workspace = true }

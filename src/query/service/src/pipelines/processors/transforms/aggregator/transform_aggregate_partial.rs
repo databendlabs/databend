@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::vec;
 
 use bumpalo::Bump;
+use common_base::runtime::GLOBAL_MEM_STAT;
 use common_catalog::plan::AggIndexMeta;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -61,6 +62,7 @@ impl<Method: HashMethodBounds> Default for HashTable<Method> {
 
 struct AggregateSettings {
     convert_threshold: usize,
+    max_memory_usage: usize,
     spilling_bytes_threshold_per_proc: usize,
 }
 
@@ -69,14 +71,30 @@ impl TryFrom<Arc<QueryContext>> for AggregateSettings {
 
     fn try_from(ctx: Arc<QueryContext>) -> std::result::Result<Self, Self::Error> {
         let settings = ctx.get_settings();
+        let max_threads = settings.get_max_threads()? as usize;
         let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
-        let value = settings.get_spilling_bytes_threshold_per_proc()?;
+        let mut memory_ratio = settings.get_spilling_memory_ratio()? as f64 / 100_f64;
+
+        if memory_ratio > 1_f64 {
+            memory_ratio = 1_f64;
+        }
+
+        let max_memory_usage = match settings.get_max_memory_usage()? {
+            0 => usize::MAX,
+            max_memory_usage => match memory_ratio {
+                x if x == 0_f64 => usize::MAX,
+                memory_ratio => (max_memory_usage as f64 * memory_ratio) as usize,
+            },
+        };
 
         Ok(AggregateSettings {
             convert_threshold,
-            spilling_bytes_threshold_per_proc: match value == 0 {
-                true => usize::MAX,
-                false => value,
+            max_memory_usage,
+            spilling_bytes_threshold_per_proc: match settings
+                .get_spilling_bytes_threshold_per_proc()?
+            {
+                0 => max_memory_usage / max_threads,
+                spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,
             },
         })
     }
@@ -200,11 +218,19 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 .unwrap()
                 .as_string()
                 .unwrap();
-
+            let state_place = self.temp_place.next(offset);
             for (row, mut raw_state) in agg_state.iter().enumerate() {
                 let place = &places[row];
-                function.deserialize(self.temp_place, &mut raw_state)?;
-                function.merge(place.next(offset), self.temp_place)?;
+                function.deserialize(state_place, &mut raw_state)?;
+                function.merge(place.next(offset), state_place)?;
+                if function.need_manual_drop_state() {
+                    unsafe {
+                        // State may allocate memory out of the arena,
+                        // drop state to avoid memory leak.
+                        function.drop_state(state_place);
+                    }
+                    function.init_state(state_place);
+                }
             }
         }
 
@@ -295,7 +321,8 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
         if Method::SUPPORT_PARTITIONED {
             if matches!(&self.hash_table, HashTable::HashTable(cell)
                 if cell.len() >= self.settings.convert_threshold ||
-                    cell.allocated_bytes() >= self.settings.spilling_bytes_threshold_per_proc
+                    cell.allocated_bytes() >= self.settings.spilling_bytes_threshold_per_proc ||
+                    GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
             ) {
                 if let HashTable::HashTable(cell) = std::mem::take(&mut self.hash_table) {
                     self.hash_table = HashTable::PartitionedHashTable(
@@ -305,6 +332,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             }
 
             if matches!(&self.hash_table, HashTable::PartitionedHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc)
+                || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
             {
                 if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table) {
                     // perf

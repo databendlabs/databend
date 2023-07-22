@@ -265,6 +265,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("spilling_memory_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(100),
+                    desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
