@@ -16,3 +16,14 @@ ALTER FUNCTION is_not_null AS (d) -> not(is_null(d))
 statement ok
 DROP FUNCTION test_alter_udf
 
+statement ok
+CREATE FUNCTION plus_int as (int, int) -> int64 address 'http://localhost:8888'
+
+statement ok
+ALTER FUNCTION plus_int as (int, int) -> int address 'http://localhost:9999' DESC = 'This is a new description'
+
+statement error 2602
+ALTER FUNCTION plus_int_unknown as (int, int) -> int address 'http://localhost:9999' DESC = 'This is a new description'
+
+statement ok
+DROP FUNCTION plus_int

@@ -29,6 +29,7 @@ async-trait = "0.1.57"
 serde_json = { workspace = true }
 
 [dev-dependencies]
+common-expression = { path = "../../query/expression" }
 common-meta-embedded = { path = "../../meta/embedded" }
 common-storage = { path = "../../common/storage" }
 mockall = "0.11.2"

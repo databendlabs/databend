@@ -13,14 +13,30 @@
 // limitations under the License.
 
 use common_exception::exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_meta_app::principal::UserDefinedFunction;
 
 #[test]
 fn test_udf() -> Result<()> {
-    let udf = UserDefinedFunction::new(
+    // lambda udf
+    let udf = UserDefinedFunction::create_lambda_udf(
         "is_not_null",
         vec!["p".to_string()],
         "not(is_null(p))",
+        "this is a description",
+    );
+    let ser = serde_json::to_string(&udf)?;
+
+    let de = UserDefinedFunction::try_from(ser.into_bytes())?;
+    assert_eq!(udf, de);
+
+    // udf server
+    let udf = UserDefinedFunction::create_udf_server(
+        "strlen",
+        "http://localhost:8888",
+        vec![DataType::String],
+        DataType::Number(NumberDataType::Int64),
         "this is a description",
     );
     let ser = serde_json::to_string(&udf)?;

@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_management::*;
 use common_meta_app::principal::UserDefinedFunction;
 use common_meta_embedded::MetaEmbedded;
@@ -27,13 +29,33 @@ use common_meta_types::SeqV;
 async fn test_add_udf() -> Result<()> {
     let (kv_api, udf_api) = new_udf_api().await?;
 
-    let udf = create_test_udf();
+    // lambda udf
+    let udf = create_test_lambda_udf();
     udf_api.add_udf(udf.clone()).await?;
-    let value = kv_api.get_kv("__fd_udfs/admin/isnotempty").await?;
+    let value = kv_api
+        .get_kv(format!("__fd_udfs/admin/{}", udf.name).as_str())
+        .await?;
 
     match value {
         Some(SeqV {
             seq: 1,
+            meta: _,
+            data: value,
+        }) => {
+            assert_eq!(value, serde_json::to_vec(&udf)?);
+        }
+        catch => panic!("GetKVActionReply{:?}", catch),
+    }
+    // udf server
+    let udf = create_test_udf_server();
+    udf_api.add_udf(udf.clone()).await?;
+    let value = kv_api
+        .get_kv(format!("__fd_udfs/admin/{}", udf.name).as_str())
+        .await?;
+
+    match value {
+        Some(SeqV {
+            seq: 2,
             meta: _,
             data: value,
         }) => {
@@ -49,9 +71,17 @@ async fn test_add_udf() -> Result<()> {
 async fn test_already_exists_add_udf() -> Result<()> {
     let (_, udf_api) = new_udf_api().await?;
 
-    let udf = create_test_udf();
+    // lambda udf
+    let udf = create_test_lambda_udf();
     udf_api.add_udf(udf.clone()).await?;
+    match udf_api.add_udf(udf.clone()).await {
+        Ok(_) => panic!("Already exists add udf must be return Err."),
+        Err(cause) => assert_eq!(cause.code(), 2603),
+    }
 
+    // udf server
+    let udf = create_test_udf_server();
+    udf_api.add_udf(udf.clone()).await?;
     match udf_api.add_udf(udf.clone()).await {
         Ok(_) => panic!("Already exists add udf must be return Err."),
         Err(cause) => assert_eq!(cause.code(), 2603),
@@ -67,11 +97,14 @@ async fn test_successfully_get_udfs() -> Result<()> {
     let udfs = udf_api.get_udfs().await?;
     assert_eq!(udfs, vec![]);
 
-    let udf = create_test_udf();
-    udf_api.add_udf(udf.clone()).await?;
+    let lambda_udf = create_test_lambda_udf();
+    let udf_server = create_test_udf_server();
+
+    udf_api.add_udf(lambda_udf.clone()).await?;
+    udf_api.add_udf(udf_server.clone()).await?;
 
     let udfs = udf_api.get_udfs().await?;
-    assert_eq!(udfs[0], udf);
+    assert_eq!(udfs, vec![lambda_udf, udf_server]);
     Ok(())
 }
 
@@ -79,13 +112,17 @@ async fn test_successfully_get_udfs() -> Result<()> {
 async fn test_successfully_drop_udf() -> Result<()> {
     let (_, udf_api) = new_udf_api().await?;
 
-    let udf = create_test_udf();
-    udf_api.add_udf(udf.clone()).await?;
+    let lambda_udf = create_test_lambda_udf();
+    let udf_server = create_test_udf_server();
+
+    udf_api.add_udf(lambda_udf.clone()).await?;
+    udf_api.add_udf(udf_server.clone()).await?;
 
     let udfs = udf_api.get_udfs().await?;
-    assert_eq!(udfs, vec![udf.clone()]);
+    assert_eq!(udfs, vec![lambda_udf.clone(), udf_server.clone()]);
 
-    udf_api.drop_udf(&udf.name, MatchSeq::GE(1)).await?;
+    udf_api.drop_udf(&lambda_udf.name, MatchSeq::GE(1)).await?;
+    udf_api.drop_udf(&udf_server.name, MatchSeq::GE(1)).await?;
 
     let udfs = udf_api.get_udfs().await?;
     assert_eq!(udfs, vec![]);
@@ -104,11 +141,21 @@ async fn test_unknown_udf_drop_udf() -> Result<()> {
     Ok(())
 }
 
-fn create_test_udf() -> UserDefinedFunction {
-    UserDefinedFunction::new(
+fn create_test_lambda_udf() -> UserDefinedFunction {
+    UserDefinedFunction::create_lambda_udf(
         "isnotempty",
         vec!["p".to_string()],
         "not(is_null(p))",
+        "This is a description",
+    )
+}
+
+fn create_test_udf_server() -> UserDefinedFunction {
+    UserDefinedFunction::create_udf_server(
+        "strlen",
+        "http://localhost:8888",
+        vec![DataType::String],
+        DataType::Number(NumberDataType::Int64),
         "This is a description",
     )
 }

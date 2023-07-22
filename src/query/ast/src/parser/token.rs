@@ -983,6 +983,8 @@ pub enum TokenKind {
     ROLLUP,
     #[token("INDEXES", ignore(ascii_case))]
     INDEXES,
+    #[token("ADDRESS", ignore(ascii_case))]
+    ADDRESS,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

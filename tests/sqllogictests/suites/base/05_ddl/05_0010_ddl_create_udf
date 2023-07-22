@@ -28,3 +28,47 @@ DROP FUNCTION isnotempty
 statement ok
 DROP FUNCTION isnotempty_with_desc
 
+# udf server test
+statement ok
+CREATE FUNCTION answer as () -> int address 'http://localhost:8888' DESC = 'This is a description'
+
+statement ok
+CREATE FUNCTION IF NOT EXISTS answer as () -> int address 'http://localhost:8888' DESC = 'This is a description'
+
+statement error 2603
+CREATE FUNCTION answer as () -> int address 'http://localhost:8888' DESC = 'This is a description'
+
+statement ok
+CREATE FUNCTION plus_int as (int, int) -> int64 address 'http://localhost:8888' DESC = 'This is a description'
+
+statement ok
+CREATE FUNCTION plus_float as (float, double) -> double address 'http://localhost:8888' DESC = 'This is a description'
+
+statement ok
+CREATE FUNCTION plus_decimal as (decimal(36, 18), decimal(36, 18)) -> decimal(36, 18) address 'http://localhost:8888' DESC = 'This is a description'
+
+statement ok
+CREATE FUNCTION concat_str as (varchar, varchar) -> varchar address 'http://localhost:8888' DESC = 'This is a description'
+
+statement ok
+CREATE FUNCTION concat_array as (ARRAY(INT64), ARRAY(INT64)) -> ARRAY(INT64) address 'http://localhost:8888' DESC = 'This is a description'
+
+statement ok
+DROP FUNCTION answer
+
+statement ok
+DROP FUNCTION plus_int
+
+statement ok
+DROP FUNCTION plus_float
+
+statement ok
+DROP FUNCTION plus_decimal
+
+statement ok
+DROP FUNCTION concat_str
+
+statement ok
+DROP FUNCTION concat_array
+
+
