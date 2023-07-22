@@ -32,6 +32,7 @@ pub fn write_parquet_file<W: Write, A, I>(
     row_groups: RowGroupIterator<A, I>,
     schema: Schema,
     options: WriteOptions,
+    created_by: Option<String>,
 ) -> Result<(u64, ThriftFileMetaData)>
 where
     W: Write,
@@ -52,8 +53,6 @@ where
 
     let parquet_schema = to_parquet_schema(&schema)?;
 
-    // Arrow2 should be honored
-    let created_by = Some("Arrow2 - Native Rust implementation of Arrow".to_string());
     let mut file_writer = FileWriter::new(writer, parquet_schema, options, created_by);
 
     for group in row_groups {
