@@ -2301,6 +2301,7 @@ dependencies = [
  "common-meta-stoerr",
  "common-meta-types",
  "common-tracing",
+ "ctor 0.2.4",
  "derive_more",
  "hostname",
  "lazy_static",
@@ -3715,6 +3716,7 @@ dependencies = [
  "common-meta-types",
  "common-metrics",
  "common-tracing",
+ "ctor 0.2.4",
  "derive_more",
  "env_logger 0.10.0",
  "futures",
@@ -6783,9 +6785,9 @@ dependencies = [
 
 [[package]]
 name = "logcall"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc46da234f7de5ec31ed4ac31642248086c788f0c7676cc8cb02209b9dd1c71b"
+checksum = "4abc7eef9e6fd624accfb9f7f031909825a03f41209508e172a6c84a69353b57"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -8554,7 +8556,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "pyo3-build-config",
  "pyo3-ffi",
  "pyo3-macros",
@@ -11102,7 +11104,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

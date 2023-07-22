@@ -168,7 +168,7 @@ tokio = { version = "1.26.0", features = ["full"] }
 async-backtrace = "0.2.2"
 
 # observability
-logcall = "0.1"
+logcall = "0.1.4"
 log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
 minitrace = { version = "0.4", feature = ["enable"] }
 
