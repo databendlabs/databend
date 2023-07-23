@@ -186,23 +186,23 @@ impl MergeIntoOperationAggregator {
         let aggregation_ctx = &self.aggregation_ctx;
         match merge_action {
             MergeIntoOperation::Delete(partitions) => {
-                for DeletionByColumn {
-                    columns_min_max,
-                    key_hashes,
-                } in partitions
-                {
-                    for (segment_index, (path, ver)) in &aggregation_ctx.segment_locations {
-                        let load_param = LoadParams {
-                            location: path.clone(),
-                            len_hint: None,
-                            ver: *ver,
-                            put_cache: true,
-                        };
-                        // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
-                        let segment_info = aggregation_ctx.segment_reader.read(&load_param).await?;
-                        let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
+                for (segment_index, (path, ver)) in &aggregation_ctx.segment_locations {
+                    // segment level
+                    let load_param = LoadParams {
+                        location: path.clone(),
+                        len_hint: None,
+                        ver: *ver,
+                        put_cache: true,
+                    };
+                    // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
+                    let segment_info = aggregation_ctx.segment_reader.read(&load_param).await?;
+                    let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
 
-                        // segment level
+                    for DeletionByColumn {
+                        columns_min_max,
+                        key_hashes,
+                    } in partitions
+                    {
                         if aggregation_ctx
                             .overlapped(&segment_info.summary.col_stats, columns_min_max)
                         {
