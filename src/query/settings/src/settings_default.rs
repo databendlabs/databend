@@ -334,6 +334,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("enable_replace_into_partitioning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables partitioning for replace-into statement (if table has cluster keys).",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

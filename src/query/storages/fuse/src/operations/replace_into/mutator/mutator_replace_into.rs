@@ -66,7 +66,9 @@ impl ReplaceIntoMutator {
         table_schema: &TableSchema,
         table_range_idx: HashMap<ColumnId, ColumnStatistics>,
     ) -> Result<Self> {
-        let partitioner = if !cluster_keys.is_empty() {
+        let partitioner = if !cluster_keys.is_empty()
+            && ctx.get_settings().get_enable_replace_into_partitioning()?
+        {
             Some(Partitioner::try_new(
                 ctx,
                 on_conflict_fields.clone(),
