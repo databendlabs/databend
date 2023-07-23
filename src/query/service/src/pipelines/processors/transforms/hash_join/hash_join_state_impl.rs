@@ -684,7 +684,6 @@ impl HashJoinState for JoinHashTable {
         let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
 
         let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
         let interrupt = self.interrupt.clone();
@@ -713,7 +712,6 @@ impl HashJoinState for JoinHashTable {
                 ));
             }
 
-            debug_assert!(is_build_projected);
             result_blocks.push(self.row_space.gather(
                 &build_indexes[0..build_indexes_occupied],
                 &data_blocks,
@@ -738,7 +736,6 @@ impl HashJoinState for JoinHashTable {
         let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
 
         let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
         let interrupt = self.interrupt.clone();
@@ -767,7 +764,6 @@ impl HashJoinState for JoinHashTable {
                 ));
             }
 
-            debug_assert!(is_build_projected);
             result_blocks.push(self.row_space.gather(
                 &build_indexes[0..build_indexes_occupied],
                 &data_blocks,
@@ -796,7 +792,6 @@ impl HashJoinState for JoinHashTable {
         let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
 
         let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
         let interrupt = self.interrupt.clone();
@@ -849,7 +844,6 @@ impl HashJoinState for JoinHashTable {
                 validity: validity.into(),
             }));
             let marker_block = DataBlock::new_from_columns(vec![marker_column]);
-            debug_assert!(is_build_projected);
             let build_block = self.row_space.gather(
                 &build_indexes[0..build_indexes_occupied],
                 &data_blocks,

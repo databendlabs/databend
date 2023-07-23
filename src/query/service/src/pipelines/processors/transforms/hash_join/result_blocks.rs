@@ -55,7 +55,6 @@ impl JoinHashTable {
                         probe_state,
                         keys_iter,
                         input,
-                        is_probe_projected,
                     )
                 } else {
                     self.left_semi_anti_join_with_conjunct::<true, _, _>(
@@ -74,7 +73,6 @@ impl JoinHashTable {
                         probe_state,
                         keys_iter,
                         input,
-                        is_probe_projected,
                     )
                 } else {
                     self.left_semi_anti_join_with_conjunct::<false, _, _>(

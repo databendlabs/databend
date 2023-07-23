@@ -33,7 +33,6 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
-        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
@@ -64,7 +63,6 @@ impl JoinHashTable {
                                 "Aborted query, because the server is shutting down or the query was killed.",
                             ));
                         }
-                        debug_assert!(is_probe_projected);
                         let probe_block = DataBlock::take_compacted_indices(
                             input,
                             &probe_indexes[0..probe_indexes_occupied],
