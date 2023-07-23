@@ -49,6 +49,7 @@ impl JoinHashTable {
         &self,
         build_block: Option<DataBlock>,
         probe_block: Option<DataBlock>,
+        num_rows: usize,
     ) -> DataBlock {
         match (probe_block, build_block) {
             (Some(mut probe_block), Some(build_block)) => {
@@ -57,7 +58,7 @@ impl JoinHashTable {
             }
             (Some(probe_block), None) => probe_block,
             (None, Some(build_block)) => build_block,
-            (None, None) => unreachable!("probe_block and build_block are both empty."),
+            (None, None) => DataBlock::new(vec![], num_rows),
         }
     }
 

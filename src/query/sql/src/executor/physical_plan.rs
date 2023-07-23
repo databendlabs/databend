@@ -554,9 +554,6 @@ impl HashJoin {
             | JoinType::RightSingle
             | JoinType::Full => {
                 probe_fields.extend(build_fields);
-                if probe_fields.is_empty() {
-                    probe_fields.push(probe_schema.field(0).clone());
-                }
                 Ok(DataSchemaRefExt::create(probe_fields))
             }
             JoinType::LeftSemi | JoinType::LeftAnti => Ok(DataSchemaRefExt::create(probe_fields)),

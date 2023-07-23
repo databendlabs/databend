@@ -36,6 +36,7 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
@@ -92,7 +93,7 @@ impl JoinHashTable {
                         ));
                     }
 
-                    let probe_block = if !input.is_empty() {
+                    let probe_block = if is_probe_projected {
                         Some(DataBlock::take_compacted_indices(
                             input,
                             &probe_indexes[0..probe_indexes_len],
@@ -109,7 +110,7 @@ impl JoinHashTable {
                     } else {
                         None
                     };
-                    let result_block = self.merge_eq_block(build_block, probe_block);
+                    let result_block = self.merge_eq_block(build_block, probe_block, occupied);
 
                     probed_blocks.push(result_block);
 
@@ -142,7 +143,7 @@ impl JoinHashTable {
         }
 
         if occupied > 0 {
-            let probe_block = if !input.is_empty() {
+            let probe_block = if is_probe_projected {
                 Some(DataBlock::take_compacted_indices(
                     input,
                     &probe_indexes[0..probe_indexes_len],
@@ -160,7 +161,7 @@ impl JoinHashTable {
             } else {
                 None
             };
-            let result_block = self.merge_eq_block(build_block, probe_block);
+            let result_block = self.merge_eq_block(build_block, probe_block, occupied);
 
             probed_blocks.push(result_block);
         }

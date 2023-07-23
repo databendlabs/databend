@@ -18,7 +18,6 @@ use common_expression::type_check::check_cast;
 use common_expression::type_check::common_super_type;
 use common_expression::ConstantFolder;
 use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
 
@@ -186,19 +185,6 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        // If build_projected_columns and probe_projected_columns is both empty, the parent operator is count(*),
-        // we will select a random column and add it to probe_fields or build_fields.
-        // TODO(Dousir9): construct a virtual column.
-        if build_projected_columns.is_empty() && probe_projected_columns.is_empty() {
-            Self::add_field_for_count(
-                &build_schema,
-                &probe_schema,
-                &join.join_type,
-                &mut probe_projected_columns,
-                &mut build_projected_columns,
-            );
-        }
-
         let mut merged_fields =
             Vec::with_capacity(probe_projected_columns.len() + build_projected_columns.len());
         for (i, field) in probe_schema.fields().iter().enumerate() {
@@ -241,34 +227,5 @@ impl PhysicalPlanBuilder {
             contain_runtime_filter: join.contain_runtime_filter,
             stat_info: Some(stat_info),
         }))
-    }
-
-    #[inline]
-    fn add_field_for_count(
-        build_schema: &DataSchema,
-        probe_schema: &DataSchema,
-        join_type: &JoinType,
-        probe_projected_columns: &mut ColumnSet,
-        build_projected_columns: &mut ColumnSet,
-    ) {
-        match join_type {
-            JoinType::Inner
-            | JoinType::Cross
-            | JoinType::Left
-            | JoinType::LeftSingle
-            | JoinType::Right
-            | JoinType::RightSingle
-            | JoinType::Full
-            | JoinType::LeftSemi
-            | JoinType::LeftAnti
-            | JoinType::RightMark => {
-                debug_assert!(probe_schema.num_fields() > 0);
-                probe_projected_columns.insert(0);
-            }
-            JoinType::RightSemi | JoinType::RightAnti | JoinType::LeftMark => {
-                debug_assert!(build_schema.num_fields() > 0);
-                build_projected_columns.insert(0);
-            }
-        }
     }
 }

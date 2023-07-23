@@ -33,6 +33,7 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
@@ -63,7 +64,7 @@ impl JoinHashTable {
                                 "Aborted query, because the server is shutting down or the query was killed.",
                             ));
                         }
-                        debug_assert!(!input.is_empty());
+                        debug_assert!(is_probe_projected);
                         let probe_block = DataBlock::take_compacted_indices(
                             input,
                             &probe_indexes[0..probe_indexes_occupied],
@@ -100,7 +101,7 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
-        input_num_rows: usize,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
@@ -128,7 +129,7 @@ impl JoinHashTable {
 
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
         // For semi join, it defaults to all.
-        let mut row_state = vec![0_u32; input_num_rows];
+        let mut row_state = vec![0_u32; input.num_rows()];
         let dummy_probed_rows = vec![RowPtr {
             chunk_index: 0,
             row_index: 0,
@@ -184,7 +185,7 @@ impl JoinHashTable {
                         ));
                     }
 
-                    let probe_block = if !input.is_empty() {
+                    let probe_block = if is_probe_projected {
                         Some(DataBlock::take_compacted_indices(
                             input,
                             &probe_indexes[0..probe_indexes_len],
@@ -201,7 +202,8 @@ impl JoinHashTable {
                     } else {
                         None
                     };
-                    let result_block = self.merge_eq_block(build_block, probe_block.clone());
+                    let result_block =
+                        self.merge_eq_block(build_block, probe_block.clone(), occupied);
 
                     let mut bm = match self.get_other_filters(&result_block, other_predicate)? {
                         (Some(b), _, _) => b.into_mut().right().unwrap(),
@@ -265,13 +267,17 @@ impl JoinHashTable {
             }
         }
 
+        if occupied == 0 {
+            return Ok(result_blocks);
+        }
+
         if self.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
         }
 
-        let probe_block = if !input.is_empty() {
+        let probe_block = if is_probe_projected {
             Some(DataBlock::take_compacted_indices(
                 input,
                 &probe_indexes[0..probe_indexes_len],
@@ -289,7 +295,7 @@ impl JoinHashTable {
         } else {
             None
         };
-        let result_block = self.merge_eq_block(build_block, probe_block.clone());
+        let result_block = self.merge_eq_block(build_block, probe_block.clone(), occupied);
 
         let mut bm = match self.get_other_filters(&result_block, other_predicate)? {
             (Some(b), _, _) => b.into_mut().right().unwrap(),

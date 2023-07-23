@@ -37,7 +37,7 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
-        input_num_rows: usize,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
@@ -57,14 +57,18 @@ impl JoinHashTable {
             }
         }
 
-        let probe_block = if !input.is_empty() {
+        let probe_block = if is_probe_projected {
             Some(input.clone())
         } else {
             None
         };
-        let marker_block = Some(self.create_marker_block(has_null, markers, input_num_rows)?);
+        let marker_block = Some(self.create_marker_block(has_null, markers, input.num_rows())?);
 
-        Ok(vec![self.merge_eq_block(marker_block, probe_block)])
+        Ok(vec![self.merge_eq_block(
+            marker_block,
+            probe_block,
+            input.num_rows(),
+        )])
     }
 
     pub(crate) fn probe_right_mark_join_with_conjunct<'a, H: HashJoinHashtableLike, IT>(
@@ -73,7 +77,7 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
-        input_num_rows: usize,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
@@ -88,7 +92,7 @@ impl JoinHashTable {
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
             .collect::<Vec<_>>();
         let markers = probe_state.markers.as_mut().unwrap();
-        Self::init_markers(&cols, input_num_rows, markers);
+        Self::init_markers(&cols, input.num_rows(), markers);
 
         let _func_ctx = self.ctx.get_function_context()?;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
@@ -139,7 +143,7 @@ impl JoinHashTable {
                         ));
                     }
 
-                    let probe_block = if !input.is_empty() {
+                    let probe_block = if is_probe_projected {
                         Some(DataBlock::take_compacted_indices(
                             input,
                             &probe_indexes[0..probe_indexes_len],
@@ -156,7 +160,7 @@ impl JoinHashTable {
                     } else {
                         None
                     };
-                    let result_block = self.merge_eq_block(build_block, probe_block);
+                    let result_block = self.merge_eq_block(build_block, probe_block, occupied);
 
                     let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
                     let filter_viewer =
@@ -211,7 +215,7 @@ impl JoinHashTable {
         }
 
         if probe_indexes_len > 0 {
-            let probe_block = if !input.is_empty() {
+            let probe_block = if is_probe_projected {
                 Some(DataBlock::take_compacted_indices(
                     input,
                     &probe_indexes[0..probe_indexes_len],
@@ -229,7 +233,7 @@ impl JoinHashTable {
             } else {
                 None
             };
-            let result_block = self.merge_eq_block(build_block, probe_block);
+            let result_block = self.merge_eq_block(build_block, probe_block, occupied);
 
             let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
             let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
@@ -255,13 +259,17 @@ impl JoinHashTable {
             }
         }
 
-        let probe_block = if !input.is_empty() {
+        let probe_block = if is_probe_projected {
             Some(input.clone())
         } else {
             None
         };
-        let marker_block = Some(self.create_marker_block(has_null, markers, input_num_rows)?);
+        let marker_block = Some(self.create_marker_block(has_null, markers, input.num_rows())?);
 
-        Ok(vec![self.merge_eq_block(marker_block, probe_block)])
+        Ok(vec![self.merge_eq_block(
+            marker_block,
+            probe_block,
+            input.num_rows(),
+        )])
     }
 }

@@ -135,7 +135,6 @@ impl HashJoinState for JoinHashTable {
             }
 
             if self.hash_join_desc.join_type == JoinType::Cross {
-                self.build_num_rows.store(row_num, Ordering::SeqCst);
                 let mut build_done = self.build_done.lock();
                 *build_done = true;
                 self.build_done_notify.notify_waiters();
@@ -479,7 +478,7 @@ impl HashJoinState for JoinHashTable {
             let chunks = &mut *self.row_space.chunks.write();
             for chunk in chunks.iter_mut() {
                 let column_nums = chunk.data_block.num_columns();
-                let mut columns = Vec::with_capacity(column_nums);
+                let mut columns = Vec::with_capacity(self.build_projected_columns.len());
                 for index in 0..column_nums {
                     if !self.build_projected_columns.contains(&index) {
                         continue;
@@ -487,11 +486,9 @@ impl HashJoinState for JoinHashTable {
                     columns.push(chunk.data_block.get_by_offset(index).clone())
                 }
                 if columns.is_empty() {
-                    chunk.data_block = DataBlock::empty();
                     self.is_build_projected.store(false, Ordering::SeqCst)
-                } else {
-                    chunk.data_block = DataBlock::new(columns, chunk.num_rows());
                 }
+                chunk.data_block = DataBlock::new(columns, chunk.num_rows());
             }
 
             let mut finalize_done = self.finalize_done.lock();
@@ -662,7 +659,11 @@ impl HashJoinState for JoinHashTable {
             } else {
                 None
             };
-            result_blocks.push(self.merge_eq_block(build_block, probe_block));
+            result_blocks.push(self.merge_eq_block(
+                build_block,
+                probe_block,
+                build_indexes_occupied,
+            ));
 
             build_indexes_occupied = 0;
         }
@@ -854,7 +855,11 @@ impl HashJoinState for JoinHashTable {
                 &data_blocks,
                 &build_num_rows,
             )?;
-            result_blocks.push(self.merge_eq_block(Some(marker_block), Some(build_block)));
+            result_blocks.push(self.merge_eq_block(
+                Some(marker_block),
+                Some(build_block),
+                build_indexes_occupied,
+            ));
 
             build_indexes_occupied = 0;
         }

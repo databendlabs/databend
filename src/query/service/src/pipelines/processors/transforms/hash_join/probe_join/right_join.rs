@@ -35,6 +35,7 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
@@ -98,7 +99,7 @@ impl JoinHashTable {
                         ));
                     }
 
-                    let probe_block = if !input.is_empty() {
+                    let probe_block = if is_probe_projected {
                         let probe_block = DataBlock::take_compacted_indices(
                             input,
                             &local_probe_indexes[0..probe_indexes_len],
@@ -124,7 +125,8 @@ impl JoinHashTable {
                     } else {
                         None
                     };
-                    let result_block = self.merge_eq_block(build_block, probe_block);
+                    let result_block =
+                        self.merge_eq_block(build_block, probe_block, max_block_size);
 
                     if !result_block.is_empty() {
                         if self.hash_join_desc.other_predicate.is_none() {
@@ -222,7 +224,7 @@ impl JoinHashTable {
             return Ok(result_blocks);
         }
 
-        let probe_block = if !input.is_empty() {
+        let probe_block = if is_probe_projected {
             let probe_block = DataBlock::take_compacted_indices(
                 input,
                 &local_probe_indexes[0..probe_indexes_len],
@@ -251,7 +253,7 @@ impl JoinHashTable {
         } else {
             None
         };
-        let result_block = self.merge_eq_block(build_block, probe_block);
+        let result_block = self.merge_eq_block(build_block, probe_block, matched_num);
 
         if !result_block.is_empty() {
             if self.hash_join_desc.other_predicate.is_none() {

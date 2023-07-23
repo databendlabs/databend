@@ -122,8 +122,6 @@ pub struct JoinHashTable {
     pub(crate) mark_scan_map_lock: Mutex<bool>,
     /// Fast return
     pub(crate) fast_return: Arc<RwLock<bool>>,
-    /// Records the number of rows on the build side, for cross join.
-    pub(crate) build_num_rows: Arc<AtomicUsize>,
 }
 
 impl JoinHashTable {
@@ -209,7 +207,6 @@ impl JoinHashTable {
             mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             mark_scan_map_lock: Mutex::new(false),
             fast_return: Default::default(),
-            build_num_rows: Arc::new(AtomicUsize::new(0)),
         })
     }
 
@@ -292,12 +289,8 @@ impl JoinHashTable {
             }
             columns.push(input.get_by_offset(index).clone())
         }
-        let input_num_rows = input.num_rows();
-        let input = if columns.is_empty() {
-            DataBlock::empty()
-        } else {
-            DataBlock::new(columns, input_num_rows)
-        };
+        let is_probe_projected = !columns.is_empty();
+        let input = DataBlock::new(columns, input.num_rows());
 
         if self.fast_return()?
             && matches!(
@@ -305,7 +298,7 @@ impl JoinHashTable {
                 JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
             )
         {
-            return self.left_fast_return(input, input_num_rows);
+            return self.left_fast_return(input, is_probe_projected);
         }
 
         let hash_table = unsafe { &*self.hash_table.get() };
@@ -313,14 +306,14 @@ impl JoinHashTable {
             HashJoinHashTable::T(table) => {
                 let keys_state = table
                     .hash_method
-                    .build_keys_state(&probe_keys, input_num_rows)?;
+                    .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
                 self.result_blocks(
                     &table.hash_table,
                     probe_state,
                     keys_iter,
                     &input,
-                    input_num_rows,
+                    is_probe_projected,
                 )
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(

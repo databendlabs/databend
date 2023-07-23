@@ -27,9 +27,9 @@ impl JoinHashTable {
         _probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
         let build_blocks = self.row_space.datablocks();
-        let build_num_rows = self
-            .build_num_rows
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let build_num_rows = build_blocks
+            .iter()
+            .fold(0, |acc, block| acc + block.num_rows());
         let input_num_rows = input.num_rows();
         if build_num_rows == 0 || input_num_rows == 0 {
             return Ok(vec![]);

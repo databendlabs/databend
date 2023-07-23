@@ -34,14 +34,20 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
-        input_num_rows: usize,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         match self.hash_join_desc.join_type {
-            JoinType::Inner => self.probe_inner_join(hash_table, probe_state, keys_iter, input),
+            JoinType::Inner => self.probe_inner_join(
+                hash_table,
+                probe_state,
+                keys_iter,
+                input,
+                is_probe_projected,
+            ),
             JoinType::LeftSemi => {
                 if self.hash_join_desc.other_predicate.is_none() {
                     self.left_semi_anti_join::<true, _, _>(
@@ -49,6 +55,7 @@ impl JoinHashTable {
                         probe_state,
                         keys_iter,
                         input,
+                        is_probe_projected,
                     )
                 } else {
                     self.left_semi_anti_join_with_conjunct::<true, _, _>(
@@ -56,7 +63,7 @@ impl JoinHashTable {
                         probe_state,
                         keys_iter,
                         input,
-                        input_num_rows,
+                        is_probe_projected,
                     )
                 }
             }
@@ -67,6 +74,7 @@ impl JoinHashTable {
                         probe_state,
                         keys_iter,
                         input,
+                        is_probe_projected,
                     )
                 } else {
                     self.left_semi_anti_join_with_conjunct::<false, _, _>(
@@ -74,7 +82,7 @@ impl JoinHashTable {
                         probe_state,
                         keys_iter,
                         input,
-                        input_num_rows,
+                        is_probe_projected,
                     )
                 }
             }
@@ -87,6 +95,7 @@ impl JoinHashTable {
                         probe_state,
                         keys_iter,
                         input,
+                        is_probe_projected,
                     )
                 }
             }
@@ -99,6 +108,7 @@ impl JoinHashTable {
                         probe_state,
                         keys_iter,
                         input,
+                        is_probe_projected,
                     )
                 }
             }
@@ -110,7 +120,7 @@ impl JoinHashTable {
                         probe_state,
                         keys_iter,
                         input,
-                        input_num_rows,
+                        is_probe_projected,
                     )
                 } else {
                     self.probe_left_join_with_conjunct::<_, _>(
@@ -118,13 +128,17 @@ impl JoinHashTable {
                         probe_state,
                         keys_iter,
                         input,
-                        input_num_rows,
+                        is_probe_projected,
                     )
                 }
             }
-            JoinType::Right | JoinType::RightSingle => {
-                self.probe_right_join::<_, _>(hash_table, probe_state, keys_iter, input)
-            }
+            JoinType::Right | JoinType::RightSingle => self.probe_right_join::<_, _>(
+                hash_table,
+                probe_state,
+                keys_iter,
+                input,
+                is_probe_projected,
+            ),
             // Three cases will produce Mark join:
             // 1. uncorrelated ANY subquery: only have one kind of join condition, equi-condition or non-equi-condition.
             // 2. correlated ANY subquery: must have two kinds of join condition, one is equi-condition and the other is non-equi-condition.
@@ -142,6 +156,7 @@ impl JoinHashTable {
                     probe_state,
                     keys_iter,
                     input,
+                    is_probe_projected,
                 ),
             },
             JoinType::RightMark => match self.hash_join_desc.other_predicate.is_none() {
@@ -150,14 +165,14 @@ impl JoinHashTable {
                     probe_state,
                     keys_iter,
                     input,
-                    input_num_rows,
+                    is_probe_projected,
                 ),
                 false => self.probe_right_mark_join_with_conjunct(
                     hash_table,
                     probe_state,
                     keys_iter,
                     input,
-                    input_num_rows,
+                    is_probe_projected,
                 ),
             },
             _ => Err(ErrorCode::Unimplemented(format!(
@@ -170,14 +185,18 @@ impl JoinHashTable {
     pub(crate) fn left_fast_return(
         &self,
         input: DataBlock,
-        input_num_rows: usize,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>> {
         if self.hash_join_desc.join_type == JoinType::LeftAnti {
             return Ok(vec![input]);
         }
-
+        let input_num_rows = input.num_rows();
         let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
-        let probe_block = if !input.is_empty() { Some(input) } else { None };
+        let probe_block = if is_probe_projected {
+            Some(input)
+        } else {
+            None
+        };
         let build_block = if is_build_projected {
             let null_build_block = DataBlock::new(
                 self.row_space
@@ -195,7 +214,7 @@ impl JoinHashTable {
         } else {
             None
         };
-        let result_block = self.merge_eq_block(build_block, probe_block);
+        let result_block = self.merge_eq_block(build_block, probe_block, input_num_rows);
 
         Ok(vec![result_block])
     }
