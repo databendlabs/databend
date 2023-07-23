@@ -353,6 +353,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
 #[cfg(not(target_os = "macos"))]
 fn check_max_open_files() {
+    use log::warn;
+
     let limits = match limits_rs::get_own_limits() {
         Ok(limits) => limits,
         Err(err) => {

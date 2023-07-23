@@ -17,7 +17,6 @@ use std::sync::Mutex;
 
 use common_tracing::init_logging;
 use common_tracing::Config;
-use log::info;
 use once_cell::sync::Lazy;
 
 #[allow(dyn_drop)]
@@ -33,7 +32,6 @@ static META_LOG_GUARD: Lazy<Arc<Mutex<Option<MetaLogGuard>>>> =
 #[ctor::ctor]
 fn init_meta_ut_tracing() {
     let guards = init_logging("meta_unittests", &Config::new_testing());
-    info!("start");
 
     *META_LOG_GUARD.as_ref().lock().unwrap() = Some(MetaLogGuard { log_guards: guards });
 
