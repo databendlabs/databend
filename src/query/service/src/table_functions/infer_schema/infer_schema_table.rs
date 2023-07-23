@@ -191,9 +191,10 @@ impl AsyncSource for InferSchemaSource {
             Some(f) => self.ctx.get_file_format(f).await?,
             None => stage_info.file_format_params.clone(),
         };
+        let use_parquet2 = self.ctx.get_settings().get_use_parquet2()?;
         let schema = match file_format_params.get_type() {
             StageFileFormatType::Parquet => {
-                if 1 > 0 {
+                if use_parquet2 {
                     let arrow_schema =
                         read_parquet_schema_async(&operator, &first_file.path).await?;
                     TableSchema::from(&arrow_schema)
