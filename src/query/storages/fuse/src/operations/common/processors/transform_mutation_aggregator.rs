@@ -22,13 +22,13 @@ use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_pipeline_transforms::processors::transforms::transform_accumulating_async::AsyncAccumulatingTransform;
+use common_sql::executor::MutationKind;
 use opendal::Operator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use tracing::debug;
 
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::common::mutation_accumulator::MutationKind;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::MutationAccumulator;
 use crate::operations::common::MutationLogs;

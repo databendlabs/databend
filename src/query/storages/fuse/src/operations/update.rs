@@ -28,11 +28,11 @@ use common_expression::TableSchema;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
+use common_sql::executor::MutationKind;
 use common_sql::plans::PREDICATE_COLUMN_NAME;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
-use crate::operations::common::MutationKind;
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationSource;

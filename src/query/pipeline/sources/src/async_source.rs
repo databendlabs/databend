@@ -24,6 +24,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use tracing::error;
 
 #[async_trait::async_trait]
 pub trait AsyncSource: Send {
@@ -90,6 +91,10 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
         match self.generated_data.take() {
             None => Ok(Event::Async),
             Some(data_block) => {
+                error!(
+                    "Async source: Pushed data block to output port,{:?}",
+                    data_block.columns()
+                );
                 self.output.push_data(Ok(data_block));
                 Ok(Event::NeedConsume)
             }

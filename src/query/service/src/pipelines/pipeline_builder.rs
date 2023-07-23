@@ -74,7 +74,6 @@ use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::Deduplicate;
-use common_sql::executor::DeleteFinal;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::EvalScalar;
@@ -83,6 +82,8 @@ use common_sql::executor::ExchangeSource;
 use common_sql::executor::Filter;
 use common_sql::executor::HashJoin;
 use common_sql::executor::Limit;
+use common_sql::executor::MutationAggregate;
+use common_sql::executor::MutationKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
@@ -107,7 +108,6 @@ use common_storages_fuse::operations::common::TransformSerializeSegment;
 use common_storages_fuse::operations::replace_into::BroadcastProcessor;
 use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
-use common_storages_fuse::operations::MutationKind;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use common_storages_stage::StageTable;
@@ -231,7 +231,7 @@ impl PipelineBuilder {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
             PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
-            PhysicalPlan::DeleteFinal(delete) => self.build_delete_final(delete),
+            PhysicalPlan::MutationAggregate(plan) => self.build_mutation_aggregate(plan),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
             PhysicalPlan::CopyIntoTable(copy) => self.build_copy_into_table(copy),
             PhysicalPlan::AsyncSourcer(async_sourcer) => self.build_async_sourcer(async_sourcer),
@@ -493,18 +493,18 @@ impl PipelineBuilder {
     /// +-----------------------+      +----------+
     /// |TableMutationAggregator| ---> |CommitSink|
     /// +-----------------------+      +----------+
-    fn build_delete_final(&mut self, delete: &DeleteFinal) -> Result<()> {
-        self.build_pipeline(&delete.input)?;
+    fn build_mutation_aggregate(&mut self, plan: &MutationAggregate) -> Result<()> {
+        self.build_pipeline(&plan.input)?;
         let table =
             self.ctx
-                .build_table_by_table_info(&delete.catalog_name, &delete.table_info, None)?;
+                .build_table_by_table_info(&plan.catalog_name, &plan.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
         table.chain_mutation_pipes(
             &ctx,
             &mut self.main_pipeline,
-            Arc::new(delete.snapshot.clone()),
-            MutationKind::Delete,
+            Arc::new(plan.snapshot.clone()),
+            plan.mutation_kind,
         )?;
         Ok(())
     }

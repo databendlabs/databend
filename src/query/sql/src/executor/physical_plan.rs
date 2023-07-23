@@ -787,7 +787,7 @@ impl DeletePartial {
     }
 }
 
-impl DeleteFinal {
+impl MutationAggregate {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRef::default())
     }
@@ -795,11 +795,22 @@ impl DeleteFinal {
 
 // TODO(sky): make TableMutationAggregator distributed
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DeleteFinal {
+pub struct MutationAggregate {
     pub input: Box<PhysicalPlan>,
     pub snapshot: TableSnapshot,
     pub table_info: TableInfo,
     pub catalog_name: String,
+    pub mutation_kind: MutationKind,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Copy)]
+/// This is used by MutationAccumulator, so no compact here.
+pub enum MutationKind {
+    Delete,
+    Update,
+    Replace,
+    Recluster,
+    Insert,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -887,7 +898,7 @@ pub enum PhysicalPlan {
 
     /// Delete
     DeletePartial(Box<DeletePartial>),
-    DeleteFinal(Box<DeleteFinal>),
+    MutationAggregate(Box<MutationAggregate>),
     /// Copy into table
     CopyIntoTable(Box<CopyIntoTable>),
     /// Replace
@@ -929,7 +940,7 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSource(v) => v.plan_id,
             PhysicalPlan::ExchangeSink(v) => v.plan_id,
             PhysicalPlan::DeletePartial(_)
-            | PhysicalPlan::DeleteFinal(_)
+            | PhysicalPlan::MutationAggregate(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)
@@ -961,7 +972,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
             PhysicalPlan::DeletePartial(plan) => plan.output_schema(),
-            PhysicalPlan::DeleteFinal(plan) => plan.output_schema(),
+            PhysicalPlan::MutationAggregate(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
             PhysicalPlan::AsyncSourcer(_)
@@ -992,7 +1003,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
             PhysicalPlan::DeletePartial(_) => "DeletePartial".to_string(),
-            PhysicalPlan::DeleteFinal(_) => "DeleteFinal".to_string(),
+            PhysicalPlan::MutationAggregate(_) => "DeleteFinal".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
             PhysicalPlan::CopyIntoTable(_) => "CopyIntoTable".to_string(),
             PhysicalPlan::AsyncSourcer(_) => "AsyncSourcer".to_string(),
@@ -1027,7 +1038,7 @@ impl PhysicalPlan {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
             PhysicalPlan::DeletePartial(_plan) => Box::new(std::iter::empty()),
-            PhysicalPlan::DeleteFinal(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MutationAggregate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ProjectSet(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::RuntimeFilterSource(plan) => Box::new(
                 std::iter::once(plan.left_side.as_ref())
@@ -1067,7 +1078,7 @@ impl PhysicalPlan {
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_)
             | PhysicalPlan::DeletePartial(_)
-            | PhysicalPlan::DeleteFinal(_)
+            | PhysicalPlan::MutationAggregate(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)

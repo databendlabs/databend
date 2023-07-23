@@ -30,12 +30,12 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::CompoundBlockOperator;
+use common_sql::executor::MutationKind;
 use storages_common_table_meta::meta::BlockMeta;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
-use crate::operations::common::MutationKind;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::common::TransformSerializeSegment;

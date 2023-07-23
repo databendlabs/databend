@@ -36,7 +36,6 @@ pub mod util;
 pub use agg_index_sink::AggIndexSink;
 pub use common::BlockMetaIndex;
 pub use common::FillInternalColumnProcessor;
-pub use common::MutationKind;
 pub use common::TransformSerializeBlock;
 pub use compact::CompactOptions;
 pub use mutation::BlockCompactMutator;

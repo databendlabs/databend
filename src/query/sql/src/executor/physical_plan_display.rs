@@ -22,9 +22,9 @@ use super::AggregateExpand;
 use super::AsyncSourcerPlan;
 use super::CopyIntoTable;
 use super::Deduplicate;
-use super::DeleteFinal;
 use super::DeletePartial;
 use super::DistributedInsertSelect;
+use super::MutationAggregate;
 use super::ProjectSet;
 use super::ReplaceInto;
 use super::RowFetch;
@@ -81,7 +81,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
             PhysicalPlan::DeletePartial(delete) => write!(f, "{}", delete)?,
-            PhysicalPlan::DeleteFinal(delete) => write!(f, "{}", delete)?,
+            PhysicalPlan::MutationAggregate(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
@@ -364,7 +364,7 @@ impl Display for DeletePartial {
     }
 }
 
-impl Display for DeleteFinal {
+impl Display for MutationAggregate {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DeleteFinal")
     }

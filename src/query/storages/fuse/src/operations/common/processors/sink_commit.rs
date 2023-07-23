@@ -32,6 +32,7 @@ use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use table_lock::TableLockHandlerWrapper;
 use table_lock::TableLockHeartbeat;
+use tracing::info;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_inc_commit_aborts;
@@ -142,6 +143,10 @@ where F: SnapshotGenerator + Send + 'static
         self.abort_operation = meta.abort_operation;
 
         self.backoff = FuseTable::set_backoff(self.max_retry_elapsed);
+        info!(
+            "conflict resolve context: {:?}",
+            meta.conflict_resolve_context
+        );
 
         self.snapshot_gen
             .set_conflict_resolve_context(meta.conflict_resolve_context);
@@ -210,6 +215,7 @@ where F: SnapshotGenerator + Send + 'static
                     .generate_new_snapshot(schema, cluster_key_meta, previous)
                 {
                     Ok(snapshot) => {
+                        info!("generated snapshot: {:?}", snapshot);
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,
                             snapshot,

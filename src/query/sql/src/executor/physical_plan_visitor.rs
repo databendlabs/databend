@@ -21,7 +21,6 @@ use super::AsyncSourcerPlan;
 use super::CopyIntoTable;
 use super::CopyIntoTableSource;
 use super::Deduplicate;
-use super::DeleteFinal;
 use super::DeletePartial;
 use super::DistributedInsertSelect;
 use super::EvalScalar;
@@ -31,6 +30,7 @@ use super::ExchangeSource;
 use super::Filter;
 use super::HashJoin;
 use super::Limit;
+use super::MutationAggregate;
 use super::PhysicalPlan;
 use super::Project;
 use super::ProjectSet;
@@ -66,7 +66,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
             PhysicalPlan::DeletePartial(plan) => self.replace_delete_partial(plan),
-            PhysicalPlan::DeleteFinal(plan) => self.replace_delete_final(plan),
+            PhysicalPlan::MutationAggregate(plan) => self.replace_delete_final(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
             PhysicalPlan::CopyIntoTable(plan) => self.replace_copy_into_table(plan),
             PhysicalPlan::AsyncSourcer(plan) => self.replace_async_sourcer(plan),
@@ -322,12 +322,14 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::DeletePartial(Box::new(plan.clone())))
     }
 
-    fn replace_delete_final(&mut self, plan: &DeleteFinal) -> Result<PhysicalPlan> {
+    fn replace_delete_final(&mut self, plan: &MutationAggregate) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::DeleteFinal(Box::new(DeleteFinal {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
+        Ok(PhysicalPlan::MutationAggregate(Box::new(
+            MutationAggregate {
+                input: Box::new(input),
+                ..plan.clone()
+            },
+        )))
     }
 
     fn replace_async_sourcer(&mut self, plan: &AsyncSourcerPlan) -> Result<PhysicalPlan> {
@@ -455,7 +457,7 @@ impl PhysicalPlan {
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::DeletePartial(_) => {}
-                PhysicalPlan::DeleteFinal(plan) => {
+                PhysicalPlan::MutationAggregate(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Deduplicate(plan) => {

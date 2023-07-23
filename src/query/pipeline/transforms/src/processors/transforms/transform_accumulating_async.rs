@@ -21,7 +21,6 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
-
 #[async_trait::async_trait]
 pub trait AsyncAccumulatingTransform: Send {
     const NAME: &'static str;
@@ -82,6 +81,7 @@ impl<T: AsyncAccumulatingTransform + 'static> Processor for AsyncAccumulatingTra
         }
 
         if let Some(data_block) = self.output_data.take() {
+            eprintln!("{} - send data block: {:?}", self.name(), data_block.get_meta());
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -92,6 +92,7 @@ impl<T: AsyncAccumulatingTransform + 'static> Processor for AsyncAccumulatingTra
 
         if self.input.has_data() {
             self.input_data = Some(self.input.pull_data().unwrap()?);
+            eprintln!("{} - recv data block: {:?}", self.name(), self.input_data.as_ref().unwrap().get_meta());
             return Ok(Event::Async);
         }
 

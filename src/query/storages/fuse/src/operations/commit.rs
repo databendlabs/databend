@@ -33,6 +33,7 @@ use common_meta_types::MatchSeq;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use common_sql::executor::MutationKind;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
@@ -47,7 +48,6 @@ use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use tracing::info;
 use tracing::warn;
 
-use super::common::MutationKind;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;

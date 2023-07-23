@@ -28,11 +28,12 @@ use common_expression::RemoteExpr;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
+use common_sql::executor::MutationKind;
 use common_sql::executor::cast_expr_to_non_null_boolean;
-use common_sql::executor::DeleteFinal;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
+use common_sql::executor::MutationAggregate;
 use common_sql::executor::PhysicalPlan;
 use common_sql::optimizer::CascadesOptimizer;
 use common_sql::optimizer::HeuristicOptimizer;
@@ -291,12 +292,15 @@ impl DeleteInterpreter {
             });
         }
 
-        Ok(PhysicalPlan::DeleteFinal(Box::new(DeleteFinal {
-            input: Box::new(root),
-            snapshot,
-            table_info,
-            catalog_name,
-        })))
+        Ok(PhysicalPlan::MutationAggregate(Box::new(
+            MutationAggregate {
+                input: Box::new(root),
+                snapshot,
+                table_info,
+                catalog_name,
+                mutation_kind: MutationKind::Delete,
+            },
+        )))
     }
 }
 

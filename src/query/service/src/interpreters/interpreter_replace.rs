@@ -21,7 +21,8 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::Deduplicate;
-use common_sql::executor::DeleteFinal;
+use common_sql::executor::MutationAggregate;
+use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::ReplaceInto;
@@ -32,6 +33,7 @@ use common_sql::plans::Replace;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use storages_common_table_meta::meta::TableSnapshot;
+use tracing::error;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::interpreter_copy::CopyInterpreter;
@@ -69,9 +71,11 @@ impl Interpreter for ReplaceInterpreter {
         self.check_on_conflicts()?;
 
         let physical_plan = self.build_physical_plan().await?;
+        error!("physical_plan: {:?}", physical_plan);
         let build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
+        error!("build_res: {:?}", build_res.main_pipeline);
         Ok(build_res)
     }
 }
@@ -138,12 +142,15 @@ impl ReplaceInterpreter {
             on_conflicts,
             snapshot: (*base_snapshot).clone(),
         }));
-        root = Box::new(PhysicalPlan::DeleteFinal(Box::new(DeleteFinal {
-            input: root,
-            snapshot: (*base_snapshot).clone(),
-            table_info: table_info.clone(),
-            catalog_name: plan.catalog.clone(),
-        })));
+        root = Box::new(PhysicalPlan::MutationAggregate(Box::new(
+            MutationAggregate {
+                input: root,
+                snapshot: (*base_snapshot).clone(),
+                table_info: table_info.clone(),
+                catalog_name: plan.catalog.clone(),
+                mutation_kind: MutationKind::Replace,
+            },
+        )));
         Ok(root)
     }
     fn check_on_conflicts(&self) -> Result<()> {

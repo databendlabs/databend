@@ -451,7 +451,7 @@ fn flatten_plan_node_profile(
             plan_node_profs.push(prof);
         }
         PhysicalPlan::DeletePartial(_)
-        | PhysicalPlan::DeleteFinal(_)
+        | PhysicalPlan::MutationAggregate(_)
         | PhysicalPlan::CopyIntoTable(_)
         | PhysicalPlan::AsyncSourcer(_)
         | PhysicalPlan::Deduplicate(_)

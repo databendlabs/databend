@@ -24,13 +24,13 @@ use super::AggregateFinal;
 use super::AggregateFunctionDesc;
 use super::AggregatePartial;
 use super::CopyIntoTable;
-use super::DeleteFinal;
 use super::DeletePartial;
 use super::EvalScalar;
 use super::Exchange;
 use super::Filter;
 use super::HashJoin;
 use super::Limit;
+use super::MutationAggregate;
 use super::PhysicalPlan;
 use super::Project;
 use super::ProjectSet;
@@ -164,7 +164,7 @@ fn to_format_tree(
         PhysicalPlan::DeletePartial(plan) => {
             delete_partial_to_format_tree(plan.as_ref(), metadata, prof_span_set)
         }
-        PhysicalPlan::DeleteFinal(plan) => {
+        PhysicalPlan::MutationAggregate(plan) => {
             delete_final_to_format_tree(plan.as_ref(), metadata, prof_span_set)
         }
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, prof_span_set),
@@ -921,7 +921,7 @@ fn delete_partial_to_format_tree(
 }
 
 fn delete_final_to_format_tree(
-    plan: &DeleteFinal,
+    plan: &MutationAggregate,
     metadata: &MetadataRef,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {

@@ -21,12 +21,12 @@ use common_exception::Result;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
 use rand::prelude::SliceRandom;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 
-use super::common::MutationKind;
 use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
 use crate::operations::common::CommitSink;

@@ -22,6 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::TableSchemaRef;
+use common_sql::executor::MutationKind;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::FormatVersion;
@@ -30,6 +31,7 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
 use tracing::error;
+use tracing::info;
 
 use super::ConflictResolveContext;
 use super::SnapshotChanges;
@@ -75,16 +77,6 @@ impl BlockMutations {
     fn push_deleted(&mut self, block_idx: BlockIndex) {
         self.deleted_blocks.push(block_idx)
     }
-}
-
-#[derive(Clone, Copy)]
-/// This is used by MutationAccumulator, so no compact here.
-pub enum MutationKind {
-    Delete,
-    Update,
-    Replace,
-    Recluster,
-    Insert,
 }
 
 pub struct MutationAccumulator {
@@ -245,6 +237,8 @@ impl MutationAccumulator {
                     .map(|(path, _segment, format_version)| (path.clone(), *format_version))
                     .chain(merged_segments)
                     .collect();
+                info!("merged_segments:{:?}", merged_segments);
+                info!("append_segments:{:?}", self.appended_segments);
                 match self.kind {
                     MutationKind::Insert => ConflictResolveContext::AppendOnly(SnapshotMerged {
                         merged_segments,
