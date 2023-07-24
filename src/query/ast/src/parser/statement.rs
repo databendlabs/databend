@@ -1998,13 +1998,13 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
 
     let modify_column_type = map(
         rule! {
-            DATA ~ TYPE ~ #column_type ~ ("," ~ #column_type)*
+            #column_type ~ ("," ~ COLUMN ~ #column_type)*
         },
-        |(_, _, column_type, column_type_vec)| {
+        |(column_type, column_type_vec)| {
             let mut column_types = vec![column_type];
             column_type_vec
                 .iter()
-                .for_each(|(_, column_type)| column_types.push(column_type.clone()));
+                .for_each(|(_, _, column_type)| column_types.push(column_type.clone()));
             ModifyColumnAction::SetDataType(column_types)
         },
     );

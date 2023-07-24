@@ -737,10 +737,17 @@ impl Display for ModifyColumnAction {
             ModifyColumnAction::SetDataType(column_type_name_vec) => {
                 let ret = column_type_name_vec
                     .iter()
-                    .map(|(column, type_name)| format!("{} {}", column, type_name))
+                    .enumerate()
+                    .map(|(i, (column, type_name))| {
+                        if i > 0 {
+                            format!(" COLUMN {} {}", column, type_name)
+                        } else {
+                            format!("{} {}", column, type_name)
+                        }
+                    })
                     .collect::<Vec<_>>()
                     .join(",");
-                write!(f, "DATA TYPE {}", ret)?
+                write!(f, "{}", ret)?
             }
             ModifyColumnAction::ConvertStoredComputedColumn(column) => {
                 write!(f, "{} DROP STORED", column)?
