@@ -84,9 +84,7 @@ fn compute_cost_join(memo: &Memo, m_expr: &MExpr, plan: &Join) -> Result<Cost> {
 
 fn compute_materialized_cte(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
     let left_group = m_expr.child_group(memo, 0)?;
-    let right_group = m_expr.child_group(memo, 1)?;
-    let card = left_group.stat_info.cardinality + right_group.stat_info.cardinality;
-    let cost = card * COST_FACTOR_COMPUTE_PER_ROW;
+    let cost = left_group.stat_info.cardinality * COST_FACTOR_COMPUTE_PER_ROW;
     Ok(Cost(cost))
 }
 

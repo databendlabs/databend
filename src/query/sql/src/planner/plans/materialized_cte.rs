@@ -74,8 +74,9 @@ impl Operator for MaterializedCte {
         _child_index: usize,
         _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
+        // Todo(xudong): consider cluster for materialized cte
         Ok(RequiredProperty {
-            distribution: Default::default(),
+            distribution: Distribution::Serial,
         })
     }
 }
