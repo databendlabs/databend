@@ -98,7 +98,8 @@ impl FromToProto for mt::principal::UserOption {
 
         Ok(mt::principal::UserOption::default()
             .with_flags(flags)
-            .with_default_role(p.default_role))
+            .with_default_role(p.default_role)
+            .with_network_policy(p.network_policy))
     }
 
     fn to_pb(&self) -> Result<pb::UserOption, Incompatible> {
@@ -107,6 +108,7 @@ impl FromToProto for mt::principal::UserOption {
             min_reader_ver: MIN_READER_VER,
             flags: self.flags().bits(),
             default_role: self.default_role().cloned(),
+            network_policy: self.network_policy().cloned(),
         })
     }
 }

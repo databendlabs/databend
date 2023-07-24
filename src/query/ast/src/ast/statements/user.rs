@@ -158,6 +158,8 @@ pub enum AccountMgrLevel {
 pub enum UserOptionItem {
     TenantSetting(bool),
     DefaultRole(String),
+    SetNetworkPolicy(String),
+    UnsetNetworkPolicy,
 }
 
 impl UserOptionItem {
@@ -167,6 +169,8 @@ impl UserOptionItem {
                 option.switch_option_flag(UserOptionFlag::TenantSetting, *enabled);
             }
             Self::DefaultRole(v) => option.set_default_role(Some(v.clone())),
+            Self::SetNetworkPolicy(v) => option.set_network_policy(Some(v.clone())),
+            Self::UnsetNetworkPolicy => option.set_network_policy(None),
         }
     }
 }
@@ -229,6 +233,8 @@ impl Display for UserOptionItem {
             UserOptionItem::TenantSetting(true) => write!(f, "TENANTSETTING"),
             UserOptionItem::TenantSetting(false) => write!(f, "NOTENANTSETTING"),
             UserOptionItem::DefaultRole(v) => write!(f, "DEFAULT_ROLE = '{}'", v),
+            UserOptionItem::SetNetworkPolicy(v) => write!(f, "SET NETWORK POLICY = '{}'", v),
+            UserOptionItem::UnsetNetworkPolicy => write!(f, "UNSET NETWORK POLICY"),
         }
     }
 }
