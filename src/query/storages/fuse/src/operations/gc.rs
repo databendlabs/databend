@@ -22,6 +22,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::ListIndexesByIdReq;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::LoadParams;
 use storages_common_cache_manager::CachedObject;
@@ -73,6 +74,14 @@ impl FuseTable {
         let mut counter = PurgeCounter::new();
         let mut dry_run_purge_files = vec![];
         let mut purged_snapshot_count = 0;
+
+        let catalog = ctx.get_catalog(&ctx.get_current_catalog())?;
+        let table_agg_indexes = catalog
+            .list_indexes_by_table_id(ListIndexesByIdReq {
+                tenant: ctx.get_tenant(),
+                table_id: self.get_id(),
+            })
+            .await?;
 
         // 2. Read snapshot fields by chunk size.
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
@@ -169,6 +178,7 @@ impl FuseTable {
                         segments_to_be_purged,
                         ts_to_be_purged,
                         snapshots_to_be_purged,
+                        &table_agg_indexes,
                     )
                     .await?;
 
@@ -218,6 +228,7 @@ impl FuseTable {
                     segments_to_be_purged,
                     ts_to_be_purged,
                     snapshots_to_be_purged,
+                    &table_agg_indexes,
                 )
                 .await?;
             }
@@ -235,6 +246,7 @@ impl FuseTable {
                 root_snapshot_info.snapshot_lite,
                 root_snapshot_info.referenced_locations,
                 root_snapshot_info.snapshot_location,
+                &table_agg_indexes,
             )
             .await?;
         }
@@ -331,6 +343,7 @@ impl FuseTable {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn partial_purge(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -339,6 +352,7 @@ impl FuseTable {
         segments_to_be_purged: HashSet<Location>,
         ts_to_be_purged: HashSet<String>,
         snapshots_to_be_purged: HashSet<String>,
+        table_agg_indexes: &[u64],
     ) -> Result<()> {
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         // Purge segments&blocks by chunk size
@@ -351,11 +365,19 @@ impl FuseTable {
                 .await?;
 
             let mut blocks_to_be_purged = HashSet::new();
+            let mut agg_indexes_to_be_purged = HashSet::new();
             for loc in &locations.block_location {
                 if locations_referenced_by_root.block_location.contains(loc) {
                     continue;
                 }
                 blocks_to_be_purged.insert(loc.to_string());
+                for index_id in table_agg_indexes {
+                    agg_indexes_to_be_purged.insert(
+                        TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
+                            loc, *index_id,
+                        ),
+                    );
+                }
             }
 
             let mut blooms_to_be_purged = HashSet::new();
@@ -389,6 +411,7 @@ impl FuseTable {
                 ctx,
                 counter,
                 blocks_to_be_purged,
+                agg_indexes_to_be_purged,
                 blooms_to_be_purged,
                 segment_locations_to_be_purged,
             )
@@ -406,6 +429,7 @@ impl FuseTable {
         root_snapshot: Arc<SnapshotLiteExtended>,
         root_location_tuple: LocationTuple,
         root_snapshot_location: String,
+        table_agg_indexes: &[u64],
     ) -> Result<()> {
         let segment_locations_to_be_purged = HashSet::from_iter(
             root_snapshot
@@ -414,10 +438,21 @@ impl FuseTable {
                 .map(|loc| loc.0.clone())
                 .collect::<Vec<_>>(),
         );
+
+        let mut agg_indexes_to_be_purged = HashSet::new();
+        for index_id in table_agg_indexes {
+            agg_indexes_to_be_purged.extend(root_location_tuple.block_location.iter().map(|loc| {
+                TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
+                    loc, *index_id,
+                )
+            }));
+        }
+
         self.purge_block_segments(
             ctx,
             counter,
             root_location_tuple.block_location,
+            agg_indexes_to_be_purged,
             root_location_tuple.bloom_location,
             segment_locations_to_be_purged,
         )
@@ -441,6 +476,7 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         counter: &mut PurgeCounter,
         blocks_to_be_purged: HashSet<String>,
+        agg_indexes_to_be_purged: HashSet<String>,
         blooms_to_be_purged: HashSet<String>,
         segments_to_be_purged: HashSet<String>,
     ) -> Result<()> {
@@ -449,6 +485,13 @@ impl FuseTable {
         if blocks_count > 0 {
             counter.blocks += blocks_count;
             self.try_purge_location_files(ctx.clone(), blocks_to_be_purged)
+                .await?;
+        }
+
+        let agg_index_count = agg_indexes_to_be_purged.len();
+        if agg_index_count > 0 {
+            counter.agg_indexes += agg_index_count;
+            self.try_purge_location_files(ctx.clone(), agg_indexes_to_be_purged)
                 .await?;
         }
 
@@ -638,6 +681,7 @@ impl From<SegmentInfo> for LocationTuple {
 struct PurgeCounter {
     start: Instant,
     blocks: usize,
+    agg_indexes: usize,
     blooms: usize,
     segments: usize,
     table_statistics: usize,
@@ -649,6 +693,7 @@ impl PurgeCounter {
         Self {
             start: Instant::now(),
             blocks: 0,
+            agg_indexes: 0,
             blooms: 0,
             segments: 0,
             table_statistics: 0,
