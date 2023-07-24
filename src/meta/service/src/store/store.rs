@@ -20,7 +20,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::ondisk::DATA_VERSION;
-use common_meta_raft_store::sm2::snapshot_store::SnapshotStore;
+use common_meta_raft_store::sm_v002::snapshot_store::SnapshotStoreV002;
 use common_meta_raft_store::state_machine::StoredSnapshot;
 use common_meta_sled_store::openraft::ErrorSubject;
 use common_meta_sled_store::openraft::ErrorVerb;
@@ -292,7 +292,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
     async fn begin_receiving_snapshot(&mut self) -> Result<Box<SnapshotData>, StorageError> {
         server_metrics::incr_applying_snapshot(1);
 
-        let snapshot_store = SnapshotStore::new(DATA_VERSION, self.inner.config.clone());
+        let snapshot_store = SnapshotStoreV002::new(DATA_VERSION, self.inner.config.clone());
 
         let temp = snapshot_store.new_temp().await.map_err(|e| {
             StorageError::from_io_error(ErrorSubject::Snapshot(None), ErrorVerb::Write, e)
@@ -307,8 +307,6 @@ impl RaftStorage<TypeConfig> for RaftStore {
         meta: &SnapshotMeta,
         snapshot: Box<SnapshotData>,
     ) -> Result<(), StorageError> {
-        // TODO(xp): disallow installing a snapshot with smaller last_applied.
-
         let data_size = snapshot.data_size().await.map_err(|e| {
             StorageError::from_io_error(
                 ErrorSubject::Snapshot(Some(meta.signature())),
@@ -322,7 +320,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
         assert!(snapshot.is_temp());
 
-        let snapshot_store = SnapshotStore::new(DATA_VERSION, self.inner.config.clone());
+        let snapshot_store = SnapshotStoreV002::new(DATA_VERSION, self.inner.config.clone());
 
         let d = snapshot_store
             .commit_received(snapshot, meta)
@@ -366,7 +364,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
             Some(snapshot) => {
                 let meta = &snapshot.meta;
 
-                let snapshot_store = SnapshotStore::new(DATA_VERSION, self.inner.config.clone());
+                let snapshot_store =
+                    SnapshotStoreV002::new(DATA_VERSION, self.inner.config.clone());
                 let d = snapshot_store
                     .new_reader(&meta.snapshot_id)
                     .await

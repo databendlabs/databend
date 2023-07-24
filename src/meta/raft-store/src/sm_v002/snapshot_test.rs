@@ -25,18 +25,18 @@ use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
 
 use crate::key_spaces::RaftStoreEntry;
-use crate::sm2::leveled_store::level::Level;
-use crate::sm2::leveled_store::map_api::MapApi;
-use crate::sm2::marked::Marked;
-use crate::sm2::sm2::SM2;
-use crate::sm2::snapshot::Snapshot;
+use crate::sm_v002::leveled_store::level::Level;
+use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::marked::Marked;
+use crate::sm_v002::sm_v002::SMV002;
+use crate::sm_v002::snapshot::SnapshotViewV002;
 use crate::state_machine::ExpireKey;
 
 #[test]
 fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
     let l = build_3_levels();
 
-    let mut snapshot = Snapshot::new(Arc::new(l));
+    let mut snapshot = SnapshotViewV002::new(Arc::new(l));
 
     snapshot.compact();
 
@@ -134,7 +134,7 @@ fn test_compact_expire_index() -> anyhow::Result<()> {
 fn test_export_3_level() -> anyhow::Result<()> {
     let l = build_3_levels();
 
-    let snapshot = Snapshot::new(Arc::new(l));
+    let snapshot = SnapshotViewV002::new(Arc::new(l));
     let got = snapshot
         .export()
         .map(|x| serde_json::to_string(&x).unwrap())
@@ -198,9 +198,9 @@ fn test_import() -> anyhow::Result<()> {
         .iter()
         .map(|x| serde_json::from_str::<RaftStoreEntry>(x).unwrap());
 
-    let d = Snapshot::import(data)?;
+    let d = SnapshotViewV002::import(data)?;
 
-    let snapshot = Snapshot::new(Arc::new(Level::new(d, None)));
+    let snapshot = SnapshotViewV002::new(Arc::new(Level::new(d, None)));
 
     let got = snapshot
         .export()
@@ -264,8 +264,8 @@ fn build_3_levels() -> Level {
 /// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c          
 /// ------------------------------------------------------------
 /// l0 | a₁  b₂         |  5,2₂ -> b    10,1₁ -> a
-fn build_sm_with_expire() -> SM2 {
-    let mut sm = SM2::default();
+fn build_sm_with_expire() -> SMV002 {
+    let mut sm = SMV002::default();
 
     sm.upsert_kv(UpsertKV::update("a", b"a0").with_expire_sec(10));
     sm.upsert_kv(UpsertKV::update("b", b"b0").with_expire_sec(5));

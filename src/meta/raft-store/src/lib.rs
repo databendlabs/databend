@@ -24,6 +24,6 @@ pub mod config;
 pub mod key_spaces;
 pub mod log;
 pub mod ondisk;
-pub mod sm2;
+pub mod sm_v002;
 pub mod state;
 pub mod state_machine;

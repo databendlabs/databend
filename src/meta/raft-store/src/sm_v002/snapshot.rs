@@ -23,21 +23,21 @@ use common_meta_types::StoredMembership;
 use openraft::AnyError;
 
 use crate::key_spaces::RaftStoreEntry;
-use crate::sm2::leveled_store::level::Level;
-use crate::sm2::leveled_store::level_data::LevelData;
-use crate::sm2::leveled_store::map_api::MapApi;
-use crate::sm2::marked::Marked;
+use crate::sm_v002::leveled_store::level::Level;
+use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::ExpireValue;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
 
-pub struct Snapshot {
+pub struct SnapshotViewV002 {
     top: Arc<Level>,
     original: Arc<Level>,
 }
 
-impl Snapshot {
+impl SnapshotViewV002 {
     pub fn new(top: Arc<Level>) -> Self {
         Self {
             top: top.clone(),

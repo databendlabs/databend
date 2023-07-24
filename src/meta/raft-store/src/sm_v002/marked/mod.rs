@@ -20,7 +20,7 @@ mod internal_seq;
 use common_meta_types::KVMeta;
 use common_meta_types::SeqV;
 use common_meta_types::SeqValue;
-pub(in crate::sm2) use internal_seq::InternalSeq;
+pub(in crate::sm_v002) use internal_seq::InternalSeq;
 
 use crate::state_machine::ExpireValue;
 
@@ -31,7 +31,7 @@ use crate::state_machine::ExpireValue;
 /// A deleted tombstone also have `internal_seq`, while for an application, deleted entry has seq=0.
 /// A normal entry(non-deleted) has a positive `seq` that is same as the corresponding `internal_seq`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(in crate::sm2) enum Marked<T = Vec<u8>> {
+pub(in crate::sm_v002) enum Marked<T = Vec<u8>> {
     TombStone {
         internal_seq: u64,
     },
@@ -95,7 +95,7 @@ impl<T> Marked<T> {
     }
 
     /// Get internal sequence number. Both None and Normal have sequence number.
-    pub(in crate::sm2) fn internal_seq(&self) -> InternalSeq {
+    pub(in crate::sm_v002) fn internal_seq(&self) -> InternalSeq {
         match self {
             Marked::TombStone { internal_seq: seq } => InternalSeq::tombstone(*seq),
             Marked::Normal {

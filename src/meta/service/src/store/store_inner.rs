@@ -32,10 +32,10 @@ use common_meta_raft_store::key_spaces::RaftStoreEntry;
 use common_meta_raft_store::log::RaftLog;
 use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_raft_store::ondisk::TREE_HEADER;
-use common_meta_raft_store::sm2::leveled_store::level_data::LevelData;
-use common_meta_raft_store::sm2::sm2::SM2;
-use common_meta_raft_store::sm2::snapshot_store::SnapshotStore;
-use common_meta_raft_store::sm2::snapshot_store::SnapshotStoreError;
+use common_meta_raft_store::sm_v002::leveled_store::level_data::LevelData;
+use common_meta_raft_store::sm_v002::sm_v002::SMV002;
+use common_meta_raft_store::sm_v002::snapshot_store::SnapshotStoreError;
+use common_meta_raft_store::sm_v002::snapshot_store::SnapshotStoreV002;
 use common_meta_raft_store::state::RaftState;
 use common_meta_raft_store::state::RaftStateKey;
 use common_meta_raft_store::state::RaftStateValue;
@@ -96,7 +96,7 @@ pub struct StoreInner {
     pub log: RaftLog,
 
     /// The Raft state machine.
-    pub state_machine: Arc<RwLock<SM2>>,
+    pub state_machine: Arc<RwLock<SMV002>>,
 
     /// The current snapshot.
     pub current_snapshot: RwLock<Option<StoredSnapshot>>,
@@ -146,7 +146,7 @@ impl StoreInner {
             MetaStartupError::StoreOpenError(store_err)
         }
 
-        let snapshot_store = SnapshotStore::new(DATA_VERSION, config.clone());
+        let snapshot_store = SnapshotStoreV002::new(DATA_VERSION, config.clone());
         let last = snapshot_store
             .load_last_snapshot()
             .await
@@ -182,12 +182,12 @@ impl StoreInner {
     async fn rebuild_state_machine(
         id: &MetaSnapshotId,
         snapshot: SnapshotData,
-    ) -> Result<(Arc<RwLock<SM2>>, SnapshotMeta), io::Error> {
+    ) -> Result<(Arc<RwLock<SMV002>>, SnapshotMeta), io::Error> {
         info!("rebuild state machine from last snapshot({:?})", id);
 
-        let sm = Arc::new(RwLock::new(SM2::default()));
+        let sm = Arc::new(RwLock::new(SMV002::default()));
 
-        SM2::install_snapshot(sm.clone(), Box::new(snapshot)).await?;
+        SMV002::install_snapshot(sm.clone(), Box::new(snapshot)).await?;
 
         let (last_applied, last_membership) = {
             let sm = sm.read().await;
@@ -207,7 +207,7 @@ impl StoreInner {
     }
 
     /// Get a handle to the state machine for testing purposes.
-    pub async fn get_state_machine(&self) -> RwLockWriteGuard<'_, SM2> {
+    pub async fn get_state_machine(&self) -> RwLockWriteGuard<'_, SMV002> {
         self.state_machine.write().await
     }
 
@@ -221,7 +221,7 @@ impl StoreInner {
 
         info!("do_build_snapshot writing snapshot start");
 
-        let mut snapshot_store = SnapshotStore::new(DATA_VERSION, self.config.clone());
+        let mut snapshot_store = SnapshotStoreV002::new(DATA_VERSION, self.config.clone());
 
         // Move heavy load to a blocking thread pool.
         let snapshot_size = tokio::task::block_in_place({
@@ -343,7 +343,7 @@ impl StoreInner {
     }
 
     fn write_snapshot(
-        snapshot_store: &mut SnapshotStore,
+        snapshot_store: &mut SnapshotStoreV002,
         snapshot_meta: SnapshotMeta,
         data: impl IntoIterator<Item = RaftStoreEntry>,
     ) -> Result<u64, SnapshotStoreError> {
@@ -375,7 +375,7 @@ impl StoreInner {
     ) -> Result<(), MetaStorageError> {
         //
 
-        SM2::install_snapshot(self.state_machine.clone(), data)
+        SMV002::install_snapshot(self.state_machine.clone(), data)
             .await
             .map_err(|e| {
                 MetaStorageError::SnapshotError(
@@ -507,7 +507,7 @@ impl StoreInner {
             if let Some(s) = snapshot {
                 let meta = s.meta;
 
-                let snapshot_store = SnapshotStore::new(DATA_VERSION, self.config.clone());
+                let snapshot_store = SnapshotStoreV002::new(DATA_VERSION, self.config.clone());
 
                 let f = snapshot_store
                     .new_reader(&meta.snapshot_id)
