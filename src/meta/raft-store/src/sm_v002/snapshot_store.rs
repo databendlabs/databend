@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::fs;
 use std::io;
-use std::io::Seek;
 use std::io::Write;
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -35,6 +34,7 @@ use tracing::warn;
 
 use crate::config::RaftConfig;
 use crate::ondisk::DataVersion;
+use crate::sm_v002::writer_v002::WriterV002;
 use crate::state_machine::MetaSnapshotId;
 
 /// Errors that occur when accessing snapshot store
@@ -270,69 +270,5 @@ impl SnapshotStoreV002 {
         let d = self.new_reader(&meta.snapshot_id).await?;
 
         Ok(d)
-    }
-}
-
-pub struct WriterV002<'a> {
-    /// The temp path to write to, which will be renamed to the final path.
-    /// So that the readers could only see a complete snapshot.
-    temp_path: String,
-
-    inner: fs::File,
-
-    meta: SnapshotMeta,
-
-    // Keep a mutable ref so that there could only be one writer at a time.
-    snapshot_store: &'a mut SnapshotStoreV002,
-}
-
-impl<'a> io::Write for WriterV002<'a> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.inner.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
-    }
-}
-
-impl<'a> WriterV002<'a> {
-    /// Create a singleton writer for the snapshot.
-    pub fn new(
-        snapshot_store: &'a mut SnapshotStoreV002,
-        meta: SnapshotMeta,
-    ) -> Result<Self, io::Error> {
-        let temp_path = snapshot_store.snapshot_temp_path();
-
-        let f = fs::OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .read(true)
-            .open(&temp_path)?;
-
-        let writer = WriterV002 {
-            temp_path,
-            inner: f,
-            meta,
-            snapshot_store,
-        };
-
-        Ok(writer)
-    }
-
-    /// Commit the snapshot so that it is visible to the readers.
-    ///
-    /// Returns the file size written.
-    pub fn commit(&mut self) -> Result<u64, io::Error> {
-        self.inner.flush()?;
-        self.inner.sync_all()?;
-
-        let file_size = self.inner.seek(io::SeekFrom::End(0))?;
-
-        let path = self.snapshot_store.snapshot_path(&self.meta.snapshot_id);
-
-        fs::rename(&self.temp_path, &path)?;
-
-        Ok(file_size)
     }
 }
