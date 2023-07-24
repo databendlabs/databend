@@ -149,7 +149,7 @@ impl ReplaceIntoMutator {
             // for each column, check if it may have conflict
             for field in &self.on_conflict_fields {
                 let column: &Value<AnyType> = &data_block.columns()[field.field_index].value;
-                let value = column.row_scalar(row_idx);
+                let value = column.row_scalar(row_idx)?;
                 let stats = column_stats.get(&field.table_field.column_id);
                 if let Some(stats) = stats {
                     should_keep = !(value < stats.min.as_ref() || value > stats.max.as_ref());
@@ -219,7 +219,7 @@ impl ReplaceIntoMutator {
     ) -> Result<ColumnHash> {
         let mut digests = HashSet::new();
         for row_idx in 0..num_rows {
-            let hash = row_hash_of_columns(column_values, row_idx);
+            let hash = row_hash_of_columns(column_values, row_idx)?;
             if saw.contains(&hash) {
                 return Ok(ColumnHash::Conflict(row_idx));
             }
@@ -301,23 +301,32 @@ struct Partition {
 }
 
 impl Partition {
-    fn new_with_row(row_digest: u128, column_values: &[&Value<AnyType>], row_idx: usize) -> Self {
+    fn try_new_with_row(
+        row_digest: u128,
+        column_values: &[&Value<AnyType>],
+        row_idx: usize,
+    ) -> Result<Self> {
         let columns_min_max = column_values
             .iter()
             .map(|column| {
-                let v = column.row_scalar(row_idx).to_owned();
-                MinMax::Point(v)
+                let v = column.row_scalar(row_idx)?.to_owned();
+                Ok(MinMax::Point(v))
             })
-            .collect::<Vec<_>>();
-        Self {
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Self {
             digests: once(row_digest).collect(),
             columns_min_max,
-        }
+        })
     }
-    fn push_row(&mut self, row_digest: u128, column_values: &[&Value<AnyType>], row_idx: usize) {
+    fn push_row(
+        &mut self,
+        row_digest: u128,
+        column_values: &[&Value<AnyType>],
+        row_idx: usize,
+    ) -> Result<()> {
         self.digests.insert(row_digest);
         for (column_idx, min_max) in self.columns_min_max.iter_mut().enumerate() {
-            let value: Scalar = column_values[column_idx].row_scalar(row_idx).to_owned();
+            let value: Scalar = column_values[column_idx].row_scalar(row_idx)?.to_owned();
             match min_max {
                 MinMax::Point(v) => {
                     if value > *v {
@@ -336,6 +345,7 @@ impl Partition {
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -380,22 +390,22 @@ impl Partitioner {
 
         let mut values_map: HashMap<Scalar, Partition> = HashMap::new();
         for row_idx in 0..data_block.num_rows() {
-            let row_digest = row_hash_of_columns(&column_values, row_idx);
-            let cluster_key_value = cluster_key_values
-                .as_column()
-                .unwrap()
-                .index(row_idx)
-                .unwrap()
-                .to_owned();
+            let row_digest = row_hash_of_columns(&column_values, row_idx)?;
+
+            let cluster_key_value = cluster_key_values.row_scalar(row_idx)?.to_owned();
 
             match values_map.entry(cluster_key_value) {
                 Entry::Occupied(ref mut entry) => {
                     entry
                         .get_mut()
-                        .push_row(row_digest, &column_values, row_idx)
+                        .push_row(row_digest, &column_values, row_idx)?
                 }
                 Entry::Vacant(entry) => {
-                    entry.insert(Partition::new_with_row(row_digest, &column_values, row_idx));
+                    entry.insert(Partition::try_new_with_row(
+                        row_digest,
+                        &column_values,
+                        row_idx,
+                    )?);
                 }
             }
         }

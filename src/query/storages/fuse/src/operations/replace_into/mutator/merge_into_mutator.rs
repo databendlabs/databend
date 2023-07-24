@@ -357,7 +357,7 @@ impl AggregationContext {
 
         let mut bitmap = MutableBitmap::new();
         for row in 0..num_rows {
-            let hash = row_hash_of_columns(&columns, row);
+            let hash = row_hash_of_columns(&columns, row)?;
             bitmap.push(!deleted_key_hashes.contains(&hash));
         }
 

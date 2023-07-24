@@ -14,6 +14,8 @@
 
 use std::hash::Hasher;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_expression::types::decimal::DecimalScalar;
 use common_expression::types::AnyType;
 use common_expression::types::DecimalSize;
@@ -24,22 +26,28 @@ use siphasher::sip128;
 use siphasher::sip128::Hasher128;
 
 pub(crate) trait RowScalarValue {
-    fn row_scalar(&self, idx: usize) -> ScalarRef;
+    fn row_scalar(&self, idx: usize) -> Result<ScalarRef>;
 }
 
 impl RowScalarValue for Value<AnyType> {
-    fn row_scalar(&self, idx: usize) -> ScalarRef {
+    fn row_scalar(&self, idx: usize) -> Result<ScalarRef> {
         match self {
-            Value::Scalar(v) => v.as_ref(),
-            Value::Column(c) => c.index(idx).expect("index out of range (mod column_hash)"),
+            Value::Scalar(v) => Ok(v.as_ref()),
+            Value::Column(c) => c.index(idx).ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "index out of range while getting row scalar value from column. idx {}, len {}",
+                    idx,
+                    c.len()
+                ))
+            }),
         }
     }
 }
 
-pub fn row_hash_of_columns(column_values: &[&Value<AnyType>], row_idx: usize) -> u128 {
+pub fn row_hash_of_columns(column_values: &[&Value<AnyType>], row_idx: usize) -> Result<u128> {
     let mut sip = sip128::SipHasher24::new();
     for col in column_values {
-        let value = col.row_scalar(row_idx);
+        let value = col.row_scalar(row_idx)?;
         match value {
             ScalarRef::Number(v) => match v {
                 NumberScalar::UInt8(v) => sip.write_u8(v),
@@ -77,5 +85,5 @@ pub fn row_hash_of_columns(column_values: &[&Value<AnyType>], row_idx: usize) ->
             }
         }
     }
-    sip.finish128().as_u128()
+    Ok(sip.finish128().as_u128())
 }
