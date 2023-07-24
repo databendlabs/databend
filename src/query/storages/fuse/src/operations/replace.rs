@@ -152,16 +152,21 @@ impl FuseTable {
             Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))
         });
 
-        let empty_table = base_snapshot.segments.is_empty();
-        let replace_into_processor =
-            ReplaceIntoProcessor::create(on_conflicts.clone(), empty_table);
+        let table_is_empty = base_snapshot.segments.is_empty();
+        let table_level_range_index = base_snapshot.summary.col_stats.clone();
+        let cluster_keys = self.cluster_keys(ctx.clone());
+        let replace_into_processor = ReplaceIntoProcessor::create(
+            ctx.as_ref(),
+            on_conflicts.clone(),
+            cluster_keys,
+            schema.as_ref(),
+            table_is_empty,
+            table_level_range_index,
+        )?;
+
         pipeline.add_pipe(replace_into_processor.into_pipe());
 
         // 3. connect to broadcast processor and append transform
-
-        let base_snapshot = self.read_table_snapshot().await?.unwrap_or_else(|| {
-            Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))
-        });
 
         let max_threads = ctx.get_settings().get_max_threads()?;
         let segment_partition_num =

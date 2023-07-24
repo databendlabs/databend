@@ -21,9 +21,15 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 
+// This mod need to be refactored, since it not longer aiming to be
+// used in the implementation of `MERGE INTO` statement in the future.
+//
+// unfortunately, distributed `replace-into` is being implemented in parallel,
+// to avoid the potential heavy merge conflicts, the refactoring is postponed.
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum MergeIntoOperation {
-    Delete(DeletionByColumn),
+    Delete(Vec<DeletionByColumn>),
     None,
 }
 

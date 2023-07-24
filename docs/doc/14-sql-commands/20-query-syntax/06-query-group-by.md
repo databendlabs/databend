@@ -16,16 +16,30 @@ GROUP BY groupItem [ , groupItem [ , ... ] ]
     [ ... ]
 ```
 
-Where:
 ```sql
-groupItem ::= { <column_alias> | <position> | <expr> }
+SELECT ...
+    FROM ...
+    [ ... ]
+GROUP BY ALL
+    [ ... ]
 ```
+
+
+Where:
+
+**GROUP BY groupItem [ , groupItem [ , ... ] ] **
 
 - `<column_alias>`: Column alias appearing in the query block’s SELECT list
 
 - `<position>`: Position of an expression in the SELECT list
 
 - `<expr>`: Any expression on tables in the current scope
+
+**GROUP BY ALL**
+
+The `GROUP BY ALL` in Databend groups by all non-aggregate items in the SELECT list.
+
+For example, see [Grouping By All Columns](#group-by-all-columns).
 
 
 ## Examples
@@ -92,6 +106,31 @@ Output:
 +---------------+--------+---------------+
 ```
 
+### Group By ALL Columns
+
+In the following example, the `GROUP BY ALL` clause is used to group by all non-aggregate columns in the SELECT list.
+
+It should be noted that in our case, the result will be identical to grouping by `department_id` and `job_id` because these are the only non-aggregate items in the SELECT list:
+
+```sql
+SELECT department_id, job_id, COUNT(*) AS num_employees
+FROM employees
+GROUP BY ALL;
+```
+
+Output:
+```sql
++---------------+--------+---------------+
+| department_id | job_id | num_employees |
++---------------+--------+---------------+
+|             1 |    101 |             2 |
+|             1 |    102 |             1 |
+|             2 |    201 |             1 |
+|             2 |    202 |             2 |
++---------------+--------+---------------+
+```
+
+
 ### Group By Position
 
 This query is equivalent to the "Group By One Column" example above. The position 1 refers to the first item in the SELECT list, which is `department_id`:
@@ -128,4 +167,3 @@ Output:
 |      2021 |         6 |
 +-----------+-----------+
 ```
-
