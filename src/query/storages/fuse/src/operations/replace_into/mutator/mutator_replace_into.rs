@@ -140,6 +140,7 @@ impl ReplaceIntoMutator {
         Ok(merge_into_operation)
     }
 
+    // filter out rows that definitely have no conflict, by using table level range index
     fn table_level_row_prune(&self, data_block: &DataBlock) -> Result<DataBlock> {
         let column_stats: &HashMap<ColumnId, ColumnStatistics> = &self.table_range_index;
         let mut bitmap = MutableBitmap::new();
@@ -154,7 +155,7 @@ impl ReplaceIntoMutator {
                 if let Some(stats) = stats {
                     should_keep = !(value < stats.min.as_ref() || value > stats.max.as_ref());
                     if !should_keep {
-                        // if one column not overlap,  no need to check other columns
+                        // if one column outsides the table level range, no need to check other columns
                         break;
                     }
                 }

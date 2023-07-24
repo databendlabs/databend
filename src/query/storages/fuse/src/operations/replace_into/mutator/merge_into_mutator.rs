@@ -26,7 +26,6 @@ use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockMetaInfoDowncast;
 use common_expression::ColumnId;
 use common_expression::ComputedExpr;
 use common_expression::DataBlock;
@@ -178,12 +177,9 @@ impl MergeIntoOperationAggregator {
 // aggregate mutations (currently, deletion only)
 impl MergeIntoOperationAggregator {
     #[async_backtrace::framed]
-    pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
-        let merge_action =
-            MergeIntoOperation::downcast_ref_from(data_block.get_meta().unwrap()).unwrap();
-
+    pub async fn accumulate(&mut self, merge_into_operation: MergeIntoOperation) -> Result<()> {
         let aggregation_ctx = &self.aggregation_ctx;
-        match merge_action {
+        match merge_into_operation {
             MergeIntoOperation::Delete(partitions) => {
                 for (segment_index, (path, ver)) in &aggregation_ctx.segment_locations {
                     // segment level
@@ -200,7 +196,7 @@ impl MergeIntoOperationAggregator {
                     for DeletionByColumn {
                         columns_min_max,
                         key_hashes,
-                    } in partitions
+                    } in &partitions
                     {
                         if aggregation_ctx
                             .overlapped(&compact_segment_info.summary.col_stats, columns_min_max)

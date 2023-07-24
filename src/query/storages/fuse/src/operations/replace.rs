@@ -153,7 +153,7 @@ impl FuseTable {
         });
 
         let table_is_empty = base_snapshot.segments.is_empty();
-        let table_level_rang_index = base_snapshot.summary.col_stats.clone();
+        let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let cluster_keys = self.cluster_keys(ctx.clone());
         let replace_into_processor = ReplaceIntoProcessor::create(
             ctx.as_ref(),
@@ -161,7 +161,7 @@ impl FuseTable {
             cluster_keys,
             schema.as_ref(),
             table_is_empty,
-            table_level_rang_index,
+            table_level_range_index,
         )?;
 
         pipeline.add_pipe(replace_into_processor.into_pipe());
