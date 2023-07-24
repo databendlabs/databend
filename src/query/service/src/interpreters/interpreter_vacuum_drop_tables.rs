@@ -102,12 +102,14 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 },
             )
             .await?;
-        // gc meta data
-        let req = GcDroppedTableReq {
-            tenant: self.ctx.get_tenant(),
-            drop_ids,
-        };
-        let _ = catalog.gc_drop_tables(req).await?;
+        // gc meta data when not dry run
+        if self.plan.option.dry_run.is_none() {
+            let req = GcDroppedTableReq {
+                tenant: self.ctx.get_tenant(),
+                drop_ids,
+            };
+            let _ = catalog.gc_drop_tables(req).await?;
+        }
 
         match files_opt {
             None => return Ok(PipelineBuildResult::create()),
