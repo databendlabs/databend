@@ -215,12 +215,10 @@ impl MergeIntoOperationAggregator {
                             };
 
                             // block level
-                            let mut num_blocks_mutated = 0;
                             for (block_index, block_meta) in seg.blocks.iter().enumerate() {
                                 if aggregation_ctx
                                     .overlapped(&block_meta.col_stats, columns_min_max)
                                 {
-                                    num_blocks_mutated += 1;
                                     self.deletion_accumulator.add_block_deletion(
                                         *segment_index,
                                         block_index,
@@ -228,9 +226,12 @@ impl MergeIntoOperationAggregator {
                                     )
                                 }
                             }
-                            metrics_inc_replace_block_number_after_pruning(num_blocks_mutated);
                         }
                     }
+
+                    metrics_inc_replace_block_number_after_pruning(
+                        self.deletion_accumulator.deletions.len() as u64,
+                    );
                 }
             }
             MergeIntoOperation::None => {}
