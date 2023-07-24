@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod network_policy;
-mod role_cache_mgr;
-mod role_mgr;
-mod user_mgr;
-mod user_udf;
-mod jwt;
+mod from_data_schema;
+mod from_table_schema;
+mod to_data_schema;
+mod to_table_schema;
+
+use from_table_schema::set_nullable;

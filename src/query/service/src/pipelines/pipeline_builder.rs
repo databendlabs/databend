@@ -14,6 +14,8 @@
 
 use std::convert::TryFrom;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Instant;
 
 use async_channel::Receiver;
 use common_catalog::table::AppendMode;
@@ -498,6 +500,31 @@ impl PipelineBuilder {
         self.ctx.set_partitions(scan.source.parts.clone())?;
         table.read_data(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
 
+        if self.enable_profiling {
+            self.main_pipeline.add_transform(|input, output| {
+                // shared timer between `on_start` and `on_finish`
+                let start_timer = Arc::new(Mutex::new(Instant::now()));
+                let finish_timer = Arc::new(Mutex::new(Instant::now()));
+                Ok(ProcessorPtr::create(Transformer::create(
+                    input,
+                    output,
+                    ProfileStub::new(scan.plan_id, self.proc_profs.clone())
+                        .on_start(move |v| {
+                            *start_timer.lock().unwrap() = Instant::now();
+                            *v
+                        })
+                        .on_finish(move |prof| {
+                            let elapsed = finish_timer.lock().unwrap().elapsed();
+                            let mut prof = *prof;
+                            prof.wait_time = elapsed;
+                            prof
+                        })
+                        .accumulate_output_bytes()
+                        .accumulate_output_rows(),
+                )))
+            })?;
+        }
+
         // Fill internal columns if needed.
         if let Some(internal_columns) = &scan.internal_column {
             if table.support_row_id_column() {
@@ -519,11 +546,12 @@ impl PipelineBuilder {
         }
 
         let schema = scan.source.schema();
-        let projection = scan
+        let mut projection = scan
             .name_mapping
             .keys()
             .map(|name| schema.index_of(name.as_str()))
             .collect::<Result<Vec<usize>>>()?;
+        projection.sort();
 
         // if projection is sequential, no need to add projection
         if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {

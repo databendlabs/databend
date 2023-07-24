@@ -214,6 +214,7 @@ build_exceptions! {
     UnknownNetworkPolicy(2207),
     NetworkPolicyAlreadyExists(2208),
     IllegalNetworkPolicy(2209),
+    NetworkPolicyIsUsedByUser(2210),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),

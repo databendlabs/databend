@@ -74,7 +74,16 @@ impl TableScan {
         name_mapping: &BTreeMap<String, IndexType>,
     ) -> Result<Vec<DataField>> {
         let mut fields = Vec::with_capacity(name_mapping.len());
-        for (name, id) in name_mapping.iter() {
+        let mut name_and_ids = name_mapping
+            .iter()
+            .map(|(name, id)| {
+                let index = schema.index_of(name)?;
+                Ok((name, id, index))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        name_and_ids.sort_by_key(|(_, _, index)| *index);
+
+        for (name, id, _) in name_and_ids {
             let orig_field = schema.field_with_name(name)?;
             let data_type = DataType::from(orig_field.data_type());
             fields.push(DataField::new(&id.to_string(), data_type));
