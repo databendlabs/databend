@@ -799,6 +799,9 @@ pub fn group_by_items(i: Input) -> IResult<GroupBy> {
     let normal = map(rule! { ^#comma_separated_list1(expr) }, |groups| {
         GroupBy::Normal(groups)
     });
+
+    let all = map(rule! { ALL }, |_| GroupBy::All);
+
     let cube = map(
         rule! { CUBE ~ "(" ~ ^#comma_separated_list1(expr) ~ ")" },
         |(_, _, groups, _)| GroupBy::Cube(groups),
@@ -819,7 +822,7 @@ pub fn group_by_items(i: Input) -> IResult<GroupBy> {
         rule! { GROUPING ~ SETS ~ "(" ~ ^#comma_separated_list1(group_set) ~ ")"  },
         |(_, _, _, sets, _)| GroupBy::GroupingSets(sets),
     );
-    rule!(#group_sets | #cube | #rollup | #normal)(i)
+    rule!(#all | #group_sets | #cube | #rollup | #normal)(i)
 }
 
 pub fn window_frame_bound(i: Input) -> IResult<WindowFrameBound> {
