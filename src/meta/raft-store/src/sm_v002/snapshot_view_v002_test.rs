@@ -29,7 +29,7 @@ use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002::SMV002;
-use crate::sm_v002::snapshot::SnapshotViewV002;
+use crate::sm_v002::snapshot_view_v002::SnapshotViewV002;
 use crate::state_machine::ExpireKey;
 
 #[test]

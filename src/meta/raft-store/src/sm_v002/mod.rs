@@ -15,10 +15,10 @@
 pub mod leveled_store;
 pub(in crate::sm_v002) mod marked;
 pub mod sm_v002;
-pub mod snapshot;
 pub mod snapshot_store;
+pub mod snapshot_view_v002;
 
 #[cfg(test)]
 mod sm_test;
 #[cfg(test)]
-mod snapshot_test;
+mod snapshot_view_v002_test;
