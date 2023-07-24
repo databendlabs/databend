@@ -267,6 +267,7 @@ impl OnDisk {
             n
         } else {
             self.progress(format_args!("No state machine tree, skip upgrade"));
+            self.finish_upgrading().await?;
             return Ok(());
         };
 
