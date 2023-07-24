@@ -1828,7 +1828,6 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
- "common-profile",
  "common-settings",
  "common-storage",
  "dashmap",
@@ -10015,6 +10014,7 @@ name = "storages-common-blocks"
 version = "0.1.0"
 dependencies = [
  "common-arrow",
+ "common-config",
  "common-exception",
  "common-expression",
  "storages-common-table-meta",
