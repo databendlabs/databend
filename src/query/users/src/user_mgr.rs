@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::net::Ipv4Addr;
+
+use cidr::Ipv4Cidr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_management::UserApi;
@@ -52,6 +55,52 @@ impl UserApiProvider {
         }
     }
 
+    // Get one user and check client ip if has network policy.
+    #[async_backtrace::framed]
+    pub async fn get_user_with_client_ip(
+        &self,
+        tenant: &str,
+        user: UserIdentity,
+        client_ip: Option<&str>,
+    ) -> Result<UserInfo> {
+        let user_info = self.get_user(tenant, user).await?;
+
+        if let Some(name) = user_info.option.network_policy() {
+            let ip_addr: Ipv4Addr = match client_ip {
+                Some(client_ip) => client_ip.parse().unwrap(),
+                None => {
+                    return Err(ErrorCode::AuthenticateFailure("Unknown client ip"));
+                }
+            };
+
+            let network_policy = self.get_network_policy(tenant, name.as_str()).await?;
+            for blocked_ip in network_policy.blocked_ip_list {
+                let blocked_cidr: Ipv4Cidr = blocked_ip.parse().unwrap();
+                if blocked_cidr.contains(&ip_addr) {
+                    return Err(ErrorCode::AuthenticateFailure(format!(
+                        "client ip `{}` is blocked",
+                        ip_addr
+                    )));
+                }
+            }
+            let mut allow = false;
+            for allowed_ip in network_policy.allowed_ip_list {
+                let allowed_cidr: Ipv4Cidr = allowed_ip.parse().unwrap();
+                if allowed_cidr.contains(&ip_addr) {
+                    allow = true;
+                    break;
+                }
+            }
+            if !allow {
+                return Err(ErrorCode::AuthenticateFailure(format!(
+                    "client ip `{}` is not allowed to login",
+                    ip_addr
+                )));
+            }
+        }
+        Ok(user_info)
+    }
+
     // Get the tenant all users list.
     #[async_backtrace::framed]
     pub async fn get_users(&self, tenant: &str) -> Result<Vec<UserInfo>> {
@@ -79,6 +128,14 @@ impl UserApiProvider {
         user_info: UserInfo,
         if_not_exists: bool,
     ) -> Result<u64> {
+        if let Some(name) = user_info.option.network_policy() {
+            if self.get_network_policy(tenant, name).await.is_err() {
+                return Err(ErrorCode::UnknownNetworkPolicy(format!(
+                    "network policy `{}` is not exist",
+                    name
+                )));
+            }
+        }
         if self.get_configured_user(&user_info.name).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
                 "Same name with configured user `{}`",
@@ -221,6 +278,16 @@ impl UserApiProvider {
         auth_info: Option<AuthInfo>,
         user_option: Option<UserOption>,
     ) -> Result<Option<u64>> {
+        if let Some(ref user_option) = user_option {
+            if let Some(name) = user_option.network_policy() {
+                if self.get_network_policy(tenant, name).await.is_err() {
+                    return Err(ErrorCode::UnknownNetworkPolicy(format!(
+                        "network policy `{}` is not exist",
+                        name
+                    )));
+                }
+            }
+        }
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
                 "Configured user `{}` cannot be updated",

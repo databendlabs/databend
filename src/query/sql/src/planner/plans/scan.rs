@@ -20,7 +20,7 @@ use common_catalog::table::ColumnStatistics;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::DataSchema;
+use common_expression::TableSchemaRef;
 use itertools::Itertools;
 
 use super::ScalarItem;
@@ -58,9 +58,23 @@ pub struct Prewhere {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AggIndexInfo {
     pub index_id: u64,
-    pub schema: DataSchema,
+    pub schema: TableSchemaRef,
     pub selection: Vec<ScalarItem>,
     pub predicates: Vec<ScalarExpr>,
+    pub is_agg: bool,
+}
+
+impl AggIndexInfo {
+    pub fn used_columns(&self) -> ColumnSet {
+        let mut used_columns = ColumnSet::new();
+        for item in self.selection.iter() {
+            used_columns.extend(item.scalar.used_columns());
+        }
+        for pred in self.predicates.iter() {
+            used_columns.extend(pred.used_columns());
+        }
+        used_columns
+    }
 }
 
 #[derive(Clone, Debug, Default)]

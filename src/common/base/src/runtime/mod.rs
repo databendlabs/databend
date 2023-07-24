@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod backtrace;
 mod catch_unwind;
 mod global_runtime;
 #[allow(clippy::module_inception)]
@@ -20,6 +21,7 @@ mod runtime_tracker;
 mod thread;
 mod thread_pool;
 
+pub use backtrace::dump_backtrace;
 pub use catch_unwind::catch_unwind;
 pub use catch_unwind::CatchUnwindFuture;
 pub use global_runtime::GlobalIORuntime;

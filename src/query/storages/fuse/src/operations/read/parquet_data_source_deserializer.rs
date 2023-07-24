@@ -30,7 +30,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 use super::fuse_source::fill_internal_column_meta;
-use super::DataSource;
+use super::parquet_data_source::DataSource;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -117,7 +117,7 @@ impl Processor for DeserializeDataTransform {
             let mut data_block = self.input.pull_data().unwrap()?;
             if let Some(source_meta) = data_block.take_meta() {
                 if let Some(source_meta) = DataSourceMeta::downcast_from(source_meta) {
-                    self.parts = source_meta.part;
+                    self.parts = source_meta.parts;
                     self.chunks = source_meta.data;
                     return Ok(Event::Sync);
                 }
@@ -141,9 +141,20 @@ impl Processor for DeserializeDataTransform {
         let chunks = self.chunks.pop();
         if let Some((part, read_res)) = part.zip(chunks) {
             match read_res {
-                DataSource::AggIndex(data) => {
+                DataSource::AggIndex((actual_part, data)) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
-                    let block = agg_index_reader.deserialize(&data)?;
+                    let block = agg_index_reader.deserialize_parquet_data(
+                        actual_part,
+                        data,
+                        self.uncompressed_buffer.clone(),
+                    )?;
+
+                    let progress_values = ProgressValues {
+                        rows: block.num_rows(),
+                        bytes: block.memory_size(),
+                    };
+                    self.scan_progress.incr(&progress_values);
+
                     self.output_data = Some(block);
                 }
                 DataSource::Normal(data) => {

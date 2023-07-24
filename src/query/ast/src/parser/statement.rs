@@ -483,6 +483,20 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+
+    let attach_table = map(
+        rule! {
+            ATTACH ~ TABLE ~ #period_separated_idents_1_to_3 ~ #uri_location
+        },
+        |(_, _, (catalog, database, table), uri_location)| {
+            Statement::AttachTable(AttachTableStmt {
+                catalog,
+                database,
+                table,
+                uri_location,
+            })
+        },
+    );
     let create_table = map(
         rule! {
             CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
@@ -600,14 +614,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let optimize_table = map(
         rule! {
-            OPTIMIZE ~ TABLE ~ #period_separated_idents_1_to_3 ~ #optimize_table_action
+            OPTIMIZE ~ TABLE ~ #period_separated_idents_1_to_3 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
         },
-        |(_, _, (catalog, database, table), action)| {
+        |(_, _, (catalog, database, table), action, opt_limit)| {
             Statement::OptimizeTable(OptimizeTableStmt {
                 catalog,
                 database,
                 table,
                 action,
+                limit: opt_limit.map(|(_, limit)| limit),
             })
         },
     );
@@ -620,6 +635,22 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 catalog,
                 database,
                 table,
+                option,
+            })
+        },
+    );
+    let vacuum_drop_table = map(
+        rule! {
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ #period_separated_idents_1_to_2)? ~ #vacuum_table_option
+        },
+        |(_, _, _, database_option, option)| {
+            let (catalog, database) = database_option.map_or_else(
+                || (None, None),
+                |(_, catalog_database)| (catalog_database.0, Some(catalog_database.1)),
+            );
+            Statement::VacuumDropTable(VacuumDropTableStmt {
+                catalog,
+                database,
                 option,
             })
         },
@@ -1288,6 +1319,107 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let create_network_policy = map(
+        rule! {
+            CREATE ~ NETWORK ~ POLICY ~ ( IF ~ NOT ~ EXISTS )? ~ #ident
+             ~ ALLOWED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")"
+             ~ ( BLOCKED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
+             ~ ( COMMENT ~ Eq ~ #literal_string)?
+        },
+        |(
+            _,
+            _,
+            _,
+            opt_if_not_exists,
+            name,
+            _,
+            _,
+            _,
+            allowed_ip_list,
+            _,
+            opt_blocked_ip_list,
+            opt_comment,
+        )| {
+            let stmt = CreateNetworkPolicyStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: name.to_string(),
+                allowed_ip_list,
+                blocked_ip_list: match opt_blocked_ip_list {
+                    Some(opt) => Some(opt.3),
+                    None => None,
+                },
+                comment: match opt_comment {
+                    Some(opt) => Some(opt.2),
+                    None => None,
+                },
+            };
+            Statement::CreateNetworkPolicy(stmt)
+        },
+    );
+    let alter_network_policy = map(
+        rule! {
+            ALTER ~ NETWORK ~ POLICY ~ ( IF ~ EXISTS )? ~ #ident ~ SET
+             ~ ( ALLOWED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
+             ~ ( BLOCKED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
+             ~ ( COMMENT ~ Eq ~ #literal_string)?
+        },
+        |(
+            _,
+            _,
+            _,
+            opt_if_exists,
+            name,
+            _,
+            opt_allowed_ip_list,
+            opt_blocked_ip_list,
+            opt_comment,
+        )| {
+            let stmt = AlterNetworkPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+                allowed_ip_list: match opt_allowed_ip_list {
+                    Some(opt) => Some(opt.3),
+                    None => None,
+                },
+                blocked_ip_list: match opt_blocked_ip_list {
+                    Some(opt) => Some(opt.3),
+                    None => None,
+                },
+                comment: match opt_comment {
+                    Some(opt) => Some(opt.2),
+                    None => None,
+                },
+            };
+            Statement::AlterNetworkPolicy(stmt)
+        },
+    );
+    let drop_network_policy = map(
+        rule! {
+            DROP ~ NETWORK ~ POLICY ~ ( IF ~ EXISTS )? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, name)| {
+            let stmt = DropNetworkPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+            };
+            Statement::DropNetworkPolicy(stmt)
+        },
+    );
+    let describe_network_policy = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ NETWORK ~ POLICY ~ #ident
+        },
+        |(_, _, _, name)| {
+            Statement::DescNetworkPolicy(DescNetworkPolicyStmt {
+                name: name.to_string(),
+            })
+        },
+    );
+    let show_network_policies = value(
+        Statement::ShowNetworkPolicies,
+        rule! { SHOW ~ NETWORK ~ POLICIES },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -1312,6 +1444,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #use_database : "`USE <database>`"
         ),
+        // network policy
+        rule!(
+            #create_network_policy: "`CREATE NETWORK POLICY [IF NOT EXISTS] name ALLOWED_IP_LIST = ('ip1' [, 'ip2']) [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
+            | #alter_network_policy: "`ALTER NETWORK POLICY [IF EXISTS] name SET [ALLOWED_IP_LIST = ('ip1' [, 'ip2'])] [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
+            | #drop_network_policy: "`DROP NETWORK POLICY [IF EXISTS] name`"
+            | #describe_network_policy: "`DESC NETWORK POLICY name`"
+            | #show_network_policies: "`SHOW NETWORK POLICIES`"
+        ),
         rule!(
             #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #replace : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
@@ -1328,6 +1468,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
             | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
             | #show_drop_tables_status : "`SHOW DROP TABLES [FROM <database>]`"
+            | #attach_table : "`ATTACH TABLE [<database>.]<table> <uri>`"
             | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
             | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
             | #undrop_table : "`UNDROP TABLE [<database>.]<table>`"
@@ -1336,6 +1477,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN]`"
+            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN]`"
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
@@ -1891,11 +2033,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let recluster_table = map(
         rule! {
-            RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )?
+            RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )? ~ ( LIMIT ~ #literal_u64 )?
         },
-        |(_, opt_is_final, opt_selection)| AlterTableAction::ReclusterTable {
+        |(_, opt_is_final, opt_selection, opt_limit)| AlterTableAction::ReclusterTable {
             is_final: opt_is_final.is_some(),
             selection: opt_selection.map(|(_, selection)| selection),
+            limit: opt_limit.map(|(_, limit)| limit),
         },
     );
 
@@ -1937,13 +2080,11 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
                 before: opt_travel_point.map(|(_, p)| p),
             },
         ),
-        map(
-            rule! { COMPACT ~ (SEGMENT)? ~ ( LIMIT ~ ^#expr )?},
-            |(_, opt_segment, opt_limit)| OptimizeTableAction::Compact {
+        map(rule! { COMPACT ~ (SEGMENT)?}, |(_, opt_segment)| {
+            OptimizeTableAction::Compact {
                 target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
-                limit: opt_limit.map(|(_, limit)| limit),
-            },
-        ),
+            }
+        }),
     ))(i)
 }
 
@@ -2158,6 +2299,18 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, role)| UserOptionItem::DefaultRole(role),
     );
+    let set_network_policy = map(
+        rule! {
+            SET ~ NETWORK ~ POLICY ~ "=" ~ #literal_string
+        },
+        |(_, _, _, _, policy)| UserOptionItem::SetNetworkPolicy(policy),
+    );
+    let unset_network_policy = map(
+        rule! {
+            UNSET ~ NETWORK ~ POLICY
+        },
+        |(_, _, _)| UserOptionItem::UnsetNetworkPolicy,
+    );
     alt((
         value(UserOptionItem::TenantSetting(true), rule! { TENANTSETTING }),
         value(
@@ -2165,6 +2318,8 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
             rule! { NOTENANTSETTING },
         ),
         default_role_option,
+        set_network_policy,
+        unset_network_policy,
     ))(i)
 }
 

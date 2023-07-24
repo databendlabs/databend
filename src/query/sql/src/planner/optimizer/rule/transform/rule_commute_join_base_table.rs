@@ -75,11 +75,13 @@ impl Rule for RuleCommuteJoinBaseTable {
             | JoinType::Cross
             | JoinType::Left
             | JoinType::Right
+            | JoinType::LeftSingle
+            | JoinType::RightSingle
             | JoinType::LeftSemi
             | JoinType::RightSemi
             | JoinType::LeftAnti
-            | JoinType::LeftMark
-            | JoinType::RightAnti => {
+            | JoinType::RightAnti
+            | JoinType::LeftMark => {
                 // Swap the join conditions side
                 (join.left_conditions, join.right_conditions) =
                     (join.right_conditions, join.left_conditions);

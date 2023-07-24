@@ -41,6 +41,7 @@ fn test_variant() {
     test_json_object_keep_null(file);
     test_json_path_query_array(file);
     test_json_path_query_first(file);
+    test_json_to_string(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -678,4 +679,17 @@ fn test_json_path_query_first(file: &mut impl Write) {
             StringType::from_data(vec!["$[0]", "$[*].k", "$.a", "$[0,2]"]),
         ),
     ]);
+}
+
+fn test_json_to_string(file: &mut impl Write) {
+    run_ast(file, "json_to_string(parse_json('true'))", &[]);
+    run_ast(file, "json_to_string(parse_json('123456'))", &[]);
+    run_ast(file, "json_to_string(parse_json('\"abcd\"'))", &[]);
+    run_ast(file, "json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))", &[
+    ]);
+    run_ast(
+        file,
+        "json_to_string(parse_json('{\"k1\":123, \"k2\":\"abc\"}'))",
+        &[],
+    );
 }

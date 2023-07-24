@@ -64,13 +64,12 @@ fn flatten_plan_node_profile(
         PhysicalPlan::TableScan(scan) => {
             let table = metadata.read().table(scan.table_index).clone();
             let qualified_name = format!("{}.{}", table.database(), table.name());
-
+            let proc_prof = profs.get(&scan.plan_id).copied().unwrap_or_default();
             let prof = OperatorProfile {
                 id: scan.plan_id,
                 operator_type: OperatorType::TableScan,
-                // We don't record the time spent on table scan for now
                 children: vec![],
-                execution_info: Default::default(),
+                execution_info: proc_prof.into(),
                 attribute: OperatorAttribute::TableScan(TableScanAttribute { qualified_name }),
             };
             plan_node_profs.push(prof);
@@ -451,7 +450,8 @@ fn flatten_plan_node_profile(
             plan_node_profs.push(prof);
         }
         PhysicalPlan::DeletePartial(_) | PhysicalPlan::DeleteFinal(_) => unreachable!(),
-        PhysicalPlan::DistributedCopyIntoTable(_) => unreachable!(),
+        PhysicalPlan::DistributedCopyIntoTableFromStage(_) => unreachable!(),
+        PhysicalPlan::CopyIntoTableFromQuery(_) => unreachable!(),
     }
 
     Ok(())

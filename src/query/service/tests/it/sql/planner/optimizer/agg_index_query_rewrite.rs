@@ -44,6 +44,7 @@ use databend_query::interpreters::Interpreter;
 use databend_query::test_kits::TestFixture;
 use parking_lot::RwLock;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 
 #[derive(Default)]
 struct TestSuite {
@@ -56,7 +57,7 @@ struct TestSuite {
     rewritten_predicates: Vec<&'static str>,
 }
 
-fn create_table_plan(fixture: &TestFixture) -> CreateTablePlan {
+fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
     CreateTablePlan {
         if_not_exists: false,
         tenant: fixture.default_tenant(),
@@ -74,6 +75,7 @@ fn create_table_plan(fixture: &TestFixture) -> CreateTablePlan {
         options: [
             // database id is required for FUSE
             (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+            (OPT_KEY_STORAGE_FORMAT.to_owned(), format.to_owned()),
         ]
         .into(),
         field_comments: vec![],
@@ -91,7 +93,7 @@ fn create_table_plan(fixture: &TestFixture) -> CreateTablePlan {
 /// ```
 fn get_test_suites() -> Vec<TestSuite> {
     vec![
-        //  query: eval-scan, index: eval-scan
+        // query: eval-scan, index: eval-scan
         TestSuite {
             query: "select to_string(c + 1) from t",
             index: "select c + 1 from t",
@@ -166,6 +168,20 @@ fn get_test_suites() -> Vec<TestSuite> {
             query: "select sum(a) from t group by b",
             index: "select a from t",
             is_matched: false,
+            ..Default::default()
+        },
+        TestSuite {
+            query: "select avg(a + 1) from t group by b",
+            index: "select a + 1, b from t",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            ..Default::default()
+        },
+        TestSuite {
+            query: "select avg(a + 1) from t",
+            index: "select a + 1, b from t",
+            is_matched: true,
+            index_selection: vec!["index_col_1 (#1)"],
             ..Default::default()
         },
         // query: eval-agg-eval-filter-scan, index: eval-scan
@@ -249,6 +265,13 @@ fn get_test_suites() -> Vec<TestSuite> {
             index: "select a from t where b > 1",
             is_matched: false,
             ..Default::default()
+        },
+        TestSuite {
+            query: "select sum(a) from t where b > 1 group by b",
+            index: "select a, b from t where b > 1",
+            is_matched: true,
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
         },
         // query: eval-scan, index: eval-agg-eval-scan
         TestSuite {
@@ -353,9 +376,14 @@ fn get_test_suites() -> Vec<TestSuite> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_query_rewrite() -> Result<()> {
+    test_query_rewrite_impl("parquet").await?;
+    test_query_rewrite_impl("native").await
+}
+
+async fn test_query_rewrite_impl(format: &str) -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
-    let create_table_plan = create_table_plan(&fixture);
+    let create_table_plan = create_table_plan(&fixture, format);
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute(ctx.clone()).await?;
 
@@ -365,7 +393,7 @@ async fn test_query_rewrite() -> Result<()> {
         let (index, _, _) = plan_sql(ctx.clone(), suite.index, false).await?;
         let meta = metadata.read();
         let base_columns = meta.columns_by_table_index(0);
-        let result = agg_index::try_rewrite(&base_columns, &query, &[(
+        let result = agg_index::try_rewrite(0, &base_columns, &query, &[(
             0,
             suite.index.to_string(),
             index,

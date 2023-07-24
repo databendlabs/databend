@@ -51,7 +51,6 @@ use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::InputError;
-use common_profile::QueryProfileManager;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
@@ -82,6 +81,13 @@ use crate::storages::Table;
 const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub enum Origin {
+    #[default]
+    Default,
+    HttpHandler,
+    BuiltInProcedure,
+}
 
 #[derive(Clone)]
 pub struct QueryContext {
@@ -92,6 +98,7 @@ pub struct QueryContext {
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
+    origin: Arc<RwLock<Origin>>,
 }
 
 impl QueryContext {
@@ -112,6 +119,7 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
+            origin: Arc::new(RwLock::new(Origin::Default)),
         })
     }
 
@@ -163,12 +171,16 @@ impl QueryContext {
         Ok(())
     }
 
-    pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
-        DataExchangeManager::instance()
+    pub fn set_origin(&self, origin: Origin) {
+        let mut o = self.origin.write();
+        *o = origin;
+    }
+    pub fn get_origin(&self) -> Origin {
+        self.origin.read().clone()
     }
 
-    pub fn get_query_profile_manager(&self) -> Arc<QueryProfileManager> {
-        self.shared.get_query_profile_manager()
+    pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
+        DataExchangeManager::instance()
     }
 
     // Get the current session.
@@ -222,6 +234,10 @@ impl QueryContext {
 
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
+    }
+
+    pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        self.shared.evict_table_from_cache(catalog, database, table)
     }
 }
 
@@ -282,6 +298,9 @@ impl TableContext for QueryContext {
     }
 
     fn set_status_info(&self, info: &str) {
+        // set_status_info is not called frequently, so we can use info! here.
+        // make it easier to match the status to the log.
+        tracing::info!("{}: {}", self.get_id(), info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
     }
@@ -539,10 +558,6 @@ impl TableContext for QueryContext {
             }
         }
         self.query_settings.get_changes()
-    }
-
-    fn get_query_profile_manager(&self) -> Arc<QueryProfileManager> {
-        self.shared.get_query_profile_manager()
     }
 
     // Get the storage data accessor operator from the session manager.

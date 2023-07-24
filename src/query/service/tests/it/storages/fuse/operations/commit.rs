@@ -71,7 +71,6 @@ use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -90,7 +89,6 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
 use common_pipeline_core::InputError;
-use common_profile::QueryProfileManager;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
@@ -535,10 +533,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_query_profile_manager(&self) -> Arc<QueryProfileManager> {
-        todo!()
-    }
-
     fn get_data_operator(&self) -> Result<DataOperator> {
         self.ctx.get_data_operator()
     }
@@ -625,7 +619,6 @@ impl Catalog for FakedCatalog {
         &self,
         _tenant: &str,
         _db_name: &str,
-        _filter: Option<TableInfoFilter>,
     ) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
     }

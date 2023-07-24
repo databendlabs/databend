@@ -103,7 +103,7 @@ impl<'a> ClusteringInformation<'a> {
         );
         let default_cluster_key_id = self.table.cluster_key_meta.clone().unwrap().0;
         let total_block_count = snapshot.summary.block_count;
-        let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
                 .read_segments::<Arc<SegmentInfo>>(chunk, true)
@@ -277,10 +277,10 @@ impl<'a> ClusteringInformation<'a> {
     }
 }
 
-// The histogram contains buckets with widths:
-// 1 to 16 with increments of 1.
-// For buckets larger than 16, increments of twice the width of the previous bucket (e.g. 32, 64, 128, …).
-// e.g. If val is 2, the bucket is 2. If val is 18, the bucket is 32.
+/// The histogram contains buckets with widths:
+/// 1 to 16 with increments of 1.
+/// For buckets larger than 16, increments of twice the width of the previous bucket (e.g. 32, 64, 128, …).
+/// e.g. If val is 2, the bucket is 2. If val is 18, the bucket is 32.
 fn get_buckets(val: usize) -> u32 {
     let mut val = val as u32;
     if val <= 16 || val & (val - 1) == 0 {

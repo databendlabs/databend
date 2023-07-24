@@ -34,6 +34,8 @@ pub struct ParquetTableInfo {
     pub arrow_schema: ArrowSchema,
     pub schema_descr: SchemaDescriptor,
     pub files_to_read: Option<Vec<StageFileInfo>>,
+    pub schema_from: String,
+    pub compression_ratio: f64,
 }
 
 impl ParquetTableInfo {

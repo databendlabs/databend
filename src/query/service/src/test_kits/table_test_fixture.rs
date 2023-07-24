@@ -63,11 +63,11 @@ use tempfile::TempDir;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-use crate::interpreters::fill_missing_columns;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
+use crate::pipelines::builders::build_fill_missing_columns_pipeline;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -532,11 +532,11 @@ impl TestFixture {
         )?;
 
         let data_schema: DataSchemaRef = Arc::new(source_schema.into());
-        fill_missing_columns(
+        build_fill_missing_columns_pipeline(
             self.ctx.clone(),
+            &mut build_res.main_pipeline,
             table.clone(),
             data_schema,
-            &mut build_res.main_pipeline,
         )?;
 
         table.append_data(

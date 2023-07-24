@@ -19,7 +19,6 @@ use std::marker::PhantomData;
 use std::mem::take;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
@@ -35,9 +34,10 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::profile_wrapper::ProcessorProfileWrapper;
+use common_pipeline_transforms::processors::profile_wrapper::ProfileStub;
+use common_pipeline_transforms::processors::transforms::Transformer;
 use common_profile::SharedProcessorProfiles;
 use common_storage::DataOperator;
-use petgraph::matrix_graph::Zero;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
@@ -51,7 +51,6 @@ use crate::pipelines::processors::transforms::TransformAggregateSpillReader;
 use crate::pipelines::processors::transforms::TransformFinalAggregate;
 use crate::pipelines::processors::transforms::TransformGroupBySpillReader;
 use crate::pipelines::processors::AggregatorParams;
-use crate::sessions::QueryContext;
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
 
@@ -408,13 +407,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
 }
 
 pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
-    ctx: &Arc<QueryContext>,
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
     enable_profiling: bool,
     prof_id: u32,
-    prof_set: SharedProcessorProfiles,
+    proc_profs: SharedProcessorProfiles,
 ) -> Result<()> {
     let input_nums = pipeline.output_len();
     let transform = TransformPartitionBucket::<Method, V>::create(method.clone(), input_nums)?;
@@ -430,17 +428,14 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
 
     pipeline.try_resize(input_nums)?;
 
-    let settings = ctx.get_settings();
-    if !settings.get_spilling_bytes_threshold_per_proc()?.is_zero() {
-        let operator = DataOperator::instance().operator();
-        pipeline.add_transform(|input, output| {
-            let operator = operator.clone();
-            match params.aggregate_functions.is_empty() {
-                true => TransformGroupBySpillReader::<Method>::create(input, output, operator),
-                false => TransformAggregateSpillReader::<Method>::create(input, output, operator),
-            }
-        })?;
-    }
+    let operator = DataOperator::instance().operator();
+    pipeline.add_transform(|input, output| {
+        let operator = operator.clone();
+        match params.aggregate_functions.is_empty() {
+            true => TransformGroupBySpillReader::<Method>::create(input, output, operator),
+            false => TransformAggregateSpillReader::<Method>::create(input, output, operator),
+        }
+    })?;
 
     pipeline.add_transform(|input, output| {
         let transform = match params.aggregate_functions.is_empty() {
@@ -455,10 +450,24 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
             Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                 transform,
                 prof_id,
-                prof_set.clone(),
+                proc_profs.clone(),
             )))
         } else {
             Ok(ProcessorPtr::create(transform))
         }
-    })
+    })?;
+    // Append a profile stub to record the output rows and bytes
+    if enable_profiling {
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(Transformer::create(
+                input,
+                output,
+                ProfileStub::new(prof_id, proc_profs.clone())
+                    .accumulate_output_rows()
+                    .accumulate_output_bytes(),
+            )))
+        })?;
+    }
+
+    Ok(())
 }

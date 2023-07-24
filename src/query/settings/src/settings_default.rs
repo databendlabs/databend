@@ -160,7 +160,7 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("max_execute_time", DefaultSettingValue {
+                ("max_execute_time_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum query execution time in seconds. Setting it to 0 means no limit.",
                     possible_values: None,
@@ -265,6 +265,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("spilling_memory_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(100),
+                    desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
@@ -298,6 +304,12 @@ impl DefaultSettings {
                     // license key should not be reported
                     display_in_show_settings: false,
                 }),
+                ("enable_table_lock", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables table lock if necessary (enabled by default).",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("table_lock_expire_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(5),
                     desc: "Sets the seconds that the table lock will expire in.",
@@ -319,6 +331,18 @@ impl DefaultSettings {
                 ("enable_aggregating_index_scan", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable scanning aggregating index data while querying.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_auto_reclustering", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables auto re-clustering.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("use_parquet2", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Use parquet2 instead of parquet_rs when infer_schema().",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),

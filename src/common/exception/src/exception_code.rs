@@ -35,6 +35,7 @@ macro_rules! build_exceptions {
                     let bt = capture();
                     ErrorCode::create(
                         $code,
+                        stringify!($body),
                         display_text.into(),
                         None,
                         bt,
@@ -183,8 +184,7 @@ build_exceptions! {
 
     // Index related errors.
     UnsupportedIndex(1601),
-    IndexAlreadyRefreshed(1602),
-    RefreshIndexError(1603),
+    RefreshIndexError(1602),
 }
 
 // Meta service errors [2001, 3000].
@@ -211,6 +211,10 @@ build_exceptions! {
     IllegalUserInfoFormat(2203),
     UnknownRole(2204),
     InvalidRole(2206),
+    UnknownNetworkPolicy(2207),
+    NetworkPolicyAlreadyExists(2208),
+    IllegalNetworkPolicy(2209),
+    NetworkPolicyIsUsedByUser(2210),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
@@ -313,6 +317,7 @@ build_exceptions! {
     StorageInsecure(3903),
     DeprecatedIndexFormat(3904),
     StorageOther(4000),
+    UnresolvableConflict(4001),
 }
 
 // Service errors [5001,6000].

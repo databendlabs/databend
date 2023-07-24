@@ -229,10 +229,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 write!(&mut values, "{:x}", value).unwrap();
             }
 
-            let col = StringColumn {
-                data: values.into(),
-                offsets: offsets.into(),
-            };
+            let col = StringColumn::new(values.into(), offsets.into());
             Value::Column(col)
         },
     );

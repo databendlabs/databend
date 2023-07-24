@@ -129,13 +129,14 @@ impl<Method: HashMethodBounds> Processor for TransformScatterGroupBySerializer<M
                                         AggregateSerdeMeta::create_spilled(
                                             bucket,
                                             payload.location,
+                                            payload.data_range,
                                             payload.columns_layout,
                                         ),
                                     );
 
                                     self.input_data.push(None);
                                     self.output_data.push(serialize_block(
-                                        bucket,
+                                        -1,
                                         data_block,
                                         &self.ipc_fields,
                                         &self.options,

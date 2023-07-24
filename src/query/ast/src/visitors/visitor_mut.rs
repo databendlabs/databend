@@ -480,6 +480,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_vacuum_table(&mut self, _stmt: &mut VacuumTableStmt) {}
 
+    fn visit_vacuum_drop_table(&mut self, _stmt: &mut VacuumDropTableStmt) {}
+
     fn visit_analyze_table(&mut self, _stmt: &mut AnalyzeTableStmt) {}
 
     fn visit_exists_table(&mut self, _stmt: &mut ExistsTableStmt) {}
@@ -599,6 +601,16 @@ pub trait VisitorMut: Sized {
     fn visit_drop_data_mask_policy(&mut self, _stmt: &mut DropDatamaskPolicyStmt) {}
 
     fn visit_desc_data_mask_policy(&mut self, _stmt: &mut DescDatamaskPolicyStmt) {}
+
+    fn visit_create_network_policy(&mut self, _stmt: &mut CreateNetworkPolicyStmt) {}
+
+    fn visit_alter_network_policy(&mut self, _stmt: &mut AlterNetworkPolicyStmt) {}
+
+    fn visit_drop_network_policy(&mut self, _stmt: &mut DropNetworkPolicyStmt) {}
+
+    fn visit_desc_network_policy(&mut self, _stmt: &mut DescNetworkPolicyStmt) {}
+
+    fn visit_show_network_policies(&mut self) {}
 
     fn visit_with(&mut self, with: &mut With) {
         let With { ctes, .. } = with;

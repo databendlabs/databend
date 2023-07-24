@@ -2780,6 +2780,50 @@ AlterUser(
 
 
 ---------- Input ----------
+ALTER USER u1 WITH SET NETWORK POLICY = 'policy1';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH SET NETWORK POLICY = 'policy1'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            SetNetworkPolicy(
+                "policy1",
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH UNSET NETWORK POLICY;
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH UNSET NETWORK POLICY
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            UnsetNetworkPolicy,
+        ],
+    },
+)
+
+
+---------- Input ----------
 CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING
 ---------- Output ---------
 CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANTSETTING
@@ -2803,6 +2847,33 @@ CreateUser(
             ),
             TenantSetting(
                 true,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+CREATE USER u1 IDENTIFIED BY '123456' WITH SET NETWORK POLICY='policy1'
+---------- Output ---------
+CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH SET NETWORK POLICY = 'policy1'
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        if_not_exists: false,
+        user: UserIdentity {
+            username: "u1",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "123456",
+            ),
+        },
+        user_options: [
+            SetNetworkPolicy(
+                "policy1",
             ),
         ],
     },
@@ -6958,6 +7029,132 @@ DropRole {
 
 
 ---------- Input ----------
+OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Compact {
+            target: Segment,
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t COMPACT LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t COMPACT BLOCK LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Compact {
+            target: Block,
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t PURGE BEFORE  (SNAPSHOT => 9828b23f74664ff3806f44bbc1925ea5) LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Purge {
+            before: Some(
+                Snapshot(
+                    "9828b23f74664ff3806f44bbc1925ea5",
+                ),
+            ),
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t PURGE BEFORE  (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Purge {
+            before: Some(
+                Timestamp(
+                    Cast {
+                        span: Some(
+                            72..83,
+                        ),
+                        expr: Literal {
+                            span: Some(
+                                44..72,
+                            ),
+                            lit: String(
+                                "2023-06-26 09:49:02.038483",
+                            ),
+                        },
+                        target_type: Timestamp,
+                        pg_style: true,
+                    },
+                ),
+            ),
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t CLUSTER BY(c1);
 ---------- Output ---------
 ALTER TABLE t CLUSTER BY c1
@@ -7039,9 +7236,9 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0;
+ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;
 ---------- Output ---------
-ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0)
+ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0) LIMIT 10
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -7097,6 +7294,9 @@ AlterTable(
                         ),
                     },
                 },
+            ),
+            limit: Some(
+                10,
             ),
         },
     },
@@ -7453,7 +7653,7 @@ VacuumTable(
 ---------- Input ----------
 VACUUM TABLE t RETAIN 4 HOURS DRY RUN;
 ---------- Output ---------
-VACUUM TABLE t  RETAIN 4 HOURS DRY RUN
+VACUUM TABLE t RETAIN 4 HOURS DRY RUN
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -7488,7 +7688,7 @@ VacuumTable(
 ---------- Input ----------
 VACUUM TABLE t RETAIN 40 HOURS;
 ---------- Output ---------
-VACUUM TABLE t  RETAIN 40 HOURS
+VACUUM TABLE t RETAIN 40 HOURS
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -7506,6 +7706,94 @@ VacuumTable(
                 Literal {
                     span: Some(
                         22..24,
+                    ),
+                    lit: UInt64(
+                        40,
+                    ),
+                },
+            ),
+            dry_run: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE RETAIN 20 HOURS;
+---------- Output ---------
+VACUUM DROP TABLE RETAIN 20 HOURS
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: None,
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        25..27,
+                    ),
+                    lit: UInt64(
+                        20,
+                    ),
+                },
+            ),
+            dry_run: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN;
+---------- Output ---------
+VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: None,
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        25..27,
+                    ),
+                    lit: UInt64(
+                        30,
+                    ),
+                },
+            ),
+            dry_run: Some(
+                (),
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE FROM db RETAIN 40 HOURS;
+---------- Output ---------
+VACUUM DROP TABLE FROM db RETAIN 40 HOURS
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Some(
+                    23..25,
+                ),
+            },
+        ),
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        33..35,
                     ),
                     lit: UInt64(
                         40,
@@ -11459,6 +11747,57 @@ GenerateVirtualColumns(
                 29..30,
             ),
         },
+    },
+)
+
+
+---------- Input ----------
+CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'
+---------- Output ---------
+CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_LIST = ('192.168.10.99') COMMENT = 'test'
+---------- AST ------------
+CreateNetworkPolicy(
+    CreateNetworkPolicyStmt {
+        if_not_exists: false,
+        name: "mypolicy",
+        allowed_ip_list: [
+            "192.168.10.0/24",
+        ],
+        blocked_ip_list: Some(
+            [
+                "192.168.10.99",
+            ],
+        ),
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'
+---------- Output ---------
+ALTER NETWORK POLICY mypolicy SET  ALLOWED_IP_LIST = ('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST = ('192.168.1.99') COMMENT = 'test'
+---------- AST ------------
+AlterNetworkPolicy(
+    AlterNetworkPolicyStmt {
+        if_exists: false,
+        name: "mypolicy",
+        allowed_ip_list: Some(
+            [
+                "192.168.10.0/24",
+                "192.168.255.1",
+            ],
+        ),
+        blocked_ip_list: Some(
+            [
+                "192.168.1.99",
+            ],
+        ),
+        comment: Some(
+            "test",
+        ),
     },
 )
 

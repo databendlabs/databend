@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use aggregating_index::get_agg_index_handler;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Partitions;
@@ -24,6 +25,8 @@ use common_expression::infer_table_schema;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::BLOCK_NAME_COL_NAME;
+use common_license::license::Feature;
+use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::UpdateIndexReq;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -178,6 +181,12 @@ impl Interpreter for RefreshIndexInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let license_manager = get_license_manager();
+        license_manager.manager.check_enterprise_enabled(
+            &self.ctx.get_settings(),
+            self.ctx.get_tenant(),
+            Feature::AggregateIndex,
+        )?;
         let (mut query_plan, output_schema, select_columns) = match self.plan.query_plan.as_ref() {
             Plan::Query {
                 s_expr,
@@ -226,10 +235,9 @@ impl Interpreter for RefreshIndexInterpreter {
             .await?;
 
         if new_read_source.is_none() {
-            return Err(ErrorCode::IndexAlreadyRefreshed(format!(
-                "Aggregating Index {} already refreshed",
-                self.plan.index_name.clone()
-            )));
+            // The partitions are all pruned, we don't need to generate indexes for these partitions (blocks).
+            let empty_pipeline = PipelineBuildResult::create();
+            return Ok(empty_pipeline);
         }
 
         let new_read_source = new_read_source.unwrap();
@@ -320,6 +328,7 @@ impl Interpreter for RefreshIndexInterpreter {
 
 async fn modify_last_update(ctx: Arc<QueryContext>, req: UpdateIndexReq) -> Result<()> {
     let catalog = ctx.get_catalog(&ctx.get_current_catalog())?;
-    catalog.update_index(req).await?;
+    let handler = get_agg_index_handler();
+    let _ = handler.do_update_index(catalog, req).await?;
     Ok(())
 }

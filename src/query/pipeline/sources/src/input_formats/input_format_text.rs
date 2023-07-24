@@ -27,7 +27,6 @@ use common_expression::BlockMetaInfo;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
-use common_expression::TableSchemaRef;
 use common_formats::FieldDecoder;
 use common_formats::FileFormatOptionsExt;
 use common_meta_app::principal::FileFormatParams;
@@ -91,9 +90,12 @@ pub struct AligningStateRowDelimiter {
     ctx: Arc<InputContext>,
     split_info: Arc<SplitInfo>,
     record_delimiter_end: u8,
+    record_delimiter_escaped: bool,
 
     common: AligningStateCommon,
     tail_of_last_batch: Vec<u8>,
+
+    in_escape: bool,
 }
 
 impl AligningStateRowDelimiter {
@@ -101,20 +103,21 @@ impl AligningStateRowDelimiter {
         ctx: &Arc<InputContext>,
         split_info: &Arc<SplitInfo>,
         record_delimiter_end: u8,
+        record_delimiter_escaped: bool,
         headers: usize,
     ) -> Result<Self> {
         Ok(Self {
             ctx: ctx.clone(),
             split_info: split_info.clone(),
             record_delimiter_end,
+            record_delimiter_escaped,
             common: AligningStateCommon::create(split_info, true, headers),
             tail_of_last_batch: vec![],
+            in_escape: false,
         })
     }
-}
 
-impl AligningStateTextBased for AligningStateRowDelimiter {
-    fn align(&mut self, buf_in: &[u8]) -> Result<Vec<RowBatch>> {
+    fn align_splittable(&mut self, buf_in: &[u8]) -> Result<Vec<RowBatch>> {
         let record_delimiter_end = self.record_delimiter_end;
         let size_last_remain = self.tail_of_last_batch.len();
         let mut buf = buf_in;
@@ -153,7 +156,7 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
         };
         let rows = &mut output.row_ends;
         for (i, b) in buf.iter().enumerate() {
-            if *b == b'\n' {
+            if *b == record_delimiter_end {
                 rows.push(i + 1 + size_last_remain)
             }
         }
@@ -178,6 +181,103 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
                 rows.len(),
             );
             Ok(vec![output])
+        }
+    }
+
+    fn align_non_splittable(&mut self, buf_in: &[u8]) -> Result<Vec<RowBatch>> {
+        let record_delimiter_end = self.record_delimiter_end;
+        let size_last_remain = self.tail_of_last_batch.len();
+        let mut buf = buf_in;
+        if self.common.rows_to_skip > 0 {
+            let mut i = 0;
+            for b in buf.iter() {
+                if *b == record_delimiter_end {
+                    if self.in_escape {
+                        self.in_escape = false;
+                    } else {
+                        self.common.rows_to_skip -= 1;
+                        if self.common.rows_to_skip == 0 {
+                            break;
+                        }
+                    }
+                } else {
+                    // '\\\[delimiter]' -> '\\'
+                    self.in_escape = (*b == b'\\') && !self.in_escape
+                }
+                i += 1;
+            }
+            if self.common.rows_to_skip > 0 {
+                self.tail_of_last_batch = vec![];
+                return Ok(vec![]);
+            } else {
+                buf = &buf[i + 1..];
+            }
+        }
+        if buf.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut data: Vec<u8> = mem::take(&mut self.tail_of_last_batch);
+        data.reserve(buf.len() + size_last_remain);
+        let mut row_ends = vec![];
+        for b in buf.iter() {
+            if *b == record_delimiter_end {
+                if !self.in_escape {
+                    row_ends.push(data.len())
+                } else {
+                    data.pop();
+                    data.push(record_delimiter_end);
+                    self.in_escape = false;
+                }
+            } else {
+                data.push(*b);
+                // '\\\[delimiter]' -> '\\'
+                self.in_escape = (*b == b'\\') && !self.in_escape
+            }
+        }
+
+        if row_ends.is_empty() {
+            self.tail_of_last_batch = data;
+            Ok(vec![])
+        } else {
+            let batch_end = row_ends[row_ends.len() - 1];
+            self.tail_of_last_batch = data.split_off(batch_end);
+            let len = data.len();
+            let num_rows = row_ends.len();
+            let output = RowBatch {
+                data,
+                row_ends,
+                field_ends: vec![],
+                num_fields: vec![],
+                split_info: self.split_info.clone(),
+                batch_id: self.common.batch_id,
+                start_offset_in_split: self.common.offset,
+                start_row_in_split: self.common.rows,
+                start_row_of_split: self.split_info.start_row_text(),
+            };
+
+            self.common.offset += len;
+            self.common.rows += num_rows;
+            self.common.batch_id += 1;
+            tracing::debug!(
+                "align batch {}, {} + {} + {} bytes to {} rows",
+                output.batch_id,
+                size_last_remain,
+                batch_end,
+                self.tail_of_last_batch.len(),
+                num_rows,
+            );
+            Ok(vec![output])
+        }
+    }
+}
+
+impl AligningStateTextBased for AligningStateRowDelimiter {
+    fn align(&mut self, buf_in: &[u8]) -> Result<Vec<RowBatch>> {
+        if self.record_delimiter_escaped {
+            self.align_splittable(buf_in)
+        } else {
+            self.align_non_splittable(buf_in)
         }
     }
 
@@ -210,12 +310,16 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
     }
 
     fn read_beyond_end(&self) -> Option<BeyondEndReader> {
-        Some(BeyondEndReader {
-            ctx: self.ctx.clone(),
-            split_info: self.split_info.clone(),
-            path: self.split_info.file.path.clone(),
-            record_delimiter_end: self.record_delimiter_end,
-        })
+        if self.record_delimiter_escaped {
+            Some(BeyondEndReader {
+                ctx: self.ctx.clone(),
+                split_info: self.split_info.clone(),
+                path: self.split_info.file.path.clone(),
+                record_delimiter_end: self.record_delimiter_end,
+            })
+        } else {
+            None
+        }
     }
 }
 
@@ -336,13 +440,6 @@ impl<T: InputFormatTextBase> InputFormat for T {
             }
         }
         Ok(infos)
-    }
-
-    #[async_backtrace::framed]
-    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<TableSchemaRef> {
-        Err(ErrorCode::Unimplemented(
-            "infer_schema is not implemented for this format yet.",
-        ))
     }
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {

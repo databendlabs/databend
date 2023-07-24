@@ -35,6 +35,8 @@ use table_lock::TableLockHeartbeat;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_inc_commit_aborts;
+use crate::metrics::metrics_inc_commit_copied_files;
+use crate::metrics::metrics_inc_commit_milliseconds;
 use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
@@ -82,6 +84,8 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     abort_operation: AbortOperation,
     heartbeat: TableLockHeartbeat,
+    need_lock: bool,
+    start_time: Instant,
 }
 
 impl<F> CommitSink<F>
@@ -94,6 +98,7 @@ where F: SnapshotGenerator + Send + 'static
         snapshot_gen: F,
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,
+        need_lock: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
@@ -110,14 +115,15 @@ where F: SnapshotGenerator + Send + 'static
             retries: 0,
             max_retry_elapsed,
             input,
+            need_lock,
+            start_time: Instant::now(),
         })))
     }
 
     fn read_meta(&mut self) -> Result<Event> {
+        self.start_time = Instant::now();
         {
-            let status = "begin commit";
-            self.ctx.set_status_info(status);
-            tracing::info!(status);
+            self.ctx.set_status_info("begin commit");
         }
 
         let input_meta = self
@@ -130,16 +136,16 @@ where F: SnapshotGenerator + Send + 'static
 
         self.input.finish();
 
-        let meta = CommitMeta::downcast_ref_from(&input_meta)
+        let meta = CommitMeta::downcast_from(input_meta)
             .ok_or(ErrorCode::Internal("No commit meta. It's a bug"))?;
 
-        self.snapshot_gen.set_merged_segments(meta.segments.clone());
-        self.snapshot_gen.set_merged_summary(meta.summary.clone());
-        self.abort_operation = meta.abort_operation.clone();
+        self.abort_operation = meta.abort_operation;
 
         self.backoff = FuseTable::set_backoff(self.max_retry_elapsed);
 
-        if meta.need_lock {
+        self.snapshot_gen
+            .set_conflict_resolve_context(meta.conflict_resolve_context);
+        if self.need_lock {
             self.state = State::TryLock;
         } else {
             self.state = State::FillDefault;
@@ -154,7 +160,7 @@ impl<F> Processor for CommitSink<F>
 where F: SnapshotGenerator + Send + 'static
 {
     fn name(&self) -> String {
-        "MutationSink".to_string()
+        "CommitSink".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -291,7 +297,13 @@ where F: SnapshotGenerator + Send + 'static
                             let keep_last_snapshot = true;
                             let snapshot_files = tbl.list_snapshot_files().await?;
                             if let Err(e) = tbl
-                                .do_purge(&self.ctx, snapshot_files, keep_last_snapshot, None)
+                                .do_purge(
+                                    &self.ctx,
+                                    snapshot_files,
+                                    None,
+                                    keep_last_snapshot,
+                                    false,
+                                )
                                 .await
                             {
                                 // Errors of GC, if any, are ignored, since GC task can be picked up
@@ -304,6 +316,11 @@ where F: SnapshotGenerator + Send + 'static
                             }
                         }
                         metrics_inc_commit_mutation_success();
+                        let duration = self.start_time.elapsed();
+                        if let Some(files) = &self.copied_files {
+                            metrics_inc_commit_copied_files(files.file_info.len() as u64);
+                        }
+                        metrics_inc_commit_milliseconds(duration.as_millis());
                         self.heartbeat.shutdown().await?;
                         self.state = State::Finish;
                     }
@@ -361,13 +378,18 @@ where F: SnapshotGenerator + Send + 'static
                 };
             }
             State::AbortOperation => {
+                let duration = self.start_time.elapsed();
                 metrics_inc_commit_aborts();
+                // todo: use histogram when it ready
+                metrics_inc_commit_milliseconds(duration.as_millis());
                 self.heartbeat.shutdown().await?;
                 let op = self.abort_operation.clone();
                 op.abort(self.ctx.clone(), self.dal.clone()).await?;
-                return Err(ErrorCode::StorageOther(
-                    "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-                ));
+                return Err(ErrorCode::StorageOther(format!(
+                    "transaction aborted after {} retries, which took {} ms",
+                    self.retries,
+                    duration.as_millis()
+                )));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

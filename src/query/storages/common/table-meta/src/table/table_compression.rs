@@ -59,13 +59,13 @@ impl From<TableCompression> for parquet::compression::CompressionOptions {
 }
 
 /// Convert to native Compression.
-impl From<TableCompression> for native::Compression {
+impl From<TableCompression> for native::CommonCompression {
     fn from(value: TableCompression) -> Self {
         match value {
-            TableCompression::None => native::Compression::None,
-            TableCompression::LZ4 => native::Compression::LZ4,
-            TableCompression::Snappy => native::Compression::SNAPPY,
-            TableCompression::Zstd => native::Compression::ZSTD,
+            TableCompression::None => native::CommonCompression::None,
+            TableCompression::LZ4 => native::CommonCompression::Lz4,
+            TableCompression::Snappy => native::CommonCompression::Snappy,
+            TableCompression::Zstd => native::CommonCompression::Zstd,
         }
     }
 }

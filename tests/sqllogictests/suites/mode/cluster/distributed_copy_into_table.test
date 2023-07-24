@@ -2,6 +2,21 @@ statement ok
 set enable_distributed_copy_into = 1;
 
 statement ok
+drop table if exists test_order;
+
+statement ok
+drop table if exists random_source;
+
+statement ok
+drop stage if exists test_stage;
+
+statement ok
+drop table if exists parquet_table;
+
+statement ok
+drop stage if exists parquet_stage;
+
+statement ok
 create stage st FILE_FORMAT = (TYPE = CSV);
 
 statement ok
@@ -49,6 +64,137 @@ query I
 select count(*) from t;
 ----
 16000000
+
+statement ok
+set enable_distributed_copy_into = 0;
+
+# test copy into from query
+
+statement ok
+set enable_distributed_copy_into = 1;
+
+statement ok
+create table t_query(a int,b string,c string);
+
+statement ok
+create stage st_query FILE_FORMAT = (TYPE = TSV);
+
+statement ok
+copy into @st_query from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @st_query from (select a,b,c from table_random limit 1000000);
+
+query I
+select count($1) from @st_query;
+----
+2000000
+
+statement ok
+copy into t_query from (select $1,$2,$3 from @st_query as t2) force =  true purge = true;
+
+query I
+select count(*) from t_query;
+----
+2000000
+
+## add parquet_file_test
+statement ok
+create table parquet_table(a int,b string,c string);
+
+statement ok
+create stage parquet_stage file_format = (type = parquet);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
+
+statement ok
+copy into @parquet_stage from (select a,b,c from table_random limit 100000);
+
+statement ok
+copy into parquet_table from @parquet_stage;
+
+query I
+select count(*) from parquet_table;
+----
+800000
+
+statement ok
+copy into parquet_table from @parquet_stage force = true purge = true;
+
+query I
+select count(*) from parquet_table;
+----
+1600000
+
+# make sure it's distributed.
+
+statement ok
+create table t_query2(a int,b string,c string);
+
+statement ok
+create stage st_query2 FILE_FORMAT = (TYPE = TSV);
+
+statement ok
+copy into @st_query2 from (select a,b,c from table_random limit 10);
+
+statement ok
+copy into @st_query2 from (select a,b,c from table_random limit 10);
+
+query I
+select count($1) from @st_query2;
+----
+20
+
+statement ok
+set max_threads = 1;
+
+statement ok
+copy into t_query2 from (select $1,$2,$3 from @st_query2 as t2) force =  true purge = true;
+
+query I
+select block_count from fuse_snapshot('default','t_query2');
+----
+2
+
+#test cluster key
+statement ok
+create table test_order(a int,b string,c timestamp) cluster by(to_yyyymmdd(c),a);
+
+statement ok
+create table random_source like test_order Engine = Random;
+
+statement ok
+create stage test_stage;
+
+statement ok
+copy into @test_stage from (select * from random_source limit 4000000) FILE_FORMAT=(type=parquet);
+
+statement ok
+copy into test_order from @test_stage file_format=(type=parquet) force=true purge = true;
+
+query I
+select count(*) from test_order;
+----
+4000000
 
 statement ok
 set enable_distributed_copy_into = 0;

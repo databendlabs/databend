@@ -91,9 +91,11 @@ impl InputFormatTSV {
         let mut field_end = 0;
         let mut err_msg = None;
         let buf_len = buf.len();
+        let mut last_is_delimiter = false;
         if let Some(columns_to_read) = columns_to_read {
             while field_end <= buf_len && column_index < num_columns {
-                if field_end == buf_len || buf[field_end] == field_delimiter {
+                if field_end == buf_len || (buf[field_end] == field_delimiter && !last_is_delimiter)
+                {
                     if columns_to_read.contains(&column_index) {
                         if let Err(msg) = Self::read_column(
                             &mut columns[column_index],
@@ -109,15 +111,21 @@ impl InputFormatTSV {
                     column_index += 1;
                     field_start = field_end + 1;
                 }
+                if field_end < buf_len {
+                    last_is_delimiter = (buf[field_end] == b'\\') && !last_is_delimiter
+                }
                 field_end += 1;
             }
-            while column_index < num_columns {
-                columns[column_index].push_default();
-                column_index += 1;
+            if err_msg.is_none() {
+                while column_index < num_columns {
+                    columns[column_index].push_default();
+                    column_index += 1;
+                }
             }
         } else {
             while field_end <= buf_len && column_index < num_columns {
-                if field_end == buf_len || buf[field_end] == field_delimiter {
+                if field_end == buf_len || (buf[field_end] == field_delimiter && !last_is_delimiter)
+                {
                     if let Err(msg) = Self::read_column(
                         &mut columns[column_index],
                         field_decoder,
@@ -130,6 +138,9 @@ impl InputFormatTSV {
                     }
                     column_index += 1;
                     field_start = field_end + 1;
+                }
+                if field_end < buf_len {
+                    last_is_delimiter = (buf[field_end] == b'\\') && !last_is_delimiter
                 }
                 field_end += 1;
             }
@@ -183,6 +194,7 @@ impl InputFormatTextBase for InputFormatTSV {
             ctx,
             split_info,
             tsv_params.record_delimiter.as_bytes()[0],
+            false,
             tsv_params.headers as usize,
         )
     }

@@ -40,6 +40,8 @@ use crate::ColumnBinding;
 use crate::MetadataRef;
 use crate::Visibility;
 
+pub const PREDICATE_COLUMN_NAME: &str = "_predicate";
+
 #[derive(Clone, Debug)]
 pub struct UpdatePlan {
     pub catalog: String,
@@ -70,7 +72,7 @@ impl UpdatePlan {
                 table_name: None,
                 column_position: None,
                 table_index: None,
-                column_name: "_predicate".to_string(),
+                column_name: PREDICATE_COLUMN_NAME.to_string(),
                 index: schema.num_fields(),
                 data_type: Box::new(DataType::Boolean),
                 visibility: Visibility::Visible,

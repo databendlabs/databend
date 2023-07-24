@@ -52,3 +52,6 @@ mod v044_table_meta;
 mod v045_background;
 mod v046_index_meta;
 mod v047_catalog_meta;
+mod v048_background;
+mod v049_network_policy;
+mod v050_user_info;

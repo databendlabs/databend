@@ -105,7 +105,11 @@ impl Binder {
             }
         };
         debug!("show columns rewrite to: {:?}", query);
-        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowColumns)
-            .await
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowColumns(database, table),
+        )
+        .await
     }
 }

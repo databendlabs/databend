@@ -12,38 +12,61 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::fmt::Display;
 use std::sync::Arc;
 
-use aggregating_index::get_agg_index_handler;
-use chrono::Utc;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_expression::block_debug::pretty_format_blocks;
-use common_expression::infer_table_schema;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRefExt;
 use common_expression::SendableDataBlockStream;
 use common_expression::SortColumnDescription;
-use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::IndexNameIdent;
-use common_meta_app::schema::IndexType;
 use common_sql::optimizer::SExpr;
 use common_sql::planner::plans::Plan;
 use common_sql::plans::RelOperator;
 use common_sql::Planner;
-use common_storages_fuse::io::serialize_block;
-use common_storages_fuse::io::TableMetaLocationGenerator;
-use common_storages_fuse::io::WriteSettings;
-use common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::table_test_fixture::expects_ok;
 use databend_query::test_kits::TestFixture;
 use enterprise_query::test_kits::context::create_ee_query_context;
-use futures_util::StreamExt;
 use futures_util::TryStreamExt;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_index_scan() -> Result<()> {
+    test_index_scan_impl("parquet").await?;
+    test_index_scan_impl("native").await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_index_scan_two_agg_funcs() -> Result<()> {
+    test_index_scan_two_agg_funcs_impl("parquet").await?;
+    test_index_scan_two_agg_funcs_impl("native").await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_projected_index_scan() -> Result<()> {
+    test_projected_index_scan_impl("parquet").await?;
+    test_projected_index_scan_impl("native").await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_index_scan_with_count() -> Result<()> {
+    test_index_scan_with_count_impl("parquet").await?;
+    test_index_scan_with_count_impl("native").await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_index_scan_agg_args_are_expression() -> Result<()> {
+    test_index_scan_agg_args_are_expression_impl("parquet").await?;
+    test_index_scan_agg_args_are_expression_impl("native").await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuzz() -> Result<()> {
+    test_fuzz_impl("parquet").await?;
+    test_fuzz_impl("native").await
+}
 
 async fn plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<Plan> {
     let mut planner = Planner::new(ctx.clone());
@@ -62,38 +85,6 @@ async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDat
     interpreter.execute(ctx).await
 }
 
-async fn create_index(ctx: Arc<QueryContext>, index_name: &str, query: &str) -> Result<u64> {
-    let sql = format!("CREATE AGGREGATING INDEX {index_name} AS {query}");
-
-    let plan = plan_sql(ctx.clone(), &sql).await?;
-
-    if let Plan::CreateIndex(plan) = plan {
-        let catalog = ctx.get_catalog("default")?;
-        let create_index_req = CreateIndexReq {
-            if_not_exists: plan.if_not_exists,
-            name_ident: IndexNameIdent {
-                tenant: ctx.get_tenant(),
-                index_name: index_name.to_string(),
-            },
-            meta: IndexMeta {
-                table_id: plan.table_id,
-                index_type: IndexType::AGGREGATING,
-                created_on: Utc::now(),
-                dropped_on: None,
-                updated_on: None,
-                query: query.to_string(),
-            },
-        };
-
-        let handler = get_agg_index_handler();
-        let res = handler.do_create_index(catalog, create_index_req).await?;
-
-        return Ok(res.index_id);
-    }
-
-    unreachable!()
-}
-
 async fn drop_index(ctx: Arc<QueryContext>, index_name: &str) -> Result<()> {
     let sql = format!("DROP AGGREGATING INDEX {index_name}");
     execute_sql(ctx, &sql).await?;
@@ -101,15 +92,14 @@ async fn drop_index(ctx: Arc<QueryContext>, index_name: &str) -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_index_scan() -> Result<()> {
+async fn test_index_scan_impl(format: &str) -> Result<()> {
     let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
 
     // Create table
     execute_sql(
         fixture.ctx(),
-        "CREATE TABLE t (a int, b int, c int) storage_format = 'parquet'",
+        &format!("CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"),
     )
     .await?;
 
@@ -123,18 +113,16 @@ async fn test_index_scan() -> Result<()> {
     // Create index
     let index_name = "index1";
 
-    let index_id = create_index(
+    execute_sql(
         fixture.ctx(),
-        index_name,
-        "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
+        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
     .await?;
 
     // Refresh Index
-    refresh_index(
+    execute_sql(
         fixture.ctx(),
-        "SELECT b, SUM_state(a), _block_name from t WHERE c > 1 GROUP BY b, _block_name",
-        index_id,
+        &format!("REFRESH AGGREGATING INDEX {index_name}"),
     )
     .await?;
 
@@ -272,15 +260,14 @@ async fn test_index_scan() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_index_scan_two_agg_funcs() -> Result<()> {
+async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
     let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
 
     // Create table
     execute_sql(
         fixture.ctx(),
-        "CREATE TABLE t (a int, b int, c int) storage_format = 'parquet'",
+        &format!("CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"),
     )
     .await?;
 
@@ -294,18 +281,16 @@ async fn test_index_scan_two_agg_funcs() -> Result<()> {
     // Create index
     let index_name = "index1";
 
-    let index_id = create_index(
+    execute_sql(
         fixture.ctx(),
-        index_name,
-        "SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b",
+        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
     .await?;
 
     // Refresh Index
-    refresh_index(
+    execute_sql(
         fixture.ctx(),
-        "SELECT b, MAX_state(a), SUM_state(a), _block_name from t WHERE c > 1 GROUP BY b, _block_name",
-        index_id,
+        &format!("REFRESH AGGREGATING INDEX {index_name}"),
     )
     .await?;
 
@@ -415,6 +400,254 @@ async fn test_index_scan_two_agg_funcs() -> Result<()> {
     Ok(())
 }
 
+async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
+    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
+    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+
+    // Create table
+    execute_sql(
+        fixture.ctx(),
+        &format!("CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"),
+    )
+    .await?;
+
+    // Insert data
+    execute_sql(
+        fixture.ctx(),
+        "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
+    )
+    .await?;
+
+    // Create index
+    let index_name = "index1";
+
+    execute_sql(
+        fixture.ctx(),
+        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
+    )
+    .await?;
+
+    // Refresh Index
+    execute_sql(
+        fixture.ctx(),
+        &format!("REFRESH AGGREGATING INDEX {index_name}"),
+    )
+    .await?;
+
+    // Query with index
+    // sum
+    let plan = plan_sql(fixture.ctx(), "SELECT b from t WHERE c > 1 GROUP BY b").await?;
+
+    assert!(is_index_scan_plan(&plan));
+
+    expects_ok(
+        "Index scan",
+        execute_plan(fixture.ctx(), &plan).await,
+        vec![
+            "+----------+",
+            "| Column 0 |",
+            "+----------+",
+            "| 1        |",
+            "| 2        |",
+            "+----------+",
+        ],
+    )
+    .await?;
+
+    // sum and max
+    let plan = plan_sql(
+        fixture.ctx(),
+        "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
+    )
+    .await?;
+
+    assert!(is_index_scan_plan(&plan));
+
+    expects_ok(
+        "Index scan",
+        execute_plan(fixture.ctx(), &plan).await,
+        vec![
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| 1        | 1        |",
+            "| 2        | 3        |",
+            "+----------+----------+",
+        ],
+    )
+    .await?;
+
+    // Insert new data but not refresh index
+    execute_sql(
+        fixture.ctx(),
+        "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
+    )
+    .await?;
+
+    // Query with one fuse block and one index block
+    // sum
+    let plan = plan_sql(
+        fixture.ctx(),
+        "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
+    )
+    .await?;
+
+    assert!(is_index_scan_plan(&plan));
+
+    expects_ok(
+        "Index scan",
+        execute_plan(fixture.ctx(), &plan).await,
+        vec![
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| 1        | 2        |",
+            "| 2        | 6        |",
+            "+----------+----------+",
+        ],
+    )
+    .await?;
+
+    // sum and max
+    let plan = plan_sql(
+        fixture.ctx(),
+        "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
+    )
+    .await?;
+
+    assert!(is_index_scan_plan(&plan));
+
+    expects_ok(
+        "Index scan",
+        execute_plan(fixture.ctx(), &plan).await,
+        vec![
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| 1        | 2        |",
+            "| 2        | 6        |",
+            "+----------+----------+",
+        ],
+    )
+    .await?;
+
+    drop_index(fixture.ctx(), index_name).await?;
+
+    Ok(())
+}
+
+async fn test_index_scan_with_count_impl(format: &str) -> Result<()> {
+    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
+    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+
+    // Create table
+    execute_sql(
+        fixture.ctx(),
+        &format!("CREATE TABLE t (a string) storage_format = '{format}'"),
+    )
+    .await?;
+
+    // Insert data
+    execute_sql(fixture.ctx(), "INSERT INTO t VALUES ('1'), ('2')").await?;
+
+    // Create index
+    let index_name = "index1";
+
+    execute_sql(
+        fixture.ctx(),
+        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT a, COUNT(*) from t GROUP BY a"),
+    )
+    .await?;
+
+    // Refresh Index
+    execute_sql(
+        fixture.ctx(),
+        &format!("REFRESH AGGREGATING INDEX {index_name}"),
+    )
+    .await?;
+
+    // Query with index
+    let plan = plan_sql(fixture.ctx(), "SELECT a, COUNT(*) from t GROUP BY a").await?;
+
+    assert!(is_index_scan_plan(&plan));
+
+    expects_ok(
+        "Index scan",
+        execute_plan(fixture.ctx(), &plan).await,
+        vec![
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| '1'      | 1        |",
+            "| '2'      | 1        |",
+            "+----------+----------+",
+        ],
+    )
+    .await?;
+
+    drop_index(fixture.ctx(), index_name).await?;
+
+    Ok(())
+}
+
+async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()> {
+    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
+    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+
+    // Create table
+    execute_sql(
+        fixture.ctx(),
+        &format!("CREATE TABLE t (a string) storage_format = '{format}'"),
+    )
+    .await?;
+
+    // Insert data
+    execute_sql(fixture.ctx(), "INSERT INTO t VALUES ('1'), ('21'), ('231')").await?;
+
+    // Create index
+    let index_name = "index1";
+
+    execute_sql(
+        fixture.ctx(),
+        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT SUBSTRING(a, 1, 1) as s, avg(length(a)), min(a) from t GROUP BY s"),
+    )
+    .await?;
+
+    // Refresh Index
+    execute_sql(
+        fixture.ctx(),
+        &format!("REFRESH AGGREGATING INDEX {index_name}"),
+    )
+    .await?;
+
+    // Query with index
+    let plan = plan_sql(
+        fixture.ctx(),
+        "SELECT SUBSTRING(a, 1, 1) as s, avg(length(a)), min(a) from t GROUP BY s",
+    )
+    .await?;
+
+    assert!(is_index_scan_plan(&plan));
+
+    expects_ok(
+        "Index scan",
+        execute_plan(fixture.ctx(), &plan).await,
+        vec![
+            "+----------+----------+----------+",
+            "| Column 0 | Column 1 | Column 2 |",
+            "+----------+----------+----------+",
+            "| '1'      | 1        | '1'      |",
+            "| '2'      | 2.5      | '21'     |",
+            "+----------+----------+----------+",
+        ],
+    )
+    .await?;
+
+    drop_index(fixture.ctx(), index_name).await?;
+
+    Ok(())
+}
+
 fn is_index_scan_plan(plan: &Plan) -> bool {
     if let Plan::Query { s_expr, .. } = plan {
         is_index_scan_sexpr(s_expr.as_ref())
@@ -434,128 +667,86 @@ fn is_index_scan_sexpr(s_expr: &SExpr) -> bool {
     }
 }
 
-async fn refresh_index(ctx: Arc<QueryContext>, sql: &str, index_id: u64) -> Result<()> {
-    let plan = plan_sql(ctx.clone(), sql).await?;
-    let mut output_fields = plan.schema().fields().to_vec();
-    assert_eq!(output_fields.last().unwrap().name(), "_block_name");
-    output_fields.pop(); // Pop _block_name field
-    let output_schema = DataSchemaRefExt::create(output_fields);
-    let index_schema = infer_table_schema(&output_schema)?;
-
-    let mut buffer = vec![];
-    let mut map: HashMap<String, Vec<(u32, u32, usize)>> = HashMap::new();
-
-    let mut index = 0;
-    let mut stream = execute_plan(ctx.clone(), &plan).await?;
-    while let Some(block) = stream.next().await {
-        let block = block?;
-        let block = block.convert_to_full();
-        let block_name_col = block
-            .columns()
-            .last()
-            .unwrap()
-            .value
-            .as_column()
-            .unwrap()
-            .as_string()
-            .unwrap()
-            .clone();
-        let result = block.pop_columns(1)?;
-
-        for (row, block_name) in block_name_col.iter().enumerate() {
-            let name = String::from_utf8(block_name.to_vec())?;
-
-            map.entry(name)
-                .and_modify(|v| v.push((index, row as u32, 1)))
-                .or_insert(vec![(index, row as u32, 1)]);
-        }
-
-        buffer.push(result);
-        index += 1;
-    }
-
-    let op = ctx.get_data_operator()?.operator();
-    let data = buffer.iter().collect::<Vec<_>>();
-
-    for (loc, indices) in map {
-        let index_block = DataBlock::take_blocks(&data, &indices, indices.len());
-        let mut buf = vec![];
-
-        serialize_block(
-            &WriteSettings::default(),
-            &index_schema,
-            index_block,
-            &mut buf,
-        )?;
-
-        let index_loc =
-            TableMetaLocationGenerator::gen_agg_index_location_from_block_location(&loc, index_id);
-
-        op.write(&index_loc, buf).await?;
-    }
-
-    Ok(())
-}
-
-async fn fuzz(
+struct FuzzParams {
     num_rows_per_block: usize,
     num_blocks: usize,
     index_block_ratio: f64,
-    query_sql: &str,
-    index_sql: &str,
-    refresh_sql: &str,
+    query_sql: String,
+    index_sql: String,
     is_index_scan: bool,
-) -> Result<()> {
-    let fuzz_info = format_fuzz_test_params(
+    table_format: String,
+}
+
+impl Display for FuzzParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Query: {}\nIndex: {}\nIsIndexScan: {}\nNumBlocks: {}\nNumRowsPerBlock: {}\nIndexBlockRatio: {}\nTableFormat: {}\n",
+            self.query_sql,
+            self.index_sql,
+            self.is_index_scan,
+            self.num_blocks,
+            self.num_rows_per_block,
+            self.index_block_ratio,
+            self.table_format,
+        )
+    }
+}
+
+async fn fuzz(params: FuzzParams) -> Result<()> {
+    let fuzz_info = params.to_string();
+    let FuzzParams {
+        num_rows_per_block,
+        num_blocks,
+        index_block_ratio,
         query_sql,
         index_sql,
-        refresh_sql,
         is_index_scan,
-        num_blocks,
-        num_rows_per_block,
-        index_block_ratio,
-    );
+        table_format: format,
+    } = params;
 
     let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
-    let ctx = fixture.ctx();
 
     // Prepare table and data
     // Create random engine table
     execute_sql(
-        ctx.clone(),
+        fixture.ctx(),
         "CREATE TABLE rt (a int, b int, c int) ENGINE = RANDOM",
     )
     .await?;
     execute_sql(
-        ctx.clone(),
-        "CREATE TABLE t (a int, b int, c int) storage_format = 'parquet'",
+        fixture.ctx(),
+        &format!("CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"),
     )
     .await?;
     execute_sql(
-        ctx.clone(),
-        "CREATE TABLE temp_t (a int, b int, c int) storage_format = 'parquet'",
+        fixture.ctx(),
+        &format!("CREATE TABLE temp_t (a int, b int, c int) storage_format = '{format}'"),
     )
     .await?;
-    let index_id = create_index(ctx.clone(), "index", index_sql).await?;
+    execute_sql(
+        fixture.ctx(),
+        &format!("CREATE AGGREGATING INDEX index AS {index_sql}"),
+    )
+    .await?;
 
-    let plan = plan_sql(ctx.clone(), query_sql).await?;
+    let plan = plan_sql(fixture.ctx(), &query_sql).await?;
     if !is_index_scan_plan(&plan) {
         assert!(!is_index_scan, "{}", fuzz_info);
         // Clear
-        drop_index(ctx.clone(), "index").await?;
-        execute_sql(ctx.clone(), "DROP TABLE rt ALL").await?;
-        execute_sql(ctx.clone(), "DROP TABLE t ALL").await?;
-        execute_sql(ctx, "DROP TABLE temp_t ALL").await?;
+        drop_index(fixture.ctx(), "index").await?;
+        execute_sql(fixture.ctx(), "DROP TABLE rt ALL").await?;
+        execute_sql(fixture.ctx(), "DROP TABLE t ALL").await?;
+        execute_sql(fixture.ctx(), "DROP TABLE temp_t ALL").await?;
         return Ok(());
     }
     assert!(is_index_scan, "{}", fuzz_info);
 
     // Generate data with index
-    let num_index_blocks = (num_blocks as f64 * index_block_ratio) as usize;
-    for _ in 0..num_index_blocks {
+    for _ in 0..num_blocks {
         execute_sql(
-            ctx.clone(),
+            fixture.ctx(),
             &format!(
                 "INSERT INTO t SELECT * FROM rt LIMIT {}",
                 num_rows_per_block
@@ -563,32 +754,28 @@ async fn fuzz(
         )
         .await?;
     }
-    refresh_index(ctx.clone(), refresh_sql, index_id).await?;
 
-    // Generate data without index
-    for _ in 0..num_blocks - num_index_blocks {
+    let num_index_blocks = (num_blocks as f64 * index_block_ratio) as usize;
+    if num_index_blocks > 0 {
         execute_sql(
-            ctx.clone(),
-            &format!(
-                "INSERT INTO t SELECT * FROM rt LIMIT {}",
-                num_rows_per_block
-            ),
+            fixture.ctx(),
+            &format!("REFRESH AGGREGATING INDEX index LIMIT {num_index_blocks}"),
         )
         .await?;
     }
 
     // Copy data into temp table
-    execute_sql(ctx.clone(), "INSERT INTO temp_t SELECT * FROM t").await?;
+    execute_sql(fixture.ctx(), "INSERT INTO temp_t SELECT * FROM t").await?;
 
     // Get query result
     let expect: Vec<DataBlock> =
-        execute_sql(ctx.clone(), &query_sql.replace("from t", "from temp_t"))
+        execute_sql(fixture.ctx(), &query_sql.replace("from t", "from temp_t"))
             .await?
             .try_collect()
             .await?;
 
     // Get index scan query result
-    let actual: Vec<DataBlock> = execute_sql(ctx.clone(), query_sql)
+    let actual: Vec<DataBlock> = execute_sql(fixture.ctx(), &query_sql)
         .await?
         .try_collect()
         .await?;
@@ -607,10 +794,10 @@ async fn fuzz(
     if expect.is_empty() {
         assert!(actual.is_empty());
         // Clear
-        drop_index(ctx.clone(), "index").await?;
-        execute_sql(ctx.clone(), "DROP TABLE rt ALL").await?;
-        execute_sql(ctx.clone(), "DROP TABLE t ALL").await?;
-        execute_sql(ctx, "DROP TABLE temp_t ALL").await?;
+        drop_index(fixture.ctx(), "index").await?;
+        execute_sql(fixture.ctx(), "DROP TABLE rt ALL").await?;
+        execute_sql(fixture.ctx(), "DROP TABLE t ALL").await?;
+        execute_sql(fixture.ctx(), "DROP TABLE temp_t ALL").await?;
         return Ok(());
     }
 
@@ -650,10 +837,10 @@ async fn fuzz(
     );
 
     // Clear
-    drop_index(ctx.clone(), "index").await?;
-    execute_sql(ctx.clone(), "DROP TABLE rt ALL").await?;
-    execute_sql(ctx.clone(), "DROP TABLE t ALL").await?;
-    execute_sql(ctx, "DROP TABLE temp_t ALL").await?;
+    drop_index(fixture.ctx(), "index").await?;
+    execute_sql(fixture.ctx(), "DROP TABLE rt ALL").await?;
+    execute_sql(fixture.ctx(), "DROP TABLE t ALL").await?;
+    execute_sql(fixture.ctx(), "DROP TABLE temp_t ALL").await?;
 
     Ok(())
 }
@@ -662,8 +849,8 @@ async fn fuzz(
 struct TestSuite {
     query: &'static str,
     index: &'static str,
-    refresh: &'static str,
-    is_matched: bool,
+
+    is_index_scan: bool,
 }
 
 /// Generate test suites.
@@ -679,264 +866,227 @@ fn get_test_suites() -> Vec<TestSuite> {
         TestSuite {
             query: "select to_string(c + 1) from t",
             index: "select c + 1 from t",
-            refresh: "select c + 1, _block_name from t",
-            is_matched: true,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select c + 1 from t",
             index: "select c + 1 from t",
-            refresh: "select c + 1, _block_name from t",
-            is_matched: true,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select a from t",
             index: "select a from t",
-            refresh: "select a, _block_name from t",
-            is_matched: true,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select a as z from t",
             index: "select a from t",
-            refresh: "select a, _block_name from t",
-            is_matched: true,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select a + 1, to_string(a) from t",
             index: "select a from t",
-            refresh: "select a, _block_name from t",
-            is_matched: true,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select a + 1 as z, to_string(a) from t",
             index: "select a from t",
-            refresh: "select a, _block_name from t",
-            is_matched: true,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select b from t",
             index: "select a, b from t",
-            refresh: "select a, b, _block_name from t",
-            is_matched: true,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select a from t",
             index: "select b, c from t",
-            refresh: "select b, c, _block_name from t",
-            is_matched: false,
+            is_index_scan: false,
         },
         // query: eval-filter-scan, index: eval-scan
         TestSuite {
             query: "select a from t where b > 1",
             index: "select b, c from t",
-            refresh: "select b, c, _block_name from t",
-            is_matched: false,
+            is_index_scan: false,
         },
         TestSuite {
             query: "select a from t where b > 1",
             index: "select a, b from t",
-            refresh: "select a, b, _block_name from t",
-            is_matched: true,
+            is_index_scan: true,
         },
         // query: eval-agg-eval-scan, index: eval-scan
         TestSuite {
             query: "select sum(a) from t group by b",
             index: "select a from t",
-            refresh: "select a, _block_name from t",
-            is_matched: false,
+            is_index_scan: false,
+        },
+        TestSuite {
+            query: "select avg(a + 1) from t group by b",
+            index: "select a + 1, b from t",
+            is_index_scan: true,
+        },
+        TestSuite {
+            query: "select avg(a + 1) from t",
+            index: "select a + 1, b from t",
+            is_index_scan: true,
         },
         // query: eval-agg-eval-filter-scan, index: eval-scan
         TestSuite {
             query: "select sum(a) from t where a > 1 group by b",
             index: "select a from t",
-            refresh: "select a, _block_name from t",
-            is_matched: false,
+            is_index_scan: false,
         },
         // query: eval-scan, index: eval-filter-scan
         TestSuite {
             query: "select a from t",
             index: "select a from t where b > 1",
-            refresh: "select a, _block_name from t where b > 1",
-            is_matched: false,
+            is_index_scan: false,
         },
         // query: eval-filter-scan, index: eval-filter-scan
         TestSuite {
             query: "select a from t where b > 1",
             index: "select a, b from t where b > 2",
-            refresh: "select a, b, _block_name from t where b > 2",
-            is_matched: false,
+            is_index_scan: false,
         },
         TestSuite {
             query: "select a from t where b > 1",
             index: "select a, b from t where b > 0",
-            refresh: "select a, b, _block_name from t where b > 0",
-            is_matched: true,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select a from t where b < 5",
             index: "select a, b from t where b > 0",
-            refresh: "select a, b, _block_name from t where b > 0",
-            is_matched: false,
+            is_index_scan: false,
         },
         TestSuite {
             query: "select a from t where b > 1 and b < 5",
             index: "select a, b from t where b > 0",
-            refresh: "select a, b, _block_name from t where b > 0",
-            is_matched: true,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select a from t where b > 1 and b < 5",
             index: "select a, b from t where b > 0 and b < 6",
-            refresh: "select a, b, _block_name from t where b > 0 and b < 6",
-            is_matched: true,
+            is_index_scan: true,
         },
         // query: eval-agg-eval-scan, index: eval-filter-scan
         TestSuite {
             query: "select sum(a) from t group by b",
             index: "select a from t where b > 1",
-            refresh: "select a, _block_name from t where b > 1",
-            is_matched: false,
+            is_index_scan: false,
         },
         // query: eval-agg-eval-filter-scan, index: eval-filter-scan
         TestSuite {
             query: "select sum(a) from t where b > 1 group by b",
             index: "select a from t where b > 1",
-            refresh: "select a, _block_name from t where b > 1",
-            is_matched: false,
+            is_index_scan: false,
+        },
+        TestSuite {
+            query: "select sum(a) from t where b > 1 group by b",
+            index: "select a, b from t where b > 1",
+            is_index_scan: true,
         },
         // query: eval-scan, index: eval-agg-eval-scan
         TestSuite {
             query: "select b from t",
             index: "select b, sum(a) from t group by b",
-            refresh: "select b, sum_state(a), _block_name from t group by b, _block_name",
-            is_matched: false,
+            is_index_scan: false,
         },
         // query: eval-filter-scan, index: eval-agg-eval-scan
         TestSuite {
             query: "select b from t where c > 1",
             index: "select b, sum(a) from t group by b",
-            refresh: "select b, sum_state(a), _block_name from t group by b, _block_name",
-            is_matched: false,
+            is_index_scan: false,
         },
         // query: eval-agg-eval-scan, index: eval-agg-eval-scan
         TestSuite {
             query: "select sum(a) from t group by b",
             index: "select b, sum(a) from t group by b",
-            refresh: "select b, sum_state(a), _block_name from t group by b, _block_name",
-            is_matched: true,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select sum(a) from t group by b",
             index: "select sum(a) from t group by b",
-            refresh: "select sum_state(a), _block_name from t group by b, _block_name",
-            is_matched: false,
+            is_index_scan: false,
         },
         TestSuite {
             query: "select sum(a) + 1 from t group by b",
             index: "select sum(a) from t group by b",
-            refresh: "select sum_state(a), _block_name from t group by b, _block_name",
-            is_matched: false,
+            is_index_scan: false,
         },
         TestSuite {
             query: "select sum(a) + 1, b + 1 from t group by b",
             index: "select b, sum(a) from t group by b",
-            refresh: "select b, sum_state(a), _block_name from t group by b, _block_name",
-            is_matched: true,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select sum(a) from t group by c",
             index: "select b, sum(a) from t group by b",
-            refresh: "select b, sum_state(a), _block_name from t group by b, _block_name",
-            is_matched: false,
+            is_index_scan: false,
         },
         TestSuite {
             query: "select sum(a) + 1 from t group by b",
             index: "select b, sum(a) from t group by b",
-            refresh: "select b, sum_state(a), _block_name from t group by b, _block_name",
-            is_matched: true,
+            is_index_scan: true,
         },
         // query: eval-agg-eval-filter-scan, index: eval-agg-eval-scan
         TestSuite {
             query: "select sum(a) + 1 from t where b > 1 group by b",
             index: "select b, sum(a) from t group by b",
-            refresh: "select b, sum_state(a), _block_name from t group by b, _block_name",
-            is_matched: true,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select sum(a) + 1 from t where c > 1 group by b",
             index: "select b, sum(a) from t group by b",
-            refresh: "select b, sum_state(a), _block_name from t group by b, _block_name",
-            is_matched: false,
+            is_index_scan: false,
         },
         // query: eval-scan, index: eval-agg-eval-filter-scan
         TestSuite {
             query: "select b from t",
             index: "select b, sum(a) from t where a > 1 group by b",
-            refresh: "select b, sum_state(a), _block_name from t where a > 1 group by b, _block_name",
-            is_matched: false,
+            is_index_scan: false,
         },
         // query: eval-filter-scan, index: eval-agg-eval-filter-scan
         TestSuite {
             query: "select b from t where a > 1",
             index: "select b, sum(a) from t where a > 1 group by b",
-            refresh: "select b, sum_state(a), _block_name from t where a > 1 group by b, _block_name",
-            is_matched: false,
+            is_index_scan: false,
         },
         // query: eval-agg-eval-scan, index: eval-agg-eval-filter-scan
         TestSuite {
             query: "select sum(a) + 1 from t group by b",
             index: "select b, sum(a) from t where c > 1 group by b",
-            refresh: "select b, sum_state(a), _block_name from t where c > 1 group by b, _block_name",
-            is_matched: false,
+            is_index_scan: false,
         },
         // query: eval-agg-eval-filter-scan, index: eval-agg-eval-filter-scan
         TestSuite {
             query: "select sum(a) + 1 from t where c > 1 group by b",
             index: "select b, sum(a) from t where c > 1 group by b",
-            refresh: "select b, sum_state(a), _block_name from t where c > 1 group by b, _block_name",
-            is_matched: true,
+            is_index_scan: true,
         },
         TestSuite {
             query: "select sum(a) + 1, b + 2 from t where b > 1 group by b",
             index: "select b, sum(a) from t where b > 0 group by b",
-            refresh: "select b, sum_state(a), _block_name from t where b > 0 group by b, _block_name",
-            is_matched: true,
+            is_index_scan: true,
         },
     ]
 }
 
-#[inline(always)]
-fn format_fuzz_test_params(
-    query: &str,
-    index: &str,
-    refresh: &str,
-    is_index_scan: bool,
-    num_blocks: usize,
-    num_rows_per_block: usize,
-    index_block_ratio: f64,
-) -> String {
-    format!(
-        "Query: {}\nIndex: {}\nRefresh: {}\nIsIndexScan: {}\nNumBlocks: {}\nNumRowsPerBlock: {}\nIndexBlockRatio: {}\n",
-        query, index, refresh, is_index_scan, num_blocks, num_rows_per_block, index_block_ratio,
-    )
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_fuzz() -> Result<()> {
+async fn test_fuzz_impl(format: &str) -> Result<()> {
     let test_suites = get_test_suites();
 
     for suite in test_suites {
         for num_blocks in [1, 10] {
-            for num_rows_per_block in [1, 10, 50, 100] {
-                for index_block_ratio in [0.0, 0.2, 0.5, 0.8, 1.0] {
-                    fuzz(
+            for num_rows_per_block in [1, 50] {
+                for index_block_ratio in [0.2, 0.5, 0.8, 1.0] {
+                    fuzz(FuzzParams {
                         num_rows_per_block,
                         num_blocks,
                         index_block_ratio,
-                        suite.query,
-                        suite.index,
-                        suite.refresh,
-                        suite.is_matched,
-                    )
+                        query_sql: suite.query.to_string(),
+                        index_sql: suite.index.to_string(),
+                        is_index_scan: suite.is_index_scan,
+                        table_format: format.to_string(),
+                    })
                     .await?;
                 }
             }

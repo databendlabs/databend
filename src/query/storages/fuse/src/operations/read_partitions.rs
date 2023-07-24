@@ -165,8 +165,14 @@ impl FuseTable {
             }
         }
 
-        let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
-            FusePruner::create(&ctx, dal.clone(), table_info.schema(), &push_downs)?
+        let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
+            FusePruner::create(
+                &ctx,
+                dal.clone(),
+                table_info.schema(),
+                &push_downs,
+                self.bloom_index_cols(),
+            )?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
 
@@ -177,10 +183,11 @@ impl FuseTable {
                 &push_downs,
                 self.cluster_key_meta.clone(),
                 cluster_keys,
+                self.bloom_index_cols(),
             )?
         };
 
-        let block_metas = pruner.pruning(segments_location).await?;
+        let block_metas = pruner.read_pruning(segments_location).await?;
         let pruning_stats = pruner.pruning_stats();
 
         info!(

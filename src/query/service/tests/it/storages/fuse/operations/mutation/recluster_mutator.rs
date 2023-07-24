@@ -25,6 +25,7 @@ use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
+use common_sql::BloomIndexColumns;
 use common_storages_fuse::operations::BlockMetaIndex;
 use common_storages_fuse::pruning::create_segment_location_vector;
 use common_storages_fuse::pruning::FusePruner;
@@ -127,9 +128,15 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = base_snapshot.segments.clone();
     let segment_locations = create_segment_location_vector(segment_locations, None);
-    let block_metas = FusePruner::create(&ctx, data_accessor.clone(), schema, &None)?
-        .pruning(segment_locations)
-        .await?;
+    let block_metas = FusePruner::create(
+        &ctx,
+        data_accessor.clone(),
+        schema,
+        &None,
+        BloomIndexColumns::All,
+    )?
+    .read_pruning(segment_locations)
+    .await?;
     let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> = BTreeMap::new();
     block_metas.iter().for_each(|(idx, b)| {
         if let Some(stats) = &b.cluster_stats {
@@ -143,11 +150,11 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         }
     });
 
-    let mut mutator = ReclusterMutator::try_create(1.0, BlockThresholds::default())?;
+    let mut mutator = ReclusterMutator::try_create(ctx, 1.0, BlockThresholds::default())?;
 
     let need_recluster = mutator.target_select(blocks_map).await?;
     assert!(need_recluster);
-    assert_eq!(mutator.selected_blocks().len(), 3);
+    assert_eq!(mutator.take_blocks().len(), 3);
 
     Ok(())
 }

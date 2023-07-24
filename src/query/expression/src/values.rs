@@ -30,11 +30,12 @@ use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
+use croaring::treemap::NativeSerializer;
+use croaring::Treemap;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
-use roaring::RoaringTreemap;
 use serde::de::Visitor;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -533,11 +534,6 @@ impl PartialOrd for Scalar {
             (Scalar::Date(d1), Scalar::Date(d2)) => d1.partial_cmp(d2),
             (Scalar::Array(a1), Scalar::Array(a2)) => a1.partial_cmp(a2),
             (Scalar::Map(m1), Scalar::Map(m2)) => m1.partial_cmp(m2),
-            (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => {
-                let rb1 = RoaringTreemap::deserialize_from(b1.as_slice()).unwrap();
-                let rb2 = RoaringTreemap::deserialize_from(b2.as_slice()).unwrap();
-                rb1.len().partial_cmp(&rb2.len())
-            }
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
                 jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
@@ -573,11 +569,6 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Date(d1), ScalarRef::Date(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
-            (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => {
-                let rb1 = RoaringTreemap::deserialize_from(*b1).unwrap();
-                let rb2 = RoaringTreemap::deserialize_from(*b2).unwrap();
-                rb1.len().partial_cmp(&rb2.len())
-            }
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
             _ => None,
@@ -658,13 +649,6 @@ impl PartialOrd for Column {
             (Column::Date(col1), Column::Date(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Array(col1), Column::Array(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Map(col1), Column::Map(col2)) => col1.iter().partial_cmp(col2.iter()),
-            (Column::Bitmap(col1), Column::Bitmap(col2)) => col1
-                .iter()
-                .map(|c1| RoaringTreemap::deserialize_from(c1).unwrap().len())
-                .partial_cmp(
-                    col2.iter()
-                        .map(|c2| RoaringTreemap::deserialize_from(c2).unwrap().len()),
-                ),
             (Column::Nullable(col1), Column::Nullable(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
             }
@@ -1051,7 +1035,7 @@ impl Column {
                         values,
                         None,
                     )
-                    .unwrap()
+                        .unwrap()
                 )
             }
             Column::Boolean(col) => Box::new(
@@ -1060,12 +1044,12 @@ impl Column {
             ),
             Column::String(col) => {
                 let offsets: Buffer<i64> =
-                    col.offsets.iter().map(|offset| *offset as i64).collect();
+                    col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(
                     common_arrow::arrow::array::BinaryArray::<i64>::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data.clone(),
+                        col.data().clone(),
                         None,
                     )
                     .unwrap(),
@@ -1129,12 +1113,12 @@ impl Column {
             }
             Column::Bitmap(col) => {
                 let offsets: Buffer<i64> =
-                    col.offsets.iter().map(|offset| *offset as i64).collect();
+                    col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(
                     common_arrow::arrow::array::BinaryArray::<i64>::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data.clone(),
+                        col.data().clone(),
                         None,
                     )
                     .unwrap(),
@@ -1154,12 +1138,12 @@ impl Column {
             ),
             Column::Variant(col) => {
                 let offsets: Buffer<i64> =
-                    col.offsets.iter().map(|offset| *offset as i64).collect();
+                    col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(
                     common_arrow::arrow::array::BinaryArray::<i64>::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data.clone(),
+                        col.data().clone(),
                         None,
                     )
                     .unwrap(),
@@ -1329,10 +1313,7 @@ impl Column {
                 let offsets = arrow_col.offsets().clone().into_inner();
 
                 let offsets = unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                Column::String(StringColumn {
-                    data: arrow_col.values().clone(),
-                    offsets,
-                })
+                Column::String(StringColumn::new(arrow_col.values().clone(), offsets))
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::Binary => {
@@ -1347,10 +1328,10 @@ impl Column {
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
 
-                Column::String(StringColumn {
-                    data: arrow_col.values().clone(),
-                    offsets: offsets.into(),
-                })
+                Column::String(StringColumn::new(
+                    arrow_col.values().clone(),
+                    offsets.into(),
+                ))
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::Utf8 => {
@@ -1365,10 +1346,10 @@ impl Column {
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
 
-                Column::String(StringColumn {
-                    data: arrow_col.values().clone(),
-                    offsets: offsets.into(),
-                })
+                Column::String(StringColumn::new(
+                    arrow_col.values().clone(),
+                    offsets.into(),
+                ))
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::LargeUtf8 => {
@@ -1382,10 +1363,10 @@ impl Column {
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
-                Column::String(StringColumn {
-                    data: arrow_col.values().clone(),
-                    offsets: offsets.into(),
-                })
+                Column::String(StringColumn::new(
+                    arrow_col.values().clone(),
+                    offsets.into(),
+                ))
             }
 
             ArrowType::Timestamp(uint, _) => {
@@ -1420,21 +1401,40 @@ impl Column {
                     .values()
                     .clone(),
             ),
-            ArrowDataType::Extension(name, _, None) if name == ARROW_EXT_TYPE_VARIANT => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
-                    .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
-                let offsets = arrow_col
-                    .offsets()
-                    .buffer()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
-                Column::Variant(StringColumn {
-                    data: arrow_col.values().clone(),
-                    offsets: offsets.into(),
-                })
+            ArrowDataType::Extension(name, box ty, None) if name == ARROW_EXT_TYPE_VARIANT => {
+                match ty {
+                    ArrowDataType::LargeBinary => {
+                        let arrow_col = arrow_col
+                            .as_any()
+                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
+                            .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
+                        let offsets = arrow_col.offsets().clone().into_inner();
+
+                        let offsets =
+                            unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+
+                        Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
+                    }
+                    ArrowDataType::Binary => {
+                        let arrow_col = arrow_col
+                            .as_any()
+                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
+                            .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
+                        let offsets = arrow_col
+                            .offsets()
+                            .buffer()
+                            .iter()
+                            .map(|x| *x as u64)
+                            .collect::<Vec<_>>();
+                        Column::Variant(StringColumn::new(
+                            arrow_col.values().clone(),
+                            offsets.into(),
+                        ))
+                    }
+                    _ => unreachable!(
+                        "fail to read from arrow: array should be `BinaryArray<i32>` or `BinaryArray<i64>`"
+                    ),
+                }
             }
             ArrowDataType::List(f) => {
                 let array_list = arrow_cast::cast(
@@ -1542,18 +1542,39 @@ impl Column {
                     scale: *scale as u8,
                 }))
             }
-            ArrowDataType::Extension(name, _, None) if name == ARROW_EXT_TYPE_BITMAP => {
-                let arrow_col = arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
-                    .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
-                let offsets = arrow_col.offsets().clone().into_inner();
+            ArrowDataType::Extension(name, box ty, None) if name == ARROW_EXT_TYPE_BITMAP => {
+                match ty {
+                    ArrowDataType::LargeBinary => {
+                        let arrow_col = arrow_col
+                            .as_any()
+                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
+                            .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
+                        let offsets = arrow_col.offsets().clone().into_inner();
 
-                let offsets = unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                Column::Bitmap(StringColumn {
-                    data: arrow_col.values().clone(),
-                    offsets,
-                })
+                        let offsets =
+                            unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                        Column::Bitmap(StringColumn::new(arrow_col.values().clone(), offsets))
+                    }
+                    ArrowDataType::Binary => {
+                        let arrow_col = arrow_col
+                            .as_any()
+                            .downcast_ref::<common_arrow::arrow::array::BinaryArray<i32>>()
+                            .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
+                        let offsets = arrow_col
+                            .offsets()
+                            .buffer()
+                            .iter()
+                            .map(|x| *x as u64)
+                            .collect::<Vec<_>>();
+                        Column::Bitmap(StringColumn::new(
+                            arrow_col.values().clone(),
+                            offsets.into(),
+                        ))
+                    }
+                    _ => unreachable!(
+                        "fail to read from arrow: array should be `BinaryArray<i32>` or `BinaryArray<i64>`"
+                    ),
+                }
             }
             ty => unimplemented!("unsupported arrow type {ty:?}"),
         };
@@ -1655,11 +1676,8 @@ impl Column {
             }
             DataType::Bitmap => BitmapType::from_data((0..len).map(|_| {
                 let data: [u64; 4] = SmallRng::from_entropy().gen();
-                let rb = RoaringTreemap::from_iter(data.iter());
-                let mut buf = vec![];
-                rb.serialize_into(&mut buf)
-                    .expect("failed serialize roaring treemap");
-                buf
+                let rb = Treemap::from_iter(data);
+                rb.serialize().expect("failed serialize roaring treemap")
             })),
             DataType::Tuple(fields) => {
                 let fields = fields
@@ -1732,15 +1750,15 @@ impl Column {
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Boolean(c) => c.as_slice().0.len(),
-            Column::String(col) => col.data.len() + col.offsets.len() * 8,
+            Column::String(col) => col.memory_size(),
             Column::Timestamp(col) => col.len() * 8,
             Column::Date(col) => col.len() * 4,
             Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
             Column::Map(col) => col.values.memory_size() + col.offsets.len() * 8,
-            Column::Bitmap(col) => col.data.len() + col.offsets.len() * 8,
+            Column::Bitmap(col) => col.memory_size(),
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
-            Column::Variant(col) => col.data.len() + col.offsets.len() * 8,
+            Column::Variant(col) => col.memory_size(),
         }
     }
 
@@ -1874,11 +1892,8 @@ impl ColumnBuilder {
             }
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
             ScalarRef::Bitmap(b) => {
-                let rb =
-                    RoaringTreemap::deserialize_from(*b).expect("failed to deserialize bitmap");
-                let mut buf = vec![];
-                rb.serialize_into(&mut buf)
-                    .expect("failed to serialize bitmap");
+                let rb = Treemap::deserialize(b).expect("failed to deserialize bitmap");
+                let buf = rb.serialize().expect("failed to serialize bitmap");
                 ColumnBuilder::Bitmap(StringColumnBuilder::repeat(&buf, n))
             }
             ScalarRef::Tuple(fields) => {

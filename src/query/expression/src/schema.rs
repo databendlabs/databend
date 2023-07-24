@@ -224,6 +224,22 @@ impl DataSchema {
             .find(|&(_, c)| c.name() == name)
     }
 
+    pub fn rename_field(&mut self, i: FieldIndex, new_name: &str) {
+        self.fields[i].name = new_name.to_string();
+    }
+
+    pub fn drop_column(&mut self, column: &str) -> Result<()> {
+        if self.fields.len() == 1 {
+            return Err(ErrorCode::DropColumnEmptyError(
+                "cannot drop table column to empty",
+            ));
+        }
+        let i = self.index_of(column)?;
+        self.fields.remove(i);
+
+        Ok(())
+    }
+
     /// Check to see if `self` is a superset of `other` schema. Here are the comparison rules:
     pub fn contains(&self, other: &DataSchema) -> bool {
         if self.fields.len() != other.fields.len() {

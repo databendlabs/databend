@@ -412,10 +412,11 @@ impl PhysicalPlanBuilder {
             .await?;
 
         if let Some(agg_index) = &scan.agg_index {
-            let schema = source.schema();
+            let source_schema = source.schema();
             let push_down = source.push_downs.as_mut().unwrap();
-            let output_fields = TableScan::output_fields(schema, &name_mapping)?;
-            Self::push_down_agg_index(push_down, agg_index, &output_fields)?;
+            let output_fields = TableScan::output_fields(source_schema, &name_mapping)?;
+            let agg_index = Self::build_agg_index(agg_index, &output_fields)?;
+            push_down.agg_index = Some(agg_index);
         }
         let internal_column = if project_internal_columns.is_empty() {
             None
@@ -432,11 +433,19 @@ impl PhysicalPlanBuilder {
         }))
     }
 
-    fn push_down_agg_index(
-        push_down: &mut PushDownInfo,
+    fn build_agg_index(
         agg: &planner::plans::AggIndexInfo,
-        output_fields: &[DataField],
-    ) -> Result<()> {
+        source_fields: &[DataField],
+    ) -> Result<AggIndexInfo> {
+        // Build projection
+        let used_columns = agg.used_columns();
+        let mut col_indices = Vec::with_capacity(used_columns.len());
+        for index in used_columns.iter().sorted() {
+            col_indices.push(agg.schema.index_of(&index.to_string())?);
+        }
+        let projection = Projection::Columns(col_indices);
+        let output_schema = projection.project_schema(&agg.schema);
+
         let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
             ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
@@ -447,38 +456,41 @@ impl PhysicalPlanBuilder {
         });
         let filter = predicate
             .map(|pred| -> Result<_> {
-                Ok(cast_expr_to_non_null_boolean(
-                    pred.as_expr()?.project_column_ref(|col| col.index),
-                )?
-                .as_remote_expr())
+                Ok(
+                    cast_expr_to_non_null_boolean(pred.as_expr()?.project_column_ref(|col| {
+                        output_schema.index_of(&col.index.to_string()).unwrap()
+                    }))?
+                    .as_remote_expr(),
+                )
             })
             .transpose()?;
         let selection = agg
             .selection
             .iter()
             .map(|sel| {
-                let offset = output_fields
+                let offset = source_fields
                     .iter()
                     .position(|f| sel.index.to_string() == f.name().as_str());
                 Ok((
                     sel.scalar
                         .as_expr()?
-                        .project_column_ref(|col| col.index)
+                        .project_column_ref(|col| {
+                            output_schema.index_of(&col.index.to_string()).unwrap()
+                        })
                         .as_remote_expr(),
                     offset,
                 ))
             })
             .collect::<Result<Vec<_>>>()?;
-        let agg_info = AggIndexInfo {
+        Ok(AggIndexInfo {
             index_id: agg.index_id,
             filter,
             selection,
             schema: agg.schema.clone(),
-            actual_table_field_len: output_fields.len(),
-        };
-        push_down.agg_index = Some(agg_info);
-
-        Ok(())
+            actual_table_field_len: source_fields.len(),
+            is_agg: agg.is_agg,
+            projection,
+        })
     }
 
     #[async_recursion::async_recursion]

@@ -7,7 +7,7 @@ Returns clustering information of a table.
 ## Syntax
 
 ```sql
-CLUSTERING_INFORMATION(‘<database_name>’, ‘<table_name>’)
+CLUSTERING_INFORMATION('<database_name>', '<table_name>')
 ```
 
 ## Examples

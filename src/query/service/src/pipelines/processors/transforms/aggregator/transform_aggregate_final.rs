@@ -15,6 +15,7 @@
 use std::borrow::BorrowMut;
 use std::sync::Arc;
 
+use bumpalo::Bump;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnBuilder;
@@ -66,7 +67,8 @@ where Method: HashMethodBounds
     fn transform(&mut self, meta: AggregateMeta<Method, usize>) -> Result<DataBlock> {
         if let AggregateMeta::Partitioned { bucket, data } = meta {
             let mut reach_limit = false;
-            let hashtable = self.method.create_hash_table::<usize>()?;
+            let arena = Arc::new(Bump::new());
+            let hashtable = self.method.create_hash_table::<usize>(arena)?;
             let _dropper = AggregateHashTableDropper::create(self.params.clone());
             let mut hash_cell = HashTableCell::<Method, usize>::create(hashtable, _dropper);
             let temp_place = self.params.alloc_layout(&mut hash_cell.arena);
@@ -158,6 +160,14 @@ where Method: HashMethodBounds
                                     unsafe { states_binary_columns[idx].index_unchecked(*row) };
                                 aggregate_function.deserialize(state_place, &mut data)?;
                                 aggregate_function.merge(final_place, state_place)?;
+                                if aggregate_function.need_manual_drop_state() {
+                                    unsafe {
+                                        // State may allocate memory out of the arena,
+                                        // drop state to avoid memory leak.
+                                        aggregate_function.drop_state(state_place);
+                                    }
+                                    aggregate_function.init_state(state_place);
+                                }
                             }
                         }
                     }

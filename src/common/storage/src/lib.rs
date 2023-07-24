@@ -39,9 +39,9 @@ mod operator;
 pub use operator::init_operator;
 pub use operator::DataOperator;
 
-mod metrics;
-pub use metrics::StorageMetrics;
-pub use metrics::StorageMetricsLayer;
+pub mod common_metrics;
+pub use common_metrics::StorageMetrics;
+pub use common_metrics::StorageMetricsLayer;
 
 mod runtime_layer;
 
@@ -49,9 +49,13 @@ mod column_node;
 pub use column_node::ColumnNode;
 pub use column_node::ColumnNodes;
 
-mod parquet;
-pub use parquet::read_parquet_metas_in_parallel;
-pub use parquet::read_parquet_schema_async;
+mod parquet2;
+pub use parquet2::infer_schema_with_extension;
+pub use parquet2::read_parquet_metas_in_parallel;
+pub use parquet2::read_parquet_schema_async;
+
+mod parquet_rs;
+pub use parquet_rs::read_parquet_schema_async_rs;
 
 mod stage;
 pub use stage::init_stage_operator;

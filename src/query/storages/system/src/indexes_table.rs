@@ -92,7 +92,10 @@ impl IndexesTable {
             TableField::new("type", TableDataType::String),
             TableField::new("definition", TableDataType::String),
             TableField::new("created_on", TableDataType::Timestamp),
-            TableField::new("updated_on", TableDataType::Timestamp),
+            TableField::new(
+                "updated_on",
+                TableDataType::Nullable(Box::new(TableDataType::Timestamp)),
+            ),
         ]);
 
         let table_info = TableInfo {

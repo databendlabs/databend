@@ -25,3 +25,14 @@ echo "select *, \$1 from @data_tsv (files=>('select.tsv'));" | $MYSQL_CLIENT_CON
 echo "---copy"
 echo "copy into t from (select \$1, \$2 from @data_tsv t2) files=('select.tsv');" | $MYSQL_CLIENT_CONNECT
 echo "select * from t order by a" | $MYSQL_CLIENT_CONNECT
+
+
+echo "drop table if exists t2;" | $MYSQL_CLIENT_CONNECT
+echo "create table t2 (a string, b string)" | $MYSQL_CLIENT_CONNECT
+
+echo "---mysql_text(select)"
+echo "select \$1, \$2 from @data_tsv/mysql_text.tsv" | $MYSQL_CLIENT_CONNECT
+
+echo "---mysql_text(copy)"
+echo "copy into t2 from @data_tsv/mysql_text.tsv" | $MYSQL_CLIENT_CONNECT
+echo "select * from t2" | $MYSQL_CLIENT_CONNECT

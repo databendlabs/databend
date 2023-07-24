@@ -15,6 +15,8 @@
 use std::sync::Arc;
 use std::vec;
 
+use bumpalo::Bump;
+use common_base::runtime::GLOBAL_MEM_STAT;
 use common_catalog::plan::AggIndexMeta;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -37,6 +39,9 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Aggreg
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_partial_hashtable_allocated_bytes;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_partial_spill_cell_count;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_partial_spill_count;
 use crate::pipelines::processors::transforms::HashTableCell;
 use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
 use crate::pipelines::processors::AggregatorParams;
@@ -57,6 +62,7 @@ impl<Method: HashMethodBounds> Default for HashTable<Method> {
 
 struct AggregateSettings {
     convert_threshold: usize,
+    max_memory_usage: usize,
     spilling_bytes_threshold_per_proc: usize,
 }
 
@@ -65,14 +71,30 @@ impl TryFrom<Arc<QueryContext>> for AggregateSettings {
 
     fn try_from(ctx: Arc<QueryContext>) -> std::result::Result<Self, Self::Error> {
         let settings = ctx.get_settings();
+        let max_threads = settings.get_max_threads()? as usize;
         let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
-        let value = settings.get_spilling_bytes_threshold_per_proc()?;
+        let mut memory_ratio = settings.get_spilling_memory_ratio()? as f64 / 100_f64;
+
+        if memory_ratio > 1_f64 {
+            memory_ratio = 1_f64;
+        }
+
+        let max_memory_usage = match settings.get_max_memory_usage()? {
+            0 => usize::MAX,
+            max_memory_usage => match memory_ratio {
+                x if x == 0_f64 => usize::MAX,
+                memory_ratio => (max_memory_usage as f64 * memory_ratio) as usize,
+            },
+        };
 
         Ok(AggregateSettings {
             convert_threshold,
-            spilling_bytes_threshold_per_proc: match value == 0 {
-                true => usize::MAX,
-                false => value,
+            max_memory_usage,
+            spilling_bytes_threshold_per_proc: match settings
+                .get_spilling_bytes_threshold_per_proc()?
+            {
+                0 => max_memory_usage / max_threads,
+                spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,
             },
         })
     }
@@ -99,7 +121,8 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
-        let hashtable = method.create_hash_table()?;
+        let arena = Arc::new(Bump::new());
+        let hashtable = method.create_hash_table(arena)?;
         let _dropper = AggregateHashTableDropper::create(params.clone());
         let hashtable = HashTableCell::create(hashtable, _dropper);
 
@@ -179,7 +202,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
 
     #[inline(always)]
     #[allow(clippy::ptr_arg)] // &[StateAddr] slower than &StateAddrs ~20%
-    fn execute_index_block(&self, block: &DataBlock, places: &StateAddrs) -> Result<()> {
+    fn execute_agg_index_block(&self, block: &DataBlock, places: &StateAddrs) -> Result<()> {
         let aggregate_functions = &self.params.aggregate_functions;
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
@@ -195,11 +218,19 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 .unwrap()
                 .as_string()
                 .unwrap();
-
+            let state_place = self.temp_place.next(offset);
             for (row, mut raw_state) in agg_state.iter().enumerate() {
                 let place = &places[row];
-                function.deserialize(self.temp_place, &mut raw_state)?;
-                function.merge(place.next(offset), self.temp_place)?;
+                function.deserialize(state_place, &mut raw_state)?;
+                function.merge(place.next(offset), state_place)?;
+                if function.need_manual_drop_state() {
+                    unsafe {
+                        // State may allocate memory out of the arena,
+                        // drop state to avoid memory leak.
+                        function.drop_state(state_place);
+                    }
+                    function.init_state(state_place);
+                }
             }
         }
 
@@ -210,7 +241,8 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         let is_agg_index_block = block
             .get_meta()
             .and_then(AggIndexMeta::downcast_ref_from)
-            .is_some();
+            .map(|index| index.is_agg)
+            .unwrap_or_default();
 
         let block = block.convert_to_full();
 
@@ -246,7 +278,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                         if self.temp_place.addr() == 0 {
                             self.temp_place = self.params.alloc_layout(&mut hashtable.arena);
                         }
-                        self.execute_index_block(&block, &places)
+                        self.execute_agg_index_block(&block, &places)
                     } else {
                         Self::execute(&self.params, &block, &places)
                     }
@@ -269,7 +301,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                         if self.temp_place.addr() == 0 {
                             self.temp_place = self.params.alloc_layout(&mut hashtable.arena);
                         }
-                        self.execute_index_block(&block, &places)
+                        self.execute_agg_index_block(&block, &places)
                     } else {
                         Self::execute(&self.params, &block, &places)
                     }
@@ -289,7 +321,8 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
         if Method::SUPPORT_PARTITIONED {
             if matches!(&self.hash_table, HashTable::HashTable(cell)
                 if cell.len() >= self.settings.convert_threshold ||
-                    cell.allocated_bytes() >= self.settings.spilling_bytes_threshold_per_proc
+                    cell.allocated_bytes() >= self.settings.spilling_bytes_threshold_per_proc ||
+                    GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
             ) {
                 if let HashTable::HashTable(cell) = std::mem::take(&mut self.hash_table) {
                     self.hash_table = HashTable::PartitionedHashTable(
@@ -299,24 +332,26 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             }
 
             if matches!(&self.hash_table, HashTable::PartitionedHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc)
+                || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
             {
                 if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table) {
-                    let _dropper = v._dropper.clone();
-                    let cells = PartitionedHashTableDropper::split_cell(v);
-                    let mut blocks = Vec::with_capacity(cells.len());
-                    for (bucket, cell) in cells.into_iter().enumerate() {
-                        if cell.hashtable.len() != 0 {
-                            blocks.push(DataBlock::empty_with_meta(
-                                AggregateMeta::<Method, usize>::create_spilling(
-                                    bucket as isize,
-                                    cell,
-                                ),
-                            ));
-                        }
+                    // perf
+                    {
+                        metrics_inc_aggregate_partial_spill_count();
+                        metrics_inc_aggregate_partial_spill_cell_count(1);
+                        metrics_inc_aggregate_partial_hashtable_allocated_bytes(
+                            v.allocated_bytes() as u64,
+                        );
                     }
 
+                    let _dropper = v._dropper.clone();
+                    let blocks = vec![DataBlock::empty_with_meta(
+                        AggregateMeta::<Method, usize>::create_spilling(v),
+                    )];
+
+                    let arena = Arc::new(Bump::new());
                     let method = PartitionedHashMethod::<Method>::create(self.method.clone());
-                    let new_hashtable = method.create_hash_table()?;
+                    let new_hashtable = method.create_hash_table(arena)?;
                     self.hash_table = HashTable::PartitionedHashTable(HashTableCell::create(
                         new_hashtable,
                         _dropper.unwrap(),

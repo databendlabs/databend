@@ -21,10 +21,12 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MatchSeq;
 use common_sql::plans::SetOptionsPlan;
 use common_storages_fuse::TableContext;
+use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use tracing::error;
 
 use super::interpreter_table_create::is_valid_block_per_segment;
+use super::interpreter_table_create::is_valid_bloom_index_columns;
 use super::interpreter_table_create::is_valid_create_opt;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -62,6 +64,13 @@ impl Interpreter for SetOptionsInterpreter {
                 OPT_KEY_STORAGE_FORMAT
             )));
         }
+        if self.plan.set_options.get(OPT_KEY_DATABASE_ID).is_some() {
+            error!(error_str);
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "can't change {} for alter table statement",
+                OPT_KEY_DATABASE_ID
+            )));
+        }
         for table_option in self.plan.set_options.iter() {
             let key = table_option.0.to_lowercase();
             if !is_valid_create_opt(&key) {
@@ -85,6 +94,9 @@ impl Interpreter for SetOptionsInterpreter {
         } else {
             return Err(ErrorCode::UnknownTable(self.plan.table.as_str()));
         };
+
+        // check bloom_index_columns.
+        is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
 
         let req = UpsertTableOptionReq {
             table_id: table.get_id(),

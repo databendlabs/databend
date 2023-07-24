@@ -22,6 +22,7 @@ use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
+use common_expression::types::VariantType;
 use common_expression::DataBlock;
 use common_expression::FromData;
 use common_expression::FromOptData;
@@ -71,6 +72,7 @@ impl AsyncSystemTable for BackgroundTaskTable {
         let mut vacuum_stats = Vec::with_capacity(tasks.len());
         let mut task_run_secs = Vec::with_capacity(tasks.len());
         let mut creators = Vec::with_capacity(tasks.len());
+        let mut trigger = Vec::with_capacity(tasks.len());
         let mut create_timestamps = Vec::with_capacity(tasks.len());
         let mut update_timestamps = Vec::with_capacity(tasks.len());
         for (_, name, task) in tasks {
@@ -81,9 +83,13 @@ impl AsyncSystemTable for BackgroundTaskTable {
             compaction_stats.push(
                 task.compaction_task_stats
                     .as_ref()
-                    .map(|s| s.to_string().as_bytes().to_vec()),
+                    .map(|s| serde_json::to_vec(s).unwrap_or_default()),
             );
-            vacuum_stats.push(task.vacuum_stats.map(|s| s.to_string().as_bytes().to_vec()));
+            vacuum_stats.push(
+                task.vacuum_stats
+                    .as_ref()
+                    .map(|s| serde_json::to_vec(s).unwrap_or_default()),
+            );
             if let Some(compact_stats) = task.compaction_task_stats.as_ref() {
                 database_ids.push(compact_stats.db_id);
                 table_ids.push(compact_stats.table_id);
@@ -94,6 +100,10 @@ impl AsyncSystemTable for BackgroundTaskTable {
                 task_run_secs.push(None);
             }
             creators.push(task.creator.map(|s| s.to_string().as_bytes().to_vec()));
+            trigger.push(
+                task.manual_trigger
+                    .map(|s| s.trigger.to_string().as_bytes().to_vec()),
+            );
             create_timestamps.push(task.created_at.timestamp_micros());
             update_timestamps.push(task.last_updated.unwrap_or_default().timestamp_micros());
         }
@@ -104,10 +114,11 @@ impl AsyncSystemTable for BackgroundTaskTable {
             StringType::from_data(messages),
             NumberType::from_data(database_ids),
             NumberType::from_data(table_ids),
-            StringType::from_opt_data(compaction_stats),
-            StringType::from_opt_data(vacuum_stats),
+            VariantType::from_opt_data(compaction_stats),
+            VariantType::from_opt_data(vacuum_stats),
             NumberType::from_opt_data(task_run_secs),
             StringType::from_opt_data(creators),
+            StringType::from_opt_data(trigger),
             TimestampType::from_data(create_timestamps),
             TimestampType::from_data(update_timestamps),
         ]))
@@ -123,13 +134,14 @@ impl BackgroundTaskTable {
             TableField::new("message", TableDataType::String),
             TableField::new("database_id", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("compaction_stats", TableDataType::String),
-            TableField::new("vacuum_stats", TableDataType::String),
+            TableField::new("compaction_stats", TableDataType::Variant.wrap_nullable()),
+            TableField::new("vacuum_stats", TableDataType::Variant.wrap_nullable()),
             TableField::new(
                 "task_running_secs",
-                TableDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
             ),
-            TableField::new("creator", TableDataType::String),
+            TableField::new("creator", TableDataType::String.wrap_nullable()),
+            TableField::new("trigger", TableDataType::String.wrap_nullable()),
             TableField::new("created_on", TableDataType::Timestamp),
             TableField::new("updated_on", TableDataType::Timestamp),
         ]);

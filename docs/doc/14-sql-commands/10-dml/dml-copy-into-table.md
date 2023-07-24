@@ -219,6 +219,10 @@ copyOptions ::=
 | ON_ERROR              | Decides how to handle a file that contains errors: 'continue' to skip and proceed, 'abort' to terminate on error, 'abort_N' to terminate when errors ≥ N. Default is 'abort'. Note: 'abort_N' not available for Parquet files. | Optional |
 | MAX_FILES             | Sets the maximum number of files to load. Defaults to `0` meaning no limits.                                                                                                                                             | Optional |
 
+:::tip
+When importing large volumes of data, such as logs, it is recommended to set both `PURGE` and `FORCE` to True. This ensures efficient data import without the need for interaction with the Meta server (updating the copied-files set). However, it is important to be aware that this may lead to duplicate data imports.
+:::
+
 ## Examples
 
 ### 1. Loading Data from an Internal Stage
@@ -259,8 +263,8 @@ This example reads 10 rows from a CSV file and inserts them into a table:
 COPY INTO mytable
 FROM 's3://mybucket/data.csv'
 CONNECTION = (
-    ENDPOINT_URL = 'https://<endpoint-URL>',
-    ACCESS_KEY_ID = '<your-access-key-ID>',
+    ENDPOINT_URL = 'https://<endpoint-URL>'
+    ACCESS_KEY_ID = '<your-access-key-ID>'
     SECRET_ACCESS_KEY = '<your-secret-access-key>'
 )
 FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
@@ -286,8 +290,8 @@ This example reads data from a CSV file and inserts it into a table:
 COPY INTO mytable
 FROM 'azblob://mybucket/data.csv'
 CONNECTION = (
-    ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net',
-    ACCOUNT_NAME = '<account_name>',
+    ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net'
+    ACCOUNT_NAME = '<account_name>'
     ACCOUNT_KEY = '<account_key>'
 )
 FILE_FORMAT = (type = CSV);

@@ -15,7 +15,7 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
+use bumpalo::Bump;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
@@ -45,6 +45,7 @@ use crate::pipelines::processors::transforms::aggregator::serde::TransformScatte
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::HashTableCell;
 use crate::pipelines::processors::transforms::TransformAggregateDeserializer;
 use crate::pipelines::processors::transforms::TransformAggregateSerializer;
@@ -89,50 +90,49 @@ struct HashTableHashScatter<Method: HashMethodBounds, V: Copy + Send + Sync + 's
     _phantom: PhantomData<V>,
 }
 
-impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> HashTableHashScatter<Method, V> {
-    fn scatter(
-        &self,
-        mut payload: HashTablePayload<Method, V>,
-    ) -> Result<Vec<HashTableCell<Method, V>>> {
-        let mut buckets = Vec::with_capacity(self.buckets);
+fn scatter<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
+    mut payload: HashTablePayload<Method, V>,
+    buckets: usize,
+    method: &Method,
+) -> Result<Vec<HashTableCell<Method, V>>> {
+    let mut buckets = Vec::with_capacity(buckets);
 
-        for _ in 0..self.buckets {
-            buckets.push(self.method.create_hash_table()?);
-        }
+    for _ in 0..buckets.capacity() {
+        buckets.push(method.create_hash_table(Arc::new(Bump::new()))?);
+    }
 
-        for item in payload.cell.hashtable.iter() {
-            let mods = StrengthReducedU64::new(self.buckets as u64);
-            let bucket_index = (item.key().fast_hash() % mods) as usize;
+    let mods = StrengthReducedU64::new(buckets.len() as u64);
+    for item in payload.cell.hashtable.iter() {
+        let bucket_index = (item.key().fast_hash() % mods) as usize;
 
-            unsafe {
-                match buckets[bucket_index].insert_and_entry(item.key()) {
-                    Ok(mut entry) => {
-                        *entry.get_mut() = *item.get();
-                    }
-                    Err(mut entry) => {
-                        *entry.get_mut() = *item.get();
-                    }
+        unsafe {
+            match buckets[bucket_index].insert_and_entry(item.key()) {
+                Ok(mut entry) => {
+                    *entry.get_mut() = *item.get();
+                }
+                Err(mut entry) => {
+                    *entry.get_mut() = *item.get();
                 }
             }
         }
-
-        let mut res = Vec::with_capacity(buckets.len());
-        let dropper = payload.cell._dropper.take();
-        let arena = std::mem::replace(&mut payload.cell.arena, Area::create());
-        payload
-            .cell
-            .arena_holders
-            .push(ArenaHolder::create(Some(arena)));
-        for bucket_table in buckets {
-            let mut cell =
-                HashTableCell::<Method, V>::create(bucket_table, dropper.clone().unwrap());
-            cell.arena_holders
-                .extend(payload.cell.arena_holders.clone());
-            res.push(cell);
-        }
-
-        Ok(res)
     }
+
+    let mut res = Vec::with_capacity(buckets.len());
+    let dropper = payload.cell._dropper.take();
+    let arena = std::mem::replace(&mut payload.cell.arena, Area::create());
+    payload
+        .cell
+        .arena_holders
+        .push(ArenaHolder::create(Some(arena)));
+
+    for bucket_table in buckets {
+        let mut cell = HashTableCell::<Method, V>::create(bucket_table, dropper.clone().unwrap());
+        cell.arena_holders
+            .extend(payload.cell.arena_holders.clone());
+        res.push(cell);
+    }
+
+    Ok(res)
 }
 
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
@@ -147,22 +147,19 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Spilling(payload) => {
-                        let bucket = payload.bucket;
-                        for hashtable_cell in self.scatter(payload)? {
+                        let method = PartitionedHashMethod::create(self.method.clone());
+                        for hashtable_cell in scatter(payload, self.buckets, &method)? {
                             blocks.push(match hashtable_cell.hashtable.len() == 0 {
                                 true => DataBlock::empty(),
                                 false => DataBlock::empty_with_meta(
-                                    AggregateMeta::<Method, V>::create_spilling(
-                                        bucket,
-                                        hashtable_cell,
-                                    ),
+                                    AggregateMeta::<Method, V>::create_spilling(hashtable_cell),
                                 ),
                             });
                         }
                     }
                     AggregateMeta::HashTable(payload) => {
                         let bucket = payload.bucket;
-                        for hashtable_cell in self.scatter(payload)? {
+                        for hashtable_cell in scatter(payload, self.buckets, &self.method)? {
                             blocks.push(match hashtable_cell.hashtable.len() == 0 {
                                 true => DataBlock::empty(),
                                 false => DataBlock::empty_with_meta(
@@ -187,7 +184,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
 }
 
 pub struct AggregateInjector<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> {
-    ctx: Arc<QueryContext>,
     method: Method,
     tenant: String,
     aggregator_params: Arc<AggregatorParams>,
@@ -196,7 +192,6 @@ pub struct AggregateInjector<Method: HashMethodBounds, V: Copy + Send + Sync + '
 
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjector<Method, V> {
     pub fn create(
-        ctx: &Arc<QueryContext>,
         tenant: String,
         method: Method,
         params: Arc<AggregatorParams>,
@@ -204,7 +199,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjecto
         Arc::new(AggregateInjector::<Method, V> {
             method,
             tenant,
-            ctx: ctx.clone(),
             aggregator_params: params,
             _phantom: Default::default(),
         })
@@ -246,37 +240,30 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
         let method = &self.method;
         let params = self.aggregator_params.clone();
 
-        if self
-            .ctx
-            .get_settings()
-            .get_spilling_bytes_threshold_per_proc()?
-            != 0
-        {
-            let operator = DataOperator::instance().operator();
-            let location_prefix = format!("_aggregate_spill/{}", self.tenant);
+        let operator = DataOperator::instance().operator();
+        let location_prefix = format!("_aggregate_spill/{}", self.tenant);
 
-            pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    match params.aggregate_functions.is_empty() {
-                        true => TransformGroupBySpillWriter::create(
-                            input,
-                            output,
-                            method.clone(),
-                            operator.clone(),
-                            location_prefix.clone(),
-                        ),
-                        false => TransformAggregateSpillWriter::create(
-                            input,
-                            output,
-                            method.clone(),
-                            operator.clone(),
-                            params.clone(),
-                            location_prefix.clone(),
-                        ),
-                    },
-                ))
-            })?;
-        }
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(
+                match params.aggregate_functions.is_empty() {
+                    true => TransformGroupBySpillWriter::create(
+                        input,
+                        output,
+                        method.clone(),
+                        operator.clone(),
+                        location_prefix.clone(),
+                    ),
+                    false => TransformAggregateSpillWriter::create(
+                        input,
+                        output,
+                        method.clone(),
+                        operator.clone(),
+                        params.clone(),
+                        location_prefix.clone(),
+                    ),
+                },
+            ))
+        })?;
 
         pipeline.add_transform(
             |input, output| match params.aggregate_functions.is_empty() {

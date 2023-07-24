@@ -14,22 +14,23 @@
 
 mod clustering_information;
 mod fuse_blocks;
+mod fuse_columns;
 mod fuse_segments;
 mod fuse_snapshots;
 mod fuse_statistics;
 mod table_args;
 
-pub use clustering_information::unwrap_tuple;
 pub use clustering_information::ClusteringInformation;
 pub use clustering_information::ClusteringInformationTable;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 pub use fuse_blocks::FuseBlock;
 pub use fuse_blocks::FuseBlockTable;
+pub use fuse_columns::FuseColumn;
+pub use fuse_columns::FuseColumnTable;
 pub use fuse_segments::FuseSegment;
 pub use fuse_segments::FuseSegmentTable;
 pub use fuse_snapshots::FuseSnapshot;
 pub use fuse_snapshots::FuseSnapshotTable;
 pub use fuse_statistics::FuseStatisticTable;
-pub use table_args::string_literal;
-pub use table_args::string_value;
+pub use table_args::*;

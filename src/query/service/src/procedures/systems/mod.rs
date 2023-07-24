@@ -15,6 +15,7 @@
 mod clustering_information;
 mod execute_job;
 mod fuse_block;
+mod fuse_column;
 mod fuse_segment;
 mod fuse_snapshot;
 mod search_tables;
@@ -22,6 +23,7 @@ mod system;
 
 pub use clustering_information::ClusteringInformationProcedure;
 pub use fuse_block::FuseBlockProcedure;
+pub use fuse_column::FuseColumnProcedure;
 pub use fuse_segment::FuseSegmentProcedure;
 pub use fuse_snapshot::FuseSnapshotProcedure;
 pub use search_tables::SearchTablesProcedure;

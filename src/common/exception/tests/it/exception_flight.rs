@@ -24,6 +24,7 @@ use common_exception::Result;
 fn test_serialize() -> Result<()> {
     let error_code = ErrorCode::create(
         1,
+        "test_name",
         String::from("test_message"),
         None,
         Some(ErrorCodeBacktrace::Symbols(Arc::new(Backtrace::new()))),
@@ -32,6 +33,7 @@ fn test_serialize() -> Result<()> {
     let backtrace_str = error_code.backtrace_str();
     let error_code = ErrorCode::try_from(FlightData::from(error_code))?;
     assert_eq!(1, error_code.code());
+    assert_eq!(String::from("test_name"), error_code.name());
     assert_eq!(String::from("test_message"), error_code.message());
     assert_eq!(backtrace_str, error_code.backtrace_str());
     assert_eq!(error_code.span(), Some((0..1).into()));
