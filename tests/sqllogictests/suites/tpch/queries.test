@@ -1819,6 +1819,19 @@ where
 order by
     s_suppkey;
 ----
+MaterializedCte: 0
+├── Left
+│   └── Scan: default.tpch.lineitem, rows: 59986052
+└── Right
+    └── HashJoin: LEFT SINGLE
+        ├── Build
+        │   └── CteScan: 0
+        └── Probe
+            └── HashJoin: INNER
+                ├── Build
+                │   └── CteScan: 0
+                └── Probe
+                    └── Scan: default.tpch.supplier, rows: 100000
 
 # Q16
 query I

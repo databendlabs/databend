@@ -1546,6 +1546,7 @@ impl PipelineBuilder {
             &*materialized_cte.left,
             materialized_cte.cte_idx,
             self.cte_state.clone(),
+            &materialized_cte.left_output_columns,
         )?;
         self.build_right_side_pipeline(&*materialized_cte.right)
     }
@@ -1555,6 +1556,7 @@ impl PipelineBuilder {
         left_side: &PhysicalPlan,
         cte_idx: IndexType,
         state: Arc<MaterializedCteState>,
+        left_output_columns: &[ColumnBinding],
     ) -> Result<()> {
         let left_side_ctx = QueryContext::create_from(self.ctx.clone());
         let mut left_side_builder = PipelineBuilder::create(
@@ -1565,6 +1567,14 @@ impl PipelineBuilder {
         left_side_builder.cte_state = self.cte_state.clone();
         let mut left_side_pipeline = left_side_builder.finalize(left_side)?;
         assert!(left_side_pipeline.main_pipeline.is_pulling_pipeline()?);
+
+        PipelineBuilder::render_result_set(
+            &self.ctx.get_function_context()?,
+            left_side.output_schema()?,
+            left_output_columns,
+            &mut left_side_pipeline.main_pipeline,
+            false,
+        )?;
 
         left_side_pipeline.main_pipeline.add_sink(|input| {
             let transform = Sinker::<MaterializedCteSink>::create(

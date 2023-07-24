@@ -122,6 +122,7 @@ pub struct MaterializedCte {
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
     pub cte_idx: IndexType,
+    pub left_output_columns: Vec<ColumnBinding>,
 }
 
 impl MaterializedCte {

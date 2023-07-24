@@ -14,8 +14,6 @@
 
 use std::any::Any;
 use std::sync::Arc;
-use std::thread::sleep;
-use std::time::Duration;
 
 use common_base::base::tokio::sync::Notify;
 use common_catalog::table_context::TableContext;
@@ -29,8 +27,6 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::Sink;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
-use common_pipeline_sources::SyncSource;
-use common_pipeline_sources::SyncSourcer;
 use common_sql::IndexType;
 use parking_lot::Mutex;
 use parking_lot::RwLock;

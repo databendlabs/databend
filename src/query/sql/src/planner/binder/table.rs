@@ -190,7 +190,7 @@ impl Binder {
                         self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
                             .await
                     } else {
-                        let new_bind_context = if cte_info.used_count == 0 {
+                        let mut new_bind_context = if cte_info.used_count == 0 {
                             let (cte_s_expr, mut cte_bind_ctx) = self
                                 .bind_cte(*span, bind_context, &table_name, alias, cte_info)
                                 .await?;
@@ -219,6 +219,7 @@ impl Binder {
                             .and_modify(|cte_info| {
                                 cte_info.used_count += 1;
                             });
+                        new_bind_context.ctes_map = bind_context.ctes_map.clone();
                         let s_expr =
                             self.bind_cte_scan(bind_context.ctes_map.get(&table_name).unwrap())?;
                         Ok((s_expr, new_bind_context))

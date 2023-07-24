@@ -25,10 +25,12 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::ColumnBinding;
 use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MaterializedCte {
+    pub(crate) left_output_columns: Vec<ColumnBinding>,
     pub(crate) cte_idx: IndexType,
 }
 

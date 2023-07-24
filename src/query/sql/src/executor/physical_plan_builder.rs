@@ -1112,6 +1112,7 @@ impl PhysicalPlanBuilder {
                     left: Box::new(self.build(s_expr.child(0)?).await?),
                     right: Box::new(self.build(s_expr.child(1)?).await?),
                     cte_idx: op.cte_idx,
+                    left_output_columns: op.left_output_columns.clone(),
                 }))
             }
 
