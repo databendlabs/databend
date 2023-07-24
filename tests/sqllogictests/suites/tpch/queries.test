@@ -710,7 +710,7 @@ order by
 ----
 677 Supplier#000000677 8mhrffG7D2WJBSQbOGstQ 23-290-639-3315 1614410.37
 
-# Q15
+# Q15 with materialized cte
 query I
 with revenue as materialized (
     select
@@ -1821,9 +1821,9 @@ order by
 ----
 MaterializedCte: 0
 ├── Left
-│   └── Scan: default.tpch.lineitem, rows: 59986052
+│   └── Scan: default.tpch.lineitem, rows: 600572
 └── Right
-    └── HashJoin: LEFT SINGLE
+    └── HashJoin: INNER
         ├── Build
         │   └── CteScan: 0
         └── Probe
@@ -1831,7 +1831,7 @@ MaterializedCte: 0
                 ├── Build
                 │   └── CteScan: 0
                 └── Probe
-                    └── Scan: default.tpch.supplier, rows: 100000
+                    └── Scan: default.tpch.supplier, rows: 1000
 
 # Q16
 query I

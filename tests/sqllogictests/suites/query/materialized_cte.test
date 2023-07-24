@@ -1,3 +1,4 @@
+# two materialized ctes and select one column
 query I
 with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select number as b from numbers(20)) select t1.a from t1 join t2 on t1.a = t2.b;
 ----
@@ -12,7 +13,7 @@ with t1 as materialized (select number as a from numbers(10)), t2 as materialize
 8
 9
 
-
+# two materialized ctes and select all columns
 query I
 with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select number as b from numbers(20)) select * from t1 join t2 on t1.a = t2.b;
 ----
@@ -27,8 +28,39 @@ with t1 as materialized (select number as a from numbers(10)), t2 as materialize
 8 8
 9 9
 
+# only one materialized
 query I
 with t1 as materialized (select number as a from numbers(10)) select t1.a from t1;
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# one materialized and one not
+query I
+with t1 as materialized (select number as a from numbers(10)), t2 as (select number as b from numbers(20)) select t1.a from t1 join t2 on t1.a = t2.b;
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# one cte uses a materialized cte
+query I
+with t1 as materialized (select number as a from numbers(10)), t2 as (select a as b from t1) select t1.a from t1 join t2 on t1.a = t2.b;
 ----
 0
 1
