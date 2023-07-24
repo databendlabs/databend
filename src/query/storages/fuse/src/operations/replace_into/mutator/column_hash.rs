@@ -31,7 +31,7 @@ impl RowScalarValue for Value<AnyType> {
     fn row_scalar(&self, idx: usize) -> ScalarRef {
         match self {
             Value::Scalar(v) => v.as_ref(),
-            Value::Column(c) => c.index(idx).expect("index out of range"),
+            Value::Column(c) => c.index(idx).expect("index out of range (mod column_hash)"),
         }
     }
 }

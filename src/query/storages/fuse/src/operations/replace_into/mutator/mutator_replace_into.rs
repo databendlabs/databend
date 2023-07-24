@@ -37,6 +37,7 @@ use common_expression::Value;
 use common_functions::aggregates::eval_aggr;
 use common_functions::BUILTIN_FUNCTIONS;
 use storages_common_table_meta::meta::ColumnStatistics;
+use tracing::info;
 
 use crate::metrics::metrics_inc_replace_original_row_number;
 use crate::metrics::metrics_inc_replace_partition_number;
@@ -97,17 +98,15 @@ enum ColumnHash {
 impl ReplaceIntoMutator {
     pub fn process_input_block(&mut self, data_block: &DataBlock) -> Result<MergeIntoOperation> {
         // pruning rows by using table level range index
-        //
         // rows that definitely have no conflict will be removed
-
         metrics_inc_replace_original_row_number(data_block.num_rows() as u64);
-        let data_block_may_have_conflicts =
-            self.extract_table_level_non_conflict_rows(data_block)?;
+        let data_block_may_have_conflicts = self.table_level_row_prune(data_block)?;
 
         let row_number_after_pruning = data_block_may_have_conflicts.num_rows();
         metrics_inc_replace_row_number_after_table_level_pruning(row_number_after_pruning as u64);
 
         if row_number_after_pruning == 0 {
+            info!("(replace-into) all rows are append-only");
             return Ok(MergeIntoOperation::None);
         }
 
@@ -141,7 +140,7 @@ impl ReplaceIntoMutator {
         Ok(merge_into_operation)
     }
 
-    fn extract_table_level_non_conflict_rows(&self, data_block: &DataBlock) -> Result<DataBlock> {
+    fn table_level_row_prune(&self, data_block: &DataBlock) -> Result<DataBlock> {
         let column_stats: &HashMap<ColumnId, ColumnStatistics> = &self.table_range_index;
         let mut bitmap = MutableBitmap::new();
         // for each row, check if it may have conflict
@@ -163,7 +162,6 @@ impl ReplaceIntoMutator {
             bitmap.push(should_keep);
         }
         let bitmap = bitmap.into();
-        // todo what if all the rows should be kept?
         data_block.clone().filter_with_bitmap(&bitmap)
     }
 
@@ -303,7 +301,7 @@ struct Partition {
 }
 
 impl Partition {
-    fn new(row_digest: u128, column_values: &[&Value<AnyType>], row_idx: usize) -> Self {
+    fn new_with_row(row_digest: u128, column_values: &[&Value<AnyType>], row_idx: usize) -> Self {
         let columns_min_max = column_values
             .iter()
             .map(|column| {
@@ -316,7 +314,7 @@ impl Partition {
             columns_min_max,
         }
     }
-    fn push_digest(&mut self, row_digest: u128, column_values: &[&Value<AnyType>], row_idx: usize) {
+    fn push_row(&mut self, row_digest: u128, column_values: &[&Value<AnyType>], row_idx: usize) {
         self.digests.insert(row_digest);
         for (column_idx, min_max) in self.columns_min_max.iter_mut().enumerate() {
             let value: Scalar = column_values[column_idx].row_scalar(row_idx).to_owned();
@@ -394,10 +392,10 @@ impl Partitioner {
                 Entry::Occupied(ref mut entry) => {
                     entry
                         .get_mut()
-                        .push_digest(row_digest, &column_values, row_idx)
+                        .push_row(row_digest, &column_values, row_idx)
                 }
                 Entry::Vacant(entry) => {
-                    entry.insert(Partition::new(row_digest, &column_values, row_idx));
+                    entry.insert(Partition::new_with_row(row_digest, &column_values, row_idx));
                 }
             }
         }

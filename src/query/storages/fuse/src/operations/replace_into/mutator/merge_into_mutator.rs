@@ -178,7 +178,6 @@ impl MergeIntoOperationAggregator {
 // aggregate mutations (currently, deletion only)
 impl MergeIntoOperationAggregator {
     #[async_backtrace::framed]
-    // pub async fn accumulate(&mut self, merge_action: MergeIntoOperation) -> Result<()> {
     pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
         let merge_action =
             MergeIntoOperation::downcast_ref_from(data_block.get_meta().unwrap()).unwrap();
@@ -194,7 +193,6 @@ impl MergeIntoOperationAggregator {
                         ver: *ver,
                         put_cache: true,
                     };
-                    // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
                     let compact_segment_info =
                         aggregation_ctx.segment_reader.read(&load_param).await?;
                     let mut segment_info: Option<SegmentInfo> = None;
