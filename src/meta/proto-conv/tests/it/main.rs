@@ -55,3 +55,4 @@ mod v047_catalog_meta;
 mod v048_background;
 mod v049_network_policy;
 mod v050_user_info;
+mod v051_udf;

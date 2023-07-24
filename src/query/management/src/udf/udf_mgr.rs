@@ -21,13 +21,14 @@ use common_functions::is_builtin_function;
 use common_meta_app::principal::UserDefinedFunction;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 
+use crate::serde::deserialize_struct;
+use crate::serde::serialize_struct;
 use crate::udf::UdfApi;
 
 static UDF_API_KEY_PREFIX: &str = "__fd_udfs";
@@ -64,7 +65,7 @@ impl UdfApi for UdfMgr {
         }
 
         let seq = MatchSeq::Exact(0);
-        let val = Operation::Update(serde_json::to_vec(&info)?);
+        let val = Operation::Update(serialize_struct(&info, ErrorCode::IllegalUDFFormat, || "")?);
         let key = format!("{}/{}", self.udf_prefix, escape_for_key(&info.name)?);
         let upsert_info = self
             .kv_api
@@ -89,7 +90,7 @@ impl UdfApi for UdfMgr {
         // Check if UDF is defined
         let _ = self.get_udf(info.name.as_str(), seq).await?;
 
-        let val = Operation::Update(serde_json::to_vec(&info)?);
+        let val = Operation::Update(serialize_struct(&info, ErrorCode::IllegalUDFFormat, || "")?);
         let key = format!("{}/{}", self.udf_prefix, escape_for_key(&info.name)?);
         let upsert_info = self
             .kv_api
@@ -115,7 +116,11 @@ impl UdfApi for UdfMgr {
             res.ok_or_else(|| ErrorCode::UnknownUDF(format!("Unknown Function {}", udf_name)))?;
 
         match seq.match_seq(&seq_value) {
-            Ok(_) => Ok(seq_value.into_seqv()?),
+            Ok(_) => Ok(SeqV::with_meta(
+                seq_value.seq,
+                seq_value.meta.clone(),
+                deserialize_struct(&seq_value.data, ErrorCode::IllegalUDFFormat, || "")?,
+            )),
             Err(_) => Err(ErrorCode::UnknownUDF(format!(
                 "Unknown Function {}",
                 udf_name
@@ -129,7 +134,7 @@ impl UdfApi for UdfMgr {
 
         let mut udfs = Vec::with_capacity(values.len());
         for (_, value) in values {
-            let udf = serde_json::from_slice::<UserDefinedFunction>(&value.data)?;
+            let udf = deserialize_struct(&value.data, ErrorCode::IllegalUDFFormat, || "")?;
             udfs.push(udf);
         }
         Ok(udfs)

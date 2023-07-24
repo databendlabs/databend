@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_base::base::tokio;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -42,7 +43,10 @@ async fn test_add_udf() -> Result<()> {
             meta: _,
             data: value,
         }) => {
-            assert_eq!(value, serde_json::to_vec(&udf)?);
+            assert_eq!(
+                value,
+                serialize_struct(&udf, ErrorCode::IllegalUDFFormat, || "")?
+            );
         }
         catch => panic!("GetKVActionReply{:?}", catch),
     }
@@ -59,7 +63,10 @@ async fn test_add_udf() -> Result<()> {
             meta: _,
             data: value,
         }) => {
-            assert_eq!(value, serde_json::to_vec(&udf)?);
+            assert_eq!(
+                value,
+                serialize_struct(&udf, ErrorCode::IllegalUDFFormat, || "")?
+            );
         }
         catch => panic!("GetKVActionReply{:?}", catch),
     }

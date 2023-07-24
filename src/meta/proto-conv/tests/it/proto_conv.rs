@@ -491,5 +491,31 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         println!("catalog catalog_meta:{:?}", buf);
     }
 
+    {
+        let catalog_meta = new_udf();
+        let p = catalog_meta.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("catalog catalog_meta:{:?}", buf);
+    }
+
     Ok(())
+}
+
+fn new_udf() -> common_meta_app::principal::UserDefinedFunction {
+    common_meta_app::principal::UserDefinedFunction {
+        name: "plus_int".to_string(),
+        description: "This is a description".to_string(),
+        definition: common_meta_app::principal::UDFDefinition::UDFServer(
+            common_meta_app::principal::UDFServer {
+                address: "http://localhost:8888".to_string(),
+                arg_types: vec![
+                    common_expression::types::DataType::Number(NumberDataType::Int32),
+                    common_expression::types::DataType::Number(NumberDataType::Int32),
+                ],
+                return_type: common_expression::types::DataType::Number(NumberDataType::Int64),
+            },
+        ),
+    }
 }

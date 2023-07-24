@@ -12,36 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::TryFrom;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
 use common_expression::types::DataType;
-use serde::Deserialize;
-use serde::Serialize;
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LambdaUDF {
     pub parameters: Vec<String>,
     pub definition: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDFServer {
     pub address: String,
     pub arg_types: Vec<DataType>,
     pub return_type: DataType,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UDFDefinition {
     LambdaUDF(LambdaUDF),
     UDFServer(UDFServer),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UserDefinedFunction {
     pub name: String,
     pub description: String,
@@ -115,19 +110,5 @@ impl Display for UDFDefinition {
             }
         }
         Ok(())
-    }
-}
-
-impl TryFrom<Vec<u8>> for UserDefinedFunction {
-    type Error = ErrorCode;
-
-    fn try_from(value: Vec<u8>) -> Result<Self> {
-        match serde_json::from_slice(&value) {
-            Ok(udf) => Ok(udf),
-            Err(serialize_error) => Err(ErrorCode::IllegalUDFFormat(format!(
-                "Cannot deserialize user defined function from bytes. cause {}",
-                serialize_error
-            ))),
-        }
     }
 }
