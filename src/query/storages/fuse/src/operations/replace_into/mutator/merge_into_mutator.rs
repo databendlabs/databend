@@ -195,8 +195,9 @@ impl MergeIntoOperationAggregator {
                         put_cache: true,
                     };
                     // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
-                    let segment_info = aggregation_ctx.segment_reader.read(&load_param).await?;
-                    let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
+                    let compact_segment_info =
+                        aggregation_ctx.segment_reader.read(&load_param).await?;
+                    let mut segment_info: Option<SegmentInfo> = None;
 
                     for DeletionByColumn {
                         columns_min_max,
@@ -204,12 +205,20 @@ impl MergeIntoOperationAggregator {
                     } in partitions
                     {
                         if aggregation_ctx
-                            .overlapped(&segment_info.summary.col_stats, columns_min_max)
+                            .overlapped(&compact_segment_info.summary.col_stats, columns_min_max)
                         {
+                            let seg = match &segment_info {
+                                None => {
+                                    // un-compact the segment if necessary
+                                    segment_info = Some(compact_segment_info.as_ref().try_into()?);
+                                    segment_info.as_ref().unwrap()
+                                }
+                                Some(v) => v,
+                            };
+
                             // block level
                             let mut num_blocks_mutated = 0;
-                            for (block_index, block_meta) in segment_info.blocks.iter().enumerate()
-                            {
+                            for (block_index, block_meta) in seg.blocks.iter().enumerate() {
                                 if aggregation_ctx
                                     .overlapped(&block_meta.col_stats, columns_min_max)
                                 {
