@@ -17,6 +17,7 @@ pub(in crate::sm_v002) mod marked;
 pub mod sm_v002;
 pub mod snapshot_store;
 pub mod snapshot_view_v002;
+pub mod writer_v002;
 
 #[cfg(test)]
 mod sm_test;
