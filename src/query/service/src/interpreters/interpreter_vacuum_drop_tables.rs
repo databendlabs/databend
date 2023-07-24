@@ -27,6 +27,7 @@ use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::TableInfoFilter;
 use common_sql::plans::VacuumDropTablePlan;
+use tracing::info;
 use vacuum_handler::get_vacuum_handler;
 
 use crate::interpreters::Interpreter;
@@ -102,8 +103,9 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 },
             )
             .await?;
-        // gc meta data when not dry run
+        // gc meta data only when not dry run
         if self.plan.option.dry_run.is_none() {
+            info!("vacuum drop table drop_ids: {:?}", drop_ids);
             let req = GcDroppedTableReq {
                 tenant: self.ctx.get_tenant(),
                 drop_ids,
