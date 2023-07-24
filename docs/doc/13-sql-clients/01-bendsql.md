@@ -136,8 +136,21 @@ from file:
     --format-opt="skip_header=1" \
     --set="presigned_url_disabled=1" \
     --data=@ontime.csv.gz
+
+> bendsql \
+    --query='REPLACE INTO sample VALUES;' \
+    --format=csv \
+    --format-opt="compression=auto" \
+    --format-opt="skip_header=0" \
+    --format-opt="field_delimiter=," \
+    --format-opt="record_delimiter=\n" \
+    --data="@sample.csv.xz"
 ```
 
 :::note
 `presigned_url_disabled=1` would instruct BendSQL to load data directly using `upload_to_stage` api, which would result in additional transfer fee as well as lower performance, and is not recommended for production use.
+:::
+
+:::tip
+For more information about `--format-opt`, please refer to [Input & Output File Formats](../13-sql-reference/50-file-format-options.md).
 :::
