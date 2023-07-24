@@ -130,8 +130,8 @@ impl FromToProto for mt::UserDefinedFunction {
 
     fn to_pb(&self) -> Result<pb::UserDefinedFunction, Incompatible> {
         let udf_def = match &self.definition {
-            mt::UDFDefinition::LambdaUDF(lamda_udf) => {
-                pb::user_defined_function::Definition::LambdaUdf(lamda_udf.to_pb()?)
+            mt::UDFDefinition::LambdaUDF(lambda_udf) => {
+                pb::user_defined_function::Definition::LambdaUdf(lambda_udf.to_pb()?)
             }
             mt::UDFDefinition::UDFServer(udf_server) => {
                 pb::user_defined_function::Definition::UdfServer(udf_server.to_pb()?)
