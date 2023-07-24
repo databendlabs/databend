@@ -20,6 +20,6 @@ pub mod snapshot_view_v002;
 pub mod writer_v002;
 
 #[cfg(test)]
-mod sm_test;
+mod sm_v002_test;
 #[cfg(test)]
 mod snapshot_view_v002_test;
