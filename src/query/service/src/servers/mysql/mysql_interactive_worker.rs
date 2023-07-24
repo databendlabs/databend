@@ -257,8 +257,9 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
         let ctx = self.session.create_query_context().await?;
         let identity = UserIdentity::new(&info.user_name, "%");
+        let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
         let user_info = UserApiProvider::instance()
-            .get_user(&ctx.get_tenant(), identity)
+            .get_user_with_client_ip(&ctx.get_tenant(), identity, Some(client_ip))
             .await?;
 
         let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;

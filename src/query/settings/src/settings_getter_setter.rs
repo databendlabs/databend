@@ -310,6 +310,10 @@ impl Settings {
         self.try_set_u64("spilling_bytes_threshold_per_proc", value as u64)
     }
 
+    pub fn get_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("spilling_memory_ratio")? as usize)
+    }
+
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
         self.try_get_string("group_by_shuffle_mode")
     }
@@ -393,5 +397,13 @@ impl Settings {
 
     pub fn set_enable_auto_reclustering(&self, val: bool) -> Result<()> {
         self.try_set_u64("enable_auto_reclustering", u64::from(val))
+    }
+
+    pub fn get_use_parquet2(&self) -> Result<bool> {
+        Ok(self.try_get_u64("use_parquet2")? != 0)
+    }
+
+    pub fn set_use_parquet2(&self, val: bool) -> Result<()> {
+        self.try_set_u64("use_parquet2", u64::from(val))
     }
 }

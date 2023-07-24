@@ -45,15 +45,15 @@ impl UncompressedBuffer {
     }
 
     pub fn clear(&self) {
-        if self.used.fetch_add(1, Ordering::Relaxed) != 0 {
-            self.used.fetch_sub(1, Ordering::Relaxed);
+        if self.used.fetch_add(1, Ordering::SeqCst) != 0 {
+            self.used.fetch_sub(1, Ordering::SeqCst);
             panic!(
                 "UncompressedBuffer cannot be accessed between multiple threads at the same time."
             );
         }
 
         drop(std::mem::take(self.buffer_mut()));
-        self.used.fetch_sub(1, Ordering::Relaxed);
+        self.used.fetch_sub(1, Ordering::SeqCst);
     }
 
     #[allow(clippy::mut_from_ref)]
@@ -90,15 +90,8 @@ where I: Iterator<Item = Result<CompressedPage, Error>>
     fn advance(&mut self) -> Result<(), Error> {
         if let Some(page) = self.current.as_mut() {
             if self.was_decompressed {
-                if self
-                    .uncompressed_buffer
-                    .used
-                    .fetch_add(1, Ordering::Relaxed)
-                    != 0
-                {
-                    self.uncompressed_buffer
-                        .used
-                        .fetch_sub(1, Ordering::Relaxed);
+                if self.uncompressed_buffer.used.fetch_add(1, Ordering::SeqCst) != 0 {
+                    self.uncompressed_buffer.used.fetch_sub(1, Ordering::SeqCst);
                     return Err(Error::FeatureNotSupported(String::from(
                         "UncompressedBuffer cannot be accessed between multiple threads at the same time.",
                     )));
@@ -112,24 +105,15 @@ where I: Iterator<Item = Result<CompressedPage, Error>>
                     }
                 }
 
-                self.uncompressed_buffer
-                    .used
-                    .fetch_sub(1, Ordering::Relaxed);
+                self.uncompressed_buffer.used.fetch_sub(1, Ordering::SeqCst);
             }
         }
 
         self.current = match self.iter.next() {
             None => None,
             Some(page) => {
-                if self
-                    .uncompressed_buffer
-                    .used
-                    .fetch_add(1, Ordering::Relaxed)
-                    != 0
-                {
-                    self.uncompressed_buffer
-                        .used
-                        .fetch_sub(1, Ordering::Relaxed);
+                if self.uncompressed_buffer.used.fetch_add(1, Ordering::SeqCst) != 0 {
+                    self.uncompressed_buffer.used.fetch_sub(1, Ordering::SeqCst);
                     return Err(Error::FeatureNotSupported(String::from(
                         "UncompressedBuffer cannot be accessed between multiple threads at the same time.",
                     )));
@@ -142,9 +126,7 @@ where I: Iterator<Item = Result<CompressedPage, Error>>
                     decompress(page, self.uncompressed_buffer.buffer_mut())?
                 };
 
-                self.uncompressed_buffer
-                    .used
-                    .fetch_sub(1, Ordering::Relaxed);
+                self.uncompressed_buffer.used.fetch_sub(1, Ordering::SeqCst);
 
                 Some(decompress_page)
             }
@@ -167,15 +149,8 @@ where I: Iterator<Item = Result<CompressedPage, Error>>
 impl<I: Iterator<Item = Result<CompressedPage, Error>>> Drop for BuffedBasicDecompressor<I> {
     fn drop(&mut self) {
         if let Some(page) = self.current.as_mut() {
-            if self
-                .uncompressed_buffer
-                .used
-                .fetch_add(1, Ordering::Relaxed)
-                != 0
-            {
-                self.uncompressed_buffer
-                    .used
-                    .fetch_sub(1, Ordering::Relaxed);
+            if self.uncompressed_buffer.used.fetch_add(1, Ordering::SeqCst) != 0 {
+                self.uncompressed_buffer.used.fetch_sub(1, Ordering::SeqCst);
                 panic!(
                     "UncompressedBuffer cannot be accessed between multiple threads at the same time."
                 );
@@ -189,9 +164,7 @@ impl<I: Iterator<Item = Result<CompressedPage, Error>>> Drop for BuffedBasicDeco
                 }
             }
 
-            self.uncompressed_buffer
-                .used
-                .fetch_sub(1, Ordering::Relaxed);
+            self.uncompressed_buffer.used.fetch_sub(1, Ordering::SeqCst);
         }
     }
 }
