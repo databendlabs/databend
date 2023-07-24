@@ -65,7 +65,7 @@ impl Display for UDFDefinition {
                 address,
             } => {
                 write_comma_separated_list(f, arg_types)?;
-                write!(f, ") -> {return_type} ADDRESS {address}")?;
+                write!(f, ") -> {return_type} ADDRESS = {address}")?;
             }
         }
         Ok(())

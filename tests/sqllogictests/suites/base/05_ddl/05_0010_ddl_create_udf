@@ -30,28 +30,28 @@ DROP FUNCTION isnotempty_with_desc
 
 # udf server test
 statement ok
-CREATE FUNCTION answer as () -> int address 'http://localhost:8888' DESC = 'This is a description'
+CREATE FUNCTION answer AS () -> int ADDRESS = 'http://localhost:8888' DESC = 'This is a description'
 
 statement ok
-CREATE FUNCTION IF NOT EXISTS answer as () -> int address 'http://localhost:8888' DESC = 'This is a description'
+CREATE FUNCTION IF NOT EXISTS answer AS () -> int ADDRESS = 'http://localhost:8888' DESC = 'This is a description'
 
 statement error 2603
-CREATE FUNCTION answer as () -> int address 'http://localhost:8888' DESC = 'This is a description'
+CREATE FUNCTION answer AS () -> int ADDRESS = 'http://localhost:8888' DESC = 'This is a description'
 
 statement ok
-CREATE FUNCTION plus_int as (int, int) -> int64 address 'http://localhost:8888' DESC = 'This is a description'
+CREATE FUNCTION plus_int AS (int, int) -> int64 ADDRESS = 'http://localhost:8888' DESC = 'This is a description'
 
 statement ok
-CREATE FUNCTION plus_float as (float, double) -> double address 'http://localhost:8888' DESC = 'This is a description'
+CREATE FUNCTION plus_float AS (float, double) -> double ADDRESS = 'http://localhost:8888' DESC = 'This is a description'
 
 statement ok
-CREATE FUNCTION plus_decimal as (decimal(36, 18), decimal(36, 18)) -> decimal(36, 18) address 'http://localhost:8888' DESC = 'This is a description'
+CREATE FUNCTION plus_decimal AS (decimal(36, 18), decimal(36, 18)) -> decimal(36, 18) ADDRESS = 'http://localhost:8888' DESC = 'This is a description'
 
 statement ok
-CREATE FUNCTION concat_str as (varchar, varchar) -> varchar address 'http://localhost:8888' DESC = 'This is a description'
+CREATE FUNCTION concat_str AS (varchar, varchar) -> varchar ADDRESS = 'http://localhost:8888' DESC = 'This is a description'
 
 statement ok
-CREATE FUNCTION concat_array as (ARRAY(INT64), ARRAY(INT64)) -> ARRAY(INT64) address 'http://localhost:8888' DESC = 'This is a description'
+CREATE FUNCTION concat_array AS (ARRAY(INT64), ARRAY(INT64)) -> ARRAY(INT64) ADDRESS = 'http://localhost:8888' DESC = 'This is a description'
 
 statement ok
 DROP FUNCTION answer

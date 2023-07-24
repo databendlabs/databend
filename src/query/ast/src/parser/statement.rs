@@ -1488,7 +1488,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_roles : "`SHOW ROLES`"
             | #create_role : "`CREATE ROLE [IF NOT EXISTS] '<role_name>']`"
             | #drop_role : "`DROP ROLE [IF EXISTS] '<role_name>'`"
-            | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <udf_name> AS {(<parameter>, ...) -> <definition expr> | (<arg_type>, ...) -> <return_type> ADDRESS <udf_server_address>} [DESC = <description>]`"
+            | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <udf_name> AS {(<parameter>, ...) -> <definition expr> | (<arg_type>, ...) -> <return_type> ADDRESS=<udf_server_address>} [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
         ),
@@ -2446,9 +2446,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         rule! {
             "(" ~ #comma_separated_list0(type_name) ~ ")"
             ~ "->" ~ #type_name
-            ~ ADDRESS ~ ^#literal_string
+            ~ ADDRESS ~ ^"=" ~ ^#literal_string
         },
-        |(_, arg_types, _, _, return_type, _, address)| UDFDefinition::UDFServer {
+        |(_, arg_types, _, _, return_type, _, _, address)| UDFDefinition::UDFServer {
             arg_types,
             return_type,
             address,
@@ -2456,7 +2456,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
     );
 
     rule!(
-        #udf_server: "(<arg_type>, ...) -> <return_type> ADDRESS <udf_server_address>"
+        #udf_server: "(<arg_type>, ...) -> <return_type> ADDRESS=<udf_server_address>"
         | #lambda_udf: "(<parameter>, ...) -> <definition expr>"
     )(i)
 }

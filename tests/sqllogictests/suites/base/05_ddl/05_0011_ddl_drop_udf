@@ -17,7 +17,7 @@ statement ok
 DROP FUNCTION IF EXISTS plus_int
 
 statement ok
-CREATE FUNCTION plus_int as (int, int) -> int64 address 'http://localhost:8888' DESC = 'This is a description'
+CREATE FUNCTION plus_int AS (int, int) -> int64 ADDRESS = 'http://localhost:8888' DESC = 'This is a description'
 
 statement ok
 DROP FUNCTION plus_int
