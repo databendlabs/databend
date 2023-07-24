@@ -2439,6 +2439,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     );
                     children.push(group_by_list_node);
                 }
+                GroupBy::All => {}
                 GroupBy::GroupingSets(sets) => {
                     let mut grouping_sets = Vec::with_capacity(sets.len());
                     for set in sets.iter() {
