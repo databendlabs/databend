@@ -80,6 +80,7 @@ impl Rule for RuleMergeFilter {
             .chain(down_filter.predicates.into_iter())
             .collect();
         let merged = Filter {
+            projections: vec![],
             predicates,
             is_having: false,
         };

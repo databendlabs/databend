@@ -36,9 +36,9 @@ impl JoinHashTable {
         }
 
         let column_nums = input.num_columns();
-        let mut columns = Vec::with_capacity(self.probe_projected_columns.len());
+        let mut columns = Vec::with_capacity(self.probe_projections.len());
         for index in 0..column_nums {
-            if !self.probe_projected_columns.contains(&index) {
+            if !self.probe_projections.contains(&index) {
                 continue;
             }
             columns.push(input.get_by_offset(index).clone())

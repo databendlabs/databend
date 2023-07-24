@@ -105,8 +105,8 @@ pub struct JoinHashTable {
     pub(crate) hash_join_desc: HashJoinDesc,
     pub(crate) probe_schema: DataSchemaRef,
     /// Projected columns
-    pub(crate) probe_projected_columns: Arc<ColumnSet>,
-    pub(crate) build_projected_columns: Arc<ColumnSet>,
+    pub(crate) probe_projections: Arc<ColumnSet>,
+    pub(crate) build_projections: Arc<ColumnSet>,
     pub(crate) is_build_projected: Arc<AtomicBool>,
     /// Interrupt
     pub(crate) interrupt: Arc<AtomicBool>,
@@ -130,8 +130,8 @@ impl JoinHashTable {
         build_keys: &[RemoteExpr],
         build_schema: DataSchemaRef,
         probe_schema: DataSchemaRef,
-        probe_projected_columns: &ColumnSet,
-        build_projected_columns: &ColumnSet,
+        probe_projections: &ColumnSet,
+        build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
     ) -> Result<Arc<JoinHashTable>> {
         let hash_key_types = build_keys
@@ -143,8 +143,8 @@ impl JoinHashTable {
             ctx,
             build_schema,
             probe_schema,
-            probe_projected_columns,
-            build_projected_columns,
+            probe_projections,
+            build_projections,
             hash_join_desc,
             method,
         )?))
@@ -154,8 +154,8 @@ impl JoinHashTable {
         ctx: Arc<QueryContext>,
         mut build_data_schema: DataSchemaRef,
         mut probe_data_schema: DataSchemaRef,
-        probe_projected_columns: &ColumnSet,
-        build_projected_columns: &ColumnSet,
+        probe_projections: &ColumnSet,
+        build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
         method: HashMethodKind,
     ) -> Result<Self> {
@@ -176,7 +176,7 @@ impl JoinHashTable {
             probe_data_schema = probe_schema_wrap_nullable(&probe_data_schema);
         }
         Ok(Self {
-            row_space: RowSpace::new(ctx.clone(), build_data_schema, build_projected_columns)?,
+            row_space: RowSpace::new(ctx.clone(), build_data_schema, build_projections)?,
             build_side_block_size_limit: Arc::new(
                 ctx.get_settings().get_max_block_size()? as usize * 16,
             ),
@@ -196,8 +196,8 @@ impl JoinHashTable {
             raw_entry_spaces: Mutex::new(vec![]),
             hash_join_desc,
             probe_schema: probe_data_schema,
-            probe_projected_columns: Arc::new(probe_projected_columns.clone()),
-            build_projected_columns: Arc::new(build_projected_columns.clone()),
+            probe_projections: Arc::new(probe_projections.clone()),
+            build_projections: Arc::new(build_projections.clone()),
             is_build_projected: Arc::new(AtomicBool::new(true)),
             interrupt: Arc::new(AtomicBool::new(false)),
             build_worker_num: Arc::new(AtomicU32::new(0)),
@@ -282,9 +282,9 @@ impl JoinHashTable {
         }
 
         let column_nums = input.num_columns();
-        let mut columns = Vec::with_capacity(self.probe_projected_columns.len());
+        let mut columns = Vec::with_capacity(self.probe_projections.len());
         for index in 0..column_nums {
-            if !&self.probe_projected_columns.contains(&index) {
+            if !&self.probe_projections.contains(&index) {
                 continue;
             }
             columns.push(input.get_by_offset(index).clone())

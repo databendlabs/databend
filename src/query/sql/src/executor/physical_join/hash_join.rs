@@ -174,26 +174,26 @@ impl PhysicalPlanBuilder {
             right_join_conditions.push(right_expr.as_remote_expr());
         }
 
-        let mut probe_projected_columns = ColumnSet::new();
-        let mut build_projected_columns = ColumnSet::new();
-        for column in join.projected_columns.iter() {
+        let mut probe_projections = ColumnSet::new();
+        let mut build_projections = ColumnSet::new();
+        for column in join.projections.iter() {
             if let Ok(index) = probe_schema.index_of(&column.to_string()) {
-                probe_projected_columns.insert(index);
+                probe_projections.insert(index);
             }
             if let Ok(index) = build_schema.index_of(&column.to_string()) {
-                build_projected_columns.insert(index);
+                build_projections.insert(index);
             }
         }
 
         let mut merged_fields =
-            Vec::with_capacity(probe_projected_columns.len() + build_projected_columns.len());
+            Vec::with_capacity(probe_projections.len() + build_projections.len());
         for (i, field) in probe_schema.fields().iter().enumerate() {
-            if probe_projected_columns.contains(&i) {
+            if probe_projections.contains(&i) {
                 merged_fields.push(field.clone());
             }
         }
         for (i, field) in build_schema.fields().iter().enumerate() {
-            if build_projected_columns.contains(&i) {
+            if build_projections.contains(&i) {
                 merged_fields.push(field.clone());
             }
         }
@@ -201,8 +201,8 @@ impl PhysicalPlanBuilder {
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: self.next_plan_id(),
-            build_projected_columns,
-            probe_projected_columns,
+            build_projections,
+            probe_projections,
             build: build_side,
             probe: probe_side,
             join_type: join.join_type.clone(),

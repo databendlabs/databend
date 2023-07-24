@@ -53,15 +53,15 @@ pub enum BlockOperator {
     },
 
     /// Filter the input [`DataBlock`] with the predicate `eval`.
-    Filter { expr: Expr },
+    Filter { projections: ColumnSet, expr: Expr },
 
     /// Reorganize the input [`DataBlock`] with `projection`.
     Project { projection: Vec<FieldIndex> },
 
     /// Expand the input [`DataBlock`] with set-returning functions.
     FlatMap {
+        projections: ColumnSet,
         srf_exprs: Vec<Expr>,
-        projected_columns: ColumnSet,
     },
 }
 
@@ -120,12 +120,21 @@ impl BlockOperator {
                 Ok(DataBlock::new_with_meta(columns, rows, meta))
             }
 
-            BlockOperator::Filter { expr } => {
+            BlockOperator::Filter { projections, expr } => {
                 assert_eq!(expr.data_type(), &DataType::Boolean);
 
                 let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
-                input.filter_boolean_value(&filter)
+                let column_nums = input.num_columns();
+                let mut columns = Vec::with_capacity(projections.len());
+                for index in 0..column_nums {
+                    if !projections.contains(&index) {
+                        continue;
+                    }
+                    columns.push(input.get_by_offset(index).clone());
+                }
+                let data_block = DataBlock::new(columns, input.num_rows());
+                data_block.filter_boolean_value(&filter)
             }
 
             BlockOperator::Project { projection } => {
@@ -137,8 +146,8 @@ impl BlockOperator {
             }
 
             BlockOperator::FlatMap {
+                projections,
                 srf_exprs,
-                projected_columns,
             } => {
                 let eval = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
 
@@ -166,7 +175,7 @@ impl BlockOperator {
                 let mut result = DataBlock::empty();
                 let mut block_is_empty = true;
                 for index in 0..input_num_columns {
-                    if !projected_columns.contains(&index) {
+                    if !projections.contains(&index) {
                         continue;
                     }
                     let column = input.get_by_offset(index);

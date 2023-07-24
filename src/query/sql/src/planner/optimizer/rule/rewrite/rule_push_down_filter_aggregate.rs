@@ -128,6 +128,7 @@ impl Rule for RulePushDownFilterAggregate {
                 } else {
                     let filter_push_down_expr = SExpr::create_unary(
                         Arc::new(RelOperator::Filter(Filter {
+                            projections: vec![],
                             predicates: push_predicates,
                             is_having: false,
                         })),
@@ -147,6 +148,7 @@ impl Rule for RulePushDownFilterAggregate {
                         // Partial filter can be pushed down.
                         result = SExpr::create_unary(
                             Arc::new(RelOperator::Filter(Filter {
+                                projections: vec![],
                                 predicates: remaining_predicates,
                                 is_having: true,
                             })),

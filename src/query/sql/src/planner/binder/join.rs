@@ -192,7 +192,7 @@ impl Binder {
             &mut non_equi_conditions,
         )?;
         let logical_join = Join {
-            projected_columns: vec![],
+            projections: vec![],
             left_conditions,
             right_conditions,
             non_equi_conditions,
@@ -250,6 +250,7 @@ impl Binder {
             *left_child = SExpr::create_unary(
                 Arc::new(
                     Filter {
+                        projections: vec![],
                         predicates: left_push_down,
                         is_having: false,
                     }
@@ -263,6 +264,7 @@ impl Binder {
             *right_child = SExpr::create_unary(
                 Arc::new(
                     Filter {
+                        projections: vec![],
                         predicates: right_push_down,
                         is_having: false,
                     }

@@ -111,11 +111,9 @@ impl UnusedColumnPruner {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
 
-                let projected_columns = others.clone().into_iter().collect::<Vec<_>>();
-                let join = p.replace_projected_columns(projected_columns);
-
+                let projections = others.clone().into_iter().collect::<Vec<_>>();
                 Ok(SExpr::create_binary(
-                    Arc::new(RelOperator::Join(join)),
+                    Arc::new(RelOperator::Join(p.replace_projections(projections))),
                     Arc::new(self.keep_required_columns(
                         expr.child(0)?,
                         left.union(&others).cloned().collect(),
@@ -150,11 +148,12 @@ impl UnusedColumnPruner {
                 }
             }
             RelOperator::Filter(p) => {
+                let projections = required.clone().into_iter().collect::<Vec<_>>();
                 let used = p.predicates.iter().fold(required, |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
                 Ok(SExpr::create_unary(
-                    Arc::new(RelOperator::Filter(p.clone())),
+                    Arc::new(RelOperator::Filter(p.replace_projections(projections))),
                     Arc::new(self.keep_required_columns(expr.child(0)?, used)?),
                 ))
             }
@@ -262,17 +261,14 @@ impl UnusedColumnPruner {
             }
 
             RelOperator::ProjectSet(p) => {
-                let projected_columns = required.clone().into_iter().collect::<Vec<_>>();
+                let projections = required.clone().into_iter().collect::<Vec<_>>();
                 for s in p.srfs.iter() {
                     required.extend(s.scalar.used_columns().iter().copied());
                 }
                 // Columns that are not used by the parent plan don't need to be kept.
                 // Repeating the rows to as many as the results of SRF may result in an OOM.
-                // let unprojected = parent_required.difference(&required).into_iter().copied().collect::<Vec<_>>();
-                let project_set = p.replace_projected_columns(projected_columns);
-
                 Ok(SExpr::create_unary(
-                    Arc::new(RelOperator::ProjectSet(project_set)),
+                    Arc::new(RelOperator::ProjectSet(p.replace_projections(projections))),
                     Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                 ))
             }

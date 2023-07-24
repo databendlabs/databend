@@ -411,8 +411,8 @@ impl PipelineBuilder {
             &join.build_keys,
             join.build.output_schema()?,
             join.probe.output_schema()?,
-            &join.probe_projected_columns,
-            &join.build_projected_columns,
+            &join.probe_projections,
+            &join.build_projections,
             HashJoinDesc::create(join)?,
         )
     }
@@ -594,6 +594,7 @@ impl PipelineBuilder {
         self.main_pipeline.add_transform(|input, output| {
             let transform = CompoundBlockOperator::new(
                 vec![BlockOperator::Filter {
+                    projections: filter.projections.clone(),
                     expr: predicate.clone(),
                 }],
                 self.ctx.get_function_context()?,
@@ -689,12 +690,12 @@ impl PipelineBuilder {
         self.build_pipeline(&project_set.input)?;
 
         let op = BlockOperator::FlatMap {
+            projections: project_set.projections.clone(),
             srf_exprs: project_set
                 .srf_exprs
                 .iter()
                 .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
                 .collect(),
-            projected_columns: project_set.projected_columns.clone(),
         };
 
         let func_ctx = self.ctx.get_function_context()?;

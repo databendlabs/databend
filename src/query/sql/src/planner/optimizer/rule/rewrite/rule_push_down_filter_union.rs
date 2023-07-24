@@ -111,6 +111,7 @@ impl Rule for RulePushDownFilterUnion {
             .map(|predicate| replace_column_binding(&index_pairs, predicate.clone()))
             .collect::<Result<Vec<_>>>()?;
         let right_filer = Filter {
+            projections: vec![],
             predicates: new_predicates,
             is_having: filter.is_having,
         };

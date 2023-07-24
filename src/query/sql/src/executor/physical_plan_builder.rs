@@ -551,8 +551,15 @@ impl PhysicalPlanBuilder {
             RelOperator::Filter(filter) => {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
                 let input_schema = input.output_schema()?;
+                let mut projections = ColumnSet::new();
+                for column in filter.projections.iter() {
+                    if let Ok(index) = input_schema.index_of(&column.to_string()) {
+                        projections.insert(index);
+                    }
+                }
                 Ok(PhysicalPlan::Filter(Filter {
                     plan_id: self.next_plan_id(),
+                    projections,
                     input,
                     predicates: filter
                         .predicates
@@ -1080,10 +1087,10 @@ impl PhysicalPlanBuilder {
                     })
                     .collect::<Result<Vec<_>>>()?;
 
-                let mut projected_columns = ColumnSet::new();
-                for column in project_set.projected_columns.iter() {
+                let mut projections = ColumnSet::new();
+                for column in project_set.projections.iter() {
                     if let Ok(index) = input_schema.index_of(&column.to_string()) {
-                        projected_columns.insert(index);
+                        projections.insert(index);
                     }
                 }
 
@@ -1091,7 +1098,7 @@ impl PhysicalPlanBuilder {
                     plan_id: self.next_plan_id(),
                     input: Box::new(input),
                     srf_exprs,
-                    projected_columns,
+                    projections,
                     stat_info: Some(stat_info),
                 }))
             }

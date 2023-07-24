@@ -95,6 +95,7 @@ impl Rule for RuleEliminateFilter {
             state.add_result(s_expr.child(0)?.clone());
         } else if origin_predicates.len() != predicates.len() {
             let filter = Filter {
+                projections: vec![],
                 predicates,
                 is_having: eval_scalar.is_having,
             };

@@ -238,6 +238,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
             predicates.push(selection.clone());
         }
         let filter = RelOperator::Filter(Filter {
+            projections: vec![],
             predicates,
             is_having: false,
         });

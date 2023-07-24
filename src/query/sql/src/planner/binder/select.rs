@@ -397,6 +397,7 @@ impl Binder {
         scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = Filter {
+            projections: vec![],
             predicates: split_conjunctions(&scalar),
             is_having: false,
         };

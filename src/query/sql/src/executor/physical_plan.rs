@@ -102,6 +102,7 @@ pub struct Filter {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
+    pub projections: ColumnSet,
 
     pub input: Box<PhysicalPlan>,
 
@@ -114,7 +115,14 @@ pub struct Filter {
 
 impl Filter {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
+        let input_schema = self.input.output_schema()?;
+        let mut fields = Vec::with_capacity(self.projections.len());
+        for (i, field) in input_schema.fields().iter().enumerate() {
+            if self.projections.contains(&i) {
+                fields.push(field.clone());
+            }
+        }
+        Ok(DataSchemaRefExt::create(fields))
     }
 }
 
@@ -179,7 +187,7 @@ pub struct ProjectSet {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
-    pub projected_columns: ColumnSet,
+    pub projections: ColumnSet,
 
     pub input: Box<PhysicalPlan>,
     pub srf_exprs: Vec<(RemoteExpr, IndexType)>,
@@ -193,7 +201,7 @@ impl ProjectSet {
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(input_schema.num_fields() + self.srf_exprs.len());
         for (i, field) in input_schema.fields().iter().enumerate() {
-            if self.projected_columns.contains(&i) {
+            if self.projections.contains(&i) {
                 fields.push(field.clone());
             }
         }
@@ -485,8 +493,8 @@ pub struct HashJoin {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
-    pub build_projected_columns: ColumnSet,
-    pub probe_projected_columns: ColumnSet,
+    pub probe_projections: ColumnSet,
+    pub build_projections: ColumnSet,
 
     pub build: Box<PhysicalPlan>,
     pub probe: Box<PhysicalPlan>,
@@ -541,15 +549,15 @@ impl HashJoin {
             _ => self.probe.output_schema()?,
         };
 
-        let mut probe_fields = Vec::with_capacity(self.probe_projected_columns.len());
-        let mut build_fields = Vec::with_capacity(self.build_projected_columns.len());
+        let mut probe_fields = Vec::with_capacity(self.probe_projections.len());
+        let mut build_fields = Vec::with_capacity(self.build_projections.len());
         for (i, field) in probe_schema.fields().iter().enumerate() {
-            if self.probe_projected_columns.contains(&i) {
+            if self.probe_projections.contains(&i) {
                 probe_fields.push(field.clone());
             }
         }
         for (i, field) in build_schema.fields().iter().enumerate() {
-            if self.build_projected_columns.contains(&i) {
+            if self.build_projections.contains(&i) {
                 build_fields.push(field.clone());
             }
         }

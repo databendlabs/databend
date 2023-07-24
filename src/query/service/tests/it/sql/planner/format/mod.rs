@@ -108,7 +108,7 @@ fn test_format() {
     let s_expr = SExpr::create_binary(
         Arc::new(
             Join {
-                projected_columns: vec![],
+                projections: vec![],
                 right_conditions: vec![
                     FunctionCall {
                         span: None,
@@ -167,6 +167,7 @@ fn test_format() {
         Arc::new(SExpr::create_unary(
             Arc::new(
                 Filter {
+                    projections: vec![],
                     predicates: vec![
                         ConstantExpr {
                             span: None,

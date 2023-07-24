@@ -182,6 +182,7 @@ impl DPhpy {
                 }
                 if !op.non_equi_conditions.is_empty() {
                     let filter = Filter {
+                        projections: vec![],
                         predicates: op.non_equi_conditions.clone(),
                         is_having: false,
                     };
@@ -579,6 +580,7 @@ impl DPhpy {
                 }
                 new_s_expr = SExpr::create_unary(
                     Arc::new(RelOperator::Filter(Filter {
+                        projections: vec![],
                         predicates,
                         is_having: false,
                     })),

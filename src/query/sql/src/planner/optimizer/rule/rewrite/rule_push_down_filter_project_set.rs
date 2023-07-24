@@ -103,6 +103,7 @@ impl Rule for RulePushDownFilterProjectSet {
         }
         if !pushed_down_predicates.is_empty() {
             let pushed_down_filter = Filter {
+                projections: vec![],
                 predicates: pushed_down_predicates,
                 is_having: filter.is_having,
             };
@@ -116,6 +117,7 @@ impl Rule for RulePushDownFilterProjectSet {
                 )
             } else {
                 let remaining_filter = Filter {
+                    projections: vec![],
                     predicates: remaining_predicates,
                     is_having: filter.is_having,
                 };

@@ -478,15 +478,15 @@ impl HashJoinState for JoinHashTable {
             let chunks = &mut *self.row_space.chunks.write();
             for chunk in chunks.iter_mut() {
                 let column_nums = chunk.data_block.num_columns();
-                let mut columns = Vec::with_capacity(self.build_projected_columns.len());
+                let mut columns = Vec::with_capacity(self.build_projections.len());
                 for index in 0..column_nums {
-                    if !self.build_projected_columns.contains(&index) {
+                    if !self.build_projections.contains(&index) {
                         continue;
                     }
-                    columns.push(chunk.data_block.get_by_offset(index).clone())
+                    columns.push(chunk.data_block.get_by_offset(index).clone());
                 }
                 if columns.is_empty() {
-                    self.is_build_projected.store(false, Ordering::SeqCst)
+                    self.is_build_projected.store(false, Ordering::SeqCst);
                 }
                 chunk.data_block = DataBlock::new(columns, chunk.num_rows());
             }
@@ -581,7 +581,7 @@ impl HashJoinState for JoinHashTable {
 
         let mut projected_probe_fields = vec![];
         for (i, field) in self.probe_schema.fields().iter().enumerate() {
-            if self.probe_projected_columns.contains(&i) {
+            if self.probe_projections.contains(&i) {
                 projected_probe_fields.push(field.clone());
             }
         }
