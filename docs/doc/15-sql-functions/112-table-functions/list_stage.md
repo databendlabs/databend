@@ -1,10 +1,11 @@
 ---
 title: LIST_STAGE 
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-List files in a stage.
+<FunctionDescription description="Introduced: v1.2.32"/>
 
-Almost the same as DDL command [LIST STAGE FILES](../../14-sql-commands/00-ddl/40-stage/04-ddl-list-stage.md), but as a table function, allow more query processing.
+Lists files in a stage. This allows you to filter files in a stage based on their extensions and obtain comprehensive details about each file. The function is similar to the DDL command [LIST STAGE FILES](../../14-sql-commands/00-ddl/40-stage/04-ddl-list-stage.md), but but provides you the flexibility to retrieve specific file information with the SELECT statement, such as file name, size, MD5 hash, last modified timestamp, and creator, rather than all file information.
 
 ## Syntax
 
@@ -29,7 +30,13 @@ internalStage ::= @<internal_stage_name>[/<path>]
 externalStage ::= @<external_stage_name>[/<path>]
 ```
 
-### example
+### userStage
+
+```sql
+userStage ::= @~[/<path>]
+```
+
+## Examples
 
 ```sql
 SELECT * FROM list_stage(location => '@my_stage/', pattern => '.log');
@@ -39,10 +46,7 @@ SELECT * FROM list_stage(location => '@my_stage/', pattern => '.log');
 | 2023/meta.log  |  475 | "4208ff530b252236e14b3cd797abdfbd" | 2023-04-19 20:23:24.000 +0000 | NULL    |
 | 2023/query.log | 1348 | "1c6654b207472c277fc8c6207c035e18" | 2023-04-19 20:23:24.000 +0000 | NULL    |
 +----------------+------+------------------------------------+-------------------------------+---------+
-```
 
-is the same as
-
-```sql
+-- Equivalent to the following statement:
 LIST @my_stage PATTERN = '.log';
 ```
