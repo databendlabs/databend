@@ -223,6 +223,7 @@ fn pretty_group_by(group_by: Option<GroupBy>) -> RcDoc<'static> {
                         .nest(NEST_FACTOR)
                         .group(),
                 ),
+            GroupBy::All => RcDoc::line().append(RcDoc::text("GROUP BY ALL")),
             GroupBy::GroupingSets(sets) => RcDoc::line()
                 .append(
                     RcDoc::text("GROUP BY GROUPING SETS (").append(RcDoc::line().nest(NEST_FACTOR)),
