@@ -23,8 +23,8 @@ use common_meta_types::NodeId;
 use common_meta_types::StoredMembership;
 use tracing::debug;
 
-use crate::sm2::leveled_store::map_api::MapApi;
-use crate::sm2::marked::Marked;
+use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
 
 static KV_EMPTY: Marked<Vec<u8>> = Marked::empty();
@@ -73,11 +73,14 @@ impl LevelData {
         }
     }
 
-    pub(in crate::sm2) fn replace_kv(&mut self, kv: BTreeMap<String, Marked<Vec<u8>>>) {
+    pub(in crate::sm_v002) fn replace_kv(&mut self, kv: BTreeMap<String, Marked<Vec<u8>>>) {
         self.kv = kv;
     }
 
-    pub(in crate::sm2) fn replace_expire(&mut self, expire: BTreeMap<ExpireKey, Marked<String>>) {
+    pub(in crate::sm_v002) fn replace_expire(
+        &mut self,
+        expire: BTreeMap<ExpireKey, Marked<String>>,
+    ) {
         self.expire = expire;
     }
 

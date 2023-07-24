@@ -47,22 +47,22 @@ use tracing::warn;
 
 use crate::applier::Applier;
 use crate::key_spaces::RaftStoreEntry;
-use crate::sm2::leveled_store::level::Level;
-use crate::sm2::leveled_store::map_api::MapApi;
-use crate::sm2::marked::Marked;
-use crate::sm2::sm2;
-pub use crate::sm2::snapshot::Snapshot;
+use crate::sm_v002::leveled_store::level::Level;
+use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::marked::Marked;
+use crate::sm_v002::sm_v002;
+pub use crate::sm_v002::snapshot::SnapshotViewV002;
 use crate::state_machine::sm::BlockingConfig;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::StateMachineSubscriber;
 
 /// A wrapper that implements KVApi **readonly** methods for the state machine.
-pub struct SM2KVApi<'a> {
-    sm: &'a SM2,
+pub struct SMV002KVApi<'a> {
+    sm: &'a SMV002,
 }
 
 #[async_trait::async_trait]
-impl<'a> kvapi::KVApi for SM2KVApi<'a> {
+impl<'a> kvapi::KVApi for SMV002KVApi<'a> {
     type Error = Infallible;
 
     async fn upsert_kv(&self, _req: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
@@ -107,7 +107,7 @@ impl<'a> kvapi::KVApi for SM2KVApi<'a> {
     }
 }
 
-impl<'a> SM2KVApi<'a> {
+impl<'a> SMV002KVApi<'a> {
     fn non_expired<V>(seq_value: Option<SeqV<V>>, now_ms: u64) -> Option<SeqV<V>> {
         if seq_value.is_expired(now_ms) {
             None
@@ -118,21 +118,21 @@ impl<'a> SM2KVApi<'a> {
 }
 
 #[derive(Debug, Default)]
-pub struct SM2 {
-    pub(in crate::sm2) top: Level,
+pub struct SMV002 {
+    pub(in crate::sm_v002) top: Level,
 
     blocking_config: BlockingConfig,
 
     /// The expiration key since which for next clean.
-    pub(in crate::sm2) expire_cursor: ExpireKey,
+    pub(in crate::sm_v002) expire_cursor: ExpireKey,
 
     /// subscriber of state machine data
     pub(crate) subscriber: Option<Box<dyn StateMachineSubscriber>>,
 }
 
-impl SM2 {
-    pub fn kv_api(&self) -> SM2KVApi {
-        SM2KVApi { sm: self }
+impl SMV002 {
+    pub fn kv_api(&self) -> SMV002KVApi {
+        SMV002KVApi { sm: self }
     }
 
     /// Install and replace state machine with the content of a snapshot
@@ -146,7 +146,7 @@ impl SM2 {
         let data_size = data.data_size().await?;
         info!("snapshot data len: {}", data_size);
 
-        let mut importer = sm2::Snapshot::new_importer();
+        let mut importer = sm_v002::SnapshotViewV002::new_importer();
 
         let br = BufReader::new(data);
         let mut lines = AsyncBufReadExt::lines(br);
@@ -319,13 +319,13 @@ impl SM2 {
     /// Creates a snapshot that contains the latest state.
     ///
     /// Internally, the state machine creates a new empty writable level and makes all current states immutable.
-    pub fn full_snapshot(&mut self) -> crate::sm2::snapshot::Snapshot {
+    pub fn full_snapshot(&mut self) -> crate::sm_v002::snapshot::SnapshotViewV002 {
         self.top.new_level();
 
         // Safe unwrap: just created new level and it must have a base level.
         let base = self.top.get_base().unwrap();
 
-        crate::sm2::snapshot::Snapshot::new(base)
+        crate::sm_v002::snapshot::SnapshotViewV002::new(base)
     }
 
     /// Replace all of the state machine data with the given one.
@@ -347,7 +347,7 @@ impl SM2 {
         self.expire_cursor = ExpireKey::new(0, 0);
     }
 
-    pub fn replace_base(&mut self, snapshot: &Snapshot) {
+    pub fn replace_base(&mut self, snapshot: &SnapshotViewV002) {
         assert!(
             Arc::ptr_eq(&self.top.get_base().unwrap(), &snapshot.original()),
             "the base must not be changed"

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 pub mod leveled_store;
-pub(in crate::sm2) mod marked;
-pub mod sm2;
+pub(in crate::sm_v002) mod marked;
+pub mod sm_v002;
 pub mod snapshot;
 pub mod snapshot_store;
 

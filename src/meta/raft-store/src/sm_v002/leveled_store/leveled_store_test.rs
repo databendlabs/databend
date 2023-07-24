@@ -14,9 +14,9 @@
 
 use common_meta_types::KVMeta;
 
-use crate::sm2::leveled_store::level::Level;
-use crate::sm2::leveled_store::map_api::MapApi;
-use crate::sm2::marked::Marked;
+use crate::sm_v002::leveled_store::level::Level;
+use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::marked::Marked;
 
 #[test]
 fn test_new_level() -> anyhow::Result<()> {

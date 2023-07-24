@@ -16,8 +16,8 @@ use common_meta_types::KVMeta;
 use common_meta_types::SeqV;
 use common_meta_types::SeqValue;
 
-use crate::sm2::marked::InternalSeq;
-use crate::sm2::marked::Marked;
+use crate::sm_v002::marked::InternalSeq;
+use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireValue;
 
 #[test]

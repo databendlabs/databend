@@ -19,11 +19,11 @@ use std::ops::RangeBounds;
 use common_meta_types::KVMeta;
 use itertools::Itertools;
 
-use crate::sm2::leveled_store::map_api::MapApi;
-use crate::sm2::marked::Marked;
+use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::marked::Marked;
 
 /// A map-like data structure that constructs its final state from multiple levels.
-pub(in crate::sm2) trait MultiLevelMap<K>
+pub(in crate::sm_v002) trait MultiLevelMap<K>
 where K: Ord
 {
     /// The API to access the data at one level.

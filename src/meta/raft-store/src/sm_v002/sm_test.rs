@@ -16,14 +16,14 @@ use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
 use pretty_assertions::assert_eq;
 
-use crate::sm2::leveled_store::map_api::MapApi;
-use crate::sm2::marked::Marked;
-use crate::sm2::sm2::SM2;
+use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::marked::Marked;
+use crate::sm_v002::sm_v002::SMV002;
 use crate::state_machine::ExpireKey;
 
 #[test]
 fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
-    let mut sm = SM2::default();
+    let mut sm = SMV002::default();
 
     let (prev, result) = sm.upsert_kv(UpsertKV::update("a", b"a0"));
     assert_eq!(prev, None);
@@ -68,7 +68,7 @@ fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
     // |   a/b(D) c d
     // | a a/b    c
 
-    let mut sm = SM2::default();
+    let mut sm = SMV002::default();
 
     // internal_seq = 0
     sm.upsert_kv(UpsertKV::update("a", b"a0"));
@@ -119,7 +119,7 @@ fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
 
 #[test]
 fn test_update_expire_index() -> anyhow::Result<()> {
-    let mut sm = SM2::default();
+    let mut sm = SMV002::default();
 
     sm.update_expire_cursor(1);
     assert_eq!(sm.expire_cursor, ExpireKey::new(1, 0));
@@ -144,8 +144,8 @@ fn test_update_expire_index() -> anyhow::Result<()> {
 /// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c          
 /// ------------------------------------------------------------
 /// l0 | a₁  b₂         |  5,2₂ -> b    10,1₁ -> a
-fn build_sm_with_expire() -> SM2 {
-    let mut sm = SM2::default();
+fn build_sm_with_expire() -> SMV002 {
+    let mut sm = SMV002::default();
 
     sm.upsert_kv(UpsertKV::update("a", b"a0").with_expire_sec(10));
     sm.upsert_kv(UpsertKV::update("b", b"b0").with_expire_sec(5));

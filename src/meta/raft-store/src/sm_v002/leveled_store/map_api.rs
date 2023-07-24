@@ -17,10 +17,10 @@ use std::ops::RangeBounds;
 
 use common_meta_types::KVMeta;
 
-use crate::sm2::marked::Marked;
+use crate::sm_v002::marked::Marked;
 
 /// Provide a key-value map API set, which is used to access state machine data.
-pub(in crate::sm2) trait MapApi<K>
+pub(in crate::sm_v002) trait MapApi<K>
 where K: Ord
 {
     type V: Clone;

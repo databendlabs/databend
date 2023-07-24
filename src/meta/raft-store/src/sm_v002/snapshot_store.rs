@@ -98,14 +98,14 @@ impl From<SnapshotStoreError> for StorageError {
 }
 
 #[derive(Debug)]
-pub struct SnapshotStore {
+pub struct SnapshotStoreV002 {
     data_version: DataVersion,
     config: RaftConfig,
 }
 
-impl SnapshotStore {
+impl SnapshotStoreV002 {
     pub fn new(data_version: DataVersion, config: RaftConfig) -> Self {
-        SnapshotStore {
+        SnapshotStoreV002 {
             data_version,
             config,
         }
@@ -214,10 +214,10 @@ impl SnapshotStore {
         Ok(Some((id, data)))
     }
 
-    pub fn new_writer(&mut self, meta: SnapshotMeta) -> Result<Writer, SnapshotStoreError> {
+    pub fn new_writer(&mut self, meta: SnapshotMeta) -> Result<WriterV002, SnapshotStoreError> {
         self.ensure_snapshot_dir()?;
 
-        Writer::new(self, meta.clone())
+        WriterV002::new(self, meta.clone())
             .map_err(|e| SnapshotStoreError::write(e).with_meta("creating snapshot writer", &meta))
     }
 
@@ -273,7 +273,7 @@ impl SnapshotStore {
     }
 }
 
-pub struct Writer<'a> {
+pub struct WriterV002<'a> {
     /// The temp path to write to, which will be renamed to the final path.
     /// So that the readers could only see a complete snapshot.
     temp_path: String,
@@ -283,10 +283,10 @@ pub struct Writer<'a> {
     meta: SnapshotMeta,
 
     // Keep a mutable ref so that there could only be one writer at a time.
-    snapshot_store: &'a mut SnapshotStore,
+    snapshot_store: &'a mut SnapshotStoreV002,
 }
 
-impl<'a> io::Write for Writer<'a> {
+impl<'a> io::Write for WriterV002<'a> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.inner.write(buf)
     }
@@ -296,10 +296,10 @@ impl<'a> io::Write for Writer<'a> {
     }
 }
 
-impl<'a> Writer<'a> {
+impl<'a> WriterV002<'a> {
     /// Create a singleton writer for the snapshot.
     pub fn new(
-        snapshot_store: &'a mut SnapshotStore,
+        snapshot_store: &'a mut SnapshotStoreV002,
         meta: SnapshotMeta,
     ) -> Result<Self, io::Error> {
         let temp_path = snapshot_store.snapshot_temp_path();
@@ -310,7 +310,7 @@ impl<'a> Writer<'a> {
             .read(true)
             .open(&temp_path)?;
 
-        let writer = Writer {
+        let writer = WriterV002 {
             temp_path,
             inner: f,
             meta,

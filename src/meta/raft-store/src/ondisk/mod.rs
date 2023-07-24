@@ -37,7 +37,7 @@ use crate::key_spaces::DataHeader;
 use crate::key_spaces::RaftStoreEntry;
 use crate::key_spaces::RaftStoreEntryCompat;
 use crate::log::TREE_RAFT_LOG;
-use crate::sm2::snapshot_store::SnapshotStore;
+use crate::sm_v002::snapshot_store::SnapshotStoreV002;
 use crate::state::TREE_RAFT_STATE;
 use crate::state_machine::StateMachineMetaKey;
 
@@ -157,7 +157,8 @@ impl OnDisk {
                     ));
                 }
                 DataVersion::V002 => {
-                    let snapshot_store = SnapshotStore::new(DataVersion::V002, self.config.clone());
+                    let snapshot_store =
+                        SnapshotStoreV002::new(DataVersion::V002, self.config.clone());
 
                     let last_snapshot = snapshot_store.load_last_snapshot().await.map_err(|e| {
                         let ae = AnyError::new(&e).add_context(|| "load last snapshot");
@@ -329,7 +330,7 @@ impl OnDisk {
         // TODO: snapshot id should be correct
         dummy_snapshot_meta.snapshot_id = "0-0-0-0".to_string();
 
-        let mut snapshot_store = SnapshotStore::new(DataVersion::V002, self.config.clone());
+        let mut snapshot_store = SnapshotStoreV002::new(DataVersion::V002, self.config.clone());
 
         let mut writer = snapshot_store
             .new_writer(dummy_snapshot_meta.clone())

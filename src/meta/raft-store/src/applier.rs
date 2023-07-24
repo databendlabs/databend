@@ -50,18 +50,18 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
-use crate::sm2::sm2::SM2;
+use crate::sm_v002::sm_v002::SMV002;
 
 /// A helper that applies raft log `Entry` to the state machine.
 pub struct Applier<'a> {
-    sm: &'a mut SM2,
+    sm: &'a mut SMV002,
 
     /// The changes has been made by the applying one log entry
     changes: Vec<Change<Vec<u8>, String>>,
 }
 
 impl<'a> Applier<'a> {
-    pub fn new(sm: &'a mut SM2) -> Self {
+    pub fn new(sm: &'a mut SMV002) -> Self {
         Self {
             sm,
             changes: Vec::new(),

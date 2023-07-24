@@ -15,9 +15,9 @@
 use std::fmt;
 use std::sync::Arc;
 
-use crate::sm2::leveled_store::level_data::LevelData;
-use crate::sm2::leveled_store::leveled_map::MultiLevelMap;
-use crate::sm2::leveled_store::map_api::MapApi;
+use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::leveled_map::MultiLevelMap;
+use crate::sm_v002::leveled_store::map_api::MapApi;
 
 /// One level of state machine data.
 ///
