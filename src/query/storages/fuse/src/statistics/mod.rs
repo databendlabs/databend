@@ -29,4 +29,6 @@ pub use column_statistic::Trim;
 pub use column_statistic::STATS_REPLACEMENT_CHAR;
 pub use column_statistic::STATS_STRING_PREFIX_LEN;
 pub use reducers::merge_statistics;
+pub use reducers::reduce_block_metas;
 pub use reducers::reduce_block_statistics;
+pub use reducers::reduce_cluster_statistics;

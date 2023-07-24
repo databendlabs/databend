@@ -268,13 +268,10 @@ impl FuseTable {
 
         pipeline.add_transform(|input, output| {
             let mut aggregator = TableMutationAggregator::create(
+                self,
                 ctx.clone(),
                 snapshot.segments.clone(),
                 snapshot.summary.clone(),
-                self.get_block_thresholds(),
-                self.meta_location_generator().clone(),
-                self.schema(),
-                self.get_operator(),
                 MutationKind::Recluster,
             );
             aggregator.accumulate_log_entry(mutator.mutation_logs());
