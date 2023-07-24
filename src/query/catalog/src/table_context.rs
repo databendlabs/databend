@@ -46,6 +46,8 @@ use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::table::Table;
 
+pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
+
 #[derive(Debug)]
 pub struct ProcessInfo {
     pub id: String,
@@ -167,7 +169,5 @@ pub trait TableContext: Send + Sync {
         idx: (usize, usize),
     ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>>;
 
-    fn get_materialized_ctes(
-        &self,
-    ) -> Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
+    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks;
 }

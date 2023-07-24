@@ -193,7 +193,7 @@ fn to_format_tree(
         PhysicalPlan::CopyIntoTableFromQuery(plan) => copy_into_table_from_query(plan),
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
         PhysicalPlan::MaterializedCte(plan) => {
-            materialized_cte_to_format_tree(plan, metadata, prof_span_set)
+            materialized_cte_to_format_tree(plan, metadata, profs)
         }
     }
 }

@@ -27,6 +27,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::table::Table;
+use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::ProcessInfo;
 use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
@@ -579,9 +580,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_materialized_ctes(
-        &self,
-    ) -> Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>> {
+    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
         todo!()
     }
 }

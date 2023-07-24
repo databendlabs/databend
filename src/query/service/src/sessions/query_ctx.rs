@@ -35,6 +35,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_args::TableArgs;
+use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::StageAttachment;
 use common_config::GlobalConfig;
 use common_config::DATABEND_COMMIT_VERSION;
@@ -664,10 +665,10 @@ impl TableContext for QueryContext {
     fn set_materialized_cte(
         &self,
         idx: (IndexType, IndexType),
-        mem_table: Arc<RwLock<Vec<DataBlock>>>,
+        blocks: Arc<RwLock<Vec<DataBlock>>>,
     ) -> Result<()> {
         let mut ctes = self.shared.materialized_cte_tables.write();
-        ctes.insert(idx, mem_table);
+        ctes.insert(idx, blocks);
         Ok(())
     }
 
@@ -679,9 +680,7 @@ impl TableContext for QueryContext {
         Ok(ctes.get(&idx).cloned())
     }
 
-    fn get_materialized_ctes(
-        &self,
-    ) -> Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>> {
+    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
         self.shared.materialized_cte_tables.clone()
     }
 }

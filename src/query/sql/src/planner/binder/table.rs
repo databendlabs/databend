@@ -731,9 +731,9 @@ impl Binder {
     }
 
     fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
-        let memory_table = Arc::new(RwLock::new(vec![]));
+        let blocks = Arc::new(RwLock::new(vec![]));
         self.ctx
-            .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), memory_table)?;
+            .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), blocks)?;
         // Get the fields in the cte
         let mut fields = vec![];
         for column in cte_info.columns.iter() {
