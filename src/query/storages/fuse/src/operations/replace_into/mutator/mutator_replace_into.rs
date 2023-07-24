@@ -318,6 +318,7 @@ impl Partition {
             columns_min_max,
         })
     }
+
     fn push_row(
         &mut self,
         row_digest: u128,

@@ -875,6 +875,7 @@ impl Binder {
                     self.metadata.clone(),
                     &[],
                     false,
+                    false,
                 );
                 let box (scalar, _) = type_checker.resolve(expr).await?;
                 let scalar_expr = scalar.as_expr()?;

@@ -4,7 +4,7 @@ title: Bitmap Functions
 
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced: v1.2.5"/>
+<FunctionDescription description="Introduced: v1.2.26"/>
 
 | Function                                   	| Description                                                                                                  	| Example                                                            	| Result    	|
 |--------------------------------------------	|--------------------------------------------------------------------------------------------------------------	|--------------------------------------------------------------------	|-----------	|
@@ -28,3 +28,4 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 | bitmap_not_count(bitmap)                      | Counts the number of bits set to 0 in the bitmap by performing a logical NOT operation.                       | bitmap_not_count(to_bitmap('1, 3, 5'))                                |  3            |
 | bitmap_or_count(bitmap)                    	| Counts the number of bits set to 1 in the bitmap by performing a logical OR operation.                       	| bitmap_or_count(to_bitmap('1, 3, 5'))                              	| 3         	|
 | bitmap_xor_count(bitmap)                   	| Counts the number of bits set to 1 in the bitmap by performing a logical XOR (exclusive OR) operation.       	| bitmap_xor_count(to_bitmap('1, 3, 5'))                             	| 3         	|
+| intersect_count('bitmap_value1', 'bitmap_value2')(bitmap_column1, bitmap_column2) | Counts the number of intersecting bits between two bitmap columns.   | intersect_count('a', 'c')(v, tag) from agg_bitmap_test | 1 |

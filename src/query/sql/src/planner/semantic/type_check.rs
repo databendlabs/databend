@@ -126,6 +126,7 @@ pub struct TypeChecker<'a> {
     // This is used to allow aggregation function in window's aggregate function.
     in_window_function: bool,
     allow_pushdown: bool,
+    forbid_udf: bool,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -136,6 +137,7 @@ impl<'a> TypeChecker<'a> {
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
         allow_pushdown: bool,
+        forbid_udf: bool,
     ) -> Self {
         let func_ctx = ctx.get_function_context().unwrap();
         Self {
@@ -148,6 +150,7 @@ impl<'a> TypeChecker<'a> {
             in_aggregate_function: false,
             in_window_function: false,
             allow_pushdown,
+            forbid_udf,
         }
     }
 
@@ -2417,6 +2420,10 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         arguments: &[Expr],
     ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
+        if self.forbid_udf {
+            return Ok(None);
+        }
+
         let udf = UserApiProvider::instance()
             .get_udf(self.ctx.get_tenant().as_str(), func_name)
             .await;
@@ -3207,8 +3214,12 @@ fn check_prefix(like_str: &str) -> bool {
 
     let mut i: usize = like_str.len();
     while i > 0 {
-        if like_str.chars().nth(i - 1).unwrap() != '%' {
-            break;
+        if let Some(c) = like_str.chars().nth(i - 1) {
+            if c != '%' {
+                break;
+            }
+        } else {
+            return false;
         }
         i -= 1;
     }
@@ -3216,7 +3227,11 @@ fn check_prefix(like_str: &str) -> bool {
         return false;
     }
     for j in (0..i).rev() {
-        if like_str.chars().nth(j).unwrap() == '_' {
+        if let Some(c) = like_str.chars().nth(j) {
+            if c == '_' {
+                return false;
+            }
+        } else {
             return false;
         }
     }

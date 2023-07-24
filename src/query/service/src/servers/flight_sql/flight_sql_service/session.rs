@@ -87,6 +87,7 @@ impl FlightSqlServiceImpl {
     pub(super) async fn auth_user_password(
         user: String,
         password: String,
+        client_ip: Option<&str>,
     ) -> Result<Arc<Session>, Status> {
         let session = SessionManager::instance()
             .create_session(SessionType::FlightSQL)
@@ -96,7 +97,7 @@ impl FlightSqlServiceImpl {
 
         let identity = UserIdentity::new(&user, "%");
         let user = UserApiProvider::instance()
-            .get_user(&tenant, identity)
+            .get_user_with_client_ip(&tenant, identity, client_ip)
             .await
             .map_err(|e| status!("get_user fail {}", e))?;
         let password = password.as_bytes().to_vec();

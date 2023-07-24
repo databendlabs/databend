@@ -21,9 +21,9 @@ use common_arrow::parquet::encoding::Encoding;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_arrow::parquet::write::Version;
 use common_arrow::write_parquet_file;
+use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::serialize::col_encoding;
 use common_expression::DataBlock;
 use common_expression::TableSchema;
 use storages_common_table_meta::table::TableCompression;
@@ -72,11 +72,34 @@ pub fn blocks_to_parquet(
         version: Version::V2,
     };
 
-    match write_parquet_file(write_buffer, row_groups, arrow_schema, options) {
+    match write_parquet_file(
+        write_buffer,
+        row_groups,
+        arrow_schema,
+        options,
+        Some(format!(
+            "DatabendQuery {} with Arrow2",
+            *DATABEND_COMMIT_VERSION
+        )),
+    ) {
         Ok(result) => Ok(result),
         Err(cause) => Err(ErrorCode::Internal(format!(
-            "write_parquet_file: {:?}",
+            "write_parquet_file fail: {:?}",
             cause,
         ))),
     }
+}
+
+fn col_encoding(_data_type: &ArrowDataType) -> Encoding {
+    // Although encoding does work, parquet2 has not implemented decoding of DeltaLengthByteArray yet, we fallback to Plain
+    // From parquet2: Decoding "DeltaLengthByteArray"-encoded required V2 pages is not yet implemented for Binary.
+    //
+    // match data_type {
+    //    ArrowDataType::Binary
+    //    | ArrowDataType::LargeBinary
+    //    | ArrowDataType::Utf8
+    //    | ArrowDataType::LargeUtf8 => Encoding::DeltaLengthByteArray,
+    //    _ => Encoding::Plain,
+    //}
+    Encoding::Plain
 }
