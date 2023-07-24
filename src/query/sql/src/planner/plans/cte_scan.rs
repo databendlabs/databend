@@ -74,8 +74,9 @@ impl Operator for CteScan {
     }
 
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        // Todo(xudong): consider cluster for materialized cte
         Ok(PhysicalProperty {
-            distribution: Distribution::Random,
+            distribution: Distribution::Serial,
         })
     }
 

@@ -1543,12 +1543,12 @@ impl PipelineBuilder {
 
     fn build_materialized_cte(&mut self, materialized_cte: &MaterializedCte) -> Result<()> {
         self.expand_left_side_pipeline(
-            &*materialized_cte.left,
+            &materialized_cte.left,
             materialized_cte.cte_idx,
             self.cte_state.clone(),
             &materialized_cte.left_output_columns,
         )?;
-        self.build_right_side_pipeline(&*materialized_cte.right)
+        self.build_right_side_pipeline(&materialized_cte.right)
     }
 
     fn expand_left_side_pipeline(
@@ -1592,7 +1592,7 @@ impl PipelineBuilder {
     fn build_right_side_pipeline(&mut self, right_side: &PhysicalPlan) -> Result<()> {
         self.build_pipeline(right_side)?;
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformMaterializedCte::create(input.clone(), output.clone());
+            let transform = TransformMaterializedCte::create(input, output);
             Ok(ProcessorPtr::create(transform))
         })?;
         Ok(())

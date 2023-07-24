@@ -770,7 +770,7 @@ impl Binder {
             aggregate_info: Default::default(),
             windows: Default::default(),
             in_grouping: false,
-            ctes_map: Box::new(Default::default()),
+            ctes_map: Box::default(),
             materialized_ctes: HashSet::new(),
             view_info: None,
             srfs: Default::default(),

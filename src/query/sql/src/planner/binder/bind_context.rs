@@ -188,7 +188,7 @@ impl BindContext {
             aggregate_info: AggregateInfo::default(),
             windows: WindowInfo::default(),
             in_grouping: false,
-            ctes_map: Box::new(Default::default()),
+            ctes_map: Box::default(),
             materialized_ctes: HashSet::new(),
             view_info: None,
             srfs: DashMap::new(),
