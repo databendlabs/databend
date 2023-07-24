@@ -51,7 +51,7 @@ use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002;
-pub use crate::sm_v002::snapshot::SnapshotViewV002;
+pub use crate::sm_v002::snapshot_view_v002::SnapshotViewV002;
 use crate::state_machine::sm::BlockingConfig;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::StateMachineSubscriber;
@@ -319,13 +319,13 @@ impl SMV002 {
     /// Creates a snapshot that contains the latest state.
     ///
     /// Internally, the state machine creates a new empty writable level and makes all current states immutable.
-    pub fn full_snapshot(&mut self) -> crate::sm_v002::snapshot::SnapshotViewV002 {
+    pub fn full_snapshot(&mut self) -> crate::sm_v002::snapshot_view_v002::SnapshotViewV002 {
         self.top.new_level();
 
         // Safe unwrap: just created new level and it must have a base level.
         let base = self.top.get_base().unwrap();
 
-        crate::sm_v002::snapshot::SnapshotViewV002::new(base)
+        crate::sm_v002::snapshot_view_v002::SnapshotViewV002::new(base)
     }
 
     /// Replace all of the state machine data with the given one.
