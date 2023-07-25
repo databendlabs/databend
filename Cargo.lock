@@ -1828,7 +1828,6 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
- "common-profile",
  "common-settings",
  "common-storage",
  "dashmap",
@@ -2643,6 +2642,7 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arrow-schema",
  "async-backtrace",
  "async-trait",
  "bytes",
@@ -2658,6 +2658,7 @@ dependencies = [
  "log",
  "metrics",
  "opendal",
+ "parquet",
  "regex",
  "reqwest",
  "serde",
@@ -3034,6 +3035,7 @@ dependencies = [
  "async-backtrace",
  "base64 0.21.0",
  "chrono",
+ "cidr",
  "common-base",
  "common-exception",
  "common-grpc",
@@ -10014,6 +10016,7 @@ name = "storages-common-blocks"
 version = "0.1.0"
 dependencies = [
  "common-arrow",
+ "common-config",
  "common-exception",
  "common-expression",
  "storages-common-table-meta",

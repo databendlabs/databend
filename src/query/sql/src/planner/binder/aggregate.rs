@@ -29,6 +29,7 @@ use itertools::Itertools;
 
 use super::prune_by_children;
 use super::ExprContext;
+use super::Finder;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::Binder;
@@ -395,6 +396,18 @@ impl Binder {
                 )
                 .await
             }
+            GroupBy::All => {
+                let groups = self.resolve_group_all(select_list)?;
+                self.resolve_group_items(
+                    bind_context,
+                    select_list,
+                    &groups,
+                    &available_aliases,
+                    false,
+                    &mut vec![],
+                )
+                .await
+            }
             GroupBy::GroupingSets(sets) => {
                 self.resolve_grouping_sets(bind_context, select_list, sets, &available_aliases)
                     .await
@@ -447,6 +460,7 @@ impl Binder {
 
         let mut new_expr = child;
         if !scalar_items.is_empty() {
+            scalar_items.sort_by_key(|item| item.index);
             let eval_scalar = EvalScalar {
                 items: scalar_items,
             };
@@ -535,6 +549,25 @@ impl Binder {
             }),
         });
         Ok(())
+    }
+
+    fn resolve_group_all(&mut self, select_list: &SelectList<'_>) -> Result<Vec<Expr>> {
+        // Resolve group items with `FROM` context. Since the alias item can not be resolved
+        // from the context, we can detect the failure and fallback to resolving with `available_aliases`.
+
+        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::AggregateFunction(_));
+        let mut groups = Vec::new();
+        for (idx, select_item) in select_list.items.iter().enumerate() {
+            let finder = Finder::new(&f);
+            let finder = select_item.scalar.accept(finder)?;
+            if finder.scalars().is_empty() {
+                groups.push(Expr::Literal {
+                    span: None,
+                    lit: Literal::UInt64(idx as u64 + 1),
+                });
+            }
+        }
+        Ok(groups)
     }
 
     #[async_backtrace::framed]

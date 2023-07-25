@@ -266,7 +266,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(50),
+                    value: UserSettingValue::UInt64(100),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     possible_values: None,
                     display_in_show_settings: true,
@@ -337,6 +337,18 @@ impl DefaultSettings {
                 ("enable_auto_reclustering", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables auto re-clustering.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("use_parquet2", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Use parquet2 instead of parquet_rs when infer_schema().",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_replace_into_partitioning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables partitioning for replace-into statement (if table has cluster keys).",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),

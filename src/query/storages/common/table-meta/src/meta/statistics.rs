@@ -60,6 +60,7 @@ pub struct Statistics {
     pub index_size: u64,
 
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
+    pub cluster_stats: Option<ClusterStatistics>,
 }
 
 // conversions from old meta data
@@ -123,6 +124,7 @@ impl Statistics {
             compressed_byte_size: v0.compressed_byte_size,
             index_size: v0.index_size,
             col_stats,
+            cluster_stats: None,
         }
     }
 }
