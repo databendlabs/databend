@@ -841,6 +841,7 @@ impl Binder {
         let lazy_cols = select_cols.difference(&non_lazy_cols).copied().collect();
         metadata.add_lazy_columns(lazy_cols);
 
+        // Single table, the table index is 0.
         let table_index = 0;
         if metadata.row_id_index_by_table_index(table_index).is_none() {
             let internal_column = INTERNAL_COLUMN_FACTORY

@@ -370,7 +370,8 @@ impl PhysicalPlanBuilder {
                     .read()
                     .row_id_index_by_table_index(scan.table_index);
                 debug_assert!(index.is_some());
-                // Safe to unwrap.
+                // Safe to unwrap: if lazy_columns is not empty, the `analyze_lazy_materialization` have been called
+                // and the row_id index of the table_index has been generated.
                 let index = index.unwrap();
                 entry.insert(index);
                 project_internal_columns.insert(index, internal_column);
