@@ -94,6 +94,7 @@ use common_sql::executor::RangeJoin;
 use common_sql::executor::ReplaceInto;
 use common_sql::executor::RowFetch;
 use common_sql::executor::RuntimeFilterSource;
+use common_sql::executor::SelectCtx;
 use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
 use common_sql::executor::UnionAll;
@@ -269,36 +270,39 @@ impl PipelineBuilder {
             table_info,
             catalog_name,
             target_schema,
-            select_column_bindings,
+            select_ctx,
         } = deduplicate;
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_name, table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         self.build_pipeline(input)?;
-        if let Some(select_column_bindings) = select_column_bindings {
-            let select_schema = input.output_schema()?;
+        if let Some(SelectCtx {
+            select_column_bindings,
+            select_schema,
+        }) = select_ctx
+        {
             PipelineBuilder::render_result_set(
                 &self.ctx.get_function_context()?,
-                select_schema.clone(),
+                input.output_schema()?,
                 select_column_bindings,
                 &mut self.main_pipeline,
                 false,
             )?;
-            // if Self::check_schema_cast(select_schema.clone(), target_schema.clone())? {
-            //     let func_ctx = self.ctx.get_function_context()?;
-            //     self.main_pipeline.add_transform(
-            //         |transform_input_port, transform_output_port| {
-            //             TransformCastSchema::try_create(
-            //                 transform_input_port,
-            //                 transform_output_port,
-            //                 select_schema.clone(),
-            //                 target_schema.clone(),
-            //                 func_ctx.clone(),
-            //             )
-            //         },
-            //     )?;
-            // }
+            if Self::check_schema_cast(select_schema.clone(), target_schema.clone())? {
+                let func_ctx = self.ctx.get_function_context()?;
+                self.main_pipeline.add_transform(
+                    |transform_input_port, transform_output_port| {
+                        TransformCastSchema::try_create(
+                            transform_input_port,
+                            transform_output_port,
+                            select_schema.clone(),
+                            target_schema.clone(),
+                            func_ctx.clone(),
+                        )
+                    },
+                )?;
+            }
         }
 
         build_fill_missing_columns_pipeline(

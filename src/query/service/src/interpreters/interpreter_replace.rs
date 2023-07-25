@@ -26,6 +26,7 @@ use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::ReplaceInto;
+use common_sql::executor::SelectCtx;
 use common_sql::plans::CopyPlan;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
@@ -123,7 +124,7 @@ impl ReplaceInterpreter {
         let max_threads = self.ctx.get_settings().get_max_threads()?;
         let segment_partition_num =
             std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
-        let (mut root, select_column_bindings) = self
+        let (mut root, select_ctx) = self
             .connect_input_source(self.ctx.clone(), &self.plan.source, self.plan.schema())
             .await?;
         root = Box::new(PhysicalPlan::Deduplicate(Deduplicate {
@@ -132,8 +133,8 @@ impl ReplaceInterpreter {
             empty_table,
             table_info: table_info.clone(),
             catalog_name: plan.catalog.clone(),
+            select_ctx,
             target_schema: plan.schema(),
-            select_column_bindings,
         }));
         root = Box::new(PhysicalPlan::ReplaceInto(ReplaceInto {
             input: root,
@@ -170,7 +171,7 @@ impl ReplaceInterpreter {
         ctx: Arc<QueryContext>,
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
-    ) -> Result<(Box<PhysicalPlan>, Option<Vec<ColumnBinding>>)> {
+    ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>)> {
         match source {
             InsertInputSource::Values(data) => self
                 .connect_value_source(schema.clone(), data)
@@ -215,7 +216,7 @@ impl ReplaceInterpreter {
         &'a self,
         ctx: Arc<QueryContext>,
         query_plan: &Plan,
-    ) -> Result<(Box<PhysicalPlan>, Option<Vec<ColumnBinding>>)> {
+    ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query_plan {
             Plan::Query {
                 s_expr,
@@ -240,6 +241,10 @@ impl ReplaceInterpreter {
             .build_physical_plan()
             .await
             .map(|x| Box::new(x))?;
-        Ok((physical_plan, Some(bind_context.columns.clone())))
+        let select_ctx = SelectCtx {
+            select_column_bindings: bind_context.columns.clone(),
+            select_schema: query_plan.schema(),
+        };
+        Ok((physical_plan, Some(select_ctx)))
     }
 }

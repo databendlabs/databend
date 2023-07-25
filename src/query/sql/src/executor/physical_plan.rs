@@ -827,7 +827,13 @@ pub struct Deduplicate {
     pub table_info: TableInfo,
     pub catalog_name: String,
     pub target_schema: DataSchemaRef,
-    pub select_column_bindings: Option<Vec<ColumnBinding>>,
+    pub select_ctx: Option<SelectCtx>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct SelectCtx {
+    pub select_column_bindings: Vec<ColumnBinding>,
+    pub select_schema: DataSchemaRef,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
