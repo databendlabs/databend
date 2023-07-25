@@ -30,6 +30,7 @@ use common_sql::plans::CopyPlan;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
 use common_sql::plans::Replace;
+use common_sql::ColumnBinding;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -122,7 +123,7 @@ impl ReplaceInterpreter {
         let max_threads = self.ctx.get_settings().get_max_threads()?;
         let segment_partition_num =
             std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
-        let mut root = self
+        let (mut root, select_column_bindings) = self
             .connect_input_source(self.ctx.clone(), &self.plan.source, self.plan.schema())
             .await?;
         root = Box::new(PhysicalPlan::Deduplicate(Deduplicate {
@@ -131,7 +132,8 @@ impl ReplaceInterpreter {
             empty_table,
             table_info: table_info.clone(),
             catalog_name: plan.catalog.clone(),
-            schema: self.plan.schema(),
+            target_schema: plan.schema(),
+            select_column_bindings,
         }));
         root = Box::new(PhysicalPlan::ReplaceInto(ReplaceInto {
             input: root,
@@ -168,9 +170,11 @@ impl ReplaceInterpreter {
         ctx: Arc<QueryContext>,
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
-    ) -> Result<Box<PhysicalPlan>> {
+    ) -> Result<(Box<PhysicalPlan>, Option<Vec<ColumnBinding>>)> {
         match source {
-            InsertInputSource::Values(data) => self.connect_value_source(schema.clone(), data),
+            InsertInputSource::Values(data) => self
+                .connect_value_source(schema.clone(), data)
+                .map(|x| (x, None)),
 
             InsertInputSource::SelectPlan(plan) => {
                 self.connect_query_plan_source(ctx.clone(), plan).await
@@ -183,7 +187,7 @@ impl ReplaceInterpreter {
                         interpreter
                             .build_physical_plan(copy_into_table_plan)
                             .await
-                            .map(|x| Box::new(x.0))
+                            .map(|x| (Box::new(x.0), None))
                     }
                     _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
                 },
@@ -210,9 +214,8 @@ impl ReplaceInterpreter {
     async fn connect_query_plan_source<'a>(
         &'a self,
         ctx: Arc<QueryContext>,
-        // self_schema: DataSchemaRef,
         query_plan: &Plan,
-    ) -> Result<Box<PhysicalPlan>> {
+    ) -> Result<(Box<PhysicalPlan>, Option<Vec<ColumnBinding>>)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query_plan {
             Plan::Query {
                 s_expr,
@@ -233,9 +236,10 @@ impl ReplaceInterpreter {
             false,
         )?;
 
-        select_interpreter
+        let physical_plan = select_interpreter
             .build_physical_plan()
             .await
-            .map(|x| Box::new(x))
+            .map(|x| Box::new(x))?;
+        Ok((physical_plan, Some(bind_context.columns.clone())))
     }
 }

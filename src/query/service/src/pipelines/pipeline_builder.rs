@@ -151,6 +151,7 @@ use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformRuntimeFilter;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -267,40 +268,46 @@ impl PipelineBuilder {
             empty_table,
             table_info,
             catalog_name,
-            schema,
+            target_schema,
+            select_column_bindings,
         } = deduplicate;
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_name, table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         self.build_pipeline(input)?;
+        if let Some(select_column_bindings) = select_column_bindings {
+            let select_schema = input.output_schema()?;
+            PipelineBuilder::render_result_set(
+                &self.ctx.get_function_context()?,
+                select_schema.clone(),
+                select_column_bindings,
+                &mut self.main_pipeline,
+                false,
+            )?;
+            // if Self::check_schema_cast(select_schema.clone(), target_schema.clone())? {
+            //     let func_ctx = self.ctx.get_function_context()?;
+            //     self.main_pipeline.add_transform(
+            //         |transform_input_port, transform_output_port| {
+            //             TransformCastSchema::try_create(
+            //                 transform_input_port,
+            //                 transform_output_port,
+            //                 select_schema.clone(),
+            //                 target_schema.clone(),
+            //                 func_ctx.clone(),
+            //             )
+            //         },
+            //     )?;
+            // }
+        }
+
         build_fill_missing_columns_pipeline(
             self.ctx.clone(),
             &mut self.main_pipeline,
             tbl.clone(),
-            schema.clone(),
+            target_schema.clone(),
         )?;
 
-        if !matches!(input.deref(), PhysicalPlan::AsyncSourcer(_))
-            && !matches!(input.deref(), PhysicalPlan::CopyIntoTable(_))
-        {
-            let select_schema = input.output_schema()?;
-            let target_schema = schema.clone();
-            if Self::check_schema_cast(select_schema.clone(), target_schema.clone())? {
-                let func_ctx = self.ctx.get_function_context()?;
-                self.main_pipeline.add_transform(
-                    |transform_input_port, transform_output_port| {
-                        TransformCastSchema::try_create(
-                            transform_input_port,
-                            transform_output_port,
-                            select_schema.clone(),
-                            target_schema.clone(),
-                            func_ctx.clone(),
-                        )
-                    },
-                )?;
-            }
-        }
         let _ = table.cluster_gen_for_append(
             self.ctx.clone(),
             &mut self.main_pipeline,

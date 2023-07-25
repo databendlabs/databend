@@ -826,7 +826,8 @@ pub struct Deduplicate {
     pub empty_table: bool,
     pub table_info: TableInfo,
     pub catalog_name: String,
-    pub schema: DataSchemaRef,
+    pub target_schema: DataSchemaRef,
+    pub select_column_bindings: Option<Vec<ColumnBinding>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
