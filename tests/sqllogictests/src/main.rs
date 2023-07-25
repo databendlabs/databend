@@ -225,7 +225,7 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                 let col_separator = " ";
                 let validator = default_validator;
                 let column_validator = default_column_validator;
-                let mut runner = Runner::new(create_databend(&client_type).await?);
+                let mut runner = Runner::new(|| async { Ok(create_databend(&client_type).await?) });
                 runner
                     .update_test_file(
                         file.unwrap().path(),
@@ -297,7 +297,7 @@ async fn run_file_async(
     let mut error_records = vec![];
     let no_fail_fast = SqlLogicTestArgs::parse().no_fail_fast;
     let records = parse_file(&filename).unwrap();
-    let mut runner = Runner::new(create_databend(client_type).await.unwrap());
+    let mut runner = Runner::new(|| async { Ok(create_databend(client_type).await.unwrap()) });
     for record in records.into_iter() {
         if let Record::Halt { .. } = record {
             break;
