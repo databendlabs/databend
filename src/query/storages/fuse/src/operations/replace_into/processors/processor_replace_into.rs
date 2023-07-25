@@ -13,10 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::RemoteExpr;
+use common_expression::TableSchema;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -24,6 +29,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
 use crate::operations::replace_into::OnConflictField;
@@ -44,13 +50,26 @@ pub struct ReplaceIntoProcessor {
 }
 
 impl ReplaceIntoProcessor {
-    pub fn create(on_conflict_fields: Vec<OnConflictField>, target_table_empty: bool) -> Self {
-        let replace_into_mutator = ReplaceIntoMutator::create(on_conflict_fields);
+    pub fn create(
+        ctx: &dyn TableContext,
+        on_conflict_fields: Vec<OnConflictField>,
+        cluster_keys: Vec<RemoteExpr<String>>,
+        table_schema: &TableSchema,
+        target_table_empty: bool,
+        table_range_idx: HashMap<ColumnId, ColumnStatistics>,
+    ) -> Result<Self> {
+        let replace_into_mutator = ReplaceIntoMutator::try_create(
+            ctx,
+            on_conflict_fields,
+            cluster_keys,
+            table_schema,
+            table_range_idx,
+        )?;
         let input_port = InputPort::create();
         let output_port_merge_into_action = OutputPort::create();
         let output_port_append_data = OutputPort::create();
 
-        Self {
+        Ok(Self {
             replace_into_mutator,
             input_port,
             output_port_merge_into_action,
@@ -59,7 +78,7 @@ impl ReplaceIntoProcessor {
             output_data_merge_into_action: None,
             output_data_append: None,
             target_table_empty,
-        }
+        })
     }
 
     pub fn into_pipe(self) -> Pipe {

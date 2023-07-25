@@ -37,6 +37,7 @@ mod comparison;
 mod control;
 mod datetime;
 mod geo;
+mod geo_h3;
 mod hash;
 mod map;
 mod math;

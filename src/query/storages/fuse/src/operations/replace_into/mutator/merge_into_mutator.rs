@@ -177,41 +177,57 @@ impl MergeIntoOperationAggregator {
 // aggregate mutations (currently, deletion only)
 impl MergeIntoOperationAggregator {
     #[async_backtrace::framed]
-    pub async fn accumulate(&mut self, merge_action: MergeIntoOperation) -> Result<()> {
+    pub async fn accumulate(&mut self, merge_into_operation: MergeIntoOperation) -> Result<()> {
         let aggregation_ctx = &self.aggregation_ctx;
-        match merge_action {
-            MergeIntoOperation::Delete(DeletionByColumn {
-                columns_min_max,
-                key_hashes,
-            }) => {
+        match merge_into_operation {
+            MergeIntoOperation::Delete(partitions) => {
                 for (segment_index, (path, ver)) in &aggregation_ctx.segment_locations {
+                    // segment level
                     let load_param = LoadParams {
                         location: path.clone(),
                         len_hint: None,
                         ver: *ver,
                         put_cache: true,
                     };
-                    // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
-                    let segment_info = aggregation_ctx.segment_reader.read(&load_param).await?;
-                    let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
+                    let compact_segment_info =
+                        aggregation_ctx.segment_reader.read(&load_param).await?;
+                    let mut segment_info: Option<SegmentInfo> = None;
 
-                    // segment level
-                    if aggregation_ctx.overlapped(&segment_info.summary.col_stats, &columns_min_max)
+                    for DeletionByColumn {
+                        columns_min_max,
+                        key_hashes,
+                    } in &partitions
                     {
-                        // block level
-                        let mut num_blocks_mutated = 0;
-                        for (block_index, block_meta) in segment_info.blocks.iter().enumerate() {
-                            if aggregation_ctx.overlapped(&block_meta.col_stats, &columns_min_max) {
-                                num_blocks_mutated += 1;
-                                self.deletion_accumulator.add_block_deletion(
-                                    *segment_index,
-                                    block_index,
-                                    &key_hashes,
-                                )
+                        if aggregation_ctx
+                            .overlapped(&compact_segment_info.summary.col_stats, columns_min_max)
+                        {
+                            let seg = match &segment_info {
+                                None => {
+                                    // un-compact the segment if necessary
+                                    segment_info = Some(compact_segment_info.as_ref().try_into()?);
+                                    segment_info.as_ref().unwrap()
+                                }
+                                Some(v) => v,
+                            };
+
+                            // block level
+                            for (block_index, block_meta) in seg.blocks.iter().enumerate() {
+                                if aggregation_ctx
+                                    .overlapped(&block_meta.col_stats, columns_min_max)
+                                {
+                                    self.deletion_accumulator.add_block_deletion(
+                                        *segment_index,
+                                        block_index,
+                                        key_hashes,
+                                    )
+                                }
                             }
                         }
-                        metrics_inc_replace_block_number_after_pruning(num_blocks_mutated);
                     }
+
+                    metrics_inc_replace_block_number_after_pruning(
+                        self.deletion_accumulator.deletions.len() as u64,
+                    );
                 }
             }
             MergeIntoOperation::None => {}
@@ -338,7 +354,7 @@ impl AggregationContext {
 
         let mut bitmap = MutableBitmap::new();
         for row in 0..num_rows {
-            let hash = row_hash_of_columns(&columns, row);
+            let hash = row_hash_of_columns(&columns, row)?;
             bitmap.push(!deleted_key_hashes.contains(&hash));
         }
 

@@ -1,10 +1,17 @@
 ---
 title: GROUP BY
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-The GROUP BY clause in Databend SQL allows you to group rows sharing the same group-by-item expressions and apply aggregate functions to the resulting groups. A group-by-item expression can be a column name, a number referencing a position in the [SELECT](./01-query-select.md) list, or a general expression.
+<FunctionDescription description="Introduced or updated: v1.2.32"/>
 
-Extensions include [GROUP BY CUBE](./08-query-group-by-cube.md), [GROUP BY GROUPING SETS](./07-query-group-by-grouping-sets.md), and [GROUP BY ROLLUP](./09-query-group-by-rollup.md).
+The GROUP BY clause enables you to group rows based on the same group-by-item expressions and then apply aggregate functions to each resulting group. The group-by-item expressions can include column names or aliases, numerical references to positions in the SELECT list, general expressions, or all non-aggregate items in the SELECT list.
+
+The GROUP BY clause in Databend comes with the following extensions for more comprehensive data grouping and versatile data analysis:
+
+- [GROUP BY CUBE](./08-query-group-by-cube.md)
+- [GROUP BY GROUPING SETS](./07-query-group-by-grouping-sets.md)
+- [GROUP BY ROLLUP](./09-query-group-by-rollup.md)
 
 ## Syntax
 
@@ -12,27 +19,24 @@ Extensions include [GROUP BY CUBE](./08-query-group-by-cube.md), [GROUP BY GROUP
 SELECT ...
     FROM ...
     [ ... ]
-GROUP BY groupItem [ , groupItem [ , ... ] ]
+GROUP BY [ ALL | groupItem [ , groupItem [ , ... ] ] ]
     [ ... ]
 ```
 
 Where:
-```sql
-groupItem ::= { <column_alias> | <position> | <expr> }
-```
 
-- `<column_alias>`: Column alias appearing in the query block’s SELECT list
-
-- `<position>`: Position of an expression in the SELECT list
-
-- `<expr>`: Any expression on tables in the current scope
-
+- **ALL**: When the keyword "ALL" is used, Databend groups the data based on all non-aggregate items in the SELECT list.
+- **groupItem**: A group item can be one of the following:
+    - A column name or alias defined in the SELECT list.
+    - A numerical reference to the position of a column in the SELECT list.
+    - Any expression that involves columns from the tables used in the current query context.
 
 ## Examples
 
-Sample Data Setup:
+The GROUP BY examples in this section are built upon the following data setup:
+
 ```sql
--- Create a sample employees table
+-- Create a sample table named "employees"
 CREATE TABLE employees (
     id INT,
     first_name VARCHAR(50),
@@ -42,7 +46,7 @@ CREATE TABLE employees (
     hire_date DATE
 );
 
--- Insert sample data into the employees table
+-- Insert sample data into the "employees" table
 INSERT INTO employees (id, first_name, last_name, department_id, job_id, hire_date)
 VALUES (1, 'John', 'Doe', 1, 101, '2021-01-15'),
        (2, 'Jane', 'Smith', 1, 101, '2021-02-20'),
@@ -92,6 +96,29 @@ Output:
 +---------------+--------+---------------+
 ```
 
+### Group By ALL
+
+This query groups employees by using the GROUP BY ALL clause, which groups all non-aggregate columns in the SELECT list. Please note that, in this case, the result will be identical to grouping by `department_id` and `job_id` since these are the only non-aggregate items present in the SELECT list.
+
+```sql
+SELECT department_id, job_id, COUNT(*) AS num_employees
+FROM employees
+GROUP BY ALL;
+```
+
+Output:
+```sql
++---------------+--------+---------------+
+| department_id | job_id | num_employees |
++---------------+--------+---------------+
+|             1 |    101 |             2 |
+|             1 |    102 |             1 |
+|             2 |    201 |             1 |
+|             2 |    202 |             2 |
++---------------+--------+---------------+
+```
+
+
 ### Group By Position
 
 This query is equivalent to the "Group By One Column" example above. The position 1 refers to the first item in the SELECT list, which is `department_id`:
@@ -128,4 +155,3 @@ Output:
 |      2021 |         6 |
 +-----------+-----------+
 ```
-

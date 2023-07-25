@@ -58,7 +58,6 @@ use crate::plans::ShowRolesPlan;
 use crate::plans::UseDatabasePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
-use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::TypeChecker;
@@ -560,12 +559,9 @@ impl<'a> Binder {
         Ok(plan)
     }
 
-    /// Create a new ColumnBinding with assigned index
-    pub(crate) fn create_column_binding(
+    /// Create a new ColumnBinding for derived column
+    pub(crate) fn create_derived_column_binding(
         &mut self,
-        database_name: Option<String>,
-        table_name: Option<String>,
-        table_index: Option<IndexType>,
         column_name: String,
         data_type: DataType,
     ) -> ColumnBinding {
@@ -574,10 +570,10 @@ impl<'a> Binder {
             .write()
             .add_derived_column(column_name.clone(), data_type.clone());
         ColumnBinding {
-            database_name,
-            table_name,
+            database_name: None,
+            table_name: None,
             column_position: None,
-            table_index,
+            table_index: None,
             column_name,
             index,
             data_type: Box::new(data_type),
