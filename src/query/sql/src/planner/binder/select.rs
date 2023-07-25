@@ -849,7 +849,7 @@ impl Binder {
             .metadata
             .write()
             .add_internal_column(table_index, internal_column.clone());
-        metadata.set_talbe_row_id_index(table_index, index);
+        metadata.set_table_row_id_index(table_index, index);
 
         Ok(())
     }

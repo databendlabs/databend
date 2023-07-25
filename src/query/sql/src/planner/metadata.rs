@@ -130,7 +130,7 @@ impl Metadata {
         &self.lazy_columns
     }
 
-    pub fn set_talbe_row_id_index(&mut self, table_index: IndexType, row_id_index: IndexType) {
+    pub fn set_table_row_id_index(&mut self, table_index: IndexType, row_id_index: IndexType) {
         self.table_row_id_index.insert(table_index, row_id_index);
     }
 
