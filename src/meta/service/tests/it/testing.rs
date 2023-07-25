@@ -42,6 +42,21 @@ where
     shutdown_test();
 }
 
+pub fn meta_service_test_harness_sync<F>(test: F)
+where F: FnOnce() -> anyhow::Result<()> + 'static {
+    setup_test();
+
+    let root = Span::root(
+        closure_name::<F>(),
+        SpanContext::new(TraceId::random(), SpanId::default()),
+    );
+    let _guard = root.set_local_parent();
+
+    test().unwrap();
+
+    shutdown_test();
+}
+
 fn setup_test() {
     static INIT: Once = Once::new();
     INIT.call_once(|| {
