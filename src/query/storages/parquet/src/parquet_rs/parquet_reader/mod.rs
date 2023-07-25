@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod parquet_reader;
-mod parquet_table;
-mod projection;
-pub(crate) mod pruning;
-mod statistics;
+mod reader;
+mod row_group_reader;
 
-pub use parquet_table::Parquet2Table;
-use projection::project_parquet_schema;
+pub use reader::ParquetReader;

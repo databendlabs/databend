@@ -40,6 +40,7 @@ use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
+use common_catalog::table_context::TableContext;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -65,6 +66,7 @@ use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
+use common_storages_parquet::Parquet2Table;
 use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultCacheMetaManager;
 use common_storages_result_cache::ResultCacheReader;
@@ -565,7 +567,8 @@ impl Binder {
                     pattern: options.pattern.clone(),
                     files: options.files.clone(),
                 };
-                self.bind_stage_table(bind_context, stage_info, files_info, alias, None)
+                let table_ctx = self.ctx.clone();
+                self.bind_stage_table(table_ctx, bind_context, stage_info, files_info, alias, None)
                     .await
             }
             TableReference::Join { .. } => unreachable!(),
@@ -575,6 +578,7 @@ impl Binder {
     #[async_backtrace::framed]
     pub(crate) async fn bind_stage_table(
         &mut self,
+        table_ctx: Arc<dyn TableContext>,
         bind_context: &BindContext,
         stage_info: StageInfo,
         files_info: StageFilesInfo,
@@ -583,10 +587,25 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         let table = match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
+                let use_parquet2 = table_ctx.get_settings().get_use_parquet2()?;
                 let read_options = ParquetReadOptions::default();
-
-                ParquetTable::create(stage_info.clone(), files_info, read_options, files_to_copy)
+                if use_parquet2 {
+                    Parquet2Table::create(
+                        stage_info.clone(),
+                        files_info,
+                        read_options,
+                        files_to_copy,
+                    )
                     .await?
+                } else {
+                    ParquetTable::create(
+                        stage_info.clone(),
+                        files_info,
+                        read_options,
+                        files_to_copy,
+                    )
+                    .await?
+                }
             }
             FileFormatParams::NdJson(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(

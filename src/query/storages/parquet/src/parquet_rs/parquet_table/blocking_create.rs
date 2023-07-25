@@ -14,24 +14,24 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::metadata::SchemaDescriptor;
+use arrow_schema::Schema as ArrowSchema;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::StageInfo;
-use common_storage::infer_schema_with_extension;
+use common_storage::parquet_rs::infer_schema_with_extension;
+use common_storage::parquet_rs::read_metadata;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
+use parquet::file::metadata::ParquetMetaData;
+use parquet::schema::types::SchemaDescPtr;
 
 use super::table::create_parquet_table_info;
-use super::Parquet2Table;
+use crate::ParquetTable;
 
-impl Parquet2Table {
+impl ParquetTable {
     pub fn blocking_create(
         operator: Operator,
         read_options: ParquetReadOptions,
@@ -47,9 +47,9 @@ impl Parquet2Table {
         let (arrow_schema, schema_descr, compression_ratio) =
             Self::blocking_prepare_metas(&first_file, operator.clone())?;
 
-        let table_info = create_parquet_table_info(arrow_schema.clone());
+        let table_info = create_parquet_table_info(arrow_schema.clone())?;
 
-        Ok(Arc::new(Parquet2Table {
+        Ok(Arc::new(ParquetTable {
             table_info,
             arrow_schema,
             schema_descr,
@@ -66,36 +66,34 @@ impl Parquet2Table {
     fn blocking_prepare_metas(
         path: &str,
         operator: Operator,
-    ) -> Result<(ArrowSchema, SchemaDescriptor, f64)> {
-        // Infer schema from the first parquet file.
-        // Assume all parquet files have the same schema.
-        // If not, throw error during reading.
-        let mut reader = operator.blocking().reader(path)?;
-        let first_meta = pread::read_metadata(&mut reader).map_err(|e| {
+    ) -> Result<(ArrowSchema, SchemaDescPtr, f64)> {
+        let op = operator.blocking();
+        let size = op.stat(path)?.content_length();
+        let first_meta = read_metadata(path, &op, size).map_err(|e| {
             ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
         })?;
 
         let arrow_schema = infer_schema_with_extension(&first_meta)?;
         let compression_ratio = get_compression_ratio(&first_meta);
-        let schema_descr = first_meta.schema_descr;
+        let schema_descr = first_meta.file_metadata().schema_descr_ptr();
         Ok((arrow_schema, schema_descr, compression_ratio))
     }
 }
 
-pub fn get_compression_ratio(filemeta: &FileMetaData) -> f64 {
-    let compressed_size: usize = filemeta
-        .row_groups
+pub fn get_compression_ratio(filemeta: &ParquetMetaData) -> f64 {
+    let compressed_size: i64 = filemeta
+        .row_groups()
         .iter()
         .map(|g| g.compressed_size())
         .sum();
-    let uncompressed_size: usize = filemeta
-        .row_groups
+    let uncompressed_size: i64 = filemeta
+        .row_groups()
         .iter()
         .map(|g| {
             g.columns()
                 .iter()
-                .map(|c| c.uncompressed_size() as usize)
-                .sum::<usize>()
+                .map(|c| c.uncompressed_size())
+                .sum::<i64>()
         })
         .sum();
     if compressed_size == 0 {
