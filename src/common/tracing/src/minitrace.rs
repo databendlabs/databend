@@ -129,7 +129,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
         );
     }
 
-    if let Some(_) = jaeger_collector_endpoint {
+    if jaeger_collector_endpoint.is_some() {
         // Log to minitrace
         let level = std::env::var("TRACE_LOG")
             .ok()
@@ -144,7 +144,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
 
     // Set global logger
     let (max_level, logger) = logger.into_log();
-    if let Err(_) = log::set_boxed_logger(logger) {
+    if log::set_boxed_logger(logger).is_err() {
         eprint!("logger has already been set");
         return Vec::new();
     }
