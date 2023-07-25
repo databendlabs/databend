@@ -139,10 +139,7 @@ impl Metadata {
     }
 
     pub fn row_id_indexes(&self) -> Vec<IndexType> {
-        self.table_row_id_index
-            .iter()
-            .map(|(_, row_id_index)| *row_id_index)
-            .collect()
+        self.table_row_id_index.values().copied().collect()
     }
 
     pub fn columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {

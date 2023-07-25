@@ -845,10 +845,7 @@ impl Binder {
         let internal_column = INTERNAL_COLUMN_FACTORY
             .get_internal_column(ROW_ID_COL_NAME)
             .unwrap();
-        let index = self
-            .metadata
-            .write()
-            .add_internal_column(table_index, internal_column.clone());
+        let index = metadata.add_internal_column(table_index, internal_column);
         metadata.set_table_row_id_index(table_index, index);
 
         Ok(())
