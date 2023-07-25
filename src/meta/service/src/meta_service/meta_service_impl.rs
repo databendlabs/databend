@@ -146,11 +146,11 @@ impl RaftService for RaftServiceImpl {
                     };
 
                     raft_metrics::network::incr_snapshot_recv_success_from_peer(addr.clone());
-                    return Ok(tonic::Response::new(mes));
+                    Ok(tonic::Response::new(mes))
                 }
                 Err(e) => {
                     raft_metrics::network::incr_snapshot_recv_failure_from_peer(addr.clone());
-                    return Err(e);
+                    Err(e)
                 }
             }
         }
