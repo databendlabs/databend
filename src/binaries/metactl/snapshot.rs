@@ -32,6 +32,7 @@ use common_meta_raft_store::key_spaces::RaftStoreEntryCompat;
 use common_meta_raft_store::log::RaftLog;
 use common_meta_raft_store::log::TREE_RAFT_LOG;
 use common_meta_raft_store::ondisk::DataVersion;
+use common_meta_raft_store::ondisk::OnDisk;
 use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_raft_store::ondisk::TREE_HEADER;
 use common_meta_raft_store::state::RaftState;
@@ -51,6 +52,7 @@ use common_meta_types::LogId;
 use common_meta_types::Membership;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
+use databend_meta::store::StoreInner;
 use tokio::net::TcpSocket;
 use url::Url;
 
@@ -357,9 +359,17 @@ fn clear() -> anyhow::Result<()> {
 /// The output encodes every key-value into one line:
 /// `[sled_tree_name, {key_space: {key, value}}]`
 /// E.g.:
-/// `["test-29000-state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}`
+/// `["state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}`
 fn export_from_dir(config: &Config) -> anyhow::Result<()> {
+    let raft_config: RaftConfig = config.raft_config.into();
     let db = get_sled_db();
+
+    let mut on_disk = OnDisk::open(&db, &raft_config).await?;
+    on_disk.log_stderr(true);
+    on_disk.upgrade().await?;
+
+    let sto_inn = StoreInner::open_create(&raft_config, Some(()), None).await?;
+    let lines = sto_inn.export().await?;
 
     eprintln!("    From: {}", config.raft_config.raft_dir);
 
@@ -371,54 +381,19 @@ fn export_from_dir(config: &Config) -> anyhow::Result<()> {
         None
     };
 
-    let mut cnt = 0;
-    let mut present_tree_names = {
-        let mut tree_names = BTreeSet::new();
-        for n in db.tree_names() {
-            let name = String::from_utf8(n.to_vec())?;
-            tree_names.insert(name);
-        }
-        tree_names
-    };
+    let cnt = lines.len();
 
-    // Export in header, raft_state, log and other order.
-    let mut tree_names = vec![];
-
-    for name in [TREE_HEADER, TREE_RAFT_STATE, TREE_RAFT_LOG] {
-        if present_tree_names.remove(name) {
-            tree_names.push(name.to_string());
+    for line in lines {
+        if file.as_ref().is_none() {
+            println!("{}", line);
         } else {
-            eprintln!("tree {} not found", name);
-        }
-    }
-    tree_names.extend(present_tree_names.into_iter().collect::<Vec<_>>());
-
-    for tree_name in tree_names.iter() {
-        eprintln!("Exporting: sled tree: '{}'...", tree_name);
-
-        let tree = db.open_tree(tree_name)?;
-        for ivec_pair_res in tree.iter() {
-            let kv = ivec_pair_res?;
-            let k = kv.0.to_vec();
-            let v = kv.1.to_vec();
-
-            let kv_entry = RaftStoreEntry::deserialize(&k, &v)?;
-            let tree_kv = (tree_name.clone(), kv_entry);
-
-            let line = serde_json::to_string(&tree_kv)?;
-            cnt += 1;
-
-            if file.as_ref().is_none() {
-                println!("{}", line);
-            } else {
-                file.as_ref()
-                    .unwrap()
-                    .write_all(format!("{}\n", line).as_bytes())?;
-            }
+            file.as_ref()
+                .unwrap()
+                .write_all(format!("{}\n", line).as_bytes())?;
         }
     }
 
-    if file.as_ref().is_some() {
+    if file.is_some() {
         file.as_ref().unwrap().sync_all()?
     }
 

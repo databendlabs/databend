@@ -420,8 +420,6 @@ impl StoreInner {
         // Although vote and log must be consistent,
         // it is OK to export RaftState and logs without transaction protection,
         // if it guarantees no logs have a greater `vote` than `RaftState.HardState`.
-        //
-        // TODO(1): Do not export the log that have greater `leader_id` than `vote`.
 
         let exported_vote = {
             let tree_name = &self.raft_state.inner.name;
