@@ -207,6 +207,7 @@ fn build_test_segment_info(num_blocks_per_seg: usize) -> common_exception::Resul
         compressed_byte_size: 0,
         index_size: 0,
         col_stats: col_stats.clone(),
+        cluster_stats: None,
     };
 
     Ok(SegmentInfo::new(block_metas, statistics))
