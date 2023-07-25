@@ -19,6 +19,7 @@ use std::time::Duration;
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
 use backoff::ExponentialBackoffBuilder;
+use chrono::Utc;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
@@ -196,6 +197,7 @@ impl FuseTable {
             number_of_segments: Some(snapshot.segments.len() as u64),
             number_of_blocks: Some(stats.block_count),
         };
+        new_table_meta.updated_on = Utc::now();
 
         // 2. prepare the request
         let catalog = ctx.get_catalog(table_info.catalog())?;

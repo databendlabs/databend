@@ -371,13 +371,7 @@ impl Binder {
                     column.column_name = item.alias.clone();
                     column
                 } else {
-                    self.create_column_binding(
-                        None,
-                        None,
-                        None,
-                        item.alias.clone(),
-                        item.scalar.data_type()?,
-                    )
+                    self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
                 };
                 available_aliases.push((column, item.scalar.clone()));
             }
@@ -525,10 +519,7 @@ impl Binder {
         let grouping_sets = grouping_sets.into_iter().unique().collect();
         agg_info.grouping_sets = grouping_sets;
         // Add a virtual column `_grouping_id` to group items.
-        let grouping_id_column = self.create_column_binding(
-            None,
-            None,
-            None,
+        let grouping_id_column = self.create_derived_column_binding(
             "_grouping_id".to_string(),
             DataType::Number(NumberDataType::UInt32),
         );
@@ -603,7 +594,7 @@ impl Binder {
                     {
                         column_ref.column.clone()
                     } else {
-                        self.create_column_binding(None, None, None, alias, scalar.data_type()?)
+                        self.create_derived_column_binding(alias, scalar.data_type()?)
                     };
                     bind_context.aggregate_info.group_items.push(ScalarItem {
                         scalar: scalar.clone(),
