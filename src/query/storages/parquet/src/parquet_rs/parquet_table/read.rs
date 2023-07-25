@@ -28,19 +28,18 @@ use common_expression::TableSchemaRef;
 use common_expression::TopKSorter;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
-use log::info;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 
-use super::Parquet2Table;
-use crate::parquet2::parquet_reader::Parquet2Reader;
+use super::ParquetTable;
 use crate::parquet_part::ParquetPart;
+use crate::parquet_rs::parquet_reader::ParquetReader;
 use crate::processors::AsyncParquetSource;
 use crate::processors::ParquetDeserializeTransform;
 use crate::processors::ParquetPrewhereInfo;
 use crate::processors::SyncParquetSource;
 
-impl Parquet2Table {
+impl ParquetTable {
     fn build_filter(filter: &RemoteExpr<String>, schema: &DataSchema) -> Expr {
         filter
             .as_expr(&BUILTIN_FUNCTIONS)
@@ -66,7 +65,7 @@ impl Parquet2Table {
         let output_schema: Arc<DataSchema> = Arc::new(plan.schema().into());
 
         // Build the reader for parquet source.
-        let source_reader = Parquet2Reader::create(
+        let source_reader = ParquetReader::create(
             self.operator.clone(),
             &self.arrow_schema,
             &self.schema_descr,
@@ -102,7 +101,7 @@ impl Parquet2Table {
         // Build remain reader.
         // If there is no prewhere filter, remain reader is the same as source reader  (no prewhere phase, deserialize directly).
         let remain_reader = if let Some(p) = &push_down_prewhere {
-            Parquet2Reader::create(
+            ParquetReader::create(
                 self.operator.clone(),
                 &self.arrow_schema,
                 &self.schema_descr,
@@ -114,7 +113,7 @@ impl Parquet2Table {
 
         let prewhere_info = push_down_prewhere
             .map(|p| {
-                let reader = Parquet2Reader::create(
+                let reader = ParquetReader::create(
                     self.operator.clone(),
                     &self.arrow_schema,
                     &self.schema_descr,
@@ -219,7 +218,7 @@ fn calc_parallelism(ctx: &Arc<dyn TableContext>, plan: &DataSourcePlan) -> Resul
     }
     let num_deserializer = max_threads.min(max_by_memory).max(1);
 
-    info!(
+    tracing::info!(
         "loading {num_partitions} partitions \
         with {num_deserializer} deserializers, \
         according to \

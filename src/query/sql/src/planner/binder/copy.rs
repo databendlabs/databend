@@ -667,8 +667,10 @@ impl<'a> Binder {
         }
         plan.stage_table_info.files_to_copy = Some(need_copy_file_infos.clone());
 
+        let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
             .bind_stage_table(
+                table_ctx,
                 bind_context,
                 plan.stage_table_info.stage_info.clone(),
                 plan.stage_table_info.files_info.clone(),

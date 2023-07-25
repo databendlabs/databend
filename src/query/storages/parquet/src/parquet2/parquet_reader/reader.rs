@@ -15,36 +15,25 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Instant;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
-use common_storage::common_metrics::copy::metrics_inc_copy_read_part_cost_milliseconds;
-use common_storage::common_metrics::copy::metrics_inc_copy_read_size_bytes;
 use common_storage::ColumnNodes;
-use opendal::BlockingOperator;
 use opendal::Operator;
 
 use crate::parquet2::parquet_reader::deserialize::try_next_block;
 use crate::parquet2::parquet_table::arrow_to_table_schema;
 use crate::parquet2::projection::project_parquet_schema;
 use crate::parquet_part::ParquetRowGroupPart;
-use crate::parquet_reader::DataReader;
-use crate::parquet_reader::IndexedChunk;
-use crate::parquet_reader::IndexedReaders;
-use crate::parquet_reader::ParquetPartData;
-use crate::ParquetPart;
 
 /// The reader to parquet files with a projected schema.
 ///
@@ -119,118 +108,13 @@ impl crate::parquet_reader::ParquetReader for Parquet2Reader {
     fn output_schema(&self) -> &DataSchema {
         &self.output_schema
     }
-    fn read_from_readers(&self, readers: &mut IndexedReaders) -> Result<Vec<IndexedChunk>> {
-        let mut chunks = Vec::with_capacity(self.columns_to_read.len());
 
-        for index in &self.columns_to_read {
-            let reader = readers.get_mut(index).unwrap();
-            let data = reader.read_all()?;
-
-            chunks.push((*index, data));
-        }
-
-        Ok(chunks)
+    fn columns_to_read(&self) -> &HashSet<FieldIndex> {
+        &self.columns_to_read
     }
 
-    fn row_group_readers_from_blocking_io(
-        &self,
-        part: &ParquetRowGroupPart,
-        operator: &BlockingOperator,
-    ) -> Result<IndexedReaders> {
-        let mut readers: HashMap<usize, DataReader> =
-            HashMap::with_capacity(self.columns_to_read.len());
-
-        for index in &self.columns_to_read {
-            let meta = &part.column_metas[index];
-            let reader =
-                operator.range_reader(&part.location, meta.offset..meta.offset + meta.length)?;
-            metrics_inc_copy_read_size_bytes(meta.length);
-            readers.insert(
-                *index,
-                DataReader::new(Box::new(reader), meta.length as usize),
-            );
-        }
-        Ok(readers)
-    }
-
-    fn readers_from_blocking_io(&self, part: PartInfoPtr) -> Result<ParquetPartData> {
-        let part = ParquetPart::from_part(&part)?;
-        match part {
-            ParquetPart::RowGroup(part) => Ok(ParquetPartData::RowGroup(
-                self.row_group_readers_from_blocking_io(part, &self.operator.blocking())?,
-            )),
-            ParquetPart::SmallFiles(part) => {
-                let op = self.operator.blocking();
-                let mut buffers = Vec::with_capacity(part.files.len());
-                for path in &part.files {
-                    let buffer = op.read(path.0.as_str())?;
-                    buffers.push(buffer);
-                }
-                metrics_inc_copy_read_size_bytes(part.compressed_size());
-                Ok(ParquetPartData::SmallFiles(buffers))
-            }
-        }
-    }
-
-    #[async_backtrace::framed]
-    async fn readers_from_non_blocking_io(&self, part: PartInfoPtr) -> Result<ParquetPartData> {
-        let part = ParquetPart::from_part(&part)?;
-        match part {
-            ParquetPart::RowGroup(part) => {
-                let mut join_handlers = Vec::with_capacity(self.columns_to_read.len());
-                let path = Arc::new(part.location.to_string());
-
-                for index in self.columns_to_read.iter() {
-                    let op = self.operator.clone();
-                    let path = path.clone();
-
-                    let meta = &part.column_metas[index];
-                    let (offset, length) = (meta.offset, meta.length);
-
-                    join_handlers.push(async move {
-                        // Perf.
-                        {
-                            metrics_inc_copy_read_size_bytes(length);
-                        }
-
-                        let data = op.range_read(&path, offset..offset + length).await?;
-                        Ok::<_, ErrorCode>((
-                            *index,
-                            DataReader::new(Box::new(std::io::Cursor::new(data)), length as usize),
-                        ))
-                    });
-                }
-
-                let start = Instant::now();
-                let readers = futures::future::try_join_all(join_handlers).await?;
-
-                // Perf.
-                {
-                    metrics_inc_copy_read_part_cost_milliseconds(start.elapsed().as_millis() as u64);
-                }
-
-                let readers = readers.into_iter().collect::<IndexedReaders>();
-                Ok(ParquetPartData::RowGroup(readers))
-            }
-            ParquetPart::SmallFiles(part) => {
-                let mut join_handlers = Vec::with_capacity(part.files.len());
-                for (path, _) in part.files.iter() {
-                    let op = self.operator.clone();
-                    join_handlers.push(async move { op.read(path.as_str()).await });
-                }
-
-                let start = Instant::now();
-                let buffers = futures::future::try_join_all(join_handlers).await?;
-
-                // Perf.
-                {
-                    metrics_inc_copy_read_size_bytes(part.compressed_size());
-                    metrics_inc_copy_read_part_cost_milliseconds(start.elapsed().as_millis() as u64);
-                }
-
-                Ok(ParquetPartData::SmallFiles(buffers))
-            }
-        }
+    fn operator(&self) -> &Operator {
+        &self.operator
     }
 
     fn deserialize(
