@@ -588,36 +588,33 @@ async fn test_key_space_multi_types() -> anyhow::Result<()> {
 #[test(harness = sled_test_harness)]
 #[minitrace::trace]
 async fn test_export() -> anyhow::Result<()> {
-    async {
-        let tc = new_sled_test_context();
-        let db = &tc.db;
-        let tree = SledTree::open(db, tc.tree_name, true)?;
-        let log_tree = tree.key_space::<Logs>();
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
+    let log_tree = tree.key_space::<Logs>();
 
-        let logs: Vec<Entry> = vec![
-            Entry {
-                log_id: new_log_id(1, 0, 2),
-                payload: EntryPayload::Blank,
-            },
-            Entry {
-                log_id: new_log_id(3, 0, 4),
-                payload: EntryPayload::Normal(LogEntry {
-                    txid: None,
-                    time_ms: None,
-                    cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
-                }),
-            },
-        ];
+    let logs: Vec<Entry> = vec![
+        Entry {
+            log_id: new_log_id(1, 0, 2),
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: new_log_id(3, 0, 4),
+            payload: EntryPayload::Normal(LogEntry {
+                txid: None,
+                time_ms: None,
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
+            }),
+        },
+    ];
 
-        log_tree.append(logs.clone()).await?;
+    log_tree.append(logs.clone()).await?;
 
-        let data = tree.export()?;
+    let data = tree.export()?;
 
-        for kv in data.iter() {
-            println!("{:?}", kv);
-        }
-
-        Ok(())
+    for kv in data.iter() {
+        println!("{:?}", kv);
     }
-    .await
+
+    Ok(())
 }
