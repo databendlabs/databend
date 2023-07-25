@@ -3,7 +3,7 @@ title: GROUP BY
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced: v1.2.32"/>
+<FunctionDescription description="Introduced or updated: v1.2.32"/>
 
 The GROUP BY clause enables you to group rows based on the same group-by-item expressions and then apply aggregate functions to each resulting group. The group-by-item expressions can include column names or aliases, numerical references to positions in the SELECT list, general expressions, or all non-aggregate items in the SELECT list.
 
