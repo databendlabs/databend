@@ -29,6 +29,7 @@ use futures::future::select;
 use futures_util::future::Either;
 use log::info;
 use log::warn;
+use log::LevelFilter;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
 
