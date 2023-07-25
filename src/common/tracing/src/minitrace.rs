@@ -70,7 +70,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
                     .expect("initialize jaeger exporter"),
                 opentelemetry::trace::SpanKind::Server,
                 Cow::Owned(opentelemetry::sdk::Resource::default()),
-                opentelemetry::InstrumentationLibrary::new(name.to_string(), None, None),
+                opentelemetry::InstrumentationLibrary::new(name, None, None),
             )
         })
         .join()
