@@ -26,12 +26,11 @@ use storages_common_index::RangeIndex;
 use storages_common_pruner::RangePrunerCreator;
 
 use super::table::arrow_to_table_schema;
-use super::Parquet2Table;
-use crate::parquet2::project_parquet_schema;
-use crate::parquet2::pruning::build_column_page_pruners;
-use crate::parquet2::pruning::PartitionPruner;
+use super::ParquetTable;
+use crate::parquet_rs::projection::project_schema_all;
+use crate::parquet_rs::pruning::PartitionPruner;
 
-impl Parquet2Table {
+impl ParquetTable {
     pub(crate) fn create_pruner(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -74,9 +73,9 @@ impl Parquet2Table {
         // and use the offset to find the column stat from `StatisticsOfColumns` (HashMap<offset, stat>).
         //
         // How the stats are collected can be found in `ParquetReader::collect_row_group_stats`.
-        let (projected_arrow_schema, projected_column_nodes, _, columns_to_read) =
-            project_parquet_schema(&self.arrow_schema, &self.schema_descr, &projection)?;
-        let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema));
+        let (projected_arrow_schema, projected_column_nodes, _, columns_to_read, _) =
+            project_schema_all(&self.arrow_schema, &self.schema_descr, &projection)?;
+        let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema)?);
 
         let filter = push_down
             .as_ref()
@@ -95,19 +94,9 @@ impl Parquet2Table {
 
         let row_group_pruner = if self.read_options.prune_row_groups() {
             Some(RangePrunerCreator::try_create(
-                func_ctx.clone(),
-                &schema,
-                filter.as_ref(),
-            )?)
-        } else {
-            None
-        };
-
-        let page_pruners = if self.read_options.prune_pages() && filter.is_some() {
-            Some(build_column_page_pruners(
                 func_ctx,
                 &schema,
-                filter.as_ref().unwrap(),
+                filter.as_ref(),
             )?)
         } else {
             None
@@ -118,7 +107,7 @@ impl Parquet2Table {
             schema_descr: self.schema_descr.clone(),
             schema_from: self.schema_from.clone(),
             row_group_pruner,
-            page_pruners,
+            page_pruners: None,
             columns_to_read,
             column_nodes: projected_column_nodes,
             skip_pruning,

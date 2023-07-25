@@ -485,6 +485,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2bebcb57eef570b15afbcf2d07d813eb476fde9f6dd69c81004d6476c197e87e"
 dependencies = [
  "bitflags 2.3.1",
+ "serde",
 ]
 
 [[package]]
@@ -1807,6 +1808,7 @@ dependencies = [
 name = "common-catalog"
 version = "0.1.0"
 dependencies = [
+ "arrow-schema",
  "async-backtrace",
  "async-trait",
  "chrono",
@@ -1824,11 +1826,13 @@ dependencies = [
  "dyn-clone",
  "goldenfile",
  "parking_lot 0.12.1",
+ "parquet",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "sha2",
  "storages-common-table-meta",
+ "thrift",
  "typetag",
 ]
 
@@ -2852,8 +2856,10 @@ dependencies = [
 name = "common-storages-parquet"
 version = "0.1.0"
 dependencies = [
+ "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
+ "bytes",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2869,6 +2875,7 @@ dependencies = [
  "futures",
  "log",
  "opendal",
+ "parquet",
  "serde",
  "storages-common-index",
  "storages-common-pruner",
