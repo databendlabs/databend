@@ -99,13 +99,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<u8>, NumberType<u64>>(
             |lon, lat, r, builder, ctx| {
-                match LatLng::new(lat.into(), lon.into()) {
-                    Ok(coord) => {
-                        let h3_cell =  coord.to_cell(Resolution::try_from(r).unwrap());
+                match LatLng::new(lat.into(), lon.into()).map_err(|e| e.to_string()).and_then(|coord| {
+                    Resolution::try_from(r).map_err(|e| e.to_string()).map(|rr| coord.to_cell(rr))
+                }) {
+                    Ok(h3_cell) => {
                         builder.push(h3_cell.into())
                     },
                     Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
+                        ctx.set_error(builder.len(), e);
                         builder.push(0);
                     }
                 }
