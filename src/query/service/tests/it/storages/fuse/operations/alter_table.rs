@@ -78,10 +78,10 @@ async fn check_segment_column_ids(
 
     let snapshot = snapshot_reader.read(&params).await?;
     if let Some(expected_column_min_max) = expected_column_min_max {
-        for (column_id, (min, max)) in expected_column_min_max {
-            if let Some(stat) = snapshot.summary.col_stats.get(&column_id) {
-                assert_eq!(min, stat.min);
-                assert_eq!(max, stat.max);
+        for (column_id, (min, max)) in &expected_column_min_max {
+            if let Some(stat) = snapshot.summary.col_stats.get(column_id) {
+                assert_eq!(min, stat.min());
+                assert_eq!(max, stat.max());
             }
         }
     }

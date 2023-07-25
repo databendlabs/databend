@@ -93,11 +93,11 @@ impl ReclusterMutator {
             for (i, (_, meta)) in block_metas.iter().enumerate() {
                 if let Some(stats) = &meta.cluster_stats {
                     points_map
-                        .entry(stats.min.clone())
+                        .entry(stats.min())
                         .and_modify(|v| v.0.push(i))
                         .or_insert((vec![i], vec![]));
                     points_map
-                        .entry(stats.max.clone())
+                        .entry(stats.max())
                         .and_modify(|v| v.1.push(i))
                         .or_insert((vec![], vec![i]));
                 }
