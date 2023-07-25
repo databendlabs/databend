@@ -34,17 +34,13 @@ use common_expression::ConstantFolder;
 use common_expression::Expr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
-use common_meta_app::principal::UserDefinedFunction;
 use tracing::warn;
 
 use crate::binder::wrap_cast;
 use crate::normalize_identifier;
-use crate::planner::udf_validator::UDFValidator;
-use crate::plans::AlterUDFPlan;
 use crate::plans::CallPlan;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
-use crate::plans::CreateUDFPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
@@ -390,54 +386,8 @@ impl<'a> Binder {
             Statement::ShowFileFormats => Plan::ShowFileFormats(Box::new(ShowFileFormatsPlan {})),
 
             // UDFs
-            Statement::CreateUDF {
-                if_not_exists,
-                udf_name,
-                parameters,
-                definition,
-                description,
-            } => {
-                let mut validator = UDFValidator {
-                    name: udf_name.to_string(),
-                    parameters: parameters.iter().map(|v| v.to_string()).collect(),
-                    ..Default::default()
-                };
-                validator.verify_definition_expr(definition)?;
-                let udf = UserDefinedFunction {
-                    name: validator.name,
-                    parameters: validator.parameters,
-                    definition: definition.to_string(),
-                    description: description.clone().unwrap_or_default(),
-                };
-
-                Plan::CreateUDF(Box::new(CreateUDFPlan {
-                    if_not_exists: *if_not_exists,
-                    udf,
-                }))
-            }
-            Statement::AlterUDF {
-                udf_name,
-                parameters,
-                definition,
-                description,
-            } => {
-                let mut validator = UDFValidator {
-                    name: udf_name.to_string(),
-                    parameters: parameters.iter().map(|v| v.to_string()).collect(),
-                    ..Default::default()
-                };
-                validator.verify_definition_expr(definition)?;
-                let udf = UserDefinedFunction {
-                    name: validator.name,
-                    parameters: validator.parameters,
-                    definition: definition.to_string(),
-                    description: description.clone().unwrap_or_default(),
-                };
-
-                Plan::AlterUDF(Box::new(AlterUDFPlan {
-                    udf,
-                }))
-            }
+            Statement::CreateUDF(stmt) => self.bind_create_udf(stmt).await?,
+            Statement::AlterUDF(stmt) => self.bind_alter_udf(stmt).await?,
             Statement::DropUDF {
                 if_exists,
                 udf_name,

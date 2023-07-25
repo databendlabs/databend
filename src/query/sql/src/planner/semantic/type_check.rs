@@ -63,6 +63,7 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_functions::GENERAL_WINDOW_FUNCTIONS;
+use common_meta_app::principal::UDFDefinition;
 use common_users::UserApiProvider;
 use simsearch::SimSearch;
 
@@ -2434,7 +2435,14 @@ impl<'a> TypeChecker<'a> {
             return Ok(None);
         };
 
-        let parameters = udf.parameters;
+        let udf_definition = if let UDFDefinition::LambdaUDF(udf_definition) = udf.definition {
+            udf_definition
+        } else {
+            // TODO(ccl): bind udf server call
+            return Ok(None);
+        };
+
+        let parameters = udf_definition.parameters;
         if parameters.len() != arguments.len() {
             return Err(ErrorCode::SyntaxException(format!(
                 "Require {} parameters, but got: {}",
@@ -2445,7 +2453,7 @@ impl<'a> TypeChecker<'a> {
         }
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
-        let sql_tokens = tokenize_sql(udf.definition.as_str())?;
+        let sql_tokens = tokenize_sql(udf_definition.definition.as_str())?;
         let expr = parse_expr(&sql_tokens, sql_dialect)?;
         let mut args_map = HashMap::new();
         arguments.iter().enumerate().for_each(|(idx, argument)| {
