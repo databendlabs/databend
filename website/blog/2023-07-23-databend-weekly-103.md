@@ -44,13 +44,13 @@ Stay connected with the latest news about Databend.
 
 **Network Policies** are options for managing network configurations of Databend services. You can use it to restrict access to your account based on user IP address.
 
-To create a set of network policies, you can use:
+To create a set of network policies:
 
 ```SQL
 CREATE NETWORK POLICY <policy-name> ALLOWED_IP_LIST=(<allowed-ip>) BLOCKED_IP_LIST=(<blocked-ip>) COMMENT=<policy-comment>
 ```
 
-To create or alter network policies for a specified user, you can use:
+To restrict access to a SQL user account:
 
 ```SQL
 CREATE USER <user-name> IDENTIFIED BY <user-password> WITH SET NETWORK POLICY=<policy-name>
@@ -83,9 +83,9 @@ If you are interested in learning more, please check out the resources listed be
 
 We have also made these improvements to Databend that we hope you will find helpful:
 
-- Added `intersect_count`, `to_yyyymmddhh` function.
-- Added `fuse_column` table function.
-- Read document [Docs | RECLUSTER TABLE](https://databend.rs/doc/sql-commands/ddl/clusterkey/dml-recluster-table) to understand the reclustering mechanism.
+- Added `intersect_count` and `to_yyyymmddhh` functions.
+- Added `fuse_column` system function.
+- Read document [Docs | RECLUSTER TABLE](https://databend.rs/doc/sql-commands/ddl/clusterkey/dml-recluster-table) to understand the updated reclustering mechanism.
 - Read documents [Docs | Fuse Engine](https://databend.rs/doc/sql-reference/table-engines/fuse#options) and [Docs | ALTER TABLE OPTION](https://databend.rs/doc/sql-commands/ddl/table/alter-table-option) to learn the options available in Fuse Engine and how to modify them.
 - Read document [Docs | Vacuum Dropped Tables](https://databend.rs/doc/sql-commands/ddl/table/vacuum-drop-table) to learn about our latest enterprise feature and how it can help you save storage space.
 
