@@ -95,8 +95,8 @@ use common_meta_app::share::GrantShareObjectReq;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
-use common_meta_app::storage::StorageAzblobConfig;
 use common_meta_app::storage::StorageParams;
+use common_meta_app::storage::StorageS3Config;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
 use common_meta_kvapi::kvapi::UpsertKVReq;
@@ -1333,8 +1333,8 @@ impl SchemaApiTestSuite {
             },
             meta: CatalogMeta {
                 catalog_option: CatalogOption::Iceberg(IcebergCatalogOption {
-                    storage_params: Box::new(StorageParams::Azblob(StorageAzblobConfig {
-                        container: "container".to_string(),
+                    storage_params: Box::new(StorageParams::S3(StorageS3Config {
+                        bucket: "bucket".to_string(),
                         ..Default::default()
                     })),
                 }),
