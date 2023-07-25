@@ -233,45 +233,9 @@ impl ReplaceInterpreter {
             false,
         )?;
 
-        // let mut build_res = select_interpreter.execute2().await?;
-
-        // let select_schema = query_plan.schema();
-        // let target_schema = self_schema;
-        // if self.check_schema_cast(query_plan)? {
-        //     let func_ctx = ctx.get_function_context()?;
-        //     build_res.main_pipeline.add_transform(
-        //         |transform_input_port, transform_output_port| {
-        //             TransformCastSchema::try_create(
-        //                 transform_input_port,
-        //                 transform_output_port,
-        //                 select_schema.clone(),
-        //                 target_schema.clone(),
-        //                 func_ctx.clone(),
-        //             )
-        //         },
-        //     )?;
-        // }
-
         select_interpreter
             .build_physical_plan()
             .await
             .map(|x| Box::new(x))
-    }
-
-    // TODO duplicated
-    fn check_schema_cast(&self, plan: &Plan) -> Result<bool> {
-        let output_schema = &self.plan.schema;
-        let select_schema = plan.schema();
-
-        // validate schema
-        if select_schema.fields().len() < output_schema.fields().len() {
-            return Err(ErrorCode::BadArguments(
-                "Fields in select statement is less than expected",
-            ));
-        }
-
-        // check if cast needed
-        let cast_needed = select_schema != DataSchema::from(output_schema.as_ref()).into();
-        Ok(cast_needed)
     }
 }

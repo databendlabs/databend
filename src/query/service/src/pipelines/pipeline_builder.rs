@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::convert::TryFrom;
 use std::io::BufRead;
 use std::io::Cursor;
+use std::ops::Deref;
 use std::ops::Not;
 use std::sync::Arc;
 
@@ -35,11 +36,13 @@ use common_expression::with_mappedhash_method;
 use common_expression::with_number_mapped_type;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
 use common_expression::HashMethodKind;
 use common_expression::RemoteExpr;
 use common_expression::SortColumnDescription;
+use common_expression::TableSchema;
 use common_formats::FastFieldDecoderValues;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
@@ -95,6 +98,7 @@ use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
 use common_sql::executor::UnionAll;
 use common_sql::executor::Window;
+use common_sql::plans::InsertInputSource;
 use common_sql::BindContext;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
@@ -240,6 +244,22 @@ impl PipelineBuilder {
         }
     }
 
+    fn check_schema_cast(
+        select_schema: Arc<DataSchema>,
+        output_schema: Arc<DataSchema>,
+    ) -> Result<bool> {
+        // validate schema
+        if select_schema.fields().len() < output_schema.fields().len() {
+            return Err(ErrorCode::BadArguments(
+                "Fields in select statement is less than expected",
+            ));
+        }
+
+        // check if cast needed
+        let cast_needed = select_schema != output_schema;
+        Ok(cast_needed)
+    }
+
     fn build_deduplicate(&mut self, deduplicate: &Deduplicate) -> Result<()> {
         let Deduplicate {
             input,
@@ -260,6 +280,27 @@ impl PipelineBuilder {
             tbl.clone(),
             schema.clone(),
         )?;
+
+        if !matches!(input.deref(), PhysicalPlan::AsyncSourcer(_))
+            && !matches!(input.deref(), PhysicalPlan::CopyIntoTable(_))
+        {
+            let select_schema = input.output_schema()?;
+            let target_schema = schema.clone();
+            if Self::check_schema_cast(select_schema.clone(), target_schema.clone())? {
+                let func_ctx = self.ctx.get_function_context()?;
+                self.main_pipeline.add_transform(
+                    |transform_input_port, transform_output_port| {
+                        TransformCastSchema::try_create(
+                            transform_input_port,
+                            transform_output_port,
+                            select_schema.clone(),
+                            target_schema.clone(),
+                            func_ctx.clone(),
+                        )
+                    },
+                )?;
+            }
+        }
         let _ = table.cluster_gen_for_append(
             self.ctx.clone(),
             &mut self.main_pipeline,
