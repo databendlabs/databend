@@ -352,18 +352,11 @@ impl FuseTable {
         pipeline.add_transform(|input, output| {
             let base_segments = base_snapshot.segments.clone();
             let base_summary = base_snapshot.summary.clone();
-            let thresholds = self.get_block_thresholds();
-            let location_gen = self.meta_location_generator.clone();
-            let schema = self.table_info.schema();
-            let dal = self.operator.clone();
             let mutation_aggregator = TableMutationAggregator::create(
+                self,
                 ctx.clone(),
                 base_segments,
                 base_summary,
-                thresholds,
-                location_gen,
-                schema,
-                dal,
                 mutation_kind,
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(

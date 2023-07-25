@@ -27,6 +27,7 @@ use tracing::warn;
 
 use crate::io::SegmentsIO;
 use crate::statistics::reduce_block_statistics;
+use crate::statistics::reduce_cluster_statistics;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -48,6 +49,8 @@ impl FuseTable {
             Ok(v) => v,
         };
 
+        let default_cluster_key_id = self.cluster_key_id();
+
         if let Some(snapshot) = snapshot_opt {
             // 2. Iterator segments and blocks to estimate statistics.
             let mut sum_map = HashMap::new();
@@ -55,6 +58,7 @@ impl FuseTable {
             let mut block_count_sum: u64 = 0;
             let mut read_segment_count = 0;
             let mut col_stats = HashMap::new();
+            let mut cluster_stats = None;
 
             let start = Instant::now();
             let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
@@ -62,8 +66,10 @@ impl FuseTable {
             let number_segments = snapshot.segments.len();
             for chunk in snapshot.segments.chunks(chunk_size) {
                 let mut stats_of_columns = Vec::new();
+                let mut blocks_cluster_stats = Vec::new();
                 if !col_stats.is_empty() {
                     stats_of_columns.push(col_stats.clone());
+                    blocks_cluster_stats.push(cluster_stats.clone());
                 }
 
                 let segments = segments_io
@@ -72,6 +78,7 @@ impl FuseTable {
                 for segment in segments {
                     let segment = segment?;
                     stats_of_columns.push(segment.summary.col_stats.clone());
+                    blocks_cluster_stats.push(segment.summary.cluster_stats.clone());
                     segment.blocks.iter().for_each(|block| {
                         let block = block.as_ref();
                         let row_count = block.row_count;
@@ -99,6 +106,8 @@ impl FuseTable {
 
                 // Generate new column statistics for snapshot
                 col_stats = reduce_block_statistics(&stats_of_columns);
+                cluster_stats =
+                    reduce_cluster_statistics(&blocks_cluster_stats, default_cluster_key_id);
 
                 // Status.
                 {
@@ -131,6 +140,7 @@ impl FuseTable {
             // 4. Save table statistics
             let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
             new_snapshot.summary.col_stats = col_stats;
+            new_snapshot.summary.cluster_stats = cluster_stats;
             new_snapshot.table_statistics_location = Some(table_statistics_location);
             FuseTable::commit_to_meta_server(
                 ctx.as_ref(),
