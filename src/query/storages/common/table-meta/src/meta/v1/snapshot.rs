@@ -21,9 +21,9 @@ use serde::Serialize;
 
 use super::super::v0::statistics::Statistics;
 use crate::meta::monotonically_increased_timestamp;
-use crate::meta::statistics::FormatVersion;
 use crate::meta::trim_timestamp_to_micro_second;
 use crate::meta::ClusterKey;
+use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;

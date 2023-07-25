@@ -14,19 +14,11 @@
 
 use std::collections::HashMap;
 
-use common_base::base::uuid::Uuid;
 use common_expression::converts::from_scalar;
 use common_expression::ColumnId;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
-
-pub type FormatVersion = u64;
-pub type SnapshotId = Uuid;
-pub type Location = (String, FormatVersion);
-pub type ClusterKey = (u32, String);
-
-pub type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
@@ -67,6 +59,30 @@ pub struct Statistics {
 // ----------------------------------------------------------------
 // ----------------------------------------------------------------
 impl ColumnStatistics {
+    pub fn new(
+        min: Scalar,
+        max: Scalar,
+        null_count: u64,
+        in_memory_size: u64,
+        distinct_of_values: Option<u64>,
+    ) -> Self {
+        Self {
+            min,
+            max,
+            null_count,
+            in_memory_size,
+            distinct_of_values,
+        }
+    }
+
+    pub fn min(&self) -> &Scalar {
+        &self.min
+    }
+
+    pub fn max(&self) -> &Scalar {
+        &self.max
+    }
+
     pub fn from_v0(
         v0: &crate::meta::v0::statistics::ColumnStatistics,
         data_type: &TableDataType,
@@ -83,6 +99,34 @@ impl ColumnStatistics {
 }
 
 impl ClusterStatistics {
+    pub fn new(
+        cluster_key_id: u32,
+        min: Vec<Scalar>,
+        max: Vec<Scalar>,
+        level: i32,
+        pages: Option<Vec<Scalar>>,
+    ) -> Self {
+        Self {
+            cluster_key_id,
+            min,
+            max,
+            level,
+            pages,
+        }
+    }
+
+    pub fn min(&self) -> Vec<Scalar> {
+        self.min.clone()
+    }
+
+    pub fn max(&self) -> Vec<Scalar> {
+        self.max.clone()
+    }
+
+    pub fn is_const(&self) -> bool {
+        self.min.eq(&self.max)
+    }
+
     pub fn from_v0(
         v0: crate::meta::v0::statistics::ClusterStatistics,
         data_type: &TableDataType,

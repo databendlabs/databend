@@ -377,9 +377,9 @@ impl FuseTable {
                 let b = b.1.col_stats.get(&top_k.column_id).unwrap();
 
                 if top_k.asc {
-                    (a.min.as_ref(), a.max.as_ref()).cmp(&(b.min.as_ref(), b.max.as_ref()))
+                    (a.min().as_ref(), a.max().as_ref()).cmp(&(b.min().as_ref(), b.max().as_ref()))
                 } else {
-                    (b.max.as_ref(), b.min.as_ref()).cmp(&(a.max.as_ref(), a.min.as_ref()))
+                    (b.max().as_ref(), b.min().as_ref()).cmp(&(a.max().as_ref(), a.min().as_ref()))
                 }
             });
         }
@@ -562,7 +562,7 @@ impl FuseTable {
 
         let sort_min_max = top_k.as_ref().map(|top_k| {
             let stat = meta.col_stats.get(&top_k.column_id).unwrap();
-            (stat.min.clone(), stat.max.clone())
+            (stat.min().clone(), stat.max().clone())
         });
 
         FusePartInfo::create(
@@ -603,7 +603,7 @@ impl FuseTable {
 
         let sort_min_max = top_k.and_then(|top_k| {
             let stat = meta.col_stats.get(&top_k.column_id);
-            stat.map(|stat| (stat.min.clone(), stat.max.clone()))
+            stat.map(|stat| (stat.min().clone(), stat.max().clone()))
         });
 
         // TODO

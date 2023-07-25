@@ -517,9 +517,11 @@ impl AggregationContext {
         key_max: &Scalar,
     ) -> bool {
         if let Some(stats) = column_stats {
-            std::cmp::min(key_max, &stats.max) >= std::cmp::max(key_min, &stats.min)
+            let max = stats.max();
+            let min = stats.min();
+            std::cmp::min(key_max, max) >= std::cmp::max(key_min, min)
                 || // coincide overlap
-                (&stats.max == key_max && &stats.min == key_min)
+                (max == key_max && min == key_min)
         } else {
             false
         }
@@ -599,17 +601,8 @@ mod tests {
             .collect::<Vec<_>>();
 
         // set up range index of columns
-
-        let range = |min: Scalar, max: Scalar| {
-            ColumnStatistics {
-                min,
-                max,
-                // the following values do not matter in this case
-                null_count: 0,
-                in_memory_size: 0,
-                distinct_of_values: None,
-            }
-        };
+        // the null_count/in_memory_size/distinct_of_values do not matter in this case
+        let range = |min: Scalar, max: Scalar| ColumnStatistics::new(min, max, 0, 0, None);
 
         let column_range_indexes = HashMap::from_iter([
             // range of xx_id [1, 10]

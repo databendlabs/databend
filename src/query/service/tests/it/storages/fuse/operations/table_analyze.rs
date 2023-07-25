@@ -123,8 +123,8 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     let after_update = fuse_table.read_table_snapshot().await?.unwrap();
     let base_summary = after_update.summary.clone();
     let id_stats = base_summary.col_stats.get(&0).unwrap();
-    assert_eq!(id_stats.max, Scalar::Number(NumberScalar::Int32(3)));
-    assert_eq!(id_stats.min, Scalar::Number(NumberScalar::Int32(0)));
+    assert_eq!(id_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
+    assert_eq!(id_stats.min(), &Scalar::Number(NumberScalar::Int32(0)));
 
     // get segments summary
     let mut segment_summary = Statistics::default();
@@ -157,8 +157,8 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     let after_analyze = fuse_table.read_table_snapshot().await?.unwrap();
     let last_summary = after_analyze.summary.clone();
     let id_stats = last_summary.col_stats.get(&0).unwrap();
-    assert_eq!(id_stats.max, Scalar::Number(NumberScalar::Int32(3)));
-    assert_eq!(id_stats.min, Scalar::Number(NumberScalar::Int32(1)));
+    assert_eq!(id_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
+    assert_eq!(id_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
 
     assert_eq!(segment_summary, last_summary);
 

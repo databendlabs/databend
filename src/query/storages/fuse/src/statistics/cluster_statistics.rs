@@ -161,12 +161,12 @@ impl ClusterStatsGenerator {
             None
         };
 
-        Ok(Some(ClusterStatistics {
-            cluster_key_id: self.cluster_key_id,
+        Ok(Some(ClusterStatistics::new(
+            self.cluster_key_id,
             min,
             max,
             level,
             pages,
-        }))
+        )))
     }
 }

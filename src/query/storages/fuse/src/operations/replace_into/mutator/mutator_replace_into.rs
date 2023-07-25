@@ -153,7 +153,7 @@ impl ReplaceIntoMutator {
                 let value = column.row_scalar(row_idx)?;
                 let stats = column_stats.get(&field.table_field.column_id);
                 if let Some(stats) = stats {
-                    should_keep = !(value < stats.min.as_ref() || value > stats.max.as_ref());
+                    should_keep = !(value < stats.min().as_ref() || value > stats.max().as_ref());
                     if !should_keep {
                         // if one column outsides the table level range, no need to check other columns
                         break;

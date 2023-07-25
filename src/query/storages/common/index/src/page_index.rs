@@ -96,7 +96,7 @@ impl PageIndex {
             None => return Ok((true, None)),
         };
 
-        let max_value = Scalar::Tuple(stats.max.clone());
+        let max_value = Scalar::Tuple(stats.max());
 
         if self.cluster_key_id != stats.cluster_key_id {
             return Ok((true, None));
@@ -162,13 +162,7 @@ impl PageIndex {
             {
                 let f = &self.cluster_key_fields[idx];
 
-                let stat = ColumnStatistics {
-                    min: min.clone(),
-                    max: max.clone(),
-                    null_count: 1,
-                    in_memory_size: 0,
-                    distinct_of_values: None,
-                };
+                let stat = ColumnStatistics::new(min.clone(), max.clone(), 1, 0, None);
                 let domain = statistics_to_domain(vec![&stat], f.data_type());
                 input_domains.insert(f.name().clone(), domain);
             }

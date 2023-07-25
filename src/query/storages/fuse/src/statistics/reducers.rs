@@ -61,26 +61,21 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             }
 
             let min = min_stats
-                .iter()
+                .into_iter()
                 .filter(|s| !s.is_null())
-                .min_by(|&x, &y| x.cmp(y))
-                .cloned()
+                .min_by(|x, y| x.cmp(y))
                 .unwrap_or(Scalar::Null);
 
             let max = max_stats
-                .iter()
+                .into_iter()
                 .filter(|s| !s.is_null())
-                .max_by(|&x, &y| x.cmp(y))
-                .cloned()
+                .max_by(|x, y| x.cmp(y))
                 .unwrap_or(Scalar::Null);
 
-            acc.insert(*id, ColumnStatistics {
-                min,
-                max,
-                null_count,
-                in_memory_size,
-                distinct_of_values: None,
-            });
+            acc.insert(
+                *id,
+                ColumnStatistics::new(min, max, null_count, in_memory_size, None),
+            );
             acc
         })
 }
@@ -89,17 +84,14 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
     blocks_cluster_stats: &[T],
     default_cluster_key_id: Option<u32>,
 ) -> Option<ClusterStatistics> {
+    if blocks_cluster_stats.is_empty() {
+        return None;
+    }
+
     if let Some(cluster_key_id) = default_cluster_key_id {
         let len = blocks_cluster_stats.len();
-        let cluster_key_len = blocks_cluster_stats
-            .first()
-            .map_or(0, |v: &T| v.borrow().clone().map_or(0, |s| s.max.len()));
-        let mut min_stats: Vec<Vec<_>> = (0..cluster_key_len)
-            .map(|_| Vec::with_capacity(len))
-            .collect();
-        let mut max_stats: Vec<Vec<_>> = (0..cluster_key_len)
-            .map(|_| Vec::with_capacity(len))
-            .collect();
+        let mut min_stats = Vec::with_capacity(len);
+        let mut max_stats = Vec::with_capacity(len);
         let mut levels = Vec::with_capacity(len);
 
         for cluster_stats in blocks_cluster_stats.iter() {
@@ -108,50 +100,27 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
                     return None;
                 }
 
-                // transpose the min max.
-                assert_eq!(stat.max.len(), cluster_key_len);
-                assert_eq!(stat.min.len(), cluster_key_len);
-                for i in 0..cluster_key_len {
-                    min_stats[i].push(stat.min[i].clone());
-                    max_stats[i].push(stat.max[i].clone());
-                }
+                min_stats.push(stat.min());
+                max_stats.push(stat.max());
                 levels.push(stat.level);
             } else {
                 return None;
             }
         }
 
-        let min = min_stats
-            .iter()
-            .map(|s| {
-                s.iter()
-                    .filter(|s| !s.is_null())
-                    .min_by(|&x, &y| x.cmp(y))
-                    .cloned()
-                    .unwrap_or(Scalar::Null)
-            })
-            .collect::<Vec<_>>();
+        let min = min_stats.into_iter().min_by(|x, y| x.cmp(y)).unwrap();
 
-        let max = max_stats
-            .iter()
-            .map(|s| {
-                s.iter()
-                    .filter(|s| !s.is_null())
-                    .max_by(|&x, &y| x.cmp(y))
-                    .cloned()
-                    .unwrap_or(Scalar::Null)
-            })
-            .collect::<Vec<_>>();
+        let max = max_stats.into_iter().max_by(|x, y| x.cmp(y)).unwrap();
 
         let level = levels.into_iter().max().unwrap_or(0);
 
-        Some(ClusterStatistics {
+        Some(ClusterStatistics::new(
             cluster_key_id,
             min,
             max,
             level,
-            pages: None,
-        })
+            None,
+        ))
     } else {
         None
     }
