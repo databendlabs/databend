@@ -43,6 +43,7 @@ use common_pipeline_sources::AsyncSourcer;
 use common_sql::binder::parse_stage_location;
 use common_storage::init_stage_operator;
 use common_storage::read_parquet_schema_async;
+use common_storage::read_parquet_schema_async_rs;
 use common_storage::StageFilesInfo;
 
 use crate::pipelines::processors::port::OutputPort;
@@ -180,7 +181,7 @@ impl AsyncSource for InferSchemaSource {
         let (stage_info, path) =
             parse_stage_location(&self.ctx, &self.args_parsed.location).await?;
         let files_info = StageFilesInfo {
-            path,
+            path: path.clone(),
             ..self.args_parsed.files_info.clone()
         };
         let operator = init_stage_operator(&stage_info)?;
@@ -190,10 +191,23 @@ impl AsyncSource for InferSchemaSource {
             Some(f) => self.ctx.get_file_format(f).await?,
             None => stage_info.file_format_params.clone(),
         };
+        let use_parquet2 = self.ctx.get_settings().get_use_parquet2()?;
         let schema = match file_format_params.get_type() {
             StageFileFormatType::Parquet => {
-                let arrow_schema = read_parquet_schema_async(&operator, &first_file.path).await?;
-                TableSchema::from(&arrow_schema)
+                if use_parquet2 {
+                    let arrow_schema =
+                        read_parquet_schema_async(&operator, &first_file.path).await?;
+                    TableSchema::from(&arrow_schema)
+                } else {
+                    let arrow_schema =
+                        read_parquet_schema_async_rs(&operator, &first_file.path).await?;
+                    TableSchema::try_from(&arrow_schema).map_err(|e| {
+                        ErrorCode::BadBytes(format!(
+                            "Failed to infer schema from Parquet file {}: {}",
+                            path, e
+                        ))
+                    })?
+                }
             }
             _ => {
                 return Err(ErrorCode::BadArguments(

@@ -81,13 +81,10 @@ impl FuseTable {
 
         pipeline.add_transform(|input, output| {
             let aggregator = TableMutationAggregator::create(
+                self,
                 ctx.clone(),
                 vec![],
                 Statistics::default(),
-                self.get_block_thresholds(),
-                self.meta_location_generator().clone(),
-                self.schema(),
-                self.get_operator(),
                 MutationKind::Insert,
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
@@ -287,6 +284,7 @@ impl FuseTable {
 
         let mut latest_snapshot = base_snapshot.clone();
         let mut latest_table_info = &self.table_info;
+        let default_cluster_key_id = self.cluster_key_id();
 
         // holding the reference of latest table during retries
         let mut latest_table_ref: Arc<dyn Table>;
@@ -309,6 +307,7 @@ impl FuseTable {
                 &base_summary,
                 concurrently_appended_segment_locations,
                 schema,
+                default_cluster_key_id,
             )
             .await?;
             snapshot_tobe_committed.segments = segments_tobe_committed;
@@ -413,6 +412,7 @@ impl FuseTable {
         base_summary: &Statistics,
         concurrently_appended_segment_locations: &[Location],
         schema: TableSchemaRef,
+        default_cluster_key_id: Option<u32>,
     ) -> Result<(Vec<Location>, Statistics)> {
         if concurrently_appended_segment_locations.is_empty() {
             Ok((base_segments.to_owned(), base_summary.clone()))
@@ -432,8 +432,11 @@ impl FuseTable {
             let mut new_statistics = base_summary.clone();
             for result in concurrent_appended_segment_infos.into_iter() {
                 let concurrent_appended_segment = result?;
-                new_statistics =
-                    merge_statistics(&new_statistics, &concurrent_appended_segment.summary);
+                new_statistics = merge_statistics(
+                    &new_statistics,
+                    &concurrent_appended_segment.summary,
+                    default_cluster_key_id,
+                );
             }
             Ok((new_segments, new_statistics))
         }

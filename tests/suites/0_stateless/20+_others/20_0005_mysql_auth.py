@@ -31,7 +31,9 @@ with NativeClient(name="client1>") as client1:
     client1.expect(prompt)
     client1.send("create network policy p1 allowed_ip_list=('127.0.0.0/24');")
     client1.expect(prompt)
-    client1.send("create network policy p2 allowed_ip_list=('127.0.0.0/24') blocked_ip_list=('127.0.0.1');")
+    client1.send(
+        "create network policy p2 allowed_ip_list=('127.0.0.0/24') blocked_ip_list=('127.0.0.1');"
+    )
     client1.expect(prompt)
     client1.send("create user u2 identified by 'abc123' with set network policy='p1';")
     client1.expect(prompt)
@@ -51,4 +53,4 @@ try:
         host="127.0.0.1", user="u3", passwd="abc123", port="3307"
     )
 except mysql.connector.errors.ProgrammingError:
-    print('u3 is blocked by client ip')
+    print("u3 is blocked by client ip")

@@ -349,6 +349,10 @@ impl FuseTable {
         self.cluster_key_meta.as_ref().map(|(_, key)| key)
     }
 
+    pub fn cluster_key_id(&self) -> Option<u32> {
+        self.cluster_key_meta.clone().map(|v| v.0)
+    }
+
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
         self.bloom_index_cols.clone()
     }

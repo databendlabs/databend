@@ -228,3 +228,18 @@ pub fn metrics_inc_replace_whole_block_deletion(c: u64) {
 pub fn metrics_inc_replace_block_of_zero_row_deleted(c: u64) {
     increment_gauge!(key!("replace_into_block_of_zero_row_deleted"), c as f64);
 }
+
+pub fn metrics_inc_replace_original_row_number(c: u64) {
+    increment_gauge!(key!("replace_into_original_row_number"), c as f64);
+}
+
+pub fn metrics_inc_replace_row_number_after_table_level_pruning(c: u64) {
+    increment_gauge!(
+        key!("replace_into_row_number_after_table_level_pruning"),
+        c as f64
+    );
+}
+
+pub fn metrics_inc_replace_partition_number(c: u64) {
+    increment_gauge!(key!("replace_into_partition_number"), c as f64);
+}

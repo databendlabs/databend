@@ -1,3 +1,11 @@
+error: 
+  --> SQL:1:1
+  |
+1 | geo_to_h3(37.79506683, 55.71290588, 16)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `geo_to_h3(37.79506683, 55.71290588, 16)`
+
+
+
 ast            : geo_to_h3(37.79506683, 55.71290588, 15)
 raw expr       : geo_to_h3(37.79506683, 55.71290588, 15)
 checked expr   : geo_to_h3<Float64, Float64, UInt8>(to_float64<Decimal(10, 8)>(37.79506683_d128(10,8)), to_float64<Decimal(10, 8)>(55.71290588_d128(10,8)), 15_u8)

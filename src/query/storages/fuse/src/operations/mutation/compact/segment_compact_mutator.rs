@@ -50,6 +50,7 @@ pub struct SegmentCompactMutator {
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
     compaction: SegmentCompactionState,
+    default_cluster_key_id: Option<u32>,
 }
 
 impl SegmentCompactMutator {
@@ -58,6 +59,7 @@ impl SegmentCompactMutator {
         compact_params: CompactOptions,
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
+        default_cluster_key_id: Option<u32>,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
@@ -65,6 +67,7 @@ impl SegmentCompactMutator {
             data_accessor: operator,
             location_generator,
             compaction: Default::default(),
+            default_cluster_key_id,
         })
     }
 
@@ -98,6 +101,7 @@ impl SegmentCompactMutator {
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         let compactor = SegmentCompactor::new(
             self.compact_params.block_per_seg as u64,
+            self.default_cluster_key_id,
             chunk_size,
             &fuse_segment_io,
             segment_writer,
@@ -165,6 +169,7 @@ pub struct SegmentCompactor<'a> {
     // Size of compacted segment should be in range R == [threshold, 2 * threshold)
     // within R, smaller one is preferred
     threshold: u64,
+    default_cluster_key_id: Option<u32>,
     // fragmented segment collected so far, it will be reset to empty if compaction occurs
     fragmented_segments: Vec<(Arc<SegmentInfo>, Location)>,
     // state which keep the number of blocks of all the fragmented segment collected so far,
@@ -180,12 +185,14 @@ pub struct SegmentCompactor<'a> {
 impl<'a> SegmentCompactor<'a> {
     pub fn new(
         threshold: u64,
+        default_cluster_key_id: Option<u32>,
         chunk_size: usize,
         segment_reader: &'a SegmentsIO,
         segment_writer: SegmentWriter<'a>,
     ) -> Self {
         Self {
             threshold,
+            default_cluster_key_id,
             accumulated_num_blocks: 0,
             fragmented_segments: vec![],
             chunk_size,
@@ -321,7 +328,11 @@ impl<'a> SegmentCompactor<'a> {
 
         self.compacted_state.num_fragments_compacted += fragments.len();
         for (segment, _location) in fragments {
-            merge_statistics_mut(&mut new_statistics, &segment.summary);
+            merge_statistics_mut(
+                &mut new_statistics,
+                &segment.summary,
+                self.default_cluster_key_id,
+            );
             blocks.append(&mut segment.blocks.clone());
         }
 

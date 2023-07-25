@@ -33,6 +33,8 @@ use common_grpc::DNSResolver;
 use common_meta_client::reply_to_api_result;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::GenericKV;
+use common_meta_raft_store::ondisk::DataVersion;
+use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::storage::Adaptor;
 use common_meta_sled_store::openraft::ChangeMembers;
@@ -90,6 +92,7 @@ use crate::meta_service::RaftServiceImpl;
 use crate::metrics::server_metrics;
 use crate::network::Network;
 use crate::store::RaftStore;
+use crate::version::METASRV_COMMIT_VERSION;
 use crate::watcher::DispatcherSender;
 use crate::watcher::EventDispatcher;
 use crate::watcher::EventDispatcherHandle;
@@ -100,6 +103,12 @@ use crate::Opened;
 #[derive(serde::Serialize)]
 pub struct MetaNodeStatus {
     pub id: NodeId,
+
+    /// The build version of meta-service binary.
+    pub binary_version: String,
+
+    /// The version of the data this meta-service is serving.
+    pub data_version: DataVersion,
 
     /// The raft service endpoint for internal communication
     pub endpoint: String,
@@ -906,6 +915,8 @@ impl MetaNode {
 
         Ok(MetaNodeStatus {
             id: self.sto.id,
+            binary_version: METASRV_COMMIT_VERSION.as_str().to_string(),
+            data_version: DATA_VERSION,
             endpoint: endpoint.to_string(),
             db_size,
             state: format!("{:?}", metrics.state),
