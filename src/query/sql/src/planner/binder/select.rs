@@ -842,11 +842,13 @@ impl Binder {
         metadata.add_lazy_columns(lazy_cols);
 
         let table_index = 0;
-        let internal_column = INTERNAL_COLUMN_FACTORY
-            .get_internal_column(ROW_ID_COL_NAME)
-            .unwrap();
-        let index = metadata.add_internal_column(table_index, internal_column);
-        metadata.set_table_row_id_index(table_index, index);
+        if metadata.row_id_index_by_table_index(table_index).is_none() {
+            let internal_column = INTERNAL_COLUMN_FACTORY
+                .get_internal_column(ROW_ID_COL_NAME)
+                .unwrap();
+            let index = metadata.add_internal_column(table_index, internal_column);
+            metadata.set_table_row_id_index(table_index, index);
+        }
 
         Ok(())
     }
