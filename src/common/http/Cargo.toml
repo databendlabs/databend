@@ -27,7 +27,6 @@ anyerror = { workspace = true }
 async-backtrace = { workspace = true }
 futures = "0.3.24"
 log = { workspace = true }
-minitrace = { workspace = true }
 poem = { version = "1", features = ["rustls"] }
 serde = { workspace = true }
 tempfile = { version = "3.4.0", optional = true }

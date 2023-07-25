@@ -67,8 +67,6 @@ serfig = "0.1.0"
 tokio-stream = "0.1.10"
 tonic = { workspace = true }
 tonic-reflection = "0.9"
-tracing-appender = "0.2.2"
-tracing-subscriber = { version = "0.3.15", features = ["env-filter", "ansi"] }
 
 [dev-dependencies]
 env_logger = "0.10.0"

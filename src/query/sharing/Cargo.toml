@@ -25,7 +25,6 @@ common-users = { path = "../users" }
 async-backtrace = { workspace = true }
 http = "0.2"
 log = { workspace = true }
-minitrace = { workspace = true }
 moka = "0.10"
 opendal = { workspace = true }
 reqwest = { workspace = true }

@@ -33,7 +33,6 @@ chrono = { workspace = true }
 cidr = { version = "0.2.2" }
 jwt-simple = "0.11"
 log = { workspace = true }
-minitrace = { workspace = true }
 p256 = "0.13"
 parking_lot = "0.12.1"
 reqwest = { workspace = true }
