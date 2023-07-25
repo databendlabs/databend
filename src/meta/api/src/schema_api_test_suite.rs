@@ -52,6 +52,7 @@ use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::DroppedId;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
+use common_meta_app::schema::GetCatalogReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
@@ -1343,6 +1344,13 @@ impl SchemaApiTestSuite {
 
         let res = mt.create_catalog(req).await?;
         info!("create catalog res: {:?}", res);
+
+        let got = mt
+            .get_catalog(GetCatalogReq::new(tenant, catalog_name))
+            .await?;
+        assert_eq!(got.id.catalog_id, res.catalog_id);
+        assert_eq!(got.name_ident.tenant, "tenant1");
+        assert_eq!(got.name_ident.catalog_name, "catalog1");
 
         Ok(())
     }
