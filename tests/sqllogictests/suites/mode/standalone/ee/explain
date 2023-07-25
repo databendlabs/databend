@@ -170,7 +170,7 @@ EvalScalar
     └── HashJoin
         ├── join type: LEFT SINGLE
         ├── build keys: [b (#13)]
-        ├── probe keys: [b (#5)]
+        ├── probe keys: [CAST(b (#5) AS Int32 NULL)]
         ├── filters: []
         ├── estimated rows: 0.00
         ├── EvalScalar(Build)
