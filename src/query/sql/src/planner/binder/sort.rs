@@ -155,10 +155,7 @@ impl Binder {
                             if let ScalarExpr::BoundColumnRef(col) = &rewrite_scalar {
                                 col.column.clone()
                             } else {
-                                self.create_column_binding(
-                                    None,
-                                    None,
-                                    None,
+                                self.create_derived_column_binding(
                                     format!("{:#}", order.expr),
                                     rewrite_scalar.data_type()?,
                                 )
