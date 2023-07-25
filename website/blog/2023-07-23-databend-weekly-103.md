@@ -2,8 +2,8 @@
 title: "This Week in Databend #103"
 date: 2023-07-23
 slug: 2023-07-23-databend-weekly
-cover_url: 'weekly/weekly-103.png'
-image: 'weekly/weekly-103.png'
+cover_url: 'weekly/weekly-103.jpg'
+image: 'weekly/weekly-103.jpg'
 tags: [weekly]
 description: "Stay up to date with the latest weekly developments on Databend!"
 contributors:
@@ -42,7 +42,7 @@ Stay connected with the latest news about Databend.
 
 ### Creating Network Policies
 
-**Network Policies** are options for managing network configurations of Databend services. You can use it to restrict access to your account based on user IP address.
+**Network Policies** are used to manage access to Databend services. They can also be utilized to restrict access to a SQL user account based on users' IP addresses.
 
 To create a set of network policies:
 
@@ -99,7 +99,7 @@ Databend supports a file format called TSV, which may mislead users into thinkin
 
 In reality, TSV corresponds to the text format of MySQL/Hive/PostgreSQL and uses escaping instead of quoting to handle delimiters in values (MySQL text supports quoting but not by default). ClickHouse also uses it for transferring data to/from MySQL.
 
-Therefore, we suggest renaming TSV as an alias for Text.
+Therefore, we suggest renaming TSV to TEXT.
 
 [Issue #11987 | Rename TSV file format to Text](https://github.com/datafuselabs/databend/issues/11987)
 
