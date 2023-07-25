@@ -7034,7 +7034,7 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 [[package]]
 name = "minitrace"
 version = "0.4.1"
-source = "git+https://github.com/andylokandy/minitrace-rust.git?branch=reporter#94ad3f41be5c33f0ba195ea7b85d88e68f7c1e91"
+source = "git+https://github.com/andylokandy/minitrace-rust.git?branch=reporter#eaf4ee8ba9af506a10de8ae1578bac345d02ce8e"
 dependencies = [
  "defer",
  "futures",
@@ -7049,7 +7049,7 @@ dependencies = [
 [[package]]
 name = "minitrace-macro"
 version = "0.4.1"
-source = "git+https://github.com/andylokandy/minitrace-rust.git?branch=reporter#94ad3f41be5c33f0ba195ea7b85d88e68f7c1e91"
+source = "git+https://github.com/andylokandy/minitrace-rust.git?branch=reporter#eaf4ee8ba9af506a10de8ae1578bac345d02ce8e"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -7060,7 +7060,7 @@ dependencies = [
 [[package]]
 name = "minitrace-opentelemetry"
 version = "0.4.1"
-source = "git+https://github.com/andylokandy/minitrace-rust.git?branch=reporter#94ad3f41be5c33f0ba195ea7b85d88e68f7c1e91"
+source = "git+https://github.com/andylokandy/minitrace-rust.git?branch=reporter#eaf4ee8ba9af506a10de8ae1578bac345d02ce8e"
 dependencies = [
  "futures",
  "log",
@@ -8624,7 +8624,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset",
- "parking_lot 0.12.1",
+ "parking_lot 0.11.2",
  "pyo3-build-config",
  "pyo3-ffi",
  "pyo3-macros",
@@ -11153,7 +11153,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

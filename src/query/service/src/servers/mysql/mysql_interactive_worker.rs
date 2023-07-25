@@ -30,6 +30,7 @@ use common_expression::SendableDataBlockStream;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::UserIdentity;
 use common_sql::Planner;
+use common_tracing::func_name;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
 use futures_util::StreamExt;
@@ -315,65 +316,71 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         federated.check(query)
     }
 
-    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn do_query(&mut self, query: &str) -> Result<(QueryResult, Option<FormatSettings>)> {
-        match self.federated_server_command_check(query) {
-            Some((schema, data_block)) => {
-                info!("Federated query: {}", query);
-                if data_block.num_rows() > 0 {
-                    info!("Federated response: {:?}", data_block);
-                }
-                let has_result = data_block.num_rows() > 0;
-                Ok((
-                    QueryResult::create(
-                        DataBlockStream::create(None, vec![data_block]).boxed(),
-                        None,
-                        has_result,
-                        schema,
-                        query.to_string(),
-                    ),
-                    None,
-                ))
-            }
-            None => {
-                info!("Normal query: {}", query);
-                let context = self.session.create_query_context().await?;
-
-                let mut planner = Planner::new(context.clone());
-                let (plan, extras) = planner.plan_sql(query).await?;
-
-                context.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
-                let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
-                let has_result_set = plan.has_result_set();
-
-                match interpreter {
-                    Ok(interpreter) => {
-                        let (blocks, extra_info) =
-                            Self::exec_query(interpreter.clone(), &context).await?;
-                        let schema = interpreter.schema();
-                        let format = context.get_format_settings()?;
-                        Ok((
-                            QueryResult::create(
-                                blocks,
-                                extra_info,
-                                has_result_set,
-                                schema,
-                                query.to_string(),
-                            ),
-                            Some(format),
-                        ))
+        let root = Span::root(
+            func_name!(),
+            SpanContext::new(TraceId::random(), SpanId::default()),
+        );
+        async {
+            match self.federated_server_command_check(query) {
+                Some((schema, data_block)) => {
+                    info!("Federated query: {}", query);
+                    if data_block.num_rows() > 0 {
+                        info!("Federated response: {:?}", data_block);
                     }
-                    Err(e) => {
-                        InterpreterQueryLog::fail_to_start(context, e.clone());
-                        Err(e)
+                    let has_result = data_block.num_rows() > 0;
+                    Ok((
+                        QueryResult::create(
+                            DataBlockStream::create(None, vec![data_block]).boxed(),
+                            None,
+                            has_result,
+                            schema,
+                            query.to_string(),
+                        ),
+                        None,
+                    ))
+                }
+                None => {
+                    info!("Normal query: {}", query);
+                    let context = self.session.create_query_context().await?;
+
+                    let mut planner = Planner::new(context.clone());
+                    let (plan, extras) = planner.plan_sql(query).await?;
+
+                    context.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
+                    let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
+                    let has_result_set = plan.has_result_set();
+
+                    match interpreter {
+                        Ok(interpreter) => {
+                            let (blocks, extra_info) =
+                                Self::exec_query(interpreter.clone(), &context).await?;
+                            let schema = interpreter.schema();
+                            let format = context.get_format_settings()?;
+                            Ok((
+                                QueryResult::create(
+                                    blocks,
+                                    extra_info,
+                                    has_result_set,
+                                    schema,
+                                    query.to_string(),
+                                ),
+                                Some(format),
+                            ))
+                        }
+                        Err(e) => {
+                            InterpreterQueryLog::fail_to_start(context, e.clone());
+                            Err(e)
+                        }
                     }
                 }
             }
         }
+        .in_span(root)
+        .await
     }
 
-    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn exec_query(
         interpreter: Arc<dyn Interpreter>,
@@ -382,37 +389,45 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         SendableDataBlockStream,
         Option<Box<dyn ProgressReporter + Send>>,
     )> {
-        let instant = Instant::now();
+        let root = Span::root(
+            func_name!(),
+            SpanContext::new(TraceId::random(), SpanId::default()),
+        );
+        async {
+            let instant = Instant::now();
 
-        let query_result = context.try_spawn({
-            let ctx = context.clone();
-            async move {
-                let mut data_stream = interpreter.execute(ctx.clone()).await?;
-                histogram!(
-                    super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
-                    instant.elapsed()
-                );
+            let query_result = context.try_spawn({
+                let ctx = context.clone();
+                async move {
+                    let mut data_stream = interpreter.execute(ctx.clone()).await?;
+                    histogram!(
+                        super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
+                        instant.elapsed()
+                    );
 
-                // Wrap the data stream, log finish event at the end of stream
-                let intercepted_stream = async_stream::stream! {
+                    // Wrap the data stream, log finish event at the end of stream
+                    let intercepted_stream = async_stream::stream! {
 
-                    while let Some(item) = data_stream.next().await {
-                        yield item
+                        while let Some(item) = data_stream.next().await {
+                            yield item
+                        };
                     };
-                };
 
-                Ok::<_, ErrorCode>(intercepted_stream.boxed())
-            }
-            .in_span(Span::enter_with_local_parent("exec_query"))
-        })?;
+                    Ok::<_, ErrorCode>(intercepted_stream.boxed())
+                }
+                .in_span(Span::enter_with_local_parent("exec_query"))
+            })?;
 
-        let query_result = query_result.await.map_err_to_code(
-            ErrorCode::TokioError,
-            || "Cannot join handle from context's runtime",
-        )?;
-        let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
-            as Box<dyn ProgressReporter + Send>;
-        query_result.map(|data| (data, Some(reporter)))
+            let query_result = query_result.await.map_err_to_code(
+                ErrorCode::TokioError,
+                || "Cannot join handle from context's runtime",
+            )?;
+            let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
+                as Box<dyn ProgressReporter + Send>;
+            query_result.map(|data| (data, Some(reporter)))
+        }
+        .in_span(root)
+        .await
     }
 
     #[async_backtrace::framed]

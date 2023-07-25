@@ -330,10 +330,16 @@ impl PipelineExecutor {
                 let try_result = catch_unwind(move || -> Result<()> {
                     match this_clone.execute_single_thread(thread_num) {
                         Ok(_) => Ok(()),
-                        Err(cause) => Err(cause.add_message_back(format!(
-                            " (while in processor thread {})",
-                            thread_num
-                        ))),
+                        Err(cause) => {
+                            if log::max_level() == LevelFilter::Trace {
+                                Err(cause.add_message_back(format!(
+                                    " (while in processor thread {})",
+                                    thread_num
+                                )))
+                            } else {
+                                Err(cause)
+                            }
+                        }
                     }
                 });
 

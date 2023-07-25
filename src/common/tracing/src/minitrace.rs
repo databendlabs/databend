@@ -56,6 +56,29 @@ pub fn inject_span_to_tonic_request<T>(msg: impl tonic::IntoRequest<T>) -> tonic
 pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync + 'static>> {
     let mut guards: Vec<Box<dyn Drop + Send + Sync + 'static>> = vec![];
 
+    // Initialize tracing reporter
+    let jaeger_collector_endpoint = std::env::var("DATABEND_JAEGER_COLLECTOR_ENDPOINT").ok();
+    if let Some(jaeger_collector_endpoint) = jaeger_collector_endpoint.clone() {
+        let name = name.to_string();
+        let otlp_reporter = std::thread::spawn(move || {
+            minitrace_opentelemetry::OpenTelemetryReporter::new(
+                opentelemetry_jaeger::new_collector_pipeline()
+                    .with_endpoint(jaeger_collector_endpoint)
+                    .with_reqwest_blocking()
+                    .with_service_name(&name)
+                    .build_collector_exporter::<opentelemetry::runtime::Tokio>()
+                    .expect("initialize jaeger exporter"),
+                opentelemetry::trace::SpanKind::Server,
+                Cow::Owned(opentelemetry::sdk::Resource::default()),
+                opentelemetry::InstrumentationLibrary::new(name.to_string(), None, None),
+            )
+        })
+        .join()
+        .unwrap();
+        minitrace::set_reporter(otlp_reporter, minitrace::collector::Config::default());
+        guards.push(Box::new(defer::defer(minitrace::flush)));
+    }
+
     // Initialize logging
     let mut logger = fern::Dispatch::new();
 
@@ -106,44 +129,26 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
         );
     }
 
-    // Log to minitrace
-    let level = std::env::var("RUST_LOG")
-        .ok()
-        .and_then(|level| level.parse().ok())
-        .unwrap_or(LevelFilter::Error);
-    logger = logger.chain(
-        fern::Dispatch::new()
-            .level(level)
-            .chain(Box::new(MinitraceLogger) as Box<dyn Log>),
-    );
+    if let Some(_) = jaeger_collector_endpoint {
+        // Log to minitrace
+        let level = std::env::var("TRACE_LOG")
+            .ok()
+            .and_then(|level| level.parse().ok())
+            .unwrap_or(LevelFilter::Info);
+        logger = logger.chain(
+            fern::Dispatch::new()
+                .level(level)
+                .chain(Box::new(MinitraceLogger) as Box<dyn Log>),
+        );
+    }
 
     // Set global logger
-    if let Err(_) = log::set_boxed_logger(logger.into_log().1) {
+    let (max_level, logger) = logger.into_log();
+    if let Err(_) = log::set_boxed_logger(logger) {
         eprint!("logger has already been set");
         return Vec::new();
     }
-
-    // Initialize tracing reporter
-    let name = name.to_string();
-    let jaeger_collector_endpoint = std::env::var("DATABEND_JAEGER_AGENT_ENDPOINT")
-        .unwrap_or_else(|_| "http://localhost:14268/api/traces".to_string());
-    let otlp_reporter = std::thread::spawn(move || {
-        minitrace_opentelemetry::OpenTelemetryReporter::new(
-            opentelemetry_jaeger::new_collector_pipeline()
-                .with_endpoint(jaeger_collector_endpoint)
-                .with_reqwest_blocking()
-                .with_service_name(&name)
-                .build_collector_exporter::<opentelemetry::runtime::Tokio>()
-                .expect("initialize jaeger exporter"),
-            opentelemetry::trace::SpanKind::Server,
-            Cow::Owned(opentelemetry::sdk::Resource::default()),
-            opentelemetry::InstrumentationLibrary::new(name.to_string(), None, None),
-        )
-    })
-    .join()
-    .unwrap();
-    minitrace::set_reporter(otlp_reporter, minitrace::collector::Config::default());
-    guards.push(Box::new(defer::defer(minitrace::flush)));
+    log::set_max_level(max_level);
 
     #[cfg(feature = "console")]
     init_tokio_console();
