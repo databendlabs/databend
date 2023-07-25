@@ -76,7 +76,7 @@ impl FuseTable {
         let mut purged_snapshot_count = 0;
 
         let catalog = ctx.get_catalog(&ctx.get_current_catalog())?;
-        let table_agg_indexes = catalog
+        let table_agg_index_ids = catalog
             .list_indexes_by_table_id(ListIndexesByIdReq {
                 tenant: ctx.get_tenant(),
                 table_id: self.get_id(),
@@ -164,6 +164,7 @@ impl FuseTable {
                         segments_to_be_purged,
                         ts_to_be_purged,
                         snapshots_to_be_purged,
+                        &table_agg_index_ids,
                     )
                     .await?;
 
@@ -178,7 +179,7 @@ impl FuseTable {
                         segments_to_be_purged,
                         ts_to_be_purged,
                         snapshots_to_be_purged,
-                        &table_agg_indexes,
+                        &table_agg_index_ids,
                     )
                     .await?;
 
@@ -218,6 +219,7 @@ impl FuseTable {
                     segments_to_be_purged,
                     ts_to_be_purged,
                     snapshots_to_be_purged,
+                    &table_agg_index_ids,
                 )
                 .await?;
             } else {
@@ -228,7 +230,7 @@ impl FuseTable {
                     segments_to_be_purged,
                     ts_to_be_purged,
                     snapshots_to_be_purged,
-                    &table_agg_indexes,
+                    &table_agg_index_ids,
                 )
                 .await?;
             }
@@ -246,7 +248,7 @@ impl FuseTable {
                 root_snapshot_info.snapshot_lite,
                 root_snapshot_info.referenced_locations,
                 root_snapshot_info.snapshot_location,
-                &table_agg_indexes,
+                &table_agg_index_ids,
             )
             .await?;
         }
@@ -303,6 +305,7 @@ impl FuseTable {
         }))
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn dry_run_purge(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -311,6 +314,7 @@ impl FuseTable {
         segments_to_be_purged: HashSet<Location>,
         ts_to_be_purged: HashSet<String>,
         snapshots_to_be_purged: HashSet<String>,
+        table_agg_index_ids: &[u64],
     ) -> Result<()> {
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         // Purge segments&blocks by chunk size
@@ -325,7 +329,14 @@ impl FuseTable {
                 if locations_referenced_by_root.block_location.contains(loc) {
                     continue;
                 }
-                purge_files.push(loc.to_string())
+                purge_files.push(loc.to_string());
+                for index_id in table_agg_index_ids {
+                    purge_files.push(
+                        TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
+                            loc, *index_id,
+                        ),
+                    )
+                }
             }
 
             for loc in &locations.bloom_location {
@@ -352,7 +363,7 @@ impl FuseTable {
         segments_to_be_purged: HashSet<Location>,
         ts_to_be_purged: HashSet<String>,
         snapshots_to_be_purged: HashSet<String>,
-        table_agg_indexes: &[u64],
+        table_agg_index_ids: &[u64],
     ) -> Result<()> {
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         // Purge segments&blocks by chunk size
@@ -371,7 +382,7 @@ impl FuseTable {
                     continue;
                 }
                 blocks_to_be_purged.insert(loc.to_string());
-                for index_id in table_agg_indexes {
+                for index_id in table_agg_index_ids {
                     agg_indexes_to_be_purged.insert(
                         TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
                             loc, *index_id,
@@ -429,7 +440,7 @@ impl FuseTable {
         root_snapshot: Arc<SnapshotLiteExtended>,
         root_location_tuple: LocationTuple,
         root_snapshot_location: String,
-        table_agg_indexes: &[u64],
+        table_agg_index_ids: &[u64],
     ) -> Result<()> {
         let segment_locations_to_be_purged = HashSet::from_iter(
             root_snapshot
@@ -440,7 +451,7 @@ impl FuseTable {
         );
 
         let mut agg_indexes_to_be_purged = HashSet::new();
-        for index_id in table_agg_indexes {
+        for index_id in table_agg_index_ids {
             agg_indexes_to_be_purged.extend(root_location_tuple.block_location.iter().map(|loc| {
                 TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
                     loc, *index_id,
