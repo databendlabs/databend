@@ -10154,6 +10154,7 @@ dependencies = [
  "common-functions",
  "criterion",
  "match-template",
+ "minitrace",
  "rand 0.8.5",
  "serde",
  "storages-common-table-meta",

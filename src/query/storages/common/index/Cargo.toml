@@ -25,6 +25,7 @@ storages-common-table-meta = { path = "../table-meta" }
 anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }
 match-template = "0.0.1"
+minitrace = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 
