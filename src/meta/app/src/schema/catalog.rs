@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Display;
+use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -55,6 +56,13 @@ pub struct HiveCatalogOption {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct IcebergCatalogOption {
     pub storage_params: Box<StorageParams>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct CatalogInfo {
+    pub id: CatalogId,
+    pub name_ident: CatalogNameIdent,
+    pub meta: CatalogMeta,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -136,6 +144,35 @@ impl Display for DropCatalogReq {
             self.if_exists, self.name_ident.tenant, self.name_ident.catalog_name
         )
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetCatalogReq {
+    pub inner: CatalogNameIdent,
+}
+
+impl Deref for GetCatalogReq {
+    type Target = CatalogNameIdent;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl GetCatalogReq {
+    pub fn new(tenant: impl Into<String>, catalog_name: impl Into<String>) -> GetCatalogReq {
+        GetCatalogReq {
+            inner: CatalogNameIdent {
+                tenant: tenant.into(),
+                catalog_name: catalog_name.into(),
+            },
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ListCatalogReq {
+    pub tenant: String,
 }
 
 mod kvapi_key_impl {
