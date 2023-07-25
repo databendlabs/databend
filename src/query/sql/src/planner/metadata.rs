@@ -56,8 +56,10 @@ pub type MetadataRef = Arc<RwLock<Metadata>>;
 pub struct Metadata {
     tables: Vec<TableEntry>,
     columns: Vec<ColumnEntry>,
-    //// Columns that are lazy materialized.
-    lazy_columns: HashSet<usize>,
+    /// Columns that are lazy materialized.
+    lazy_columns: HashSet<IndexType>,
+    /// Mappings from table index to _row_id column index.
+    table_row_id_index: HashMap<IndexType, IndexType>,
     agg_indexes: HashMap<String, Vec<(u64, String, SExpr)>>,
     max_column_position: usize, // for CSV
 }
@@ -126,6 +128,21 @@ impl Metadata {
 
     pub fn lazy_columns(&self) -> &HashSet<usize> {
         &self.lazy_columns
+    }
+
+    pub fn set_talbe_row_id_index(&mut self, table_index: IndexType, row_id_index: IndexType) {
+        self.table_row_id_index.insert(table_index, row_id_index);
+    }
+
+    pub fn row_id_index_by_table_index(&self, table_index: IndexType) -> Option<IndexType> {
+        self.table_row_id_index.get(&table_index).copied()
+    }
+
+    pub fn row_id_indexes(&self) -> Vec<IndexType> {
+        self.table_row_id_index
+            .iter()
+            .map(|(_, row_id_index)| *row_id_index)
+            .collect()
     }
 
     pub fn columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {

@@ -234,6 +234,7 @@ impl UnusedColumnPruner {
                         .difference(lazy_columns)
                         .cloned()
                         .collect::<ColumnSet>();
+                    required.extend(metadata.row_id_indexes());
                 }
 
                 Ok(SExpr::create_unary(
