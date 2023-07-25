@@ -31,7 +31,6 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
-use tracing::error;
 use tracing::info;
 
 use super::ConflictResolveContext;

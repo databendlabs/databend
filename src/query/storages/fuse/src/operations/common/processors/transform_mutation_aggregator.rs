@@ -25,8 +25,6 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use tracing::debug;
 
-use crate::io::TableMetaLocationGenerator;
-use crate::operations::common::mutation_accumulator::MutationKind;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::MutationAccumulator;
 use crate::operations::common::MutationLogs;
