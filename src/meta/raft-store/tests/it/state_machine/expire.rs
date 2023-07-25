@@ -15,7 +15,6 @@
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_base::base::tokio;
 use common_meta_raft_store::key_spaces::Expire;
 use common_meta_raft_store::key_spaces::GenericKV;
 use common_meta_raft_store::state_machine::ExpireKey;
@@ -29,11 +28,13 @@ use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::UpsertKV;
 use common_meta_types::With;
+use test_harness::test;
 
 use crate::testing::new_raft_test_context;
+use crate::testing::raft_store_test_harness;
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_state_machine_update_expiration_index() -> anyhow::Result<()> {
     // - Update expiration index when upsert.
     // - Remove from expiration index when overriding
@@ -98,8 +99,8 @@ async fn test_state_machine_update_expiration_index() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_state_machine_list_expired() -> anyhow::Result<()> {
     // - Feed logs into state machine.
     // - List expired keys

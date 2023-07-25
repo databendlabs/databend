@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_types::new_log_id;
+use test_harness::test;
 
 use crate::testing::new_raft_test_context;
+use crate::testing::raft_store_test_harness;
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_state_machine_snapshot() -> anyhow::Result<()> {
     // - Feed logs into state machine.
     // - Take a snapshot and examine the data

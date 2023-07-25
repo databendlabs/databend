@@ -38,6 +38,7 @@ use common_meta_types::StorageError;
 use common_meta_types::StoredMembership;
 use common_meta_types::TypeConfig;
 use common_meta_types::Vote;
+use log::as_debug;
 use log::debug;
 use log::error;
 use log::info;
@@ -169,7 +170,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
     #[minitrace::trace]
     async fn save_vote(&mut self, hs: &Vote) -> Result<(), StorageError> {
-        info!(id = self.id, hs = hs as &dyn Debug; "save_vote");
+        info!(id = self.id, hs = as_debug!(hs); "save_vote");
 
         match self
             .raft_state
@@ -207,7 +208,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
     #[minitrace::trace]
     async fn purge_logs_upto(&mut self, log_id: LogId) -> Result<(), StorageError> {
-        info!(id = self.id, log_id = &log_id as &dyn Debug; "purge_logs_upto");
+        info!(id = self.id, log_id = as_debug!(&log_id); "purge_logs_upto");
 
         if let Err(err) = self
             .log

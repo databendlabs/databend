@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::fmt::Debug;
-use std::fmt::Display;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -63,6 +62,8 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
 use common_meta_types::With;
+use log::as_debug;
+use log::as_display;
 use log::debug;
 use log::error;
 use log::info;
@@ -297,7 +298,7 @@ impl StateMachine {
     #[minitrace::trace]
     pub async fn apply(&self, entry: &Entry) -> Result<AppliedState, MetaStorageError> {
         info!("apply: summary: {}", entry.summary(),);
-        debug!(log_id = &entry.log_id as &dyn Display; "sled tx start: {:?}", entry);
+        debug!(log_id = as_display!(&entry.log_id); "sled tx start: {:?}", entry);
 
         let log_id = &entry.log_id;
         let log_time_ms = Self::get_log_time(entry);
@@ -461,7 +462,7 @@ impl StateMachine {
         txn_tree: &mut TransactionSledTree,
         log_time_ms: u64,
     ) -> Result<AppliedState, MetaStorageError> {
-        debug!(upsert_kv = upsert_kv as &dyn Debug; "apply_update_kv_cmd");
+        debug!(upsert_kv = as_debug!(upsert_kv); "apply_update_kv_cmd");
 
         let (expired, prev, result) = Self::txn_upsert_kv(txn_tree, upsert_kv, log_time_ms)?;
 
@@ -515,7 +516,7 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
         cond: &TxnCondition,
     ) -> Result<bool, MetaStorageError> {
-        debug!(cond = cond as &dyn Display; "txn_execute_one_condition");
+        debug!(cond = as_display!(cond); "txn_execute_one_condition");
 
         let key = cond.key.clone();
 
@@ -558,7 +559,7 @@ impl StateMachine {
         condition: &Vec<TxnCondition>,
     ) -> Result<bool, MetaStorageError> {
         for cond in condition {
-            debug!(condition = cond as &dyn Display; "txn_execute_condition");
+            debug!(condition = as_display!(cond); "txn_execute_condition");
 
             if !self.txn_execute_one_condition(txn_tree, cond)? {
                 return Ok(false);
@@ -712,7 +713,7 @@ impl StateMachine {
         resp: &mut TxnReply,
         log_time_ms: u64,
     ) -> Result<(), MetaStorageError> {
-        debug!(op = op as &dyn Display; "txn execute TxnOp");
+        debug!(op = as_display!(op); "txn execute TxnOp");
         match &op.request {
             Some(txn_op::Request::Get(get)) => {
                 self.txn_execute_get_operation(txn_tree, get, resp)?;
@@ -746,7 +747,7 @@ impl StateMachine {
         kv_pairs: Option<&(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>,
         log_time_ms: u64,
     ) -> Result<AppliedState, MetaStorageError> {
-        debug!(txn = req as &dyn Display; "apply txn cmd");
+        debug!(txn = as_display!(req); "apply txn cmd");
 
         let condition = &req.condition;
 

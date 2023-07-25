@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_raft_store::state_machine::SerializableSnapshot;
@@ -40,7 +39,9 @@ use log::debug;
 use log::info;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;
 
 struct MetaStoreBuilder {}
@@ -57,16 +58,16 @@ impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaSto
     }
 }
 
-#[minitrace::trace(root = true)]
-#[test]
-fn test_impl_raft_storage() -> anyhow::Result<()> {
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
+async fn test_impl_raft_storage() -> anyhow::Result<()> {
     common_meta_sled_store::openraft::testing::Suite::test_all(MetaStoreBuilder {})?;
 
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_store_restart() -> anyhow::Result<()> {
     // - Create a meta store
     // - Update meta store
@@ -119,8 +120,8 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Apply logs
@@ -157,8 +158,8 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Apply logs
@@ -199,8 +200,8 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Feed logs

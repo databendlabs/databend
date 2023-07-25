@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
 use std::sync::Arc;
 
 use arrow_array::types::UInt64Type;
@@ -23,6 +22,7 @@ use arrow_array::RecordBatch;
 use background_service::Suggestion;
 use common_exception::Result;
 use common_meta_app::schema::TableStatistics;
+use log::as_debug;
 use log::info;
 
 use crate::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
@@ -80,7 +80,7 @@ impl SuggestedBackgroundTasksProcedure {
         let resps = Self::do_get_all_suggested_compaction_tables(ctx).await?;
         let mut suggestions = vec![];
         for records in resps {
-            info!(records = &records as &dyn Debug; "target_tables");
+            info!(records = as_debug!(&records); "target_tables");
             let db_names = records
                 .column(0)
                 .as_any()

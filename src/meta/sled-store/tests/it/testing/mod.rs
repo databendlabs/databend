@@ -15,14 +15,14 @@
 pub mod fake_key_spaces;
 pub mod fake_state_machine_meta;
 
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::Once;
 
 use common_base::base::GlobalSequence;
 use common_meta_sled_store::get_sled_db;
+use common_tracing::closure_name;
 use common_tracing::init_logging;
 use common_tracing::Config;
-use once_cell::sync::Lazy;
+use minitrace::prelude::*;
 
 pub struct SledTestContext {
     pub tree_name: String,
@@ -37,31 +37,43 @@ pub fn new_sled_test_context() -> SledTestContext {
     }
 }
 
-pub fn next_seq() -> u32 {
+fn next_seq() -> u32 {
     29000u32 + (GlobalSequence::next() as u32)
 }
 
-#[allow(dyn_drop)]
-struct MetaLogGuard {
-    #[allow(dead_code)]
-    log_guards: Vec<Box<dyn Drop + Send + Sync + 'static>>,
+pub fn sled_test_harness<F, Fut>(test: F)
+where
+    F: FnOnce() -> Fut + 'static,
+    Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
+{
+    setup_test();
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    let root = Span::root(
+        closure_name::<F>(),
+        SpanContext::new(TraceId::random(), SpanId::default()),
+    );
+    let test = test().in_span(root);
+    rt.block_on(test).unwrap();
+
+    shutdown_test();
 }
 
-static META_LOG_GUARD: Lazy<Arc<Mutex<Option<MetaLogGuard>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(None)));
+fn setup_test() {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        let t = tempfile::tempdir().expect("create temp dir to sled db");
+        common_meta_sled_store::init_temp_sled_db(t);
 
-/// Initialize unit test tracing for metasrv
-#[ctor::ctor]
-fn init_meta_ut_tracing() {
-    let guards = init_logging("meta_unittests", &Config::new_testing());
-
-    *META_LOG_GUARD.as_ref().lock().unwrap() = Some(MetaLogGuard { log_guards: guards });
-
-    let t = tempfile::tempdir().expect("create temp dir to sled db");
-    common_meta_sled_store::init_temp_sled_db(t);
+        let guards = init_logging("meta_unittests", &Config::new_testing());
+        Box::leak(Box::new(guards));
+    });
 }
 
-#[ctor::dtor]
-fn cleanup_meta_ut_tracing() {
-    META_LOG_GUARD.as_ref().lock().unwrap().take();
+fn shutdown_test() {
+    minitrace::flush();
 }

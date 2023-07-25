@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
 use common_metrics::init_default_metrics_recorder;
 use databend_meta::api::http::v1::metrics::metrics_handler;
 use log::info;
@@ -26,11 +25,13 @@ use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::meta_node::start_meta_node_cluster;
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_metrics() -> anyhow::Result<()> {
     init_default_metrics_recorder();
 

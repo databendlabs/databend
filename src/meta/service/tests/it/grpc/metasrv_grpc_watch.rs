@@ -41,6 +41,9 @@ use common_meta_types::TxnOp;
 use common_meta_types::TxnPutRequest;
 use databend_meta::meta_service::MetaNode;
 use log::info;
+use test_harness::test;
+
+use crate::testing::meta_service_test_harness;
 
 async fn test_watch_main(
     addr: String,
@@ -112,8 +115,8 @@ async fn test_watch_txn_main(
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_watch() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Watch some key.
@@ -345,8 +348,8 @@ async fn test_watch() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_watch_expired_events() -> anyhow::Result<()> {
     // Test events emitted when cleaning expired key:
     // - Before applying, 32 expired keys will be cleaned.
@@ -493,8 +496,8 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_watch_stream_count() -> anyhow::Result<()> {
     // When the client drops the stream, databend-meta should reclaim the resources.
 

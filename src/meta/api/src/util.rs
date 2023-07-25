@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::fmt::Debug;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -69,6 +68,8 @@ use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
 use common_proto_conv::FromToProto;
 use enumflags2::BitFlags;
+use log::as_debug;
+use log::as_display;
 use log::debug;
 use log::warn;
 use ConditionResult::Eq;
@@ -366,7 +367,7 @@ pub fn db_has_to_exist(
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq = seq, db_name_ident = db_name_ident as &dyn Debug; "db does not exist");
+        debug!(seq = seq, db_name_ident = as_debug!(db_name_ident); "db does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownDatabase(
             UnknownDatabase::new(
@@ -391,7 +392,7 @@ pub fn assert_table_exist(
         return Ok(());
     }
 
-    debug!(seq = seq, name_ident = name_ident as &dyn Debug; "does not exist");
+    debug!(seq = seq, name_ident = as_debug!(name_ident); "does not exist");
 
     Err(UnknownTable::new(
         &name_ident.table_name,
@@ -411,7 +412,7 @@ pub fn assert_table_id_exist(
         return Ok(());
     }
 
-    debug!(seq = seq, table_id = table_id as &dyn Debug; "does not exist");
+    debug!(seq = seq, table_id = as_debug!(table_id); "does not exist");
 
     Err(UnknownTableId::new(
         table_id.table_id,
@@ -432,8 +433,8 @@ pub async fn get_table_by_id_or_err(
     let table_meta = table_meta.unwrap();
 
     debug!(
-        ident = table_id as &dyn Display,
-        table_meta = &table_meta as &dyn Debug;
+        ident = as_display!(table_id),
+        table_meta = as_debug!(&table_meta);
         "{}",
         ctx
     );
@@ -503,7 +504,7 @@ fn share_endpoint_has_to_exist(
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq = seq, name_key = name_key as &dyn Debug; "share endpoint does not exist");
+        debug!(seq = seq, name_key = as_debug!(name_key); "share endpoint does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownShareEndpoint(
             UnknownShareEndpoint::new(&name_key.endpoint, format!("{}: {}", msg, name_key)),
@@ -588,7 +589,7 @@ fn share_has_to_exist(
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq = seq, share_name_ident = share_name_ident as &dyn Debug; "share does not exist");
+        debug!(seq = seq, share_name_ident = as_debug!(share_name_ident); "share does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownShare(
             UnknownShare::new(
@@ -627,7 +628,7 @@ fn share_account_meta_has_to_exist(
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq = seq, name_key = name_key as &dyn Debug; "share account does not exist");
+        debug!(seq = seq, name_key = as_debug!(name_key); "share account does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownShareAccounts(
             UnknownShareAccounts::new(
@@ -1223,8 +1224,8 @@ pub async fn get_virtual_column_by_id_or_err(
     let virtual_column_meta = virtual_column_meta.unwrap();
 
     debug!(
-        ident = name_ident as &dyn Display,
-        table_meta = &virtual_column_meta as &dyn Debug;
+        ident = as_display!(name_ident),
+        table_meta = as_debug!(&virtual_column_meta);
         "{}",
         ctx
     );

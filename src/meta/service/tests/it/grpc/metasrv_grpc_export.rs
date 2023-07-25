@@ -14,7 +14,6 @@
 
 use std::time::Duration;
 
-use common_base::base::tokio;
 use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
@@ -22,10 +21,12 @@ use common_meta_types::protobuf::Empty;
 use log::info;
 use pretty_assertions::assert_eq;
 use regex::Regex;
+use test_harness::test;
 use tokio_stream::StreamExt;
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+use crate::testing::meta_service_test_harness;
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_export() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Write some data

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
 use common_meta_sled_store::SledItem;
 use common_meta_sled_store::SledTree;
 use common_meta_types::new_log_id;
@@ -24,14 +23,15 @@ use common_meta_types::UpsertKV;
 use log::info;
 use pretty_assertions::assert_eq;
 use sled::IVec;
-use testing::new_sled_test_context;
+use test_harness::test;
 
-use crate::testing;
 use crate::testing::fake_key_spaces::Logs;
+use crate::testing::new_sled_test_context;
+use crate::testing::sled_test_harness;
 
 /// Feed some data to two trees, iterate them and check output.
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_sled_iter() -> anyhow::Result<()> {
     let logs: Vec<Entry> = vec![
         Entry {

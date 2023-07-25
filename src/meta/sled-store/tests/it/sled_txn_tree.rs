@@ -12,17 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
 use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
 use common_meta_types::Endpoint;
 use common_meta_types::Node;
+use test_harness::test;
 
 use crate::testing::fake_key_spaces::Nodes;
 use crate::testing::new_sled_test_context;
+use crate::testing::sled_test_harness;
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> {
     // Test transactional API insert, get, remove on a sub key space of TransactionSledTree
 
@@ -64,8 +65,8 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_sled_txn_tree_key_space_remove() -> anyhow::Result<()> {
     // Test transactional API insert, get, remove on a sub key space of TransactionSledTree
 

@@ -21,6 +21,7 @@ use common_meta_stoerr::MetaStorageError;
 use common_meta_types::MetaStartupError;
 use common_meta_types::NodeId;
 use common_meta_types::Vote;
+use log::as_debug;
 use log::debug;
 use log::info;
 
@@ -65,7 +66,7 @@ impl RaftState {
         open: Option<()>,
         create: Option<()>,
     ) -> Result<RaftState, MetaStartupError> {
-        info!(config = config as &dyn Debug; "open: {:?}, create: {:?}", open, create);
+        info!(config = as_debug!(config); "open: {:?}, create: {:?}", open, create);
 
         let tree_name = config.tree_name(TREE_RAFT_STATE);
         let inner = SledTree::open(db, &tree_name, config.is_sync())?;

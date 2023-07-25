@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
 use std::io::Cursor;
 use std::io::ErrorKind;
 use std::sync::Arc;
@@ -45,6 +44,7 @@ use common_meta_types::Snapshot;
 use common_meta_types::SnapshotMeta;
 use common_meta_types::StorageError;
 use common_meta_types::StorageIOError;
+use log::as_display;
 use log::debug;
 use log::info;
 use log::warn;
@@ -120,7 +120,7 @@ impl StoreInner {
         open: Option<()>,
         create: Option<()>,
     ) -> Result<StoreInner, MetaStartupError> {
-        info!(config_id = &config.config_id as &dyn Display; "open: {:?}, create: {:?}", open, create);
+        info!(config_id = as_display!(&config.config_id); "open: {:?}, create: {:?}", open, create);
 
         let db = get_sled_db();
 

@@ -14,7 +14,6 @@
 
 #![deny(unused_crate_dependencies)]
 
-use std::fmt::Debug;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
@@ -35,6 +34,7 @@ use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
+use log::as_debug;
 use log::info;
 use tokio_stream::Stream;
 
@@ -134,7 +134,7 @@ impl MetaStoreProvider {
     pub async fn create_meta_store(&self) -> Result<MetaStore, MetaError> {
         if self.rpc_conf.local_mode() {
             info!(
-                conf = &self.rpc_conf as &dyn Debug;
+                conf = as_debug!(&self.rpc_conf);
                 "use embedded meta, data will be removed when process exits"
             );
 
@@ -142,7 +142,7 @@ impl MetaStoreProvider {
             let meta_store = MetaEmbedded::get_meta().await?;
             Ok(MetaStore::L(meta_store))
         } else {
-            info!(conf = &self.rpc_conf as &dyn Debug; "use remote meta");
+            info!(conf = as_debug!(&self.rpc_conf); "use remote meta");
             let client = MetaGrpcClient::try_new(&self.rpc_conf)?;
             Ok(MetaStore::R(client))
         }

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
 use common_meta_sled_store::SledTree;
 use common_meta_types::new_log_id;
 use common_meta_types::Cmd;
@@ -22,9 +21,8 @@ use common_meta_types::LogEntry;
 use common_meta_types::LogIndex;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
-use testing::new_sled_test_context;
+use test_harness::test;
 
-use crate::testing;
 use crate::testing::fake_key_spaces::Files;
 use crate::testing::fake_key_spaces::GenericKV;
 use crate::testing::fake_key_spaces::Logs;
@@ -32,9 +30,11 @@ use crate::testing::fake_key_spaces::StateMachineMeta;
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey::Initialized;
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey::LastApplied;
 use crate::testing::fake_state_machine_meta::StateMachineMetaValue;
+use crate::testing::new_sled_test_context;
+use crate::testing::sled_test_harness;
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_sled_tree_open() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -43,8 +43,8 @@ async fn test_sled_tree_open() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_as_range() -> anyhow::Result<()> {
     // This test assumes the following order.
     // to check the range boundary.
@@ -114,8 +114,8 @@ async fn test_as_range() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_last() -> anyhow::Result<()> {
     // This test assumes the following order.
     // To ensure a last() does not returns item from another key space with smaller prefix
@@ -169,8 +169,8 @@ async fn test_key_space_last() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_append() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -223,8 +223,8 @@ async fn test_key_space_append() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_append_and_range_get() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -293,8 +293,8 @@ async fn test_key_space_append_and_range_get() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_range_kvs() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -328,8 +328,8 @@ async fn test_key_space_range_kvs() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_scan_prefix() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -370,8 +370,8 @@ async fn test_key_space_scan_prefix() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_insert() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -427,8 +427,8 @@ async fn test_key_space_insert() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_get() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -464,8 +464,8 @@ async fn test_key_space_get() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_range_remove() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -520,8 +520,8 @@ async fn test_key_space_range_remove() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_multi_types() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -585,8 +585,8 @@ async fn test_key_space_multi_types() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_export() -> anyhow::Result<()> {
     async {
         let tc = new_sled_test_context();

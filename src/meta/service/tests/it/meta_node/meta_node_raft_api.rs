@@ -22,7 +22,9 @@ use common_meta_types::LogEntry;
 use common_meta_types::UpsertKV;
 use log::info;
 use maplit::btreeset;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::meta_node::start_meta_node_cluster;
 
 /// When a follower is dumping a snapshot, it should not block append entries request.
@@ -31,8 +33,8 @@ use crate::tests::meta_node::start_meta_node_cluster;
 /// Building a snapshot includes two steps:
 /// 1. Dumping the state machine to a in-memory struct.
 /// 2. Serialize the dumped data.
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_node_dumping_snapshot_does_not_block_append_entries() -> anyhow::Result<()> {
     info!("--- initialize cluster 2 voters");
     let (mut _log_index, mut tcs) = start_meta_node_cluster(btreeset![0, 1], btreeset![]).await?;
@@ -77,8 +79,8 @@ async fn test_meta_node_dumping_snapshot_does_not_block_append_entries() -> anyh
 /// Building a snapshot includes two steps:
 /// 1. Dumping the state machine to a in-memory struct.
 /// 2. Serialize the dumped data.
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_node_serializing_snapshot_does_not_block_append_entries() -> anyhow::Result<()> {
     info!("--- initialize cluster 2 voters");
     let (mut _log_index, mut tcs) = start_meta_node_cluster(btreeset![0, 1], btreeset![]).await?;

@@ -17,7 +17,6 @@
 
 use std::time::Duration;
 
-use common_base::base::tokio;
 use common_base::base::Stoppable;
 use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
@@ -26,7 +25,9 @@ use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use log::info;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::service::start_metasrv_cluster;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
@@ -35,8 +36,8 @@ use crate::tests::start_metasrv_with_context;
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.
 /// - Test upsert kv and read on different nodes.
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
     fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
@@ -121,8 +122,8 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.
 /// - Test read kv using same grpc client.
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
     fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;

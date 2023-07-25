@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
-use std::fmt::Debug;
 
 use common_base::base::tokio::sync::RwLockReadGuard;
 use common_meta_kvapi::kvapi::KVApi;
@@ -33,6 +32,7 @@ use common_meta_types::NodeId;
 use common_meta_types::RaftError;
 use common_meta_types::SeqV;
 use common_metrics::counter::Count;
+use log::as_debug;
 use log::debug;
 use log::info;
 use maplit::btreemap;
@@ -71,7 +71,7 @@ impl<'a> MetaLeader<'a> {
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaOperationError> {
-        debug!(req = &req as &dyn Debug, target = req.forward_to_leader; "handle_forwardable_req");
+        debug!(req = as_debug!(&req), target = req.forward_to_leader; "handle_forwardable_req");
 
         match req.body {
             ForwardRequestBody::Ping => Ok(ForwardResponse::Pong),

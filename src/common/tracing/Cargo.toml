@@ -23,8 +23,11 @@ defer = "0.1"
 fern = "0.6.2"
 humantime = "2.1.0"
 log = { workspace = true }
-minitrace = { workspace = true }
-minitrace-jaeger = "0.4"
+minitrace = { version = "0.4", features = ["enable"] }
+minitrace-opentelemetry = "0.4"
+opentelemetry = { version = "0.19", features = ["trace"] }
+opentelemetry-jaeger = { version = "0.18", features = ["rt-tokio", "reqwest_blocking_collector_client"] }
+
 serde = { workspace = true }
 serde_json = "1"
 tonic = { workspace = true }

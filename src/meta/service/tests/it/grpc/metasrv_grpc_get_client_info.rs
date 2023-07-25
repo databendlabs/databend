@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
 use pretty_assertions::assert_eq;
 use regex::Regex;
+use test_harness::test;
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+use crate::testing::meta_service_test_harness;
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_get_client_info() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Get client ip

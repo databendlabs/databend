@@ -66,6 +66,8 @@ use common_metrics::label_decrement_gauge_with_val_and_labels;
 use common_metrics::label_histogram_with_val;
 use common_metrics::label_increment_gauge_with_val_and_labels;
 use futures::stream::StreamExt;
+use log::as_debug;
+use log::as_display;
 use log::debug;
 use log::error;
 use log::info;
@@ -378,11 +380,11 @@ impl MetaGrpcClient {
                 Some(x) => x,
             };
 
-            debug!(req = &req as &dyn Debug; "MetaGrpcClient recv request");
+            debug!(req = as_debug!(&req); "MetaGrpcClient recv request");
 
             if req.resp_tx.is_closed() {
                 debug!(
-                    req = &req as &dyn Debug;
+                    req = as_debug!(&req);
                     "MetaGrpcClient request.resp_tx is closed, cancel handling this request"
                 );
                 continue;
@@ -454,7 +456,7 @@ impl MetaGrpcClient {
             };
 
             debug!(
-                resp = &resp as &dyn Debug;
+                resp = as_debug!(&resp);
                 "MetaGrpcClient send response to the handle"
             );
 
@@ -506,7 +508,7 @@ impl MetaGrpcClient {
             let send_res = resp_tx.send(resp);
             if let Err(err) = send_res {
                 error!(
-                    err = &err as &dyn Debug;
+                    err = as_debug!(&err);
                     "MetaGrpcClient failed to send response to the handle. recv-end closed"
                 );
             }
@@ -785,8 +787,8 @@ impl MetaGrpcClient {
         password: &str,
     ) -> Result<Vec<u8>, MetaHandshakeError> {
         debug!(
-            client_ver = client_ver as &dyn Display,
-            min_metasrv_ver = min_metasrv_ver as &dyn Display;
+            client_ver = as_display!(client_ver),
+            min_metasrv_ver = as_display!(min_metasrv_ver);
             "client version"
         );
 
@@ -851,7 +853,7 @@ impl MetaGrpcClient {
         watch_request: WatchRequest,
     ) -> Result<tonic::codec::Streaming<WatchResponse>, MetaError> {
         debug!(
-            watch_request = &watch_request as &dyn Debug;
+            watch_request = as_debug!(&watch_request);
             "MetaGrpcClient worker: handle watch request"
         );
 
@@ -867,7 +869,7 @@ impl MetaGrpcClient {
         export_request: message::ExportReq,
     ) -> Result<tonic::codec::Streaming<ExportedChunk>, MetaError> {
         debug!(
-            export_request = &export_request as &dyn Debug;
+            export_request = as_debug!(&export_request);
             "MetaGrpcClient worker: handle export request"
         );
 
@@ -896,7 +898,7 @@ impl MetaGrpcClient {
         let read_req: MetaGrpcReq = v.into();
 
         debug!(
-            req = &read_req as &dyn Debug;
+            req = as_debug!(&read_req);
             "MetaGrpcClient::kv_api request"
         );
 
@@ -905,7 +907,7 @@ impl MetaGrpcClient {
         })?;
 
         debug!(
-            req = &req as &dyn Debug;
+            req = as_debug!(&req);
             "MetaGrpcClient::kv_api serialized request"
         );
 
@@ -922,7 +924,7 @@ impl MetaGrpcClient {
             .await;
 
         debug!(
-            reply = &result as &dyn Debug;
+            reply = as_debug!(&result);
             "MetaGrpcClient::kv_api reply"
         );
 
@@ -963,7 +965,7 @@ impl MetaGrpcClient {
         let txn: TxnRequest = req;
 
         debug!(
-            req = &txn as &dyn Display;
+            req = as_display!(&txn);
             "MetaGrpcClient::transaction request"
         );
 
@@ -992,7 +994,7 @@ impl MetaGrpcClient {
         let reply = result?;
 
         debug!(
-            reply = &reply as &dyn Display;
+            reply = as_display!(&reply);
             "MetaGrpcClient::transaction reply"
         );
 
@@ -1032,8 +1034,8 @@ fn threshold() -> Duration {
 fn info_spent(msg: impl Display) -> impl Fn(Duration, Duration) {
     move |total, busy| {
         info!(
-            total = &total as &dyn Debug,
-            busy = &busy as &dyn Debug;
+            total = as_debug!(&total),
+            busy = as_debug!(&busy);
             "{} spent", msg
         );
     }

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio;
 use common_meta_sled_store::openraft::error::RaftError;
 use common_meta_types::ClientWriteError;
 use common_meta_types::Cmd;
@@ -24,12 +23,14 @@ use common_meta_types::UpsertKV;
 use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::meta_service::MetaNode;
 use maplit::btreeset;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::meta_node::start_meta_node_cluster;
 use crate::tests::service::MetaSrvTestContext;
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_node_forward_to_leader() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and a non-voter;
     // - Write to the raft node on the leader, expect Ok.

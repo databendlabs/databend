@@ -24,13 +24,15 @@ use common_meta_types::SeqV;
 use log::debug;
 use log::info;
 use pretty_assertions::assert_eq;
+use test_harness::test;
 use tokio::time::Duration;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_restart() -> anyhow::Result<()> {
     // Fix: Issue 1134  https://github.com/datafuselabs/databend/issues/1134
     // - Start a metasrv server.
@@ -91,8 +93,8 @@ async fn test_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_retry_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
@@ -141,8 +143,8 @@ async fn test_retry_join() -> anyhow::Result<()> {
     }
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
@@ -201,8 +203,8 @@ async fn test_join() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_auto_sync_addr() -> anyhow::Result<()> {
     // - Start 3 metasrv.
     // - Join node-1, node-2 to node-0

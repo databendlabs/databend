@@ -19,7 +19,6 @@ use std::fmt::Display;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::tokio;
 use common_base::base::Stoppable;
 use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
@@ -27,7 +26,9 @@ use common_meta_kvapi::kvapi::KVApi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::MetaClientError;
 use log::info;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::service::start_metasrv_cluster;
 
 /// Ensure grpc-client will retry when failing to connect.
@@ -35,8 +36,8 @@ use crate::tests::service::start_metasrv_cluster;
 /// - Start a cluster of 3.
 /// - Shutdown node 1.
 /// - Test upsert kv, expect the client auto choose the running nodes.
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_metasrv_connection_error() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
     let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
@@ -82,8 +83,8 @@ async fn test_metasrv_connection_error() -> anyhow::Result<()> {
 /// - Create a client to node 1 and 2.
 /// - Shutdown follower node 1.
 /// - Test upsert kv, expect the client to auto choose the running nodes.
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_metasrv_one_client_follower_down() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
     let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
@@ -115,8 +116,8 @@ async fn test_metasrv_one_client_follower_down() -> anyhow::Result<()> {
 /// - Create a client to node 1 and 2.
 /// - Shutdown leader node 0.
 /// - Test upsert kv, expect the client to auto choose the running nodes.
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_metasrv_one_client_leader_down() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
     let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;

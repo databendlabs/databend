@@ -38,6 +38,7 @@ use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_metrics::counter::Count;
+use common_tracing::func_name;
 use futures::StreamExt;
 use log::debug;
 use log::info;
@@ -157,12 +158,12 @@ impl MetaService for MetaServiceImpl {
     }
 
     async fn kv_api(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        self.check_token(r.metadata())?;
-        network_metrics::incr_recv_bytes(r.get_ref().encoded_len() as u64);
-        let _guard = RequestInFlight::guard();
-
-        let root = common_tracing::start_trace_for_remote_request("kv_api", &r);
+        let root = common_tracing::start_trace_for_remote_request(func_name!(), &r);
         let reply = async {
+            self.check_token(r.metadata())?;
+            network_metrics::incr_recv_bytes(r.get_ref().encoded_len() as u64);
+            let _guard = RequestInFlight::guard();
+
             let req: MetaGrpcReq = r.try_into()?;
             info!("Received MetaGrpcReq: {:?}", req);
 
@@ -201,36 +202,38 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: Request<TxnRequest>,
     ) -> Result<Response<TxnReply>, Status> {
-        self.check_token(request.metadata())?;
-        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let _guard = RequestInFlight::guard();
+        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        async {
+            self.check_token(request.metadata())?;
+            network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+            let _guard = RequestInFlight::guard();
 
-        let root = common_tracing::start_trace_for_remote_request("transaction", &request);
-        let _guard = root.set_local_parent();
+            let request = request.into_inner();
 
-        let request = request.into_inner();
+            info!("Receive txn_request: {}", request);
 
-        info!("Receive txn_request: {}", request);
+            let ret = self.meta_node.transaction(request).await;
+            network_metrics::incr_request_result(ret.is_ok());
 
-        let ret = self.meta_node.transaction(request).await;
-        network_metrics::incr_request_result(ret.is_ok());
+            let body = match ret {
+                Ok(resp) => TxnReply {
+                    success: resp.success,
+                    error: "".to_string(),
+                    responses: resp.responses,
+                },
+                Err(err) => TxnReply {
+                    success: false,
+                    error: serde_json::to_string(&err).expect("fail to serialize"),
+                    responses: vec![],
+                },
+            };
 
-        let body = match ret {
-            Ok(resp) => TxnReply {
-                success: resp.success,
-                error: "".to_string(),
-                responses: resp.responses,
-            },
-            Err(err) => TxnReply {
-                success: false,
-                error: serde_json::to_string(&err).expect("fail to serialize"),
-                responses: vec![],
-            },
-        };
+            network_metrics::incr_sent_bytes(body.encoded_len() as u64);
 
-        network_metrics::incr_sent_bytes(body.encoded_len() as u64);
-
-        Ok(Response::new(body))
+            Ok(Response::new(body))
+        }
+        .in_span(root)
+        .await
     }
 
     type ExportStream =

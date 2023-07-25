@@ -14,13 +14,14 @@
 
 //! Test metasrv SchemaApi by writing to one follower and then reading from another follower.
 
-use common_base::base::tokio;
 use common_meta_api::SchemaApiTestSuite;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::service::start_metasrv_cluster;
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
@@ -32,8 +33,8 @@ async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> 
         .await
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_grpc_client_list_database() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
@@ -45,8 +46,8 @@ async fn test_meta_grpc_client_list_database() -> anyhow::Result<()> {
         .await
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
@@ -58,8 +59,8 @@ async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
         .await
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_grpc_client_list_table() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 

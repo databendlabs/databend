@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
-use std::fmt::Display;
 use std::net::Ipv4Addr;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
@@ -66,6 +65,8 @@ use common_meta_types::RaftMetrics;
 use common_meta_types::TypeConfig;
 use futures::channel::oneshot;
 use itertools::Itertools;
+use log::as_debug;
+use log::as_display;
 use log::debug;
 use log::error;
 use log::info;
@@ -528,7 +529,7 @@ impl MetaNode {
     /// according to config.
     #[minitrace::trace]
     pub async fn start(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
-        info!(config = config as &dyn Debug; "start()");
+        info!(config = as_debug!(config); "start()");
         let mn = Self::do_start(config).await?;
         info!("Done starting MetaNode: {:?}", config);
         Ok(mn)
@@ -992,7 +993,7 @@ impl MetaNode {
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaAPIError> {
-        debug!(target = &req.forward_to_leader as &dyn Display, req = &req as &dyn Debug; "handle_forwardable_request");
+        debug!(target = as_display!(&req.forward_to_leader), req = as_debug!(&req); "handle_forwardable_request");
 
         let forward = req.forward_to_leader;
 

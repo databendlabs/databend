@@ -11,14 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use common_base::base::tokio;
+
 use common_meta_raft_store::state::RaftState;
 use common_meta_types::Vote;
+use test_harness::test;
 
 use crate::testing::new_raft_test_context;
+use crate::testing::raft_store_test_harness;
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_state_create() -> anyhow::Result<()> {
     // - create a raft state
     // - creating another raft state in the same sled db should fail
@@ -50,8 +52,8 @@ async fn test_raft_state_create() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_state_open() -> anyhow::Result<()> {
     // - create a raft state
     // - open it.
@@ -73,8 +75,8 @@ async fn test_raft_state_open() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
     let mut tc = new_raft_test_context();
     let db = &tc.db;
@@ -88,8 +90,8 @@ async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_state_write_read_vote() -> anyhow::Result<()> {
     // - create a raft state
     // - write vote and the read it.
@@ -119,8 +121,8 @@ async fn test_raft_state_write_read_vote() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[minitrace::trace(root = true)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_state_write_read_state_machine_id() -> anyhow::Result<()> {
     // - create a raft state
     // - write state machine id and the read it.
