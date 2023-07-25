@@ -11,7 +11,7 @@ Lists files in a stage. This allows you to filter files in a stage based on thei
 
 ```sql
 LIST_STAGE(
-  LOCATION => '{ internalStage | externalStage }'
+  LOCATION => '{ internalStage | externalStage | userStage }'
   [ PATTERN => '<regex_pattern>']
 )
 ```
