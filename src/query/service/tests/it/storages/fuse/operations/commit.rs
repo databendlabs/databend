@@ -89,7 +89,6 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
 use common_pipeline_core::InputError;
-use common_profile::QueryProfileManager;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
@@ -531,10 +530,6 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        todo!()
-    }
-
-    fn get_query_profile_manager(&self) -> Arc<QueryProfileManager> {
         todo!()
     }
 

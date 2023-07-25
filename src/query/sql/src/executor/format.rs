@@ -131,47 +131,43 @@ impl PhysicalPlan {
 fn to_format_tree(
     plan: &PhysicalPlan,
     metadata: &MetadataRef,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     match plan {
-        PhysicalPlan::TableScan(plan) => table_scan_to_format_tree(plan, metadata),
-        PhysicalPlan::Filter(plan) => filter_to_format_tree(plan, metadata, prof_span_set),
-        PhysicalPlan::Project(plan) => project_to_format_tree(plan, metadata, prof_span_set),
-        PhysicalPlan::EvalScalar(plan) => eval_scalar_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::TableScan(plan) => table_scan_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::Filter(plan) => filter_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::Project(plan) => project_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::EvalScalar(plan) => eval_scalar_to_format_tree(plan, metadata, profs),
         PhysicalPlan::AggregateExpand(plan) => {
-            aggregate_expand_to_format_tree(plan, metadata, prof_span_set)
+            aggregate_expand_to_format_tree(plan, metadata, profs)
         }
         PhysicalPlan::AggregatePartial(plan) => {
-            aggregate_partial_to_format_tree(plan, metadata, prof_span_set)
+            aggregate_partial_to_format_tree(plan, metadata, profs)
         }
-        PhysicalPlan::AggregateFinal(plan) => {
-            aggregate_final_to_format_tree(plan, metadata, prof_span_set)
-        }
-        PhysicalPlan::Window(plan) => window_to_format_tree(plan, metadata, prof_span_set),
-        PhysicalPlan::Sort(plan) => sort_to_format_tree(plan, metadata, prof_span_set),
-        PhysicalPlan::Limit(plan) => limit_to_format_tree(plan, metadata, prof_span_set),
-        PhysicalPlan::RowFetch(plan) => row_fetch_to_format_tree(plan, metadata, prof_span_set),
-        PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata, prof_span_set),
-        PhysicalPlan::Exchange(plan) => exchange_to_format_tree(plan, metadata, prof_span_set),
-        PhysicalPlan::UnionAll(plan) => union_all_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::AggregateFinal(plan) => aggregate_final_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::Window(plan) => window_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::Sort(plan) => sort_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::Limit(plan) => limit_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::RowFetch(plan) => row_fetch_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::Exchange(plan) => exchange_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::UnionAll(plan) => union_all_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ExchangeSource(plan) => exchange_source_to_format_tree(plan),
-        PhysicalPlan::ExchangeSink(plan) => {
-            exchange_sink_to_format_tree(plan, metadata, prof_span_set)
-        }
+        PhysicalPlan::ExchangeSink(plan) => exchange_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::DistributedInsertSelect(plan) => {
-            distributed_insert_to_format_tree(plan.as_ref(), metadata, prof_span_set)
+            distributed_insert_to_format_tree(plan.as_ref(), metadata, profs)
         }
         PhysicalPlan::DeletePartial(plan) => {
-            delete_partial_to_format_tree(plan.as_ref(), metadata, prof_span_set)
+            delete_partial_to_format_tree(plan.as_ref(), metadata, profs)
         }
         PhysicalPlan::MutationAggregate(plan) => {
-            delete_final_to_format_tree(plan.as_ref(), metadata, prof_span_set)
+            delete_final_to_format_tree(plan.as_ref(), metadata, profs)
         }
-        PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RuntimeFilterSource(plan) => {
-            runtime_filter_source_to_format_tree(plan, metadata, prof_span_set)
+            runtime_filter_source_to_format_tree(plan, metadata, profs)
         }
-        PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, profs),
         PhysicalPlan::CopyIntoTable(plan) => copy_into_table(plan),
         PhysicalPlan::AsyncSourcer(_) => Ok(FormatTreeNode::new("AsyncSourcer".to_string())),
         PhysicalPlan::Deduplicate(_) => Ok(FormatTreeNode::new("Deduplicate".to_string())),
@@ -182,17 +178,25 @@ fn to_format_tree(
 /// Helper function to add profile info to the format tree.
 fn append_profile_info(
     children: &mut Vec<FormatTreeNode<String>>,
-    prof_set: &SharedProcessorProfiles,
+    profs: &SharedProcessorProfiles,
     plan_id: u32,
 ) {
-    if let Some(prof) = prof_set.lock().unwrap().get(&plan_id) {
+    if let Some(prof) = profs.lock().unwrap().get(&plan_id) {
         children.push(FormatTreeNode::new(format!(
             "output rows: {}",
             prof.output_rows,
         )));
         children.push(FormatTreeNode::new(format!(
+            "output bytes: {}",
+            prof.output_bytes,
+        )));
+        children.push(FormatTreeNode::new(format!(
             "total cpu time: {:.3}ms",
             prof.cpu_time.as_secs_f64() * 1000.0
+        )));
+        children.push(FormatTreeNode::new(format!(
+            "total wait time: {:.3}ms",
+            prof.wait_time.as_secs_f64() * 1000.0
         )));
     }
 }
@@ -207,6 +211,7 @@ fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
 fn table_scan_to_format_tree(
     plan: &TableScan,
     metadata: &MetadataRef,
+    profs: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     if plan.table_index == DUMMY_TABLE_INDEX {
         return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
@@ -311,6 +316,8 @@ fn table_scan_to_format_tree(
         let items = plan_stats_info_to_format_tree(info);
         children.extend(items);
     }
+
+    append_profile_info(&mut children, profs, plan.plan_id);
 
     Ok(FormatTreeNode::with_children(
         "TableScan".to_string(),

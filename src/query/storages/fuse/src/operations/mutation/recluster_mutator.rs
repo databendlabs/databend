@@ -19,6 +19,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::Scalar;
@@ -28,34 +30,44 @@ use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 
-static MAX_BLOCK_COUNT: usize = 50;
-
 #[derive(Clone)]
 pub struct ReclusterMutator {
-    selected_blocks: Vec<Arc<BlockMeta>>,
-    level: i32,
-    threshold: f64,
-    mutation_logs: MutationLogs,
+    memory_threshold: usize,
+    depth_threshold: f64,
     block_thresholds: BlockThresholds,
+
+    mutation_logs: MutationLogs,
+    selected_blocks: Vec<Arc<BlockMeta>>,
+
+    pub(crate) total_rows: usize,
+    pub(crate) total_bytes: usize,
+    pub(crate) level: i32,
 }
 
 impl ReclusterMutator {
-    pub fn try_create(threshold: f64, block_thresholds: BlockThresholds) -> Result<Self> {
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        depth_threshold: f64,
+        block_thresholds: BlockThresholds,
+    ) -> Result<Self> {
+        let mem_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
+        let max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
+        let memory_threshold =
+            cmp::min(mem_info.avail as usize * 1024, max_memory_usage) * 50 / 100;
         Ok(Self {
-            selected_blocks: Vec::new(),
-            level: 0,
-            threshold,
+            memory_threshold,
+            depth_threshold,
             block_thresholds,
             mutation_logs: Default::default(),
+            selected_blocks: Vec::new(),
+            total_rows: 0,
+            total_bytes: 0,
+            level: 0,
         })
     }
 
-    pub fn selected_blocks(&self) -> Vec<Arc<BlockMeta>> {
-        self.selected_blocks.clone()
-    }
-
-    pub fn level(&self) -> i32 {
-        self.level
+    pub fn take_blocks(&mut self) -> Vec<Arc<BlockMeta>> {
+        std::mem::take(&mut self.selected_blocks)
     }
 
     pub fn mutation_logs(&self) -> MutationLogs {
@@ -68,7 +80,7 @@ impl ReclusterMutator {
         blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>>,
     ) -> Result<bool> {
         for (level, block_metas) in blocks_map.into_iter() {
-            if block_metas.len() <= 1 {
+            if block_metas.len() < 2 {
                 continue;
             }
 
@@ -104,8 +116,9 @@ impl ReclusterMutator {
                         block_meta
                     })
                     .collect();
+                self.total_rows = total_rows as usize;
+                self.total_bytes = total_bytes as usize;
                 self.level = level;
-
                 return Ok(true);
             }
 
@@ -159,7 +172,7 @@ impl ReclusterMutator {
                 average_depth,
                 level
             );
-            if average_depth <= self.threshold {
+            if average_depth <= self.depth_threshold {
                 continue;
             }
 
@@ -169,17 +182,21 @@ impl ReclusterMutator {
                 selected_idx.insert(*idx);
             });
 
-            self.selected_blocks = selected_idx
-                .iter()
-                .take(MAX_BLOCK_COUNT)
-                .map(|idx| {
-                    let (block_idx, block_meta) = block_metas[*idx].clone();
-                    self.mutation_logs
-                        .entries
-                        .push(MutationLogEntry::DeletedBlock { index: block_idx });
-                    block_meta
-                })
-                .collect::<Vec<_>>();
+            for idx in selected_idx {
+                let (block_idx, block_meta) = block_metas[idx].clone();
+                let memory_usage = self.total_bytes + block_meta.block_size as usize;
+                if memory_usage > self.memory_threshold {
+                    break;
+                }
+
+                self.mutation_logs
+                    .entries
+                    .push(MutationLogEntry::DeletedBlock { index: block_idx });
+                self.total_rows += block_meta.row_count as usize;
+                self.total_bytes = memory_usage;
+                self.selected_blocks.push(block_meta);
+            }
+
             self.level = level;
             return Ok(true);
         }

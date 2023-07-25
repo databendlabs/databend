@@ -54,6 +54,7 @@ async-recursion = "1.0.0"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+cidr = { version = "0.2.2" }
 ctor = "0.1.26"
 dashmap = "5.4"
 educe = "0.4"
@@ -74,4 +75,4 @@ simsearch = "0.2"
 time = "0.3.14"
 tracing = "0.1.36"
 url = { version = "2.3" }
-z3 = { version = "0.11.2", features = ["static-link-z3"], optional = true }
+z3 = { version = "0.12.1", features = ["static-link-z3"], optional = true }

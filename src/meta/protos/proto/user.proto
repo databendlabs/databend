@@ -95,6 +95,7 @@ message UserOption {
 
   uint64 flags = 1;
   optional string default_role = 2;
+  optional string network_policy = 3;
 }
 
 message UserInfo {
@@ -115,4 +116,16 @@ message UserIdentity {
 
   string username = 1;
   string hostname = 2;
+}
+
+message NetworkPolicy {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string name = 1;
+  repeated string allowed_ip_list = 2;
+  repeated string blocked_ip_list = 3;
+  string comment = 4;
+  string create_on = 5;
+  optional string update_on = 6;
 }

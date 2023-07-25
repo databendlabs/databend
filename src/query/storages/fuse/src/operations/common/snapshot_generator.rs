@@ -28,7 +28,6 @@ use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
-use tracing::error;
 use uuid::Uuid;
 
 use crate::metrics::metrics_inc_commit_mutation_latest_snapshot_append_only;
@@ -36,6 +35,7 @@ use crate::metrics::metrics_inc_commit_mutation_modified_segment_exists_in_lates
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
+use crate::statistics::reducers::deduct_statistics_mut;
 use crate::statistics::reducers::merge_statistics_mut;
 
 #[async_trait::async_trait]
@@ -177,6 +177,8 @@ impl SnapshotGenerator for MutationGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
     ) -> Result<TableSnapshot> {
+        let default_cluster_key_id = cluster_key_meta.clone().map(|v| v.0);
+
         let previous =
             previous.unwrap_or_else(|| Arc::new(TableSnapshot::new_empty_snapshot(schema.clone())));
         let ctx = self
@@ -207,7 +209,11 @@ impl SnapshotGenerator for MutationGenerator {
                         .chain(ctx.merged_segments.iter())
                         .cloned()
                         .collect::<Vec<_>>();
-                    let new_summary = merge_statistics(&ctx.merged_statistics, &append_statistics);
+                    let new_summary = merge_statistics(
+                        &ctx.merged_statistics,
+                        &append_statistics,
+                        default_cluster_key_id,
+                    );
                     let new_snapshot = TableSnapshot::new(
                         Uuid::new_v4(),
                         &previous.timestamp,
@@ -231,19 +237,17 @@ impl SnapshotGenerator for MutationGenerator {
                 {
                     tracing::info!("resolvable conflicts detected");
                     metrics_inc_commit_mutation_modified_segment_exists_in_latest();
-                    error!("positions: {:?}", positions);
-                    error!("added_segments: {:?}", ctx.added_segments);
-                    error!("previous.segments: {:?}", previous.segments);
-                    error!("previous.segments.len(): {}", previous.segments.len());
                     let new_segments = ConflictResolveContext::merge_segments(
                         previous.segments.clone(),
                         ctx.added_segments.clone(),
                         positions,
                     );
-                    error!("new_segments: {:?}", new_segments);
-                    error!("len: {}", new_segments.len());
-                    let new_summary = merge_statistics(&ctx.added_statistics, &previous.summary);
-                    let new_summary = deduct_statistics(&new_summary, &ctx.removed_statistics);
+                    let mut new_summary = merge_statistics(
+                        &ctx.added_statistics,
+                        &previous.summary,
+                        default_cluster_key_id,
+                    );
+                    deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
                     let new_snapshot = TableSnapshot::new(
                         Uuid::new_v4(),
                         &previous.timestamp,
@@ -259,9 +263,10 @@ impl SnapshotGenerator for MutationGenerator {
             }
         }
         metrics_inc_commit_mutation_unresolvable_conflict();
-        Err(ErrorCode::StorageOther(
-            "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-        ))
+        Err(ErrorCode::UnresolvableConflict(format!(
+            "conflict resolve context:{:?}",
+            ctx
+        )))
     }
 
     fn set_conflict_resolve_context(&mut self, ctx: ConflictResolveContext) {
@@ -386,7 +391,12 @@ impl SnapshotGenerator for AppendGenerator {
                     .chain(snapshot.segments.iter())
                     .cloned()
                     .collect();
-                merge_statistics_mut(&mut new_summary, &summary);
+
+                merge_statistics_mut(
+                    &mut new_summary,
+                    &summary,
+                    cluster_key_meta.clone().map(|v| v.0),
+                );
             }
         }
 

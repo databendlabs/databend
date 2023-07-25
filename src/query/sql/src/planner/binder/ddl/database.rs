@@ -30,10 +30,8 @@ use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::share::ShareNameIdent;
-use itertools::Itertools;
 use tracing::debug;
 
-use crate::binder::ddl::column::generate_unique_object;
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::CreateDatabasePlan;
@@ -60,21 +58,7 @@ impl Binder {
             limit,
         } = stmt;
 
-        let tenant = self.ctx.get_tenant();
-        let user = self.ctx.get_current_user()?;
-        let grant_set = user.grants;
-
-        let (unique_dbs, has_object_priv) =
-            generate_unique_object(None, None, &tenant, grant_set).await?;
-
-        let mut select_builder = if has_object_priv {
-            SelectBuilder::from("system.databases")
-        } else {
-            let in_list = unique_dbs.iter().join(",");
-            SelectBuilder::from(&format!(
-                "(select * from system.databases where name in ({in_list}))"
-            ))
-        };
+        let mut select_builder = SelectBuilder::from("system.databases");
 
         let ctl = if let Some(ctl) = catalog {
             normalize_identifier(ctl, &self.name_resolution_ctx).name

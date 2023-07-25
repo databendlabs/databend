@@ -135,6 +135,19 @@ impl ScalarExpr {
             _ => None,
         }
     }
+
+    pub fn valid_for_clustering(&self) -> bool {
+        match self {
+            ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => true,
+            ScalarExpr::WindowFunction(_)
+            | ScalarExpr::AggregateFunction(_)
+            | ScalarExpr::SubqueryExpr(_) => false,
+            ScalarExpr::FunctionCall(expr) => {
+                expr.arguments.iter().all(|arg| arg.valid_for_clustering())
+            }
+            ScalarExpr::CastExpr(expr) => expr.argument.valid_for_clustering(),
+        }
+    }
 }
 
 impl From<BoundColumnRef> for ScalarExpr {

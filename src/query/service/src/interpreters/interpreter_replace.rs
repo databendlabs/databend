@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,6 +30,8 @@ use common_sql::executor::ReplaceInto;
 use common_sql::executor::SelectCtx;
 use common_sql::plans::CopyPlan;
 use common_sql::plans::InsertInputSource;
+use common_sql::plans::OptimizeTableAction;
+use common_sql::plans::OptimizeTablePlan;
 use common_sql::plans::Plan;
 use common_sql::plans::Replace;
 use common_sql::ColumnBinding;
@@ -41,6 +44,7 @@ use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::interpreter_copy::CopyInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::interpreters::OptimizeTableInterpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;

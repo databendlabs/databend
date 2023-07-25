@@ -19,6 +19,7 @@ use std::time::Duration;
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
 use backoff::ExponentialBackoffBuilder;
+use chrono::Utc;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
@@ -80,13 +81,10 @@ impl FuseTable {
 
         pipeline.add_transform(|input, output| {
             let aggregator = TableMutationAggregator::create(
+                self,
                 ctx.clone(),
                 vec![],
                 Statistics::default(),
-                self.get_block_thresholds(),
-                self.meta_location_generator().clone(),
-                self.schema(),
-                self.get_operator(),
                 MutationKind::Insert,
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
@@ -198,6 +196,7 @@ impl FuseTable {
             number_of_segments: Some(snapshot.segments.len() as u64),
             number_of_blocks: Some(stats.block_count),
         };
+        new_table_meta.updated_on = Utc::now();
 
         // 2. prepare the request
         let catalog = ctx.get_catalog(table_info.catalog())?;
@@ -286,6 +285,7 @@ impl FuseTable {
 
         let mut latest_snapshot = base_snapshot.clone();
         let mut latest_table_info = &self.table_info;
+        let default_cluster_key_id = self.cluster_key_id();
 
         // holding the reference of latest table during retries
         let mut latest_table_ref: Arc<dyn Table>;
@@ -308,6 +308,7 @@ impl FuseTable {
                 &base_summary,
                 concurrently_appended_segment_locations,
                 schema,
+                default_cluster_key_id,
             )
             .await?;
             snapshot_tobe_committed.segments = segments_tobe_committed;
@@ -365,8 +366,8 @@ impl FuseTable {
                                     .abort(ctx.clone(), self.operator.clone())
                                     .await?;
                                 metrics_inc_commit_mutation_unresolvable_conflict();
-                                break Err(ErrorCode::StorageOther(
-                                    "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
+                                break Err(ErrorCode::UnresolvableConflict(
+                                    "segment compact conflict with other operations",
                                 ));
                             }
 
@@ -412,6 +413,7 @@ impl FuseTable {
         base_summary: &Statistics,
         concurrently_appended_segment_locations: &[Location],
         schema: TableSchemaRef,
+        default_cluster_key_id: Option<u32>,
     ) -> Result<(Vec<Location>, Statistics)> {
         if concurrently_appended_segment_locations.is_empty() {
             Ok((base_segments.to_owned(), base_summary.clone()))
@@ -431,8 +433,11 @@ impl FuseTable {
             let mut new_statistics = base_summary.clone();
             for result in concurrent_appended_segment_infos.into_iter() {
                 let concurrent_appended_segment = result?;
-                new_statistics =
-                    merge_statistics(&new_statistics, &concurrent_appended_segment.summary);
+                new_statistics = merge_statistics(
+                    &new_statistics,
+                    &concurrent_appended_segment.summary,
+                    default_cluster_key_id,
+                );
             }
             Ok((new_segments, new_statistics))
         }

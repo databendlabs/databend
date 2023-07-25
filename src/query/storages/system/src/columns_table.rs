@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
@@ -29,12 +31,15 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::UserGrantSet;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_sql::Planner;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
+use common_users::RoleCacheManager;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -177,8 +182,46 @@ impl ColumnsTable {
             }
         }
 
+        let tenant = ctx.get_tenant();
+        let user = ctx.get_current_user()?;
+        let grant_set = user.grants;
+
+        let (unique_object, global_object_priv) =
+            generate_unique_object(&tenant, grant_set).await?;
+
+        let mut access_dbs = HashMap::new();
+        let mut final_dbs = vec![];
+        let mut access_tables: HashSet<(String, String)> = HashSet::new();
+        if !global_object_priv {
+            for object in unique_object {
+                match object {
+                    GrantObject::Database(catalog, db) => {
+                        if catalog == CATALOG_DEFAULT && databases.contains(&db) {
+                            access_dbs.insert(db.clone(), false);
+                        }
+                    }
+                    GrantObject::Table(catalog, db, table) => {
+                        if catalog == CATALOG_DEFAULT && databases.contains(&db) {
+                            access_tables.insert((db.clone(), table));
+                            if !access_dbs.contains_key(&db) {
+                                access_dbs.insert(db.clone(), true);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            for db in &databases {
+                if access_dbs.contains_key(db) {
+                    final_dbs.push(db.to_string());
+                }
+            }
+        } else {
+            final_dbs = databases;
+        }
+
         let mut rows: Vec<(String, String, TableField)> = vec![];
-        for database in databases {
+        for database in final_dbs {
             let tables = if tables.is_empty() {
                 if let Ok(table) = catalog.list_tables(tenant.as_str(), &database).await {
                     table
@@ -196,26 +239,89 @@ impl ColumnsTable {
             };
 
             for table in tables {
-                let fields = if table.engine() == VIEW_ENGINE {
-                    if let Some(query) = table.options().get(QUERY) {
-                        let mut planner = Planner::new(ctx.clone());
-                        let (plan, _) = planner.plan_sql(query).await?;
-                        let schema = infer_table_schema(&plan.schema())?;
-                        schema.fields().clone()
-                    } else {
-                        return Err(ErrorCode::Internal(
-                            "Logical error, View Table must have a SelectQuery inside.",
-                        ));
+                if global_object_priv {
+                    let fields = generate_fields(&ctx, &table).await?;
+                    for field in fields {
+                        rows.push((database.clone(), table.name().into(), field.clone()))
                     }
-                } else {
-                    table.schema().fields().clone()
-                };
-                for field in fields {
-                    rows.push((database.clone(), table.name().into(), field.clone()))
+                } else if let Some(contain_table_priv) = access_dbs.get(&database) {
+                    if *contain_table_priv {
+                        if access_tables.contains(&(database.to_string(), table.name().to_string()))
+                        {
+                            let fields = generate_fields(&ctx, &table).await?;
+                            for field in fields {
+                                rows.push((database.clone(), table.name().into(), field.clone()))
+                            }
+                        }
+                    } else {
+                        let fields = generate_fields(&ctx, &table).await?;
+                        for field in fields {
+                            rows.push((database.clone(), table.name().into(), field.clone()))
+                        }
+                    }
                 }
             }
         }
 
         Ok(rows)
     }
+}
+
+async fn generate_fields(
+    ctx: &Arc<dyn TableContext>,
+    table: &Arc<dyn Table>,
+) -> Result<Vec<TableField>> {
+    let fields = if table.engine() == VIEW_ENGINE {
+        if let Some(query) = table.options().get(QUERY) {
+            let mut planner = Planner::new(ctx.clone());
+            let (plan, _) = planner.plan_sql(query).await?;
+            let schema = infer_table_schema(&plan.schema())?;
+            schema.fields().clone()
+        } else {
+            return Err(ErrorCode::Internal(
+                "Logical error, View Table must have a SelectQuery inside.",
+            ));
+        }
+    } else {
+        table.schema().fields().clone()
+    };
+    Ok(fields)
+}
+
+pub(crate) async fn generate_unique_object(
+    tenant: &str,
+    grant_set: UserGrantSet,
+) -> Result<(HashSet<GrantObject>, bool)> {
+    let mut unique_object: HashSet<GrantObject> = HashSet::new();
+    let mut global_object_priv = false;
+    let _objects = RoleCacheManager::instance()
+        .find_related_roles(tenant, &grant_set.roles())
+        .await?
+        .into_iter()
+        .map(|role| role.grants)
+        .fold(grant_set, |a, b| a | b)
+        .entries()
+        .iter()
+        .map(|e| {
+            let object = e.object();
+            match object {
+                GrantObject::Global => {
+                    global_object_priv = true;
+                }
+                GrantObject::Database(catalog, ldb) => {
+                    unique_object
+                        .insert(GrantObject::Database(catalog.to_string(), ldb.to_string()));
+                }
+                GrantObject::Table(catalog, ldb, ltab) => {
+                    unique_object.insert(GrantObject::Table(
+                        catalog.to_string(),
+                        ldb.to_string(),
+                        ltab.to_string(),
+                    ));
+                }
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Ok((unique_object, global_object_priv))
 }

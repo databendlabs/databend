@@ -62,8 +62,10 @@ SELECT * FROM abc WHERE a > 5 AND a < 5 AND b>=100
 statement ok
 INSERT INTO abc VALUES (0, 1, 2)
 
-statement error 1001
+query II
 SELECT a,b FROM abc WHERE CASE WHEN a != 0 THEN b/a > 1.5 ELSE false END
+----
+1 2
 
 statement ok
 drop table if exists kv

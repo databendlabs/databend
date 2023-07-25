@@ -49,6 +49,14 @@ use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
 use crate::io::WriteSettings;
+use crate::metrics::metrics_inc_replace_block_number_after_pruning;
+use crate::metrics::metrics_inc_replace_block_number_totally_loaded;
+use crate::metrics::metrics_inc_replace_block_number_write;
+use crate::metrics::metrics_inc_replace_block_of_zero_row_deleted;
+use crate::metrics::metrics_inc_replace_row_number_after_pruning;
+use crate::metrics::metrics_inc_replace_row_number_totally_loaded;
+use crate::metrics::metrics_inc_replace_row_number_write;
+use crate::metrics::metrics_inc_replace_whole_block_deletion;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -168,38 +176,57 @@ impl MergeIntoOperationAggregator {
 // aggregate mutations (currently, deletion only)
 impl MergeIntoOperationAggregator {
     #[async_backtrace::framed]
-    pub async fn accumulate(&mut self, merge_action: MergeIntoOperation) -> Result<()> {
+    pub async fn accumulate(&mut self, merge_into_operation: MergeIntoOperation) -> Result<()> {
         let aggregation_ctx = &self.aggregation_ctx;
-        match merge_action {
-            MergeIntoOperation::Delete(DeletionByColumn {
-                columns_min_max,
-                key_hashes,
-            }) => {
+        match merge_into_operation {
+            MergeIntoOperation::Delete(partitions) => {
                 for (segment_index, (path, ver)) in &aggregation_ctx.segment_locations {
+                    // segment level
                     let load_param = LoadParams {
                         location: path.clone(),
                         len_hint: None,
                         ver: *ver,
                         put_cache: true,
                     };
-                    // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
-                    let segment_info = aggregation_ctx.segment_reader.read(&load_param).await?;
-                    let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
+                    let compact_segment_info =
+                        aggregation_ctx.segment_reader.read(&load_param).await?;
+                    let mut segment_info: Option<SegmentInfo> = None;
 
-                    // segment level
-                    if aggregation_ctx.overlapped(&segment_info.summary.col_stats, &columns_min_max)
+                    for DeletionByColumn {
+                        columns_min_max,
+                        key_hashes,
+                    } in &partitions
                     {
-                        // block level
-                        for (block_index, block_meta) in segment_info.blocks.iter().enumerate() {
-                            if aggregation_ctx.overlapped(&block_meta.col_stats, &columns_min_max) {
-                                self.deletion_accumulator.add_block_deletion(
-                                    *segment_index,
-                                    block_index,
-                                    &key_hashes,
-                                )
+                        if aggregation_ctx
+                            .overlapped(&compact_segment_info.summary.col_stats, columns_min_max)
+                        {
+                            let seg = match &segment_info {
+                                None => {
+                                    // un-compact the segment if necessary
+                                    segment_info = Some(compact_segment_info.as_ref().try_into()?);
+                                    segment_info.as_ref().unwrap()
+                                }
+                                Some(v) => v,
+                            };
+
+                            // block level
+                            for (block_index, block_meta) in seg.blocks.iter().enumerate() {
+                                if aggregation_ctx
+                                    .overlapped(&block_meta.col_stats, columns_min_max)
+                                {
+                                    self.deletion_accumulator.add_block_deletion(
+                                        *segment_index,
+                                        block_index,
+                                        key_hashes,
+                                    )
+                                }
                             }
                         }
                     }
+
+                    metrics_inc_replace_block_number_after_pruning(
+                        self.deletion_accumulator.deletions.len() as u64,
+                    );
                 }
             }
             MergeIntoOperation::None => {}
@@ -216,6 +243,7 @@ impl MergeIntoOperationAggregator {
         let aggregation_ctx = &self.aggregation_ctx;
         let io_runtime = GlobalIORuntime::instance();
         let mut mutation_log_handlers = Vec::new();
+        let mut num_rows_mutated = 0;
         for (segment_idx, block_deletion) in self.deletion_accumulator.deletions.drain() {
             let (path, ver) = self
                 .aggregation_ctx
@@ -242,6 +270,7 @@ impl MergeIntoOperationAggregator {
                 let permit = aggregation_ctx.acquire_task_permit().await?;
                 let block_meta = segment_info.blocks[block_index].clone();
                 let aggregation_ctx = aggregation_ctx.clone();
+                num_rows_mutated += block_meta.row_count;
                 let handle = io_runtime.spawn(async_backtrace::location!().frame({
                     async move {
                         let mutation_log_entry = aggregation_ctx
@@ -258,6 +287,9 @@ impl MergeIntoOperationAggregator {
                 }));
                 mutation_log_handlers.push(handle)
             }
+        }
+        if num_rows_mutated > 0 {
+            metrics_inc_replace_row_number_after_pruning(num_rows_mutated);
         }
 
         let log_entries = futures::future::try_join_all(mutation_log_handlers)
@@ -307,7 +339,7 @@ impl AggregationContext {
         let mut columns = Vec::with_capacity(on_conflict_fields.len());
         for (field, _) in on_conflict_fields.iter().enumerate() {
             let on_conflict_field_index = field;
-            let key_column = key_columns_data
+            columns.push(&key_columns_data
                 .columns()
                 .get(on_conflict_field_index)
                 .ok_or_else(|| {
@@ -316,20 +348,12 @@ impl AggregationContext {
                         on_conflict_field_index, segment_index, block_index
                     ))
                 })?
-                .value
-                .as_column()
-                .ok_or_else(|| {
-                    ErrorCode::Internal(format!(
-                        "unexpected, cast block entry (index {}) to column failed, got None. segment index {}, block index {}",
-                        on_conflict_field_index, segment_index, block_index
-                    ))
-                })?;
-            columns.push(key_column);
+                .value);
         }
 
         let mut bitmap = MutableBitmap::new();
         for row in 0..num_rows {
-            let hash = row_hash_of_columns(&columns, row);
+            let hash = row_hash_of_columns(&columns, row)?;
             bitmap.push(!deleted_key_hashes.contains(&hash));
         }
 
@@ -339,6 +363,7 @@ impl AggregationContext {
         // shortcut: nothing to be deleted
         if delete_nums == 0 {
             info!("nothing deleted");
+            metrics_inc_replace_block_of_zero_row_deleted(1);
             // nothing to be deleted
             return Ok(None);
         }
@@ -354,9 +379,10 @@ impl AggregationContext {
             .get_write_progress()
             .incr(&progress_values);
 
-        // shortcut: nothing to be deleted
+        // shortcut: whole block deletion
         if delete_nums == block_meta.row_count as usize {
             info!("whole block deletion");
+            metrics_inc_replace_whole_block_deletion(1);
             // whole block deletion
             // NOTE that if deletion marker is enabled, check the real meaning of `row_count`
             let mutation = MutationLogEntry::DeletedBlock {
@@ -375,6 +401,9 @@ impl AggregationContext {
         let new_block = match &self.remain_column_reader {
             None => key_columns_data_after_deletion,
             Some(remain_columns_reader) => {
+                metrics_inc_replace_block_number_totally_loaded(1);
+                metrics_inc_replace_row_number_totally_loaded(block_meta.row_count);
+
                 // read the remaining columns
                 let remain_columns_data =
                     self.read_block(remain_columns_reader, block_meta).await?;
@@ -423,6 +452,9 @@ impl AggregationContext {
         let new_block_raw_data = serialized.block_raw_data;
         let data_accessor = self.data_accessor.clone();
         write_data(new_block_raw_data, &data_accessor, &new_block_location).await?;
+
+        metrics_inc_replace_block_number_write(1);
+        metrics_inc_replace_row_number_write(new_block_meta.row_count);
         if let Some(index_state) = serialized.bloom_index_state {
             write_data(index_state.data, &data_accessor, &index_state.location.0).await?;
         }

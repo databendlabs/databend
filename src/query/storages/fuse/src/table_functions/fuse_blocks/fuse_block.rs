@@ -16,15 +16,15 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_exception::Result;
-use common_expression::types::number::NumberColumnBuilder;
-use common_expression::types::number::NumberScalar;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
+use common_expression::types::UInt64Type;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::FromData;
 use common_expression::FromOptData;
 use common_expression::Scalar;
 use common_expression::TableDataType;
@@ -107,12 +107,11 @@ impl<'a> FuseBlock<'a> {
         let snapshot_id = snapshot.snapshot_id.simple().to_string().into_bytes();
         let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
         let mut block_location = StringColumnBuilder::with_capacity(len, len);
-        let mut block_size = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
-        let mut file_size = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
-        let mut row_count = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut block_size = Vec::with_capacity(len);
+        let mut file_size = Vec::with_capacity(len);
+        let mut row_count = Vec::with_capacity(len);
         let mut bloom_filter_location = vec![];
-        let mut bloom_filter_size =
-            NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut bloom_filter_size = Vec::with_capacity(len);
 
         let segments_io = SegmentsIO::create(
             self.ctx.clone(),
@@ -144,16 +143,16 @@ impl<'a> FuseBlock<'a> {
                     let block = block.as_ref();
                     block_location.put_slice(block.location.0.as_bytes());
                     block_location.commit_row();
-                    block_size.push(NumberScalar::UInt64(block.block_size));
-                    file_size.push(NumberScalar::UInt64(block.file_size));
-                    row_count.push(NumberScalar::UInt64(block.row_count));
+                    block_size.push(block.block_size);
+                    file_size.push(block.file_size);
+                    row_count.push(block.row_count);
                     bloom_filter_location.push(
                         block
                             .bloom_filter_index_location
                             .as_ref()
                             .map(|s| s.0.as_bytes().to_vec()),
                     );
-                    bloom_filter_size.push(NumberScalar::UInt64(block.bloom_filter_index_size));
+                    bloom_filter_size.push(block.bloom_filter_index_size);
                 });
 
                 if end_flag {
@@ -173,7 +172,7 @@ impl<'a> FuseBlock<'a> {
                     Value::Scalar(Scalar::String(snapshot_id.to_vec())),
                 ),
                 BlockEntry::new(
-                    DataType::Nullable(Box::new(DataType::Timestamp)),
+                    DataType::Timestamp,
                     Value::Scalar(Scalar::Timestamp(timestamp)),
                 ),
                 BlockEntry::new(
@@ -182,15 +181,15 @@ impl<'a> FuseBlock<'a> {
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),
-                    Value::Column(Column::Number(block_size.build())),
+                    Value::Column(UInt64Type::from_data(block_size)),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),
-                    Value::Column(Column::Number(file_size.build())),
+                    Value::Column(UInt64Type::from_data(file_size)),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),
-                    Value::Column(Column::Number(row_count.build())),
+                    Value::Column(UInt64Type::from_data(row_count)),
                 ),
                 BlockEntry::new(
                     DataType::String.wrap_nullable(),
@@ -198,7 +197,7 @@ impl<'a> FuseBlock<'a> {
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),
-                    Value::Column(Column::Number(bloom_filter_size.build())),
+                    Value::Column(UInt64Type::from_data(bloom_filter_size)),
                 ),
             ],
             len,
@@ -208,7 +207,7 @@ impl<'a> FuseBlock<'a> {
     pub fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("snapshot_id", TableDataType::String),
-            TableField::new("timestamp", TableDataType::Timestamp.wrap_nullable()),
+            TableField::new("timestamp", TableDataType::Timestamp),
             TableField::new("block_location", TableDataType::String),
             TableField::new("block_size", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("file_size", TableDataType::Number(NumberDataType::UInt64)),

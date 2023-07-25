@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
@@ -28,10 +29,12 @@ use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
+use common_meta_app::principal::GrantObject;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
+use crate::columns_table::generate_unique_object;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 
@@ -64,10 +67,38 @@ impl AsyncSystemTable for DatabasesTable {
         let mut catalog_names = vec![];
         let mut db_names = vec![];
         let mut db_id = vec![];
-        for (ctl_name, catalog) in catalogs.into_iter() {
-            let databases = catalog.list_databases(tenant.as_str()).await?;
 
-            for db in databases {
+        let user = ctx.get_current_user()?;
+        let grant_set = user.grants;
+        let (unique_object, global_object_priv) =
+            generate_unique_object(&tenant, grant_set).await?;
+        for (ctl_name, catalog) in catalogs.into_iter() {
+            let mut access_dbs = HashSet::new();
+            let mut final_dbs = vec![];
+            if global_object_priv {
+                final_dbs = catalog.list_databases(tenant.as_str()).await?;
+            } else {
+                for object in &unique_object {
+                    match object {
+                        GrantObject::Database(priv_catalog, db) => {
+                            if priv_catalog == &ctl_name {
+                                access_dbs.insert(db);
+                            }
+                        }
+                        GrantObject::Table(catalog, db, _) => {
+                            if catalog == &ctl_name && !access_dbs.contains(db) {
+                                access_dbs.insert(db);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                for access_db in access_dbs {
+                    final_dbs.push(catalog.get_database(tenant.as_str(), access_db).await?);
+                }
+            }
+
+            for db in final_dbs {
                 catalog_names.push(ctl_name.clone().into_bytes());
                 let db_name = db.name().to_string().into_bytes();
                 db_names.push(db_name);

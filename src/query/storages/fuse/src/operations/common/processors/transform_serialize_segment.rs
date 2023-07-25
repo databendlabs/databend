@@ -28,7 +28,6 @@ use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
 use tracing::info;
 
@@ -68,6 +67,9 @@ pub struct TransformSerializeSegment {
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
     block_per_seg: u64,
+
+    thresholds: BlockThresholds,
+    default_cluster_key_id: Option<u32>,
 }
 
 impl TransformSerializeSegment {
@@ -77,6 +79,7 @@ impl TransformSerializeSegment {
         table: &FuseTable,
         thresholds: BlockThresholds,
     ) -> Self {
+        let default_cluster_key_id = table.cluster_key_id();
         TransformSerializeSegment {
             input,
             output,
@@ -84,10 +87,12 @@ impl TransformSerializeSegment {
             data_accessor: table.get_operator(),
             meta_locations: table.meta_location_generator().clone(),
             state: State::None,
-            accumulator: StatisticsAccumulator::new(thresholds),
+            accumulator: Default::default(),
             block_per_seg: table
                 .get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT)
                 as u64,
+            thresholds,
+            default_cluster_key_id,
         }
     }
 
@@ -175,17 +180,9 @@ impl Processor for TransformSerializeSegment {
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSegment => {
                 let acc = std::mem::take(&mut self.accumulator);
-                let col_stats = acc.summary();
+                let summary = acc.summary(self.thresholds, self.default_cluster_key_id);
 
-                let segment_info = SegmentInfo::new(acc.blocks_metas, Statistics {
-                    row_count: acc.summary_row_count,
-                    block_count: acc.summary_block_count,
-                    perfect_block_count: acc.perfect_block_count,
-                    uncompressed_byte_size: acc.in_memory_size,
-                    compressed_byte_size: acc.file_size,
-                    index_size: acc.index_size,
-                    col_stats,
-                });
+                let segment_info = SegmentInfo::new(acc.blocks_metas, summary);
 
                 self.state = State::SerializedSegment {
                     data: segment_info.to_bytes()?,

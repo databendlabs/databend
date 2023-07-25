@@ -20,10 +20,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::native::read::column_iter_to_arrays;
-use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::ArrayIter;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_base::base::Progress;
@@ -59,14 +55,12 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_storage::ColumnNode;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::DataSource;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
-use crate::io::NativeReaderExt;
 use crate::metrics::metrics_inc_pruning_prewhere_nums;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 
@@ -482,42 +476,6 @@ impl NativeDeserializeDataTransform {
         }
         Ok(())
     }
-
-    pub(crate) fn build_array_iter(
-        column_node: &ColumnNode,
-        leaves: Vec<ColumnDescriptor>,
-        readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
-    ) -> Result<ArrayIter<'static>> {
-        let field = column_node.field.clone();
-        let is_nested = column_node.is_nested;
-        match column_iter_to_arrays(readers, leaves, field, is_nested) {
-            Ok(array_iter) => Ok(array_iter),
-            Err(err) => Err(err.into()),
-        }
-    }
-
-    fn build_virtual_array_iter(
-        name: String,
-        leaf: ColumnDescriptor,
-        readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
-    ) -> Result<ArrayIter<'static>> {
-        let is_nested = false;
-        let leaves = vec![leaf];
-        let field = ArrowField::new(
-            name,
-            ArrowType::Extension(
-                "Variant".to_string(),
-                Box::new(ArrowType::LargeBinary),
-                None,
-            ),
-            true,
-        );
-
-        match column_iter_to_arrays(readers, leaves, field, is_nested) {
-            Ok(array_iter) => Ok(array_iter),
-            Err(err) => Err(err.into()),
-        }
-    }
 }
 
 impl Processor for NativeDeserializeDataTransform {
@@ -615,7 +573,8 @@ impl Processor for NativeDeserializeDataTransform {
                     let readers = chunks.remove(&index).unwrap();
                     if !readers.is_empty() {
                         let leaves = self.column_leaves.get(index).unwrap().clone();
-                        let array_iter = Self::build_array_iter(column_node, leaves, readers)?;
+                        let array_iter =
+                            BlockReader::build_array_iter(column_node, leaves, readers)?;
                         self.array_iters.insert(index, array_iter);
                         self.array_skip_pages.insert(index, 0);
                     } else {
@@ -628,7 +587,7 @@ impl Processor for NativeDeserializeDataTransform {
                         let virtual_index = virtual_column_meta.index
                             + self.block_reader.project_column_nodes.len();
                         if let Some(readers) = chunks.remove(&virtual_index) {
-                            let array_iter = Self::build_virtual_array_iter(
+                            let array_iter = BlockReader::build_virtual_array_iter(
                                 name.clone(),
                                 virtual_column_meta.desc.clone(),
                                 readers,

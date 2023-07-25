@@ -5,6 +5,12 @@ statement ok
 drop table if exists products;
 
 statement ok
+drop table if exists parquet_table_;
+
+statement ok
+drop stage if exists parquet_stage_;
+
+statement ok
 drop table if exists table_random;
 
 statement ok
@@ -60,22 +66,24 @@ select count(*) from products;
 statement ok
 select block_count from fuse_snapshot('default','products');
 
-# error test
-statement error 1001
+statement ok
 copy into products from (select $1,$2,$4 from @s1 as t2) force = true;
 
 query I
 select count(*) from products;
 ----
-0
+8000000
+
+statement ok
+truncate table products;
 
 statement ok
 set max_threads = 1;
 
 query T
-explain pipeline copy into products from (select $1,$2,$4 from @s1 as t2);
+explain pipeline copy into products from (select $1,$2,$4 from @s1 as t2) force = true;
 ----
-MutationSink × 1 processor
+CommitSink × 1 processor
   MutationAggregator × 1 processor
     TransformExchangeDeserializer × 1 processor
       Merge (DummyTransform × 3 processors) to (TransformExchangeDeserializer × 1)
@@ -83,9 +91,11 @@ MutationSink × 1 processor
           TransformSerializeSegment × 1 processor
             TransformSerializeBlock × 1 processor
               BlockCompactTransform × 1 processor
-                DeserializeTransformer × 1 processor
-                  Resize × 1 processor
-                    Aligner × 1 processor
+                CastSchemaTransform × 1 processor
+                  CompoundBlockOperator(Project) × 1 processor
+                    DeserializeTransformer × 1 processor
+                      Resize × 1 processor
+                        Aligner × 1 processor
 
 statement ok
 copy into products from (select $1,$2,$3 from @s1 as t2) force =  true purge = true;
@@ -94,6 +104,45 @@ query I
 select count(*) from products;
 ----
 8000000
+
+## add parquet_file_test
+statement ok
+create table parquet_table_(a int,b string,c string);
+
+statement ok
+create stage parquet_stage_ file_format = (type = parquet);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @parquet_stage_ from (select a,b from table_random2 limit 1000000);
+
+statement error
+copy into parquet_table_ from @parquet_stage_;
+
+query I
+select count(*) from parquet_table_;
+----
+0
 
 statement ok
 set enable_distributed_copy_into = 0;

@@ -2780,6 +2780,50 @@ AlterUser(
 
 
 ---------- Input ----------
+ALTER USER u1 WITH SET NETWORK POLICY = 'policy1';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH SET NETWORK POLICY = 'policy1'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            SetNetworkPolicy(
+                "policy1",
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH UNSET NETWORK POLICY;
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH UNSET NETWORK POLICY
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            UnsetNetworkPolicy,
+        ],
+    },
+)
+
+
+---------- Input ----------
 CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING
 ---------- Output ---------
 CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANTSETTING
@@ -2803,6 +2847,33 @@ CreateUser(
             ),
             TenantSetting(
                 true,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+CREATE USER u1 IDENTIFIED BY '123456' WITH SET NETWORK POLICY='policy1'
+---------- Output ---------
+CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH SET NETWORK POLICY = 'policy1'
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        if_not_exists: false,
+        user: UserIdentity {
+            username: "u1",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "123456",
+            ),
+        },
+        user_options: [
+            SetNetworkPolicy(
+                "policy1",
             ),
         ],
     },
@@ -7165,9 +7236,9 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0;
+ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;
 ---------- Output ---------
-ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0)
+ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0) LIMIT 10
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -7223,6 +7294,9 @@ AlterTable(
                         ),
                     },
                 },
+            ),
+            limit: Some(
+                10,
             ),
         },
     },
@@ -11673,6 +11747,57 @@ GenerateVirtualColumns(
                 29..30,
             ),
         },
+    },
+)
+
+
+---------- Input ----------
+CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'
+---------- Output ---------
+CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_LIST = ('192.168.10.99') COMMENT = 'test'
+---------- AST ------------
+CreateNetworkPolicy(
+    CreateNetworkPolicyStmt {
+        if_not_exists: false,
+        name: "mypolicy",
+        allowed_ip_list: [
+            "192.168.10.0/24",
+        ],
+        blocked_ip_list: Some(
+            [
+                "192.168.10.99",
+            ],
+        ),
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'
+---------- Output ---------
+ALTER NETWORK POLICY mypolicy SET  ALLOWED_IP_LIST = ('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST = ('192.168.1.99') COMMENT = 'test'
+---------- AST ------------
+AlterNetworkPolicy(
+    AlterNetworkPolicyStmt {
+        if_exists: false,
+        name: "mypolicy",
+        allowed_ip_list: Some(
+            [
+                "192.168.10.0/24",
+                "192.168.255.1",
+            ],
+        ),
+        blocked_ip_list: Some(
+            [
+                "192.168.1.99",
+            ],
+        ),
+        comment: Some(
+            "test",
+        ),
     },
 )
 

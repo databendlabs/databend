@@ -94,7 +94,7 @@ fn auth_by_header(
                 let c = Credential::Password {
                     name,
                     password,
-                    hostname: client_ip,
+                    client_ip,
                 };
                 Ok(c)
             }
@@ -104,6 +104,7 @@ fn auth_by_header(
         match Bearer::decode(value) {
             Some(bearer) => Ok(Credential::Jwt {
                 token: bearer.token().to_string(),
+                client_ip,
             }),
             None => Err(ErrorCode::AuthenticateFailure("bad Bearer auth header")),
         }
@@ -121,7 +122,7 @@ fn auth_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Re
         let c = Credential::Password {
             name: String::from_utf8(name.as_bytes().to_vec()).unwrap(),
             password: Some(password.as_bytes().to_vec()),
-            hostname: client_ip,
+            client_ip,
         };
         Ok(c)
     } else {
@@ -133,7 +134,7 @@ fn auth_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Re
             Ok(Credential::Password {
                 name: name.clone(),
                 password: Some(password.as_bytes().to_vec()),
-                hostname: client_ip,
+                client_ip,
             })
         } else {
             Err(ErrorCode::AuthenticateFailure(

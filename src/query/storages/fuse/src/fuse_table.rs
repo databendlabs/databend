@@ -350,6 +350,10 @@ impl FuseTable {
         self.cluster_key_meta.as_ref().map(|(_, key)| key)
     }
 
+    pub fn cluster_key_id(&self) -> Option<u32> {
+        self.cluster_key_meta.clone().map(|v| v.0)
+    }
+
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
         self.bloom_index_cols.clone()
     }
@@ -704,10 +708,11 @@ impl Table for FuseTable {
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
+        limit: Option<usize>,
+        pipeline: &mut Pipeline,
     ) -> Result<u64> {
-        self.do_recluster(ctx, pipeline, push_downs).await
+        self.do_recluster(ctx, push_downs, limit, pipeline).await
     }
 
     #[async_backtrace::framed]

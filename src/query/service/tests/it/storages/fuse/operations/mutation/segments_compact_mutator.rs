@@ -193,7 +193,7 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
     // the compact operation committed latter should failed
     let r = mutator.try_commit(table.clone()).await;
     assert!(r.is_err());
-    assert_eq!(r.err().unwrap().code(), ErrorCode::STORAGE_OTHER);
+    assert_eq!(r.err().unwrap().code(), ErrorCode::UNRESOLVABLE_CONFLICT);
 
     Ok(())
 }
@@ -254,6 +254,7 @@ async fn build_mutator(
         compact_params,
         tbl.meta_location_generator().clone(),
         tbl.get_operator(),
+        tbl.cluster_key_id(),
     )?;
 
     if segment_mutator.target_select().await? {
@@ -654,6 +655,7 @@ impl CompactSegmentTestFixture {
         let segment_writer = SegmentWriter::new(data_accessor, location_gen);
         let seg_acc = SegmentCompactor::new(
             block_per_seg,
+            None,
             max_io_requests,
             &fuse_segment_io,
             segment_writer.clone(),
@@ -670,7 +672,7 @@ impl CompactSegmentTestFixture {
         .await?;
         let mut summary = Statistics::default();
         for segment in segments {
-            merge_statistics_mut(&mut summary, &segment.summary);
+            merge_statistics_mut(&mut summary, &segment.summary, None);
         }
         self.input_blocks = blocks;
         let limit = limit.unwrap_or(usize::MAX);
@@ -699,7 +701,7 @@ impl CompactSegmentTestFixture {
         {
             let (schema, blocks) =
                 TestFixture::gen_sample_blocks_ex(*num_blocks, *rows_per_block, 1);
-            let mut stats_acc = StatisticsAccumulator::new(thresholds);
+            let mut stats_acc = StatisticsAccumulator::default();
             for block in blocks {
                 let block = block?;
                 let col_stats = gen_columns_statistics(&block, None, &schema)?;
@@ -711,16 +713,8 @@ impl CompactSegmentTestFixture {
                 collected_blocks.push(block_meta.clone());
                 stats_acc.add_with_block_meta(block_meta);
             }
-            let col_stats = stats_acc.summary();
-            let segment_info = SegmentInfo::new(stats_acc.blocks_metas, Statistics {
-                row_count: stats_acc.summary_row_count,
-                block_count: stats_acc.summary_block_count,
-                perfect_block_count: stats_acc.perfect_block_count,
-                uncompressed_byte_size: stats_acc.in_memory_size,
-                compressed_byte_size: stats_acc.file_size,
-                index_size: stats_acc.index_size,
-                col_stats,
-            });
+            let summary = stats_acc.summary(thresholds, None);
+            let segment_info = SegmentInfo::new(stats_acc.blocks_metas, summary);
             let location = segment_writer.write_segment_no_cache(&segment_info).await?;
             segment_infos.push(segment_info);
             locations.push(location);
@@ -828,7 +822,7 @@ impl CompactCase {
 
             let compact_segment = compact_segment_reader.read(&load_params).await?;
             let segment = SegmentInfo::try_from(compact_segment.as_ref())?;
-            merge_statistics_mut(&mut statistics_of_input_segments, &segment.summary);
+            merge_statistics_mut(&mut statistics_of_input_segments, &segment.summary, None);
             block_num_of_output_segments.push(segment.blocks.len());
 
             for x in &segment.blocks {

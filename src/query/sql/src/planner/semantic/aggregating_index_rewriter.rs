@@ -47,6 +47,20 @@ impl VisitorMut for AggregatingIndexRewriter {
             {
                 name.name = format!("{}_STATE", name.name);
             }
+            Expr::CountAll { window, .. } if window.is_none() => {
+                *expr = Expr::FunctionCall {
+                    span: None,
+                    distinct: false,
+                    name: Identifier {
+                        name: "COUNT_STATE".to_string(),
+                        quote: None,
+                        span: None,
+                    },
+                    args: vec![],
+                    params: vec![],
+                    window: None,
+                };
+            }
             _ => {}
         }
     }

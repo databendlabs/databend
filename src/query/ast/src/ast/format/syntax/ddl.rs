@@ -183,6 +183,7 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
         AlterTableAction::ReclusterTable {
             is_final,
             selection,
+            limit,
         } => RcDoc::line()
             .append(RcDoc::text("RECLUSTER"))
             .append(if is_final {
@@ -196,6 +197,11 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
                         .nest(NEST_FACTOR)
                         .append(pretty_expr(selection).nest(NEST_FACTOR).group()),
                 )
+            } else {
+                RcDoc::nil()
+            })
+            .append(if let Some(limit) = limit {
+                RcDoc::text(format!(" LIMIT {limit}"))
             } else {
                 RcDoc::nil()
             }),

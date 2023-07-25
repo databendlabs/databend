@@ -1403,11 +1403,18 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
-            AlterTableAction::ReclusterTable { selection, .. } => {
+            AlterTableAction::ReclusterTable {
+                selection, limit, ..
+            } => {
                 let mut children = Vec::new();
                 if let Some(selection) = selection {
                     self.visit_expr(selection);
                     children.push(self.children.pop().unwrap());
+                }
+                if let Some(limit) = limit {
+                    let name = format!("Limit {}", limit);
+                    let limit_format_ctx = AstFormatContext::new(name);
+                    children.push(FormatTreeNode::new(limit_format_ctx));
                 }
                 let action_name = "Action Recluster".to_string();
                 let action_format_ctx =
@@ -2272,6 +2279,52 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_create_network_policy(&mut self, stmt: &'ast CreateNetworkPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("NetworkPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "CreateNetworkPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_alter_network_policy(&mut self, stmt: &'ast AlterNetworkPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("NetworkPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "AlterNetworkPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_drop_network_policy(&mut self, stmt: &'ast DropNetworkPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("NetworkPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "DropNetworkPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_desc_network_policy(&mut self, stmt: &'ast DescNetworkPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("NetworkPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "DescNetworkPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_show_network_policies(&mut self) {
+        let ctx = AstFormatContext::new("ShowNetworkPolicies".to_string());
+        let node = FormatTreeNode::new(ctx);
+        self.children.push(node);
+    }
+
     fn visit_with(&mut self, with: &'ast With) {
         let mut children = Vec::with_capacity(with.ctes.len());
         for cte in with.ctes.iter() {
@@ -2386,6 +2439,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     );
                     children.push(group_by_list_node);
                 }
+                GroupBy::All => {}
                 GroupBy::GroupingSets(sets) => {
                     let mut grouping_sets = Vec::with_capacity(sets.len());
                     for set in sets.iter() {

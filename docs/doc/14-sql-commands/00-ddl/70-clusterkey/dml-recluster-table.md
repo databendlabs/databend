@@ -2,23 +2,40 @@
 title: RECLUSTER TABLE
 ---
 
-Use this command to re-cluster the data in a clustered table.
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-A well-clustered table may become chaotic in some storage blocks negatively affecting the query performance. For example, the table continues to have DML operations (INSERT / UPDATE / DELETE). This command helps reduce the chaos by re-clustering the table.
+<FunctionDescription description="Introduced: v1.2.25"/>
 
-The re-clustering operation does not cluster the table from the ground up. It selects and reorganizes the most chaotic existing storage blocks by calculating based on the clustering algorithm. For more information about how the re-clustering works, see https://databend.rs/doc/contributing/rfcs/recluster.
+A well-clustered table may become chaotic in some storage blocks, negatively affecting the query performance. For example, the table continues to experience DML operations (INSERT / UPDATE / DELETE). This command helps reduce the chaos by re-clustering the table.
 
-You can run the command against a table multiple times to further cluster your data in the table. Alternatively, you can use the FINAL option to keep optimizing the table until it is fully clustered. 
-
-Please note that re-clustering a table consumes time (even longer if you include the FINAL option) and credits (when you are in Databend Cloud). During the optimizing process, do not perform DML actions to the table.
-
-## Syntax
+Databend recommends using the following statement with the [CLUSTERING_INFORMATION](../../../15-sql-functions/111-system-functions/clustering_information.md) function to determine when to re-cluster a table:
 
 ```sql
-ALTER TABLE [IF EXISTS] <name> RECLUSTER [FINAL] [WHERE condition]
+SELECT If(average_depth > total_block_count * 0.01
+          AND average_depth > 1, 'The table needs recluster now',
+              'The table does not need recluster now')
+FROM   clustering_information('<your_database>', '<your_table>'); 
 ```
 
-## Examples
+### Syntax
+
+```sql
+ALTER TABLE [IF EXISTS] <table_name> RECLUSTER [FINAL] [WHERE condition] [LIMIT <segment_count>]
+```
+
+The command has a limitation on the number of segments it can process, with the default value being "max_thread * 4". You can modify this limit by using the **LIMIT** option. Alternatively, you have two options to cluster your data in the table further:
+
+- Run the command multiple times against the table.
+- Use the **FINAL** option to continuously optimize the table until it is fully clustered.
+
+:::note
+
+Re-clustering a table consumes time (even longer if you include the **FINAL** option) and credits (when you are in Databend Cloud). During the optimizing process, do NOT perform DML actions to the table.
+:::
+
+The command does not cluster the table from the ground up. Instead, it selects and reorganizes the most chaotic existing storage blocks from the latest **LIMIT** segments using a clustering algorithm. For more information about how the re-clustering works, see https://databend.rs/doc/contributing/rfcs/recluster.
+
+### Examples
 
 ```sql
 -- create table

@@ -53,6 +53,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let data_accessor = ctx.get_data_operator()?.operator();
     let seg_writer = SegmentWriter::new(&data_accessor, &location_generator);
 
+    let cluster_key_id = 0;
     let gen_test_seg = |cluster_stats: Option<ClusterStatistics>| async {
         let block_id = Uuid::new_v4().simple().to_string();
         let location = (block_id, DataBlock::VERSION);
@@ -70,8 +71,11 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             Some(Utc::now()),
         ));
 
-        let statistics =
-            reduce_block_metas(&[test_block_meta.as_ref()], BlockThresholds::default());
+        let statistics = reduce_block_metas(
+            &[test_block_meta.as_ref()],
+            BlockThresholds::default(),
+            Some(0),
+        );
 
         let segment = SegmentInfo::new(vec![test_block_meta], statistics);
         Ok::<_, ErrorCode>((seg_writer.write_segment(segment).await?, location))
@@ -80,7 +84,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let mut test_segment_locations = vec![];
     let mut test_block_locations = vec![];
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
-        cluster_key_id: 0,
+        cluster_key_id,
         min: vec![Scalar::from(1i64)],
         max: vec![Scalar::from(3i64)],
         level: 0,
@@ -91,7 +95,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     test_block_locations.push(block_location);
 
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
-        cluster_key_id: 0,
+        cluster_key_id,
         min: vec![Scalar::from(2i64)],
         max: vec![Scalar::from(4i64)],
         level: 0,
@@ -102,7 +106,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     test_block_locations.push(block_location);
 
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
-        cluster_key_id: 0,
+        cluster_key_id,
         min: vec![Scalar::from(4i64)],
         max: vec![Scalar::from(5i64)],
         level: 0,
@@ -150,11 +154,11 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         }
     });
 
-    let mut mutator = ReclusterMutator::try_create(1.0, BlockThresholds::default())?;
+    let mut mutator = ReclusterMutator::try_create(ctx, 1.0, BlockThresholds::default())?;
 
     let need_recluster = mutator.target_select(blocks_map).await?;
     assert!(need_recluster);
-    assert_eq!(mutator.selected_blocks().len(), 3);
+    assert_eq!(mutator.take_blocks().len(), 3);
 
     Ok(())
 }

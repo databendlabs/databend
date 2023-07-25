@@ -51,7 +51,6 @@ use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::InputError;
-use common_profile::QueryProfileManager;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
@@ -184,10 +183,6 @@ impl QueryContext {
         DataExchangeManager::instance()
     }
 
-    pub fn get_query_profile_manager(&self) -> Arc<QueryProfileManager> {
-        self.shared.get_query_profile_manager()
-    }
-
     // Get the current session.
     pub fn get_current_session(&self) -> Arc<Session> {
         self.shared.session.clone()
@@ -239,6 +234,10 @@ impl QueryContext {
 
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
+    }
+
+    pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        self.shared.evict_table_from_cache(catalog, database, table)
     }
 }
 
@@ -559,10 +558,6 @@ impl TableContext for QueryContext {
             }
         }
         self.query_settings.get_changes()
-    }
-
-    fn get_query_profile_manager(&self) -> Arc<QueryProfileManager> {
-        self.shared.get_query_profile_manager()
     }
 
     // Get the storage data accessor operator from the session manager.

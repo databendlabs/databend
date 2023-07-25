@@ -583,10 +583,16 @@ if [[ "$AUTO_APPROVE" == "false" ]]; then
 	fi
 fi
 
-if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
+case "$PACKAGE_MANAGER" in
+apt-get)
 	"${PRE_COMMAND[@]}" apt-get update
 	install_pkg ca-certificates "$PACKAGE_MANAGER"
-fi
+	;;
+yum | dnf)
+	install_pkg epel-release "$PACKAGE_MANAGER"
+	;;
+*) ;;
+esac
 
 [[ "$INSTALL_PROFILE" == "true" ]] && update_path_and_profile
 

@@ -29,7 +29,6 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_pipeline_core::InputError;
-use common_profile::QueryProfileManager;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
@@ -85,8 +84,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
-    /// Query profile manager
-    pub(in crate::sessions) profile_mgr: Arc<QueryProfileManager>,
 }
 
 impl QueryContextShared {
@@ -120,7 +117,6 @@ impl QueryContextShared {
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
-            profile_mgr: QueryProfileManager::instance(),
         }))
     }
 
@@ -278,6 +274,13 @@ impl QueryContextShared {
         }
     }
 
+    pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
+        let mut tables_refs = self.tables_refs.lock();
+        tables_refs.remove(&table_meta_key);
+        Ok(())
+    }
+
     /// Init runtime when first get
     pub fn try_get_runtime(&self) -> Result<Arc<Runtime>> {
         let mut query_runtime = self.runtime.write();
@@ -370,10 +373,6 @@ impl QueryContextShared {
     pub fn get_status_info(&self) -> String {
         let status = self.status.read();
         status.clone()
-    }
-
-    pub fn get_query_profile_manager(&self) -> Arc<QueryProfileManager> {
-        self.profile_mgr.clone()
     }
 }
 
