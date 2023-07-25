@@ -21,7 +21,6 @@ use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_pipeline_transforms::processors::transforms::transform_accumulating_async::AsyncAccumulatingTransform;
 use log::debug;
-use opendal::Operator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 
