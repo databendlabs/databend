@@ -60,6 +60,7 @@ use common_meta_app::schema::IcebergCatalogOption;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::IndexType;
+use common_meta_app::schema::ListCatalogReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesReq;
@@ -295,7 +296,7 @@ impl SchemaApiTestSuite {
         suite
             .virtual_column_create_list_drop(&b.build().await)
             .await?;
-        suite.catalog_create_get_drop(&b.build().await).await?;
+        suite.catalog_create_get_list(&b.build().await).await?;
 
         Ok(())
     }
@@ -1318,9 +1319,8 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    /// TODO: we need to implement get and drop later.
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn catalog_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn catalog_create_get_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let catalog_name = "catalog1";
 
@@ -1351,6 +1351,11 @@ impl SchemaApiTestSuite {
         assert_eq!(got.id.catalog_id, res.catalog_id);
         assert_eq!(got.name_ident.tenant, "tenant1");
         assert_eq!(got.name_ident.catalog_name, "catalog1");
+
+        let got = mt.list_catalogs(ListCatalogReq::new("tenant1")).await?;
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].name_ident.tenant, "tenant1");
+        assert_eq!(got[0].name_ident.catalog_name, "catalog1");
 
         Ok(())
     }

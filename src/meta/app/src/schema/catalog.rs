@@ -175,6 +175,14 @@ pub struct ListCatalogReq {
     pub tenant: String,
 }
 
+impl ListCatalogReq {
+    pub fn new(tenant: impl Into<String>) -> ListCatalogReq {
+        ListCatalogReq {
+            tenant: tenant.into(),
+        }
+    }
+}
+
 mod kvapi_key_impl {
     use common_meta_kvapi::kvapi;
 
