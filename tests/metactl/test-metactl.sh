@@ -41,8 +41,7 @@ metactl_import_export () {
     echo " === ${title} 1.1. Check snapshot data"
     echo " === "
 
-    # TODO: use valid snapshot name
-    snapshot_path="$meta_dir/df_meta/V002/snapshot/0-0-0-0.snap"
+    snapshot_path="$(ls $meta_dir/df_meta/V002/snapshot/1-0-83-*.snap)"
     echo "=== snapshot path:"
     ls $snapshot_path
 
@@ -88,8 +87,6 @@ metactl_import_export () {
 metactl_import_export 'V0'   "$meta_json"      "$want_exported" "$want_snapshot_v002"
 metactl_import_export 'V002' "$meta_json_v002" "$want_exported" "$want_snapshot_v002"
 
-exit 0
-
 
 echo " === "
 echo " === 4. Test export from empty running metasrv to file $grpc_exported"
@@ -131,35 +128,7 @@ fi
 
 kill $METASRV_PID
 
-exit 0
-
 sleep 3
-
-
-echo " === "
-echo " === 4. Test import data with header $grpc_exported to dir $meta_dir"
-echo " === "
-
-echo " === import into $meta_dir"
-cat $grpc_exported |
-    ./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir "$meta_dir"
-
-
-echo " === "
-echo " === 5. Test export data with header from dir: $meta_dir to file $exported"
-echo " === "
-
-echo " === export from $meta_dir"
-./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir "$meta_dir" >$exported
-
-echo " === exported file data start..."
-cat $exported
-echo " === exported file data end"
-
-echo " === check backup data $grpc_exported and exported $exported"
-diff $grpc_exported $exported
-
-
 
 echo " === "
 echo " === 6. Test import data with incompatible header $grpc_exported to dir $meta_dir"
@@ -173,5 +142,3 @@ cat $grpc_exported |
     ./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir "$meta_dir"  \
     && { echo " === expect error when importing incompatible header"; exit 1; } \
     || echo " === error is expected. OK";
-
-
