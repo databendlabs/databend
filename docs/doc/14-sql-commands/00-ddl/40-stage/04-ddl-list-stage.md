@@ -5,6 +5,8 @@ sidebar_label: LIST STAGE FILES
 
 Lists files in a stage.
 
+See also: [LIST_STAGE](../../../15-sql-functions/112-table-functions/list_stage.md)
+
 ## Syntax
 
 ```sql

@@ -95,8 +95,15 @@ where T: Processor + 'static
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        // TODO: record profile information for async process
-        self.inner.async_process().await
+        let instant = Instant::now();
+        self.inner.async_process().await?;
+        let elapsed = instant.elapsed();
+        self.prof = self.prof
+            + ProcessorProfile {
+                wait_time: elapsed,
+                ..Default::default()
+            };
+        Ok(())
     }
 }
 
@@ -145,6 +152,7 @@ where T: Transform + 'static
         self.prof = self.prof
             + ProcessorProfile {
                 cpu_time: elapsed,
+                wait_time: Default::default(),
                 input_rows,
                 input_bytes,
                 output_rows: res.num_rows(),

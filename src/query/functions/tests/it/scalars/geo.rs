@@ -36,6 +36,7 @@ fn test_geo() {
 }
 
 fn test_geo_to_h3(file: &mut impl Write) {
+    run_ast(file, "geo_to_h3(37.79506683, 55.71290588, 16)", &[]);
     run_ast(file, "geo_to_h3(37.79506683, 55.71290588, 15)", &[]);
     run_ast(file, "geo_to_h3(lon, lat, 15)", &[
         (

@@ -202,7 +202,7 @@ impl Rule for RuleTryApplyAggIndex {
         s_expr: &SExpr,
         state: &mut crate::optimizer::rule::TransformResult,
     ) -> Result<()> {
-        let (table_inedx, table_name) = self.get_table(s_expr);
+        let (table_index, table_name) = self.get_table(s_expr);
         let metadata = self.metadata.read();
         let index_plans = metadata.get_agg_indexes(&table_name);
         if index_plans.is_none() {
@@ -215,9 +215,11 @@ impl Rule for RuleTryApplyAggIndex {
             return Ok(());
         }
 
-        let base_columns = metadata.columns_by_table_index(table_inedx);
+        let base_columns = metadata.columns_by_table_index(table_index);
 
-        if let Some(mut result) = agg_index::try_rewrite(&base_columns, s_expr, index_plans)? {
+        if let Some(mut result) =
+            agg_index::try_rewrite(table_index, &base_columns, s_expr, index_plans)?
+        {
             result.set_applied_rule(&self.id);
             state.add_result(result);
         }

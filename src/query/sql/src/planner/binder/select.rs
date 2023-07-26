@@ -41,6 +41,7 @@ use common_exception::Result;
 use common_exception::Span;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
+use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use tracing::warn;
 
@@ -50,6 +51,7 @@ use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
+use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
@@ -838,6 +840,16 @@ impl Binder {
 
         let lazy_cols = select_cols.difference(&non_lazy_cols).copied().collect();
         metadata.add_lazy_columns(lazy_cols);
+
+        // Single table, the table index is 0.
+        let table_index = 0;
+        if metadata.row_id_index_by_table_index(table_index).is_none() {
+            let internal_column = INTERNAL_COLUMN_FACTORY
+                .get_internal_column(ROW_ID_COL_NAME)
+                .unwrap();
+            let index = metadata.add_internal_column(table_index, internal_column);
+            metadata.set_table_row_id_index(table_index, index);
+        }
 
         Ok(())
     }

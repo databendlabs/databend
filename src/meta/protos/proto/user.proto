@@ -95,6 +95,7 @@ message UserOption {
 
   uint64 flags = 1;
   optional string default_role = 2;
+  optional string network_policy = 3;
 }
 
 message UserInfo {

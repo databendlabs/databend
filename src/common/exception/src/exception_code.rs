@@ -145,6 +145,7 @@ build_exceptions! {
     ColumnReferencedByComputedColumn(1117),
     // The table is not a clustered table.
     UnclusteredTable(1118),
+    UnknownCatalog(11119),
 
     // Data Related Errors
 
@@ -214,6 +215,7 @@ build_exceptions! {
     UnknownNetworkPolicy(2207),
     NetworkPolicyAlreadyExists(2208),
     IllegalNetworkPolicy(2209),
+    NetworkPolicyIsUsedByUser(2210),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),

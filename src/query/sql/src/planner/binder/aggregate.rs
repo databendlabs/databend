@@ -29,6 +29,7 @@ use itertools::Itertools;
 
 use super::prune_by_children;
 use super::ExprContext;
+use super::Finder;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::Binder;
@@ -370,13 +371,7 @@ impl Binder {
                     column.column_name = item.alias.clone();
                     column
                 } else {
-                    self.create_column_binding(
-                        None,
-                        None,
-                        None,
-                        item.alias.clone(),
-                        item.scalar.data_type()?,
-                    )
+                    self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
                 };
                 available_aliases.push((column, item.scalar.clone()));
             }
@@ -389,6 +384,18 @@ impl Binder {
                     bind_context,
                     select_list,
                     exprs,
+                    &available_aliases,
+                    false,
+                    &mut vec![],
+                )
+                .await
+            }
+            GroupBy::All => {
+                let groups = self.resolve_group_all(select_list)?;
+                self.resolve_group_items(
+                    bind_context,
+                    select_list,
+                    &groups,
                     &available_aliases,
                     false,
                     &mut vec![],
@@ -447,6 +454,7 @@ impl Binder {
 
         let mut new_expr = child;
         if !scalar_items.is_empty() {
+            scalar_items.sort_by_key(|item| item.index);
             let eval_scalar = EvalScalar {
                 items: scalar_items,
             };
@@ -511,10 +519,7 @@ impl Binder {
         let grouping_sets = grouping_sets.into_iter().unique().collect();
         agg_info.grouping_sets = grouping_sets;
         // Add a virtual column `_grouping_id` to group items.
-        let grouping_id_column = self.create_column_binding(
-            None,
-            None,
-            None,
+        let grouping_id_column = self.create_derived_column_binding(
             "_grouping_id".to_string(),
             DataType::Number(NumberDataType::UInt32),
         );
@@ -535,6 +540,25 @@ impl Binder {
             }),
         });
         Ok(())
+    }
+
+    fn resolve_group_all(&mut self, select_list: &SelectList<'_>) -> Result<Vec<Expr>> {
+        // Resolve group items with `FROM` context. Since the alias item can not be resolved
+        // from the context, we can detect the failure and fallback to resolving with `available_aliases`.
+
+        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::AggregateFunction(_));
+        let mut groups = Vec::new();
+        for (idx, select_item) in select_list.items.iter().enumerate() {
+            let finder = Finder::new(&f);
+            let finder = select_item.scalar.accept(finder)?;
+            if finder.scalars().is_empty() {
+                groups.push(Expr::Literal {
+                    span: None,
+                    lit: Literal::UInt64(idx as u64 + 1),
+                });
+            }
+        }
+        Ok(groups)
     }
 
     #[async_backtrace::framed]
@@ -570,7 +594,7 @@ impl Binder {
                     {
                         column_ref.column.clone()
                     } else {
-                        self.create_column_binding(None, None, None, alias, scalar.data_type()?)
+                        self.create_derived_column_binding(alias, scalar.data_type()?)
                     };
                     bind_context.aggregate_info.group_items.push(ScalarItem {
                         scalar: scalar.clone(),
