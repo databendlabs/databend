@@ -217,11 +217,11 @@ impl SnapshotStoreV002 {
         Ok(Some((id, data)))
     }
 
-    pub fn new_writer(&mut self, meta: SnapshotMeta) -> Result<WriterV002, SnapshotStoreError> {
+    pub fn new_writer(&mut self) -> Result<WriterV002, SnapshotStoreError> {
         self.ensure_snapshot_dir()?;
 
-        WriterV002::new(self, meta.clone())
-            .map_err(|e| SnapshotStoreError::write(e).with_meta("creating snapshot writer", &meta))
+        WriterV002::new(self)
+            .map_err(|e| SnapshotStoreError::write(e).with_context("creating snapshot writer"))
     }
 
     pub async fn new_temp(&self) -> Result<SnapshotData, io::Error> {

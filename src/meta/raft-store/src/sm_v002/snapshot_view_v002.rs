@@ -77,13 +77,7 @@ impl SnapshotViewV002 {
     pub fn export(&self) -> impl Iterator<Item = RaftStoreEntry> + '_ {
         let d = self.top.data_ref();
 
-        // Sequence
-
-        let mut sm_meta = vec![RaftStoreEntry::Sequences {
-            // For back compatibility.
-            key: s("generic-kv"),
-            value: SeqNum(d.curr_seq()),
-        }];
+        let mut sm_meta = vec![];
 
         // Last applied
 
@@ -103,6 +97,15 @@ impl SnapshotViewV002 {
                 value: StateMachineMetaValue::Membership(last_membership.clone()),
             })
         }
+
+        // Sequence
+
+        sm_meta.push(RaftStoreEntry::Sequences {
+            // Use this fixed key `generic-kv` for back compatibility:
+            // Only this key is used.
+            key: s("generic-kv"),
+            value: SeqNum(d.curr_seq()),
+        });
 
         // Nodes
 

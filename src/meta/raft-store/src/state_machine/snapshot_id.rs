@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::str::FromStr;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use common_meta_types::new_log_id;
 use common_meta_types::LogId;
@@ -32,6 +34,22 @@ pub struct MetaSnapshotId {
 impl MetaSnapshotId {
     pub fn new(last_applied: Option<LogId>, uniq: u64) -> Self {
         Self { last_applied, uniq }
+    }
+
+    /// Create a new snapshot id with current time as `uniq` index.
+    pub fn new_with_epoch(last_applied: Option<LogId>) -> Self {
+        let uniq = Self::epoch_millis();
+        Self { last_applied, uniq }
+    }
+
+    fn epoch_millis() -> u64 {
+        let milli = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+
+        let milli: u64 = milli.try_into().unwrap();
+        milli
     }
 }
 
