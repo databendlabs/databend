@@ -235,6 +235,11 @@ SELECT quantile_disc(0, 0.5, 0.6, 1)(number) from numbers_mt(10000);
 ----
 [0,4999,5999,9999]
 
+query F
+SELECT quantile_tdigest(0.6)(number) from numbers_mt(10000)
+----
+5999.5
+
 query T
 SELECT list(number) from numbers_mt(10)
 ----
