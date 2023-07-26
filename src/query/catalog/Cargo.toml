@@ -20,7 +20,6 @@ common-pipeline-core = { path = "../pipeline/core" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
 common-meta-store = {path = "../../meta/store"}
-common-config = {path = "../config"}
 
 async-backtrace = { workspace = true }
 async-trait = "0.1.57"

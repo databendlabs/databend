@@ -85,9 +85,6 @@ pub struct StorageDescription {
 }
 
 #[async_trait::async_trait]
-pub trait CatalogBuilder {}
-
-#[async_trait::async_trait]
 pub trait Catalog: DynClone + Send + Sync {
     /// Database.
 

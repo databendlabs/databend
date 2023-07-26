@@ -1814,7 +1814,6 @@ dependencies = [
  "chrono",
  "common-arrow",
  "common-base",
- "common-config",
  "common-exception",
  "common-expression",
  "common-io",

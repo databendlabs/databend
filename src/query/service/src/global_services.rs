@@ -15,6 +15,7 @@
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::GlobalQueryRuntime;
+use common_catalog::catalog::CatalogManager;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_exception::Result;
@@ -29,7 +30,7 @@ use storages_common_cache_manager::CacheManager;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
-use crate::catalogs::CatalogManager;
+use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::ClusterDiscovery;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::SessionManager;
