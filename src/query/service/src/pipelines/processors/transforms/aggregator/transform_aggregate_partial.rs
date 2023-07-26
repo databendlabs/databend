@@ -16,6 +16,8 @@ use std::sync::Arc;
 use std::vec;
 
 use bumpalo::Bump;
+use common_base::base::convert_byte_size;
+use common_base::base::convert_number_size;
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_catalog::plan::AggIndexMeta;
 use common_catalog::table_context::TableContext;
@@ -33,6 +35,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::AccumulatingTransform;
 use common_pipeline_transforms::processors::transforms::AccumulatingTransformer;
+use tracing::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::AggregateHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
@@ -376,6 +379,12 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                 )],
             },
             HashTable::PartitionedHashTable(v) => {
+                info!(
+                    "Processed {} different keys, allocated {} memory while in group by.",
+                    convert_number_size(v.len() as f64),
+                    convert_byte_size(v.allocated_bytes() as f64)
+                );
+
                 let cells = PartitionedHashTableDropper::split_cell(v);
                 let mut blocks = Vec::with_capacity(cells.len());
                 for (bucket, cell) in cells.into_iter().enumerate() {
