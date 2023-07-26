@@ -9059,6 +9059,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ringbuffer"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00cd23b78b7c0c29b99a7840f540c48def3cfd303024faf2f45d7b064e4cb930"
+
+[[package]]
 name = "rio"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10163,9 +10169,9 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 
 [[package]]
 name = "strawboat"
-version = "0.2.4"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bceffaa31493ee1ab2282122ecbd3d02235d96385bd1c725ba712f6d24d38b3"
+checksum = "02e9b53a8ed3f90a8301c8c07d8233664fa174cf91e8838e8c710767a5375634"
 dependencies = [
  "ahash 0.8.3",
  "arrow2",
@@ -10178,8 +10184,10 @@ dependencies = [
  "log",
  "lz4",
  "num",
+ "ordered-float 3.7.0",
  "parquet2",
  "rand 0.8.5",
+ "ringbuffer",
  "roaring",
  "seq-macro",
  "serde",

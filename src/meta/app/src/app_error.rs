@@ -285,6 +285,22 @@ impl UnknownDatabase {
 }
 
 #[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UnknownCatalog: `{catalog_name}` while `{context}`")]
+pub struct UnknownCatalog {
+    catalog_name: String,
+    context: String,
+}
+
+impl UnknownCatalog {
+    pub fn new(catalog_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            catalog_name: catalog_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownDatamask: `{name}` while `{context}`")]
 pub struct UnknownDatamask {
     name: String,
@@ -795,6 +811,9 @@ pub enum AppError {
     UnknownDatabase(#[from] UnknownDatabase),
 
     #[error(transparent)]
+    UnknownCatalog(#[from] UnknownCatalog),
+
+    #[error(transparent)]
     UnknownDatabaseId(#[from] UnknownDatabaseId),
 
     #[error(transparent)]
@@ -901,6 +920,12 @@ impl AppErrorMessage for BackgroundJobAlreadyExists {
 impl AppErrorMessage for UnknownDatabase {
     fn message(&self) -> String {
         format!("Unknown database '{}'", self.db_name)
+    }
+}
+
+impl AppErrorMessage for UnknownCatalog {
+    fn message(&self) -> String {
+        format!("Unknown catalog '{}'", self.catalog_name)
     }
 }
 
@@ -1177,6 +1202,7 @@ impl From<AppError> for ErrorCode {
             AppError::UnknownDatabaseId(err) => ErrorCode::UnknownDatabaseId(err.message()),
             AppError::UnknownTableId(err) => ErrorCode::UnknownTableId(err.message()),
             AppError::UnknownTable(err) => ErrorCode::UnknownTable(err.message()),
+            AppError::UnknownCatalog(err) => ErrorCode::UnknownCatalog(err.message()),
             AppError::DatabaseAlreadyExists(err) => ErrorCode::DatabaseAlreadyExists(err.message()),
             AppError::CatalogAlreadyExists(err) => ErrorCode::CatalogAlreadyExists(err.message()),
             AppError::CreateDatabaseWithDropTime(err) => {

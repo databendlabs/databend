@@ -39,6 +39,7 @@ use common_meta_app::app_error::UndropDbWithNoDropTime;
 use common_meta_app::app_error::UndropTableAlreadyExists;
 use common_meta_app::app_error::UndropTableHasNoHistory;
 use common_meta_app::app_error::UndropTableWithNoDropTime;
+use common_meta_app::app_error::UnknownCatalog;
 use common_meta_app::app_error::UnknownDatabaseId;
 use common_meta_app::app_error::UnknownIndex;
 use common_meta_app::app_error::UnknownTable;
@@ -48,6 +49,9 @@ use common_meta_app::app_error::WrongShare;
 use common_meta_app::app_error::WrongShareObject;
 use common_meta_app::schema::CatalogId;
 use common_meta_app::schema::CatalogIdToName;
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::CatalogMeta;
+use common_meta_app::schema::CatalogNameIdent;
 use common_meta_app::schema::CountTablesKey;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
@@ -88,6 +92,7 @@ use common_meta_app::schema::EmptyProto;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::GcDroppedTableResp;
+use common_meta_app::schema::GetCatalogReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
@@ -98,6 +103,7 @@ use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexIdToName;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
+use common_meta_app::schema::ListCatalogReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListDroppedTableResp;
@@ -3155,6 +3161,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn create_catalog(
         &self,
         req: CreateCatalogReq,
@@ -3235,6 +3242,83 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         };
 
         Ok(CreateCatalogReply { catalog_id })
+    }
+
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    async fn get_catalog(&self, req: GetCatalogReq) -> Result<Arc<CatalogInfo>, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let name_key = &req.inner;
+
+        let (_, catalog_id, _, catalog_meta) =
+            get_catalog_or_err(self, name_key, "get_catalog").await?;
+
+        let catalog = CatalogInfo {
+            id: CatalogId { catalog_id },
+            name_ident: name_key.clone(),
+            meta: catalog_meta,
+        };
+
+        Ok(Arc::new(catalog))
+    }
+
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    async fn list_catalogs(
+        &self,
+        req: ListCatalogReq,
+    ) -> Result<Vec<Arc<CatalogInfo>>, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let name_key = CatalogNameIdent {
+            tenant: req.tenant,
+            // Using a empty catalog to to list all
+            catalog_name: "".to_string(),
+        };
+
+        // Pairs of catalog-name and catalog_id with seq
+        let (tenant_catalog_names, catalog_ids) = list_u64_value(self, &name_key).await?;
+
+        // Keys for fetching serialized CatalogMeta from kvapi::KVApi
+        let mut kv_keys = Vec::with_capacity(catalog_ids.len());
+
+        for catalog_id in catalog_ids.iter() {
+            let k = CatalogId {
+                catalog_id: *catalog_id,
+            }
+            .to_string_key();
+            kv_keys.push(k);
+        }
+
+        // Batch get all catalog-metas.
+        // - A catalog-meta may be already deleted. It is Ok. Just ignore it.
+
+        let seq_metas = self.mget_kv(&kv_keys).await?;
+        let mut catalog_infos = Vec::with_capacity(kv_keys.len());
+
+        for (i, seq_meta_opt) in seq_metas.iter().enumerate() {
+            if let Some(seq_meta) = seq_meta_opt {
+                let catalog_meta: CatalogMeta = deserialize_struct(&seq_meta.data)?;
+
+                let catalog_info = CatalogInfo {
+                    id: CatalogId {
+                        catalog_id: catalog_ids[i],
+                    },
+                    name_ident: CatalogNameIdent {
+                        tenant: name_key.tenant.clone(),
+                        catalog_name: tenant_catalog_names[i].catalog_name.clone(),
+                    },
+                    meta: catalog_meta,
+                };
+                catalog_infos.push(Arc::new(catalog_info));
+            } else {
+                debug!(
+                    k = display(&kv_keys[i]),
+                    "catalog_meta not found, maybe just deleted after listing names and before listing meta"
+                );
+            }
+        }
+
+        Ok(catalog_infos)
     }
 
     fn name(&self) -> String {
@@ -3868,27 +3952,66 @@ async fn gc_dropped_table_data(
     }
 
     // Get id -> name mapping
-    let (name_seq, name): (_, Option<DBIdTableName>) = get_pb_value(kv_api, &id_to_name).await?;
-
-    if name_seq == 0 || name.is_none() {
-        error!(
-            "gc_dropped_table_by_id cannot find {:?} database_id_table_name",
-            id_to_name
-        );
-        return Ok(());
-    }
+    let (name_seq, _name): (_, Option<DBIdTableName>) = get_pb_value(kv_api, &id_to_name).await?;
 
     // table id not changed
     condition.push(txn_cond_seq(&tbid, Eq, tb_meta_seq));
-    // table id to name not changed
-    condition.push(txn_cond_seq(&id_to_name, Eq, name_seq));
-
+    // consider only when TableIdToName exist
+    if name_seq != 0 {
+        // table id to name not changed
+        condition.push(txn_cond_seq(&id_to_name, Eq, name_seq));
+        // remove table id to name
+        if_then.push(txn_op_del(&id_to_name));
+    }
     // remove table meta
     if_then.push(txn_op_del(&tbid));
-    // remove table id to name
-    if_then.push(txn_op_del(&id_to_name));
 
     remove_table_copied_files(kv_api, table_id, condition, if_then).await?;
 
     Ok(())
+}
+
+/// Returns (catalog_id_seq, catalog_id, db_meta_seq, catalog_meta)
+pub(crate) async fn get_catalog_or_err(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    name_key: &CatalogNameIdent,
+    msg: impl Display,
+) -> Result<(u64, u64, u64, CatalogMeta), KVAppError> {
+    let (catalog_id_seq, catalog_id) = get_u64_value(kv_api, name_key).await?;
+    catalog_has_to_exist(catalog_id_seq, name_key, &msg)?;
+
+    let id_key = CatalogId { catalog_id };
+
+    let (catalog_meta_seq, catalog_meta) = get_pb_value(kv_api, &id_key).await?;
+    catalog_has_to_exist(catalog_meta_seq, name_key, msg)?;
+
+    Ok((
+        catalog_id_seq,
+        catalog_id,
+        catalog_meta_seq,
+        // Safe unwrap(): catalog_meta_seq > 0 implies db_meta is not None.
+        catalog_meta.unwrap(),
+    ))
+}
+
+/// Return OK if a catalog_id or catalog_meta exists by checking the seq.
+///
+/// Otherwise returns UnknownCatalog error
+pub fn catalog_has_to_exist(
+    seq: u64,
+    catalog_name_ident: &CatalogNameIdent,
+    msg: impl Display,
+) -> Result<(), KVAppError> {
+    if seq == 0 {
+        debug!(seq, ?catalog_name_ident, "catalog does not exist");
+
+        Err(KVAppError::AppError(AppError::UnknownCatalog(
+            UnknownCatalog::new(
+                &catalog_name_ident.catalog_name,
+                format!("{}: {}", msg, catalog_name_ident),
+            ),
+        )))
+    } else {
+        Ok(())
+    }
 }
