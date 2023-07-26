@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::ColumnStatistics;
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -33,11 +33,10 @@ use common_sql::plans::OptimizeTableAction;
 use common_sql::plans::OptimizeTablePlan;
 use common_sql::plans::Plan;
 use common_sql::plans::Replace;
-use common_sql::ColumnBinding;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use storages_common_table_meta::meta::TableSnapshot;
-use tracing::error;
+use tracing::info;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::interpreter_copy::CopyInterpreter;
@@ -45,6 +44,8 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::OptimizeTableInterpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -74,14 +75,76 @@ impl Interpreter for ReplaceInterpreter {
         }
 
         self.check_on_conflicts()?;
-
         let physical_plan = self.build_physical_plan().await?;
-        error!("physical_plan: {:?}", physical_plan);
-        let build_res =
+        let mut pipeline =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
-        error!("build_res: {:?}", build_res.main_pipeline);
-        Ok(build_res)
+
+        let plan = &self.plan;
+        let table = self
+            .ctx
+            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .await?;
+        let has_cluster_key = !table.cluster_keys(self.ctx.clone()).is_empty();
+        if !pipeline.main_pipeline.is_empty()
+            && has_cluster_key
+            && self.ctx.get_settings().get_enable_auto_reclustering()?
+        {
+            let ctx = self.ctx.clone();
+            let catalog = self.plan.catalog.clone();
+            let database = self.plan.database.to_string();
+            let table = self.plan.table.to_string();
+            pipeline.main_pipeline.set_on_finished(|err| {
+                    if err.is_none() {
+                        info!("execute replace into finished successfully. running table optimization job.");
+                         match  GlobalIORuntime::instance().block_on({
+                             async move {
+                                 ctx.evict_table_from_cache(&catalog, &database, &table)?;
+                                 let optimize_interpreter = OptimizeTableInterpreter::try_create(ctx.clone(),
+                                 OptimizeTablePlan {
+                                     catalog,
+                                     database,
+                                     table,
+                                     action: OptimizeTableAction::CompactBlocks,
+                                     limit: None,
+                                 }
+                                 )?;
+
+                                 let mut build_res = optimize_interpreter.execute2().await?;
+
+                                 if build_res.main_pipeline.is_empty() {
+                                     return Ok(());
+                                 }
+
+                                 let settings = ctx.get_settings();
+                                 let query_id = ctx.get_id();
+                                 build_res.set_max_threads(settings.get_max_threads()? as usize);
+                                 let settings = ExecutorSettings::try_create(&settings, query_id)?;
+
+                                 if build_res.main_pipeline.is_complete_pipeline()? {
+                                     let mut pipelines = build_res.sources_pipelines;
+                                     pipelines.push(build_res.main_pipeline);
+
+                                     let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+
+                                     ctx.set_executor(complete_executor.get_inner())?;
+                                     complete_executor.execute()?;
+                                 }
+                                 Ok(())
+                             }
+                         }) {
+                            Ok(_) => {
+                                info!("execute replace into finished successfully. table optimization job finished.");
+                            }
+                            Err(e) => { info!("execute replace into finished successfully. table optimization job failed. {:?}", e)}
+                        }
+
+                        return Ok(());
+                    }
+                    Ok(())
+                });
+        }
+        Ok(pipeline)
     }
 }
 
