@@ -24,7 +24,11 @@ use common_expression::types::NumberDataType;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
+use common_meta_app::schema::CatalogMeta;
+use common_meta_app::schema::CatalogNameIdent;
+use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CountTablesReq;
+use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReq;
@@ -48,12 +52,15 @@ use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::DroppedId;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
+use common_meta_app::schema::GetCatalogReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::IcebergCatalogOption;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::IndexType;
+use common_meta_app::schema::ListCatalogReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesReq;
@@ -88,6 +95,8 @@ use common_meta_app::share::GrantShareObjectReq;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
+use common_meta_app::storage::StorageParams;
+use common_meta_app::storage::StorageS3Config;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
 use common_meta_kvapi::kvapi::UpsertKVReq;
@@ -287,6 +296,8 @@ impl SchemaApiTestSuite {
         suite
             .virtual_column_create_list_drop(&b.build().await)
             .await?;
+        suite.catalog_create_get_list(&b.build().await).await?;
+
         Ok(())
     }
 
@@ -1304,6 +1315,47 @@ impl SchemaApiTestSuite {
                 },
             ]);
         }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn catalog_create_get_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let catalog_name = "catalog1";
+
+        info!("--- create catalog1");
+        let req = CreateCatalogReq {
+            if_not_exists: false,
+            name_ident: CatalogNameIdent {
+                tenant: tenant.to_string(),
+                catalog_name: catalog_name.to_string(),
+            },
+            meta: CatalogMeta {
+                catalog_option: CatalogOption::Iceberg(IcebergCatalogOption {
+                    storage_params: Box::new(StorageParams::S3(StorageS3Config {
+                        bucket: "bucket".to_string(),
+                        ..Default::default()
+                    })),
+                }),
+                created_on: Utc::now(),
+            },
+        };
+
+        let res = mt.create_catalog(req).await?;
+        info!("create catalog res: {:?}", res);
+
+        let got = mt
+            .get_catalog(GetCatalogReq::new(tenant, catalog_name))
+            .await?;
+        assert_eq!(got.id.catalog_id, res.catalog_id);
+        assert_eq!(got.name_ident.tenant, "tenant1");
+        assert_eq!(got.name_ident.catalog_name, "catalog1");
+
+        let got = mt.list_catalogs(ListCatalogReq::new("tenant1")).await?;
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].name_ident.tenant, "tenant1");
+        assert_eq!(got[0].name_ident.catalog_name, "catalog1");
 
         Ok(())
     }
