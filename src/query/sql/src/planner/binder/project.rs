@@ -68,13 +68,7 @@ impl Binder {
                 column_binding.column_name = item.alias.clone();
                 column_binding
             } else {
-                self.create_column_binding(
-                    None,
-                    None,
-                    None,
-                    item.alias.clone(),
-                    item.scalar.data_type()?,
-                )
+                self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
             };
             if is_grouping_sets_item {
                 column_binding.data_type = Box::new(column_binding.data_type.wrap_nullable());
