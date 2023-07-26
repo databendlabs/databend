@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateCatalogReply;
@@ -41,6 +42,7 @@ use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::GcDroppedTableResp;
+use common_meta_app::schema::GetCatalogReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
@@ -48,6 +50,7 @@ use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListCatalogReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListDroppedTableResp;
@@ -226,6 +229,11 @@ pub trait SchemaApi: Send + Sync {
 
     async fn create_catalog(&self, req: CreateCatalogReq)
     -> Result<CreateCatalogReply, KVAppError>;
+
+    async fn get_catalog(&self, req: GetCatalogReq) -> Result<Arc<CatalogInfo>, KVAppError>;
+
+    async fn list_catalogs(&self, req: ListCatalogReq)
+    -> Result<Vec<Arc<CatalogInfo>>, KVAppError>;
 
     fn name(&self) -> String;
 }

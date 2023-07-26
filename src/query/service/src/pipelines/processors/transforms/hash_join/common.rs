@@ -251,7 +251,7 @@ impl JoinHashTable {
         let mut data_block = data_block;
         if matches!(
             self.hash_join_desc.join_type,
-            JoinType::Left | JoinType::Full
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full
         ) {
             let mut validity = MutableBitmap::new();
             validity.extend_constant(data_block.num_rows(), true);

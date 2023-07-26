@@ -171,7 +171,7 @@ select count(*) = 50 from t
 ----
 1
 
-statement error 1002
+statement ok
 delete from t where t.a in (select * from numbers(10))
 
 statement ok
@@ -294,7 +294,7 @@ truncate table system.metrics;
 statement ok
 delete from t where c > 3 and c < 8;
 
-# expects 1 block pruned and 
+# expects 1 block pruned and
 query I
 select value from system.metrics where metric = 'fuse_deletion_block_range_pruned_nums';
 ----
