@@ -3886,25 +3886,19 @@ async fn gc_dropped_table_data(
     }
 
     // Get id -> name mapping
-    let (name_seq, name): (_, Option<DBIdTableName>) = get_pb_value(kv_api, &id_to_name).await?;
-
-    if name_seq == 0 || name.is_none() {
-        error!(
-            "gc_dropped_table_by_id cannot find {:?} database_id_table_name",
-            id_to_name
-        );
-        return Ok(());
-    }
+    let (name_seq, _name): (_, Option<DBIdTableName>) = get_pb_value(kv_api, &id_to_name).await?;
 
     // table id not changed
     condition.push(txn_cond_seq(&tbid, Eq, tb_meta_seq));
-    // table id to name not changed
-    condition.push(txn_cond_seq(&id_to_name, Eq, name_seq));
-
+    // consider only when TableIdToName exist
+    if name_seq != 0 {
+        // table id to name not changed
+        condition.push(txn_cond_seq(&id_to_name, Eq, name_seq));
+        // remove table id to name
+        if_then.push(txn_op_del(&id_to_name));
+    }
     // remove table meta
     if_then.push(txn_op_del(&tbid));
-    // remove table id to name
-    if_then.push(txn_op_del(&id_to_name));
 
     remove_table_copied_files(kv_api, table_id, condition, if_then).await?;
 
