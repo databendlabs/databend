@@ -38,10 +38,9 @@ use crate::api::ShuffleExchangeParams;
 use crate::api::TransformExchangeDeserializer;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
+use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeGroupBySerializer;
-use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterAggregateSerializer;
-use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterAggregateSpillWriter;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -308,39 +307,22 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
                         schema.clone(),
                         local_pos,
                     ),
-                    false => TransformScatterAggregateSpillWriter::create(
+                    false => TransformExchangeAggregateSerializer::create(
                         input,
                         output,
                         method.clone(),
                         operator.clone(),
                         location_prefix.clone(),
                         params.clone(),
+                        schema.clone(),
+                        local_pos,
                     ),
                 },
             ))
         })?;
 
-        let schema = shuffle_params.schema.clone();
-        let local_id = &shuffle_params.executor_id;
-        let local_pos = shuffle_params
-            .destination_ids
-            .iter()
-            .position(|x| x == local_id)
-            .unwrap();
-
-        pipeline.add_transform(
-            |input, output| match params.aggregate_functions.is_empty() {
-                true => TransformExchangeAsyncBarrier::try_create(input, output),
-                false => TransformScatterAggregateSerializer::try_create(
-                    input,
-                    output,
-                    method.clone(),
-                    schema.clone(),
-                    local_pos,
-                    params.clone(),
-                ),
-            },
-        )
+        pipeline
+            .add_transform(|input, output| TransformExchangeAsyncBarrier::try_create(input, output))
     }
 
     fn apply_merge_deserializer(
