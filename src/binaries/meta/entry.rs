@@ -129,6 +129,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     println!("Log:");
     println!("    File: {}", conf.log.file);
     println!("    Stderr: {}", conf.log.stderr);
+    println!("    Tracing: {}", conf.log.tracing);
     println!("Id: {}", conf.raft_config.id);
     println!("Raft Cluster Name: {}", conf.raft_config.cluster_name);
     println!("Raft Dir: {}", conf.raft_config.raft_dir);

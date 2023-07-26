@@ -243,6 +243,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!("Logging:");
     println!("    file: {}", conf.log.file);
     println!("    stderr: {}", conf.log.stderr);
+    println!("    query: {}", conf.log.query);
+    println!("    tracing: {}", conf.log.tracing);
     println!(
         "Meta: {}",
         if conf.meta.is_embedded_meta()? {

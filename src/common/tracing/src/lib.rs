@@ -16,18 +16,19 @@
 #![allow(clippy::uninlined_format_args)]
 #![deny(unused_crate_dependencies)]
 
-#[macro_use]
-mod macros;
 mod config;
 mod minitrace;
 mod panic_hook;
 
 pub use crate::config::Config;
 pub use crate::config::FileConfig;
+pub use crate::config::QueryLogConfig;
 pub use crate::config::StderrConfig;
+pub use crate::config::TracingConfig;
 pub use crate::minitrace::init_logging;
 pub use crate::minitrace::inject_span_to_tonic_request;
 pub use crate::minitrace::start_trace_for_remote_request;
+pub use crate::minitrace::GlobalLogger;
 pub use crate::panic_hook::log_panic;
 pub use crate::panic_hook::set_panic_hook;
 
@@ -47,4 +48,40 @@ macro_rules! func_name {
 pub fn closure_name<F: std::any::Any>() -> &'static str {
     let full_name = std::any::type_name::<F>();
     full_name.rsplit("::").next().unwrap()
+}
+
+/// Returns the intended databend semver for Sentry as an `Option<Cow<'static, str>>`.
+///
+/// This can be used with `sentry::ClientOptions` to set the databend semver.
+///
+/// # Examples
+///
+/// ```
+/// # #[macro_use] extern crate common_tracing;
+/// # fn main() {
+/// let _sentry = sentry::init(sentry::ClientOptions {
+///     release: common_tracing::databend_semver!(),
+///     ..Default::default()
+/// });
+/// # }
+/// ```
+#[macro_export]
+macro_rules! databend_semver {
+    () => {{
+        use std::sync::Once;
+        static mut INIT: Once = Once::new();
+        static mut RELEASE: Option<String> = None;
+        unsafe {
+            INIT.call_once(|| {
+                RELEASE = option_env!("CARGO_PKG_NAME").and_then(|name| {
+                    option_env!("DATABEND_GIT_SEMVER")
+                        .map(|version| format!("{}@{}", name, version))
+                });
+            });
+            RELEASE.as_ref().map(|x| {
+                let release: &'static str = ::std::mem::transmute(x.as_str());
+                ::std::borrow::Cow::Borrowed(release)
+            })
+        }
+    }};
 }

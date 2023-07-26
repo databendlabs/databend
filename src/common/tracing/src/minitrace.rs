@@ -17,6 +17,7 @@ use std::fmt;
 use std::io::Write;
 use std::time::SystemTime;
 
+use common_base::base::GlobalInstance;
 use fern::FormatCallback;
 use log::LevelFilter;
 use log::Log;
@@ -28,6 +29,18 @@ use tracing_appender::rolling::Rotation;
 use crate::Config;
 
 const HEADER_TRACE_PARENT: &str = "traceparent";
+
+#[allow(dyn_drop)]
+pub struct GlobalLogger {
+    _guards: Vec<Box<dyn Drop + Send + Sync + 'static>>,
+}
+
+impl GlobalLogger {
+    pub fn init(name: &str, cfg: &Config) {
+        let _guards = init_logging(name, cfg);
+        GlobalInstance::set(Self { _guards });
+    }
+}
 
 pub fn start_trace_for_remote_request<T>(name: &'static str, request: &tonic::Request<T>) -> Span {
     let span_context = try {
@@ -57,13 +70,13 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
     let mut guards: Vec<Box<dyn Drop + Send + Sync + 'static>> = vec![];
 
     // Initialize tracing reporter
-    let jaeger_collector_endpoint = std::env::var("DATABEND_JAEGER_COLLECTOR_ENDPOINT").ok();
-    if let Some(jaeger_collector_endpoint) = jaeger_collector_endpoint.clone() {
+    if cfg.tracing.on {
         let name = name.to_string();
+        let jaeger_endpoint = cfg.tracing.jaeger_endpoint.clone();
         let otlp_reporter = std::thread::spawn(move || {
             minitrace_opentelemetry::OpenTelemetryReporter::new(
                 opentelemetry_jaeger::new_collector_pipeline()
-                    .with_endpoint(jaeger_collector_endpoint)
+                    .with_endpoint(jaeger_endpoint)
                     .with_reqwest_blocking()
                     .with_service_name(&name)
                     .build_collector_exporter::<opentelemetry::runtime::Tokio>()
@@ -80,13 +93,14 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
     }
 
     // Initialize logging
-    let mut logger = fern::Dispatch::new();
+    // let mut logger = fern::Dispatch::new();
+    let mut normal_logger = fern::Dispatch::new();
+    let mut query_logger = fern::Dispatch::new();
 
     // Console logger
     if cfg.stderr.on {
-        logger = logger.chain(
+        normal_logger = normal_logger.chain(
             fern::Dispatch::new()
-                .filter(|metadata| metadata.target() != "query")
                 .level(cfg.stderr.level.parse().unwrap_or(LevelFilter::Info))
                 .format(formmater(&cfg.stderr.format))
                 .chain(std::io::stderr()),
@@ -103,52 +117,57 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
             ));
         guards.push(Box::new(flush_guard));
 
-        logger = logger.chain(
+        normal_logger = normal_logger.chain(
             fern::Dispatch::new()
                 .level(cfg.file.level.parse().unwrap_or(LevelFilter::Info))
-                .filter(|metadata| metadata.target() != "query")
                 .format(formmater(&cfg.file.format))
                 .chain(Box::new(normal_log_file) as Box<dyn Write + Send>),
         );
     }
 
-    // Query logger
-    if cfg.file.on {
-        let (query_log_file, flush_guard) =
-            tracing_appender::non_blocking(RollingFileAppender::new(
-                Rotation::HOURLY,
-                format!("{}/query-detail", &cfg.file.dir),
-                name,
-            ));
-        guards.push(Box::new(flush_guard));
-
-        logger = logger.chain(
-            fern::Dispatch::new()
-                .level_for("query", LevelFilter::Info)
-                .chain(Box::new(query_log_file) as Box<dyn Write + Send>),
-        );
-    }
-
-    if jaeger_collector_endpoint.is_some() {
-        // Log to minitrace
-        let level = std::env::var("TRACE_LOG")
+    // Log to minitrace
+    if cfg.tracing.on {
+        let level = cfg
+            .tracing
+            .log_level
+            .parse()
             .ok()
-            .and_then(|level| level.parse().ok())
             .unwrap_or(LevelFilter::Info);
-        logger = logger.chain(
+        normal_logger = normal_logger.chain(
             fern::Dispatch::new()
                 .level(level)
                 .chain(Box::new(MinitraceLogger) as Box<dyn Log>),
         );
     }
 
+    // Query logger
+    if cfg.query.on {
+        let (query_log_file, flush_guard) = tracing_appender::non_blocking(
+            RollingFileAppender::new(Rotation::HOURLY, &cfg.query.dir, name),
+        );
+        guards.push(Box::new(flush_guard));
+
+        query_logger = query_logger.chain(Box::new(query_log_file) as Box<dyn Write + Send>);
+    }
+
+    let logger = fern::Dispatch::new()
+        .chain(
+            fern::Dispatch::new()
+                .level_for("query", LevelFilter::Off)
+                .chain(normal_logger),
+        )
+        .chain(
+            fern::Dispatch::new()
+                .level(LevelFilter::Off)
+                .level_for("query", LevelFilter::Info)
+                .chain(query_logger),
+        );
+
     // Set global logger
-    let (max_level, logger) = logger.into_log();
-    if log::set_boxed_logger(logger).is_err() {
+    if logger.apply().is_err() {
         eprint!("logger has already been set");
         return Vec::new();
     }
-    log::set_max_level(max_level);
 
     #[cfg(feature = "console")]
     init_tokio_console();
