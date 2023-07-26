@@ -381,8 +381,8 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             HashTable::PartitionedHashTable(v) => {
                 info!(
                     "Processed {} rows, allocated {} memory while in group by.",
-                    convert_number_size(v.len()),
-                    convert_byte_size(v.allocated_bytes())
+                    convert_number_size(v.len() as f64),
+                    convert_byte_size(v.allocated_bytes() as f64)
                 );
 
                 let cells = PartitionedHashTableDropper::split_cell(v);
