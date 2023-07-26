@@ -13,18 +13,18 @@ Databend has the ability to export tracing data to Jaeger by integrating with th
 This tutorial uses the All In One image to deploy Jaeger in Docker. If you already have a running Jaeger instance, you can skip this step.
 
 ```bash
-docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
+docker run -d -p6831:6831/udp -p14268:14268 -p16686:16686 --name jaeger jaegertracing/all-in-one:latest
 ```
 
 ### Step 2. Set Environment Variables
 
 Set the following environment variables according to your actual tracing level requirements and Jaeger endpoint.
-    - `RUST_LOG`: Sets the log level.
-    - `DATABEND_JAEGER_AGENT_ENDPOINT`: Sets the endpoint the Jaeger agent is listening on.
+    - `TRACE_LOG`: Sets the log level that attaches to spans.
+    - `DATABEND_JAEGER_ENDPOINT`: Sets the endpoint the Jaeger agent is listening on.
 
 ```bash
-export RUST_LOG=DEBUG
-export DATABEND_JAEGER_AGENT_ENDPOINT=localhost:6831
+export TRACE_LOG=DEBUG
+export DATABEND_JAEGER_ENDPOINT=http://localhost:14268/api/traces
 ```
 
 ### Step 3. Deploy Databend

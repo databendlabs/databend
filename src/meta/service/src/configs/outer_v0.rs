@@ -21,7 +21,9 @@ use common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
 use common_meta_types::MetaStartupError;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
+use common_tracing::QueryLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
+use common_tracing::TracingConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -577,6 +579,11 @@ impl Into<InnerLogConfig> for LogConfig {
         InnerLogConfig {
             file: self.file.into(),
             stderr: self.stderr.into(),
+            query: QueryLogConfig {
+                on: false,
+                dir: "".to_string(),
+            },
+            tracing: TracingConfig::from_env(),
         }
     }
 }
