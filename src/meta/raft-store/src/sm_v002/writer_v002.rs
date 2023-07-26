@@ -19,6 +19,8 @@ use std::io::Write;
 
 use common_meta_types::SnapshotMeta;
 
+use crate::key_spaces::RaftStoreEntry;
+use crate::sm_v002::snapshot_store::SnapshotStoreError;
 use crate::sm_v002::snapshot_store::SnapshotStoreV002;
 
 pub struct WriterV002<'a> {
@@ -66,6 +68,48 @@ impl<'a> WriterV002<'a> {
         };
 
         Ok(writer)
+    }
+
+    /// Write entries to the snapshot, without flushing.
+    ///
+    /// Returns the count of entries
+    pub fn write_entries<E>(
+        &mut self,
+        entries: impl IntoIterator<Item = RaftStoreEntry>,
+    ) -> Result<usize, E>
+    where
+        E: std::error::Error + From<io::Error> + 'static,
+    {
+        self.write_entry_results(entries.into_iter().map(Ok))
+    }
+
+    /// Write `Result` of entries to the snapshot, without flushing.
+    ///
+    /// Returns the count of entries
+    pub fn write_entry_results<E>(
+        &mut self,
+        entry_results: impl IntoIterator<Item = Result<RaftStoreEntry, E>>,
+    ) -> Result<usize, E>
+    where
+        E: std::error::Error + From<io::Error> + 'static,
+    {
+        let mut cnt = 0;
+        let data_version = self.snapshot_store.data_version();
+        for ent in entry_results {
+            let ent = ent?;
+
+            tracing::debug!(entry = debug(&ent), "write {} entry", data_version);
+
+            serde_json::to_writer(&mut *self, &ent)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+            self.write(b"\n")
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+            cnt += 1;
+        }
+
+        Ok(cnt)
     }
 
     /// Commit the snapshot so that it is visible to the readers.

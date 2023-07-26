@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::fs::remove_dir_all;
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
@@ -22,6 +23,7 @@ use std::io::Lines;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
+use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::anyhow;
@@ -30,13 +32,11 @@ use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::RaftStoreEntry;
 use common_meta_raft_store::key_spaces::RaftStoreEntryCompat;
 use common_meta_raft_store::log::RaftLog;
-use common_meta_raft_store::log::TREE_RAFT_LOG;
 use common_meta_raft_store::ondisk::DataVersion;
 use common_meta_raft_store::ondisk::OnDisk;
 use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_raft_store::ondisk::TREE_HEADER;
 use common_meta_raft_store::state::RaftState;
-use common_meta_raft_store::state::TREE_RAFT_STATE;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
@@ -65,7 +65,7 @@ pub async fn export_data(config: &Config) -> anyhow::Result<()> {
     // export from grpc api if metasrv is running
     if config.grpc_api_address.is_empty() {
         init_sled_db(raft_config.raft_dir.clone());
-        export_from_dir(config)?;
+        export_from_dir(config).await?;
     } else {
         export_from_running_node(config).await?;
     }
@@ -81,8 +81,8 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
 
     init_sled_db(raft_config.raft_dir.clone());
 
-    clear()?;
-    let max_log_id = import_from(config.db.clone())?;
+    clear(config)?;
+    let max_log_id = import_from(&config).await?;
 
     if config.initial_cluster.is_empty() {
         return Ok(());
@@ -119,12 +119,17 @@ fn import_lines<B: BufRead + 'static>(lines: Lines<B>) -> anyhow::Result<Option<
         ));
     }
 
-    match version {
-        DataVersion::V0 | DataVersion::V001 => import_v0_v001(it),
+    let max_log_id = match version {
+        DataVersion::V0 => import_v0_or_v001_or_v002(it)?,
+        DataVersion::V001 => import_v0_or_v001_or_v002(it)?,
+        // V002 depends on the upgrade after import to convert data to latest version.
         DataVersion::V002 => {
-            todo!()
+            //
+            import_v0_or_v001_or_v002(it)?
         }
-    }
+    };
+
+    Ok(max_log_id)
 }
 
 fn read_version(first_line: &str) -> anyhow::Result<DataVersion> {
@@ -151,7 +156,7 @@ fn read_version(first_line: &str) -> anyhow::Result<DataVersion> {
 /// Import serialized lines for `DataVersion::V0` and `DataVersion::V001`
 ///
 /// While importing, the max log id is also returned.
-fn import_v0_v001(
+fn import_v0_or_v001_or_v002(
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
     let db = get_sled_db();
@@ -191,20 +196,39 @@ fn import_v0_v001(
 
 /// Read every line from stdin or restore file, deserialize it into tree_name, key and value.
 /// Insert them into sled db and flush.
-fn import_from(restore: String) -> anyhow::Result<Option<LogId>> {
-    if restore.is_empty() {
+///
+/// Finally upgrade the data in raft_dir to the latest version.
+async fn import_from(config: &Config) -> anyhow::Result<Option<LogId>> {
+    let restore = config.db.clone();
+
+    let max_log_id = if restore.is_empty() {
         let lines = io::stdin().lines();
-        import_lines(lines)
+
+        import_lines(lines)?
     } else {
-        match File::open(restore) {
-            Ok(file) => {
-                let reader = BufReader::new(file);
-                let lines = reader.lines();
-                import_lines(lines)
-            }
-            Err(e) => Err(anyhow::Error::new(e)),
-        }
-    }
+        let file = File::open(restore)?;
+        let reader = BufReader::new(file);
+        let lines = reader.lines();
+
+        import_lines(lines)?
+    };
+
+    upgrade(config).await?;
+
+    Ok(max_log_id)
+}
+
+/// Upgrade the data in raft_dir to the latest version.
+async fn upgrade(config: &Config) -> anyhow::Result<()> {
+    let raft_config: RaftConfig = config.raft_config.clone().into();
+
+    let db = get_sled_db();
+
+    let mut on_disk = OnDisk::open(&db, &raft_config).await?;
+    on_disk.log_stderr(true);
+    on_disk.upgrade().await?;
+
+    Ok(())
 }
 
 /// Build `Node` for cluster with new addresses configured.
@@ -340,7 +364,7 @@ async fn init_new_cluster(
     Ok(())
 }
 
-fn clear() -> anyhow::Result<()> {
+fn clear(config: &Config) -> anyhow::Result<()> {
     let db = get_sled_db();
 
     let tree_names = db.tree_names();
@@ -349,6 +373,11 @@ fn clear() -> anyhow::Result<()> {
         let tree = db.open_tree(&name)?;
         tree.clear()?;
         eprintln!("Clear sled tree {} Done", name);
+    }
+
+    let df_meta_path = format!("{}/df_meta", &config.raft_config.raft_dir);
+    if Path::new(&df_meta_path).exists() {
+        remove_dir_all(&df_meta_path)?;
     }
 
     Ok(())
@@ -360,18 +389,15 @@ fn clear() -> anyhow::Result<()> {
 /// `[sled_tree_name, {key_space: {key, value}}]`
 /// E.g.:
 /// `["state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}`
-fn export_from_dir(config: &Config) -> anyhow::Result<()> {
-    let raft_config: RaftConfig = config.raft_config.into();
-    let db = get_sled_db();
+async fn export_from_dir(config: &Config) -> anyhow::Result<()> {
+    upgrade(config).await?;
 
-    let mut on_disk = OnDisk::open(&db, &raft_config).await?;
-    on_disk.log_stderr(true);
-    on_disk.upgrade().await?;
+    let raft_config: RaftConfig = config.raft_config.clone().into();
 
     let sto_inn = StoreInner::open_create(&raft_config, Some(()), None).await?;
     let lines = sto_inn.export().await?;
 
-    eprintln!("    From: {}", config.raft_config.raft_dir);
+    eprintln!("    From: {}", raft_config.raft_dir);
 
     let file: Option<File> = if !config.db.is_empty() {
         eprintln!("    To:   File: {}", config.db);

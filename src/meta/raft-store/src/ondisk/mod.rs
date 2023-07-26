@@ -30,6 +30,7 @@ use common_meta_types::SnapshotMeta;
 pub use data_version::DataVersion;
 pub use header::Header;
 use openraft::AnyError;
+use tokio::io;
 use tracing::info;
 
 use crate::config::RaftConfig;
@@ -39,6 +40,7 @@ use crate::key_spaces::RaftStoreEntryCompat;
 use crate::log::TREE_RAFT_LOG;
 use crate::sm_v002::snapshot_store::SnapshotStoreV002;
 use crate::state::TREE_RAFT_STATE;
+use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
 
 /// The sled tree name to store the data versions.
@@ -328,7 +330,7 @@ impl OnDisk {
 
         let mut dummy_snapshot_meta = SnapshotMeta::default();
         // TODO: snapshot id should be correct
-        dummy_snapshot_meta.snapshot_id = "0-0-0-0".to_string();
+        dummy_snapshot_meta.snapshot_id = MetaSnapshotId::default().to_string();
 
         let mut snapshot_store = SnapshotStoreV002::new(DataVersion::V002, self.config.clone());
 
@@ -363,10 +365,8 @@ impl OnDisk {
                 continue;
             }
 
-            serde_json::to_writer(&mut writer, &kv_entry).map_err(|e| MetaBytesError::from(e))?;
-
-            writer.write(b"\n").map_err(|e| {
-                let ae = AnyError::new(&e).add_context(|| "write snapshot line break");
+            writer.write_entries::<io::Error>([kv_entry]).map_err(|e| {
+                let ae = AnyError::new(&e).add_context(|| "write snapshot entry");
                 MetaStorageError::SnapshotError(ae)
             })?;
 
