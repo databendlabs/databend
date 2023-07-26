@@ -1319,8 +1319,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-        #[minitrace::trace]
-
+    #[minitrace::trace]
     async fn catalog_create_get_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let catalog_name = "catalog1";
@@ -1361,8 +1360,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-        #[minitrace::trace]
-
+    #[minitrace::trace]
     async fn table_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
