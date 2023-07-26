@@ -46,8 +46,7 @@ impl Interpreter for DropCatalogInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let mgr = CatalogManager::instance();
-        mgr.drop_user_defined_catalog(self.plan.clone().into())
-            .await?;
+        mgr.drop_user_defined_catalog(self.plan.clone().into())?;
 
         Ok(PipelineBuildResult::create())
     }

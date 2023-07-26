@@ -26,7 +26,6 @@ use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::DropCatalogReq;
 use common_meta_app::schema::IcebergCatalogOption;
-use common_meta_store::MetaStoreProvider;
 use common_storage::DataOperator;
 #[cfg(feature = "hive")]
 use common_storages_hive::HiveCatalog;
@@ -41,10 +40,14 @@ pub trait CatalogManagerHelper {
 
     async fn try_create(conf: &InnerConfig) -> Result<Arc<CatalogManager>>;
 
+    async fn register_build_in_catalogs(&self, conf: &InnerConfig) -> Result<()>;
+
+    fn register_external_catalogs(&self, conf: &InnerConfig) -> Result<()>;
+
     /// build catalog from sql
     async fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()>;
 
-    async fn drop_user_defined_catalog(&self, req: DropCatalogReq) -> Result<()>;
+    fn drop_user_defined_catalog(&self, req: DropCatalogReq) -> Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -58,27 +61,33 @@ impl CatalogManagerHelper for CatalogManager {
 
     #[async_backtrace::framed]
     async fn try_create(conf: &InnerConfig) -> Result<Arc<CatalogManager>> {
-        let meta = {
-            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
-
-            provider.create_meta_store().await?
-        };
-
         let catalog_manager = CatalogManager {
-            meta,
             catalogs: DashMap::new(),
         };
 
-        // Add built-in catalog: default
+        catalog_manager.register_build_in_catalogs(conf).await?;
+
+        #[cfg(feature = "hive")]
+        {
+            catalog_manager.register_external_catalogs(conf)?;
+        }
+
+        Ok(Arc::new(catalog_manager))
+    }
+
+    #[async_backtrace::framed]
+    async fn register_build_in_catalogs(&self, conf: &InnerConfig) -> Result<()> {
         let default_catalog: Arc<dyn Catalog> =
             Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
-        catalog_manager
-            .catalogs
+        self.catalogs
             .insert(CATALOG_DEFAULT.to_owned(), default_catalog);
+        Ok(())
+    }
 
-        // Add hive catalog that stored in config.
-        //
-        // TODO: we already supported create catalog via SQL so we can remove it.
+    fn register_external_catalogs(&self, conf: &InnerConfig) -> Result<()> {
+        // currently, if the `hive` feature is not enabled
+        // the loop will quit after the first iteration.
+        // this is expected.
         #[allow(clippy::never_loop)]
         for (name, ctl) in conf.catalogs.iter() {
             match ctl {
@@ -95,15 +104,12 @@ impl CatalogManagerHelper for CatalogManager {
                     {
                         let hms_address = ctl.address.clone();
                         let hive_catalog = Arc::new(HiveCatalog::try_create(hms_address)?);
-                        catalog_manager
-                            .catalogs
-                            .insert(name.to_string(), hive_catalog);
+                        self.catalogs.insert(name.to_string(), hive_catalog);
                     }
                 }
             }
         }
-
-        Ok(Arc::new(catalog_manager))
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -146,8 +152,7 @@ impl CatalogManagerHelper for CatalogManager {
         }
     }
 
-    #[async_backtrace::framed]
-    async fn drop_user_defined_catalog(&self, req: DropCatalogReq) -> Result<()> {
+    fn drop_user_defined_catalog(&self, req: DropCatalogReq) -> Result<()> {
         let name = req.name_ident.catalog_name;
         if name == CATALOG_DEFAULT {
             return Err(ErrorCode::CatalogNotSupported(

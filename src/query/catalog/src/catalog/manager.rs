@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_store::MetaStore;
 use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
 
@@ -26,21 +25,20 @@ use super::Catalog;
 pub const CATALOG_DEFAULT: &str = "default";
 
 pub struct CatalogManager {
-    pub meta: MetaStore,
     pub catalogs: DashMap<String, Arc<dyn Catalog>>,
 }
 
 impl CatalogManager {
-    pub fn instance() -> Arc<CatalogManager> {
-        GlobalInstance::get()
-    }
-
     pub fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.catalogs
             .get(catalog_name)
             .as_deref()
             .cloned()
             .ok_or_else(|| ErrorCode::BadArguments(format!("no such catalog {}", catalog_name)))
+    }
+
+    pub fn instance() -> Arc<CatalogManager> {
+        GlobalInstance::get()
     }
 
     pub fn insert_catalog(
