@@ -53,13 +53,13 @@ pub fn compute_row_id_prefix(seg_id: u64, block_id: u64) -> u64 {
 
 #[inline(always)]
 pub fn compute_row_id(prefix: u64, idx: u64) -> u64 {
-    (prefix << NUM_ROW_ID_PREFIX_BITS) | (idx & ((1 << NUM_ROW_ID_PREFIX_BITS) - 1))
+    (prefix << (64 - NUM_ROW_ID_PREFIX_BITS)) | (idx & ((1 << (64 - NUM_ROW_ID_PREFIX_BITS)) - 1))
 }
 
 #[inline(always)]
 pub fn split_row_id(id: u64) -> (u64, u64) {
-    let prefix = id >> NUM_ROW_ID_PREFIX_BITS;
-    let idx = id & ((1 << NUM_ROW_ID_PREFIX_BITS) - 1);
+    let prefix = id >> (64 - NUM_ROW_ID_PREFIX_BITS);
+    let idx = id & ((1 << (64 - NUM_ROW_ID_PREFIX_BITS)) - 1);
     (prefix, idx)
 }
 
