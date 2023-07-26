@@ -161,6 +161,7 @@ pub fn build_commit_data_pipeline(
         main_pipeline,
         copied_files_meta_req,
         insert_overwrite_option,
+        None,
     )?;
 
     // set on_finished callback.

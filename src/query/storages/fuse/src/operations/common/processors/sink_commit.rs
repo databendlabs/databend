@@ -25,9 +25,11 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
+use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use opendal::Operator;
 use storages_common_table_meta::meta::ClusterKey;
+use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use table_lock::TableLockHandlerWrapper;
@@ -55,10 +57,12 @@ enum State {
     GenerateSnapshot {
         previous: Option<Arc<TableSnapshot>>,
         cluster_key_meta: Option<ClusterKey>,
+        table_info: TableInfo,
     },
     TryCommit {
         data: Vec<u8>,
         snapshot: TableSnapshot,
+        table_info: TableInfo,
     },
     AbortOperation,
     Finish,
@@ -86,6 +90,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     heartbeat: TableLockHeartbeat,
     need_lock: bool,
     start_time: Instant,
+    prev_snapshot_id: Option<SnapshotId>,
 }
 
 impl<F> CommitSink<F>
@@ -99,6 +104,7 @@ where F: SnapshotGenerator + Send + 'static
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,
         need_lock: bool,
+        prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
@@ -117,6 +123,7 @@ where F: SnapshotGenerator + Send + 'static
             input,
             need_lock,
             start_time: Instant::now(),
+            prev_snapshot_id,
         })))
     }
 
@@ -203,6 +210,7 @@ where F: SnapshotGenerator + Send + 'static
             State::GenerateSnapshot {
                 previous,
                 cluster_key_meta,
+                table_info,
             } => {
                 let schema = self.table.schema().as_ref().clone();
                 match self
@@ -213,6 +221,7 @@ where F: SnapshotGenerator + Send + 'static
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,
                             snapshot,
+                            table_info,
                         };
                     }
                     Err(e) => {
@@ -238,6 +247,23 @@ where F: SnapshotGenerator + Send + 'static
 
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
+                // save current table info when commit to meta server
+                // if table_id not match, update table meta will fail
+                let table_info = fuse_table.table_info.clone();
+                // check if snapshot has been changed
+                let snapshot_has_changed = if let Some(prev_snapshot_id) = self.prev_snapshot_id {
+                    match &previous {
+                        Some(previous) => previous.snapshot_id != prev_snapshot_id,
+                        None => true,
+                    }
+                } else {
+                    false
+                };
+                if snapshot_has_changed {
+                    return Err(ErrorCode::UnresolvableConflict(
+                        "snapshot has been changed when commit".to_string(),
+                    ));
+                }
 
                 self.snapshot_gen
                     .fill_default_values(schema, &previous)
@@ -246,6 +272,7 @@ where F: SnapshotGenerator + Send + 'static
                 self.state = State::GenerateSnapshot {
                     previous,
                     cluster_key_meta: fuse_table.cluster_key_meta.clone(),
+                    table_info,
                 };
             }
             State::TryLock => {
@@ -265,7 +292,11 @@ where F: SnapshotGenerator + Send + 'static
                     }
                 }
             }
-            State::TryCommit { data, snapshot } => {
+            State::TryCommit {
+                data,
+                snapshot,
+                table_info,
+            } => {
                 let location = self
                     .location_gen
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
@@ -274,7 +305,7 @@ where F: SnapshotGenerator + Send + 'static
 
                 match FuseTable::update_table_meta(
                     self.ctx.as_ref(),
-                    self.table.get_table_info(),
+                    &table_info,
                     &self.location_gen,
                     snapshot,
                     location,
@@ -375,6 +406,7 @@ where F: SnapshotGenerator + Send + 'static
                 self.state = State::GenerateSnapshot {
                     previous,
                     cluster_key_meta,
+                    table_info: fuse_table.table_info.clone(),
                 };
             }
             State::AbortOperation => {

@@ -153,6 +153,12 @@ impl ModifyTableColumnInterpreter {
             .try_lock(self.ctx.clone(), table_info.clone())
             .await?;
 
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let prev_snapshot_id = match fuse_table.read_table_snapshot().await {
+            Ok(snapshot) => snapshot.map(|snapshot| snapshot.snapshot_id),
+            _ => None,
+        };
+
         for (column, type_name) in column_name_types {
             let column = column.to_string();
             if let Ok(i) = schema.index_of(&column) {
@@ -241,7 +247,13 @@ impl ModifyTableColumnInterpreter {
             build_query_pipeline_without_render_result_set(&self.ctx, &insert_plan, false).await?;
 
         // 6. commit new meta schema and snapshots
-        new_table.commit_insertion(self.ctx.clone(), &mut build_res.main_pipeline, None, true)?;
+        new_table.commit_insertion(
+            self.ctx.clone(),
+            &mut build_res.main_pipeline,
+            None,
+            true,
+            prev_snapshot_id,
+        )?;
 
         if build_res.main_pipeline.is_empty() {
             heartbeat.shutdown().await?;
