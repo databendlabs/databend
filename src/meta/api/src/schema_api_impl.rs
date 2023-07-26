@@ -3161,7 +3161,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
     async fn create_catalog(
         &self,
         req: CreateCatalogReq,
@@ -3244,9 +3245,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         Ok(CreateCatalogReply { catalog_id })
     }
 
-    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
     async fn get_catalog(&self, req: GetCatalogReq) -> Result<Arc<CatalogInfo>, KVAppError> {
-        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
         let name_key = &req.inner;
 
@@ -3262,12 +3264,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         Ok(Arc::new(catalog))
     }
 
-    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
     async fn list_catalogs(
         &self,
         req: ListCatalogReq,
     ) -> Result<Vec<Arc<CatalogInfo>>, KVAppError> {
-        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
         let name_key = CatalogNameIdent {
             tenant: req.tenant,
@@ -3312,7 +3315,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 catalog_infos.push(Arc::new(catalog_info));
             } else {
                 debug!(
-                    k = display(&kv_keys[i]),
+                    k = as_display!(&kv_keys[i]);
                     "catalog_meta not found, maybe just deleted after listing names and before listing meta"
                 );
             }
@@ -4003,7 +4006,7 @@ pub fn catalog_has_to_exist(
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq, ?catalog_name_ident, "catalog does not exist");
+        debug!(seq = seq, catalog_name_ident = as_debug!(catalog_name_ident); "catalog does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownCatalog(
             UnknownCatalog::new(

@@ -144,7 +144,7 @@ pub struct TracingConfig {
 }
 
 impl TracingConfig {
-    // TODO: make this config public instead of infering from env.
+    // TODO: make this config public instead of inferring from env.
     pub fn from_env() -> Self {
         let log_level = std::env::var("TRACE_LOG").unwrap_or_else(|_| "INFO".to_string());
         let jaeger_endpoint = std::env::var("DATABEND_JAEGER_ENDPOINT");

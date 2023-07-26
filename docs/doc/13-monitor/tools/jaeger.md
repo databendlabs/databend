@@ -19,7 +19,7 @@ docker run -d -p6831:6831/udp -p14268:14268 -p16686:16686 --name jaeger jaegertr
 ### Step 2. Set Environment Variables
 
 Set the following environment variables according to your actual tracing level requirements and Jaeger endpoint.
-    - `TRACE_LOG`: Sets the log level that attches to spans.
+    - `TRACE_LOG`: Sets the log level that attaches to spans.
     - `DATABEND_JAEGER_ENDPOINT`: Sets the endpoint the Jaeger agent is listening on.
 
 ```bash
