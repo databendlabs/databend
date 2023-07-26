@@ -14,11 +14,9 @@
 
 mod catalog;
 
-mod catalog_manager;
 pub mod default;
 pub use catalog::Catalog;
 pub use catalog_manager::CatalogManager;
-pub use catalog_manager::CatalogManagerHelper;
 #[cfg(feature = "hive")]
 pub use common_storages_hive as hive;
 pub use default::table_id_ranges::*;

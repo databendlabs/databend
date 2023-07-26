@@ -14,10 +14,7 @@
 
 /// catalog_interface is the module defining `Catalog` trait
 mod interface;
-/// the catalog manager implementation
-mod manager;
-
 pub use interface::Catalog;
 pub use interface::StorageDescription;
-pub use manager::CatalogManager;
-pub use manager::CATALOG_DEFAULT;
+
+pub mod manager;
