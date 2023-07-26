@@ -68,15 +68,11 @@ impl IcebergTable {
         tbl_root: DataOperator,
     ) -> Result<IcebergTable> {
         let op = tbl_root.operator();
-        let mut table = icelake::Table::new(op.clone());
-        table
-            .load()
+        let table = icelake::Table::open_with_op(op.clone())
             .await
             .map_err(|e| ErrorCode::ReadTableDataError(format!("Cannot load metadata: {e:?}")))?;
 
-        let meta = table.current_table_metadata().map_err(|e| {
-            ErrorCode::ReadTableDataError(format!("Cannot get current table metadata: {e:?}"))
-        })?;
+        let meta = table.current_table_metadata();
 
         // Build arrow schema from iceberg metadata.
         let arrow_schema: ArrowSchema = meta

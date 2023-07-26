@@ -19,9 +19,18 @@ use std::time::Duration;
 use arrow_flight::flight_descriptor::DescriptorType;
 use arrow_flight::flight_service_server::FlightService;
 use arrow_flight::sql::server::FlightSqlService;
+use arrow_flight::sql::ActionBeginSavepointRequest;
+use arrow_flight::sql::ActionBeginSavepointResult;
+use arrow_flight::sql::ActionBeginTransactionRequest;
+use arrow_flight::sql::ActionBeginTransactionResult;
+use arrow_flight::sql::ActionCancelQueryRequest;
+use arrow_flight::sql::ActionCancelQueryResult;
 use arrow_flight::sql::ActionClosePreparedStatementRequest;
 use arrow_flight::sql::ActionCreatePreparedStatementRequest;
 use arrow_flight::sql::ActionCreatePreparedStatementResult;
+use arrow_flight::sql::ActionCreatePreparedSubstraitPlanRequest;
+use arrow_flight::sql::ActionEndSavepointRequest;
+use arrow_flight::sql::ActionEndTransactionRequest;
 use arrow_flight::sql::Any;
 use arrow_flight::sql::CommandGetCatalogs;
 use arrow_flight::sql::CommandGetCrossReference;
@@ -36,6 +45,7 @@ use arrow_flight::sql::CommandGetXdbcTypeInfo;
 use arrow_flight::sql::CommandPreparedStatementQuery;
 use arrow_flight::sql::CommandPreparedStatementUpdate;
 use arrow_flight::sql::CommandStatementQuery;
+use arrow_flight::sql::CommandStatementSubstraitPlan;
 use arrow_flight::sql::CommandStatementUpdate;
 use arrow_flight::sql::DoPutUpdateResult;
 use arrow_flight::sql::ProstMessageExt;
@@ -107,6 +117,7 @@ fn simple_flight_info<T: ProstMessageExt>(message: T) -> Response<FlightInfo> {
         endpoint: endpoints,
         total_records: -1,
         total_bytes: -1,
+        ordered: false,
     };
     Response::new(info)
 }
@@ -245,6 +256,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
             endpoint: endpoints,
             total_records: -1,
             total_bytes: -1,
+            ordered: false,
         };
         let resp = Response::new(info);
         Ok(resp)
@@ -596,7 +608,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: ActionClosePreparedStatementRequest,
         request: Request<Action>,
-    ) {
+    ) -> Result<(), Status> {
         let handle = query.prepared_statement_handle.as_ref();
         if let Ok(handle) = std::str::from_utf8(handle) {
             info!(
@@ -610,12 +622,13 @@ impl FlightSqlService for FlightSqlServiceImpl {
                     }
                 }
                 Err(e) => {
-                    Status::internal(format!(
+                    return Err(Status::internal(format!(
                         "do_action_close_prepared_statement Error decoding handle: {e} {handle:?}"
-                    ));
+                    )));
                 }
             }
         }
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -638,6 +651,70 @@ impl FlightSqlService for FlightSqlServiceImpl {
         _query: CommandGetXdbcTypeInfo,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        unimplemented!()
+    }
+
+    async fn get_flight_info_substrait_plan(
+        &self,
+        _query: CommandStatementSubstraitPlan,
+        _request: Request<FlightDescriptor>,
+    ) -> std::result::Result<Response<FlightInfo>, Status> {
+        unimplemented!()
+    }
+
+    async fn do_put_substrait_plan(
+        &self,
+        _query: CommandStatementSubstraitPlan,
+        _request: Request<Streaming<FlightData>>,
+    ) -> std::result::Result<i64, Status> {
+        unimplemented!()
+    }
+
+    async fn do_action_create_prepared_substrait_plan(
+        &self,
+        _query: ActionCreatePreparedSubstraitPlanRequest,
+        _request: Request<Action>,
+    ) -> std::result::Result<ActionCreatePreparedStatementResult, Status> {
+        unimplemented!()
+    }
+
+    async fn do_action_begin_transaction(
+        &self,
+        _query: ActionBeginTransactionRequest,
+        _request: Request<Action>,
+    ) -> std::result::Result<ActionBeginTransactionResult, Status> {
+        unimplemented!()
+    }
+
+    async fn do_action_end_transaction(
+        &self,
+        _query: ActionEndTransactionRequest,
+        _request: Request<Action>,
+    ) -> std::result::Result<(), Status> {
+        unimplemented!()
+    }
+
+    async fn do_action_begin_savepoint(
+        &self,
+        _query: ActionBeginSavepointRequest,
+        _request: Request<Action>,
+    ) -> std::result::Result<ActionBeginSavepointResult, Status> {
+        unimplemented!()
+    }
+
+    async fn do_action_end_savepoint(
+        &self,
+        _query: ActionEndSavepointRequest,
+        _request: Request<Action>,
+    ) -> std::result::Result<(), Status> {
+        unimplemented!()
+    }
+
+    async fn do_action_cancel_query(
+        &self,
+        _query: ActionCancelQueryRequest,
+        _request: Request<Action>,
+    ) -> std::result::Result<ActionCancelQueryResult, Status> {
         unimplemented!()
     }
 }

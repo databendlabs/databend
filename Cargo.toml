@@ -216,8 +216,9 @@ rpath = false
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
 
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "031bc7bc" }
 arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e11341" }
-parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
+parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "693c265" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 croaring = { git = "https://github.com/RoaringBitmap/croaring-rs", rev = "13a71b4" }
 minitrace = { git = "https://github.com/andylokandy/minitrace-rust.git", branch = "reporter" }
