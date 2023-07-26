@@ -60,9 +60,9 @@ async fn run_query(
     client: &mut FlightSqlServiceClient<Channel>,
     sql: &str,
 ) -> std::result::Result<String, ArrowError> {
-    let mut stmt = client.prepare(sql.to_string()).await?;
+    let mut stmt = client.prepare(sql.to_string(), None).await?;
     let res = if stmt.dataset_schema()?.fields.is_empty() {
-        let affected_rows = client.execute_update(sql.to_string()).await?;
+        let affected_rows = client.execute_update(sql.to_string(), None).await?;
         affected_rows.to_string()
     } else {
         let flight_info = stmt.execute().await?;
