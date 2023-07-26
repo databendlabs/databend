@@ -409,9 +409,9 @@ impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
 
     fn create_hash_table<T: Send + Sync + 'static>(
         &self,
-        bump: Arc<Bump>,
+        _bump: Arc<Bump>,
     ) -> Result<Self::HashTable<T>> {
-        Ok(ShortStringHashMap::new(bump))
+        Ok(ShortStringHashMap::new(Arc::new(Bump::new())))
     }
 
     type ColumnBuilder<'a> = StringKeysColumnBuilder<'a>;
