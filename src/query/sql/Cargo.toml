@@ -75,4 +75,4 @@ simsearch = "0.2"
 time = "0.3.14"
 tracing = "0.1.36"
 url = { version = "2.3" }
-z3 = { version = "0.11.2", features = ["static-link-z3"], optional = true }
+z3 = { version = "0.12.1", features = ["static-link-z3"], optional = true }
