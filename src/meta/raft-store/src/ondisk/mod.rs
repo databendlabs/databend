@@ -24,9 +24,7 @@ use std::io::Write;
 
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledTree;
-use common_meta_stoerr::MetaBytesError;
 use common_meta_stoerr::MetaStorageError;
-use common_meta_types::SnapshotMeta;
 pub use data_version::DataVersion;
 pub use header::Header;
 use openraft::AnyError;
@@ -40,7 +38,6 @@ use crate::key_spaces::RaftStoreEntryCompat;
 use crate::log::TREE_RAFT_LOG;
 use crate::sm_v002::snapshot_store::SnapshotStoreV002;
 use crate::state::TREE_RAFT_STATE;
-use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
 
 /// The sled tree name to store the data versions.
@@ -328,18 +325,12 @@ impl OnDisk {
         let mut cnt = 0;
         let tree = self.db.open_tree(sm_tree_name)?;
 
-        let mut dummy_snapshot_meta = SnapshotMeta::default();
-        // TODO: snapshot id should be correct
-        dummy_snapshot_meta.snapshot_id = MetaSnapshotId::default().to_string();
-
         let mut snapshot_store = SnapshotStoreV002::new(DataVersion::V002, self.config.clone());
 
-        let mut writer = snapshot_store
-            .new_writer(dummy_snapshot_meta.clone())
-            .map_err(|e| {
-                let ae = AnyError::new(&e).add_context(|| "new snapshot writer");
-                MetaStorageError::SnapshotError(ae)
-            })?;
+        let mut writer = snapshot_store.new_writer().map_err(|e| {
+            let ae = AnyError::new(&e).add_context(|| "new snapshot writer");
+            MetaStorageError::SnapshotError(ae)
+        })?;
 
         for ivec_pair_res in tree.iter() {
             let kv_entry = {
@@ -373,7 +364,7 @@ impl OnDisk {
             cnt += 1;
         }
 
-        let file_size = writer.commit().map_err(|e| {
+        let (snapshot_id, file_size) = writer.commit(None).map_err(|e| {
             let ae = AnyError::new(&e).add_context(|| "commit snapshot");
             MetaStorageError::SnapshotError(ae)
         })?;
@@ -382,7 +373,7 @@ impl OnDisk {
             "Written {} records to snapshot, filesize: {}, path: {}",
             cnt,
             file_size,
-            snapshot_store.snapshot_path(&dummy_snapshot_meta.snapshot_id)
+            snapshot_store.snapshot_path(&snapshot_id.to_string())
         ));
 
         Ok(())

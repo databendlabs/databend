@@ -36,6 +36,7 @@ use common_meta_raft_store::ondisk::DataVersion;
 use common_meta_raft_store::ondisk::OnDisk;
 use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_raft_store::ondisk::TREE_HEADER;
+use common_meta_raft_store::sm_v002::snapshot_store::SnapshotStoreV002;
 use common_meta_raft_store::state::RaftState;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
@@ -82,7 +83,7 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
     init_sled_db(raft_config.raft_dir.clone());
 
     clear(config)?;
-    let max_log_id = import_from(&config).await?;
+    let max_log_id = import_from_stdin_or_file(&config).await?;
 
     if config.initial_cluster.is_empty() {
         return Ok(());
@@ -93,7 +94,10 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
 }
 
 /// Import from lines of exported data and Return the max log id that is found.
-fn import_lines<B: BufRead + 'static>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
+fn import_lines<B: BufRead + 'static>(
+    config: &Config,
+    lines: Lines<B>,
+) -> anyhow::Result<Option<LogId>> {
     #[allow(clippy::useless_conversion)]
     let mut it = lines.into_iter().peekable();
     let first = it
@@ -120,13 +124,9 @@ fn import_lines<B: BufRead + 'static>(lines: Lines<B>) -> anyhow::Result<Option<
     }
 
     let max_log_id = match version {
-        DataVersion::V0 => import_v0_or_v001_or_v002(it)?,
-        DataVersion::V001 => import_v0_or_v001_or_v002(it)?,
-        // V002 depends on the upgrade after import to convert data to latest version.
-        DataVersion::V002 => {
-            //
-            import_v0_or_v001_or_v002(it)?
-        }
+        DataVersion::V0 => import_v0_or_v001(config, it)?,
+        DataVersion::V001 => import_v0_or_v001(config, it)?,
+        DataVersion::V002 => import_v002(config, it)?,
     };
 
     Ok(max_log_id)
@@ -156,7 +156,8 @@ fn read_version(first_line: &str) -> anyhow::Result<DataVersion> {
 /// Import serialized lines for `DataVersion::V0` and `DataVersion::V001`
 ///
 /// While importing, the max log id is also returned.
-fn import_v0_or_v001_or_v002(
+fn import_v0_or_v001(
+    _config: &Config,
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
     let db = get_sled_db();
@@ -194,23 +195,86 @@ fn import_v0_or_v001_or_v002(
     Ok(max_log_id)
 }
 
+/// Import serialized lines for `DataVersion::V002`
+///
+/// While importing, the max log id is also returned.
+///
+/// It write logs and related entries to sled trees, and state_machine entries to a snapshot.
+fn import_v002(
+    config: &Config,
+    lines: impl IntoIterator<Item = Result<String, io::Error>>,
+) -> anyhow::Result<Option<LogId>> {
+    let raft_config: RaftConfig = config.raft_config.clone().into();
+
+    let db = get_sled_db();
+
+    let mut n = 0;
+    let mut max_log_id: Option<LogId> = None;
+    let mut trees = BTreeMap::new();
+
+    let mut snapshot_store = SnapshotStoreV002::new(DataVersion::V002, raft_config);
+    let mut writer = snapshot_store.new_writer()?;
+
+    for line in lines {
+        let l = line?;
+        let (tree_name, kv_entry): (String, RaftStoreEntryCompat) = serde_json::from_str(&l)?;
+        let kv_entry = kv_entry.upgrade();
+
+        if tree_name.starts_with("state_machine/") {
+            // Write to snapshot
+            writer.write_entries::<io::Error>([kv_entry])?;
+        } else {
+            // Write to sled tree
+            if !trees.contains_key(&tree_name) {
+                let tree = db.open_tree(&tree_name)?;
+                trees.insert(tree_name.clone(), tree);
+            }
+
+            let tree = trees.get(&tree_name).unwrap();
+
+            let (k, v) = RaftStoreEntry::serialize(&kv_entry)?;
+
+            tree.insert(k, v)?;
+
+            if let RaftStoreEntry::Logs { key: _, value } = kv_entry {
+                max_log_id = std::cmp::max(max_log_id, Some(value.log_id));
+            };
+        }
+
+        n += 1;
+    }
+
+    for tree in trees.values() {
+        tree.flush()?;
+    }
+    let (snapshot_id, snapshot_size) = writer.commit(None)?;
+
+    eprintln!(
+        "Imported {} records, snapshot id: {}; snapshot size: {}",
+        n,
+        snapshot_id.to_string(),
+        snapshot_size
+    );
+    Ok(max_log_id)
+}
+
 /// Read every line from stdin or restore file, deserialize it into tree_name, key and value.
 /// Insert them into sled db and flush.
 ///
 /// Finally upgrade the data in raft_dir to the latest version.
-async fn import_from(config: &Config) -> anyhow::Result<Option<LogId>> {
+async fn import_from_stdin_or_file(config: &Config) -> anyhow::Result<Option<LogId>> {
     let restore = config.db.clone();
 
     let max_log_id = if restore.is_empty() {
         let lines = io::stdin().lines();
 
-        import_lines(lines)?
+        import_lines(config, lines)?
     } else {
         let file = File::open(restore)?;
         let reader = BufReader::new(file);
         let lines = reader.lines();
 
-        import_lines(lines)?
+        import_lines(config, lines)?
     };
 
     upgrade(config).await?;

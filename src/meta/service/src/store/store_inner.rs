@@ -14,14 +14,10 @@
 
 use std::io;
 use std::io::ErrorKind;
-use std::io::Write;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use anyerror::AnyError;
-use common_arrow::parquet::FallibleStreamingIterator;
 use common_base::base::tokio;
 use common_base::base::tokio::io::AsyncBufReadExt;
 use common_base::base::tokio::io::BufReader;
@@ -218,14 +214,14 @@ impl StoreInner {
 
         info!("do_build_snapshot start");
 
-        let (snapshot_meta, data_entries) = self.build_compacted_snapshot().await;
+        let (mut snapshot_meta, data_entries) = self.build_compacted_snapshot().await;
 
         info!("do_build_snapshot writing snapshot start");
 
         let mut snapshot_store = SnapshotStoreV002::new(DATA_VERSION, self.config.clone());
 
         // Move heavy load to a blocking thread pool.
-        let snapshot_size = tokio::task::block_in_place({
+        let (snapshot_id, snapshot_size) = tokio::task::block_in_place({
             let sto = &mut snapshot_store;
             let meta = snapshot_meta.clone();
             let sleep = self.get_delay_config("write").await;
@@ -235,6 +231,13 @@ impl StoreInner {
                 Self::write_snapshot(sto, meta, data_entries)
             }
         })?;
+
+        assert_eq!(
+            snapshot_id.last_applied, snapshot_meta.last_log_id,
+            "snapshot_id.last_applied: {:?} must equal snapshot_meta.last_log_id: {:?}",
+            snapshot_id.last_applied, snapshot_meta.last_log_id
+        );
+        snapshot_meta.snapshot_id = snapshot_id.to_string();
 
         info!(snapshot_size = snapshot_size, "do_build_snapshot complete");
 
@@ -329,12 +332,7 @@ impl StoreInner {
         let last_applied = level_data.last_applied_ref().clone();
         let last_membership = level_data.last_membership_ref().clone();
 
-        let snapshot_idx = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let snapshot_id = MetaSnapshotId::new(last_applied, snapshot_idx);
+        let snapshot_id = MetaSnapshotId::new_with_epoch(last_applied);
 
         SnapshotMeta {
             snapshot_id: snapshot_id.to_string(),
@@ -347,18 +345,18 @@ impl StoreInner {
         snapshot_store: &mut SnapshotStoreV002,
         snapshot_meta: SnapshotMeta,
         data: impl IntoIterator<Item = RaftStoreEntry>,
-    ) -> Result<u64, SnapshotStoreError> {
-        let mut writer = snapshot_store.new_writer(snapshot_meta.clone())?;
+    ) -> Result<(MetaSnapshotId, u64), SnapshotStoreError> {
+        let mut writer = snapshot_store.new_writer()?;
 
         writer.write_entries::<io::Error>(data).map_err(|e| {
             SnapshotStoreError::write(e).with_meta("serialize entries", &snapshot_meta)
         })?;
 
-        let file_size = writer
-            .commit()
+        let (snapshot_id, file_size) = writer
+            .commit(None)
             .map_err(|e| SnapshotStoreError::write(e).with_meta("writer.commit", &snapshot_meta))?;
 
-        Ok(file_size)
+        Ok((snapshot_id, file_size))
     }
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
