@@ -732,8 +732,16 @@ pub struct CopyIntoTable {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum CopyIntoTableSource {
-    Query(Box<PhysicalPlan>),
+    Query(Box<QueryCtx>),
     Stage(Box<DataSourcePlan>),
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct QueryCtx {
+    pub plan: PhysicalPlan,
+    pub query_source_schema: DataSchemaRef,
+    pub ignore_result: bool,
+    pub result_columns: Vec<ColumnBinding>,
 }
 
 impl CopyIntoTable {

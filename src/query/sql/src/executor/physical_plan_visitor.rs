@@ -34,6 +34,7 @@ use super::MutationAggregate;
 use super::PhysicalPlan;
 use super::Project;
 use super::ProjectSet;
+use super::QueryCtx;
 use super::ReplaceInto;
 use super::RowFetch;
 use super::Sort;
@@ -291,10 +292,13 @@ pub trait PhysicalPlanReplacer {
             CopyIntoTableSource::Stage(_) => {
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
             }
-            CopyIntoTableSource::Query(input) => {
-                let input = self.replace(input)?;
+            CopyIntoTableSource::Query(query_ctx) => {
+                let input = self.replace(&query_ctx.plan)?;
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(input)),
+                    source: CopyIntoTableSource::Query(Box::new(QueryCtx {
+                        plan: input,
+                        ..*query_ctx.clone()
+                    })),
                     ..plan.clone()
                 })))
             }
@@ -444,7 +448,7 @@ impl PhysicalPlan {
                 }
                 PhysicalPlan::CopyIntoTable(plan) => match &plan.source {
                     CopyIntoTableSource::Query(input) => {
-                        Self::traverse(input, pre_visit, visit, post_visit);
+                        Self::traverse(&input.plan, pre_visit, visit, post_visit);
                     }
                     CopyIntoTableSource::Stage(_) => {}
                 },

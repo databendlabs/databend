@@ -489,7 +489,14 @@ impl PipelineBuilder {
         let to_table = catalog.get_table_by_info(&copy.table_info)?;
         match &copy.source {
             CopyIntoTableSource::Query(input) => {
-                self.build_pipeline(input)?;
+                self.build_pipeline(&input.plan)?;
+                Self::render_result_set(
+                    &self.ctx.get_function_context()?,
+                    input.plan.output_schema()?,
+                    &input.result_columns,
+                    &mut self.main_pipeline,
+                    input.ignore_result,
+                )?;
             }
             CopyIntoTableSource::Stage(source) => {
                 let stage_table = StageTable::try_create(copy.stage_table_info.clone())?;
