@@ -131,7 +131,7 @@ kill $METASRV_PID
 sleep 3
 
 echo " === "
-echo " === 6. Test import data with incompatible header $grpc_exported to dir $meta_dir"
+echo " === 5. Test import data with incompatible header $grpc_exported to dir $meta_dir"
 echo " === "
 
 
