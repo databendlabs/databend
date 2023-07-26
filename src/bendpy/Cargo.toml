@@ -15,11 +15,11 @@ name = "databend"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.18.1", features = ["extension-module", "abi3", "abi3-py37"] }
+pyo3 = { version = "0.19.1", features = ["extension-module", "abi3", "abi3-py37"] }
 uuid = { version = "1.1.2" }
 # Workspace dependencies
-arrow = { version = "40.0.0", features = ["pyarrow"] }
-arrow-schema = "40.0.0"
+arrow = { version = "43.0.0", features = ["pyarrow"] }
+arrow-schema = "43.0.0"
 
 # common-base = { path = "../common/base", features = ["jemalloc", "disable_initial_exec_tls"] }
 common-config = { path = "../query/config" }
