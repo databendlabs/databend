@@ -18,7 +18,7 @@ use common_meta_types::new_log_id;
 use common_meta_types::LogId;
 
 /// Structured snapshot id used by meta service
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MetaSnapshotId {
     /// The last log id upto which a snapshot includes(inclusive).
     pub last_applied: Option<LogId>,

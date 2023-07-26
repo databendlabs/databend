@@ -21,6 +21,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use anyerror::AnyError;
+use common_arrow::parquet::FallibleStreamingIterator;
 use common_base::base::tokio;
 use common_base::base::tokio::io::AsyncBufReadExt;
 use common_base::base::tokio::io::BufReader;
@@ -349,17 +350,10 @@ impl StoreInner {
     ) -> Result<u64, SnapshotStoreError> {
         let mut writer = snapshot_store.new_writer(snapshot_meta.clone())?;
 
-        for ent in data.into_iter() {
-            serde_json::to_writer(&mut writer, &ent).map_err(|e| {
-                let e = io::Error::new(io::ErrorKind::InvalidData, e);
-                SnapshotStoreError::write(e).with_meta("serialize entry", &snapshot_meta)
-            })?;
+        writer.write_entries::<io::Error>(data).map_err(|e| {
+            SnapshotStoreError::write(e).with_meta("serialize entries", &snapshot_meta)
+        })?;
 
-            writer.write(b"\n").map_err(|e| {
-                let e = io::Error::new(io::ErrorKind::InvalidData, e);
-                SnapshotStoreError::write(e).with_meta("write line break", &snapshot_meta)
-            })?;
-        }
         let file_size = writer
             .commit()
             .map_err(|e| SnapshotStoreError::write(e).with_meta("writer.commit", &snapshot_meta))?;

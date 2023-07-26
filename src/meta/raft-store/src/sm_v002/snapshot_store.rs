@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::fs;
 use std::io;
-use std::io::Write;
 use std::str::FromStr;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -111,9 +110,13 @@ impl SnapshotStoreV002 {
         }
     }
 
+    pub fn data_version(&self) -> DataVersion {
+        self.data_version
+    }
+
     fn snapshot_dir(&self) -> String {
         format!(
-            "{}/df_meta/v{}/snapshot",
+            "{}/df_meta/{}/snapshot",
             self.config.raft_dir, self.data_version
         )
     }
