@@ -37,8 +37,6 @@ use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
 use common_storage::StorageMetrics;
-use serde::Deserialize;
-use serde::Serialize;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;

@@ -35,8 +35,8 @@ use common_expression::ScalarRef;
 use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::aggregates::eval_aggr;
-use common_sql::executor::OnConflictField;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_sql::executor::OnConflictField;
 use storages_common_table_meta::meta::ColumnStatistics;
 use tracing::info;
 

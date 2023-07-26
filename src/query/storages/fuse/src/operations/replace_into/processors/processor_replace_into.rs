@@ -30,8 +30,8 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_sql::executor::OnConflictField;
-use tracing::error;
 use storages_common_table_meta::meta::ColumnStatistics;
+use tracing::error;
 
 use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
 

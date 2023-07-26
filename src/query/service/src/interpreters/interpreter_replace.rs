@@ -308,7 +308,7 @@ impl ReplaceInterpreter {
         let physical_plan = select_interpreter
             .build_physical_plan()
             .await
-            .map(|x| Box::new(x))?;
+            .map(Box::new)?;
         let select_ctx = SelectCtx {
             select_column_bindings: bind_context.columns.clone(),
             select_schema: query_plan.schema(),
