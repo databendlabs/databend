@@ -139,7 +139,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
         subscriber.with(None).with(None)
     };
 
-    // Jaeger layer.
+    // // Jaeger layer.
     // TODO: we should support config this in the future.
     let mut jaeger_layer = None;
     let jaeger_agent_endpoint =
