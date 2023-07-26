@@ -38,10 +38,10 @@ use crate::api::ShuffleExchangeParams;
 use crate::api::TransformExchangeDeserializer;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
+use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
+use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeGroupBySerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterAggregateSpillWriter;
-use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterGroupBySerializer;
-use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterGroupBySpillWriter;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -288,15 +288,25 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
         let operator = DataOperator::instance().operator();
         let location_prefix = format!("_aggregate_spill/{}", self.tenant);
 
+        let schema = shuffle_params.schema.clone();
+        let local_id = &shuffle_params.executor_id;
+        let local_pos = shuffle_params
+            .destination_ids
+            .iter()
+            .position(|x| x == local_id)
+            .unwrap();
+
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
                 match params.aggregate_functions.is_empty() {
-                    true => TransformScatterGroupBySpillWriter::create(
+                    true => TransformExchangeGroupBySerializer::create(
                         input,
                         output,
                         method.clone(),
                         operator.clone(),
                         location_prefix.clone(),
+                        schema.clone(),
+                        local_pos,
                     ),
                     false => TransformScatterAggregateSpillWriter::create(
                         input,
@@ -320,13 +330,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
 
         pipeline.add_transform(
             |input, output| match params.aggregate_functions.is_empty() {
-                true => TransformScatterGroupBySerializer::try_create(
-                    input,
-                    output,
-                    method.clone(),
-                    schema.clone(),
-                    local_pos,
-                ),
+                true => TransformExchangeAsyncBarrier::try_create(input, output),
                 false => TransformScatterAggregateSerializer::try_create(
                     input,
                     output,

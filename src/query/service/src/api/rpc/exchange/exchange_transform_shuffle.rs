@@ -287,6 +287,7 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
 
     let exchange_injector = &params.exchange_injector;
     exchange_injector.apply_shuffle_serializer(params, pipeline)?;
+    // ExchangeMeta -> Serialized
 
     if let Some(exchange_sorting) = &exchange_injector.exchange_sorting() {
         let output_len = pipeline.output_len();
