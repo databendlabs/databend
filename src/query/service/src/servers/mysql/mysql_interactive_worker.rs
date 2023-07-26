@@ -395,10 +395,11 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 
                 // Wrap the data stream, log finish event at the end of stream
                 let intercepted_stream = async_stream::stream! {
-
+                    println!("1");
                     while let Some(item) = data_stream.next().await {
                         yield item
                     };
+                    println!("2");
                 };
 
                 Ok::<_, ErrorCode>(intercepted_stream.boxed())

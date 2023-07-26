@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -26,6 +27,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::BlockThresholds;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -39,6 +41,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_storage::StageFileInfo;
 use enum_as_inner::EnumAsInner;
+use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::explain::PlanStatsInfo;
@@ -832,11 +835,12 @@ pub struct AsyncSourcerPlan {
 pub struct Deduplicate {
     pub input: Box<PhysicalPlan>,
     pub on_conflicts: Vec<OnConflictField>,
-    pub empty_table: bool,
+    pub table_is_empty: bool,
     pub table_info: TableInfo,
     pub catalog_name: String,
-    pub target_schema: DataSchemaRef,
+    pub table_schema: TableSchemaRef,
     pub select_ctx: Option<SelectCtx>,
+    pub table_level_range_index: HashMap<ColumnId, ColumnStatistics>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::ColumnStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -122,7 +123,8 @@ impl ReplaceInterpreter {
             Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))
         });
 
-        let empty_table = base_snapshot.segments.is_empty();
+        let table_is_empty = base_snapshot.segments.is_empty();
+        let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let max_threads = self.ctx.get_settings().get_max_threads()?;
         let segment_partition_num =
             std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
@@ -132,11 +134,12 @@ impl ReplaceInterpreter {
         root = Box::new(PhysicalPlan::Deduplicate(Deduplicate {
             input: root,
             on_conflicts: on_conflicts.clone(),
-            empty_table,
+            table_is_empty,
             table_info: table_info.clone(),
             catalog_name: plan.catalog.clone(),
             select_ctx,
-            target_schema: plan.schema(),
+            table_schema: plan.schema.clone(),
+            table_level_range_index,
         }));
         root = Box::new(PhysicalPlan::ReplaceInto(ReplaceInto {
             input: root,

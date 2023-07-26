@@ -267,16 +267,18 @@ impl PipelineBuilder {
         let Deduplicate {
             input,
             on_conflicts,
-            empty_table,
+            table_is_empty,
             table_info,
             catalog_name,
-            target_schema,
             select_ctx,
+            table_level_range_index,
+            table_schema,
         } = deduplicate;
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_name, table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
+        let target_schema: Arc<DataSchema> = Arc::new(table_schema.clone().into());
         self.build_pipeline(input)?;
         if let Some(SelectCtx {
             select_column_bindings,
@@ -335,9 +337,15 @@ impl PipelineBuilder {
         // (1) -> output_port_merge_into_action
         //    the "downstream" is supposed to be connected with a processor which can process MergeIntoOperations
         //    in our case, it is the broadcast processor
-
-        let replace_into_processor =
-            ReplaceIntoProcessor::create(on_conflicts.clone(), *empty_table);
+        let cluster_keys = table.cluster_keys(self.ctx.clone());
+        let replace_into_processor = ReplaceIntoProcessor::create(
+            self.ctx.as_ref(),
+            on_conflicts.clone(),
+            cluster_keys,
+            table_schema.as_ref(),
+            *table_is_empty,
+            table_level_range_index.clone(),
+        )?;
         self.main_pipeline
             .add_pipe(replace_into_processor.into_pipe());
         Ok(())
