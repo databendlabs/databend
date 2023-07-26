@@ -331,3 +331,15 @@ create table t_with_bloom_index(a int, b int) bloom_index_columns='b'
 
 statement ok
 drop table if exists t_with_bloom_index;
+
+statement error 1301
+create table t_row_per_block(a int) row_per_block = 100000000000;
+
+statement ok
+create table t_row_per_block(a int) row_per_block = 100000;
+
+statement error 1301
+alter table t_row_per_block set options(row_per_block = 100000000000);
+
+statement ok
+alter table t_row_per_block set options(row_per_block = 10000000);

@@ -257,7 +257,7 @@ impl CreateTableInterpreter {
         };
 
         is_valid_block_per_segment(&table_meta.options)?;
-
+        is_valid_row_per_block(&table_meta.options)?;
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&table_meta.options, schema)?;
 
@@ -401,6 +401,21 @@ pub fn is_valid_block_per_segment(options: &BTreeMap<String, String>) -> Result<
         let blocks_per_segment = value.parse::<u64>()?;
         let error_str = "invalid block_per_segment option, can't be over 1000";
         if blocks_per_segment > 1000 {
+            error!(error_str);
+            return Err(ErrorCode::TableOptionInvalid(error_str));
+        }
+    }
+
+    Ok(())
+}
+
+pub fn is_valid_row_per_block(options: &BTreeMap<String, String>) -> Result<()> {
+    // check block_per_segment is not over 1000.
+    if let Some(value) = options.get(FUSE_OPT_KEY_ROW_PER_BLOCK) {
+        let row_per_block = value.parse::<u64>()?;
+        let error_str = "invalid row_per_block option, can't be over 1000000000";
+        // for internal_column, we use 31 bits for row_offset.
+        if row_per_block > 1000_000_000 {
             error!(error_str);
             return Err(ErrorCode::TableOptionInvalid(error_str));
         }
