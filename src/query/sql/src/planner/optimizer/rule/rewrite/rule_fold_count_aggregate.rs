@@ -117,7 +117,10 @@ impl Rule for RuleFoldCountAggregate {
                     return Ok(());
                 }
             }
-            let eval_scalar = EvalScalar { items: scalars };
+            let eval_scalar = EvalScalar {
+                projections: vec![],
+                items: scalars,
+            };
             let dummy_table_scan = DummyTableScan;
             state.add_result(SExpr::create_unary(
                 Arc::new(eval_scalar.into()),

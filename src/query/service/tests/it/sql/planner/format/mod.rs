@@ -108,6 +108,7 @@ fn test_format() {
     let s_expr = SExpr::create_binary(
         Arc::new(
             Join {
+                pre_projections: vec![],
                 projections: vec![],
                 right_conditions: vec![
                     FunctionCall {

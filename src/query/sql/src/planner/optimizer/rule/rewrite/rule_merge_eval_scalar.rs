@@ -95,7 +95,10 @@ impl Rule for RuleMergeEvalScalar {
                 .into_iter()
                 .chain(down_eval_scalar.items.into_iter())
                 .collect();
-            let merged = EvalScalar { items };
+            let merged = EvalScalar {
+                projections: vec![],
+                items,
+            };
 
             let new_expr = SExpr::create_unary(
                 Arc::new(merged.into()),

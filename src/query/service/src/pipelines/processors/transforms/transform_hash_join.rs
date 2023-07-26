@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
+use common_sql::optimizer::ColumnSet;
 use common_sql::plans::JoinType;
 
 use super::hash_join::ProbeState;
@@ -43,6 +44,7 @@ pub struct TransformHashJoinProbe {
 
     input_data: VecDeque<DataBlock>,
     output_data_blocks: VecDeque<DataBlock>,
+    projections: ColumnSet,
     step: HashJoinStep,
     join_state: Arc<dyn HashJoinState>,
     probe_state: ProbeState,
@@ -51,9 +53,11 @@ pub struct TransformHashJoinProbe {
 }
 
 impl TransformHashJoinProbe {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
+        projections: ColumnSet,
         join_state: Arc<dyn HashJoinState>,
         max_block_size: usize,
         func_ctx: FunctionContext,
@@ -63,6 +67,7 @@ impl TransformHashJoinProbe {
         Ok(Box::new(TransformHashJoinProbe {
             input_port,
             output_port,
+            projections,
             input_data: VecDeque::new(),
             output_data_blocks: VecDeque::new(),
             step: HashJoinStep::Build,
@@ -131,7 +136,11 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if !self.output_data_blocks.is_empty() {
-                    let data = self.output_data_blocks.pop_front().unwrap();
+                    let data = self
+                        .output_data_blocks
+                        .pop_front()
+                        .unwrap()
+                        .project(&self.projections);
                     self.output_port.push_data(Ok(data));
                     return Ok(Event::NeedConsume);
                 }
@@ -175,7 +184,11 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if !self.output_data_blocks.is_empty() {
-                    let data = self.output_data_blocks.pop_front().unwrap();
+                    let data = self
+                        .output_data_blocks
+                        .pop_front()
+                        .unwrap()
+                        .project(&self.projections);
                     self.output_port.push_data(Ok(data));
                     return Ok(Event::NeedConsume);
                 }

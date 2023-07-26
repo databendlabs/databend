@@ -156,6 +156,7 @@ pub struct EvalScalar {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
+    pub projections: ColumnSet,
 
     pub input: Box<PhysicalPlan>,
     pub exprs: Vec<(RemoteExpr, IndexType)>,
@@ -167,14 +168,19 @@ pub struct EvalScalar {
 impl EvalScalar {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
-        let mut fields = input_schema.fields().clone();
-        for (expr, index) in self.exprs.iter() {
-            let name = index.to_string();
-            if let RemoteExpr::ColumnRef { id, .. } = expr {
-                if name == fields[*id].name().as_str() {
-                    continue;
-                }
+        let mut fields = Vec::with_capacity(self.projections.len());
+        for (i, field) in input_schema.fields().iter().enumerate() {
+            if self.projections.contains(&i) {
+                fields.push(field.clone());
             }
+        }
+        let input_column_nums = input_schema.num_fields();
+        for (i, (expr, index)) in self.exprs.iter().enumerate() {
+            let i = i + input_column_nums;
+            if !self.projections.contains(&i) {
+                continue;
+            }
+            let name = index.to_string();
             let data_type = expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
             fields.push(DataField::new(&name, data_type));
         }
@@ -493,6 +499,7 @@ pub struct HashJoin {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
+    pub projections: ColumnSet,
     pub probe_projections: ColumnSet,
     pub build_projections: ColumnSet,
 
@@ -562,7 +569,7 @@ impl HashJoin {
             }
         }
 
-        match self.join_type {
+        let merged_fields = match self.join_type {
             JoinType::Cross
             | JoinType::Inner
             | JoinType::Left
@@ -571,10 +578,10 @@ impl HashJoin {
             | JoinType::RightSingle
             | JoinType::Full => {
                 probe_fields.extend(build_fields);
-                Ok(DataSchemaRefExt::create(probe_fields))
+                probe_fields
             }
-            JoinType::LeftSemi | JoinType::LeftAnti => Ok(DataSchemaRefExt::create(probe_fields)),
-            JoinType::RightSemi | JoinType::RightAnti => Ok(DataSchemaRefExt::create(build_fields)),
+            JoinType::LeftSemi | JoinType::LeftAnti => probe_fields,
+            JoinType::RightSemi | JoinType::RightAnti => build_fields,
             JoinType::LeftMark => {
                 let name = if let Some(idx) = self.marker_index {
                     idx.to_string()
@@ -585,7 +592,7 @@ impl HashJoin {
                     name.as_str(),
                     DataType::Nullable(Box::new(DataType::Boolean)),
                 ));
-                Ok(DataSchemaRefExt::create(build_fields))
+                build_fields
             }
             JoinType::RightMark => {
                 let name = if let Some(idx) = self.marker_index {
@@ -597,9 +604,16 @@ impl HashJoin {
                     name.as_str(),
                     DataType::Nullable(Box::new(DataType::Boolean)),
                 ));
-                Ok(DataSchemaRefExt::create(probe_fields))
+                probe_fields
+            }
+        };
+        let mut fields = Vec::with_capacity(self.projections.len());
+        for (i, field) in merged_fields.iter().enumerate() {
+            if self.projections.contains(&i) {
+                fields.push(field.clone());
             }
         }
+        Ok(DataSchemaRefExt::create(fields))
     }
 }
 

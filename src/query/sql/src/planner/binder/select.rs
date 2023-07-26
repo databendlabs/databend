@@ -723,6 +723,7 @@ impl Binder {
             left_expr = SExpr::create_unary(
                 Arc::new(
                     EvalScalar {
+                        projections: vec![],
                         items: left_scalar_items,
                     }
                     .into(),
@@ -734,6 +735,7 @@ impl Binder {
             right_expr = SExpr::create_unary(
                 Arc::new(
                     EvalScalar {
+                        projections: vec![],
                         items: right_scalar_items,
                     }
                     .into(),

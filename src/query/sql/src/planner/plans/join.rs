@@ -141,6 +141,7 @@ impl Display for JoinType {
 /// the probe side.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Join {
+    pub pre_projections: Vec<IndexType>,
     pub projections: Vec<IndexType>,
     pub left_conditions: Vec<ScalarExpr>,
     pub right_conditions: Vec<ScalarExpr>,
@@ -156,6 +157,7 @@ pub struct Join {
 impl Default for Join {
     fn default() -> Self {
         Self {
+            pre_projections: vec![],
             projections: vec![],
             left_conditions: Default::default(),
             right_conditions: Default::default(),
@@ -183,8 +185,13 @@ impl Join {
     }
 
     #[inline]
-    pub fn replace_projections(&self, projections: Vec<IndexType>) -> Self {
+    pub fn replace_projections(
+        &self,
+        pre_projections: Vec<IndexType>,
+        projections: Vec<IndexType>,
+    ) -> Self {
         Self {
+            pre_projections,
             projections,
             left_conditions: self.left_conditions.clone(),
             right_conditions: self.right_conditions.clone(),

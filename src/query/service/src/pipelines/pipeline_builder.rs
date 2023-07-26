@@ -31,7 +31,6 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
 use common_expression::HashMethodKind;
-use common_expression::RemoteExpr;
 use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
@@ -645,12 +644,6 @@ impl PipelineBuilder {
         let exprs = eval_scalar
             .exprs
             .iter()
-            .filter(|(scalar, idx)| {
-                if let RemoteExpr::ColumnRef { id, .. } = scalar {
-                    return idx.to_string() != input_schema.field(*id).name().as_str();
-                }
-                true
-            })
             .map(|(scalar, _)| scalar.as_expr(&BUILTIN_FUNCTIONS))
             .collect::<Vec<_>>();
 
@@ -658,7 +651,10 @@ impl PipelineBuilder {
             return Ok(());
         }
 
-        let op = BlockOperator::Map { exprs };
+        let op = BlockOperator::Map {
+            projections: eval_scalar.projections.clone(),
+            exprs,
+        };
 
         let func_ctx = self.ctx.get_function_context()?;
 
@@ -1271,6 +1267,7 @@ impl PipelineBuilder {
             let transform = TransformHashJoinProbe::create(
                 input,
                 output,
+                join.projections.clone(),
                 TransformHashJoinProbe::attach(state.clone())?,
                 max_block_size,
                 func_ctx.clone(),

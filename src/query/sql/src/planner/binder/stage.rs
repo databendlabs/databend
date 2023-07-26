@@ -38,6 +38,7 @@ use crate::binder::wrap_cast;
 use crate::binder::wrap_cast_scalar;
 use crate::evaluator::BlockOperator;
 use crate::evaluator::CompoundBlockOperator;
+use crate::optimizer::ColumnSet;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
@@ -84,8 +85,11 @@ impl BindContext {
             map_exprs.push(expr);
         }
 
-        let mut operators = Vec::with_capacity(schema_fields_len);
-        operators.push(BlockOperator::Map { exprs: map_exprs });
+        let projections = (0..=schema_fields_len).collect::<ColumnSet>();
+        let operators = vec![BlockOperator::Map {
+            projections,
+            exprs: map_exprs,
+        }];
 
         let one_row_chunk = DataBlock::new(
             vec![BlockEntry::new(

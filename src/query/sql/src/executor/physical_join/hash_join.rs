@@ -16,6 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_cast;
 use common_expression::type_check::common_super_type;
+use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
@@ -176,7 +177,7 @@ impl PhysicalPlanBuilder {
 
         let mut probe_projections = ColumnSet::new();
         let mut build_projections = ColumnSet::new();
-        for column in join.projections.iter() {
+        for column in join.pre_projections.iter() {
             if let Ok(index) = probe_schema.index_of(&column.to_string()) {
                 probe_projections.insert(index);
             }
@@ -199,8 +200,68 @@ impl PhysicalPlanBuilder {
         }
         let merged_schema = DataSchemaRefExt::create(merged_fields);
 
+        let mut probe_fields = Vec::with_capacity(probe_projections.len());
+        let mut build_fields = Vec::with_capacity(build_projections.len());
+        for (i, field) in probe_schema.fields().iter().enumerate() {
+            if probe_projections.contains(&i) {
+                probe_fields.push(field.clone());
+            }
+        }
+        for (i, field) in build_schema.fields().iter().enumerate() {
+            if build_projections.contains(&i) {
+                build_fields.push(field.clone());
+            }
+        }
+
+        let merged_fields = match join.join_type {
+            JoinType::Cross
+            | JoinType::Inner
+            | JoinType::Left
+            | JoinType::LeftSingle
+            | JoinType::Right
+            | JoinType::RightSingle
+            | JoinType::Full => {
+                probe_fields.extend(build_fields);
+                probe_fields
+            }
+            JoinType::LeftSemi | JoinType::LeftAnti => probe_fields,
+            JoinType::RightSemi | JoinType::RightAnti => build_fields,
+            JoinType::LeftMark => {
+                let name = if let Some(idx) = join.marker_index {
+                    idx.to_string()
+                } else {
+                    "marker".to_string()
+                };
+                build_fields.push(DataField::new(
+                    name.as_str(),
+                    DataType::Nullable(Box::new(DataType::Boolean)),
+                ));
+                build_fields
+            }
+            JoinType::RightMark => {
+                let name = if let Some(idx) = join.marker_index {
+                    idx.to_string()
+                } else {
+                    "marker".to_string()
+                };
+                probe_fields.push(DataField::new(
+                    name.as_str(),
+                    DataType::Nullable(Box::new(DataType::Boolean)),
+                ));
+                probe_fields
+            }
+        };
+        let mut projections = ColumnSet::new();
+        let projected_schema = DataSchemaRefExt::create(merged_fields);
+        for column in join.projections.iter() {
+            if let Ok(index) = projected_schema.index_of(&column.to_string()) {
+                projections.insert(index);
+            }
+        }
+
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: self.next_plan_id(),
+            projections,
             build_projections,
             probe_projections,
             build: build_side,

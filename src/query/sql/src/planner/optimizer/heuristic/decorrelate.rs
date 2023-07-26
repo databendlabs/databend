@@ -176,6 +176,7 @@ impl SubqueryRewriter {
         }
 
         let join = Join {
+            pre_projections: vec![],
             projections: vec![],
             left_conditions,
             right_conditions,
@@ -263,6 +264,7 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                 )?;
                 let join_plan = Join {
+                    pre_projections: vec![],
                     projections: vec![],
                     left_conditions,
                     right_conditions,
@@ -307,6 +309,7 @@ impl SubqueryRewriter {
                     )
                 };
                 let join_plan = Join {
+                    pre_projections: vec![],
                     projections: vec![],
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
@@ -370,6 +373,7 @@ impl SubqueryRewriter {
                     )
                 };
                 let mark_join = Join {
+                    pre_projections: vec![],
                     projections: vec![],
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
@@ -470,6 +474,7 @@ impl SubqueryRewriter {
                 Arc::new(logical_get),
             );
             let cross_join = Join {
+                pre_projections: vec![],
                 projections: vec![],
                 left_conditions: vec![],
                 right_conditions: vec![],
@@ -533,7 +538,13 @@ impl SubqueryRewriter {
                     });
                 }
                 Ok(SExpr::create_unary(
-                    Arc::new(EvalScalar { items }.into()),
+                    Arc::new(
+                        EvalScalar {
+                            projections: vec![],
+                            items,
+                        }
+                        .into(),
+                    ),
                     Arc::new(flatten_plan),
                 ))
             }
@@ -590,6 +601,7 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_binary(
                     Arc::new(
                         Join {
+                            pre_projections: vec![],
                             projections: vec![],
                             left_conditions: join.left_conditions.clone(),
                             right_conditions: join.right_conditions.clone(),

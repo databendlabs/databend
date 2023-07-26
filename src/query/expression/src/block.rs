@@ -518,6 +518,18 @@ impl DataBlock {
 
         Ok(DataBlock::new(columns, num_rows))
     }
+
+    #[inline]
+    pub fn project(self, projections: &HashSet<usize>) -> Self {
+        let mut columns = Vec::with_capacity(projections.len());
+        for (index, column) in self.columns.into_iter().enumerate() {
+            if !projections.contains(&index) {
+                continue;
+            }
+            columns.push(column);
+        }
+        DataBlock::new_with_meta(columns, self.num_rows, self.meta)
+    }
 }
 
 impl TryFrom<DataBlock> for ArrowChunk<ArrayRef> {

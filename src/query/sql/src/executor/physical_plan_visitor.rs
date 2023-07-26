@@ -107,6 +107,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::EvalScalar(EvalScalar {
             plan_id: plan.plan_id,
+            projections: plan.projections.clone(),
             input: Box::new(input),
             exprs: plan.exprs.clone(),
             stat_info: plan.stat_info.clone(),
@@ -172,6 +173,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: plan.plan_id,
+            projections: plan.projections.clone(),
             probe_projections: plan.probe_projections.clone(),
             build_projections: plan.build_projections.clone(),
             build: Box::new(build),

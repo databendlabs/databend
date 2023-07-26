@@ -44,12 +44,15 @@ use crate::optimizer::ColumnSet;
 #[derive(Clone)]
 pub enum BlockOperator {
     /// Batch mode of map which merges map operators into one.
-    Map { exprs: Vec<Expr> },
+    Map {
+        projections: ColumnSet,
+        exprs: Vec<Expr>,
+    },
 
     MapWithOutput {
         exprs: Vec<Expr>,
         /// The index of the output columns, based on the exprs.
-        output_indexes: Vec<usize>,
+        projections: ColumnSet,
     },
 
     /// Filter the input [`DataBlock`] with the predicate `eval`.
@@ -82,42 +85,24 @@ impl BlockOperator {
                 // It's from aggregating index.
                 Ok(input)
             }
-            BlockOperator::Map { exprs } => {
+            BlockOperator::Map { projections, exprs } => {
                 for expr in exprs {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                     let result = evaluator.run(expr)?;
                     let col = BlockEntry::new(expr.data_type().clone(), result);
                     input.add_column(col);
                 }
-                Ok(input)
+                Ok(input.project(projections))
             }
 
-            BlockOperator::MapWithOutput {
-                exprs,
-                output_indexes,
-            } => {
-                let original_num_columns = input.num_columns();
+            BlockOperator::MapWithOutput { exprs, projections } => {
                 for expr in exprs {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                     let result = evaluator.run(expr)?;
                     let col = BlockEntry::new(expr.data_type().clone(), result);
                     input.add_column(col);
                 }
-
-                let columns: Vec<BlockEntry> = input
-                    .columns()
-                    .iter()
-                    .enumerate()
-                    .filter(|(index, _)| {
-                        *index < original_num_columns || output_indexes.contains(index)
-                    })
-                    .map(|(_, col)| col.clone())
-                    .collect();
-
-                let rows = input.num_rows();
-                let meta = input.get_owned_meta();
-
-                Ok(DataBlock::new_with_meta(columns, rows, meta))
+                Ok(input.project(projections))
             }
 
             BlockOperator::Filter { projections, expr } => {
@@ -364,11 +349,16 @@ impl CompoundBlockOperator {
 
         for op in operators {
             match op {
-                BlockOperator::Map { exprs } => {
-                    if let Some(BlockOperator::Map { exprs: pre_exprs }) = results.last_mut() {
+                BlockOperator::Map { projections, exprs } => {
+                    if let Some(BlockOperator::Map {
+                        projections: pre_projections,
+                        exprs: pre_exprs,
+                    }) = results.last_mut()
+                    {
+                        pre_projections.extend(projections);
                         pre_exprs.extend(exprs);
                     } else {
-                        results.push(BlockOperator::Map { exprs });
+                        results.push(BlockOperator::Map { projections, exprs });
                     }
                 }
                 _ => results.push(op),

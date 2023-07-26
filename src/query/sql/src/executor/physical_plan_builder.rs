@@ -959,6 +959,7 @@ impl PhysicalPlanBuilder {
                         plan_builder.build_eval_scalar(
                             plan,
                             &crate::plans::EvalScalar {
+                                projections: vec![],
                                 items: scalar_items,
                             },
                             stat_info,
@@ -1205,6 +1206,7 @@ impl PhysicalPlanBuilder {
             self.build_eval_scalar(
                 input,
                 &crate::planner::plans::EvalScalar {
+                    projections: vec![],
                     items: scalar_items,
                 },
                 stat_info.clone(),
@@ -1341,8 +1343,32 @@ impl PhysicalPlanBuilder {
                 Ok((expr.as_remote_expr(), item.index))
             })
             .collect::<Result<Vec<_>>>()?;
+
+        let exprs = exprs
+            .into_iter()
+            .filter(|(scalar, idx)| {
+                if let RemoteExpr::ColumnRef { id, .. } = scalar {
+                    return idx.to_string() != input_schema.field(*id).name().as_str();
+                }
+                true
+            })
+            .collect::<Vec<_>>();
+
+        let mut projections = ColumnSet::new();
+        for column in eval_scalar.projections.iter() {
+            if let Ok(index) = input_schema.index_of(&column.to_string()) {
+                projections.insert(index);
+            }
+        }
+        let input_column_nums = input_schema.num_fields();
+        for (index, (_, idx)) in exprs.iter().enumerate() {
+            if eval_scalar.projections.contains(idx) {
+                projections.insert(index + input_column_nums);
+            }
+        }
         Ok(PhysicalPlan::EvalScalar(EvalScalar {
             plan_id: self.next_plan_id(),
+            projections,
             input: Box::new(input),
             exprs,
             stat_info: Some(stat_info),

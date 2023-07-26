@@ -96,12 +96,14 @@ impl UnusedColumnPruner {
                 ))))
             }
             RelOperator::Join(p) => {
+                let projections = required.clone().into_iter().collect::<Vec<_>>();
                 let others = p
                     .non_equi_conditions
                     .iter()
                     .fold(required.clone(), |acc, v| {
                         acc.union(&v.used_columns()).cloned().collect()
                     });
+                let pre_projections = others.clone().into_iter().collect::<Vec<_>>();
                 // Include columns referenced in left conditions
                 let left = p.left_conditions.iter().fold(required.clone(), |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
@@ -110,10 +112,10 @@ impl UnusedColumnPruner {
                 let right = p.right_conditions.iter().fold(required, |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
-
-                let projections = others.clone().into_iter().collect::<Vec<_>>();
                 Ok(SExpr::create_binary(
-                    Arc::new(RelOperator::Join(p.replace_projections(projections))),
+                    Arc::new(RelOperator::Join(
+                        p.replace_projections(pre_projections, projections),
+                    )),
                     Arc::new(self.keep_required_columns(
                         expr.child(0)?,
                         left.union(&others).cloned().collect(),
@@ -126,6 +128,7 @@ impl UnusedColumnPruner {
             }
 
             RelOperator::EvalScalar(p) => {
+                let projections = required.clone().into_iter().collect::<Vec<_>>();
                 let mut used = vec![];
                 // Only keep columns needed by parent plan.
                 for s in p.items.iter() {
@@ -142,7 +145,10 @@ impl UnusedColumnPruner {
                     self.keep_required_columns(expr.child(0)?, required)
                 } else {
                     Ok(SExpr::create_unary(
-                        Arc::new(RelOperator::EvalScalar(EvalScalar { items: used })),
+                        Arc::new(RelOperator::EvalScalar(EvalScalar {
+                            projections,
+                            items: used,
+                        })),
                         Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                     ))
                 }

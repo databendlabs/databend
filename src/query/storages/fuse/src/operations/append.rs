@@ -32,6 +32,7 @@ use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
+use common_sql::optimizer::ColumnSet;
 
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::common::TransformSerializeSegment;
@@ -180,7 +181,8 @@ impl FuseTable {
         let operators = if exprs.is_empty() {
             vec![]
         } else {
-            vec![BlockOperator::Map { exprs }]
+            let projections = (0..=cluster_keys.len()).collect::<ColumnSet>();
+            vec![BlockOperator::Map { projections, exprs }]
         };
 
         Ok(ClusterStatsGenerator::new(

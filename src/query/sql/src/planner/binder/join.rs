@@ -192,6 +192,7 @@ impl Binder {
             &mut non_equi_conditions,
         )?;
         let logical_join = Join {
+            pre_projections: vec![],
             projections: vec![],
             left_conditions,
             right_conditions,

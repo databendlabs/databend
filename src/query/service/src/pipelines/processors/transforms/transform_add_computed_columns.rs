@@ -26,6 +26,7 @@ use common_license::license_manager::get_license_manager;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::parse_computed_expr;
+use common_sql::ColumnSet;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -90,9 +91,10 @@ where Self: Transform
         }
 
         let func_ctx = ctx.get_function_context()?;
+        let projections = (0..=output_schema.fields().len()).collect::<ColumnSet>();
         let expression_transform = CompoundBlockOperator {
             ctx: func_ctx,
-            operators: vec![BlockOperator::Map { exprs }],
+            operators: vec![BlockOperator::Map { projections, exprs }],
         };
 
         Ok(ProcessorPtr::create(Transformer::create(

@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use common_expression::Expr;
 
 use super::BlockOperator;
+use crate::optimizer::ColumnSet;
 
 /// Eliminate common expression in `Map` operator
 pub fn apply_cse(
@@ -27,7 +28,7 @@ pub fn apply_cse(
 
     for op in operators {
         match op {
-            BlockOperator::Map { exprs } => {
+            BlockOperator::Map { projections, exprs } => {
                 // find common expression
                 let mut cse_counter = HashMap::new();
                 for expr in exprs.iter() {
@@ -48,6 +49,7 @@ pub fn apply_cse(
                     let mut new_exprs = Vec::new();
                     let mut cse_replacements = HashMap::new();
 
+                    let candidates_nums = cse_candidates.len();
                     for cse_candidate in &cse_candidates {
                         let temp_var = format!("__temp_cse_{}", temp_var_counter);
                         let temp_expr = Expr::ColumnRef {
@@ -71,21 +73,27 @@ pub fn apply_cse(
                         temp_var_counter += 1;
                     }
 
-                    let mut output_indexes = Vec::with_capacity(exprs.len());
+                    let mut new_projections: ColumnSet = projections
+                        .iter()
+                        .filter(|idx| **idx < input_num_columns)
+                        .copied()
+                        .collect::<ColumnSet>();
                     for mut expr in exprs {
                         perform_cse_replacement(&mut expr, &cse_replacements);
                         new_exprs.push(expr);
 
-                        output_indexes.push(temp_var_counter);
+                        if projections.contains(&(temp_var_counter - candidates_nums)) {
+                            new_projections.insert(temp_var_counter);
+                        }
                         temp_var_counter += 1;
                     }
 
                     results.push(BlockOperator::MapWithOutput {
                         exprs: new_exprs,
-                        output_indexes,
+                        projections: new_projections,
                     });
                 } else {
-                    results.push(BlockOperator::Map { exprs });
+                    results.push(BlockOperator::Map { projections, exprs });
                 }
             }
             BlockOperator::Project { projection } => {

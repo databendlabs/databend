@@ -429,6 +429,7 @@ impl SubqueryRewriter {
                     )),
                 );
                 let cross_join = Join {
+                    pre_projections: vec![],
                     projections: vec![],
                     left_conditions: vec![],
                     right_conditions: vec![],
@@ -501,6 +502,7 @@ impl SubqueryRewriter {
                 // Will be transferred to:select t1.a, t2.a, marker_index from t1, t2 where t2.a = t1.a;
                 // Note that subquery is the right table, and it'll be the build side.
                 let mark_join = Join {
+                    pre_projections: vec![],
                     projections: vec![],
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
@@ -531,6 +533,7 @@ impl SubqueryRewriter {
         // Such as `SELECT * FROM c WHERE c_id=(SELECT max(c_id) FROM o WHERE ship='WA');`
         // We can push down `c_id = max(c_id)` to cross join then make it as inner join.
         let join_plan = Join {
+            pre_projections: vec![],
             projections: vec![],
             left_conditions: vec![],
             right_conditions: vec![],
@@ -674,6 +677,7 @@ impl SubqueryRewriter {
         let scalar_expr = SExpr::create_unary(
             Arc::new(
                 EvalScalar {
+                    projections: vec![],
                     items: vec![ScalarItem {
                         scalar: if_func,
                         index: if_func_idx,

@@ -421,11 +421,22 @@ impl Rule for RuleEagerAggregation {
         let extra_eval_scalar = if has_extra_eval {
             extra_eval_scalar_expr.plan().clone().try_into()?
         } else {
-            EvalScalar { items: vec![] }
+            EvalScalar {
+                projections: vec![],
+                items: vec![],
+            }
         };
         // Check if all extra eval scalars can be solved by one of the children.
-        let mut eager_extra_eval_scalar_expr =
-            [EvalScalar { items: vec![] }, EvalScalar { items: vec![] }];
+        let mut eager_extra_eval_scalar_expr = [
+            EvalScalar {
+                projections: vec![],
+                items: vec![],
+            },
+            EvalScalar {
+                projections: vec![],
+                items: vec![],
+            },
+        ];
         if has_extra_eval {
             for eval_item in extra_eval_scalar.items.iter() {
                 let eval_used_columns = eval_item.scalar.used_columns();
@@ -710,8 +721,14 @@ impl Rule for RuleEagerAggregation {
             }
 
             // Try to multiply eager count for each sum aggregate column.
-            let mut eager_split_count_sum = EvalScalar { items: vec![] };
-            let mut eager_groupby_count_count_sum = EvalScalar { items: vec![] };
+            let mut eager_split_count_sum = EvalScalar {
+                projections: vec![],
+                items: vec![],
+            };
+            let mut eager_groupby_count_count_sum = EvalScalar {
+                projections: vec![],
+                items: vec![],
+            };
             let final_eager = [&mut final_eager_split, &mut final_eager_groupby_count];
             let count_sum = [
                 &mut eager_split_count_sum,
@@ -988,8 +1005,14 @@ impl Rule for RuleEagerAggregation {
 
             let mut need_eager_count = false;
             // Try to multiply eager count for each sum aggregate column.
-            let mut double_eager_count_sum = EvalScalar { items: vec![] };
-            let mut eager_count_sum = EvalScalar { items: vec![] };
+            let mut double_eager_count_sum = EvalScalar {
+                projections: vec![],
+                items: vec![],
+            };
+            let mut eager_count_sum = EvalScalar {
+                projections: vec![],
+                items: vec![],
+            };
             if can_eager[d ^ 1] {
                 let final_eager = [&mut final_double_eager, &mut final_eager_count];
                 let count_sum = [&mut double_eager_count_sum, &mut eager_count_sum];
