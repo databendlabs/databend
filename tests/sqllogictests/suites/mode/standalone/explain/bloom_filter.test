@@ -234,7 +234,7 @@ alter table bloom_test_alter_t2 set options(bloom_index_columns='c1, c2')
 statement ok
 insert into  bloom_test_alter_t2 values(1,1), (3,4), (10,10)
 
-# note that the bloom index of column c1 is NOT created for the first 2 blocks (but created for the last block), 
+# note that the bloom index of column c1 is NOT created for the first 2 blocks (but created for the last block),
 # thus, while point querying on column c1, only 1 block might be filtered out.
 query T
 explain select 1 from bloom_test_alter_t2 where c1 = 5

@@ -369,8 +369,12 @@ impl PhysicalPlanBuilder {
                     .unwrap();
                 let index = self
                     .metadata
-                    .write()
-                    .add_internal_column(scan.table_index, internal_column.clone());
+                    .read()
+                    .row_id_index_by_table_index(scan.table_index);
+                debug_assert!(index.is_some());
+                // Safe to unwrap: if lazy_columns is not empty, the `analyze_lazy_materialization` have been called
+                // and the row_id index of the table_index has been generated.
+                let index = index.unwrap();
                 entry.insert(index);
                 project_internal_columns.insert(index, internal_column);
             }

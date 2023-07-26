@@ -360,7 +360,7 @@ impl DataBlock {
         }
 
         Ok(Self {
-            columns: self.columns.clone(),
+            columns: self.columns,
             num_rows: self.num_rows,
             meta,
         })

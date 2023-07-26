@@ -216,3 +216,13 @@ select number::Decimal(15,2) a, number % 3 b from numbers(5) group by a, b order
 2.00 2
 3.00 0
 4.00 1
+
+query IIII
+select number % 3 a, max(number) - 3,  number % 2 b, sum(number) + 4 from numbers(1000) group by all order by a, b;
+----
+0 993 0 83170
+0 996 1 83671
+1 991 0 82838
+1 994 1 83337
+2 995 0 83504
+2 992 1 83004

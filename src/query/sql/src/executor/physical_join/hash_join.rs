@@ -85,7 +85,7 @@ impl PhysicalPlanBuilder {
         }
 
         let build_schema = match join.join_type {
-            JoinType::Left | JoinType::Full => {
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
                 let build_schema = build_side.output_schema()?;
                 // Wrap nullable type for columns in build side.
                 let build_schema = DataSchemaRefExt::create(

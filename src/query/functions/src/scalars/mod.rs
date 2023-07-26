@@ -24,6 +24,7 @@ mod control;
 mod datetime;
 mod decimal;
 mod geo;
+mod geo_h3;
 mod hash;
 mod map;
 mod math;
@@ -53,6 +54,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     string_multi_args::register(registry);
     tuple::register(registry);
     geo::register(registry);
+    geo_h3::register(registry);
     hash::register(registry);
     other::register(registry);
     decimal::register(registry);
