@@ -130,7 +130,7 @@ impl Display for QueryLogConfig {
 impl Default for QueryLogConfig {
     fn default() -> Self {
         Self {
-            on: false,
+            on: true,
             dir: "./.databend/logs/query-details".to_string(),
         }
     }
@@ -178,7 +178,7 @@ impl Default for TracingConfig {
         Self {
             on: false,
             log_level: "INFO".to_string(),
-            jaeger_endpoint: "http://localhost:14268/api/traces".to_string(),
+            jaeger_endpoint: "".to_string(),
         }
     }
 }
