@@ -25,6 +25,7 @@ use common_expression::BLOCK_NAME_COL_NAME;
 use common_expression::ROW_ID_COL_NAME;
 use common_expression::SEGMENT_NAME_COL_NAME;
 use common_expression::SNAPSHOT_NAME_COL_NAME;
+use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::CreateTableReq;
@@ -413,9 +414,9 @@ pub fn is_valid_row_per_block(options: &BTreeMap<String, String>) -> Result<()> 
     // check block_per_segment is not over 1000.
     if let Some(value) = options.get(FUSE_OPT_KEY_ROW_PER_BLOCK) {
         let row_per_block = value.parse::<u64>()?;
-        let error_str = "invalid row_per_block option, can't be over 1000000000";
-        // for internal_column, we use 31 bits for row_offset.
-        if row_per_block > 1000_000_000 {
+        let error_str = "invalid row_per_block option, can't be over 1000000";
+
+        if row_per_block > DEFAULT_BLOCK_MAX_ROWS as u64 {
             error!(error_str);
             return Err(ErrorCode::TableOptionInvalid(error_str));
         }
