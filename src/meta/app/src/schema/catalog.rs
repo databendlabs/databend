@@ -20,7 +20,7 @@ use chrono::Utc;
 
 use crate::storage::StorageParams;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum CatalogType {
     Default = 1,
     Hive = 2,
@@ -44,6 +44,15 @@ pub enum CatalogOption {
     Hive(HiveCatalogOption),
     // Uri location for iceberg
     Iceberg(IcebergCatalogOption),
+}
+
+impl CatalogOption {
+    pub fn catalog_type(&self) -> CatalogType {
+        match self {
+            CatalogOption::Hive(_) => CatalogType::Hive,
+            CatalogOption::Iceberg(_) => CatalogType::Iceberg,
+        }
+    }
 }
 
 /// Option for creating a iceberg catalog

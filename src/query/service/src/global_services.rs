@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::GlobalQueryRuntime;
@@ -19,10 +21,12 @@ use common_catalog::catalog::CatalogManager;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_exception::Result;
+use common_meta_app::schema::CatalogType;
 use common_profile::QueryProfileManager;
 use common_sharing::ShareEndpointManager;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
+use common_storages_iceberg::IcebergCreater;
 use common_tracing::QueryLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
@@ -30,7 +34,7 @@ use storages_common_cache_manager::CacheManager;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
-use crate::catalogs::CatalogManagerHelper;
+use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::SessionManager;
@@ -67,7 +71,34 @@ impl GlobalServices {
         )?;
 
         CacheManager::init(&config.cache, &config.query.tenant_id)?;
-        CatalogManager::init(&config).await?;
+
+        // TODO(xuanwo):
+        //
+        // This part is a bit complex because catalog are used widely in different
+        // crates that we don't have a good place for different kinds of creaters.
+        //
+        // Maybe we can do some refactor to simplify the logic here.
+        {
+            CatalogManager::init(&config).await?;
+
+            let catalog_manager = CatalogManager::instance();
+
+            // Init default catalog.
+            let default_catalog = DatabaseCatalog::try_create_with_config(config.clone()).await?;
+            catalog_manager.init_default_catalog(Arc::new(default_catalog));
+
+            // Register iceberg catalog.
+            catalog_manager.register_catalog(CatalogType::Iceberg, Arc::new(IcebergCreater));
+
+            // Register hive catalog.
+            #[cfg(feature = "hive")]
+            {
+                use common_storages_hive::HiveCreater;
+
+                catalog_manager.register_catalog(CatalogType::Hive, Arc::new(HiveCreater));
+            }
+        }
+
         HttpQueryManager::init(&config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(&config)?;

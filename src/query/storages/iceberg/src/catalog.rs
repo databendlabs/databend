@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_catalog::catalog::Catalog;
+use common_catalog::catalog::CatalogCreator;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
 use common_catalog::table::Table;
@@ -24,6 +25,8 @@ use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -82,13 +85,35 @@ use crate::database::IcebergDatabase;
 
 pub const ICEBERG_CATALOG: &str = "iceberg";
 
+#[derive(Debug)]
+pub struct IcebergCreater;
+
+#[async_trait]
+impl CatalogCreator for IcebergCreater {
+    async fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
+        let opt = match &info.meta.catalog_option {
+            CatalogOption::Hive(_) => unreachable!(
+                "trying to create iceberg catalog from hive options, must be an internal bug"
+            ),
+            CatalogOption::Iceberg(opt) => opt,
+        };
+
+        let ctl_name = &info.name_ident.catalog_name;
+        let data_operator = DataOperator::try_create(&opt.storage_params).await?;
+        let catalog: Arc<dyn Catalog> =
+            Arc::new(IcebergCatalog::try_create(ctl_name, data_operator)?);
+
+        Ok(catalog)
+    }
+}
+
 /// `Catalog` for a external iceberg storage
 ///
 /// - Metadata of databases are saved in meta store
 /// - Instances of `Database` are created from reading subdirectories of
 ///    Iceberg table
 /// - Table metadata are saved in external Iceberg storage
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct IcebergCatalog {
     /// name of this iceberg table
     name: String,
@@ -146,6 +171,10 @@ impl IcebergCatalog {
 
 #[async_trait]
 impl Catalog for IcebergCatalog {
+    fn name(&self) -> String {
+        self.name.to_string()
+    }
+
     #[tracing::instrument(level = "debug", skip(self))]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {

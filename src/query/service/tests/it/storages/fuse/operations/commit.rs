@@ -420,7 +420,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_catalog(&self, _catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+    async fn get_catalog(&self, _catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+        Ok(self.catalog.clone())
+    }
+
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
         Ok(self.catalog.clone())
     }
 

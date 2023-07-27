@@ -23,7 +23,6 @@ use common_sql::plans::CreateCatalogPlan;
 use common_storages_fuse::TableContext;
 
 use super::Interpreter;
-use crate::catalogs::CatalogManagerHelper;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -58,7 +57,7 @@ impl Interpreter for CreateCatalogInterpreter {
 
         let catalog_manager = CatalogManager::instance();
         catalog_manager
-            .create_user_defined_catalog(self.plan.clone().into())
+            .create_catalog(self.plan.clone().into())
             .await?;
 
         Ok(PipelineBuildResult::create())

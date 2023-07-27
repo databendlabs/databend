@@ -81,7 +81,7 @@ impl Interpreter for SetOptionsInterpreter {
             }
             options_map.insert(key, Some(table_option.1.clone()));
         }
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let database = self.plan.database.as_str();
         let table = self.plan.table.as_str();
         let tbl = catalog

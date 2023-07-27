@@ -508,7 +508,8 @@ impl PhysicalPlanBuilder {
             RelOperator::DummyTableScan(_) => {
                 let catalogs = CatalogManager::instance();
                 let table = catalogs
-                    .get_catalog(CATALOG_DEFAULT)?
+                    .get_catalog(CATALOG_DEFAULT)
+                    .await?
                     .get_table(self.ctx.get_tenant().as_str(), "system", "one")
                     .await?;
 

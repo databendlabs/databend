@@ -15,8 +15,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use common_base::base::tokio;
 use common_catalog::catalog::Catalog;
+use common_catalog::catalog::CatalogCreator;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
 use common_catalog::table::Table;
@@ -27,6 +29,8 @@ use common_exception::Result;
 use common_hive_meta_store::Partition;
 use common_hive_meta_store::TThriftHiveMetastoreSyncClient;
 use common_hive_meta_store::ThriftHiveMetastoreSyncClient;
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -84,15 +88,40 @@ use crate::hive_table::HiveTable;
 
 pub const HIVE_CATALOG: &str = "hive";
 
-#[derive(Clone)]
+#[derive(Debug)]
+pub struct HiveCreater;
+
+#[async_trait]
+impl CatalogCreator for HiveCreater {
+    async fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
+        let opt = match &info.meta.catalog_option {
+            CatalogOption::Iceberg(_) => unreachable!(
+                "trying to create hive catalog from iceberg options, must be an internal bug"
+            ),
+            CatalogOption::Hive(opt) => opt,
+        };
+
+        let catalog: Arc<dyn Catalog> = Arc::new(HiveCatalog::try_create(
+            &info.name_ident.catalog_name,
+            &opt.address,
+        )?);
+
+        Ok(catalog)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct HiveCatalog {
+    name: String,
+
     /// address of hive meta store service
     client_address: String,
 }
 
 impl HiveCatalog {
-    pub fn try_create(hms_address: impl Into<String>) -> Result<HiveCatalog> {
+    pub fn try_create(name: &str, hms_address: impl Into<String>) -> Result<HiveCatalog> {
         Ok(HiveCatalog {
+            name: name.to_string(),
             client_address: hms_address.into(),
         })
     }
@@ -241,6 +270,10 @@ fn from_thrift_error(error: thrift::Error) -> ErrorCode {
 impl Catalog for HiveCatalog {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn name(&self) -> String {
+        self.name.clone()
     }
 
     #[async_backtrace::framed]

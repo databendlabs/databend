@@ -189,7 +189,7 @@ impl AsyncSource for GPT2SQLSource {
         // SELECT
         let database = self.ctx.get_current_database();
         let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(CATALOG_DEFAULT)?;
+        let catalog = self.ctx.get_catalog(CATALOG_DEFAULT).await?;
 
         let mut template = vec![];
         template.push("### Postgres SQL tables, with their properties:".to_string());

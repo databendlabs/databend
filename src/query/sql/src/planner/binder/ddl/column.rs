@@ -43,11 +43,11 @@ impl Binder {
             None => self.ctx.get_current_catalog(),
             Some(ident) => {
                 let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
-                self.ctx.get_catalog(&catalog)?;
+                self.ctx.get_catalog(&catalog).await?;
                 catalog
             }
         };
-        let catalog = self.ctx.get_catalog(&catalog_name)?;
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let database = match database {
             None => self.ctx.get_current_database(),
             Some(ident) => {

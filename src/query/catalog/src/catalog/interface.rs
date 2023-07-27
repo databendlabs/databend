@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -85,7 +87,15 @@ pub struct StorageDescription {
 }
 
 #[async_trait::async_trait]
-pub trait Catalog: DynClone + Send + Sync {
+pub trait CatalogCreator: Send + Sync + Debug {
+    async fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>>;
+}
+
+#[async_trait::async_trait]
+pub trait Catalog: DynClone + Send + Sync + Debug {
+    /// Catalog itself
+    fn name(&self) -> String;
+
     /// Database.
 
     // Get the database by name.

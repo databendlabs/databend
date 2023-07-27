@@ -57,7 +57,8 @@ impl Interpreter for AddTableColumnInterpreter {
 
         let tbl = self
             .ctx
-            .get_catalog(catalog_name)?
+            .get_catalog(catalog_name)
+            .await?
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await
             .ok();
@@ -77,7 +78,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 )));
             }
 
-            let catalog = self.ctx.get_catalog(catalog_name)?;
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
             let mut new_table_meta = table.get_table_info().meta.clone();
             let field = self.plan.field.clone();
             if field.computed_expr().is_some() {

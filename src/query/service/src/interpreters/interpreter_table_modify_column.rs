@@ -152,7 +152,8 @@ impl Interpreter for ModifyTableColumnInterpreter {
 
         let tbl = self
             .ctx
-            .get_catalog(catalog_name)?
+            .get_catalog(catalog_name)
+            .await?
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await
             .ok();
@@ -177,7 +178,7 @@ impl Interpreter for ModifyTableColumnInterpreter {
             )));
         }
 
-        let catalog = self.ctx.get_catalog(catalog_name)?;
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
         let table_meta = table.get_table_info().meta.clone();
 
         // NOTICE: if we support modify column data type,

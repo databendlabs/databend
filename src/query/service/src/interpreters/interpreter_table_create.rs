@@ -108,7 +108,7 @@ impl Interpreter for CreateTableInterpreter {
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let engine = self.plan.engine;
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         if quota.max_tables_per_database > 0 {
             // Note:
             // max_tables_per_database is a config quota. Default is 0.
@@ -153,7 +153,7 @@ impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
         let reply = catalog.create_table(self.build_request(None)?).await?;
@@ -190,7 +190,7 @@ impl CreateTableInterpreter {
 
     #[async_backtrace::framed]
     async fn create_table(&self) -> Result<PipelineBuildResult> {
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let mut stat = None;
         if !GlobalConfig::instance().query.management_mode {
             if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {

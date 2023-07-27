@@ -99,7 +99,7 @@ impl Interpreter for CreateDatabaseInterpreter {
         let tenant = self.plan.tenant.clone();
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let databases = catalog.list_databases(&tenant).await?;
         if quota.max_databases != 0 && databases.len() >= quota.max_databases as usize {
             return Err(ErrorCode::TenantQuotaExceeded(format!(

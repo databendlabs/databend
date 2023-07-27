@@ -55,7 +55,10 @@ impl Interpreter for DropIndexInterpreter {
         )?;
 
         let index_name = self.plan.index.clone();
-        let catalog = self.ctx.get_catalog(&self.ctx.get_current_catalog())?;
+        let catalog = self
+            .ctx
+            .get_catalog(&self.ctx.get_current_catalog())
+            .await?;
         let drop_index_req = DropIndexReq {
             if_exists: self.plan.if_exists,
             name_ident: IndexNameIdent { tenant, index_name },

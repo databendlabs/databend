@@ -97,4 +97,5 @@ mod table;
 mod table_source;
 
 pub use catalog::IcebergCatalog;
+pub use catalog::IcebergCreater;
 pub use catalog::ICEBERG_CATALOG;

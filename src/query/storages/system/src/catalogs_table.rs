@@ -50,13 +50,14 @@ impl AsyncSystemTable for CatalogsTable {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
-        let cm = CatalogManager::instance();
+        let mgr = CatalogManager::instance();
 
-        let catalog_names: Vec<Vec<u8>> = cm
-            .catalogs
-            .iter()
-            .map(|x| x.key().as_bytes().to_vec())
-            .collect();
+        let catalog_names = mgr
+            .list_catalogs()
+            .await?
+            .into_iter()
+            .map(|v| v.name().into_bytes())
+            .collect::<Vec<_>>();
 
         Ok(DataBlock::new_from_columns(vec![StringType::from_data(
             catalog_names,

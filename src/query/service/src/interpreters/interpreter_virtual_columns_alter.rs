@@ -68,7 +68,7 @@ impl Interpreter for AlterVirtualColumnsInterpreter {
             .await?;
 
         let table_id = table.get_id();
-        let catalog = self.ctx.get_catalog(&catalog_name)?;
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
 
         let update_virtual_column_req = UpdateVirtualColumnReq {
             name_ident: VirtualColumnNameIdent { tenant, table_id },

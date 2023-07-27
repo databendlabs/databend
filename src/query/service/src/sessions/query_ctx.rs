@@ -130,7 +130,7 @@ impl QueryContext {
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self.get_catalog(catalog_name)?;
+        let catalog = self.shared.catalog_manager.get_default_catalog();
         match table_args {
             None => catalog.get_table_by_info(table_info),
             Some(table_args) => Ok(catalog
@@ -154,7 +154,9 @@ impl QueryContext {
     #[async_backtrace::framed]
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
         let tenant_id = self.get_tenant();
-        let catalog = self.get_catalog(self.get_current_catalog().as_str())?;
+        let catalog = self
+            .get_catalog(self.get_current_catalog().as_str())
+            .await?;
         match catalog
             .get_database(tenant_id.as_str(), &new_database_name)
             .await
@@ -381,10 +383,16 @@ impl TableContext for QueryContext {
         self.fragment_id.fetch_add(1, Ordering::Release)
     }
 
-    fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+    #[async_backtrace::framed]
+    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
             .get_catalog(catalog_name.as_ref())
+            .await
+    }
+
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
+        self.shared.catalog_manager.get_default_catalog()
     }
 
     fn get_id(&self) -> String {
@@ -607,7 +615,7 @@ impl TableContext for QueryContext {
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let tenant = self.get_tenant();
-        let catalog = self.get_catalog(catalog_name)?;
+        let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
             .get_table(&tenant, database_name, table_name)
             .await?;

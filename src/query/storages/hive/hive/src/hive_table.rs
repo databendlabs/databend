@@ -389,7 +389,7 @@ impl HiveTable {
         partition_keys: Vec<String>,
         filter_expression: Option<Expr<String>>,
     ) -> Result<Vec<(String, Option<String>)>> {
-        let hive_catalog = ctx.get_catalog(CATALOG_HIVE)?;
+        let hive_catalog = ctx.get_catalog(CATALOG_HIVE).await?;
         let hive_catalog = hive_catalog.as_any().downcast_ref::<HiveCatalog>().unwrap();
 
         // todo may use get_partition_names_ps to filter
