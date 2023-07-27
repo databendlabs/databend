@@ -21,6 +21,8 @@ use common_expression::Scalar;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::ClusterStatistics;
 
+use crate::statistics::column_statistic::Trim;
+
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
@@ -127,11 +129,11 @@ impl ClusterStatsGenerator {
         for key in self.cluster_key_index.iter() {
             let val = data_block.get_by_offset(*key);
             let val_ref = val.value.as_ref();
-            let left = unsafe { val_ref.index_unchecked(0) };
-            min.push(left.to_owned());
+            let left = unsafe { val_ref.index_unchecked(0) }.to_owned();
+            min.push(left.clone().trim_min().unwrap_or(left));
 
-            let right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) };
-            max.push(right.to_owned());
+            let right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) }.to_owned();
+            max.push(right.clone().trim_max().unwrap_or(right));
         }
 
         let level = if min == max
