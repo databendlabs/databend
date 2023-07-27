@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_ast::ast::Identifier;
 use common_ast::ast::ModifyColumnAction;
 use common_ast::ast::TypeName;
-use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
@@ -45,7 +44,6 @@ use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
 use common_users::UserApiProvider;
 use data_mask_feature::get_datamask_handler;
-use table_lock::TableLockHandlerWrapper;
 
 use super::common::check_referenced_computed_columns;
 use crate::interpreters::Interpreter;
@@ -146,14 +144,9 @@ impl ModifyTableColumnInterpreter {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
-
-        // Add table lock heartbeat.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), table_info.clone())
-            .await?;
-
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+        // save current snapshot id
         let prev_snapshot_id = match fuse_table.read_table_snapshot().await {
             Ok(snapshot) => snapshot.map(|snapshot| snapshot.snapshot_id),
             _ => None,
@@ -254,19 +247,6 @@ impl ModifyTableColumnInterpreter {
             true,
             prev_snapshot_id,
         )?;
-
-        if build_res.main_pipeline.is_empty() {
-            heartbeat.shutdown().await?;
-        } else {
-            build_res.main_pipeline.set_on_finished(move |may_error| {
-                // shutdown table lock heartbeat.
-                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
-                match may_error {
-                    None => Ok(()),
-                    Some(error_code) => Err(error_code.clone()),
-                }
-            });
-        }
 
         Ok(build_res)
     }

@@ -96,6 +96,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
 impl<F> CommitSink<F>
 where F: SnapshotGenerator + Send + 'static
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
@@ -125,6 +126,15 @@ where F: SnapshotGenerator + Send + 'static
             start_time: Instant::now(),
             prev_snapshot_id,
         })))
+    }
+
+    fn is_error_recoverable(&self, e: &ErrorCode) -> bool {
+        // When prev_snapshot_id is some, means it is an alter table column modification.
+        // In this case if commit to meta fail and error is TABLE_VERSION_MISMATCHED operation will be aborted.
+        if self.prev_snapshot_id.is_some() && e.code() == ErrorCode::TABLE_VERSION_MISMATCHED {
+            return false;
+        }
+        FuseTable::is_error_recoverable(e, self.transient)
     }
 
     fn read_meta(&mut self) -> Result<Event> {
@@ -251,29 +261,30 @@ where F: SnapshotGenerator + Send + 'static
                 // if table_id not match, update table meta will fail
                 let table_info = fuse_table.table_info.clone();
                 // check if snapshot has been changed
-                let snapshot_has_changed = if let Some(prev_snapshot_id) = self.prev_snapshot_id {
-                    match &previous {
+                let snapshot_has_changed = match self.prev_snapshot_id {
+                    Some(prev_snapshot_id) => match &previous {
                         Some(previous) => previous.snapshot_id != prev_snapshot_id,
                         None => true,
-                    }
-                } else {
-                    false
+                    },
+                    None => false,
                 };
                 if snapshot_has_changed {
-                    return Err(ErrorCode::UnresolvableConflict(
-                        "snapshot has been changed when commit".to_string(),
-                    ));
+                    tracing::error!(
+                        "commit mutation failed cause snapshot has changed when commit",
+                    );
+                    // if snapshot has changed abort operation
+                    self.state = State::AbortOperation;
+                } else {
+                    self.snapshot_gen
+                        .fill_default_values(schema, &previous)
+                        .await?;
+
+                    self.state = State::GenerateSnapshot {
+                        previous,
+                        cluster_key_meta: fuse_table.cluster_key_meta.clone(),
+                        table_info,
+                    };
                 }
-
-                self.snapshot_gen
-                    .fill_default_values(schema, &previous)
-                    .await?;
-
-                self.state = State::GenerateSnapshot {
-                    previous,
-                    cluster_key_meta: fuse_table.cluster_key_meta.clone(),
-                    table_info,
-                };
             }
             State::TryLock => {
                 let table_info = self.table.get_table_info();
@@ -355,7 +366,7 @@ where F: SnapshotGenerator + Send + 'static
                         self.heartbeat.shutdown().await?;
                         self.state = State::Finish;
                     }
-                    Err(e) if FuseTable::is_error_recoverable(&e, self.transient) => {
+                    Err(e) if self.is_error_recoverable(&e) => {
                         let table_info = self.table.get_table_info();
                         match self.backoff.next_backoff() {
                             Some(d) => {
