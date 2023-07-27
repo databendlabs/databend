@@ -409,7 +409,7 @@ bucket = "databend"
 ```toml
 [storage]
 # s3
-type = "s3"
+type = "oss"
 
 [storage.s3]
 # How to create a bucket:
