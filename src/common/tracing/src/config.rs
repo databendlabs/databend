@@ -45,7 +45,7 @@ impl Config {
             },
             tracing: TracingConfig {
                 on: true,
-                log_level: "TRACE".to_string(),
+                capture_log_level: "TRACE".to_string(),
                 jaeger_endpoint: "http://localhost:14268/api/traces".to_string(),
             },
         }
@@ -139,18 +139,19 @@ impl Default for QueryLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TracingConfig {
     pub on: bool,
-    pub log_level: String,
+    pub capture_log_level: String,
     pub jaeger_endpoint: String,
 }
 
 impl TracingConfig {
     // TODO: make this config public instead of inferring from env.
     pub fn from_env() -> Self {
-        let log_level = std::env::var("TRACE_LOG").unwrap_or_else(|_| "INFO".to_string());
+        let capture_log_level = std::env::var("DATABEND_TRACING_CAPTURE_LOG_LEVEL")
+            .unwrap_or_else(|_| "INFO".to_string());
         let jaeger_endpoint = std::env::var("DATABEND_JAEGER_ENDPOINT");
         Self {
             on: jaeger_endpoint.is_ok(),
-            log_level,
+            capture_log_level,
             jaeger_endpoint: jaeger_endpoint.unwrap_or_default(),
         }
     }
@@ -160,14 +161,14 @@ impl Display for TracingConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}{}, log_level={}(To override: TRACE_LOG=info), jaeger_endpoint={}",
+            "enabled={}{}, capture_log_level={}(To override: DATABEND_TRACING_CAPTURE_LOG_LEVEL=info), jaeger_endpoint={}",
             self.on,
             if !self.on {
                 "(To enable: DATABEND_JAEGER_ENDPOINT=http://localhost:14268/api/traces)"
             } else {
                 ""
             },
-            self.log_level,
+            self.capture_log_level,
             self.jaeger_endpoint
         )
     }
@@ -177,7 +178,7 @@ impl Default for TracingConfig {
     fn default() -> Self {
         Self {
             on: false,
-            log_level: "INFO".to_string(),
+            capture_log_level: "INFO".to_string(),
             jaeger_endpoint: "".to_string(),
         }
     }

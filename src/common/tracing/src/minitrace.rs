@@ -104,7 +104,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
         normal_logger = normal_logger.chain(
             fern::Dispatch::new()
                 .level(cfg.stderr.level.parse().unwrap_or(LevelFilter::Info))
-                .format(formmater(&cfg.stderr.format))
+                .format(formatter(&cfg.stderr.format))
                 .chain(std::io::stderr()),
         )
     }
@@ -122,7 +122,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
         normal_logger = normal_logger.chain(
             fern::Dispatch::new()
                 .level(cfg.file.level.parse().unwrap_or(LevelFilter::Info))
-                .format(formmater(&cfg.file.format))
+                .format(formatter(&cfg.file.format))
                 .chain(Box::new(normal_log_file) as Box<dyn Write + Send>),
         );
     }
@@ -131,7 +131,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
     if cfg.tracing.on {
         let level = cfg
             .tracing
-            .log_level
+            .capture_log_level
             .parse()
             .ok()
             .unwrap_or(LevelFilter::Info);
@@ -186,7 +186,7 @@ fn init_tokio_console() {
     tracing::subscriber::set_global_default(subscriber).ok();
 }
 
-fn formmater(
+fn formatter(
     format: &str,
 ) -> fn(out: FormatCallback, message: &fmt::Arguments, record: &log::Record) {
     match format {
