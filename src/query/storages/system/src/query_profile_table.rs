@@ -74,6 +74,9 @@ fn encode_operator_attribute(attr: &OperatorAttribute) -> jsonb::Value {
         OperatorAttribute::TableScan(scan_attr) => {
             (&serde_json::json!({ "qualified_name": scan_attr.qualified_name })).into()
         }
+        OperatorAttribute::CteScan(cte_scan_attr) => {
+            (&serde_json::json!({ "cte_idx": cte_scan_attr.cte_idx })).into()
+        }
         OperatorAttribute::Sort(sort_attr) => {
             (&serde_json::json!({ "sort_keys": sort_attr.sort_keys })).into()
         }
