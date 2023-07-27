@@ -54,6 +54,7 @@ use common_meta_app::schema::ListCatalogReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListDroppedTableResp;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
@@ -133,6 +134,11 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: ListIndexesReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
+
+    async fn list_indexes_by_table_id(
+        &self,
+        req: ListIndexesByIdReq,
+    ) -> Result<Vec<u64>, KVAppError>;
 
     // virtual column
 
