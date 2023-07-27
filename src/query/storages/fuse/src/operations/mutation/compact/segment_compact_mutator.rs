@@ -291,6 +291,7 @@ impl<'a> SegmentCompactor<'a> {
             self.fragmented_segments.push((segment_info, location));
             self.compact_fragments().await?;
         } else {
+            // JackTan25: I think this won't happen, right? so need to remove this branch??
             // no choice but to compact the fragmented segments collected so far.
             // in this situation, after compaction, the size of compacted segments may be
             // lesser than threshold. this happens if the size of segment BEFORE compaction

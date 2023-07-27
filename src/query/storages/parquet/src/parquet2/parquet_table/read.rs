@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -33,23 +32,14 @@ use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 
 use super::ParquetTable;
-use crate::deserialize_transform::ParquetDeserializeTransform;
-use crate::deserialize_transform::ParquetPrewhereInfo;
+use crate::parquet2::parquet_reader::Parquet2Reader;
 use crate::parquet_part::ParquetPart;
-use crate::parquet_reader::ParquetReader;
-use crate::parquet_source::AsyncParquetSource;
-use crate::parquet_source::SyncParquetSource;
+use crate::processors::AsyncParquetSource;
+use crate::processors::ParquetDeserializeTransform;
+use crate::processors::ParquetPrewhereInfo;
+use crate::processors::SyncParquetSource;
 
 impl ParquetTable {
-    pub fn create_reader(&self, projection: Projection) -> Result<Arc<ParquetReader>> {
-        ParquetReader::create(
-            self.operator.clone(),
-            &self.arrow_schema,
-            &self.schema_descr,
-            projection,
-        )
-    }
-
     fn build_filter(filter: &RemoteExpr<String>, schema: &DataSchema) -> Expr {
         filter
             .as_expr(&BUILTIN_FUNCTIONS)
@@ -75,7 +65,7 @@ impl ParquetTable {
         let output_schema: Arc<DataSchema> = Arc::new(plan.schema().into());
 
         // Build the reader for parquet source.
-        let source_reader = ParquetReader::create(
+        let source_reader = Parquet2Reader::create(
             self.operator.clone(),
             &self.arrow_schema,
             &self.schema_descr,
@@ -111,7 +101,7 @@ impl ParquetTable {
         // Build remain reader.
         // If there is no prewhere filter, remain reader is the same as source reader  (no prewhere phase, deserialize directly).
         let remain_reader = if let Some(p) = &push_down_prewhere {
-            ParquetReader::create(
+            Parquet2Reader::create(
                 self.operator.clone(),
                 &self.arrow_schema,
                 &self.schema_descr,
@@ -123,7 +113,7 @@ impl ParquetTable {
 
         let prewhere_info = push_down_prewhere
             .map(|p| {
-                let reader = ParquetReader::create(
+                let reader = Parquet2Reader::create(
                     self.operator.clone(),
                     &self.arrow_schema,
                     &self.schema_descr,
@@ -176,7 +166,7 @@ impl ParquetTable {
                 prewhere_info.clone(),
                 source_reader.clone(),
                 remain_reader.clone(),
-                self.create_pruner(ctx.clone(), plan.push_downs.clone(), true)?,
+                Arc::new(self.create_pruner(ctx.clone(), plan.push_downs.clone(), true)?),
             )
         })
     }

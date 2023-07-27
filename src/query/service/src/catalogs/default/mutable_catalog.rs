@@ -60,6 +60,7 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
@@ -268,6 +269,11 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
         Ok(self.ctx.meta.list_indexes(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_indexes_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>> {
+        Ok(self.ctx.meta.list_indexes_by_table_id(req).await?)
     }
 
     // Virtual column

@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::default::Default;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -46,6 +47,7 @@ use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
+use common_expression::DataField;
 use common_expression::FunctionKind;
 use common_expression::Scalar;
 use common_expression::TableDataType;
@@ -71,6 +73,7 @@ use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
+use parking_lot::RwLock;
 
 use crate::binder::copy::parse_file_location;
 use crate::binder::scalar::ScalarBinder;
@@ -80,9 +83,11 @@ use crate::binder::ColumnBinding;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::CteScan;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
@@ -179,10 +184,46 @@ impl Binder {
                     None
                 };
                 // Check and bind common table expression
-                if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
-                    return self
-                        .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
-                        .await;
+                let ctes_map = bind_context.ctes_map.clone();
+                if let Some(cte_info) = ctes_map.get(&table_name) {
+                    return if !cte_info.materialized {
+                        self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                            .await
+                    } else {
+                        let mut new_bind_context = if cte_info.used_count == 0 {
+                            let (cte_s_expr, mut cte_bind_ctx) = self
+                                .bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                                .await?;
+                            cte_bind_ctx
+                                .materialized_ctes
+                                .insert((cte_info.cte_idx, cte_s_expr.clone()));
+                            let stat_info =
+                                RelExpr::with_s_expr(&cte_s_expr).derive_cardinality()?;
+                            // Add `materialized_cte` to bind_context.
+                            bind_context
+                                .materialized_ctes
+                                .insert((cte_info.cte_idx, cte_s_expr));
+                            bind_context.ctes_map.entry(table_name.clone()).and_modify(
+                                |cte_info| {
+                                    cte_info.stat_info = Some(stat_info);
+                                    cte_info.columns = cte_bind_ctx.columns.clone();
+                                },
+                            );
+                            cte_bind_ctx
+                        } else {
+                            bind_context.clone()
+                        };
+                        bind_context
+                            .ctes_map
+                            .entry(table_name.clone())
+                            .and_modify(|cte_info| {
+                                cte_info.used_count += 1;
+                            });
+                        new_bind_context.ctes_map = bind_context.ctes_map.clone();
+                        let s_expr =
+                            self.bind_cte_scan(bind_context.ctes_map.get(&table_name).unwrap())?;
+                        Ok((s_expr, new_bind_context))
+                    };
                 }
 
                 let tenant = self.ctx.get_tenant();
@@ -212,7 +253,7 @@ impl Binder {
                             }
                             if let Some(cte_info) = parent.unwrap().ctes_map.get(&table_name) {
                                 return self
-                                    .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
+                                    .bind_cte(*span, bind_context, &table_name, alias, cte_info)
                                     .await;
                             }
                             parent = parent.unwrap().parent.as_ref();
@@ -690,8 +731,32 @@ impl Binder {
         Ok((result_expr, result_ctx))
     }
 
+    fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
+        let blocks = Arc::new(RwLock::new(vec![]));
+        self.ctx
+            .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), blocks)?;
+        // Get the fields in the cte
+        let mut fields = vec![];
+        for column in cte_info.columns.iter() {
+            fields.push(DataField::new(
+                column.index.to_string().as_str(),
+                *column.data_type.clone(),
+            ))
+        }
+        let cte_scan = SExpr::create_leaf(Arc::new(
+            CteScan {
+                cte_idx: (cte_info.cte_idx, cte_info.used_count),
+                fields,
+                // It is safe to unwrap here because we have checked that the cte is materialized.
+                stat: cte_info.stat_info.clone().unwrap(),
+            }
+            .into(),
+        ));
+        Ok(cte_scan)
+    }
+
     #[async_backtrace::framed]
-    async fn bind_cte(
+    pub(crate) async fn bind_cte(
         &mut self,
         span: Span,
         bind_context: &BindContext,
@@ -706,7 +771,8 @@ impl Binder {
             aggregate_info: Default::default(),
             windows: Default::default(),
             in_grouping: false,
-            ctes_map: Box::new(DashMap::new()),
+            ctes_map: Box::default(),
+            materialized_ctes: HashSet::new(),
             view_info: None,
             srfs: Default::default(),
             expr_context: ExprContext::default(),

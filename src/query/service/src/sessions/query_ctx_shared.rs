@@ -23,6 +23,7 @@ use std::time::SystemTime;
 use common_base::base::Progress;
 use common_base::runtime::Runtime;
 use common_catalog::catalog::CatalogManager;
+use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -84,6 +85,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
+    /// Key is (cte index, used_count), value contains cte's materialized blocks
+    pub(in crate::sessions) materialized_cte_tables: MaterializedCtesBlocks,
 }
 
 impl QueryContextShared {
@@ -117,6 +120,7 @@ impl QueryContextShared {
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
+            materialized_cte_tables: Arc::new(Default::default()),
         }))
     }
 
