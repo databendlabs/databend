@@ -215,7 +215,9 @@ impl UnusedColumnPruner {
                 }
                 let projections = required.clone().into_iter().collect::<Vec<_>>();
                 Ok(SExpr::create_unary(
-                    Arc::new(RelOperator::Window(p.clone().replace_projections(projections))),
+                    Arc::new(RelOperator::Window(
+                        p.clone().replace_projections(projections),
+                    )),
                     Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                 ))
             }
