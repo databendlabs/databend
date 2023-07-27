@@ -11,15 +11,16 @@ test = false
 [dependencies]
 common-arrow = { path = "../../common/arrow" }
 common-base = { path = "../../common/base" }
+common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
 common-io = { path = "../../common/io" }
 common-meta-app = { path = "../../meta/app" }
+common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 common-pipeline-core = { path = "../pipeline/core" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
-common-meta-store = { path = "../../meta/store" }
 
 async-backtrace = { workspace = true }
 async-trait = "0.1.57"
