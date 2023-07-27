@@ -203,6 +203,21 @@ impl ListIndexesReq {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ListIndexesByIdReq {
+    pub tenant: String,
+    pub table_id: MetaId,
+}
+
+impl ListIndexesByIdReq {
+    pub fn new(tenant: impl Into<String>, table_id: MetaId) -> Self {
+        Self {
+            tenant: tenant.into(),
+            table_id,
+        }
+    }
+}
+
 mod kvapi_key_impl {
     use common_meta_kvapi::kvapi;
 
