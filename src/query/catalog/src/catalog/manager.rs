@@ -131,8 +131,14 @@ impl CatalogManager {
     ///
     /// Trying to create default catalog will return an error.
     #[async_backtrace::framed]
-    pub async fn create_catalog(&self, _: CreateCatalogReq) -> Result<()> {
-        todo!()
+    pub async fn create_catalog(&self, req: CreateCatalogReq) -> Result<()> {
+        if req.catalog_name() == CATALOG_DEFAULT {
+            return Err(ErrorCode::BadArguments(
+                "default catalog cannot be created".to_string(),
+            ));
+        }
+
+        self.meta.create_catalog(req).await
     }
 
     /// Drop a catalog.
@@ -141,7 +147,7 @@ impl CatalogManager {
     ///
     /// Trying to drop default catalog will return an error.
     #[async_backtrace::framed]
-    pub async fn drop_catalog(&self, _: DropCatalogReq) -> Result<()> {
+    pub async fn drop_catalog(&self, req: DropCatalogReq) -> Result<()> {
         todo!()
     }
 
