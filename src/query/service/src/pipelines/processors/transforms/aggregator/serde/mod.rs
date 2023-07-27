@@ -37,3 +37,38 @@ pub use transform_group_by_serializer::TransformGroupBySerializer;
 pub use transform_group_by_spill_writer::TransformGroupBySpillWriter;
 pub use transform_spill_reader::TransformAggregateSpillReader;
 pub use transform_spill_reader::TransformGroupBySpillReader;
+
+pub mod exchange_defines {
+    use common_arrow::arrow::io::flight::default_ipc_fields;
+    use common_arrow::arrow::io::flight::WriteOptions;
+    use common_arrow::arrow::io::ipc::IpcField;
+    use common_expression::types::DataType;
+    use common_expression::types::NumberDataType;
+    use common_expression::DataField;
+    use common_expression::DataSchema;
+    use once_cell::sync::OnceCell;
+
+    pub fn spilled_ipc_fields() -> &'static [IpcField] {
+        static IPC_FIELDS: OnceCell<Vec<IpcField>> = OnceCell::new();
+
+        IPC_FIELDS.get_or_init(|| {
+            let schema = DataSchema::new(vec![
+                DataField::new("bucket", DataType::Number(NumberDataType::Int64)),
+                DataField::new("data_range_start", DataType::Number(NumberDataType::UInt64)),
+                DataField::new("data_range_end", DataType::Number(NumberDataType::UInt64)),
+                DataField::new(
+                    "columns_layout",
+                    DataType::Array(Box::new(DataType::Number(NumberDataType::UInt64))),
+                ),
+            ]);
+
+            let arrow_schema = schema.to_arrow();
+            default_ipc_fields(&arrow_schema.fields)
+        })
+    }
+
+    pub fn spilled_write_options() -> &'static WriteOptions {
+        static WRITE_OPTIONS: WriteOptions = WriteOptions { compression: None };
+        &WRITE_OPTIONS
+    }
+}

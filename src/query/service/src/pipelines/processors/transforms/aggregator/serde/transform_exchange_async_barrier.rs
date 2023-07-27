@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
+use common_exception::{ErrorCode, Result};
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
@@ -58,9 +58,11 @@ impl AsyncTransform for TransformExchangeAsyncBarrier {
                 });
             }
 
-            Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
+            return Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
                 futures::future::try_join_all(futures).await?,
-            )))
+            )));
         }
+
+        Err(ErrorCode::Internal(""))
     }
 }

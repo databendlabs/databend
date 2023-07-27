@@ -12,17 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
 use common_exception::Result;
-use common_expression::{BlockMetaInfoDowncast, DataSchemaRef};
+use common_expression::{BlockEntry, BlockMetaInfoDowncast, DataSchemaRef, FromData};
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
 use futures_util::future::BoxFuture;
 use opendal::Operator;
@@ -31,7 +28,8 @@ use common_arrow::arrow::io::flight::{default_ipc_fields, WriteOptions};
 use common_arrow::arrow::io::ipc::IpcField;
 use common_base::base::GlobalUniqName;
 use common_expression::arrow::serialize_column;
-use common_pipeline_transforms::processors::transforms::{AsyncTransform, BlockMetaTransform, BlockMetaTransformer};
+use common_expression::types::{ArgType, ArrayType, Int64Type, UInt64Type, ValueType};
+use common_pipeline_transforms::processors::transforms::{BlockMetaTransform, BlockMetaTransformer};
 
 use crate::api::{ExchangeShuffleMeta, serialize_block};
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::{AggregateMeta, HashTablePayload};
@@ -40,6 +38,8 @@ use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_serializer::{serialize_aggregate, SerializeAggregateStream};
 use crate::pipelines::processors::transforms::aggregator::serde::transform_exchange_group_by_serializer::{FlightSerialized, FlightSerializedMeta};
 use crate::pipelines::processors::transforms::metrics::{metrics_inc_aggregate_spill_data_serialize_milliseconds, metrics_inc_aggregate_spill_write_bytes, metrics_inc_aggregate_spill_write_count, metrics_inc_aggregate_spill_write_milliseconds};
+use common_hashtable::HashtableLike;
+use crate::pipelines::processors::transforms::aggregator::serde::exchange_defines;
 
 pub struct TransformExchangeAggregateSerializer<Method: HashMethodBounds> {
     method: Method,
@@ -130,6 +130,10 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
     }
 }
 
+fn get_columns(data_block: DataBlock) -> Vec<BlockEntry> {
+    data_block.columns().to_vec()
+}
+
 fn spilling_aggregate_payload<Method: HashMethodBounds>(
     operator: Operator,
     method: &Method,
@@ -142,17 +146,20 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
 
     let mut write_size = 0;
     let mut write_data = Vec::with_capacity(256);
-    let mut spilled_blocks = VecDeque::with_capacity(256);
+    let mut buckets_column_data = Vec::with_capacity(256);
+    let mut data_range_start_column_data = Vec::with_capacity(256);
+    let mut data_range_end_column_data = Vec::with_capacity(256);
+    let mut columns_layout_column_data = Vec::with_capacity(256);
+
     for (bucket, inner_table) in payload.cell.hashtable.iter_tables_mut().enumerate() {
         if inner_table.len() == 0 {
-            spilled_blocks.push_back(DataBlock::empty());
             continue;
         }
 
         let now = Instant::now();
         let data_block = serialize_aggregate(method, params, inner_table)?;
 
-        let begin = write_size;
+        let old_write_size = write_size;
         let columns = get_columns(data_block);
         let mut columns_data = Vec::with_capacity(columns.len());
         let mut columns_layout = Vec::with_capacity(columns.len());
@@ -161,7 +168,7 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
             let column = column.value.as_column().unwrap();
             let column_data = serialize_column(column);
             write_size += column_data.len() as u64;
-            columns_layout.push(column_data.len());
+            columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);
         }
 
@@ -173,22 +180,16 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
         }
 
         write_data.push(columns_data);
-        spilled_blocks.push_back(DataBlock::empty_with_meta(
-            AggregateMeta::<Method, usize>::create_spilled(
-                bucket as isize,
-                location.clone(),
-                begin..write_size,
-                columns_layout,
-            ),
-        ));
+        buckets_column_data.push(bucket as i64);
+        data_range_end_column_data.push(write_size);
+        columns_layout_column_data.push(columns_layout);
+        data_range_start_column_data.push(old_write_size);
     }
 
     Ok(Box::pin(async move {
-        let instant = Instant::now();
-
-        let mut write_bytes = 0;
-
         if !write_data.is_empty() {
+            let instant = Instant::now();
+            let mut write_bytes = 0;
             let mut writer = operator.writer(&location).await?;
             for write_bucket_data in write_data.into_iter() {
                 for data in write_bucket_data.into_iter() {
@@ -198,21 +199,41 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
             }
 
             writer.close().await?;
+
+            // perf
+            {
+                metrics_inc_aggregate_spill_write_count();
+                metrics_inc_aggregate_spill_write_bytes(write_bytes as u64);
+                metrics_inc_aggregate_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+            }
+
+            info!(
+                "Write aggregate spill {} successfully, elapsed: {:?}",
+                location,
+                instant.elapsed()
+            );
+
+            let data_block = DataBlock::new_from_columns(vec![
+                Int64Type::from_data(buckets_column_data),
+                UInt64Type::from_data(data_range_start_column_data),
+                UInt64Type::from_data(data_range_end_column_data),
+                ArrayType::upcast_column(ArrayType::<UInt64Type>::column_from_iter(
+                    columns_layout_column_data
+                        .into_iter()
+                        .map(|x| UInt64Type::column_from_iter(x.into_iter(), &[])),
+                    &[],
+                )),
+            ]);
+
+            let data_block = data_block.add_meta(Some(
+                AggregateMeta::<Method, usize>::create_spilled(-1, location.clone(), 0..0, vec![]),
+            ))?;
+
+            let ipc_fields = exchange_defines::spilled_ipc_fields();
+            let write_options = exchange_defines::spilled_write_options();
+            return serialize_block(-1, data_block, ipc_fields, write_options);
         }
 
-        // perf
-        {
-            metrics_inc_aggregate_spill_write_count();
-            metrics_inc_aggregate_spill_write_bytes(write_bytes as u64);
-            metrics_inc_aggregate_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
-        }
-
-        info!(
-            "Write aggregate spill {} successfully, elapsed: {:?}",
-            location,
-            instant.elapsed()
-        );
-
-        Ok(())
+        Ok(DataBlock::empty())
     }))
 }
