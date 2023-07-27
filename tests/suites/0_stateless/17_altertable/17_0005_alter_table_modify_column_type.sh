@@ -11,7 +11,7 @@ echo "INSERT INTO test_modify_column_type.a values('1', 2, 3)"  | $MYSQL_CLIENT_
 echo "SELECT a,b,c from test_modify_column_type.a"  | $MYSQL_CLIENT_CONNECT
 echo "DESC test_modify_column_type.a"  | $MYSQL_CLIENT_CONNECT
 
-echo "alter table test_modify_column_type.a modify column a float, b String"  | $MYSQL_CLIENT_CONNECT
+echo "alter table test_modify_column_type.a modify column a float, column b String"  | $MYSQL_CLIENT_CONNECT
 echo "SELECT a,b from test_modify_column_type.a"  | $MYSQL_CLIENT_CONNECT
 echo "DESC test_modify_column_type.a"  | $MYSQL_CLIENT_CONNECT
 
