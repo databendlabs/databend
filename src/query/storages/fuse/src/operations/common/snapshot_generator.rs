@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
+use ahash::HashSet;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -357,7 +358,7 @@ impl SnapshotGenerator for AppendGenerator {
         previous: Option<Arc<TableSnapshot>>,
     ) -> Result<TableSnapshot> {
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
-        if expected_schema != &schema {
+        if is_column_type_modified(&schema, expected_schema) {
             return Err(ErrorCode::UnresolvableConflict(format!(
                 "schema was changed during insert, expected:{:?}, actual:{:?}",
                 expected_schema, schema
@@ -424,4 +425,20 @@ impl SnapshotGenerator for AppendGenerator {
             table_statistics_location,
         ))
     }
+}
+
+fn is_column_type_modified(schema: &TableSchema, expected_schema: &TableSchema) -> bool {
+    let expected: HashMap<_, _> = expected_schema
+        .fields()
+        .iter()
+        .map(|f| (f.column_id, &f.data_type))
+        .collect();
+    for field in schema.fields() {
+        if let Some(ty) = expected.get(&field.column_id) {
+            if **ty != field.data_type {
+                return true;
+            }
+        }
+    }
+    false
 }
