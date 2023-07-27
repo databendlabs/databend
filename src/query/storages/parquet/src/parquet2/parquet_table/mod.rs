@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
+mod blocking_create;
+mod non_blocking_create;
+mod partition;
+mod read;
+mod table;
 
-mod parquet2;
-mod parquet_part;
-mod parquet_reader;
-mod processors;
-
-pub use parquet2::ParquetTable;
-pub(crate) use parquet_part::ParquetPart;
+pub(crate) use table::arrow_to_table_schema;
+pub use table::ParquetTable;

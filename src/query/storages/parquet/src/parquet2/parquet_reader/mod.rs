@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
+mod deserialize;
+mod filter;
+mod reader;
 
-mod parquet2;
-mod parquet_part;
-mod parquet_reader;
-mod processors;
-
-pub use parquet2::ParquetTable;
-pub(crate) use parquet_part::ParquetPart;
+pub use reader::Parquet2Reader;

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod deserialize;
-mod filter;
-mod reader;
+mod deserialize_transform;
+mod parquet_source;
 
-pub use reader::DataReader;
-pub use reader::IndexedChunk;
-pub use reader::IndexedReaders;
-pub use reader::ParquetPartData;
-pub use reader::ParquetReader;
+pub(crate) use deserialize_transform::ParquetDeserializeTransform;
+pub(crate) use deserialize_transform::ParquetPrewhereInfo;
+pub(crate) use deserialize_transform::SmallFilePrunner;
+pub(crate) use parquet_source::AsyncParquetSource;
+pub(crate) use parquet_source::ParquetSourceMeta;
+pub(crate) use parquet_source::SyncParquetSource;

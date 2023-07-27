@@ -81,14 +81,14 @@ impl BlockMetaInfo for ParquetSourceMeta {
 
 pub struct SyncParquetSource {
     ctx: Arc<dyn TableContext>,
-    block_reader: Arc<ParquetReader>,
+    block_reader: Arc<dyn ParquetReader>,
 }
 
 impl SyncParquetSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        block_reader: Arc<ParquetReader>,
+        block_reader: Arc<dyn ParquetReader>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx.clone(), output, SyncParquetSource { ctx, block_reader })
     }
@@ -117,7 +117,7 @@ impl SyncSource for SyncParquetSource {
 pub struct AsyncParquetSource {
     finished: bool,
     ctx: Arc<dyn TableContext>,
-    block_reader: Arc<ParquetReader>,
+    block_reader: Arc<dyn ParquetReader>,
 
     output: Arc<OutputPort>,
     output_data: Option<Vec<(PartInfoPtr, ParquetPartData)>>,
@@ -127,7 +127,7 @@ impl AsyncParquetSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        block_reader: Arc<ParquetReader>,
+        block_reader: Arc<dyn ParquetReader>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(AsyncParquetSource {
             ctx,
