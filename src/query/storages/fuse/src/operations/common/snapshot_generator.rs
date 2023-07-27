@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
-use ahash::HashSet;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
