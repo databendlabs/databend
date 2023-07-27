@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Read;
 use std::io::Seek;
-use std::mem;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Field as ArrowField;
@@ -29,6 +28,7 @@ use common_arrow::parquet::indexes::Interval;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::metadata::SchemaDescriptor;
+use common_arrow::parquet::read::read_metadata_with_size;
 use common_arrow::parquet::read::read_pages_locations;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -47,12 +47,13 @@ use opendal::Operator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 
+use crate::parquet2::statistics::collect_row_group_stats;
+use crate::parquet2::statistics::BatchStatistics;
+use crate::parquet_part::collect_small_file_parts;
 use crate::parquet_part::ColumnMeta;
 use crate::parquet_part::ParquetPart;
 use crate::parquet_part::ParquetRowGroupPart;
-use crate::parquet_part::ParquetSmallFilesPart;
-use crate::statistics::collect_row_group_stats;
-use crate::statistics::BatchStatistics;
+use crate::processors::SmallFilePrunner;
 
 /// Prune parquet row groups and pages.
 pub struct PartitionPruner {
@@ -93,6 +94,23 @@ fn check_parquet_schema(
         )));
     }
     Ok(())
+}
+
+impl SmallFilePrunner for PartitionPruner {
+    fn prune_one_file(
+        &self,
+        path: &str,
+        op: &Operator,
+        file_size: u64,
+    ) -> Result<Vec<ParquetRowGroupPart>> {
+        let blocking_op = op.blocking();
+        let mut reader = blocking_op.reader(path)?;
+        let file_meta = read_metadata_with_size(&mut reader, file_size).map_err(|e| {
+            ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
+        })?;
+        let (_, parts) = self.read_and_prune_file_meta(path, file_meta, op.clone())?;
+        Ok(parts)
+    }
 }
 
 impl PartitionPruner {
@@ -310,60 +328,6 @@ impl PartitionPruner {
     }
 }
 
-/// files smaller than setting fast_read_part_bytes is small file,
-/// which is load in one read, without reading its meta in advance.
-/// some considerations:
-/// 1. to fully utilize the IO, multiple small files are loaded in one part.
-/// 2. to avoid OOM, the total size of small files in one part is limited,
-///    and we need compression_ratio to estimate the uncompressed size.
-fn collect_small_file_parts(
-    small_files: Vec<(String, u64)>,
-    mut max_compression_ratio: f64,
-    mut max_compressed_size: u64,
-    partitions: &mut Vec<ParquetPart>,
-    stats: &mut PartStatistics,
-    num_columns_to_read: usize,
-) {
-    if max_compression_ratio <= 0.0 || max_compression_ratio >= 1.0 {
-        // just incase
-        max_compression_ratio = 1.0;
-    }
-    if max_compressed_size == 0 {
-        // there are no large files, so we choose a default value.
-        max_compressed_size = ((128usize << 20) as f64 / max_compression_ratio) as u64;
-    }
-    let mut num_small_files = small_files.len();
-    stats.read_rows += num_small_files;
-    let mut small_part = vec![];
-    let mut part_size = 0;
-    let mut make_small_files_part = |files: Vec<(String, u64)>, part_size| {
-        let estimated_uncompressed_size = (part_size as f64 / max_compression_ratio) as u64;
-        num_small_files -= files.len();
-        partitions.push(ParquetPart::SmallFiles(ParquetSmallFilesPart {
-            files,
-            estimated_uncompressed_size,
-        }));
-        stats.partitions_scanned += 1;
-        stats.partitions_total += 1;
-    };
-    let max_files = num_columns_to_read * 2;
-    for (path, size) in small_files.into_iter() {
-        stats.read_bytes += size as usize;
-        if !small_part.is_empty()
-            && (part_size + size > max_compressed_size || small_part.len() + 1 >= max_files)
-        {
-            make_small_files_part(mem::take(&mut small_part), part_size);
-            part_size = 0;
-        }
-        small_part.push((path, size));
-        part_size += size;
-    }
-    if !small_part.is_empty() {
-        make_small_files_part(mem::take(&mut small_part), part_size);
-    }
-    assert_eq!(num_small_files, 0);
-}
-
 /// [`RangePruner`]s for each column
 type ColumnRangePruners = Vec<(usize, Arc<dyn RangePruner + Send + Sync>)>;
 
@@ -557,11 +521,11 @@ mod tests {
     use common_storage::ColumnNodes;
     use storages_common_pruner::RangePrunerCreator;
 
-    use crate::pruning::and_intervals;
-    use crate::pruning::build_column_page_pruners;
-    use crate::pruning::combine_intervals;
-    use crate::pruning::filter_pages;
-    use crate::statistics::collect_row_group_stats;
+    use crate::parquet2::pruning::and_intervals;
+    use crate::parquet2::pruning::build_column_page_pruners;
+    use crate::parquet2::pruning::combine_intervals;
+    use crate::parquet2::pruning::filter_pages;
+    use crate::parquet2::statistics::collect_row_group_stats;
 
     #[test]
     fn test_and_intervals() {

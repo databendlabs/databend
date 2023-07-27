@@ -65,7 +65,8 @@ impl From<&TableField> for ArrowField {
                 let ty = set_nullable(&ty);
                 ArrowField::new(f.name(), ty, f.is_nullable())
             }
-            _ => ArrowField::new(f.name(), ty, f.is_nullable()),
+            // if datatype is null, need to set nullable to true
+            _ => ArrowField::new(f.name(), ty, f.is_nullable_or_null()),
         }
     }
 }
