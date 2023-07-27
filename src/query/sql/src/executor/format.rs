@@ -396,6 +396,9 @@ fn eval_scalar_to_format_tree(
     metadata: &MetadataRef,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
+    if plan.exprs.is_empty() {
+        return to_format_tree(&plan.input, metadata, prof_span_set);
+    }
     let scalars = plan
         .exprs
         .iter()

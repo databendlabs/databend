@@ -91,7 +91,7 @@ where Self: Transform
         }
 
         let func_ctx = ctx.get_function_context()?;
-        let projections = (0..=output_schema.fields().len()).collect::<ColumnSet>();
+        let projections = (0..=(input_schema.fields().len() + output_schema.fields().len())).collect::<ColumnSet>();
         let expression_transform = CompoundBlockOperator {
             ctx: func_ctx,
             operators: vec![BlockOperator::Map { projections, exprs }],

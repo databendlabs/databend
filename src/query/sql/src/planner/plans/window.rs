@@ -64,6 +64,8 @@ pub struct Window {
     pub order_by: Vec<WindowOrderByInfo>,
     // window frames
     pub frame: WindowFuncFrame,
+    // column indexes required
+    pub projections: Vec<usize>,
 }
 
 impl Window {
@@ -89,6 +91,11 @@ impl Window {
         }
 
         Ok(used_columns)
+    }
+
+    pub fn replace_projections(mut self, projections: Vec<usize>) -> Self {
+        self.projections = projections;
+        self
     }
 }
 

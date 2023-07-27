@@ -13,75 +13,38 @@ create table t2 as select number as a, number as b from numbers(5)
 query T
 explain select t1.a from t1 where a > 0
 ----
-EvalScalar
-├── expressions: [t1.a (#0)]
-├── estimated rows: 0.20
-└── TableScan
-    ├── table: default.default.t1
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 1
-    ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
-    ├── output columns: [a]
-    └── estimated rows: 0.20
+TableScan
+├── table: default.default.t1
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 1
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
+├── output columns: [a]
+└── estimated rows: 0.20
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1)
 ----
-EvalScalar
-├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+Filter
+├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
 ├── estimated rows: 0.13
-└── Filter
-    ├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
-    ├── estimated rows: 0.13
-    └── HashJoin
-        ├── join type: INNER
-        ├── build keys: [t1.a (#0)]
-        ├── probe keys: [t2.a (#2)]
-        ├── filters: []
-        ├── estimated rows: 0.35
-        ├── TableScan(Build)
-        │   ├── table: default.default.t1
-        │   ├── read rows: 0
-        │   ├── read bytes: 0
-        │   ├── partitions total: 1
-        │   ├── partitions scanned: 0
-        │   ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
-        │   ├── push downs: [filters: [t1.a (#0) > 3 OR t1.a (#0) > 1], limit: NONE]
-        │   └── estimated rows: 0.36
-        └── TableScan(Probe)
-            ├── table: default.default.t2
-            ├── read rows: 5
-            ├── read bytes: 68
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [t2.a (#2) > 3 OR t2.a (#2) > 1], limit: NONE]
-            └── estimated rows: 3.89
-
-query T
-explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a)
-----
-EvalScalar
-├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 1.00
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t1.a (#0)]
     ├── probe keys: [t2.a (#2)]
     ├── filters: []
-    ├── estimated rows: 1.00
+    ├── estimated rows: 0.35
     ├── TableScan(Build)
     │   ├── table: default.default.t1
-    │   ├── read rows: 1
-    │   ├── read bytes: 36
+    │   ├── read rows: 0
+    │   ├── read bytes: 0
     │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │   ├── push downs: [filters: [], limit: NONE]
-    │   └── estimated rows: 1.00
+    │   ├── partitions scanned: 0
+    │   ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+    │   ├── push downs: [filters: [t1.a (#0) > 3 OR t1.a (#0) > 1], limit: NONE]
+    │   └── estimated rows: 0.36
     └── TableScan(Probe)
         ├── table: default.default.t2
         ├── read rows: 5
@@ -89,8 +52,36 @@ EvalScalar
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 5.00
+        ├── push downs: [filters: [t2.a (#2) > 3 OR t2.a (#2) > 1], limit: NONE]
+        └── estimated rows: 3.89
+
+query T
+explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a)
+----
+HashJoin
+├── join type: INNER
+├── build keys: [t1.a (#0)]
+├── probe keys: [t2.a (#2)]
+├── filters: []
+├── estimated rows: 1.00
+├── TableScan(Build)
+│   ├── table: default.default.t1
+│   ├── read rows: 1
+│   ├── read bytes: 36
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 1.00
+└── TableScan(Probe)
+    ├── table: default.default.t2
+    ├── read rows: 5
+    ├── read bytes: 68
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 5.00
 
 query T
 explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a)
@@ -557,252 +548,64 @@ explain select a from t1 UNION ALL select a from t2
 ----
 UnionAll
 ├── estimated rows: 6.00
-├── EvalScalar
-│   ├── expressions: [t1.a (#0)]
-│   ├── estimated rows: 1.00
-│   └── TableScan
-│       ├── table: default.default.t1
-│       ├── read rows: 1
-│       ├── read bytes: 18
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [], limit: NONE]
-│       ├── output columns: [a]
-│       └── estimated rows: 1.00
-└── EvalScalar
-    ├── expressions: [t2.a (#2)]
-    ├── estimated rows: 5.00
-    └── TableScan
-        ├── table: default.default.t2
-        ├── read rows: 5
-        ├── read bytes: 34
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [], limit: NONE]
-        ├── output columns: [a]
-        └── estimated rows: 5.00
+├── TableScan
+│   ├── table: default.default.t1
+│   ├── read rows: 1
+│   ├── read bytes: 18
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   ├── output columns: [a]
+│   └── estimated rows: 1.00
+└── TableScan
+    ├── table: default.default.t2
+    ├── read rows: 5
+    ├── read bytes: 34
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── output columns: [a]
+    └── estimated rows: 5.00
 
 query T
 explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4)
 ----
-EvalScalar
-├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+Filter
+├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
 ├── estimated rows: 0.54
-└── Filter
-    ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-    ├── estimated rows: 0.54
-    └── HashJoin
-        ├── join type: CROSS
-        ├── build keys: []
-        ├── probe keys: []
-        ├── filters: []
-        ├── estimated rows: 1.50
-        ├── TableScan(Build)
-        │   ├── table: default.default.t1
-        │   ├── read rows: 1
-        │   ├── read bytes: 36
-        │   ├── partitions total: 1
-        │   ├── partitions scanned: 1
-        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        │   ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 3], limit: NONE]
-        │   └── estimated rows: 0.36
-        └── TableScan(Probe)
-            ├── table: default.default.t2
-            ├── read rows: 5
-            ├── read bytes: 68
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
-            └── estimated rows: 4.17
-
-query T
-explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t1.a = 2
-----
-EvalScalar
-├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 0.65
-└── Filter
-    ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t1.a (#0) = 2]
-    ├── estimated rows: 0.65
-    └── HashJoin
-        ├── join type: CROSS
-        ├── build keys: []
-        ├── probe keys: []
-        ├── filters: []
-        ├── estimated rows: 1.80
-        ├── TableScan(Build)
-        │   ├── table: default.default.t1
-        │   ├── read rows: 1
-        │   ├── read bytes: 36
-        │   ├── partitions total: 1
-        │   ├── partitions scanned: 1
-        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-        │   ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 3 OR t1.a (#0) = 2], limit: NONE]
-        │   └── estimated rows: 0.36
-        └── TableScan(Probe)
-            ├── table: default.default.t2
-            ├── read rows: 5
-            ├── read bytes: 68
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 5.00
-
-statement ok
-drop table if exists t3
-
-statement ok
-create table t3 as select number as a, number as b from numbers(10)
-
-query T
-explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t3.a = 2
-----
-EvalScalar
-├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3), t3.a (#4), t3.b (#5)]
-├── estimated rows: 21.20
-└── Filter
-    ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t3.a (#4) = 2]
-    ├── estimated rows: 21.20
-    └── HashJoin
-        ├── join type: CROSS
-        ├── build keys: []
-        ├── probe keys: []
-        ├── filters: []
-        ├── estimated rows: 50.00
-        ├── HashJoin(Build)
-        │   ├── join type: CROSS
-        │   ├── build keys: []
-        │   ├── probe keys: []
-        │   ├── filters: []
-        │   ├── estimated rows: 5.00
-        │   ├── TableScan(Build)
-        │   │   ├── table: default.default.t1
-        │   │   ├── read rows: 1
-        │   │   ├── read bytes: 36
-        │   │   ├── partitions total: 1
-        │   │   ├── partitions scanned: 1
-        │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        │   │   ├── push downs: [filters: [], limit: NONE]
-        │   │   └── estimated rows: 1.00
-        │   └── TableScan(Probe)
-        │       ├── table: default.default.t2
-        │       ├── read rows: 5
-        │       ├── read bytes: 68
-        │       ├── partitions total: 1
-        │       ├── partitions scanned: 1
-        │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        │       ├── push downs: [filters: [], limit: NONE]
-        │       └── estimated rows: 5.00
-        └── TableScan(Probe)
-            ├── table: default.default.t3
-            ├── read rows: 10
-            ├── read bytes: 108
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 10.00
-
-query T
-explain select * from t1,t2, t3 where ((t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4)) and t3.a > 1
-----
-EvalScalar
-├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3), t3.a (#4), t3.b (#5)]
-├── estimated rows: 4.42
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── estimated rows: 4.42
-    ├── Filter(Build)
-    │   ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-    │   ├── estimated rows: 0.54
-    │   └── HashJoin
-    │       ├── join type: CROSS
-    │       ├── build keys: []
-    │       ├── probe keys: []
-    │       ├── filters: []
-    │       ├── estimated rows: 1.50
-    │       ├── TableScan(Build)
-    │       │   ├── table: default.default.t1
-    │       │   ├── read rows: 1
-    │       │   ├── read bytes: 36
-    │       │   ├── partitions total: 1
-    │       │   ├── partitions scanned: 1
-    │       │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       │   ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 3], limit: NONE]
-    │       │   └── estimated rows: 0.36
-    │       └── TableScan(Probe)
-    │           ├── table: default.default.t2
-    │           ├── read rows: 5
-    │           ├── read bytes: 68
-    │           ├── partitions total: 1
-    │           ├── partitions scanned: 1
-    │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │           ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
-    │           └── estimated rows: 4.17
+    ├── estimated rows: 1.50
+    ├── TableScan(Build)
+    │   ├── table: default.default.t1
+    │   ├── read rows: 1
+    │   ├── read bytes: 36
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │   ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 3], limit: NONE]
+    │   └── estimated rows: 0.36
     └── TableScan(Probe)
-        ├── table: default.default.t3
-        ├── read rows: 10
-        ├── read bytes: 108
+        ├── table: default.default.t2
+        ├── read rows: 5
+        ├── read bytes: 68
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [t3.a (#4) > 1], limit: NONE]
-        └── estimated rows: 8.18
+        ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
+        └── estimated rows: 4.17
 
 query T
-explain select * from t1,t2 where ((t1.a > 1 or t1.b < 2) and t2.a > 2) or (t1.b < 3 and t2.b < 4) order by 1 desc limit 3
+explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t1.a = 2
 ----
-EvalScalar
-├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 0.99
-└── Limit
-    ├── limit: 3
-    ├── offset: 0
-    ├── estimated rows: 0.99
-    └── Sort
-        ├── sort keys: [a DESC NULLS LAST]
-        ├── estimated rows: 0.99
-        └── Filter
-            ├── filters: [(t1.a (#0) > 1 OR t1.b (#1) < 2) AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-            ├── estimated rows: 0.99
-            └── HashJoin
-                ├── join type: CROSS
-                ├── build keys: []
-                ├── probe keys: []
-                ├── filters: []
-                ├── estimated rows: 2.03
-                ├── TableScan(Build)
-                │   ├── table: default.default.t1
-                │   ├── read rows: 1
-                │   ├── read bytes: 36
-                │   ├── partitions total: 1
-                │   ├── partitions scanned: 1
-                │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                │   ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 2 OR t1.b (#1) < 3], limit: NONE]
-                │   └── estimated rows: 0.49
-                └── TableScan(Probe)
-                    ├── table: default.default.t2
-                    ├── read rows: 5
-                    ├── read bytes: 68
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
-                    └── estimated rows: 4.17
-
-query T
-explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2)
-----
-EvalScalar
-├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 1.80
+Filter
+├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t1.a (#0) = 2]
+├── estimated rows: 0.65
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
@@ -815,8 +618,8 @@ EvalScalar
     │   ├── read bytes: 36
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
-    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │   ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 2], limit: NONE]
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+    │   ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 3 OR t1.a (#0) = 2], limit: NONE]
     │   └── estimated rows: 0.36
     └── TableScan(Probe)
         ├── table: default.default.t2
@@ -827,6 +630,170 @@ EvalScalar
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 5.00
+
+statement ok
+drop table if exists t3
+
+statement ok
+create table t3 as select number as a, number as b from numbers(10)
+
+query T
+explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t3.a = 2
+----
+Filter
+├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t3.a (#4) = 2]
+├── estimated rows: 21.20
+└── HashJoin
+    ├── join type: CROSS
+    ├── build keys: []
+    ├── probe keys: []
+    ├── filters: []
+    ├── estimated rows: 50.00
+    ├── HashJoin(Build)
+    │   ├── join type: CROSS
+    │   ├── build keys: []
+    │   ├── probe keys: []
+    │   ├── filters: []
+    │   ├── estimated rows: 5.00
+    │   ├── TableScan(Build)
+    │   │   ├── table: default.default.t1
+    │   │   ├── read rows: 1
+    │   │   ├── read bytes: 36
+    │   │   ├── partitions total: 1
+    │   │   ├── partitions scanned: 1
+    │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │   │   ├── push downs: [filters: [], limit: NONE]
+    │   │   └── estimated rows: 1.00
+    │   └── TableScan(Probe)
+    │       ├── table: default.default.t2
+    │       ├── read rows: 5
+    │       ├── read bytes: 68
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 5.00
+    └── TableScan(Probe)
+        ├── table: default.default.t3
+        ├── read rows: 10
+        ├── read bytes: 108
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 10.00
+
+query T
+explain select * from t1,t2, t3 where ((t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4)) and t3.a > 1
+----
+HashJoin
+├── join type: CROSS
+├── build keys: []
+├── probe keys: []
+├── filters: []
+├── estimated rows: 4.42
+├── Filter(Build)
+│   ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
+│   ├── estimated rows: 0.54
+│   └── HashJoin
+│       ├── join type: CROSS
+│       ├── build keys: []
+│       ├── probe keys: []
+│       ├── filters: []
+│       ├── estimated rows: 1.50
+│       ├── TableScan(Build)
+│       │   ├── table: default.default.t1
+│       │   ├── read rows: 1
+│       │   ├── read bytes: 36
+│       │   ├── partitions total: 1
+│       │   ├── partitions scanned: 1
+│       │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       │   ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 3], limit: NONE]
+│       │   └── estimated rows: 0.36
+│       └── TableScan(Probe)
+│           ├── table: default.default.t2
+│           ├── read rows: 5
+│           ├── read bytes: 68
+│           ├── partitions total: 1
+│           ├── partitions scanned: 1
+│           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│           ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
+│           └── estimated rows: 4.17
+└── TableScan(Probe)
+    ├── table: default.default.t3
+    ├── read rows: 10
+    ├── read bytes: 108
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [t3.a (#4) > 1], limit: NONE]
+    └── estimated rows: 8.18
+
+query T
+explain select * from t1,t2 where ((t1.a > 1 or t1.b < 2) and t2.a > 2) or (t1.b < 3 and t2.b < 4) order by 1 desc limit 3
+----
+Limit
+├── limit: 3
+├── offset: 0
+├── estimated rows: 0.99
+└── Sort
+    ├── sort keys: [a DESC NULLS LAST]
+    ├── estimated rows: 0.99
+    └── Filter
+        ├── filters: [(t1.a (#0) > 1 OR t1.b (#1) < 2) AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
+        ├── estimated rows: 0.99
+        └── HashJoin
+            ├── join type: CROSS
+            ├── build keys: []
+            ├── probe keys: []
+            ├── filters: []
+            ├── estimated rows: 2.03
+            ├── TableScan(Build)
+            │   ├── table: default.default.t1
+            │   ├── read rows: 1
+            │   ├── read bytes: 36
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            │   ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 2 OR t1.b (#1) < 3], limit: NONE]
+            │   └── estimated rows: 0.49
+            └── TableScan(Probe)
+                ├── table: default.default.t2
+                ├── read rows: 5
+                ├── read bytes: 68
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+                ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
+                └── estimated rows: 4.17
+
+query T
+explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2)
+----
+HashJoin
+├── join type: CROSS
+├── build keys: []
+├── probe keys: []
+├── filters: []
+├── estimated rows: 1.80
+├── TableScan(Build)
+│   ├── table: default.default.t1
+│   ├── read rows: 1
+│   ├── read bytes: 36
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│   ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 2], limit: NONE]
+│   └── estimated rows: 0.36
+└── TableScan(Probe)
+    ├── table: default.default.t2
+    ├── read rows: 5
+    ├── read bytes: 68
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 5.00
 
 query T
 explain select count(distinct a) from t1;
@@ -850,19 +817,16 @@ EvalScalar
                 ├── group by: [a]
                 ├── aggregate functions: []
                 ├── estimated rows: 1.00
-                └── EvalScalar
-                    ├── expressions: [t1.a (#0)]
-                    ├── estimated rows: 1.00
-                    └── TableScan
-                        ├── table: default.default.t1
-                        ├── read rows: 1
-                        ├── read bytes: 18
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        ├── push downs: [filters: [], limit: NONE]
-                        ├── output columns: [a]
-                        └── estimated rows: 1.00
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── read rows: 1
+                    ├── read bytes: 18
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    ├── output columns: [a]
+                    └── estimated rows: 1.00
 
 query T
 explain select count_distinct(a) from t1;
@@ -886,19 +850,16 @@ EvalScalar
                 ├── group by: [a]
                 ├── aggregate functions: []
                 ├── estimated rows: 1.00
-                └── EvalScalar
-                    ├── expressions: [t1.a (#0)]
-                    ├── estimated rows: 1.00
-                    └── TableScan
-                        ├── table: default.default.t1
-                        ├── read rows: 1
-                        ├── read bytes: 18
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        ├── push downs: [filters: [], limit: NONE]
-                        ├── output columns: [a]
-                        └── estimated rows: 1.00
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── read rows: 1
+                    ├── read bytes: 18
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    ├── output columns: [a]
+                    └── estimated rows: 1.00
 
 statement ok
 drop table t1
@@ -952,17 +913,14 @@ create table t4(a int, b string);
 query T
 explain select * from t4 where a = 1 and try_cast(get(try_parse_json(b),'bb') as varchar) = 'xx';
 ----
-EvalScalar
-├── expressions: [t4.a (#0), t4.b (#1)]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.default.t4
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(CAST(t4.a (#0) = 1 AS Boolean NULL), TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
-    └── estimated rows: 0.00
+TableScan
+├── table: default.default.t4
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [and_filters(CAST(t4.a (#0) = 1 AS Boolean NULL), TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
+└── estimated rows: 0.00
 
 statement ok
 drop view if exists v4
@@ -974,34 +932,28 @@ query T
 explain select * from v4 where b = 'xx';
 ----
 EvalScalar
-├── expressions: [v4.a (#0), v4.b (#2)]
+├── expressions: [TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL)]
 ├── estimated rows: 0.00
-└── EvalScalar
-    ├── expressions: [t4.a (#0), TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL)]
-    ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t4
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
-        └── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t4
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
+    └── estimated rows: 0.00
 
 query T
 explain select * from v4 where a > 100;
 ----
 EvalScalar
-├── expressions: [v4.a (#0), v4.b (#2)]
+├── expressions: [TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL)]
 ├── estimated rows: 0.00
-└── EvalScalar
-    ├── expressions: [t4.a (#0), TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL)]
-    ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t4
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [t4.a (#0) > 100], limit: NONE]
-        └── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t4
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [t4.a (#0) > 100], limit: NONE]
+    └── estimated rows: 0.00

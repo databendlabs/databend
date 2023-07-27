@@ -1203,11 +1203,12 @@ impl PhysicalPlanBuilder {
         for order in &w.order_by {
             scalar_items.push(order.order_by_item.clone())
         }
+        let projections = w.projections.clone();
         let input = if !scalar_items.is_empty() {
             self.build_eval_scalar(
                 input,
                 &crate::planner::plans::EvalScalar {
-                    projections: vec![],
+                    projections,
                     items: scalar_items,
                 },
                 stat_info.clone(),
