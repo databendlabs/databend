@@ -432,7 +432,11 @@ fn is_column_type_modified(schema: &TableSchema, expected_schema: &TableSchema) 
         .iter()
         .map(|f| (f.column_id, &f.data_type))
         .collect();
-    for field in schema.fields() {
+    schema.fields().iter().any(|f| {
+        expected
+            .get(&f.column_id)
+            .is_some_and(|ty| **ty != f.data_type)
+    })
         if let Some(ty) = expected.get(&field.column_id) {
             if **ty != field.data_type {
                 return true;
