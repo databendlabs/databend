@@ -411,7 +411,7 @@ bucket = "databend"
 # s3
 type = "oss"
 
-[storage.s3]
+[storage.oss]
 # How to create a bucket:
 // highlight-next-line
 bucket = "databend"
