@@ -166,7 +166,15 @@ impl SMV002 {
         {
             let mut sm = state_machine.write().await;
 
-            if &new_last_applied <= sm.last_applied_ref() {
+            // When rebuilding the state machine, last_applied is empty,
+            // and it should always install the snapshot.
+            //
+            // And the snapshot may contain data when its last_applied is None,
+            // when importing data with metactl:
+            // The snapshot is empty but contains Nodes data that are manually added.
+            //
+            // See: `databend_metactl::snapshot`
+            if &new_last_applied <= sm.last_applied_ref() && sm.last_applied_ref().is_some() {
                 info!(
                     "no need to install: snapshot({:?}) <= sm({:?})",
                     new_last_applied,
@@ -300,15 +308,15 @@ impl SMV002 {
         self.top.data_ref().nodes_ref()
     }
 
-    pub(crate) fn last_applied_mut(&mut self) -> &mut Option<LogId> {
+    pub fn last_applied_mut(&mut self) -> &mut Option<LogId> {
         self.top.data_mut().last_applied_mut()
     }
 
-    pub(crate) fn last_membership_mut(&mut self) -> &mut StoredMembership {
+    pub fn last_membership_mut(&mut self) -> &mut StoredMembership {
         self.top.data_mut().last_membership_mut()
     }
 
-    pub(crate) fn nodes_mut(&mut self) -> &mut BTreeMap<NodeId, Node> {
+    pub fn nodes_mut(&mut self) -> &mut BTreeMap<NodeId, Node> {
         self.top.data_mut().nodes_mut()
     }
 

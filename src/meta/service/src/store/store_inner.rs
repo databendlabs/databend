@@ -242,6 +242,7 @@ impl StoreInner {
         info!(snapshot_size = snapshot_size, "do_build_snapshot complete");
 
         {
+            // TODO: replace StoredSnapshot with SnapshotMeta?
             let snapshot = StoredSnapshot {
                 meta: snapshot_meta.clone(),
             };

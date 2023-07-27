@@ -42,9 +42,12 @@ use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
 use common_meta_sled_store::openraft::compat::Upgrade;
+use common_meta_sled_store::openraft::RaftSnapshotBuilder;
+use common_meta_sled_store::openraft::RaftStorage;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::Cmd;
+use common_meta_types::CommittedLeaderId;
 use common_meta_types::Endpoint;
 use common_meta_types::Entry;
 use common_meta_types::EntryPayload;
@@ -53,6 +56,9 @@ use common_meta_types::LogId;
 use common_meta_types::Membership;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
+use common_meta_types::SeqV;
+use common_meta_types::StoredMembership;
+use databend_meta::store::RaftStore;
 use databend_meta::store::StoreInner;
 use tokio::net::TcpSocket;
 use url::Url;
@@ -89,7 +95,7 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    init_new_cluster(nodes, max_log_id, config.raft_config.id).await?;
+    init_new_cluster(config, nodes, max_log_id, config.raft_config.id).await?;
     Ok(())
 }
 
@@ -353,60 +359,64 @@ fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap
 
 // initial_cluster format: node_id=endpoint,grpc_api_addr;
 async fn init_new_cluster(
+    config: &Config,
     nodes: BTreeMap<NodeId, Node>,
     max_log_id: Option<LogId>,
     id: u64,
 ) -> anyhow::Result<()> {
     eprintln!("Initialize Cluster with: {:?}", nodes);
 
-    let node_ids = nodes.keys().copied().collect::<BTreeSet<_>>();
-
     let db = get_sled_db();
-    let config = RaftConfig {
-        ..Default::default()
-    };
-    let log = RaftLog::open(&db, &config).await?;
-    let raft_state = RaftState::open_create(&db, &config, Some(()), None).await?;
-    let (sm_id, _prev_sm_id) = raft_state.read_state_machine_id()?;
+    let raft_config: RaftConfig = config.raft_config.clone().into();
 
-    let sm = StateMachine::open(&config, sm_id).await?;
+    let mut sto = RaftStore::open_create(&raft_config, Some(()), None).await?;
 
-    let mut log_id: LogId = match max_log_id {
-        Some(max_log_id) => max_log_id,
-        None => match sm.get_last_applied()? {
-            Some(last_applied) => last_applied,
-            None => {
-                return Err(anyhow::Error::new(MetaStorageError::SledError(
-                    AnyError::error("cannot find last applied log id"),
-                )));
-            }
-        },
+    let last_applied = {
+        let mut sm2 = sto.get_state_machine().await;
+        sm2.last_applied_ref().clone()
     };
 
-    // construct Membership log entry
+    let last_log_id = std::cmp::max(last_applied, max_log_id);
+    let mut log_id = last_log_id.unwrap_or(LogId::new(CommittedLeaderId::new(0, 0), 0));
+
+    let node_ids = nodes.keys().copied().collect::<BTreeSet<_>>();
+    let membership = Membership::new(vec![node_ids], ());
+
+    // Update snapshot: Replace nodes set and membership config.
     {
-        // insert last membership log
-        log_id.index += 1;
+        let mut sm2 = sto.get_state_machine().await;
+
+        *sm2.nodes_mut() = nodes.clone();
+
+        // It must set membership to state machine because
+        // the snapshot may contain more logs than the last_log_id.
+        // In which case, logs will be purged upon startup.
         let membership = Membership::new(vec![node_ids], ());
+        *sm2.last_membership_mut() = StoredMembership::new(last_applied, membership);
+    }
+
+    // Build snapshot to persist state machine.
+    sto.build_snapshot().await?;
+
+    // Update logs: add nodes and override membership
+    {
+        // insert membership log
+        log_id.index += 1;
+
         let entry: Entry = Entry {
             log_id,
             payload: EntryPayload::Membership(membership),
         };
 
-        log.append([entry]).await?;
-    }
+        sto.append_to_log([entry]).await?;
 
-    // construct AddNode log entries
-    {
-        // first clear all the nodes info
-        sm.nodes().range_remove(.., true).await?;
-
-        for node in nodes {
-            sm.add_node(node.0, &node.1).await?;
+        // insert AddNodes logs
+        for (node_id, node) in nodes {
             log_id.index += 1;
+
             let cmd: Cmd = Cmd::AddNode {
-                node_id: node.0,
-                node: node.1,
+                node_id,
+                node,
                 overriding: true,
             };
 
@@ -419,10 +429,12 @@ async fn init_new_cluster(
                 }),
             };
 
-            log.append([entry]).await?;
+            sto.append_to_log([entry]).await?;
         }
     }
 
+    // Reset node id
+    let raft_state = RaftState::open_create(&db, &raft_config, Some(()), None).await?;
     raft_state.set_node_id(id).await?;
 
     Ok(())

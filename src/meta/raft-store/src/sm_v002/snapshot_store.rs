@@ -203,6 +203,7 @@ impl SnapshotStoreV002 {
         }
 
         snapshot_ids.sort();
+        dbg!(&snapshot_ids);
 
         info!("choose the latest from found snapshots: {:?}", snapshot_ids);
 
