@@ -250,8 +250,10 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::UnionAll(_)
         | RelOperator::Sort(_)
         | RelOperator::DummyTableScan(_)
+        | RelOperator::CteScan(_)
         | RelOperator::RuntimeFilterSource(_)
-        | RelOperator::Pattern(_) => false,
+        | RelOperator::Pattern(_)
+        | RelOperator::MaterializedCte(_) => false,
         RelOperator::Join(op) => {
             op.left_conditions.iter().any(find_subquery_in_expr)
                 || op.right_conditions.iter().any(find_subquery_in_expr)

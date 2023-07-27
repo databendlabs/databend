@@ -16,6 +16,7 @@ use common_exception::Result;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_profile::AggregateAttribute;
 use common_profile::AggregateExpandAttribute;
+use common_profile::CteScanAttribute;
 use common_profile::EvalScalarAttribute;
 use common_profile::ExchangeAttribute;
 use common_profile::FilterAttribute;
@@ -73,6 +74,18 @@ fn flatten_plan_node_profile(
                 attribute: OperatorAttribute::TableScan(TableScanAttribute { qualified_name }),
             };
             plan_node_profs.push(prof);
+        }
+        PhysicalPlan::CteScan(scan) => {
+            let prof = OperatorProfile {
+                id: scan.plan_id,
+                operator_type: OperatorType::CteScan,
+                children: vec![],
+                execution_info: Default::default(),
+                attribute: OperatorAttribute::CteScan(CteScanAttribute {
+                    cte_idx: scan.cte_idx.0,
+                }),
+            };
+            plan_node_profs.push(prof)
         }
         PhysicalPlan::Filter(filter) => {
             flatten_plan_node_profile(metadata, &filter.input, profs, plan_node_profs)?;
@@ -449,6 +462,7 @@ fn flatten_plan_node_profile(
             };
             plan_node_profs.push(prof);
         }
+        PhysicalPlan::MaterializedCte(_) => todo!(),
         PhysicalPlan::DeletePartial(_) | PhysicalPlan::DeleteFinal(_) => unreachable!(),
         PhysicalPlan::DistributedCopyIntoTableFromStage(_) => unreachable!(),
         PhysicalPlan::CopyIntoTableFromQuery(_) => unreachable!(),

@@ -144,18 +144,22 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
             }
 
-            RelOperator::Join(_) | RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
-                Arc::new(s_expr.plan().clone()),
-                Arc::new(self.rewrite(s_expr.child(0)?)?),
-                Arc::new(self.rewrite(s_expr.child(1)?)?),
-            )),
+            RelOperator::Join(_) | RelOperator::UnionAll(_) | RelOperator::MaterializedCte(_) => {
+                Ok(SExpr::create_binary(
+                    Arc::new(s_expr.plan().clone()),
+                    Arc::new(self.rewrite(s_expr.child(0)?)?),
+                    Arc::new(self.rewrite(s_expr.child(1)?)?),
+                ))
+            }
 
             RelOperator::Limit(_) | RelOperator::Sort(_) => Ok(SExpr::create_unary(
                 Arc::new(s_expr.plan().clone()),
                 Arc::new(self.rewrite(s_expr.child(0)?)?),
             )),
 
-            RelOperator::DummyTableScan(_) | RelOperator::Scan(_) => Ok(s_expr.clone()),
+            RelOperator::DummyTableScan(_) | RelOperator::Scan(_) | RelOperator::CteScan(_) => {
+                Ok(s_expr.clone())
+            }
 
             _ => Err(ErrorCode::Internal("Invalid plan type")),
         }
@@ -407,7 +411,7 @@ impl SubqueryRewriter {
                         .into(),
                         ConstantExpr {
                             span: subquery.span,
-                            value: common_expression::Scalar::Number(NumberScalar::UInt64(1)),
+                            value: Scalar::Number(NumberScalar::UInt64(1)),
                         }
                         .into(),
                     ],

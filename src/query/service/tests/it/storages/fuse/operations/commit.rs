@@ -27,6 +27,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::table::Table;
+use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::ProcessInfo;
 use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
@@ -101,6 +102,7 @@ use databend_query::sessions::QueryContext;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
+use parking_lot::RwLock;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -559,6 +561,25 @@ impl TableContext for CtxDelegation {
         _files: &[StageFileInfo],
         _max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
+        todo!()
+    }
+
+    fn set_materialized_cte(
+        &self,
+        _idx: (usize, usize),
+        _blocks: Arc<RwLock<Vec<DataBlock>>>,
+    ) -> Result<()> {
+        todo!()
+    }
+
+    fn get_materialized_cte(
+        &self,
+        _idx: (usize, usize),
+    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
+        todo!()
+    }
+
+    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
         todo!()
     }
 }
