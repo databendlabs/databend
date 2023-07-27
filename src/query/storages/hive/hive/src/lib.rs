@@ -34,7 +34,7 @@ mod utils;
 pub use hive_block_filter::HiveBlockFilter;
 pub use hive_blocks::HiveBlocks;
 pub use hive_catalog::HiveCatalog;
-pub use hive_catalog::HiveCreater;
+pub use hive_catalog::HiveCreator;
 pub use hive_file_splitter::HiveFileSplitter;
 pub use hive_meta_data_reader::MetaDataReader;
 pub use hive_parquet_block_reader::filter_hive_partition_from_partition_keys;

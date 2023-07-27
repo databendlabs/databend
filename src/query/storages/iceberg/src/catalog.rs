@@ -87,10 +87,10 @@ use crate::database::IcebergDatabase;
 pub const ICEBERG_CATALOG: &str = "iceberg";
 
 #[derive(Debug)]
-pub struct IcebergCreater;
+pub struct IcebergCreator;
 
 #[async_trait]
-impl CatalogCreator for IcebergCreater {
+impl CatalogCreator for IcebergCreator {
     async fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
         let opt = match &info.meta.catalog_option {
             CatalogOption::Hive(_) => unreachable!(

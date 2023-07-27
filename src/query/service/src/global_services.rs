@@ -26,7 +26,7 @@ use common_profile::QueryProfileManager;
 use common_sharing::ShareEndpointManager;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
-use common_storages_iceberg::IcebergCreater;
+use common_storages_iceberg::IcebergCreator;
 use common_tracing::QueryLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
@@ -75,7 +75,7 @@ impl GlobalServices {
         // TODO(xuanwo):
         //
         // This part is a bit complex because catalog are used widely in different
-        // crates that we don't have a good place for different kinds of creaters.
+        // crates that we don't have a good place for different kinds of creators.
         //
         // Maybe we can do some refactor to simplify the logic here.
         {
@@ -88,14 +88,14 @@ impl GlobalServices {
             catalog_manager.init_default_catalog(Arc::new(default_catalog));
 
             // Register iceberg catalog.
-            catalog_manager.register_catalog(CatalogType::Iceberg, Arc::new(IcebergCreater));
+            catalog_manager.register_catalog(CatalogType::Iceberg, Arc::new(IcebergCreator));
 
             // Register hive catalog.
             #[cfg(feature = "hive")]
             {
-                use common_storages_hive::HiveCreater;
+                use common_storages_hive::HiveCreator;
 
-                catalog_manager.register_catalog(CatalogType::Hive, Arc::new(HiveCreater));
+                catalog_manager.register_catalog(CatalogType::Hive, Arc::new(HiveCreator));
             }
         }
 

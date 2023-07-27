@@ -47,7 +47,7 @@ impl CatalogManager {
         GlobalInstance::get()
     }
 
-    /// Init the catalog manager in gloabl instance.
+    /// Init the catalog manager in global instance.
     #[async_backtrace::framed]
     pub async fn init(conf: &InnerConfig) -> Result<()> {
         GlobalInstance::set(Self::try_create(conf).await?);
@@ -117,11 +117,11 @@ impl CatalogManager {
             .await?;
 
         let typ = info.meta.catalog_option.catalog_type();
-        let creater = self.catalog_creators.get(&typ).ok_or_else(|| {
+        let creator = self.catalog_creators.get(&typ).ok_or_else(|| {
             ErrorCode::UnknownCatalogType(format!("unknown catalog type: {:?}", typ))
         })?;
 
-        creater.try_create(info).await
+        creator.try_create(info).await
     }
 
     /// Create a new catalog.

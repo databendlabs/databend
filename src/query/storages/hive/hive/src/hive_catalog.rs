@@ -90,10 +90,10 @@ use crate::hive_table::HiveTable;
 pub const HIVE_CATALOG: &str = "hive";
 
 #[derive(Debug)]
-pub struct HiveCreater;
+pub struct HiveCreator;
 
 #[async_trait]
-impl CatalogCreator for HiveCreater {
+impl CatalogCreator for HiveCreator {
     async fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
         let opt = match &info.meta.catalog_option {
             CatalogOption::Iceberg(_) => unreachable!(
