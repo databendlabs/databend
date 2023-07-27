@@ -30,7 +30,7 @@ pub use crate::minitrace::inject_span_to_tonic_request;
 pub use crate::minitrace::start_trace_for_remote_request;
 pub use crate::minitrace::GlobalLogger;
 pub use crate::panic_hook::log_panic;
-pub use crate::panic_hook::set_panic_hook;b2
+pub use crate::panic_hook::set_panic_hook;
 
 #[macro_export]
 macro_rules! func_name {
