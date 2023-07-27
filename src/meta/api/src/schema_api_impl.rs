@@ -1203,12 +1203,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         Ok(index_metas)
     }
 
-    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
     async fn list_indexes_by_table_id(
         &self,
         req: ListIndexesByIdReq,
     ) -> Result<Vec<u64>, KVAppError> {
-        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
         // Get index id list by `prefix_list` "<prefix>/<tenant>"
         let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
@@ -1225,7 +1226,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             id_name_list.push((index_id.0, name_ident.index_name));
         }
 
-        debug!(ident = display(&prefix_key), "list_indexes");
+        debug!(ident = as_display!(&prefix_key); "list_indexes");
 
         if id_name_list.is_empty() {
             return Ok(vec![]);

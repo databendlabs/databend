@@ -129,7 +129,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
     if cfg.tracing.on {
         let level = cfg
             .tracing
-            .log_level
+            .capture_log_level
             .parse()
             .ok()
             .unwrap_or(LevelFilter::Info);

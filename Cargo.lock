@@ -7024,7 +7024,7 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 [[package]]
 name = "minitrace"
 version = "0.4.1"
-source = "git+https://github.com/andylokandy/minitrace-rust.git?branch=reporter#eaf4ee8ba9af506a10de8ae1578bac345d02ce8e"
+source = "git+https://github.com/tikv/minitrace-rust.git?rev=19d5ea9d#19d5ea9dc43c4a7d8b6a358d1a5ef52ae775d5b8"
 dependencies = [
  "defer",
  "futures",
@@ -7039,7 +7039,7 @@ dependencies = [
 [[package]]
 name = "minitrace-macro"
 version = "0.4.1"
-source = "git+https://github.com/andylokandy/minitrace-rust.git?branch=reporter#eaf4ee8ba9af506a10de8ae1578bac345d02ce8e"
+source = "git+https://github.com/tikv/minitrace-rust.git?rev=19d5ea9d#19d5ea9dc43c4a7d8b6a358d1a5ef52ae775d5b8"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -7050,7 +7050,7 @@ dependencies = [
 [[package]]
 name = "minitrace-opentelemetry"
 version = "0.4.1"
-source = "git+https://github.com/andylokandy/minitrace-rust.git?branch=reporter#eaf4ee8ba9af506a10de8ae1578bac345d02ce8e"
+source = "git+https://github.com/tikv/minitrace-rust.git?rev=19d5ea9d#19d5ea9dc43c4a7d8b6a358d1a5ef52ae775d5b8"
 dependencies = [
  "futures",
  "log",
