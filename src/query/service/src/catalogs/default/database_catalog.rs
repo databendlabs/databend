@@ -140,7 +140,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     fn name(&self) -> String {
-        "Default".to_string()
+        "default".to_string()
     }
 
     #[async_backtrace::framed]

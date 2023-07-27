@@ -118,9 +118,10 @@ impl CatalogManager {
             .await?;
 
         let typ = info.meta.catalog_option.catalog_type();
-        let creator = self.catalog_creators.get(&typ).ok_or_else(|| {
-            ErrorCode::UnknownCatalogType(format!("unknown catalog type: {:?}", typ))
-        })?;
+        let creator = self
+            .catalog_creators
+            .get(&typ)
+            .ok_or_else(|| ErrorCode::BadArguments(format!("unknown catalog type: {:?}", typ)))?;
 
         creator.try_create(info).await
     }
