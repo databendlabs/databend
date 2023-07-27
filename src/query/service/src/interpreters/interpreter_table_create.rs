@@ -411,7 +411,7 @@ pub fn is_valid_block_per_segment(options: &BTreeMap<String, String>) -> Result<
 }
 
 pub fn is_valid_row_per_block(options: &BTreeMap<String, String>) -> Result<()> {
-    // check block_per_segment is not over 1000.
+    // check row_per_block can not be over 1000000.
     if let Some(value) = options.get(FUSE_OPT_KEY_ROW_PER_BLOCK) {
         let row_per_block = value.parse::<u64>()?;
         let error_str = "invalid row_per_block option, can't be over 1000000";
