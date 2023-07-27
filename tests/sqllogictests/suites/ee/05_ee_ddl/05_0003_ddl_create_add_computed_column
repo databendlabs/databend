@@ -61,7 +61,7 @@ statement ok
 create table t3(a string, b string as (concat(a, '-')) stored)
 
 statement error 1117
-alter table t3 modify column data type a float
+alter table t3 modify column a float
 
 statement ok
 USE default
