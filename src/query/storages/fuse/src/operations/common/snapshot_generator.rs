@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::Scalar;
 use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 use common_sql::field_default_value;
 use log::info;
 use storages_common_table_meta::meta::ClusterKey;
@@ -75,7 +76,7 @@ pub struct SnapshotMerged {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 pub enum ConflictResolveContext {
-    AppendOnly(SnapshotMerged),
+    AppendOnly((SnapshotMerged, TableSchemaRef)),
     LatestSnapshotAppendOnly(SnapshotMerged),
     ModifiedSegmentExistsInLatest(SnapshotChanges),
 }
@@ -296,7 +297,13 @@ impl AppendGenerator {
     fn check_fill_default(&self, summary: &Statistics) -> Result<bool> {
         let mut fill_default_values = false;
         // check if need to fill default value in statistics
-        for column_id in self.snapshot_merged()?.merged_statistics.col_stats.keys() {
+        for column_id in self
+            .conflict_resolve_ctx()?
+            .0
+            .merged_statistics
+            .col_stats
+            .keys()
+        {
             if !summary.col_stats.contains_key(column_id) {
                 fill_default_values = true;
                 break;
@@ -307,13 +314,13 @@ impl AppendGenerator {
 }
 
 impl AppendGenerator {
-    fn snapshot_merged(&self) -> Result<&SnapshotMerged> {
+    fn conflict_resolve_ctx(&self) -> Result<(&SnapshotMerged, &TableSchema)> {
         let ctx = self
             .conflict_resolve_ctx
             .as_ref()
             .ok_or(ErrorCode::Internal("conflict_solve_ctx not set"))?;
         match ctx {
-            ConflictResolveContext::AppendOnly(ctx) => Ok(ctx),
+            ConflictResolveContext::AppendOnly((ctx, schema)) => Ok((ctx, schema.as_ref())),
             _ => Err(ErrorCode::Internal(
                 "conflict_resolve_ctx should only be Appendonly in AppendGenerator",
             )),
@@ -350,7 +357,13 @@ impl SnapshotGenerator for AppendGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
     ) -> Result<TableSnapshot> {
-        let snapshot_merged = self.snapshot_merged()?;
+        let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
+        if is_column_type_modified(&schema, expected_schema) {
+            return Err(ErrorCode::UnresolvableConflict(format!(
+                "schema was changed during insert, expected:{:?}, actual:{:?}",
+                expected_schema, schema
+            )));
+        }
         let mut prev_timestamp = None;
         let mut prev_snapshot_id = None;
         let mut table_statistics_location = None;
@@ -412,4 +425,17 @@ impl SnapshotGenerator for AppendGenerator {
             table_statistics_location,
         ))
     }
+}
+
+fn is_column_type_modified(schema: &TableSchema, expected_schema: &TableSchema) -> bool {
+    let expected: HashMap<_, _> = expected_schema
+        .fields()
+        .iter()
+        .map(|f| (f.column_id, &f.data_type))
+        .collect();
+    schema.fields().iter().any(|f| {
+        expected
+            .get(&f.column_id)
+            .is_some_and(|ty| **ty != f.data_type)
+    })
 }

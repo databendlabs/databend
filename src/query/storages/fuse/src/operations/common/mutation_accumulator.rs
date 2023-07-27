@@ -266,10 +266,13 @@ impl MutationAccumulator {
                     .chain(merged_segments)
                     .collect();
                 match self.kind {
-                    MutationKind::Insert => ConflictResolveContext::AppendOnly(SnapshotMerged {
-                        merged_segments,
-                        merged_statistics: self.summary.clone(),
-                    }),
+                    MutationKind::Insert => ConflictResolveContext::AppendOnly((
+                        SnapshotMerged {
+                            merged_segments,
+                            merged_statistics: self.summary.clone(),
+                        },
+                        self.schema.clone(),
+                    )),
                     _ => ConflictResolveContext::LatestSnapshotAppendOnly(SnapshotMerged {
                         merged_segments,
                         merged_statistics: self.summary.clone(),
