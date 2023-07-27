@@ -75,7 +75,7 @@ impl FuseTable {
         let mut dry_run_purge_files = vec![];
         let mut purged_snapshot_count = 0;
 
-        let catalog = ctx.get_catalog(&ctx.get_current_catalog())?;
+        let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
         let table_agg_index_ids = catalog
             .list_indexes_by_table_id(ListIndexesByIdReq {
                 tenant: ctx.get_tenant(),

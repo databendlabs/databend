@@ -126,14 +126,16 @@ impl QueryContext {
         })
     }
 
-    // Build fuse/system normal table by table info.
+    /// Build fuse/system normal table by table info.
+    ///
+    /// TODO(xuanwo): we should support build table via table info in the future.
     pub fn build_table_by_table_info(
         &self,
-        catalog_name: &str,
+        _catalog_name: &str,
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self.shared.catalog_manager.get_default_catalog();
+        let catalog = self.shared.catalog_manager.get_default_catalog()?;
         match table_args {
             None => catalog.get_table_by_info(table_info),
             Some(table_args) => Ok(catalog

@@ -218,7 +218,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
             let fixture = TestFixture::new().await;
             fixture.create_default_table().await?;
             let ctx = fixture.ctx();
-            let catalog = ctx.get_catalog("default")?;
+            let catalog = ctx.get_catalog("default").await?;
 
             let table = fixture.latest_default_table().await?;
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -588,7 +588,7 @@ impl TableContext for CtxDelegation {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct FakedCatalog {
     cat: Arc<dyn Catalog>,
     error_injection: Option<ErrorCode>,
@@ -596,6 +596,10 @@ struct FakedCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for FakedCatalog {
+    fn name(&self) -> String {
+        "FakedCatalog".to_string()
+    }
+
     async fn get_database(&self, _tenant: &str, _db_name: &str) -> Result<Arc<dyn Database>> {
         todo!()
     }
