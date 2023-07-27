@@ -64,6 +64,7 @@ pub enum OperatorType {
     EvalScalar,
     Limit,
     TableScan,
+    CteScan,
     Sort,
     UnionAll,
     Project,
@@ -93,6 +94,7 @@ impl Display for OperatorType {
             OperatorType::Exchange => write!(f, "Exchange"),
             OperatorType::RuntimeFilter => write!(f, "RuntimeFilter"),
             OperatorType::Insert => write!(f, "Insert"),
+            OperatorType::CteScan => write!(f, "CteScan"),
         }
     }
 }
@@ -137,6 +139,7 @@ pub enum OperatorAttribute {
     Sort(SortAttribute),
     Window(WindowAttribute),
     Exchange(ExchangeAttribute),
+    CteScan(CteScanAttribute),
     Empty,
 }
 
@@ -188,6 +191,11 @@ pub struct SortAttribute {
 #[derive(Debug, Clone)]
 pub struct TableScanAttribute {
     pub qualified_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct CteScanAttribute {
+    pub cte_idx: usize,
 }
 
 #[derive(Debug, Clone)]

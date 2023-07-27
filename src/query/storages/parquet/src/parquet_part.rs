@@ -17,12 +17,14 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::mem;
 use std::sync::Arc;
 
 use common_arrow::parquet::compression::Compression;
 use common_arrow::parquet::indexes::Interval;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::PartStatistics;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::FieldIndex;
@@ -63,13 +65,6 @@ impl ParquetPart {
         match self {
             ParquetPart::RowGroup(r) => r.compressed_size(),
             ParquetPart::SmallFiles(p) => p.compressed_size(),
-        }
-    }
-
-    pub fn num_io(&self) -> usize {
-        match self {
-            ParquetPart::RowGroup(r) => r.column_metas.len(),
-            ParquetPart::SmallFiles(p) => p.files.len(),
         }
     }
 }
@@ -145,4 +140,58 @@ impl ParquetPart {
             )),
         }
     }
+}
+
+/// files smaller than setting fast_read_part_bytes is small file,
+/// which is load in one read, without reading its meta in advance.
+/// some considerations:
+/// 1. to fully utilize the IO, multiple small files are loaded in one part.
+/// 2. to avoid OOM, the total size of small files in one part is limited,
+///    and we need compression_ratio to estimate the uncompressed size.
+pub(crate) fn collect_small_file_parts(
+    small_files: Vec<(String, u64)>,
+    mut max_compression_ratio: f64,
+    mut max_compressed_size: u64,
+    partitions: &mut Vec<ParquetPart>,
+    stats: &mut PartStatistics,
+    num_columns_to_read: usize,
+) {
+    if max_compression_ratio <= 0.0 || max_compression_ratio >= 1.0 {
+        // just incase
+        max_compression_ratio = 1.0;
+    }
+    if max_compressed_size == 0 {
+        // there are no large files, so we choose a default value.
+        max_compressed_size = ((128usize << 20) as f64 / max_compression_ratio) as u64;
+    }
+    let mut num_small_files = small_files.len();
+    stats.read_rows += num_small_files;
+    let mut small_part = vec![];
+    let mut part_size = 0;
+    let mut make_small_files_part = |files: Vec<(String, u64)>, part_size| {
+        let estimated_uncompressed_size = (part_size as f64 / max_compression_ratio) as u64;
+        num_small_files -= files.len();
+        partitions.push(ParquetPart::SmallFiles(ParquetSmallFilesPart {
+            files,
+            estimated_uncompressed_size,
+        }));
+        stats.partitions_scanned += 1;
+        stats.partitions_total += 1;
+    };
+    let max_files = num_columns_to_read * 2;
+    for (path, size) in small_files.into_iter() {
+        stats.read_bytes += size as usize;
+        if !small_part.is_empty()
+            && (part_size + size > max_compressed_size || small_part.len() + 1 >= max_files)
+        {
+            make_small_files_part(mem::take(&mut small_part), part_size);
+            part_size = 0;
+        }
+        small_part.push((path, size));
+        part_size += size;
+    }
+    if !small_part.is_empty() {
+        make_small_files_part(mem::take(&mut small_part), part_size);
+    }
+    assert_eq!(num_small_files, 0);
 }

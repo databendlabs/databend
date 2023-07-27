@@ -307,11 +307,12 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
 pub fn with(i: Input) -> IResult<With> {
     let cte = map(
         consumed(rule! {
-            #table_alias ~ AS ~ "(" ~ #query ~ ")"
+            #table_alias ~ AS ~ MATERIALIZED? ~ "(" ~ #query ~ ")"
         }),
-        |(span, (table_alias, _, _, query, _))| CTE {
+        |(span, (table_alias, _, materialized, _, query, _))| CTE {
             span: transform_span(span.0),
             alias: table_alias,
+            materialized: materialized.is_some(),
             query,
         },
     );

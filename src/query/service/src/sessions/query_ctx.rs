@@ -35,12 +35,14 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_args::TableArgs;
+use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::StageAttachment;
 use common_config::GlobalConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::date_helper::TzFactory;
+use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -53,6 +55,7 @@ use common_meta_app::schema::TableInfo;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
+use common_sql::IndexType;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
@@ -657,6 +660,28 @@ impl TableContext for QueryContext {
             }
         }
         Ok(results)
+    }
+
+    fn set_materialized_cte(
+        &self,
+        idx: (IndexType, IndexType),
+        blocks: Arc<RwLock<Vec<DataBlock>>>,
+    ) -> Result<()> {
+        let mut ctes = self.shared.materialized_cte_tables.write();
+        ctes.insert(idx, blocks);
+        Ok(())
+    }
+
+    fn get_materialized_cte(
+        &self,
+        idx: (IndexType, IndexType),
+    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
+        let ctes = self.shared.materialized_cte_tables.read();
+        Ok(ctes.get(&idx).cloned())
+    }
+
+    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
+        self.shared.materialized_cte_tables.clone()
     }
 }
 

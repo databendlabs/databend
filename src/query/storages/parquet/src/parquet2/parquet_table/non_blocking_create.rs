@@ -29,8 +29,8 @@ use common_storage::StageFilesInfo;
 use opendal::Operator;
 
 use super::table::create_parquet_table_info;
-use crate::parquet_table::blocking::get_compression_ratio;
-use crate::ParquetTable;
+use super::ParquetTable;
+use crate::parquet2::parquet_table::blocking_create::get_compression_ratio;
 
 impl ParquetTable {
     #[async_backtrace::framed]
