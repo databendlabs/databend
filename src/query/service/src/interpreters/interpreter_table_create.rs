@@ -417,7 +417,7 @@ pub fn is_valid_row_per_block(options: &BTreeMap<String, String>) -> Result<()> 
         let error_str = "invalid row_per_block option, can't be over 1000000";
 
         if row_per_block > DEFAULT_BLOCK_MAX_ROWS as u64 {
-            error!(error_str);
+            error!("{}", error_str);
             return Err(ErrorCode::TableOptionInvalid(error_str));
         }
     }
