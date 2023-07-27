@@ -138,7 +138,9 @@ impl CatalogManager {
             ));
         }
 
-        self.meta.create_catalog(req).await
+        let _ = self.meta.create_catalog(req).await;
+
+        Ok(())
     }
 
     /// Drop a catalog.
@@ -147,7 +149,7 @@ impl CatalogManager {
     ///
     /// Trying to drop default catalog will return an error.
     #[async_backtrace::framed]
-    pub async fn drop_catalog(&self, req: DropCatalogReq) -> Result<()> {
+    pub async fn drop_catalog(&self, _: DropCatalogReq) -> Result<()> {
         todo!()
     }
 
