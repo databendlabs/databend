@@ -17,14 +17,16 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::SchemaDescriptor;
-use common_arrow::schema_projection as ap;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
@@ -34,55 +36,22 @@ use common_storage::ColumnNodes;
 use opendal::BlockingOperator;
 use opendal::Operator;
 
-use crate::parquet_part::ParquetPart;
+use crate::parquet2::parquet_reader::deserialize::try_next_block;
+use crate::parquet2::parquet_table::arrow_to_table_schema;
+use crate::parquet2::projection::project_parquet_schema;
 use crate::parquet_part::ParquetRowGroupPart;
-use crate::parquet_table::arrow_to_table_schema;
-
-pub trait SeekRead: std::io::Read + std::io::Seek {}
-
-impl<T> SeekRead for T where T: std::io::Read + std::io::Seek {}
-
-pub struct DataReader {
-    bytes: usize,
-    inner: Box<dyn SeekRead + Sync + Send>,
-}
-
-impl DataReader {
-    pub fn new(inner: Box<dyn SeekRead + Sync + Send>, bytes: usize) -> Self {
-        Self { inner, bytes }
-    }
-
-    pub fn read_all(&mut self) -> Result<Vec<u8>> {
-        let mut data = Vec::with_capacity(self.bytes);
-        // `DataReader` might be reused if there is nested-type data, example:
-        // Table: t Tuple(a int, b int);
-        // Query: select t from table where t:a > 1;
-        // The query will create two readers: Reader(a), Reader(b).
-        // Prewhere phase: Reader(a).read_all();
-        // Remain phase: Reader(a).read_all(); Reader(b).read_all();
-        // If we don't seek to the start of the reader, the second read_all will read nothing.
-        self.inner.rewind()?;
-        // TODO(1): don't seek and read, but reuse the data (reduce IO).
-        // TODO(2): for nested types, merge sub columns into one column (reduce deserialization).
-        self.inner.read_to_end(&mut data)?;
-        Ok(data)
-    }
-}
-
-pub type IndexedChunk = (FieldIndex, Vec<u8>);
-pub type IndexedReaders = HashMap<FieldIndex, DataReader>;
-
-pub enum ParquetPartData {
-    RowGroup(IndexedReaders),
-    SmallFiles(Vec<Vec<u8>>),
-}
+use crate::parquet_reader::DataReader;
+use crate::parquet_reader::IndexedChunk;
+use crate::parquet_reader::IndexedReaders;
+use crate::parquet_reader::ParquetPartData;
+use crate::ParquetPart;
 
 /// The reader to parquet files with a projected schema.
 ///
 /// **ALERT**: dictionary type is not supported yet.
 /// If there are dictionary pages in the parquet file, the reading process may fail.
 #[derive(Clone)]
-pub struct ParquetReader {
+pub struct Parquet2Reader {
     operator: Operator,
     /// The indices of columns need to read by this reader.
     ///
@@ -115,24 +84,24 @@ pub struct ParquetReader {
     pub(crate) projected_column_descriptors: HashMap<FieldIndex, ColumnDescriptor>,
 }
 
-impl ParquetReader {
+impl Parquet2Reader {
     pub fn create(
         operator: Operator,
         schema: &ArrowSchema,
         schema_descr: &SchemaDescriptor,
         projection: Projection,
-    ) -> Result<Arc<ParquetReader>> {
+    ) -> Result<Arc<Parquet2Reader>> {
         let (
             projected_arrow_schema,
             projected_column_nodes,
             projected_column_descriptors,
             columns_to_read,
-        ) = Self::do_projection(schema, schema_descr, &projection)?;
+        ) = project_parquet_schema(schema, schema_descr, &projection)?;
 
         let t_schema = arrow_to_table_schema(projected_arrow_schema.clone());
         let output_schema = DataSchema::from(&t_schema);
 
-        Ok(Arc::new(ParquetReader {
+        Ok(Arc::new(Parquet2Reader {
             operator,
             columns_to_read,
             output_schema: Arc::new(output_schema),
@@ -141,59 +110,16 @@ impl ParquetReader {
             projected_column_descriptors,
         }))
     }
+}
 
-    /// Project the schema and get the needed column leaves.
-    #[allow(clippy::type_complexity)]
-    pub fn do_projection(
-        schema: &ArrowSchema,
-        schema_descr: &SchemaDescriptor,
-        projection: &Projection,
-    ) -> Result<(
-        ArrowSchema,
-        ColumnNodes,
-        HashMap<FieldIndex, ColumnDescriptor>,
-        HashSet<FieldIndex>,
-    )> {
-        // Full schema and column leaves.
+/// Project the schema and get the needed column leaves.
 
-        let column_nodes = ColumnNodes::new_from_schema(schema, None);
-        // Project schema
-        let projected_arrow_schema = match projection {
-            Projection::Columns(indices) => ap::project(schema, indices),
-            Projection::InnerColumns(path_indices) => ap::inner_project(schema, path_indices),
-        };
-        // Project column leaves
-        let projected_column_nodes = ColumnNodes {
-            column_nodes: projection
-                .project_column_nodes(&column_nodes)?
-                .iter()
-                .map(|&leaf| leaf.clone())
-                .collect(),
-        };
-        let column_nodes = &projected_column_nodes.column_nodes;
-        // Project column descriptors and collect columns to read
-        let mut projected_column_descriptors = HashMap::with_capacity(column_nodes.len());
-        let mut columns_to_read = HashSet::with_capacity(
-            column_nodes
-                .iter()
-                .map(|leaf| leaf.leaf_indices.len())
-                .sum(),
-        );
-        for column_node in column_nodes {
-            for index in &column_node.leaf_indices {
-                columns_to_read.insert(*index);
-                projected_column_descriptors.insert(*index, schema_descr.columns()[*index].clone());
-            }
-        }
-        Ok((
-            projected_arrow_schema,
-            projected_column_nodes,
-            projected_column_descriptors,
-            columns_to_read,
-        ))
+#[async_trait::async_trait]
+impl crate::parquet_reader::ParquetReader for Parquet2Reader {
+    fn output_schema(&self) -> &DataSchema {
+        &self.output_schema
     }
-
-    pub fn read_from_readers(&self, readers: &mut IndexedReaders) -> Result<Vec<IndexedChunk>> {
+    fn read_from_readers(&self, readers: &mut IndexedReaders) -> Result<Vec<IndexedChunk>> {
         let mut chunks = Vec::with_capacity(self.columns_to_read.len());
 
         for index in &self.columns_to_read {
@@ -206,7 +132,7 @@ impl ParquetReader {
         Ok(chunks)
     }
 
-    pub fn row_group_readers_from_blocking_io(
+    fn row_group_readers_from_blocking_io(
         &self,
         part: &ParquetRowGroupPart,
         operator: &BlockingOperator,
@@ -227,7 +153,7 @@ impl ParquetReader {
         Ok(readers)
     }
 
-    pub fn readers_from_blocking_io(&self, part: PartInfoPtr) -> Result<ParquetPartData> {
+    fn readers_from_blocking_io(&self, part: PartInfoPtr) -> Result<ParquetPartData> {
         let part = ParquetPart::from_part(&part)?;
         match part {
             ParquetPart::RowGroup(part) => Ok(ParquetPartData::RowGroup(
@@ -247,7 +173,7 @@ impl ParquetReader {
     }
 
     #[async_backtrace::framed]
-    pub async fn readers_from_non_blocking_io(&self, part: PartInfoPtr) -> Result<ParquetPartData> {
+    async fn readers_from_non_blocking_io(&self, part: PartInfoPtr) -> Result<ParquetPartData> {
         let part = ParquetPart::from_part(&part)?;
         match part {
             ParquetPart::RowGroup(part) => {
@@ -305,5 +231,103 @@ impl ParquetReader {
                 Ok(ParquetPartData::SmallFiles(buffers))
             }
         }
+    }
+
+    fn deserialize(
+        &self,
+        part: &ParquetRowGroupPart,
+        chunks: Vec<(FieldIndex, Vec<u8>)>,
+        filter: Option<Bitmap>,
+    ) -> Result<DataBlock> {
+        if chunks.is_empty() {
+            return Ok(DataBlock::new(vec![], part.num_rows));
+        }
+
+        let mut chunk_map: HashMap<FieldIndex, Vec<u8>> = chunks.into_iter().collect();
+        let mut columns_array_iter = Vec::with_capacity(self.projected_arrow_schema.fields.len());
+        let mut nested_columns_array_iter =
+            Vec::with_capacity(self.projected_arrow_schema.fields.len());
+        let mut normal_fields = Vec::with_capacity(self.projected_arrow_schema.fields.len());
+        let mut nested_fields = Vec::with_capacity(self.projected_arrow_schema.fields.len());
+
+        let column_nodes = &self.projected_column_nodes.column_nodes;
+        let mut cnt_map = Self::build_projection_count_map(column_nodes);
+
+        for (idx, column_node) in column_nodes.iter().enumerate() {
+            let indices = &column_node.leaf_indices;
+            let mut metas = Vec::with_capacity(indices.len());
+            let mut chunks = Vec::with_capacity(indices.len());
+            for index in indices {
+                // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
+                let column_meta = &part.column_metas[index];
+                let cnt = cnt_map.get_mut(index).unwrap();
+                *cnt -= 1;
+                let column_chunk = if cnt > &mut 0 {
+                    chunk_map.get(index).unwrap().clone()
+                } else {
+                    chunk_map.remove(index).unwrap()
+                };
+                let descriptor = &self.projected_column_descriptors[index];
+                metas.push((column_meta, descriptor));
+                chunks.push(column_chunk);
+            }
+            if let Some(ref bitmap) = filter {
+                // Filter push down for nested type is not supported now.
+                // If the array is nested type, do not push down filter to it.
+                if chunks.len() > 1 {
+                    nested_columns_array_iter.push(Self::to_array_iter(
+                        metas,
+                        chunks,
+                        part.num_rows,
+                        column_node.field.clone(),
+                    )?);
+                    nested_fields.push(self.output_schema.field(idx).clone());
+                } else {
+                    columns_array_iter.push(Self::to_array_iter_with_filter(
+                        metas,
+                        chunks,
+                        part.num_rows,
+                        column_node.field.clone(),
+                        bitmap.clone(),
+                    )?);
+                    normal_fields.push(self.output_schema.field(idx).clone());
+                }
+            } else {
+                columns_array_iter.push(Self::to_array_iter(
+                    metas,
+                    chunks,
+                    part.num_rows,
+                    column_node.field.clone(),
+                )?)
+            }
+        }
+
+        if nested_fields.is_empty() {
+            let mut deserializer =
+                RowGroupDeserializer::new(columns_array_iter, part.num_rows, None);
+            return self.full_deserialize(&mut deserializer);
+        }
+
+        let bitmap = filter.unwrap();
+        let normal_block = try_next_block(
+            &DataSchema::new(normal_fields.clone()),
+            &mut RowGroupDeserializer::new(columns_array_iter, part.num_rows, None),
+        )?;
+        let nested_block = try_next_block(
+            &DataSchema::new(nested_fields.clone()),
+            &mut RowGroupDeserializer::new(nested_columns_array_iter, part.num_rows, None),
+        )?;
+        // need to filter nested block
+        let nested_block = DataBlock::filter_with_bitmap(nested_block, &bitmap)?;
+
+        // Construct the final output
+        let mut final_columns = Vec::with_capacity(self.output_schema.fields().len());
+        final_columns.extend_from_slice(normal_block.columns());
+        final_columns.extend_from_slice(nested_block.columns());
+        let final_block = DataBlock::new(final_columns, bitmap.len() - bitmap.unset_bits());
+
+        normal_fields.extend_from_slice(&nested_fields);
+        let src_schema = DataSchema::new(normal_fields);
+        final_block.resort(&src_schema, &self.output_schema)
     }
 }
