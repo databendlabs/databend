@@ -498,7 +498,7 @@ dependencies = [
  "arrow-schema",
  "arrow-select",
  "regex",
- "regex-syntax 0.7.1",
+ "regex-syntax 0.7.4",
 ]
 
 [[package]]
@@ -528,7 +528,7 @@ dependencies = [
  "hash_hasher",
  "hashbrown 0.13.2",
  "indexmap",
- "itertools",
+ "itertools 0.10.5",
  "json-deserializer",
  "lexical-core",
  "lz4",
@@ -565,7 +565,7 @@ dependencies = [
  "async-backtrace-attributes",
  "dashmap",
  "futures",
- "itertools",
+ "itertools 0.10.5",
  "loom",
  "once_cell",
  "pin-project-lite",
@@ -1181,7 +1181,7 @@ checksum = "ba3569f383e8f1598449f1a423e72e99569137b47740b1da11ef19af3d5c3223"
 dependencies = [
  "lazy_static",
  "memchr",
- "regex-automata",
+ "regex-automata 0.1.10",
 ]
 
 [[package]]
@@ -1192,7 +1192,7 @@ checksum = "5ffdb39cb703212f3c11973452c2861b972f757b021158f3516ba10f2fa8b2c1"
 dependencies = [
  "memchr",
  "once_cell",
- "regex-automata",
+ "regex-automata 0.1.10",
  "serde",
 ]
 
@@ -1633,7 +1633,7 @@ name = "codegen"
 version = "0.1.0"
 dependencies = [
  "common-expression",
- "itertools",
+ "itertools 0.10.5",
 ]
 
 [[package]]
@@ -1711,7 +1711,7 @@ dependencies = [
  "ethnum",
  "fast-float",
  "goldenfile",
- "itertools",
+ "itertools 0.10.5",
  "logos",
  "nom",
  "nom-rule",
@@ -1920,7 +1920,7 @@ dependencies = [
  "futures",
  "goldenfile",
  "hex",
- "itertools",
+ "itertools 0.10.5",
  "jsonb",
  "lexical-core",
  "match-template",
@@ -1995,7 +1995,7 @@ dependencies = [
  "goldenfile",
  "h3o",
  "hex",
- "itertools",
+ "itertools 0.10.5",
  "jsonb",
  "lexical-core",
  "libm",
@@ -2517,7 +2517,7 @@ dependencies = [
  "common-meta-types",
  "common-users",
  "dashmap",
- "itertools",
+ "itertools 0.10.5",
  "num_cpus",
  "once_cell",
  "serde",
@@ -2591,7 +2591,7 @@ dependencies = [
  "educe",
  "enum-as-inner",
  "globiter",
- "itertools",
+ "itertools 0.10.5",
  "num-derive",
  "num-traits",
  "once_cell",
@@ -2956,7 +2956,7 @@ dependencies = [
  "common-storages-result-cache",
  "common-storages-view",
  "common-users",
- "itertools",
+ "itertools 0.10.5",
  "jsonb",
  "once_cell",
  "parking_lot 0.12.1",
@@ -3215,7 +3215,7 @@ dependencies = [
  "ciborium",
  "clap 3.2.23",
  "criterion-plot",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "num-traits",
  "oorandom",
@@ -3236,7 +3236,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
 dependencies = [
  "cast",
- "itertools",
+ "itertools 0.10.5",
 ]
 
 [[package]]
@@ -3669,7 +3669,7 @@ dependencies = [
  "derive_more",
  "env_logger",
  "futures",
- "itertools",
+ "itertools 0.10.5",
  "maplit",
  "metrics",
  "once_cell",
@@ -3777,7 +3777,7 @@ dependencies = [
  "hex",
  "http",
  "humantime",
- "itertools",
+ "itertools 0.10.5",
  "jsonb",
  "jwt-simple",
  "lz4",
@@ -4050,9 +4050,9 @@ dependencies = [
 
 [[package]]
 name = "educe"
-version = "0.4.20"
+version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb0188e3c3ba8df5753894d54461f0e39bc91741dc5b22e1c46999ec2c71f4e4"
+checksum = "079044df30bb07de7d846d41a184c4b00e66ebdac93ee459253474f3a47e50ae"
 dependencies = [
  "enum-ordinalize",
  "proc-macro2",
@@ -5673,7 +5673,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0757cd38a6dc71ff622f52309d213d1b3a39297f49db6aaf6a820f9487c7cb34"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
 ]
 
 [[package]]
@@ -6337,6 +6337,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6824,7 +6833,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8263075bb86c5a1b1427b5ae862e8889656f126e9f77c484496e8b47cf5c5558"
 dependencies = [
- "regex-automata",
+ "regex-automata 0.1.10",
 ]
 
 [[package]]
@@ -8159,7 +8168,7 @@ checksum = "59230a63c37f3e18569bdb90e4a89cbf5bf8b06fea0b84e65ea10cc4df47addd"
 dependencies = [
  "difflib",
  "float-cmp",
- "itertools",
+ "itertools 0.10.5",
  "normalize-line-endings",
  "predicates-core",
  "regex",
@@ -8360,7 +8369,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef7a8ed15bcffc55fe0328931ef20d393bb89ad704756a37bd20cffb4804f306"
 dependencies = [
  "chrono",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "regex",
 ]
@@ -8383,7 +8392,7 @@ checksum = "119533552c9a7ffacc21e099c24a0ac8bb19c2a2a3f363de84cd9b844feab270"
 dependencies = [
  "bytes",
  "heck 0.4.1",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "log",
  "multimap",
@@ -8404,7 +8413,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5d2d8d10f3c6ded6da8b05b5fb3b8a5082514344d56c9f871412d29b4e075b4"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -8786,13 +8795,14 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.8.1"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af83e617f331cc6ae2da5443c602dfa5af81e517212d9d611a5b3ba1777b5370"
+checksum = "b2eae68fc220f7cf2532e4494aded17545fce192d59cd996e0fe7887f4ceb575"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-syntax 0.7.1",
+ "regex-automata 0.3.3",
+ "regex-syntax 0.7.4",
 ]
 
 [[package]]
@@ -8805,6 +8815,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex-automata"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39354c10dd07468c2e73926b23bb9c2caca74c5501e38a35da70406f1d923310"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-syntax 0.7.4",
+]
+
+[[package]]
 name = "regex-syntax"
 version = "0.6.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8812,9 +8833,9 @@ checksum = "456c603be3e8d448b072f410900c09faf164fbce2d480456f50eea6e25f9c848"
 
 [[package]]
 name = "regex-syntax"
-version = "0.7.1"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5996294f19bd3aae0453a862ad728f60e6600695733dd5df01da90c54363a3c"
+checksum = "e5ea92a5b6195c6ef2a0295ea818b312502c6fc94dde986c5553242e18fd4ce2"
 
 [[package]]
 name = "rend"
@@ -9925,9 +9946,9 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.13.0"
+version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fae9a103dcc09a7c21f11ef5971fc85b536900793f2a86d94183af2b0c26d23e"
+checksum = "94c15d704d8f73ce40501dc0d73d7c5d831b98ab3edac685c7d90ade99b8b6d8"
 dependencies = [
  "async-trait",
  "educe",
@@ -9935,7 +9956,7 @@ dependencies = [
  "futures",
  "glob",
  "humantime",
- "itertools",
+ "itertools 0.11.0",
  "libtest-mimic",
  "md-5",
  "owo-colors",
