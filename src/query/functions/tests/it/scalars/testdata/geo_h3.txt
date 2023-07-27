@@ -221,3 +221,179 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : h3_is_valid(0)
+raw expr       : h3_is_valid(0)
+checked expr   : h3_is_valid<UInt64>(to_uint64<UInt8>(0_u8))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : h3_is_valid(644325524701193974)
+raw expr       : h3_is_valid(644325524701193974)
+checked expr   : h3_is_valid<UInt64>(644325524701193974_u64)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : h3_is_valid(res)
+raw expr       : h3_is_valid(res::UInt64)
+checked expr   : h3_is_valid<UInt64>(res)
+evaluation:
++--------+--------------------------+---------------+
+|        | res                      | Output        |
++--------+--------------------------+---------------+
+| Type   | UInt64                   | Boolean       |
+| Domain | {1..=644325529094369568} | {FALSE, TRUE} |
+| Row 0  | 1                        | false         |
+| Row 1  | 644325524701193974       | true          |
+| Row 2  | 644325529094369568       | true          |
+| Row 3  | 644325528627451570       | true          |
+| Row 4  | 644325528491955313       | true          |
++--------+--------------------------+---------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------+
+| Column | Data                                                                                        |
++--------+---------------------------------------------------------------------------------------------+
+| res    | UInt64([1, 644325524701193974, 644325529094369568, 644325528627451570, 644325528491955313]) |
+| Output | Boolean([0b___11110])                                                                       |
++--------+---------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | h3_get_resolution(0)
+  | ^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_get_resolution(0)`
+
+
+
+ast            : h3_get_resolution(644325524701193974)
+raw expr       : h3_get_resolution(644325524701193974)
+checked expr   : h3_get_resolution<UInt64>(644325524701193974_u64)
+optimized expr : 15_u8
+output type    : UInt8
+output domain  : {15..=15}
+output         : 15
+
+
+ast            : h3_get_resolution(h3)
+raw expr       : h3_get_resolution(h3::UInt64)
+checked expr   : h3_get_resolution<UInt64>(h3)
+evaluation:
++--------+-------------------------------------------+-----------+
+|        | h3                                        | Output    |
++--------+-------------------------------------------+-----------+
+| Type   | UInt64                                    | UInt8     |
+| Domain | {644325524701193974..=644325529094369568} | {0..=255} |
+| Row 0  | 644325524701193974                        | 15        |
+| Row 1  | 644325529094369568                        | 15        |
+| Row 2  | 644325528627451570                        | 15        |
+| Row 3  | 644325528491955313                        | 15        |
++--------+-------------------------------------------+-----------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------+
+| Column | Data                                                                                     |
++--------+------------------------------------------------------------------------------------------+
+| h3     | UInt64([644325524701193974, 644325529094369568, 644325528627451570, 644325528491955313]) |
+| Output | UInt8([15, 15, 15, 15])                                                                  |
++--------+------------------------------------------------------------------------------------------+
+
+
+ast            : h3_edge_length_m(0)
+raw expr       : h3_edge_length_m(0)
+checked expr   : h3_edge_length_m<UInt8>(0_u8)
+optimized expr : 1107712.591_f64
+output type    : Float64
+output domain  : {1107712.591..=1107712.591}
+output         : 1107712.591
+
+
+ast            : h3_edge_length_m(1)
+raw expr       : h3_edge_length_m(1)
+checked expr   : h3_edge_length_m<UInt8>(1_u8)
+optimized expr : 418676.0055_f64
+output type    : Float64
+output domain  : {418676.0055..=418676.0055}
+output         : 418676.0055
+
+
+ast            : h3_edge_length_m(15)
+raw expr       : h3_edge_length_m(15)
+checked expr   : h3_edge_length_m<UInt8>(15_u8)
+optimized expr : 0.509713273_f64
+output type    : Float64
+output domain  : {0.509713273..=0.509713273}
+output         : 0.509713273
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | h3_edge_length_m(16)
+  | ^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_edge_length_m(16)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | h3_edge_length_m(res)
+  | ^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `h3_edge_length_m(UInt64)`
+
+has tried possible overloads:
+  h3_edge_length_m(UInt8) :: Float64            : unable to unify `UInt64` with `UInt8`
+  h3_edge_length_m(UInt8 NULL) :: Float64 NULL  : unable to unify `UInt64` with `UInt8`
+
+
+
+ast            : h3_edge_length_km(0)
+raw expr       : h3_edge_length_km(0)
+checked expr   : h3_edge_length_km<UInt8>(0_u8)
+optimized expr : 1107.712591_f64
+output type    : Float64
+output domain  : {1107.712591..=1107.712591}
+output         : 1107.712591
+
+
+ast            : h3_edge_length_km(1)
+raw expr       : h3_edge_length_km(1)
+checked expr   : h3_edge_length_km<UInt8>(1_u8)
+optimized expr : 418.6760055_f64
+output type    : Float64
+output domain  : {418.6760055..=418.6760055}
+output         : 418.6760055
+
+
+ast            : h3_edge_length_km(15)
+raw expr       : h3_edge_length_km(15)
+checked expr   : h3_edge_length_km<UInt8>(15_u8)
+optimized expr : 0.000509713_f64
+output type    : Float64
+output domain  : {0.000509713..=0.000509713}
+output         : 0.000509713
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | h3_edge_length_km(16)
+  | ^^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_edge_length_km(16)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | h3_edge_length_km(res)
+  | ^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `h3_edge_length_km(UInt64)`
+
+has tried possible overloads:
+  h3_edge_length_km(UInt8) :: Float64            : unable to unify `UInt64` with `UInt8`
+  h3_edge_length_km(UInt8 NULL) :: Float64 NULL  : unable to unify `UInt64` with `UInt8`
+
+
+
