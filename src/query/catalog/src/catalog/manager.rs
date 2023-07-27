@@ -24,6 +24,7 @@ use common_meta_app::schema::CatalogType;
 use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::DropCatalogReq;
 use common_meta_app::schema::GetCatalogReq;
+use common_meta_app::schema::ListCatalogReq;
 use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 use dashmap::DashMap;
@@ -146,6 +147,23 @@ impl CatalogManager {
 
     #[async_backtrace::framed]
     pub async fn list_catalogs(&self) -> Result<Vec<Arc<dyn Catalog>>> {
-        todo!()
+        let mut catalogs = vec![self.get_default_catalog()?];
+
+        let infos = self
+            .meta
+            .list_catalogs(ListCatalogReq::new(&self.tenant))
+            .await?;
+
+        for info in infos {
+            let typ = info.meta.catalog_option.catalog_type();
+            let creator = self.catalog_creators.get(&typ).ok_or_else(|| {
+                ErrorCode::UnknownCatalogType(format!("unknown catalog type: {:?}", typ))
+            })?;
+
+            let catalog = creator.try_create(info).await?;
+            catalogs.push(catalog);
+        }
+
+        Ok(catalogs)
     }
 }
