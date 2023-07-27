@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod blocking;
-mod non_blocking;
-mod partition;
-mod read;
-mod table;
+mod parquet_reader;
+mod parquet_table;
+mod projection;
+pub(crate) mod pruning;
+mod statistics;
 
-pub(crate) use table::arrow_to_table_schema;
-pub use table::ParquetTable;
+pub use parquet_table::ParquetTable;
+use projection::project_parquet_schema;
