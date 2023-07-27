@@ -18,13 +18,11 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::parquet::indexes::Interval;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::BooleanType;
@@ -45,6 +43,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use opendal::services::Memory;
+use opendal::Operator;
 
 use crate::parquet_part::ParquetPart;
 use crate::parquet_part::ParquetRowGroupPart;
@@ -52,16 +52,24 @@ use crate::parquet_part::ParquetSmallFilesPart;
 use crate::parquet_reader::IndexedReaders;
 use crate::parquet_reader::ParquetPartData;
 use crate::parquet_reader::ParquetReader;
-use crate::parquet_source::ParquetSourceMeta;
-use crate::pruning::PartitionPruner;
+use crate::processors::ParquetSourceMeta;
 
 #[derive(Clone)]
 pub struct ParquetPrewhereInfo {
     pub func_ctx: FunctionContext,
-    pub reader: Arc<ParquetReader>,
+    pub reader: Arc<dyn ParquetReader>,
     pub filter: Expr,
     pub top_k: Option<(usize, TopKSorter)>,
     // the usize is the index of the column in ParquetReader.schema
+}
+
+pub trait SmallFilePrunner: Send + Sync {
+    fn prune_one_file(
+        &self,
+        path: &str,
+        op: &Operator,
+        file_size: u64,
+    ) -> Result<Vec<ParquetRowGroupPart>>;
 }
 
 pub struct ParquetDeserializeTransform {
@@ -81,11 +89,11 @@ pub struct ParquetDeserializeTransform {
     prewhere_info: Option<ParquetPrewhereInfo>,
 
     // Used for remain reading
-    remain_reader: Arc<ParquetReader>,
+    remain_reader: Arc<dyn ParquetReader>,
 
     // Used for reading from small files
-    source_reader: Arc<ParquetReader>,
-    partition_pruner: PartitionPruner,
+    source_reader: Arc<dyn ParquetReader>,
+    partition_pruner: Arc<dyn SmallFilePrunner>,
 }
 
 impl ParquetDeserializeTransform {
@@ -97,9 +105,9 @@ impl ParquetDeserializeTransform {
         src_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         prewhere_info: Option<ParquetPrewhereInfo>,
-        source_reader: Arc<ParquetReader>,
-        remain_reader: Arc<ParquetReader>,
-        partition_pruner: PartitionPruner,
+        source_reader: Arc<dyn ParquetReader>,
+        remain_reader: Arc<dyn ParquetReader>,
+        partition_pruner: Arc<dyn SmallFilePrunner>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
 
@@ -152,21 +160,15 @@ impl ParquetDeserializeTransform {
 
     fn process_small_file(&mut self, path: &str, data: Vec<u8>) -> Result<Vec<DataBlock>> {
         let mut res = Vec::new();
-        use opendal::services::Memory;
-        use opendal::Operator;
         let builder = Memory::default();
         let op = Operator::new(builder)?.finish();
+        let data_size = data.len();
         let blocking_op = op.blocking();
-
         blocking_op.write(path, data)?;
-
-        let mut reader = blocking_op.reader(path)?;
-        let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
-            ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
-        })?;
-        let (_, parts) = self
+        let parts = self
             .partition_pruner
-            .read_and_prune_file_meta(path, file_meta, op)?;
+            .prune_one_file(path, &op, data_size as u64)?;
+
         for part in parts {
             let mut readers = self
                 .source_reader
@@ -260,7 +262,7 @@ impl ParquetDeserializeTransform {
 
                 // Step 5 Remove columns that are not needed for output. Use dummy column to replace them.
                 let mut columns = prewhere_block.columns().to_vec();
-                for (col, f) in columns.iter_mut().zip(reader.output_schema.fields()) {
+                for (col, f) in columns.iter_mut().zip(reader.output_schema().fields()) {
                     if !self.output_schema.has_field(f.name()) {
                         *col = BlockEntry::new(DataType::Null, Value::Scalar(Scalar::Null));
                     }

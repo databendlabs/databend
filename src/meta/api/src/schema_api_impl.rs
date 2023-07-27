@@ -107,6 +107,7 @@ use common_meta_app::schema::ListCatalogReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListDroppedTableResp;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
@@ -1169,6 +1170,46 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         };
 
         Ok(index_metas)
+    }
+
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    async fn list_indexes_by_table_id(
+        &self,
+        req: ListIndexesByIdReq,
+    ) -> Result<Vec<u64>, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        // Get index id list by `prefix_list` "<prefix>/<tenant>"
+        let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
+            .push_str(&req.tenant)
+            .done();
+
+        let id_list = self.prefix_list_kv(&prefix_key).await?;
+        let mut id_name_list = Vec::with_capacity(id_list.len());
+        for (key, seq) in id_list.iter() {
+            let name_ident = IndexNameIdent::from_str_key(key).map_err(|e| {
+                KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
+            })?;
+            let index_id = deserialize_u64(&seq.data)?;
+            id_name_list.push((index_id.0, name_ident.index_name));
+        }
+
+        debug!(ident = display(&prefix_key), "list_indexes");
+
+        if id_name_list.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let index_ids = {
+            let index_metas = get_index_metas_by_ids(self, id_name_list).await?;
+            index_metas
+                .into_iter()
+                .filter(|(_, _, meta)| req.table_id == meta.table_id)
+                .map(|(id, _, _)| id)
+                .collect::<Vec<_>>()
+        };
+
+        Ok(index_ids)
     }
 
     // virtual column
