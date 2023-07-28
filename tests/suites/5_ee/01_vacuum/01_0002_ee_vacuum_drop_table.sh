@@ -26,7 +26,7 @@ echo "INSERT INTO test_vacuum_drop.b VALUES (2)" | $MYSQL_CLIENT_CONNECT
 
 echo "drop table test_vacuum_drop.b" | $MYSQL_CLIENT_CONNECT
 
-echo "set retention_period=0;vacuum drop table from test_vacuum_drop" | $MYSQL_CLIENT_CONNECT
+echo "vacuum drop table from test_vacuum_drop" | $MYSQL_CLIENT_CONNECT
 
 echo "undrop table test_vacuum_drop.b" | $MYSQL_CLIENT_CONNECT
 
