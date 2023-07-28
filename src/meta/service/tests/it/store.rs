@@ -64,10 +64,7 @@ impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaSto
 #[test(harness = meta_service_test_harness_sync)]
 #[minitrace::trace]
 fn test_impl_raft_storage() -> anyhow::Result<()> {
-    let root = Span::root(
-        func_name!(),
-        SpanContext::new(TraceId::random(), SpanId::default()),
-    );
+    let root = Span::root(func_name!(), SpanContext::random());
     let _guard = root.set_local_parent();
 
     common_meta_sled_store::openraft::testing::Suite::test_all(MetaStoreBuilder {})?;

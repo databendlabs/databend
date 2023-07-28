@@ -53,10 +53,7 @@ where
         .enable_all()
         .build()
         .unwrap();
-    let root = Span::root(
-        closure_name::<F>(),
-        SpanContext::new(TraceId::random(), SpanId::default()),
-    );
+    let root = Span::root(closure_name::<F>(), SpanContext::random());
     let test = test().in_span(root);
     rt.block_on(test).unwrap();
 

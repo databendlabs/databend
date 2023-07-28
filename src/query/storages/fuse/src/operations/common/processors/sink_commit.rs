@@ -272,9 +272,7 @@ where F: SnapshotGenerator + Send + 'static
                     None => false,
                 };
                 if snapshot_has_changed {
-                    tracing::error!(
-                        "commit mutation failed cause snapshot has changed when commit",
-                    );
+                    error!("commit mutation failed cause snapshot has changed when commit",);
                     // if snapshot has changed abort operation
                     self.state = State::AbortOperation;
                 } else {

@@ -1821,6 +1821,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "storages-common-table-meta",
  "typetag",
 ]
 
@@ -2819,6 +2820,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.1",
  "serde",
+ "storages-common-table-meta",
  "typetag",
 ]
 
@@ -7023,8 +7025,8 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "minitrace"
-version = "0.4.1"
-source = "git+https://github.com/tikv/minitrace-rust.git?rev=19d5ea9d#19d5ea9dc43c4a7d8b6a358d1a5ef52ae775d5b8"
+version = "0.5.0"
+source = "git+https://github.com/tikv/minitrace-rust.git?rev=39d8c96#39d8c9683d96f994a7507abdc933d6bc363256d2"
 dependencies = [
  "defer",
  "futures",
@@ -7038,8 +7040,8 @@ dependencies = [
 
 [[package]]
 name = "minitrace-macro"
-version = "0.4.1"
-source = "git+https://github.com/tikv/minitrace-rust.git?rev=19d5ea9d#19d5ea9dc43c4a7d8b6a358d1a5ef52ae775d5b8"
+version = "0.5.0"
+source = "git+https://github.com/tikv/minitrace-rust.git?rev=39d8c96#39d8c9683d96f994a7507abdc933d6bc363256d2"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -7049,8 +7051,8 @@ dependencies = [
 
 [[package]]
 name = "minitrace-opentelemetry"
-version = "0.4.1"
-source = "git+https://github.com/tikv/minitrace-rust.git?rev=19d5ea9d#19d5ea9dc43c4a7d8b6a358d1a5ef52ae775d5b8"
+version = "0.5.0"
+source = "git+https://github.com/tikv/minitrace-rust.git?rev=39d8c96#39d8c9683d96f994a7507abdc933d6bc363256d2"
 dependencies = [
  "futures",
  "log",

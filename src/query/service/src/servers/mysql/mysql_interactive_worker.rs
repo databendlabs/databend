@@ -318,10 +318,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 
     #[async_backtrace::framed]
     async fn do_query(&mut self, query: &str) -> Result<(QueryResult, Option<FormatSettings>)> {
-        let root = Span::root(
-            func_name!(),
-            SpanContext::new(TraceId::random(), SpanId::default()),
-        );
+        let root = Span::root(func_name!(), SpanContext::random());
         async {
             match self.federated_server_command_check(query) {
                 Some((schema, data_block)) => {
@@ -389,10 +386,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         SendableDataBlockStream,
         Option<Box<dyn ProgressReporter + Send>>,
     )> {
-        let root = Span::root(
-            func_name!(),
-            SpanContext::new(TraceId::random(), SpanId::default()),
-        );
+        let root = Span::root(func_name!(), SpanContext::random());
         async {
             let instant = Instant::now();
 
