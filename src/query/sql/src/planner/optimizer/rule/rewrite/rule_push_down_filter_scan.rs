@@ -101,7 +101,7 @@ impl RulePushDownFilterScan {
                             column.column.data_type.clone(),
                             column.column.visibility.clone(),
                         )
-                        .table_name(Some(table_entry.database().to_string()))
+                        .table_name(Some(table_entry.name().to_string()))
                         .database_name(Some(table_entry.database().to_string()))
                         .table_index(Some(table_entry.index()))
                         .virtual_computed_expr(column.column.virtual_computed_expr.clone())
