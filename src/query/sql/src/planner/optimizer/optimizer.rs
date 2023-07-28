@@ -175,7 +175,6 @@ pub fn optimize_query(
     }
     let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, dphyp_optimized)?;
     result = cascades.optimize(result)?;
-    result = heuristic.optimize(result, &RESIDUAL_RULES)?;
     // So far, we don't have ability to execute distributed query
     // with reading data from local tales(e.g. system tables).
     let enable_distributed_query =
@@ -190,6 +189,7 @@ pub fn optimize_query(
     if enable_distributed_query {
         result = optimize_distributed_query(ctx.clone(), &result)?;
     }
+    result = heuristic.optimize(result, &RESIDUAL_RULES)?;
 
     Ok(result)
 }

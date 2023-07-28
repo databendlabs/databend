@@ -25,6 +25,7 @@ use crate::plans::Aggregate;
 use crate::plans::CteScan;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
+use crate::plans::Exchange;
 use crate::plans::RelOperator;
 use crate::ColumnEntry;
 use crate::MetadataRef;
@@ -337,6 +338,18 @@ impl UnusedColumnPruner {
                     Arc::new(RelOperator::MaterializedCte(cte.clone())),
                     Arc::new(self.keep_required_columns(expr.child(0)?, left_required)?),
                     Arc::new(self.keep_required_columns(expr.child(1)?, required)?),
+                ))
+            }
+
+            RelOperator::Exchange(p) => {
+                if let Exchange::Hash(exprs) = p {
+                    for expr in exprs {
+                        required.extend(expr.used_columns());
+                    }
+                }
+                Ok(SExpr::create_unary(
+                    Arc::new(RelOperator::Exchange(p.clone())),
+                    Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                 ))
             }
 
