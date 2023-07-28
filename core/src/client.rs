@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::{collections::BTreeMap, fmt};
 
 use http::StatusCode;
+use once_cell::sync::Lazy;
 use percent_encoding::percent_decode_str;
 use reqwest::header::HeaderMap;
 use reqwest::multipart::{Form, Part};
@@ -32,6 +33,12 @@ use crate::{
     request::{PaginationConfig, QueryRequest, SessionConfig, StageAttachmentConfig},
     response::{QueryError, QueryResponse},
 };
+
+static VERSION: Lazy<String> = Lazy::new(|| {
+    let version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
+    let sha = option_env!("VERGEN_GIT_SHA").unwrap_or("dev");
+    format!("{}-{}", version, sha)
+});
 
 pub struct PresignedResponse {
     pub method: String,
@@ -163,14 +170,17 @@ impl APIClient {
             },
         };
 
+        let mut cli_builder =
+            HttpClient::builder().user_agent(format!("databend-client-rust/{}", VERSION.as_str()));
         #[cfg(any(feature = "rustls", feature = "native-tls"))]
         if scheme == "https" {
             if let Some(ref ca_file) = client.tls_ca_file {
                 let cert_pem = tokio::fs::read(ca_file).await?;
                 let cert = reqwest::Certificate::from_pem(&cert_pem)?;
-                client.cli = HttpClient::builder().add_root_certificate(cert).build()?;
+                cli_builder = cli_builder.add_root_certificate(cert);
             }
         }
+        client.cli = cli_builder.build()?;
         client.endpoint = Url::parse(&format!("{}://{}:{}", scheme, client.host, client.port))?;
         client.session_settings = Arc::new(Mutex::new(session_settings));
 
