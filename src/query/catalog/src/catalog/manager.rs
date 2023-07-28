@@ -12,22 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::OnceLock;
 
+use chrono::Utc;
 use common_base::base::GlobalInstance;
+use common_config::CatalogConfig;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
+use common_meta_app::schema::CatalogId;
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::CatalogMeta;
+use common_meta_app::schema::CatalogNameIdent;
+use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CatalogType;
 use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::DropCatalogReq;
 use common_meta_app::schema::GetCatalogReq;
+use common_meta_app::schema::HiveCatalogOption;
 use common_meta_app::schema::ListCatalogReq;
 use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
-use dashmap::DashMap;
 
 use super::Catalog;
 use super::CatalogCreator;
@@ -38,8 +45,13 @@ pub struct CatalogManager {
     pub meta: MetaStore,
     pub tenant: String,
 
-    pub default_catalog: OnceLock<Arc<dyn Catalog>>,
-    pub catalog_creators: DashMap<CatalogType, Arc<dyn CatalogCreator>>,
+    /// default_catalog is the DEFAULT catalog.
+    pub default_catalog: Arc<dyn Catalog>,
+    /// external catalogs is the external catalogs that configured in config.
+    pub external_catalogs: HashMap<String, Arc<dyn Catalog>>,
+
+    /// catalog_creators is the catalog creators that registered.
+    pub catalog_creators: HashMap<CatalogType, Arc<dyn CatalogCreator>>,
 }
 
 impl CatalogManager {
@@ -50,15 +62,23 @@ impl CatalogManager {
 
     /// Init the catalog manager in global instance.
     #[async_backtrace::framed]
-    pub async fn init(conf: &InnerConfig) -> Result<()> {
-        GlobalInstance::set(Self::try_create(conf).await?);
+    pub async fn init(
+        conf: &InnerConfig,
+        default_catalog: Arc<dyn Catalog>,
+        catalog_creators: Vec<(CatalogType, Arc<dyn CatalogCreator>)>,
+    ) -> Result<()> {
+        GlobalInstance::set(Self::try_create(conf, default_catalog, catalog_creators).await?);
 
         Ok(())
     }
 
     /// Try to create a catalog manager via Config.
     #[async_backtrace::framed]
-    async fn try_create(conf: &InnerConfig) -> Result<Arc<CatalogManager>> {
+    async fn try_create(
+        conf: &InnerConfig,
+        default_catalog: Arc<dyn Catalog>,
+        catalog_creators: Vec<(CatalogType, Arc<dyn CatalogCreator>)>,
+    ) -> Result<Arc<CatalogManager>> {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
@@ -66,21 +86,42 @@ impl CatalogManager {
         };
 
         let tenant = conf.query.tenant_id.clone();
+        let catalog_creators = HashMap::from_iter(catalog_creators.into_iter());
+
+        // init external catalogs.
+        let mut external_catalogs = HashMap::default();
+        for (name, ctl_cfg) in conf.catalogs.iter() {
+            let CatalogConfig::Hive(hive_ctl_cfg) = ctl_cfg;
+            let creator = catalog_creators.get(&CatalogType::Hive).ok_or_else(|| {
+                ErrorCode::BadArguments(format!("unknown catalog type: {:?}", CatalogType::Hive))
+            })?;
+            let ctl = creator
+                .try_create(Arc::new(CatalogInfo {
+                    id: CatalogId { catalog_id: 0 },
+                    name_ident: CatalogNameIdent {
+                        tenant: tenant.clone(),
+                        catalog_name: name.clone(),
+                    },
+                    meta: CatalogMeta {
+                        catalog_option: CatalogOption::Hive(HiveCatalogOption {
+                            address: hive_ctl_cfg.address.clone(),
+                        }),
+                        created_on: Utc::now(),
+                    },
+                }))
+                .await?;
+            external_catalogs.insert(name.clone(), ctl);
+        }
 
         let catalog_manager = Self {
             meta,
             tenant,
-            default_catalog: OnceLock::new(),
-            catalog_creators: DashMap::new(),
+            default_catalog,
+            external_catalogs,
+            catalog_creators,
         };
 
         Ok(Arc::new(catalog_manager))
-    }
-
-    pub fn init_default_catalog(&self, default_catalog: Arc<dyn Catalog>) {
-        self.default_catalog
-            .set(default_catalog)
-            .expect("init default catalog must succeed")
     }
 
     /// Get default catalog from manager.
@@ -88,15 +129,7 @@ impl CatalogManager {
     /// There are some place that we don't have async context, so we provide
     /// `get_default_catalog` to allow users fetch default catalog without async.
     pub fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
-        self.default_catalog
-            .get()
-            .cloned()
-            .ok_or_else(|| ErrorCode::BadArguments("default catalog is not initiated".to_string()))
-    }
-
-    /// Register a catalog creator for given name.
-    pub fn register_catalog(&self, typ: CatalogType, creator: Arc<dyn CatalogCreator>) {
-        self.catalog_creators.insert(typ, creator);
+        Ok(self.default_catalog.clone())
     }
 
     /// Get a catalog from manager.
@@ -109,6 +142,10 @@ impl CatalogManager {
     pub async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         if catalog_name == CATALOG_DEFAULT {
             return self.get_default_catalog();
+        }
+
+        if let Some(ctl) = self.external_catalogs.get(catalog_name) {
+            return Ok(ctl.clone());
         }
 
         // Get catalog from metasrv.
@@ -139,6 +176,12 @@ impl CatalogManager {
             ));
         }
 
+        if self.external_catalogs.get(req.catalog_name()).is_some() {
+            return Err(ErrorCode::BadArguments(
+                "catalog already exists that cannot be created".to_string(),
+            ));
+        }
+
         let _ = self.meta.create_catalog(req).await;
 
         Ok(())
@@ -158,6 +201,12 @@ impl CatalogManager {
     pub async fn list_catalogs(&self) -> Result<Vec<Arc<dyn Catalog>>> {
         let mut catalogs = vec![self.get_default_catalog()?];
 
+        // insert external catalogs.
+        for ctl in self.external_catalogs.values() {
+            catalogs.push(ctl.clone());
+        }
+
+        // fecth catalogs from metasrv.
         let infos = self
             .meta
             .list_catalogs(ListCatalogReq::new(&self.tenant))

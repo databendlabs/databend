@@ -86,6 +86,9 @@ use crate::catalogs::default::MutableCatalog;
 use crate::storages::Table;
 use crate::table_functions::TableFunctionFactory;
 
+#[derive(Debug)]
+pub struct DatabaseCatalogCreator;
+
 /// Combine two catalogs together
 /// - read/search like operations are always performed at
 ///   upper layer first, and bottom layer later(if necessary)

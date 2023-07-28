@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::GlobalQueryRuntime;
+use common_catalog::catalog::CatalogCreator;
 use common_catalog::catalog::CatalogManager;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
@@ -79,24 +80,20 @@ impl GlobalServices {
         //
         // Maybe we can do some refactor to simplify the logic here.
         {
-            CatalogManager::init(&config).await?;
-
-            let catalog_manager = CatalogManager::instance();
-
             // Init default catalog.
             let default_catalog = DatabaseCatalog::try_create_with_config(config.clone()).await?;
-            catalog_manager.init_default_catalog(Arc::new(default_catalog));
 
-            // Register iceberg catalog.
-            catalog_manager.register_catalog(CatalogType::Iceberg, Arc::new(IcebergCreator));
-
+            let mut catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![];
+            catalog_creator.push((CatalogType::Iceberg, Arc::new(IcebergCreator)));
             // Register hive catalog.
             #[cfg(feature = "hive")]
             {
                 use common_storages_hive::HiveCreator;
 
-                catalog_manager.register_catalog(CatalogType::Hive, Arc::new(HiveCreator));
+                catalog_creator.push((CatalogType::Hive, Arc::new(HiveCreator)));
             }
+
+            CatalogManager::init(&config, Arc::new(default_catalog), catalog_creator).await?;
         }
 
         HttpQueryManager::init(&config).await?;
