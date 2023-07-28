@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_exception::Span;
 
 use super::select::SelectList;
+use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
@@ -38,7 +39,6 @@ use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
 use crate::BindContext;
 use crate::Binder;
-use crate::ColumnBinding;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;
@@ -267,17 +267,13 @@ impl<'a> WindowRewriter<'a> {
                         .get(&agg_func.display_name)
                     {
                         let agg = &self.bind_context.aggregate_info.aggregate_functions[*index];
-                        let column_binding = ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_position: None,
-                            table_index: None,
-                            column_name: agg_func.display_name.clone(),
-                            index: agg.index,
-                            data_type: agg_func.return_type.clone(),
-                            visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
-                        };
+                        let column_binding = ColumnBindingBuilder::new(
+                            agg_func.display_name.clone(),
+                            agg.index,
+                            agg_func.return_type.clone(),
+                            Visibility::Visible,
+                        )
+                        .build();
                         Ok(BoundColumnRef {
                             span: None,
                             column: column_binding,
@@ -483,17 +479,13 @@ impl<'a> WindowRewriter<'a> {
                 .add_derived_column(name.to_string(), ty.clone());
 
             // Generate a ColumnBinding for each argument of aggregates
-            let column = ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_position: None,
-                table_index: None,
-                column_name: name.to_string(),
+            let column = ColumnBindingBuilder::new(
+                name.to_string(),
                 index,
-                data_type: Box::new(ty),
-                visibility: Visibility::Visible,
-                virtual_computed_expr: None,
-            };
+                Box::new(ty),
+                Visibility::Visible,
+            )
+            .build();
             Ok(BoundColumnRef {
                 span: arg.span(),
                 column,

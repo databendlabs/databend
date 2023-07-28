@@ -407,6 +407,8 @@ pub enum TokenKind {
     DATABASE,
     #[token("DATABASES", ignore(ascii_case))]
     DATABASES,
+    #[token("DATA", ignore(ascii_case))]
+    DATA,
     #[token("DATE", ignore(ascii_case))]
     DATE,
     #[token("DATE_ADD", ignore(ascii_case))]

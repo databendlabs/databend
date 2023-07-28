@@ -18,6 +18,7 @@ use ahash::HashMap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
@@ -36,7 +37,6 @@ use crate::plans::UnionAll;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
-use crate::ColumnBinding;
 use crate::IndexType;
 use crate::Visibility;
 
@@ -147,17 +147,14 @@ fn replace_column_binding(
         ScalarExpr::BoundColumnRef(column) => {
             let index = column.column.index;
             if index_pairs.contains_key(&index) {
-                let new_column = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_position: None,
-                    table_index: None,
-                    column_name: column.column.column_name.clone(),
-                    index: *index_pairs.get(&index).unwrap(),
-                    data_type: column.column.data_type,
-                    visibility: Visibility::Visible,
-                    virtual_computed_expr: column.column.virtual_computed_expr.clone(),
-                };
+                let new_column = ColumnBindingBuilder::new(
+                    column.column.column_name.clone(),
+                    *index_pairs.get(&index).unwrap(),
+                    column.column.data_type,
+                    Visibility::Visible,
+                )
+                .virtual_computed_expr(column.column.virtual_computed_expr.clone())
+                .build();
                 return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: column.span,
                     column: new_column,

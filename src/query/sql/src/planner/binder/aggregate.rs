@@ -34,6 +34,7 @@ use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
@@ -233,20 +234,14 @@ impl<'a> AggregateRewriter<'a> {
                     .add_derived_column(name.clone(), arg.data_type()?);
 
                 // Generate a ColumnBinding for each argument of aggregates
-                let column_binding = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-
-                    // TODO(leiysky): use a more reasonable name, since aggregate arguments
-                    // can not be referenced, the name is only for debug
-                    column_position: None,
-                    table_index: None,
-                    column_name: name,
+                let column_binding = ColumnBindingBuilder::new(
+                    name,
                     index,
-                    data_type: Box::new(arg.data_type()?),
-                    visibility: Visibility::Visible,
-                    virtual_computed_expr: None,
-                };
+                    Box::new(arg.data_type()?),
+                    Visibility::Visible,
+                )
+                .build();
+
                 replaced_args.push(
                     BoundColumnRef {
                         span: arg.span(),

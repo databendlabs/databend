@@ -17,6 +17,7 @@
 #![feature(let_chains)]
 #![feature(try_blocks)]
 #![feature(extend_one)]
+#![feature(default_free_fn)]
 
 pub mod evaluator;
 pub mod executor;
