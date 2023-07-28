@@ -338,16 +338,27 @@ error:
 
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | h3_edge_length_m(res)
-  | ^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `h3_edge_length_m(UInt64)`
-
-has tried possible overloads:
-  h3_edge_length_m(UInt8) :: Float64            : unable to unify `UInt64` with `UInt8`
-  h3_edge_length_m(UInt8 NULL) :: Float64 NULL  : unable to unify `UInt64` with `UInt8`
-
+ast            : h3_edge_length_m(res)
+raw expr       : h3_edge_length_m(res::UInt8)
+checked expr   : h3_edge_length_m<UInt8>(res)
+evaluation:
++--------+---------+--------------+
+|        | res     | Output       |
++--------+---------+--------------+
+| Type   | UInt8   | Float64      |
+| Domain | {1..=4} | {-inf..=NaN} |
+| Row 0  | 1       | 418676.0055  |
+| Row 1  | 2       | 158244.6558  |
+| Row 2  | 3       | 59810.85794  |
+| Row 3  | 4       | 22606.3794   |
++--------+---------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------+
+| Column | Data                                                         |
++--------+--------------------------------------------------------------+
+| res    | UInt8([1, 2, 3, 4])                                          |
+| Output | Float64([418676.0055, 158244.6558, 59810.85794, 22606.3794]) |
++--------+--------------------------------------------------------------+
 
 
 ast            : h3_edge_length_km(0)
@@ -385,15 +396,26 @@ error:
 
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | h3_edge_length_km(res)
-  | ^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `h3_edge_length_km(UInt64)`
-
-has tried possible overloads:
-  h3_edge_length_km(UInt8) :: Float64            : unable to unify `UInt64` with `UInt8`
-  h3_edge_length_km(UInt8 NULL) :: Float64 NULL  : unable to unify `UInt64` with `UInt8`
-
+ast            : h3_edge_length_km(res)
+raw expr       : h3_edge_length_km(res::UInt8)
+checked expr   : h3_edge_length_km<UInt8>(res)
+evaluation:
++--------+---------+--------------+
+|        | res     | Output       |
++--------+---------+--------------+
+| Type   | UInt8   | Float64      |
+| Domain | {1..=4} | {-inf..=NaN} |
+| Row 0  | 1       | 418.6760055  |
+| Row 1  | 2       | 158.2446558  |
+| Row 2  | 3       | 59.81085794  |
+| Row 3  | 4       | 22.6063794   |
++--------+---------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------+
+| Column | Data                                                         |
++--------+--------------------------------------------------------------+
+| res    | UInt8([1, 2, 3, 4])                                          |
+| Output | Float64([418.6760055, 158.2446558, 59.81085794, 22.6063794]) |
++--------+--------------------------------------------------------------+
 
 
