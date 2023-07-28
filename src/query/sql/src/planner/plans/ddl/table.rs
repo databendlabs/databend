@@ -269,7 +269,6 @@ pub struct ModifyTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub column: String,
     pub action: ModifyColumnAction,
 }
 

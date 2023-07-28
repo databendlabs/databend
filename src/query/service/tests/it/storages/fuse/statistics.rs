@@ -262,6 +262,35 @@ fn test_reduce_cluster_statistics() -> common_exception::Result<()> {
 
     let res_2 = reducers::reduce_cluster_statistics(&[cluster_stats_0, cluster_stats_1], Some(1));
     assert_eq!(res_2, None);
+
+    // multi cluster keys.
+    let multi_cluster_stats_0 = Some(ClusterStatistics {
+        cluster_key_id: 0,
+        min: vec![Scalar::from(1i64), Scalar::from(4i64)],
+        max: vec![Scalar::from(1i64), Scalar::from(4i64)],
+        level: 0,
+        pages: None,
+    });
+    let multi_cluster_stats_2 = Some(ClusterStatistics {
+        cluster_key_id: 0,
+        min: vec![Scalar::from(3i64), Scalar::from(2i64)],
+        max: vec![Scalar::from(3i64), Scalar::from(2i64)],
+        level: 0,
+        pages: None,
+    });
+    let res_3 = reducers::reduce_cluster_statistics(
+        &[multi_cluster_stats_0, multi_cluster_stats_2],
+        default_cluster_key_id,
+    );
+    let expect = Some(ClusterStatistics {
+        cluster_key_id: 0,
+        min: vec![Scalar::from(1i64), Scalar::from(4i64)],
+        max: vec![Scalar::from(3i64), Scalar::from(2i64)],
+        level: 0,
+        pages: None,
+    });
+    assert_eq!(res_3, expect);
+
     Ok(())
 }
 

@@ -1366,19 +1366,33 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
-            AlterTableAction::ModifyColumn { column, action } => {
-                let child_name = match action {
-                    ModifyColumnAction::SetMaskingPolicy(mask_name) => {
-                        format!("Action SetMaskingPolicy {}", mask_name)
+            AlterTableAction::ModifyColumn { action } => {
+                let (action_name, child_name) = match action {
+                    ModifyColumnAction::SetMaskingPolicy(column, mask_name) => (
+                        format!("Action ModifyColumn column {}", column),
+                        format!("Action SetMaskingPolicy {}", mask_name),
+                    ),
+                    ModifyColumnAction::SetDataType(column_type_name_vec) => {
+                        let action_name = "Action ModifyColumn".to_string();
+
+                        let child_action = column_type_name_vec
+                            .iter()
+                            .map(|(column, type_name)| {
+                                format!("Set Column {} DataType {}", column, type_name)
+                            })
+                            .collect::<Vec<_>>()
+                            .join(",");
+
+                        (action_name, format!("Action {}", child_action))
                     }
-                    ModifyColumnAction::ConvertStoredComputedColumn => {
-                        "Action ConvertStoredComputedColumn".to_string()
-                    }
+                    ModifyColumnAction::ConvertStoredComputedColumn(column) => (
+                        format!("Action ModifyColumn column {}", column),
+                        "Action ConvertStoredComputedColumn".to_string(),
+                    ),
                 };
                 let child_format_ctx = AstFormatContext::new(child_name);
                 let child = FormatTreeNode::new(child_format_ctx);
 
-                let action_name = format!("Action ModifyColumn column {}", column);
                 let action_format_ctx = AstFormatContext::with_children(action_name, 1);
                 FormatTreeNode::with_children(action_format_ctx, vec![child])
             }

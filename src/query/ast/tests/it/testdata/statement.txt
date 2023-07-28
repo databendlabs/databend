@@ -7472,15 +7472,158 @@ AlterTable(
             unpivot: None,
         },
         action: ModifyColumn {
-            column: Identifier {
-                name: "b",
+            action: SetMaskingPolicy(
+                Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Some(
+                        28..29,
+                    ),
+                },
+                "mask",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY COLUMN a int, COLUMN b float;
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN a Int32, COLUMN b Float32
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
                 quote: None,
                 span: Some(
-                    28..29,
+                    12..13,
                 ),
             },
-            action: SetMaskingPolicy(
-                "mask",
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyColumn {
+            action: SetDataType(
+                [
+                    (
+                        Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                28..29,
+                            ),
+                        },
+                        Int32,
+                    ),
+                    (
+                        Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                42..43,
+                            ),
+                        },
+                        Float32,
+                    ),
+                ],
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY COLUMN a int;
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN a Int32
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyColumn {
+            action: SetDataType(
+                [
+                    (
+                        Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                28..29,
+                            ),
+                        },
+                        Int32,
+                    ),
+                ],
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY COLUMN a DROP STORED;
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN a DROP STORED
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyColumn {
+            action: ConvertStoredComputedColumn(
+                Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Some(
+                        28..29,
+                    ),
+                },
             ),
         },
     },

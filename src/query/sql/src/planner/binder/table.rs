@@ -736,17 +736,20 @@ impl Binder {
             .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), blocks)?;
         // Get the fields in the cte
         let mut fields = vec![];
-        for column in cte_info.columns.iter() {
+        let mut offsets = vec![];
+        for (idx, column) in cte_info.columns.iter().enumerate() {
             fields.push(DataField::new(
                 column.index.to_string().as_str(),
                 *column.data_type.clone(),
-            ))
+            ));
+            offsets.push(idx);
         }
         let cte_scan = SExpr::create_leaf(Arc::new(
             CteScan {
                 cte_idx: (cte_info.cte_idx, cte_info.used_count),
                 fields,
                 // It is safe to unwrap here because we have checked that the cte is materialized.
+                offsets,
                 stat: cte_info.stat_info.clone().unwrap(),
             }
             .into(),

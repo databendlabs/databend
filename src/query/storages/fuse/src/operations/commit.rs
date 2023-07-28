@@ -42,6 +42,7 @@ use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -77,6 +78,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
+        prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
         pipeline.try_resize(1)?;
 
@@ -103,6 +105,7 @@ impl FuseTable {
                 input,
                 None,
                 false,
+                prev_snapshot_id,
             )
         })?;
 

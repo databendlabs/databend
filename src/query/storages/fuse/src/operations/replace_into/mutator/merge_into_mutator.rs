@@ -225,9 +225,14 @@ impl MergeIntoOperationAggregator {
                         }
                     }
 
-                    metrics_inc_replace_block_number_after_pruning(
-                        self.deletion_accumulator.deletions.len() as u64,
+                    let num_blocks_mutated = self.deletion_accumulator.deletions.values().fold(
+                        0,
+                        |acc, blocks_may_have_row_deletion| {
+                            acc + blocks_may_have_row_deletion.len()
+                        },
                     );
+
+                    metrics_inc_replace_block_number_after_pruning(num_blocks_mutated as u64);
                 }
             }
             MergeIntoOperation::None => {}

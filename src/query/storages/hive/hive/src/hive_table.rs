@@ -58,6 +58,7 @@ use opendal::EntryMode;
 use opendal::Metakey;
 use opendal::Operator;
 use storages_common_index::RangeIndex;
+use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use super::hive_catalog::HiveCatalog;
@@ -591,6 +592,7 @@ impl Table for HiveTable {
         _pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
         _overwrite: bool,
+        _prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "commit_insertion operation for table {} is not implemented, table engine is {}",
