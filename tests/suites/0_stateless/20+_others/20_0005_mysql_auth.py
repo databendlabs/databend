@@ -3,6 +3,7 @@
 import os
 import mysql.connector
 import sys
+import time
 
 CURDIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(CURDIR, "../../../helpers"))
@@ -21,6 +22,8 @@ with NativeClient(name="client1>") as client1:
     client1.expect(prompt)
     client1.send("create user u1 identified by 'abc123';")
     client1.expect(prompt)
+
+time.sleep(1)
 
 mydb = mysql.connector.connect(
     host="127.0.0.1", user="u1", passwd="abc123", port="3307"
