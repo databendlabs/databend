@@ -207,7 +207,6 @@ impl FuseTable {
         }
 
         let mut computed_exprs = Vec::with_capacity(computed_list.len());
-        let computed_list_len = computed_list.len();
         for (id, remote_expr) in computed_list.into_iter() {
             let expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
@@ -222,16 +221,11 @@ impl FuseTable {
         }
         // regenerate related stored computed columns.
         if !computed_exprs.is_empty() {
-            let projections = (0..=computed_list_len).collect::<ColumnSet>();
             ops.push(BlockOperator::Map {
-                projections,
+                projections: offset_map.values().cloned().collect(),
                 exprs: computed_exprs,
             });
         }
-
-        ops.push(BlockOperator::Project {
-            projection: offset_map.values().cloned().collect(),
-        });
 
         let block_reader = self.create_block_reader(projection.clone(), false, ctx.clone())?;
         let mut schema = block_reader.schema().as_ref().clone();
