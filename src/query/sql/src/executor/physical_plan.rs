@@ -528,7 +528,6 @@ impl RowFetch {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = self.input.output_schema()?.fields().clone();
         fields.extend_from_slice(&self.fetched_fields);
-        dbg!(&fields);
         Ok(DataSchemaRefExt::create(fields))
     }
 }

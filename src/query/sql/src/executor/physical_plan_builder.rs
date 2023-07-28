@@ -1143,9 +1143,33 @@ impl PhysicalPlanBuilder {
         w: &LogicalWindow,
     ) -> Result<PhysicalPlan> {
         let input = self.build(s_expr.child(0)?).await?;
-        let input_schema = input.output_schema()?;
 
         let mut w = w.clone();
+        // Generate a `EvalScalar` as the input of `Window`.
+        let mut scalar_items: Vec<ScalarItem> = Vec::new();
+        for arg in &w.arguments {
+            scalar_items.push(arg.clone());
+        }
+        for part in &w.partition_by {
+            scalar_items.push(part.clone());
+        }
+        for order in &w.order_by {
+            scalar_items.push(order.order_by_item.clone())
+        }
+        let projections = w.projections.clone();
+        let input = if !scalar_items.is_empty() {
+            self.build_eval_scalar(
+                input,
+                &crate::planner::plans::EvalScalar {
+                    projections,
+                    items: scalar_items,
+                },
+                stat_info.clone(),
+            )?
+        } else {
+            input
+        };
+        let input_schema = input.output_schema()?;
 
         // Unify the data type for range frame.
         if w.frame.units.is_range() && w.order_by.len() == 1 {
@@ -1210,31 +1234,6 @@ impl PhysicalPlanBuilder {
                 .set_span(w.span));
             }
         }
-
-        // Generate a `EvalScalar` as the input of `Window`.
-        let mut scalar_items: Vec<ScalarItem> = Vec::new();
-        for arg in &w.arguments {
-            scalar_items.push(arg.clone());
-        }
-        for part in &w.partition_by {
-            scalar_items.push(part.clone());
-        }
-        for order in &w.order_by {
-            scalar_items.push(order.order_by_item.clone())
-        }
-        let projections = w.projections.clone();
-        let input = if !scalar_items.is_empty() {
-            self.build_eval_scalar(
-                input,
-                &crate::planner::plans::EvalScalar {
-                    projections,
-                    items: scalar_items,
-                },
-                stat_info.clone(),
-            )?
-        } else {
-            input
-        };
 
         let order_by_items = w
             .order_by
