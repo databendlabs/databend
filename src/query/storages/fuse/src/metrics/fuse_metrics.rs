@@ -244,18 +244,22 @@ pub fn metrics_inc_replace_partition_number(c: u64) {
     increment_gauge!(key!("replace_into_partition_number"), c as f64);
 }
 
+// time used in processing the input block
 pub fn metrics_inc_replace_process_input_block_time_ms(c: u64) {
     increment_gauge!(key!("replace_into_time_process_input_block_ms"), c as f64);
 }
 
+// the number of accumulate_merge_action operation invoked
 pub fn metrics_inc_replace_number_accumulated_merge_action() {
-    counter!(key!("replace_into_accumulated_merge_action"), 1);
+    counter!(key!("replace_into_number_accumulated_merge_action"), 1);
 }
 
+// the number of apply_deletion operation applied
 pub fn metrics_inc_replace_number_apply_deletion() {
-    counter!(key!("replace_into_apply_deletion"), 1);
+    counter!(key!("replace_into_number_apply_deletion"), 1);
 }
 
+// time used in executing the accumulated_merge_action operation
 pub fn metrics_inc_replace_accumulated_merge_action_time_ms(c: u64) {
     increment_gauge!(
         key!("replace_into_time_accumulated_merge_action_ms"),
@@ -263,6 +267,7 @@ pub fn metrics_inc_replace_accumulated_merge_action_time_ms(c: u64) {
     );
 }
 
+// time used in executing the apply_deletion operation
 pub fn metrics_inc_replace_apply_deletion_time_ms(c: u64) {
     increment_gauge!(key!("replace_into_time_apply_deletion_ms"), c as f64);
 }

@@ -16,10 +16,12 @@
 
 use metrics::increment_gauge;
 
+// the time used in executing the whole replace-into statement
 pub fn metrics_inc_replace_execution_time_ms(c: u64) {
     increment_gauge!("replace_into_time_execution_ms", c as f64);
 }
 
+// the time used in executing the mutation (upsert) part of the replace-into statement
 pub fn metrics_inc_replace_mutation_time_ms(c: u64) {
     increment_gauge!("replace_into_time_mutation_ms", c as f64);
 }
