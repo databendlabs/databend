@@ -36,6 +36,9 @@ excludes = [
     "core/tests/**",
     "driver/tests/**",
     "cli/tests/**",
+
+    # python files
+    "**/*.pyi"
 ]
 
 [properties]

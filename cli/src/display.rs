@@ -31,6 +31,7 @@ use crate::{
     ast::format_query,
     config::{OutputFormat, Settings},
     helper::CliHelper,
+    session::QueryKind,
 };
 
 #[async_trait::async_trait]
@@ -42,6 +43,7 @@ pub trait ChunkDisplay {
 pub struct FormatDisplay<'a> {
     settings: &'a Settings,
     query: &'a str,
+    kind: QueryKind,
     // whether replace '\n' with '\\n', only disable in explain/show create stmts
     replace_newline: bool,
     schema: SchemaRef,
@@ -68,6 +70,7 @@ impl<'a> FormatDisplay<'a> {
             replace_newline,
             schema,
             data,
+            kind: QueryKind::from(query),
             rows: 0,
             progress: None,
             start,
@@ -205,12 +208,20 @@ impl<'a> FormatDisplay<'a> {
         if !self.settings.show_stats {
             return;
         }
+
         if let Some(ref mut stats) = self.stats {
             stats.normalize();
-            let rows_str = if self.rows > 1 { "rows" } else { "row" };
+
+            let (rows, kind) = if matches!(self.kind, QueryKind::Update) {
+                (stats.write_rows, "written")
+            } else {
+                (self.rows, "result")
+            };
+
+            let rows_str = if rows > 1 { "rows" } else { "row" };
             eprintln!(
-                "{} {} in {:.3} sec. Processed {} rows, {} ({} rows/s, {}/s)",
-                self.rows,
+                "{} {} {kind} in {:.3} sec. Processed {} rows, {} ({} rows/s, {}/s)",
+                rows,
                 rows_str,
                 self.start.elapsed().as_secs_f64(),
                 humanize_count(stats.total_rows as f64),
