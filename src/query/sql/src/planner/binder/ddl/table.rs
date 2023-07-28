@@ -1377,6 +1377,14 @@ impl Binder {
                 )));
             }
 
+            let data_type = expr.data_type();
+            if !Self::valid_cluster_key_type(data_type) {
+                return Err(ErrorCode::InvalidClusterKeys(format!(
+                    "Unsupported data type '{}' for cluster by expression `{:#}`",
+                    data_type, cluster_by
+                )));
+            }
+
             let mut cluster_by = cluster_by.clone();
             walk_expr_mut(
                 &mut IdentifierNormalizer {
@@ -1388,5 +1396,19 @@ impl Binder {
         }
 
         Ok(cluster_keys)
+    }
+
+    fn valid_cluster_key_type(d: &DataType) -> bool {
+        match d {
+            DataType::Array(_)
+            | DataType::EmptyArray
+            | DataType::EmptyMap
+            | DataType::Map(_)
+            | DataType::Bitmap
+            | DataType::Tuple(_)
+            | DataType::Generic(_) => false,
+            DataType::Nullable(inner) => Self::valid_cluster_key_type(inner.as_ref()),
+            _ => true,
+        }
     }
 }
