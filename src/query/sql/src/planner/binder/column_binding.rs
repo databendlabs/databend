@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::default::default;
-use common_expression::ColumnIndex;
-
 use common_expression::types::DataType;
+use common_expression::ColumnIndex;
 
 use crate::IndexType;
 use crate::Visibility;

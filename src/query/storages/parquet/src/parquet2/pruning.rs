@@ -515,7 +515,7 @@ mod tests {
     use common_sql::plans::ConstantExpr;
     use common_sql::plans::FunctionCall;
     use common_sql::plans::ScalarExpr;
-    use common_sql::ColumnBinding;
+    use common_sql::ColumnBindingBuilder;
     use common_sql::Visibility;
     use common_storage::ColumnNodes;
     use storages_common_pruner::RangePrunerCreator;

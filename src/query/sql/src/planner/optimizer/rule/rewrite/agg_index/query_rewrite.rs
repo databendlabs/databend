@@ -38,7 +38,6 @@ use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
-use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::IndexType;

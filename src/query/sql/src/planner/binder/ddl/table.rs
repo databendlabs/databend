@@ -116,7 +116,6 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::BindContext;
-use crate::ColumnBinding;
 use crate::Planner;
 use crate::SelectBuilder;
 

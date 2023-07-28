@@ -29,7 +29,6 @@ use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
-use crate::ColumnBinding;
 use crate::ScalarExpr;
 use crate::Visibility;
 

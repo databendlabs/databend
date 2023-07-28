@@ -26,7 +26,6 @@ use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
 use common_sql::binder::ColumnBindingBuilder;
 use common_sql::executor::cast_expr_to_non_null_boolean;
-use common_sql::ColumnBinding;
 use common_sql::Visibility;
 use table_lock::TableLockHandlerWrapper;
 

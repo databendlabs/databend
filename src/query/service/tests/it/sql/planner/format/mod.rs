@@ -33,7 +33,6 @@ use databend_query::sql::plans::BoundColumnRef;
 use databend_query::sql::plans::ConstantExpr;
 use databend_query::sql::plans::Filter;
 use databend_query::sql::plans::FunctionCall;
-use databend_query::sql::ColumnBinding;
 use databend_query::sql::Visibility;
 use databend_query::storages::Table;
 use parking_lot::RwLock;

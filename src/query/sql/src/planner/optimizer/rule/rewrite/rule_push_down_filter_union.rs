@@ -37,7 +37,6 @@ use crate::plans::UnionAll;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
-use crate::ColumnBinding;
 use crate::IndexType;
 use crate::Visibility;
 

@@ -24,7 +24,6 @@ use common_expression::Scalar;
 use common_functions::aggregates::AggregateCountFunction;
 
 use crate::binder::wrap_cast;
-use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::RelExpr;

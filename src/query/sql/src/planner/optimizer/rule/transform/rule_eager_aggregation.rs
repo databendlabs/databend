@@ -40,7 +40,6 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
-use crate::ColumnBinding;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;

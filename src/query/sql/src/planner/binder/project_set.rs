@@ -35,7 +35,6 @@ use crate::plans::ProjectSet;
 use crate::plans::SrfItem;
 use crate::BindContext;
 use crate::Binder;
-use crate::ColumnBinding;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;

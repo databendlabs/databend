@@ -43,7 +43,6 @@ use crate::binder::ColumnBindingBuilder;
 use crate::plans::BoundColumnRef;
 use crate::resolve_type_name_by_str;
 use crate::BindContext;
-use crate::ColumnBinding;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::ScalarExpr;

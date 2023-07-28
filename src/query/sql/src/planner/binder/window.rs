@@ -39,7 +39,6 @@ use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
 use crate::BindContext;
 use crate::Binder;
-use crate::ColumnBinding;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;

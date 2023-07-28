@@ -34,7 +34,6 @@ use crate::plans::Scan;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
-use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::MetadataRef;
 use crate::ScalarExpr;

@@ -16,7 +16,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 
-use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::plans::BoundColumnRef;

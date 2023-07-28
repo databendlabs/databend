@@ -20,7 +20,6 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
 use crate::BindContext;
-use crate::ColumnBinding;
 use crate::ScalarExpr;
 use crate::Visibility;
 

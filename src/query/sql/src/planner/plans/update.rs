@@ -37,7 +37,6 @@ use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryDesc;
 use crate::BindContext;
-use crate::ColumnBinding;
 use crate::MetadataRef;
 use crate::Visibility;
 
