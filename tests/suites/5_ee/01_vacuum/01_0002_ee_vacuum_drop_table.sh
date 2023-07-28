@@ -18,7 +18,7 @@ echo "select * from test_vacuum_drop.a" | $MYSQL_CLIENT_CONNECT
 
 echo "drop table test_vacuum_drop.a" | $MYSQL_CLIENT_CONNECT
 
-echo "vacuum drop table from test_vacuum_drop retain 0 hours" | $MYSQL_CLIENT_CONNECT
+echo "set retention_period=0;vacuum drop table from test_vacuum_drop retain 0 hours" | $MYSQL_CLIENT_CONNECT
 
 echo "create table test_vacuum_drop.b(c int)" | $MYSQL_CLIENT_CONNECT
 
@@ -26,7 +26,7 @@ echo "INSERT INTO test_vacuum_drop.b VALUES (2)" | $MYSQL_CLIENT_CONNECT
 
 echo "drop table test_vacuum_drop.b" | $MYSQL_CLIENT_CONNECT
 
-echo "vacuum drop table from test_vacuum_drop" | $MYSQL_CLIENT_CONNECT
+echo "set retention_period=0;vacuum drop table from test_vacuum_drop" | $MYSQL_CLIENT_CONNECT
 
 echo "undrop table test_vacuum_drop.b" | $MYSQL_CLIENT_CONNECT
 
@@ -50,11 +50,12 @@ echo "drop database test_vacuum_drop_2" | $MYSQL_CLIENT_CONNECT
 echo "drop table test_vacuum_drop_3.a" | $MYSQL_CLIENT_CONNECT
 
 # vacuum without [from db] will vacuum all tables, including tables in drop db
-echo "vacuum drop table retain 0 hours" | $MYSQL_CLIENT_CONNECT
+echo "set retention_period=0;vacuum drop table retain 0 hours" | $MYSQL_CLIENT_CONNECT
 
 echo "drop database if exists test_vacuum_drop" | $MYSQL_CLIENT_CONNECT
 echo "drop database if exists test_vacuum_drop_2" | $MYSQL_CLIENT_CONNECT
 echo "drop database if exists test_vacuum_drop_3" | $MYSQL_CLIENT_CONNECT
+echo "drop database if exists test_vacuum_drop_4" | $MYSQL_CLIENT_CONNECT
 
 # test external table
 echo "drop table if exists table_drop_external_location;" | $MYSQL_CLIENT_CONNECT
@@ -76,7 +77,7 @@ echo "select * from table_drop_external_location order by a;" | $MYSQL_CLIENT_CO
 
 echo "drop table table_drop_external_location;" | $MYSQL_CLIENT_CONNECT
 
-echo "vacuum drop table retain 0 hours" | $MYSQL_CLIENT_CONNECT
+echo "set retention_period=0;vacuum drop table retain 0 hours" | $MYSQL_CLIENT_CONNECT
 
 ## dry run
 echo "CREATE DATABASE test_vacuum_drop_4" | $MYSQL_CLIENT_CONNECT
@@ -84,9 +85,20 @@ echo "create table test_vacuum_drop_4.a(c int)" | $MYSQL_CLIENT_CONNECT
 echo "INSERT INTO test_vacuum_drop_4.a VALUES (1)" | $MYSQL_CLIENT_CONNECT
 echo "select * from test_vacuum_drop_4.a"  | $MYSQL_CLIENT_CONNECT
 echo "drop table test_vacuum_drop_4.a" | $MYSQL_CLIENT_CONNECT
-echo "vacuum drop table retain 0 hours dry run" | $MYSQL_CLIENT_CONNECT > /dev/null 
+echo "set retention_period=0;vacuum drop table retain 0 hours dry run" | $MYSQL_CLIENT_CONNECT > /dev/null 
 echo "undrop table test_vacuum_drop_4.a" | $MYSQL_CLIENT_CONNECT
 echo "select * from test_vacuum_drop_4.a"  | $MYSQL_CLIENT_CONNECT
+
+# check vacuum table with the same name
+echo "create table test_vacuum_drop_4.b(c float)" | $MYSQL_CLIENT_CONNECT
+echo "drop table test_vacuum_drop_4.b" | $MYSQL_CLIENT_CONNECT
+echo "create table test_vacuum_drop_4.b(c int)" | $MYSQL_CLIENT_CONNECT
+echo "INSERT INTO test_vacuum_drop_4.b VALUES (2)" | $MYSQL_CLIENT_CONNECT
+echo "select * from test_vacuum_drop_4.b"  | $MYSQL_CLIENT_CONNECT
+echo "set retention_period=0; vacuum drop table retain 0 hours dry run" | $MYSQL_CLIENT_CONNECT
+echo "select * from test_vacuum_drop_4.b"  | $MYSQL_CLIENT_CONNECT
+
+echo "drop database if exists test_vacuum_drop_4" | $MYSQL_CLIENT_CONNECT
 
 ## Drop table
 echo "drop table if exists table_drop_external_location;" | $MYSQL_CLIENT_CONNECT
