@@ -1109,6 +1109,7 @@ impl PhysicalPlanBuilder {
                 plan_id: self.next_plan_id(),
                 cte_idx: cte_scan.cte_idx,
                 output_schema: DataSchemaRefExt::create(cte_scan.fields.clone()),
+                offsets: cte_scan.offsets.clone(),
             })),
 
             RelOperator::MaterializedCte(op) => {

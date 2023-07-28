@@ -1,8 +1,6 @@
 ---
-title: How to Trace Databend
+title: Tracing Databend
 ---
-
-## Tracing In Databend
 
 Databend using Rust's tracing ecosystem [tokio-tracing](https://github.com/tokio-rs/tracing) to do log and profile.
 
