@@ -15,13 +15,14 @@
 use std::assert_eq;
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime};
-use databend_driver::{new_connection, Connection, DecimalSize, NumberValue, Value};
+use databend_driver::{Client, Connection, DecimalSize, NumberValue, Value};
 
 use crate::common::DEFAULT_DSN;
 
 async fn prepare() -> Box<dyn Connection> {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
-    new_connection(dsn).unwrap()
+    let client = Client::new(dsn.to_string());
+    client.get_conn().await.unwrap()
 }
 
 #[tokio::test]

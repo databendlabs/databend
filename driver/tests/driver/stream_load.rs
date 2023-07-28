@@ -15,7 +15,7 @@
 use std::vec;
 
 use chrono::{NaiveDateTime, Utc};
-use databend_driver::new_connection;
+use databend_driver::Client;
 use tokio::fs::File;
 use tokio_stream::StreamExt;
 
@@ -24,11 +24,12 @@ use crate::common::DEFAULT_DSN;
 async fn stream_load(presigned: bool, file_type: &str) {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
     let client = if presigned {
-        new_connection(dsn).unwrap()
+        Client::new(dsn.to_string())
     } else {
-        new_connection(&format!("{}&presigned_url_disabled=1", dsn)).unwrap()
+        Client::new(format!("{}&presigned_url_disabled=1", dsn))
     };
-    let info = client.info().await;
+    let conn = client.get_conn().await.unwrap();
+    let info = conn.info().await;
     if info.handler == "FlightSQL" {
         // NOTE: FlightSQL does not support stream load
         return;
@@ -54,7 +55,7 @@ async fn stream_load(presigned: bool, file_type: &str) {
             publish_time TIMESTAMP NULL)",
         table
     );
-    client.exec(&sql).await.unwrap();
+    conn.exec(&sql).await.unwrap();
 
     let sql = format!("INSERT INTO `{}` VALUES", table);
     let data = Box::new(file);
@@ -65,14 +66,14 @@ async fn stream_load(presigned: bool, file_type: &str) {
         _ => panic!("unsupported file type"),
     };
 
-    let progress = client
+    let progress = conn
         .stream_load(&sql, data, size, file_format_options, None)
         .await
         .unwrap();
     assert_eq!(progress.write_rows, 3);
 
     let sql = format!("SELECT * FROM `{}`", table);
-    let rows = client.query_iter(&sql).await.unwrap();
+    let rows = conn.query_iter(&sql).await.unwrap();
     let result: Vec<(String, String, String, NaiveDateTime)> = rows
         .map(|r| {
             println!("{:?}", r);
@@ -105,7 +106,7 @@ async fn stream_load(presigned: bool, file_type: &str) {
     assert_eq!(result, expected);
 
     let sql = format!("DROP TABLE `{}` ALL;", table);
-    client.exec(&sql).await.unwrap();
+    conn.exec(&sql).await.unwrap();
 }
 
 #[tokio::test]

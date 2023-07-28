@@ -22,6 +22,10 @@
 export class Client {
   /** Create a new databend client with a given DSN. */
   constructor(dsn: string)
+  /** Get a connection from the client. */
+  getConn(): Promise<Connection>
+}
+export class Connection {
   /** Get the connection information. */
   info(): Promise<ConnectionInfo>
   /** Get the databend version. */

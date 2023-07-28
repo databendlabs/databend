@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use anyhow::Result;
-use databend_driver::{new_connection, Connection};
+use databend_driver::{Client, Connection};
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -36,7 +36,7 @@ use crate::helper::CliHelper;
 use crate::VERSION;
 
 pub struct Session {
-    dsn: String,
+    client: Client,
     conn: Box<dyn Connection>,
     is_repl: bool,
 
@@ -47,7 +47,8 @@ pub struct Session {
 
 impl Session {
     pub async fn try_new(dsn: String, settings: Settings, is_repl: bool) -> Result<Self> {
-        let conn = new_connection(&dsn)?;
+        let client = Client::new(dsn);
+        let conn = client.get_conn().await?;
         let info = conn.info().await;
         if is_repl {
             println!("Welcome to BendSQL {}.", VERSION.as_str());
@@ -61,7 +62,7 @@ impl Session {
         }
 
         Ok(Self {
-            dsn,
+            client,
             conn,
             is_repl,
             settings,
@@ -366,7 +367,7 @@ impl Session {
     }
 
     async fn reconnect(&mut self) -> Result<()> {
-        self.conn = new_connection(&self.dsn)?;
+        self.conn = self.client.get_conn().await?;
         if self.is_repl {
             let info = self.conn.info().await;
             eprintln!(

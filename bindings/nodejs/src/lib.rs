@@ -20,7 +20,10 @@ use futures::StreamExt;
 use napi::bindgen_prelude::*;
 
 #[napi]
-pub struct Client(Box<dyn databend_driver::Connection>);
+pub struct Client(databend_driver::Client);
+
+#[napi]
+pub struct Connection(Box<dyn databend_driver::Connection>);
 
 #[napi]
 pub struct ConnectionInfo(databend_driver::ConnectionInfo);
@@ -267,11 +270,24 @@ impl QueryProgress {
 impl Client {
     /// Create a new databend client with a given DSN.
     #[napi(constructor)]
-    pub fn new(dsn: String) -> Result<Self> {
-        let conn = databend_driver::new_connection(&dsn).map_err(format_napi_error)?;
-        Ok(Self(conn))
+    pub fn new(dsn: String) -> Self {
+        let client = databend_driver::Client::new(dsn);
+        Self(client)
     }
 
+    /// Get a connection from the client.
+    #[napi]
+    pub async fn get_conn(&self) -> Result<Connection> {
+        self.0
+            .get_conn()
+            .await
+            .map(|conn| Connection(conn))
+            .map_err(format_napi_error)
+    }
+}
+
+#[napi]
+impl Connection {
     /// Get the connection information.
     #[napi]
     pub async fn info(&self) -> ConnectionInfo {

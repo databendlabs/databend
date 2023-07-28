@@ -21,9 +21,11 @@ use crate::common::DEFAULT_DSN;
 async fn insert_with_stage(presigned: bool) {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
     let client = if presigned {
-        APIClient::from_dsn(dsn).unwrap()
+        APIClient::from_dsn(dsn).await.unwrap()
     } else {
-        APIClient::from_dsn(&format!("{}&presigned_url_disabled=1", dsn)).unwrap()
+        APIClient::from_dsn(&format!("{}&presigned_url_disabled=1", dsn))
+            .await
+            .unwrap()
     };
 
     let file = File::open("tests/core/data/sample.csv").await.unwrap();

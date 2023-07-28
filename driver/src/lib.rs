@@ -21,7 +21,7 @@ mod rows;
 mod schema;
 mod value;
 
-pub use conn::{new_connection, Connection, ConnectionInfo};
+pub use conn::{Client, Connection, ConnectionInfo};
 pub use error::Error;
 pub use rows::{QueryProgress, Row, RowIterator, RowProgressIterator, RowWithProgress};
 pub use schema::{DataType, DecimalSize, Field, Schema, SchemaRef};

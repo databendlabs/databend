@@ -105,8 +105,8 @@ impl Connection for FlightSQLConnection {
 }
 
 impl FlightSQLConnection {
-    pub fn try_create(dsn: &str) -> Result<Self> {
-        let (args, endpoint) = Self::parse_dsn(dsn)?;
+    pub async fn try_create(dsn: &str) -> Result<Self> {
+        let (args, endpoint) = Self::parse_dsn(dsn).await?;
         let channel = endpoint.connect_lazy();
         let mut client = FlightSqlServiceClient::new(channel);
         // enable progress
@@ -137,7 +137,7 @@ impl FlightSQLConnection {
         Ok(())
     }
 
-    fn parse_dsn(dsn: &str) -> Result<(Args, Endpoint)> {
+    async fn parse_dsn(dsn: &str) -> Result<(Args, Endpoint)> {
         let u = Url::parse(dsn)?;
         let args = Args::from_url(&u)?;
         let mut endpoint = Endpoint::new(args.uri.clone())?
@@ -153,7 +153,7 @@ impl FlightSQLConnection {
             let tls_config = match args.tls_ca_file {
                 None => ClientTlsConfig::new(),
                 Some(ref ca_file) => {
-                    let pem = std::fs::read(ca_file)?;
+                    let pem = tokio::fs::read(ca_file).await?;
                     let cert = tonic::transport::Certificate::from_pem(pem);
                     ClientTlsConfig::new().ca_certificate(cert)
                 }

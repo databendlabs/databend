@@ -22,18 +22,19 @@ const dsn = process.env.TEST_DATABEND_DSN
   ? process.env.TEST_DATABEND_DSN
   : "databend://root:@localhost:8000/default?sslmode=disable";
 
-Given("A new Databend Driver Client", function () {
+Given("A new Databend Driver Client", async function () {
   this.client = new Client(dsn);
+  this.conn = await this.client.getConn();
 });
 
 Then("Select string {string} should be equal to {string}", async function (input, output) {
-  const row = await this.client.queryRow(`SELECT '${input}'`);
+  const row = await this.conn.queryRow(`SELECT '${input}'`);
   const value = row.values()[0];
   assert.equal(output, value);
 });
 
 Then("Select numbers should iterate all rows", async function () {
-  let rows = await this.client.queryIter("SELECT number FROM numbers(5)");
+  let rows = await this.conn.queryIter("SELECT number FROM numbers(5)");
   let ret = [];
   let row = await rows.next();
   while (row) {
@@ -45,8 +46,8 @@ Then("Select numbers should iterate all rows", async function () {
 });
 
 When("Create a test table", async function () {
-  await this.client.exec("DROP TABLE IF EXISTS test");
-  await this.client.exec(`CREATE TABLE test (
+  await this.conn.exec("DROP TABLE IF EXISTS test");
+  await this.conn.exec(`CREATE TABLE test (
 		i64 Int64,
 		u64 UInt64,
 		f64 Float64,
@@ -58,11 +59,11 @@ When("Create a test table", async function () {
 });
 
 Then("Insert and Select should be equal", async function () {
-  await this.client.exec(`INSERT INTO test VALUES
+  await this.conn.exec(`INSERT INTO test VALUES
     (-1, 1, 1.0, '1', '1', '2011-03-06', '2011-03-06 06:20:00'),
     (-2, 2, 2.0, '2', '2', '2012-05-31', '2012-05-31 11:20:00'),
     (-3, 3, 3.0, '3', '2', '2016-04-04', '2016-04-04 11:30:00')`);
-  const rows = await this.client.queryIter("SELECT * FROM test");
+  const rows = await this.conn.queryIter("SELECT * FROM test");
   const ret = [];
   let row = await rows.next();
   while (row) {
@@ -83,11 +84,11 @@ Then("Stream load and Select should be equal", async function () {
     ["-2", "2", "2.0", "2", "2", "2012-05-31", "2012-05-31T11:20:00Z"],
     ["-3", "3", "3.0", "3", "2", "2016-04-04", "2016-04-04T11:30:00Z"],
   ];
-  const progress = await this.client.streamLoad(`INSERT INTO test VALUES`, values);
+  const progress = await this.conn.streamLoad(`INSERT INTO test VALUES`, values);
   assert.equal(progress.writeRows, 3);
   assert.equal(progress.writeBytes, 178);
 
-  const rows = await this.client.queryIter("SELECT * FROM test");
+  const rows = await this.conn.queryIter("SELECT * FROM test");
   const ret = [];
   let row = await rows.next();
   while (row) {

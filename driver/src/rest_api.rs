@@ -108,8 +108,8 @@ impl Connection for RestAPIConnection {
 }
 
 impl<'o> RestAPIConnection {
-    pub fn try_create(dsn: &str) -> Result<Self> {
-        let client = APIClient::from_dsn(dsn)?;
+    pub async fn try_create(dsn: &str) -> Result<Self> {
+        let client = APIClient::from_dsn(dsn).await?;
         Ok(Self { client })
     }
 

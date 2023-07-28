@@ -28,6 +28,35 @@ use crate::rows::{Row, RowIterator, RowProgressIterator};
 use crate::schema::Schema;
 use crate::QueryProgress;
 
+pub struct Client {
+    dsn: String,
+}
+
+impl<'c> Client {
+    pub fn new(dsn: String) -> Self {
+        Self { dsn }
+    }
+
+    pub async fn get_conn(&self) -> Result<Box<dyn Connection>> {
+        let u = Url::parse(&self.dsn)?;
+        match u.scheme() {
+            "databend" | "databend+http" | "databend+https" => {
+                let conn = RestAPIConnection::try_create(&self.dsn).await?;
+                Ok(Box::new(conn))
+            }
+            #[cfg(feature = "flight-sql")]
+            "databend+flight" | "databend+grpc" => {
+                let conn = FlightSQLConnection::try_create(&self.dsn).await?;
+                Ok(Box::new(conn))
+            }
+            _ => Err(Error::Parsing(format!(
+                "Unsupported scheme: {}",
+                u.scheme()
+            ))),
+        }
+    }
+}
+
 pub struct ConnectionInfo {
     pub handler: String,
     pub host: String,
@@ -70,22 +99,3 @@ pub trait Connection: DynClone + Send + Sync {
     ) -> Result<QueryProgress>;
 }
 dyn_clone::clone_trait_object!(Connection);
-
-pub fn new_connection(dsn: &str) -> Result<Box<dyn Connection>> {
-    let u = Url::parse(dsn)?;
-    match u.scheme() {
-        "databend" | "databend+http" | "databend+https" => {
-            let conn = RestAPIConnection::try_create(dsn)?;
-            Ok(Box::new(conn))
-        }
-        #[cfg(feature = "flight-sql")]
-        "databend+flight" | "databend+grpc" => {
-            let conn = FlightSQLConnection::try_create(dsn)?;
-            Ok(Box::new(conn))
-        }
-        _ => Err(Error::Parsing(format!(
-            "Unsupported scheme: {}",
-            u.scheme()
-        ))),
-    }
-}

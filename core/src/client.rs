@@ -95,7 +95,7 @@ pub struct APIClient {
 }
 
 impl APIClient {
-    pub fn from_dsn(dsn: &str) -> Result<Self> {
+    pub async fn from_dsn(dsn: &str) -> Result<Self> {
         let u = Url::parse(dsn)?;
         let mut client = Self::default();
         if let Some(host) = u.host_str() {
@@ -166,7 +166,7 @@ impl APIClient {
         #[cfg(any(feature = "rustls", feature = "native-tls"))]
         if scheme == "https" {
             if let Some(ref ca_file) = client.tls_ca_file {
-                let cert_pem = std::fs::read(ca_file)?;
+                let cert_pem = tokio::fs::read(ca_file).await?;
                 let cert = reqwest::Certificate::from_pem(&cert_pem)?;
                 client.cli = HttpClient::builder().add_root_certificate(cert).build()?;
             }
@@ -543,10 +543,10 @@ impl Default for APIClient {
 mod test {
     use super::*;
 
-    #[test]
-    fn parse_dsn() -> Result<()> {
+    #[tokio::test]
+    async fn parse_dsn() -> Result<()> {
         let dsn = "databend://username:password@app.databend.com/test?wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&warehouse=wh&sslmode=disable";
-        let client = APIClient::from_dsn(dsn)?;
+        let client = APIClient::from_dsn(dsn).await?;
         assert_eq!(client.host, "app.databend.com");
         assert_eq!(client.endpoint, Url::parse("http://app.databend.com:80")?);
         assert_eq!(client.user, "username");
@@ -566,18 +566,18 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    fn parse_encoded_password() -> Result<()> {
+    #[tokio::test]
+    async fn parse_encoded_password() -> Result<()> {
         let dsn = "databend://username:3a%40SC(nYE1k%3D%7B%7BR@localhost";
-        let client = APIClient::from_dsn(dsn)?;
+        let client = APIClient::from_dsn(dsn).await?;
         assert_eq!(client.password, Some("3a@SC(nYE1k={{R".to_string()));
         Ok(())
     }
 
-    #[test]
-    fn parse_special_chars_password() -> Result<()> {
+    #[tokio::test]
+    async fn parse_special_chars_password() -> Result<()> {
         let dsn = "databend://username:3a@SC(nYE1k={{R@localhost:8000";
-        let client = APIClient::from_dsn(dsn)?;
+        let client = APIClient::from_dsn(dsn).await?;
         assert_eq!(client.password, Some("3a@SC(nYE1k={{R".to_string()));
         Ok(())
     }

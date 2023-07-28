@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_driver::{new_connection, Connection};
+use databend_driver::{Client, Connection};
 use tokio_stream::StreamExt;
 
 use crate::common::DEFAULT_DSN;
@@ -20,7 +20,8 @@ use crate::common::DEFAULT_DSN;
 async fn prepare(name: &str) -> (Box<dyn Connection>, String) {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
     let table = format!("{}_{}", name, chrono::Utc::now().timestamp());
-    let conn = new_connection(dsn).unwrap();
+    let client = Client::new(dsn.to_string());
+    let conn = client.get_conn().await.unwrap();
     (conn, table)
 }
 
