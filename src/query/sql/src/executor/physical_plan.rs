@@ -105,6 +105,7 @@ pub struct CteScan {
     pub plan_id: u32,
     pub cte_idx: (IndexType, IndexType),
     pub output_schema: DataSchemaRef,
+    pub offsets: Vec<IndexType>,
 }
 
 impl CteScan {

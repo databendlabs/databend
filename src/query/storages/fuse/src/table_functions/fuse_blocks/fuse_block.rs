@@ -122,24 +122,15 @@ impl<'a> FuseBlock<'a> {
         let mut row_num = 0;
         let mut end_flag = false;
         let chunk_size =
-            std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len);
-        for chunk in snapshot.segments.chunks(chunk_size) {
+            std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
+        'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
                 .read_segments::<Arc<SegmentInfo>>(chunk, true)
                 .await?;
             for segment in segments {
                 let segment = segment?;
 
-                let block_count = segment.summary.block_count as usize;
-                let take_num = if row_num + block_count >= len {
-                    end_flag = true;
-                    len - row_num
-                } else {
-                    row_num += block_count;
-                    block_count
-                };
-
-                segment.blocks.iter().take(take_num).for_each(|block| {
+                for block in segment.blocks.iter() {
                     let block = block.as_ref();
                     block_location.put_slice(block.location.0.as_bytes());
                     block_location.commit_row();
@@ -153,15 +144,17 @@ impl<'a> FuseBlock<'a> {
                             .map(|s| s.0.as_bytes().to_vec()),
                     );
                     bloom_filter_size.push(block.bloom_filter_index_size);
-                });
+
+                    row_num += 1;
+                    if row_num >= limit {
+                        end_flag = true;
+                        break;
+                    }
+                }
 
                 if end_flag {
-                    break;
+                    break 'FOR;
                 }
-            }
-
-            if end_flag {
-                break;
             }
         }
 
@@ -200,7 +193,7 @@ impl<'a> FuseBlock<'a> {
                     Value::Column(UInt64Type::from_data(bloom_filter_size)),
                 ),
             ],
-            len,
+            row_num,
         ))
     }
 
