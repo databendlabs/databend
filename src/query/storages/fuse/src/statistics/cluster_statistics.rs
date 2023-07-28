@@ -23,6 +23,8 @@ use storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::statistics::column_statistic::Trim;
 
+pub const CLUSTER_STATS_STRING_PREFIX_LEN: usize = 8;
+
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
@@ -115,6 +117,7 @@ impl ClusterStatsGenerator {
         self.clusters_statistics(&block, origin_stats.level)
     }
 
+    /// for string value, only use the first 8 bytes.
     fn clusters_statistics(
         &self,
         data_block: &DataBlock,
@@ -130,10 +133,21 @@ impl ClusterStatsGenerator {
             let val = data_block.get_by_offset(*key);
             let val_ref = val.value.as_ref();
             let left = unsafe { val_ref.index_unchecked(0) }.to_owned();
-            min.push(left.clone().trim_min().unwrap_or(left));
+            min.push(
+                left.clone()
+                    .trim_min(CLUSTER_STATS_STRING_PREFIX_LEN)
+                    .unwrap_or(left),
+            );
 
+            // The maximum in cluster statistics neednot larger than the non-trimmed one.
+            // So we use trim_min directly.
             let right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) }.to_owned();
-            max.push(right.clone().trim_max().unwrap_or(right));
+            max.push(
+                right
+                    .clone()
+                    .trim_min(CLUSTER_STATS_STRING_PREFIX_LEN)
+                    .unwrap_or(right),
+            );
         }
 
         let level = if min == max

@@ -1398,17 +1398,16 @@ impl Binder {
         Ok(cluster_keys)
     }
 
-    fn valid_cluster_key_type(d: &DataType) -> bool {
-        match d {
-            DataType::Array(_)
-            | DataType::EmptyArray
-            | DataType::EmptyMap
-            | DataType::Map(_)
-            | DataType::Bitmap
-            | DataType::Tuple(_)
-            | DataType::Generic(_) => false,
-            DataType::Nullable(inner) => Self::valid_cluster_key_type(inner.as_ref()),
-            _ => true,
-        }
+    fn valid_cluster_key_type(data_type: &DataType) -> bool {
+        let inner_type = data_type.remove_nullable();
+        matches!(
+            inner_type,
+            DataType::Number(_)
+                | DataType::String
+                | DataType::Timestamp
+                | DataType::Date
+                | DataType::Boolean
+                | DataType::Decimal(_)
+        )
     }
 }
