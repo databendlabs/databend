@@ -37,11 +37,11 @@ impl From<&DataField> for ArrowField {
     fn from(f: &DataField) -> Self {
         let ty = f.data_type().into();
         match ty {
-            ArrowDataType::Struct(_) if f.is_nullable() => {
+            ArrowDataType::Struct(_) if f.is_nullable_or_null() => {
                 let ty = set_nullable(&ty);
-                ArrowField::new(f.name(), ty, f.is_nullable())
+                ArrowField::new(f.name(), ty, f.is_nullable_or_null())
             }
-            _ => ArrowField::new(f.name(), ty, f.is_nullable()),
+            _ => ArrowField::new(f.name(), ty, f.is_nullable_or_null()),
         }
     }
 }

@@ -65,9 +65,11 @@ use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_join;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
+use crate::executor::CteScan;
 use crate::executor::FragmentKind;
 use crate::executor::LagLeadDefault;
 use crate::executor::LagLeadFunctionDesc;
+use crate::executor::MaterializedCte;
 use crate::executor::NtileFunctionDesc;
 use crate::executor::PhysicalJoinType;
 use crate::executor::PhysicalPlan;
@@ -1105,6 +1107,23 @@ impl PhysicalPlanBuilder {
                     srf_exprs,
                     projections,
                     stat_info: Some(stat_info),
+                }))
+            }
+
+            RelOperator::CteScan(cte_scan) => Ok(PhysicalPlan::CteScan(CteScan {
+                plan_id: self.next_plan_id(),
+                cte_idx: cte_scan.cte_idx,
+                output_schema: DataSchemaRefExt::create(cte_scan.fields.clone()),
+                offsets: cte_scan.offsets.clone(),
+            })),
+
+            RelOperator::MaterializedCte(op) => {
+                Ok(PhysicalPlan::MaterializedCte(MaterializedCte {
+                    plan_id: self.next_plan_id(),
+                    left: Box::new(self.build(s_expr.child(0)?).await?),
+                    right: Box::new(self.build(s_expr.child(1)?).await?),
+                    cte_idx: op.cte_idx,
+                    left_output_columns: op.left_output_columns.clone(),
                 }))
             }
 
