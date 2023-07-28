@@ -22,5 +22,6 @@ mod subquery_rewriter;
 pub use heuristic::HeuristicOptimizer;
 pub use heuristic::DEFAULT_REWRITE_RULES;
 pub use heuristic::RESIDUAL_RULES;
+pub use prune_unused_columns::UnusedColumnPruner;
 pub use rule_list::RuleList;
 pub use subquery_rewriter::SubqueryRewriter;
