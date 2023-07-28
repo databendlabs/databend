@@ -19,6 +19,7 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::ROW_ID_COL_NAME;
 
+use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::DeletePlan;
@@ -198,17 +199,16 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
         )
         .unwrap();
     let s_expr = if !delete.subquery_desc.is_empty() {
-        let row_id_column_binding = ColumnBinding {
-            database_name: Some(delete.database_name.clone()),
-            table_name: Some(delete.table_name.clone()),
-            column_position: None,
-            table_index: Some(table_index),
-            column_name: ROW_ID_COL_NAME.to_string(),
-            index: delete.subquery_desc[0].index,
-            data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-            visibility: Visibility::InVisible,
-            virtual_computed_expr: None,
-        };
+        let row_id_column_binding = ColumnBindingBuilder::new(
+            ROW_ID_COL_NAME.to_string(),
+            delete.subquery_desc[0].index,
+            Box::new(DataType::Number(NumberDataType::UInt64)),
+            Visibility::InVisible,
+        )
+        .database_name(Some(delete.database_name.clone()))
+        .table_name(Some(delete.table_name.clone()))
+        .table_index(Some(table_index))
+        .build();
         SExpr::create_unary(
             Arc::new(RelOperator::EvalScalar(EvalScalar {
                 items: vec![ScalarItem {

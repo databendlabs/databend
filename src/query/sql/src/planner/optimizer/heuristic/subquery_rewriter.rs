@@ -25,6 +25,7 @@ use common_functions::aggregates::AggregateCountFunction;
 
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBinding;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
@@ -276,17 +277,8 @@ impl SubqueryRewriter {
 
                 let column_ref = ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: subquery.span,
-                    column: ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_position: None,
-                        table_index: None,
-                        column_name: name,
-                        index,
-                        data_type,
-                        visibility: Visibility::Visible,
-                        virtual_computed_expr: None,
-                    },
+                    column: ColumnBindingBuilder::new(name, index, data_type, Visibility::Visible)
+                        .build(),
                 });
 
                 let scalar = if flatten_info.from_count_func {
@@ -396,17 +388,13 @@ impl SubqueryRewriter {
                     arguments: vec![
                         BoundColumnRef {
                             span: subquery.span,
-                            column: ColumnBinding {
-                                database_name: None,
-                                table_name: None,
-                                column_position: None,
-                                table_index: None,
-                                column_name: "count(*)".to_string(),
-                                index: agg_func_index,
-                                data_type: Box::new(agg_func.return_type()?),
-                                visibility: Visibility::Visible,
-                                virtual_computed_expr: None,
-                            },
+                            column: ColumnBindingBuilder::new(
+                                "count(*)".to_string(),
+                                agg_func_index,
+                                Box::new(agg_func.return_type()?),
+                                Visibility::Visible,
+                            )
+                            .build(),
                         }
                         .into(),
                         ConstantExpr {
@@ -455,17 +443,13 @@ impl SubqueryRewriter {
                 let left_condition = wrap_cast(
                     &ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: subquery.span,
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_position: None,
-                            table_index: None,
+                        column: ColumnBindingBuilder::new(
                             column_name,
-                            index: output_column.index,
-                            data_type: output_column.data_type,
-                            visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
-                        },
+                            output_column.index,
+                            output_column.data_type,
+                            Visibility::Visible,
+                        )
+                        .build(),
                     }),
                     &subquery.data_type,
                 );
@@ -614,31 +598,23 @@ impl SubqueryRewriter {
         // Wrap expression
         let count_col_ref = ScalarExpr::BoundColumnRef(BoundColumnRef {
             span: None,
-            column: ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_position: None,
-                table_index: None,
-                column_name: "_count_scalar_subquery".to_string(),
-                index: count_idx,
-                data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-                visibility: Visibility::Visible,
-                virtual_computed_expr: None,
-            },
+            column: ColumnBindingBuilder::new(
+                "_count_scalar_subquery".to_string(),
+                count_idx,
+                Box::new(DataType::Number(NumberDataType::UInt64)),
+                Visibility::Visible,
+            )
+            .build(),
         });
         let any_col_ref = ScalarExpr::BoundColumnRef(BoundColumnRef {
             span: None,
-            column: ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_position: None,
-                table_index: None,
-                column_name: "_any_scalar_subquery".to_string(),
-                index: any_idx,
-                data_type: subquery.output_column.data_type.clone(),
-                visibility: Visibility::Visible,
-                virtual_computed_expr: None,
-            },
+            column: ColumnBindingBuilder::new(
+                "_any_scalar_subquery".to_string(),
+                any_idx,
+                subquery.output_column.data_type.clone(),
+                Visibility::Visible,
+            )
+            .build(),
         });
         let eq_func = ScalarExpr::FunctionCall(FunctionCall {
             span: None,

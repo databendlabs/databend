@@ -25,6 +25,7 @@ use common_exception::Span;
 use common_expression::FunctionKind;
 use common_functions::BUILTIN_FUNCTIONS;
 
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
@@ -154,17 +155,13 @@ impl Binder {
                 .metadata
                 .write()
                 .add_derived_column(name.clone(), srf_expr.data_type().clone());
-            let column = ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_position: None,
-                table_index: None,
-                column_name: name.clone(),
-                index: column_index,
-                data_type: Box::new(srf_expr.data_type().clone()),
-                visibility: Visibility::InVisible,
-                virtual_computed_expr: None,
-            };
+            let column = ColumnBindingBuilder::new(
+                name.clone(),
+                column_index,
+                Box::new(srf_expr.data_type().clone()),
+                Visibility::InVisible,
+            )
+            .build();
 
             let item = SrfItem {
                 scalar: srf_scalar,

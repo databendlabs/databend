@@ -43,6 +43,7 @@ use common_meta_app::schema::TableInfo;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
+use crate::binder::ColumnBindingBuilder;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
@@ -82,21 +83,24 @@ pub fn parse_exprs(
                 path_indices,
                 virtual_computed_expr,
                 ..
-            }) => ColumnBinding {
-                database_name: Some("default".to_string()),
-                table_name: Some(table.name().to_string()),
-                column_position: None,
-                table_index: Some(table.index()),
-                column_name: column_name.clone(),
-                index,
-                data_type: Box::new(data_type.into()),
-                visibility: if path_indices.is_some() {
+            }) => {
+                let visibility = if path_indices.is_some() {
                     Visibility::InVisible
                 } else {
                     Visibility::Visible
-                },
-                virtual_computed_expr: virtual_computed_expr.clone(),
-            },
+                };
+                ColumnBindingBuilder::new(
+                    column_name.clone(),
+                    index,
+                    Box::new(data_type.into()),
+                    visibility,
+                )
+                .database_name(Some("default".to_string()))
+                .table_name(Some(table.name().to_string()))
+                .table_index(Some(table.index()))
+                .virtual_computed_expr(virtual_computed_expr.clone())
+                .build()
+            }
             _ => {
                 return Err(ErrorCode::Internal("Invalid column entry"));
             }
@@ -167,17 +171,14 @@ pub fn parse_computed_expr(
     let mut metadata = Metadata::default();
     let table_schema = infer_table_schema(&schema)?;
     for (index, field) in schema.fields().iter().enumerate() {
-        bind_context.add_column_binding(ColumnBinding {
-            database_name: None,
-            table_name: None,
-            column_position: None,
-            table_index: None,
-            column_name: field.name().clone(),
+        let column = ColumnBindingBuilder::new(
+            field.name().clone(),
             index,
-            data_type: Box::new(field.data_type().clone()),
-            visibility: Visibility::Visible,
-            virtual_computed_expr: None,
-        });
+            Box::new(field.data_type().clone()),
+            Visibility::Visible,
+        )
+        .build();
+        bind_context.add_column_binding(column);
         let table_field = table_schema.field(index);
         metadata.add_base_table_column(
             table_field.name().clone(),
@@ -279,17 +280,15 @@ pub fn parse_computed_expr_to_string(
     let mut bind_context = BindContext::new();
     let mut metadata = Metadata::default();
     for (index, field) in table_schema.fields().iter().enumerate() {
-        bind_context.add_column_binding(ColumnBinding {
-            database_name: None,
-            table_name: None,
-            column_position: None,
-            table_index: None,
-            column_name: field.name().clone(),
-            index,
-            data_type: Box::new(field.data_type().into()),
-            visibility: Visibility::Visible,
-            virtual_computed_expr: None,
-        });
+        bind_context.add_column_binding(
+            ColumnBindingBuilder::new(
+                field.name().clone(),
+                index,
+                Box::new(field.data_type().into()),
+                Visibility::Visible,
+            )
+            .build(),
+        );
         metadata.add_base_table_column(
             field.name().clone(),
             field.data_type().clone(),

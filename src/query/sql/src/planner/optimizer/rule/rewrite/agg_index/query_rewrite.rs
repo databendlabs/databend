@@ -27,6 +27,7 @@ use itertools::Itertools;
 use tracing::info;
 
 use crate::binder::split_conjunctions;
+use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::SExpr;
 use crate::plans::AggIndexInfo;
 use crate::plans::Aggregate;
@@ -471,17 +472,13 @@ impl<'a> Range<'a> {
     fn to_scalar(&self, index: IndexType, data_type: &DataType) -> Option<ScalarExpr> {
         let col = BoundColumnRef {
             span: None,
-            column: ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_position: None,
-                table_index: None,
-                column_name: format!("index_col_{index}"),
+            column: ColumnBindingBuilder::new(
+                format!("index_col_{index}"),
                 index,
-                data_type: Box::new(data_type.clone()),
-                visibility: Visibility::Visible,
-                virtual_computed_expr: None,
-            },
+                Box::new(data_type.clone()),
+                Visibility::Visible,
+            )
+            .build(),
         };
         match (self.min, self.max) {
             (Some(min), Some(max)) => Some(
@@ -923,17 +920,13 @@ fn try_create_column_binding(
     if let Some((index, ty)) = index_selection.get(formatted_scalar) {
         Some(BoundColumnRef {
             span: None,
-            column: ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_position: None,
-                table_index: None,
-                column_name: format!("index_col_{index}"),
-                index: *index,
-                data_type: Box::new(ty.clone()),
-                visibility: Visibility::Visible,
-                virtual_computed_expr: None,
-            },
+            column: ColumnBindingBuilder::new(
+                format!("index_col_{index}"),
+                *index,
+                Box::new(ty.clone()),
+                Visibility::Visible,
+            )
+            .build(),
         })
     } else {
         None
