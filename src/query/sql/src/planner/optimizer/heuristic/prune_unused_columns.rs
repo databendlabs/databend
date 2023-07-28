@@ -19,6 +19,7 @@ use common_exception::Result;
 use itertools::Itertools;
 
 use crate::optimizer::ColumnSet;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::DummyTableScan;
@@ -234,6 +235,7 @@ impl UnusedColumnPruner {
                         .difference(lazy_columns)
                         .cloned()
                         .collect::<ColumnSet>();
+                    required.extend(metadata.row_id_indexes());
                 }
 
                 Ok(SExpr::create_unary(
@@ -277,7 +279,28 @@ impl UnusedColumnPruner {
                 ))
             }
 
-            RelOperator::DummyTableScan(_) => Ok(expr.clone()),
+            RelOperator::MaterializedCte(cte) => {
+                let left_output_column = RelExpr::with_s_expr(expr)
+                    .derive_relational_prop_child(0)?
+                    .output_columns
+                    .clone();
+                let right_used_column = RelExpr::with_s_expr(expr)
+                    .derive_relational_prop_child(1)?
+                    .used_columns
+                    .clone();
+                // Get the intersection of `left_used_column` and `right_used_column`
+                let left_required = left_output_column
+                    .intersection(&right_used_column)
+                    .cloned()
+                    .collect::<ColumnSet>();
+                Ok(SExpr::create_binary(
+                    Arc::new(RelOperator::MaterializedCte(cte.clone())),
+                    Arc::new(self.keep_required_columns(expr.child(0)?, left_required)?),
+                    Arc::new(self.keep_required_columns(expr.child(1)?, required)?),
+                ))
+            }
+
+            RelOperator::DummyTableScan(_) | RelOperator::CteScan(_) => Ok(expr.clone()),
 
             _ => Err(ErrorCode::Internal(
                 "Attempting to prune columns of a physical plan is not allowed",

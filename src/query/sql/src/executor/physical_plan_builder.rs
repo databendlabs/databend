@@ -65,9 +65,11 @@ use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_join;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
+use crate::executor::CteScan;
 use crate::executor::FragmentKind;
 use crate::executor::LagLeadDefault;
 use crate::executor::LagLeadFunctionDesc;
+use crate::executor::MaterializedCte;
 use crate::executor::NtileFunctionDesc;
 use crate::executor::PhysicalJoinType;
 use crate::executor::PhysicalPlan;
@@ -367,8 +369,12 @@ impl PhysicalPlanBuilder {
                     .unwrap();
                 let index = self
                     .metadata
-                    .write()
-                    .add_internal_column(scan.table_index, internal_column.clone());
+                    .read()
+                    .row_id_index_by_table_index(scan.table_index);
+                debug_assert!(index.is_some());
+                // Safe to unwrap: if lazy_columns is not empty, the `analyze_lazy_materialization` have been called
+                // and the row_id index of the table_index has been generated.
+                let index = index.unwrap();
                 entry.insert(index);
                 project_internal_columns.insert(index, internal_column);
             }
@@ -1095,6 +1101,22 @@ impl PhysicalPlanBuilder {
                     srf_exprs,
                     unused_indices,
                     stat_info: Some(stat_info),
+                }))
+            }
+
+            RelOperator::CteScan(cte_scan) => Ok(PhysicalPlan::CteScan(CteScan {
+                plan_id: self.next_plan_id(),
+                cte_idx: cte_scan.cte_idx,
+                output_schema: DataSchemaRefExt::create(cte_scan.fields.clone()),
+            })),
+
+            RelOperator::MaterializedCte(op) => {
+                Ok(PhysicalPlan::MaterializedCte(MaterializedCte {
+                    plan_id: self.next_plan_id(),
+                    left: Box::new(self.build(s_expr.child(0)?).await?),
+                    right: Box::new(self.build(s_expr.child(1)?).await?),
+                    cte_idx: op.cte_idx,
+                    left_output_columns: op.left_output_columns.clone(),
                 }))
             }
 

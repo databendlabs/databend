@@ -30,6 +30,7 @@ use super::ReplaceInto;
 use super::RowFetch;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
+use crate::executor::CteScan;
 use crate::executor::EvalScalar;
 use crate::executor::Exchange;
 use crate::executor::ExchangeSink;
@@ -37,6 +38,7 @@ use crate::executor::ExchangeSource;
 use crate::executor::Filter;
 use crate::executor::HashJoin;
 use crate::executor::Limit;
+use crate::executor::MaterializedCte;
 use crate::executor::PhysicalPlan;
 use crate::executor::Project;
 use crate::executor::RangeJoin;
@@ -89,6 +91,8 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::AsyncSourcer(async_sourcer) => write!(f, "{}", async_sourcer)?,
             PhysicalPlan::Deduplicate(deduplicate) => write!(f, "{}", deduplicate)?,
             PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
+            PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
+            PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -103,6 +107,18 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
 impl Display for TableScan {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "TableScan: [{}]", self.source.source_info.desc())
+    }
+}
+
+impl Display for CteScan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CteScan: [{}]", self.cte_idx.0)
+    }
+}
+
+impl Display for MaterializedCte {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MaterializedCte")
     }
 }
 

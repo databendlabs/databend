@@ -49,6 +49,8 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
         RelOperator::ProjectSet(_) => "ProjectSet".to_string(),
         RelOperator::Window(_) => "WindowFunc".to_string(),
+        RelOperator::CteScan(_) => "CteScan".to_string(),
+        RelOperator::MaterializedCte(_) => "MaterializedCte".to_string(),
     }
 }
 

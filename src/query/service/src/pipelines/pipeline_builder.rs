@@ -77,6 +77,9 @@ use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::Deduplicate;
+use common_sql::executor::CopyIntoTableFromQuery;
+use common_sql::executor::CteScan;
+use common_sql::executor::DeleteFinal;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::EvalScalar;
@@ -86,6 +89,7 @@ use common_sql::executor::Filter;
 use common_sql::executor::HashJoin;
 use common_sql::executor::Limit;
 use common_sql::executor::MutationAggregate;
+use common_sql::executor::MaterializedCte;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
@@ -128,11 +132,15 @@ use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
+use crate::pipelines::processors::transforms::MaterializedCteSink;
+use crate::pipelines::processors::transforms::MaterializedCteSource;
+use crate::pipelines::processors::transforms::MaterializedCteState;
 use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::RangeJoinState;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
+use crate::pipelines::processors::transforms::TransformMaterializedCte;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
@@ -163,6 +171,8 @@ pub struct PipelineBuilder {
     // record the index of join build side pipeline in `pipelines`
     pub index: Option<usize>,
 
+    pub cte_state: Arc<MaterializedCteState>,
+
     enable_profiling: bool,
     proc_profs: SharedProcessorProfiles,
     exchange_injector: Arc<dyn ExchangeInjector>,
@@ -176,13 +186,14 @@ impl PipelineBuilder {
     ) -> PipelineBuilder {
         PipelineBuilder {
             enable_profiling,
-            ctx,
+            ctx: ctx.clone(),
             pipelines: vec![],
             join_state: None,
             main_pipeline: Pipeline::create(),
             proc_profs: prof_span_set,
             exchange_injector: DefaultExchangeInjector::create(),
             index: None,
+            cte_state: Arc::new(MaterializedCteState::new(ctx)),
         }
     }
 
@@ -208,6 +219,7 @@ impl PipelineBuilder {
     fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
+            PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),
             PhysicalPlan::Filter(filter) => self.build_filter(filter),
             PhysicalPlan::Project(project) => self.build_project(project),
             PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
@@ -235,6 +247,15 @@ impl PipelineBuilder {
             PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
             PhysicalPlan::MutationAggregate(plan) => self.build_mutation_aggregate(plan),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
+            PhysicalPlan::DistributedCopyIntoTableFromStage(distributed_plan) => {
+                self.build_distributed_copy_into_table_from_stage(distributed_plan)
+            }
+            PhysicalPlan::CopyIntoTableFromQuery(copy_plan) => {
+                self.build_copy_into_table_from_query(copy_plan)
+            }
+            PhysicalPlan::MaterializedCte(materialized_cte) => {
+                self.build_materialized_cte(materialized_cte)
+            }
             PhysicalPlan::CopyIntoTable(copy) => self.build_copy_into_table(copy),
             PhysicalPlan::AsyncSourcer(async_sourcer) => self.build_async_sourcer(async_sourcer),
             PhysicalPlan::Deduplicate(deduplicate) => self.build_deduplicate(deduplicate),
@@ -517,11 +538,11 @@ impl PipelineBuilder {
     /// The flow of Pipeline is as follows:
     ///
     /// +---------------+      +-----------------------+
-    /// |MutationSource1| ---> |SerializeDataTransform1|   
-    /// +---------------+      +-----------------------+               
+    /// |MutationSource1| ---> |SerializeDataTransform1|
+    /// +---------------+      +-----------------------+
     /// |     ...       | ---> |          ...          |
-    /// +---------------+      +-----------------------+               
-    /// |MutationSourceN| ---> |SerializeDataTransformN|   
+    /// +---------------+      +-----------------------+
+    /// |MutationSourceN| ---> |SerializeDataTransformN|
     /// +---------------+      +-----------------------+
     fn build_delete_partial(&mut self, delete: &DeletePartial) -> Result<()> {
         let table =
@@ -619,11 +640,12 @@ impl PipelineBuilder {
         state: Arc<RangeJoinState>,
     ) -> Result<()> {
         let right_side_context = QueryContext::create_from(self.ctx.clone());
-        let right_side_builder = PipelineBuilder::create(
+        let mut right_side_builder = PipelineBuilder::create(
             right_side_context,
             self.enable_profiling,
             self.proc_profs.clone(),
         );
+        right_side_builder.cte_state = self.cte_state.clone();
         let mut right_res = right_side_builder.finalize(&range_join.right)?;
         right_res.main_pipeline.add_sink(|input| {
             let transform = Sinker::<TransformRangeJoinRight>::create(
@@ -669,11 +691,12 @@ impl PipelineBuilder {
         join_state: Arc<JoinHashTable>,
     ) -> Result<()> {
         let build_side_context = QueryContext::create_from(self.ctx.clone());
-        let build_side_builder = PipelineBuilder::create(
+        let mut build_side_builder = PipelineBuilder::create(
             build_side_context,
             self.enable_profiling,
             self.proc_profs.clone(),
         );
+        build_side_builder.cte_state = self.cte_state.clone();
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
@@ -816,6 +839,21 @@ impl PipelineBuilder {
         }
 
         Ok(())
+    }
+
+    fn build_cte_scan(&mut self, cte_scan: &CteScan) -> Result<()> {
+        let max_threads = self.ctx.get_settings().get_max_threads()?;
+        self.main_pipeline.add_source(
+            |output| {
+                MaterializedCteSource::create(
+                    self.ctx.clone(),
+                    output,
+                    cte_scan.cte_idx,
+                    self.cte_state.clone(),
+                )
+            },
+            max_threads as usize,
+        )
     }
 
     fn build_filter(&mut self, filter: &Filter) -> Result<()> {
@@ -1573,8 +1611,9 @@ impl PipelineBuilder {
         union_plan: &UnionAll,
     ) -> Result<Receiver<DataBlock>> {
         let union_ctx = QueryContext::create_from(self.ctx.clone());
-        let pipeline_builder =
+        let mut pipeline_builder =
             PipelineBuilder::create(union_ctx, self.enable_profiling, self.proc_profs.clone());
+        pipeline_builder.cte_state = self.cte_state.clone();
         let mut build_res = pipeline_builder.finalize(input)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
@@ -1755,6 +1794,63 @@ impl PipelineBuilder {
             runtime_filter_source.left_runtime_filters.clone(),
             runtime_filter_source.right_runtime_filters.clone(),
         )))
+    }
+
+    fn build_materialized_cte(&mut self, materialized_cte: &MaterializedCte) -> Result<()> {
+        self.expand_left_side_pipeline(
+            &materialized_cte.left,
+            materialized_cte.cte_idx,
+            self.cte_state.clone(),
+            &materialized_cte.left_output_columns,
+        )?;
+        self.build_right_side_pipeline(&materialized_cte.right)
+    }
+
+    fn expand_left_side_pipeline(
+        &mut self,
+        left_side: &PhysicalPlan,
+        cte_idx: IndexType,
+        state: Arc<MaterializedCteState>,
+        left_output_columns: &[ColumnBinding],
+    ) -> Result<()> {
+        let left_side_ctx = QueryContext::create_from(self.ctx.clone());
+        let mut left_side_builder = PipelineBuilder::create(
+            left_side_ctx,
+            self.enable_profiling,
+            self.proc_profs.clone(),
+        );
+        left_side_builder.cte_state = self.cte_state.clone();
+        let mut left_side_pipeline = left_side_builder.finalize(left_side)?;
+        assert!(left_side_pipeline.main_pipeline.is_pulling_pipeline()?);
+
+        PipelineBuilder::render_result_set(
+            &self.ctx.get_function_context()?,
+            left_side.output_schema()?,
+            left_output_columns,
+            &mut left_side_pipeline.main_pipeline,
+            false,
+        )?;
+
+        left_side_pipeline.main_pipeline.add_sink(|input| {
+            let transform = Sinker::<MaterializedCteSink>::create(
+                input,
+                MaterializedCteSink::create(self.ctx.clone(), cte_idx, state.clone())?,
+            );
+            Ok(ProcessorPtr::create(transform))
+        })?;
+        self.pipelines.push(left_side_pipeline.main_pipeline);
+        self.pipelines
+            .extend(left_side_pipeline.sources_pipelines.into_iter());
+        Ok(())
+    }
+
+    fn build_right_side_pipeline(&mut self, right_side: &PhysicalPlan) -> Result<()> {
+        self.build_pipeline(right_side)?;
+        self.main_pipeline.add_transform(|input, output| {
+            let transform = TransformMaterializedCte::create(input, output);
+            Ok(ProcessorPtr::create(transform))
+        })?;
+        Ok(())
     }
 }
 

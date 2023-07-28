@@ -40,10 +40,12 @@ use super::TableScan;
 use super::UnionAll;
 use super::WindowFunction;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::CteScan;
 use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
+use crate::executor::MaterializedCte;
 use crate::executor::RangeJoin;
 use crate::executor::RangeJoinType;
 use crate::executor::RuntimeFilterSource;
@@ -106,6 +108,22 @@ impl PhysicalPlan {
 
                 Ok(FormatTreeNode::with_children(
                     format!("RangeJoin: {}", plan.join_type),
+                    children,
+                ))
+            }
+            PhysicalPlan::CteScan(cte_scan) => Ok(FormatTreeNode::with_children(
+                format!("CteScan: {}", cte_scan.cte_idx.0),
+                vec![],
+            )),
+            PhysicalPlan::MaterializedCte(materialized_cte) => {
+                let left_child = materialized_cte.left.format_join(metadata)?;
+                let right_child = materialized_cte.right.format_join(metadata)?;
+                let children = vec![
+                    FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+                    FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+                ];
+                Ok(FormatTreeNode::with_children(
+                    format!("MaterializedCte: {}", materialized_cte.cte_idx),
                     children,
                 ))
             }
@@ -172,6 +190,10 @@ fn to_format_tree(
         PhysicalPlan::AsyncSourcer(_) => Ok(FormatTreeNode::new("AsyncSourcer".to_string())),
         PhysicalPlan::Deduplicate(_) => Ok(FormatTreeNode::new("Deduplicate".to_string())),
         PhysicalPlan::ReplaceInto(_) => Ok(FormatTreeNode::new("Replace".to_string())),
+        PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
+        PhysicalPlan::MaterializedCte(plan) => {
+            materialized_cte_to_format_tree(plan, metadata, profs)
+        }
     }
 }
 
@@ -323,6 +345,13 @@ fn table_scan_to_format_tree(
         "TableScan".to_string(),
         children,
     ))
+}
+
+fn cte_scan_to_format_tree(plan: &CteScan) -> Result<FormatTreeNode<String>> {
+    let cte_idx = FormatTreeNode::new(format!("CTE index: {}", plan.cte_idx.0));
+    Ok(FormatTreeNode::with_children("CTEScan".to_string(), vec![
+        cte_idx,
+    ]))
 }
 
 fn filter_to_format_tree(
@@ -981,6 +1010,21 @@ fn runtime_filter_source_to_format_tree(
     ];
     Ok(FormatTreeNode::with_children(
         "RuntimeFilterSource".to_string(),
+        children,
+    ))
+}
+
+fn materialized_cte_to_format_tree(
+    plan: &MaterializedCte,
+    metadata: &MetadataRef,
+    prof_span_set: &SharedProcessorProfiles,
+) -> Result<FormatTreeNode<String>> {
+    let children = vec![
+        to_format_tree(&plan.left, metadata, prof_span_set)?,
+        to_format_tree(&plan.right, metadata, prof_span_set)?,
+    ];
+    Ok(FormatTreeNode::with_children(
+        "MaterializedCTE".to_string(),
         children,
     ))
 }

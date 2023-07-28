@@ -167,6 +167,11 @@ tokio = { version = "1.26.0", features = ["full"] }
 # backtrace
 async-backtrace = "0.2.2"
 
+# observability
+logcall = "0.1.4"
+log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
+minitrace = "0.4"
+
 [profile.release]
 debug = 1
 lto = "thin"
@@ -211,7 +216,10 @@ rpath = false
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
 
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "031bc7bc" }
 arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e11341" }
-parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
+parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "693c265" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 croaring = { git = "https://github.com/RoaringBitmap/croaring-rs", rev = "13a71b4" }
+minitrace = { git = "https://github.com/tikv/minitrace-rust.git", rev = "19d5ea9d" }
+minitrace-opentelemetry = { git = "https://github.com/tikv/minitrace-rust.git", rev = "19d5ea9d" }

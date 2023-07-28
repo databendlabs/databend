@@ -29,7 +29,7 @@ use common_storage::StageFilesInfo;
 use opendal::Operator;
 
 use super::table::create_parquet_table_info;
-use crate::ParquetTable;
+use super::ParquetTable;
 
 impl ParquetTable {
     pub fn blocking_create(

@@ -15,20 +15,10 @@
 #![allow(clippy::uninlined_format_args)]
 #![deny(unused_crate_dependencies)]
 
-mod deserialize_transform;
+mod parquet2;
 mod parquet_part;
 mod parquet_reader;
-mod parquet_source;
-mod parquet_table;
-mod pruning;
-mod statistics;
+mod processors;
 
-pub use deserialize_transform::ParquetDeserializeTransform;
-pub use parquet_part::ParquetPart;
-pub use parquet_part::ParquetSmallFilesPart;
-pub use parquet_reader::ParquetReader;
-pub use parquet_source::AsyncParquetSource;
-pub use parquet_source::SyncParquetSource;
-/// FIXME: it seems not a good idea to expose this function directly.
-pub use parquet_table::ParquetTable;
-pub use pruning::PartitionPruner;
+pub use parquet2::ParquetTable;
+pub(crate) use parquet_part::ParquetPart;

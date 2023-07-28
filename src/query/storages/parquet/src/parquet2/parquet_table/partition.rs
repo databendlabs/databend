@@ -26,10 +26,10 @@ use storages_common_index::RangeIndex;
 use storages_common_pruner::RangePrunerCreator;
 
 use super::table::arrow_to_table_schema;
-use crate::parquet_reader::ParquetReader;
-use crate::pruning::build_column_page_pruners;
-use crate::pruning::PartitionPruner;
-use crate::ParquetTable;
+use super::ParquetTable;
+use crate::parquet2::project_parquet_schema;
+use crate::parquet2::pruning::build_column_page_pruners;
+use crate::parquet2::pruning::PartitionPruner;
 
 impl ParquetTable {
     pub(crate) fn create_pruner(
@@ -75,7 +75,7 @@ impl ParquetTable {
         //
         // How the stats are collected can be found in `ParquetReader::collect_row_group_stats`.
         let (projected_arrow_schema, projected_column_nodes, _, columns_to_read) =
-            ParquetReader::do_projection(&self.arrow_schema, &self.schema_descr, &projection)?;
+            project_parquet_schema(&self.arrow_schema, &self.schema_descr, &projection)?;
         let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema));
 
         let filter = push_down
