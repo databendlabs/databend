@@ -167,6 +167,9 @@ pub struct EvalScalar {
 
 impl EvalScalar {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        if self.exprs.is_empty() {
+            return Ok(self.input.output_schema()?);
+        }
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(self.projections.len());
         for (i, field) in input_schema.fields().iter().enumerate() {
@@ -490,6 +493,7 @@ impl RowFetch {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = self.input.output_schema()?.fields().clone();
         fields.extend_from_slice(&self.fetched_fields);
+        dbg!(&fields);
         Ok(DataSchemaRefExt::create(fields))
     }
 }
