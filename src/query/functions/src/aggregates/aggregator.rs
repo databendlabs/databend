@@ -42,6 +42,7 @@ use crate::aggregates::aggregate_kurtosis::aggregate_kurtosis_function_desc;
 use crate::aggregates::aggregate_quantile_cont::aggregate_median_function_desc;
 use crate::aggregates::aggregate_quantile_cont::aggregate_quantile_cont_function_desc;
 use crate::aggregates::aggregate_quantile_disc::aggregate_quantile_disc_function_desc;
+use crate::aggregates::aggregate_quantile_tdigest::aggregate_median_tdigest_function_desc;
 use crate::aggregates::aggregate_quantile_tdigest::aggregate_quantile_tdigest_function_desc;
 use crate::aggregates::aggregate_retention::aggregate_retention_function_desc;
 use crate::aggregates::aggregate_skewness::aggregate_skewness_function_desc;
@@ -78,6 +79,7 @@ impl Aggregators {
             aggregate_quantile_tdigest_function_desc(),
         );
         factory.register("median", aggregate_median_function_desc());
+        factory.register("median_tdigest", aggregate_median_tdigest_function_desc());
         factory.register("window_funnel", aggregate_window_funnel_function_desc());
         factory.register(
             "approx_count_distinct",

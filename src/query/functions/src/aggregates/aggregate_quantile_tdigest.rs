@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::alloc::Layout;
-use std::cmp::Ordering;
 use std::f64::consts::PI;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -41,36 +40,21 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
+use crate::aggregates::assert_params;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
 use crate::BUILTIN_FUNCTIONS;
 
-#[derive(Serialize, Deserialize)]
-struct Centroid {
-    pub mean: f32,
-    pub count: f32,
-}
-
-impl PartialEq<Self> for Centroid {
-    fn eq(&self, other: &Self) -> bool {
-        self.mean == other.mean && self.count == other.count
-    }
-}
-
-impl PartialOrd for Centroid {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.mean.partial_cmp(&other.mean)
-    }
-}
+const MEDIAN: u8 = 0;
+const QUANTILE: u8 = 1;
 
 #[derive(Serialize, Deserialize)]
-struct QuantileState {
+struct QuantileTDigestState {
     epsilon: u32,
     max_centroids: usize,
 
-    centroids: Vec<Centroid>,
     total_weight: f64,
     weights: Vec<f64>,
     means: Vec<f64>,
@@ -82,12 +66,11 @@ struct QuantileState {
     max: f64,
 }
 
-impl Default for QuantileState {
-    fn default() -> Self {
+impl QuantileTDigestState {
+    fn new() -> Self {
         Self {
             epsilon: 100u32,
             max_centroids: 2048,
-            centroids: vec![],
             total_weight: 0f64,
             weights: vec![],
             means: vec![],
@@ -98,12 +81,6 @@ impl Default for QuantileState {
             max: 0f64,
         }
     }
-}
-
-impl QuantileState {
-    fn new() -> Self {
-        Self::default()
-    }
 
     fn add(&mut self, other: f64) {
         if self.unmerged_weights.len() + self.weights.len() >= self.max_centroids - 1 {
@@ -112,7 +89,7 @@ impl QuantileState {
 
         self.unmerged_weights.push(1f64);
         self.unmerged_means.push(other);
-        self.unmerged_total_weight += other;
+        self.unmerged_total_weight += 1f64;
     }
 
     fn merge(&mut self, rhs: &mut Self) -> Result<()> {
@@ -157,31 +134,67 @@ impl QuantileState {
             return self.means[0];
         }
 
+        let mean_last = self.means.len() - 1;
+        let weight_last = self.weights.len() - 1;
+
         let index = level * self.total_weight;
-        if index < self.weights[0] / 2f64 {
-            return self.min + 2f64 * index / self.weights[0] * (self.means[0] - self.min);
+        if index < 1f64 {
+            return self.min;
+        }
+        if self.weights[0] > 1f64 && index < self.weights[0] / 2f64 {
+            return self.min
+                + (index - 1f64) / (self.weights[0] / 2f64 - 1f64) * (self.means[0] - self.min);
+        }
+        if index > self.total_weight - 1f64 {
+            return self.max;
+        }
+        if self.weights[weight_last] > 1f64
+            && self.total_weight - index <= self.weights[weight_last] / 2f64
+        {
+            return self.max
+                - (self.total_weight - index - 1f64) / (self.weights[weight_last] / 2f64 - 1f64)
+                    * (self.max - self.means[mean_last]);
         }
 
         let mut weight_so_far = self.weights[0] / 2f64;
-        for i in 0..self.weights.len() - 1 {
+        for i in 0..(self.weights.len() - 1) {
             let dw = (self.weights[i] + self.weights[i + 1]) / 2f64;
             if weight_so_far + dw > index {
-                let z1 = index - weight_so_far;
-                let z2 = weight_so_far + dw - index;
-                return QuantileState::weighted_average(self.means[i], z2, self.means[i + 1], z1);
+                let mut left_unit = 0f64;
+                if self.weights[i] == 1f64 {
+                    if index - weight_so_far < 0.5 {
+                        return self.means[i];
+                    }
+                    left_unit = 0.5;
+                }
+
+                let mut right_unit = 0f64;
+                if self.weights[i + 1] == 1f64 {
+                    if weight_so_far + dw - index <= 0.5 {
+                        return self.means[i + 1];
+                    }
+                    right_unit = 0.5;
+                }
+
+                let z1 = index - weight_so_far - left_unit;
+                let z2 = weight_so_far + dw - index - right_unit;
+                return QuantileTDigestState::weighted_average(
+                    self.means[i],
+                    z2,
+                    self.means[i + 1],
+                    z1,
+                );
             }
             weight_so_far += dw;
         }
 
         debug_assert!(index <= self.total_weight);
-        debug_assert!(index >= self.total_weight - self.weights[self.weights.len() - 1] / 2f64);
+        debug_assert!(index >= self.total_weight - self.weights[weight_last] / 2f64);
 
-        let mean_last = self.means.len() - 1;
-        let weight_last = self.weights.len() - 1;
         let z1 = index - self.total_weight - self.weights[weight_last] / 2f64;
         let z2 = self.weights[weight_last] / 2f64 - z1;
 
-        QuantileState::weighted_average(self.means[mean_last], z1, self.max, z2)
+        QuantileTDigestState::weighted_average(self.means[mean_last], z1, self.max, z2)
     }
 
     fn len(&self) -> usize {
@@ -286,10 +299,10 @@ where T: Number + AsPrimitive<f64>
         Ok(self.return_type.clone())
     }
     fn init_state(&self, place: StateAddr) {
-        place.write(|| QuantileState::new)
+        place.write(QuantileTDigestState::new)
     }
     fn state_layout(&self) -> Layout {
-        Layout::new::<QuantileState>()
+        Layout::new::<QuantileTDigestState>()
     }
     fn accumulate(
         &self,
@@ -299,7 +312,7 @@ where T: Number + AsPrimitive<f64>
         _input_rows: usize,
     ) -> Result<()> {
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
-        let state = place.get::<QuantileState>();
+        let state = place.get::<QuantileTDigestState>();
         match validity {
             Some(bitmap) => {
                 for (value, is_valid) in column.iter().zip(bitmap.iter()) {
@@ -321,7 +334,7 @@ where T: Number + AsPrimitive<f64>
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
         let v = NumberType::<T>::index_column(&column, row);
         if let Some(v) = v {
-            let state = place.get::<QuantileState>();
+            let state = place.get::<QuantileTDigestState>();
             state.add(v.as_())
         }
         Ok(())
@@ -336,29 +349,29 @@ where T: Number + AsPrimitive<f64>
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
         column.iter().zip(places.iter()).for_each(|(v, place)| {
             let addr = place.next(offset);
-            let state = addr.get::<QuantileState>();
+            let state = addr.get::<QuantileTDigestState>();
             let v = v.as_();
             state.add(v)
         });
         Ok(())
     }
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<QuantileState>();
+        let state = place.get::<QuantileTDigestState>();
         serialize_into_buf(writer, state)
     }
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<QuantileState>();
+        let state = place.get::<QuantileTDigestState>();
         *state = deserialize_from_slice(reader)?;
 
         Ok(())
     }
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<QuantileState>();
-        let state = place.get::<QuantileState>();
+        let rhs = rhs.get::<QuantileTDigestState>();
+        let state = place.get::<QuantileTDigestState>();
         state.merge(rhs)
     }
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let state = place.get::<QuantileState>();
+        let state = place.get::<QuantileTDigestState>();
         state.merge_result(builder, self.levels.clone())
     }
 
@@ -367,7 +380,7 @@ where T: Number + AsPrimitive<f64>
     }
 
     unsafe fn drop_state(&self, place: StateAddr) {
-        let state = place.get::<QuantileState>();
+        let state = place.get::<QuantileTDigestState>();
         std::ptr::drop_in_place(state);
     }
 }
@@ -447,11 +460,15 @@ where T: Number + AsPrimitive<f64>
     }
 }
 
-pub fn try_create_aggregate_quantile_tdigest_function(
+pub fn try_create_aggregate_quantile_tdigest_function<const TYPE: u8>(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
 ) -> Result<AggregateFunctionRef> {
+    if TYPE == MEDIAN {
+        assert_params(display_name, params.len(), 0)?;
+    }
+
     assert_unary_arguments(display_name, arguments.len())?;
     with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
         DataType::Number(NumberDataType::NUM_TYPE) => {
@@ -477,5 +494,13 @@ pub fn try_create_aggregate_quantile_tdigest_function(
 }
 
 pub fn aggregate_quantile_tdigest_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_quantile_tdigest_function))
+    AggregateFunctionDescription::creator(Box::new(
+        try_create_aggregate_quantile_tdigest_function::<QUANTILE>,
+    ))
+}
+
+pub fn aggregate_median_tdigest_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(
+        try_create_aggregate_quantile_tdigest_function::<MEDIAN>,
+    ))
 }
