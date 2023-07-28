@@ -44,30 +44,31 @@ const dsn = process.env.DATABEND_DSN
     ? process.env.DATABEND_DSN
     : "databend://user1:abc123@localhost:8000/default?sslmode=disable";
 
-function create_client() {
+async function create_conn() {
     this.client = new Client(dsn);
+    this.conn = await this.client.getConn();
     console.log('Connected to Databend Server!');
 }
 
 async function select_books() {
     var sql = "CREATE DATABASE IF NOT EXISTS book_db";
-    await this.client.exec(sql);
+    await this.conn.exec(sql);
     console.log("Database created");
 
     var sql = "USE book_db";
-    await this.client.exec(sql);
+    await this.conn.exec(sql);
     console.log("Database used");
 
     var sql = "CREATE TABLE IF NOT EXISTS books(title VARCHAR, author VARCHAR, date VARCHAR)";
-    await this.client.exec(sql);
+    await this.conn.exec(sql);
     console.log("Table created");
 
     var sql = "INSERT INTO books VALUES('Readings in Database Systems', 'Michael Stonebraker', '2004')";
-    await this.client.exec(sql);
+    await this.conn.exec(sql);
     console.log("1 record inserted");
 
     var sql = "SELECT * FROM books";
-    const rows = await this.client.queryIter(sql);
+    const rows = await this.conn.queryIter(sql);
     const ret = [];
     let row = await rows.next();
     while (row) {
@@ -77,8 +78,9 @@ async function select_books() {
     console.log(ret);
 }
 
-create_client();
-select_books();
+create_conn().then(conn => {
+    select_books()
+});
 ```
 
 2. Run `node databend.js`:
