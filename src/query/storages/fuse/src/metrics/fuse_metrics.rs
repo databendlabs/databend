@@ -243,3 +243,26 @@ pub fn metrics_inc_replace_row_number_after_table_level_pruning(c: u64) {
 pub fn metrics_inc_replace_partition_number(c: u64) {
     increment_gauge!(key!("replace_into_partition_number"), c as f64);
 }
+
+pub fn metrics_inc_replace_process_input_block_time_ms(c: u64) {
+    increment_gauge!(key!("replace_into_time_process_input_block_ms"), c as f64);
+}
+
+pub fn metrics_inc_replace_number_accumulated_merge_action() {
+    counter!(key!("replace_into_accumulated_merge_action"), 1);
+}
+
+pub fn metrics_inc_replace_number_apply_deletion() {
+    counter!(key!("replace_into_apply_deletion"), 1);
+}
+
+pub fn metrics_inc_replace_accumulated_merge_action_time_ms(c: u64) {
+    increment_gauge!(
+        key!("replace_into_time_accumulated_merge_action_ms"),
+        c as f64
+    );
+}
+
+pub fn metrics_inc_replace_apply_deletion_time_ms(c: u64) {
+    increment_gauge!(key!("replace_into_time_apply_deletion_ms"), c as f64);
+}

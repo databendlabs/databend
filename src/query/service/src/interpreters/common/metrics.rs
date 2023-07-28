@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2023 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod grant;
-mod metrics;
-mod table;
-mod util;
+// interpreter metrics
 
-pub use grant::validate_grant_object_exists;
-pub use table::check_referenced_computed_columns;
-pub use util::check_deduplicate_label;
+use metrics::increment_gauge;
 
-pub use self::metrics::*;
+pub fn metrics_inc_replace_execution_time_ms(c: u64) {
+    increment_gauge!("replace_into_time_execution_ms", c as f64);
+}
+
+pub fn metrics_inc_replace_mutation_time_ms(c: u64) {
+    increment_gauge!("replace_into_time_mutation_ms", c as f64);
+}
