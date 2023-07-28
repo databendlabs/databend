@@ -168,7 +168,7 @@ pub struct EvalScalar {
 impl EvalScalar {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         if self.exprs.is_empty() {
-            return Ok(self.input.output_schema()?);
+            return self.input.output_schema();
         }
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(self.projections.len());
