@@ -22,6 +22,7 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
+use crate::plans::CteScan;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::ProjectSet;
@@ -279,6 +280,38 @@ impl UnusedColumnPruner {
                 ))
             }
 
+            RelOperator::CteScan(scan) => {
+                // Pruner column will be executed twice, the second shouldn't change cte scan
+                if self.apply_lazy {
+                    return Ok(SExpr::create_leaf(Arc::new(RelOperator::CteScan(
+                        CteScan {
+                            cte_idx: scan.cte_idx,
+                            fields: scan.fields.clone(),
+                            offsets: scan.offsets.clone(),
+                            stat: scan.stat.clone(),
+                        },
+                    ))));
+                }
+                let mut used_columns = scan.used_columns()?;
+                used_columns = required.intersection(&used_columns).cloned().collect();
+                let mut pruned_fields = vec![];
+                let mut pruned_offsets = vec![];
+                for (idx, field) in scan.fields.iter().enumerate() {
+                    if used_columns.contains(&field.name().parse()?) {
+                        pruned_fields.push(field.clone());
+                        pruned_offsets.push(idx);
+                    }
+                }
+                Ok(SExpr::create_leaf(Arc::new(RelOperator::CteScan(
+                    CteScan {
+                        cte_idx: scan.cte_idx,
+                        fields: pruned_fields,
+                        offsets: pruned_offsets,
+                        stat: scan.stat.clone(),
+                    },
+                ))))
+            }
+
             RelOperator::MaterializedCte(cte) => {
                 let left_output_column = RelExpr::with_s_expr(expr)
                     .derive_relational_prop_child(0)?
@@ -300,7 +333,7 @@ impl UnusedColumnPruner {
                 ))
             }
 
-            RelOperator::DummyTableScan(_) | RelOperator::CteScan(_) => Ok(expr.clone()),
+            RelOperator::DummyTableScan(_) => Ok(expr.clone()),
 
             _ => Err(ErrorCode::Internal(
                 "Attempting to prune columns of a physical plan is not allowed",
