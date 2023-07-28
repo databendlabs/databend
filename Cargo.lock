@@ -1833,6 +1833,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "storages-common-table-meta",
  "typetag",
 ]
 
@@ -2819,6 +2820,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.1",
  "serde",
+ "storages-common-table-meta",
  "typetag",
 ]
 
