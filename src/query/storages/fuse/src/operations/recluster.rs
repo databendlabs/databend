@@ -290,6 +290,7 @@ impl FuseTable {
                 input,
                 None,
                 true,
+                None,
             )
         })?;
         Ok(block_count as u64)

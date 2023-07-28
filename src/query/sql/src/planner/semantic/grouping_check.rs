@@ -16,7 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 
-use crate::binder::ColumnBinding;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
@@ -45,17 +45,13 @@ impl<'a> GroupingChecker<'a> {
             {
                 column_ref.column.clone()
             } else {
-                ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_position: None,
-                    table_index: None,
-                    column_name: "group_item".to_string(),
-                    index: column.index,
-                    data_type: Box::new(column.scalar.data_type()?),
-                    visibility: Visibility::Visible,
-                    virtual_computed_expr: None,
-                }
+                ColumnBindingBuilder::new(
+                    "group_item".to_string(),
+                    column.index,
+                    Box::new(column.scalar.data_type()?),
+                    Visibility::Visible,
+                )
+                .build()
             };
 
             if let Some(grouping_id) = &self.bind_context.aggregate_info.grouping_id_column {
@@ -138,17 +134,13 @@ impl<'a> GroupingChecker<'a> {
                         self.resolve(&arg.scalar, span)?;
                     }
 
-                    let column_binding = ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_position: None,
-                        table_index: None,
-                        column_name: win.display_name.clone(),
-                        index: window_info.index,
-                        data_type: Box::new(window_info.func.return_type()),
-                        visibility: Visibility::Visible,
-                        virtual_computed_expr: None,
-                    };
+                    let column_binding = ColumnBindingBuilder::new(
+                        win.display_name.clone(),
+                        window_info.index,
+                        Box::new(window_info.func.return_type()),
+                        Visibility::Visible,
+                    )
+                    .build();
                     Ok(BoundColumnRef {
                         span: None,
                         column: column_binding,
@@ -167,17 +159,13 @@ impl<'a> GroupingChecker<'a> {
                     .get(&agg.display_name)
                 {
                     let agg_func = &self.bind_context.aggregate_info.aggregate_functions[*column];
-                    let column_binding = ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_position: None,
-                        table_index: None,
-                        column_name: agg.display_name.clone(),
-                        index: agg_func.index,
-                        data_type: Box::new(agg_func.scalar.data_type()?),
-                        visibility: Visibility::Visible,
-                        virtual_computed_expr: None,
-                    };
+                    let column_binding = ColumnBindingBuilder::new(
+                        agg.display_name.clone(),
+                        agg_func.index,
+                        Box::new(agg_func.scalar.data_type()?),
+                        Visibility::Visible,
+                    )
+                    .build();
                     return Ok(BoundColumnRef {
                         span: None,
                         column: column_binding,

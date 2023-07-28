@@ -24,8 +24,8 @@ use common_expression::types::NumberDataType;
 use common_expression::ROW_ID_COL_NAME;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
+use common_sql::binder::ColumnBindingBuilder;
 use common_sql::executor::cast_expr_to_non_null_boolean;
-use common_sql::ColumnBinding;
 use common_sql::Visibility;
 use table_lock::TableLockHandlerWrapper;
 
@@ -99,17 +99,16 @@ impl Interpreter for UpdateInterpreter {
                 .metadata
                 .read()
                 .get_table_index(Some(self.plan.database.as_str()), self.plan.table.as_str());
-            let row_id_column_binding = ColumnBinding {
-                database_name: Some(self.plan.database.clone()),
-                table_name: Some(self.plan.table.clone()),
-                column_position: None,
-                table_index,
-                column_name: ROW_ID_COL_NAME.to_string(),
-                index: self.plan.subquery_desc[0].index,
-                data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-                visibility: Visibility::InVisible,
-                virtual_computed_expr: None,
-            };
+            let row_id_column_binding = ColumnBindingBuilder::new(
+                ROW_ID_COL_NAME.to_string(),
+                self.plan.subquery_desc[0].index,
+                Box::new(DataType::Number(NumberDataType::UInt64)),
+                Visibility::InVisible,
+            )
+            .database_name(Some(self.plan.database.clone()))
+            .table_name(Some(self.plan.table.clone()))
+            .table_index(table_index)
+            .build();
             let mut filters = VecDeque::new();
             for subquery_desc in &self.plan.subquery_desc {
                 let filter = subquery_filter(

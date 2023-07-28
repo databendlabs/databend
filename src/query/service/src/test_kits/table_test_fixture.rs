@@ -552,6 +552,7 @@ impl TestFixture {
                 &mut build_res.main_pipeline,
                 None,
                 overwrite,
+                None,
             )?;
         } else {
             build_res

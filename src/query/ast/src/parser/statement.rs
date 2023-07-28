@@ -1970,6 +1970,52 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     )(i)
 }
 
+fn column_type(i: Input) -> IResult<(Identifier, TypeName)> {
+    map(
+        rule! {
+            #ident ~ #type_name
+        },
+        |(column, type_name)| (column, type_name),
+    )(i)
+}
+
+pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
+    let set_mask_policy = map(
+        rule! {
+            #ident ~ SET ~ MASKING ~ POLICY ~ #ident
+        },
+        |(column, _, _, _, mask_name)| {
+            ModifyColumnAction::SetMaskingPolicy(column, mask_name.to_string())
+        },
+    );
+
+    let convert_stored_computed_column = map(
+        rule! {
+            #ident ~ DROP ~ STORED
+        },
+        |(column, _, _)| ModifyColumnAction::ConvertStoredComputedColumn(column),
+    );
+
+    let modify_column_type = map(
+        rule! {
+            #column_type ~ ("," ~ COLUMN ~ #column_type)*
+        },
+        |(column_type, column_type_vec)| {
+            let mut column_types = vec![column_type];
+            column_type_vec
+                .iter()
+                .for_each(|(_, _, column_type)| column_types.push(column_type.clone()));
+            ModifyColumnAction::SetDataType(column_types)
+        },
+    );
+
+    rule!(
+        #set_mask_policy
+        | #convert_stored_computed_column
+        | #modify_column_type
+    )(i)
+}
+
 pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     let rename_table = map(
         rule! {
@@ -1995,22 +2041,11 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let modify_column = map(
         rule! {
-            MODIFY ~ COLUMN ~ #ident ~ SET ~ MASKING ~ POLICY ~ #ident
+            MODIFY ~ COLUMN ~ #modify_column_action
         },
-        |(_, _, column, _, _, _, mask_name)| AlterTableAction::ModifyColumn {
-            column,
-            action: ModifyColumnAction::SetMaskingPolicy(mask_name.to_string()),
-        },
+        |(_, _, action)| AlterTableAction::ModifyColumn { action },
     );
-    let convert_stored_computed_column = map(
-        rule! {
-            MODIFY ~ COLUMN ~ #ident ~ DROP ~ STORED
-        },
-        |(_, _, column, _, _)| AlterTableAction::ModifyColumn {
-            column,
-            action: ModifyColumnAction::ConvertStoredComputedColumn,
-        },
-    );
+
     let drop_column = map(
         rule! {
             DROP ~ COLUMN ~ #ident
@@ -2062,7 +2097,6 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #add_column
         | #drop_column
         | #modify_column
-        | #convert_stored_computed_column
         | #alter_table_cluster_key
         | #drop_table_cluster_key
         | #recluster_table

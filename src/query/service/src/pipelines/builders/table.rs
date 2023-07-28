@@ -79,7 +79,7 @@ pub fn build_append2table_with_commit_pipeline(
 
     table.append_data(ctx.clone(), main_pipeline, append_mode)?;
 
-    table.commit_insertion(ctx, main_pipeline, copied_files, overwrite)?;
+    table.commit_insertion(ctx, main_pipeline, copied_files, overwrite, None)?;
 
     Ok(())
 }
