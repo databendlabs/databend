@@ -89,13 +89,14 @@ echo "set retention_period=0;vacuum drop table retain 0 hours dry run" | $MYSQL_
 echo "undrop table test_vacuum_drop_4.a" | $MYSQL_CLIENT_CONNECT
 echo "select * from test_vacuum_drop_4.a"  | $MYSQL_CLIENT_CONNECT
 
-# check vacuum table with the same name
-echo "create table test_vacuum_drop_4.b(c float)" | $MYSQL_CLIENT_CONNECT
+# check vacuum drop table with the same name
+echo "create table test_vacuum_drop_4.b(c int)" | $MYSQL_CLIENT_CONNECT
+echo "INSERT INTO test_vacuum_drop_4.b VALUES (1)" | $MYSQL_CLIENT_CONNECT
 echo "drop table test_vacuum_drop_4.b" | $MYSQL_CLIENT_CONNECT
 echo "create table test_vacuum_drop_4.b(c int)" | $MYSQL_CLIENT_CONNECT
 echo "INSERT INTO test_vacuum_drop_4.b VALUES (2)" | $MYSQL_CLIENT_CONNECT
 echo "select * from test_vacuum_drop_4.b"  | $MYSQL_CLIENT_CONNECT
-echo "set retention_period=0; vacuum drop table retain 0 hours dry run" | $MYSQL_CLIENT_CONNECT
+echo "set retention_period=0; vacuum drop table retain 0 hours" | $MYSQL_CLIENT_CONNECT
 echo "select * from test_vacuum_drop_4.b"  | $MYSQL_CLIENT_CONNECT
 
 echo "drop database if exists test_vacuum_drop_4" | $MYSQL_CLIENT_CONNECT
