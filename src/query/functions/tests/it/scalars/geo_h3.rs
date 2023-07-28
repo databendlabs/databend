@@ -134,7 +134,7 @@ fn test_h3_edge_length_m(file: &mut impl Write) {
 
     run_ast(file, "h3_edge_length_m(res)", &[(
         "res",
-        UInt64Type::from_data(vec![1, 2, 3, 4]),
+        UInt8Type::from_data(vec![1, 2, 3, 4]),
     )]);
 }
 
@@ -146,6 +146,6 @@ fn test_h3_edge_length_km(file: &mut impl Write) {
 
     run_ast(file, "h3_edge_length_km(res)", &[(
         "res",
-        UInt64Type::from_data(vec![1, 2, 3, 4]),
+        UInt8Type::from_data(vec![1, 2, 3, 4]),
     )]);
 }
