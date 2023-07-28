@@ -353,6 +353,11 @@ impl UnusedColumnPruner {
                 ))
             }
 
+            RelOperator::RuntimeFilterSource(p) => Ok(SExpr::create_unary(
+                Arc::new(RelOperator::RuntimeFilterSource(p.clone())),
+                Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
+            )),
+
             RelOperator::DummyTableScan(_) => Ok(expr.clone()),
 
             _ => Err(ErrorCode::Internal(
