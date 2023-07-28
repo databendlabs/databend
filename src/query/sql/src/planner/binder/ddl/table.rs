@@ -80,6 +80,7 @@ use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
@@ -115,7 +116,6 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::BindContext;
-use crate::ColumnBinding;
 use crate::Planner;
 use crate::SelectBuilder;
 
@@ -1339,17 +1339,14 @@ impl Binder {
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
         for (index, field) in schema.fields().iter().enumerate() {
-            let column = ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_position: None,
-                table_index: None,
-                column_name: field.name().clone(),
+            let column = ColumnBindingBuilder::new(
+                field.name().clone(),
                 index,
-                data_type: Box::new(DataType::from(field.data_type())),
-                visibility: Visibility::Visible,
-                virtual_computed_expr: None,
-            };
+                Box::new(DataType::from(field.data_type())),
+                Visibility::Visible,
+            )
+            .build();
+
             bind_context.columns.push(column);
         }
         let mut scalar_binder = ScalarBinder::new(

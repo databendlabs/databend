@@ -70,6 +70,7 @@ use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::NameResolutionResult;
 use crate::optimizer::RelExpr;
@@ -2750,17 +2751,16 @@ impl<'a> TypeChecker<'a> {
         }
 
         let data_type = DataType::Nullable(Box::new(DataType::Variant));
-        let virtual_column = ColumnBinding {
-            database_name: column.database_name.clone(),
-            table_name: column.table_name.clone(),
-            column_position: None,
-            table_index: Some(table_index),
-            column_name: name,
+        let virtual_column = ColumnBindingBuilder::new(
+            name,
             index,
-            data_type: Box::new(data_type.clone()),
-            visibility: Visibility::InVisible,
-            virtual_computed_expr: None,
-        };
+            Box::new(data_type.clone()),
+            Visibility::InVisible,
+        )
+        .database_name(column.database_name.clone())
+        .table_name(column.table_name.clone())
+        .table_index(Some(table_index))
+        .build();
         let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
             span: None,
             column: virtual_column,
