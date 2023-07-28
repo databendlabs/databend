@@ -91,21 +91,29 @@ fn test_cse() {
     let mut projections = ColumnSet::new();
     projections.insert(1);
     projections.insert(2);
-    let operators = vec![BlockOperator::Map { projections, exprs }];
+    let operators = vec![BlockOperator::Map {
+        exprs,
+        projections: Some(projections),
+    }];
 
     let mut operators = apply_cse(operators, 1);
 
     assert_eq!(operators.len(), 1);
 
     match operators.pop().unwrap() {
-        BlockOperator::MapWithOutput { exprs, projections } => {
+        BlockOperator::Map { exprs, projections } => {
             assert_eq!(exprs.len(), 3);
             assert_eq!(exprs[0].sql_display(), "a + 1");
             assert_eq!(exprs[1].sql_display(), "__temp_cse_1");
             assert_eq!(exprs[2].sql_display(), "__temp_cse_1 * 2");
-            assert_eq!(projections.into_iter().sorted().collect::<Vec<_>>(), vec![
-                2, 3
-            ]);
+            assert_eq!(
+                projections
+                    .unwrap()
+                    .into_iter()
+                    .sorted()
+                    .collect::<Vec<_>>(),
+                vec![2, 3]
+            );
         }
 
         _ => unreachable!(),

@@ -28,7 +28,6 @@ use common_expression::TableSchema;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
-use common_sql::optimizer::ColumnSet;
 use common_sql::plans::PREDICATE_COLUMN_NAME;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
@@ -192,7 +191,6 @@ impl FuseTable {
         let mut ops = Vec::with_capacity(cap);
 
         let mut exprs = Vec::with_capacity(update_list.len());
-        let update_list_len = update_list.len();
         for (id, remote_expr) in update_list.into_iter() {
             let expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
@@ -202,8 +200,10 @@ impl FuseTable {
             pos += 1;
         }
         if !exprs.is_empty() {
-            let projections = (0..=update_list_len).collect::<ColumnSet>();
-            ops.push(BlockOperator::Map { projections, exprs });
+            ops.push(BlockOperator::Map {
+                exprs,
+                projections: None,
+            });
         }
 
         let mut computed_exprs = Vec::with_capacity(computed_list.len());
@@ -222,10 +222,14 @@ impl FuseTable {
         // regenerate related stored computed columns.
         if !computed_exprs.is_empty() {
             ops.push(BlockOperator::Map {
-                projections: offset_map.values().cloned().collect(),
                 exprs: computed_exprs,
+                projections: None,
             });
         }
+
+        ops.push(BlockOperator::Project {
+            projection: offset_map.values().cloned().collect(),
+        });
 
         let block_reader = self.create_block_reader(projection.clone(), false, ctx.clone())?;
         let mut schema = block_reader.schema().as_ref().clone();

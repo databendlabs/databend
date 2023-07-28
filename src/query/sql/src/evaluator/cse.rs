@@ -28,7 +28,7 @@ pub fn apply_cse(
 
     for op in operators {
         match op {
-            BlockOperator::Map { projections, exprs } => {
+            BlockOperator::Map { exprs, projections } => {
                 // find common expression
                 let mut cse_counter = HashMap::new();
                 for expr in exprs.iter() {
@@ -73,27 +73,50 @@ pub fn apply_cse(
                         temp_var_counter += 1;
                     }
 
-                    let mut new_projections: ColumnSet = projections
-                        .iter()
-                        .filter(|idx| **idx < input_num_columns)
-                        .copied()
-                        .collect::<ColumnSet>();
+                    let mut new_projections: Option<ColumnSet> =
+                        projections.as_ref().map(|projections| {
+                            projections
+                                .iter()
+                                .filter(|idx| **idx < input_num_columns)
+                                .copied()
+                                .collect::<ColumnSet>()
+                        });
+                    // if let Some(projections) = &projections {
+                    //     Some(
+                    //         projections
+                    //             .iter()
+                    //             .filter(|idx| **idx < input_num_columns)
+                    //             .copied()
+                    //             .collect::<ColumnSet>(),
+                    //     )
+                    // } else {
+                    //     None
+                    // };
+
+                    let has_projections = new_projections.is_some();
                     for mut expr in exprs {
                         perform_cse_replacement(&mut expr, &cse_replacements);
                         new_exprs.push(expr);
 
-                        if projections.contains(&(temp_var_counter - candidates_nums)) {
-                            new_projections.insert(temp_var_counter);
+                        if has_projections {
+                            // Safe to unwrap().
+                            if projections
+                                .as_ref()
+                                .unwrap()
+                                .contains(&(temp_var_counter - candidates_nums))
+                            {
+                                new_projections.as_mut().unwrap().insert(temp_var_counter);
+                            }
                         }
                         temp_var_counter += 1;
                     }
 
-                    results.push(BlockOperator::MapWithOutput {
+                    results.push(BlockOperator::Map {
                         exprs: new_exprs,
                         projections: new_projections,
                     });
                 } else {
-                    results.push(BlockOperator::Map { projections, exprs });
+                    results.push(BlockOperator::Map { exprs, projections });
                 }
             }
             BlockOperator::Project { projection } => {

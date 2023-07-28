@@ -683,8 +683,8 @@ impl PipelineBuilder {
         }
 
         let op = BlockOperator::Map {
-            projections: eval_scalar.projections.clone(),
             exprs,
+            projections: Some(eval_scalar.projections.clone()),
         };
 
         let func_ctx = self.ctx.get_function_context()?;

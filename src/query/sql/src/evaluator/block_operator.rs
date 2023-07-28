@@ -45,14 +45,9 @@ use crate::optimizer::ColumnSet;
 pub enum BlockOperator {
     /// Batch mode of map which merges map operators into one.
     Map {
-        projections: ColumnSet,
-        exprs: Vec<Expr>,
-    },
-
-    MapWithOutput {
         exprs: Vec<Expr>,
         /// The index of the output columns, based on the exprs.
-        projections: ColumnSet,
+        projections: Option<ColumnSet>,
     },
 
     /// Filter the input [`DataBlock`] with the predicate `eval`.
@@ -74,9 +69,7 @@ impl BlockOperator {
             return Ok(DataBlock::empty());
         }
         match self {
-            BlockOperator::Map { .. }
-            | BlockOperator::MapWithOutput { .. }
-            | BlockOperator::Filter { .. }
+            BlockOperator::Map { .. } | BlockOperator::Filter { .. }
                 if input
                     .get_meta()
                     .and_then(AggIndexMeta::downcast_ref_from)
@@ -85,24 +78,17 @@ impl BlockOperator {
                 // It's from aggregating index.
                 Ok(input)
             }
-            BlockOperator::Map { projections, exprs } => {
+            BlockOperator::Map { exprs, projections } => {
                 for expr in exprs {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                     let result = evaluator.run(expr)?;
                     let col = BlockEntry::new(expr.data_type().clone(), result);
                     input.add_column(col);
                 }
-                Ok(input.project(projections))
-            }
-
-            BlockOperator::MapWithOutput { exprs, projections } => {
-                for expr in exprs {
-                    let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                    let result = evaluator.run(expr)?;
-                    let col = BlockEntry::new(expr.data_type().clone(), result);
-                    input.add_column(col);
+                match projections {
+                    Some(projections) => Ok(input.project(projections)),
+                    None => Ok(input),
                 }
-                Ok(input.project(projections))
             }
 
             BlockOperator::Filter { projections, expr } => {
@@ -349,16 +335,19 @@ impl CompoundBlockOperator {
 
         for op in operators {
             match op {
-                BlockOperator::Map { projections, exprs } => {
+                BlockOperator::Map { exprs, projections } => {
                     if let Some(BlockOperator::Map {
-                        projections: pre_projections,
                         exprs: pre_exprs,
+                        projections: pre_projections,
                     }) = results.last_mut()
                     {
-                        pre_projections.extend(projections);
-                        pre_exprs.extend(exprs);
+                        if pre_projections.is_none() && projections.is_none() {
+                            pre_exprs.extend(exprs);
+                        } else {
+                            results.push(BlockOperator::Map { exprs, projections });
+                        }
                     } else {
-                        results.push(BlockOperator::Map { projections, exprs });
+                        results.push(BlockOperator::Map { exprs, projections });
                     }
                 }
                 _ => results.push(op),
@@ -389,7 +378,6 @@ impl Transform for CompoundBlockOperator {
                 .map(|op| {
                     match op {
                         BlockOperator::Map { .. } => "Map",
-                        BlockOperator::MapWithOutput { .. } => "MapWithOutput",
                         BlockOperator::Filter { .. } => "Filter",
                         BlockOperator::Project { .. } => "Project",
                         BlockOperator::FlatMap { .. } => "FlatMap",

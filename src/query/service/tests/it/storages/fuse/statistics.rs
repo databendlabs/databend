@@ -38,7 +38,6 @@ use common_expression::TableSchema;
 use common_functions::aggregates::eval_aggr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
-use common_sql::optimizer::ColumnSet;
 use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::statistics::Trim;
 use common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
@@ -342,11 +341,10 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
             },
         ],
     };
-    let projections = (0..=schema.fields().len()).collect::<ColumnSet>();
     let expr = check(&expr, &BUILTIN_FUNCTIONS).unwrap();
     let operators = vec![BlockOperator::Map {
-        projections,
         exprs: vec![expr],
+        projections: None,
     }];
 
     let stats_gen = ClusterStatsGenerator::new(

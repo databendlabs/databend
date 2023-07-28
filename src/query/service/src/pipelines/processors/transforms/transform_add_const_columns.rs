@@ -22,7 +22,6 @@ use common_expression::Expr;
 use common_expression::Scalar as DataScalar;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::optimizer::ColumnSet;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -76,11 +75,12 @@ where Self: Transform
         }
 
         let func_ctx = ctx.get_function_context()?;
-        let projections = (0..=(input_schema.fields().len() + output_schema.fields().len()))
-            .collect::<ColumnSet>();
         let expression_transform = CompoundBlockOperator {
             ctx: func_ctx,
-            operators: vec![BlockOperator::Map { projections, exprs }],
+            operators: vec![BlockOperator::Map {
+                exprs,
+                projections: None,
+            }],
         };
 
         Ok(ProcessorPtr::create(Transformer::create(
