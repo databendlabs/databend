@@ -70,12 +70,15 @@ select * from clustering_information('db_09_0016','t3')
 (b) 2 0 0 1.0 2.0 {"00002":2}
 
 statement ok
+insert into t3 values(3,'a'),(4,'c')
+
+statement ok
 ALTER TABLE t3 RECLUSTER
 
 query TIIIFFT
 select * from clustering_information('db_09_0016','t3')
 ----
-(b) 2 1 0 1.0 2.0 {"00002":2}
+(b) 2 0 0 0.0 1.0 {"00001":2}
 
 # test trim string
 statement ok
