@@ -76,10 +76,8 @@ use common_sql::executor::AggregatePartial;
 use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
-use common_sql::executor::Deduplicate;
-use common_sql::executor::CopyIntoTableFromQuery;
 use common_sql::executor::CteScan;
-use common_sql::executor::DeleteFinal;
+use common_sql::executor::Deduplicate;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::EvalScalar;
@@ -88,8 +86,8 @@ use common_sql::executor::ExchangeSource;
 use common_sql::executor::Filter;
 use common_sql::executor::HashJoin;
 use common_sql::executor::Limit;
-use common_sql::executor::MutationAggregate;
 use common_sql::executor::MaterializedCte;
+use common_sql::executor::MutationAggregate;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
@@ -247,12 +245,6 @@ impl PipelineBuilder {
             PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
             PhysicalPlan::MutationAggregate(plan) => self.build_mutation_aggregate(plan),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
-            PhysicalPlan::DistributedCopyIntoTableFromStage(distributed_plan) => {
-                self.build_distributed_copy_into_table_from_stage(distributed_plan)
-            }
-            PhysicalPlan::CopyIntoTableFromQuery(copy_plan) => {
-                self.build_copy_into_table_from_query(copy_plan)
-            }
             PhysicalPlan::MaterializedCte(materialized_cte) => {
                 self.build_materialized_cte(materialized_cte)
             }

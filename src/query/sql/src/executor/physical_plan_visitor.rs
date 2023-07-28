@@ -414,9 +414,9 @@ impl PhysicalPlan {
         if pre_visit(plan) {
             visit(plan);
             match plan {
-                PhysicalPlan::TableScan(_) => {}
-                PhysicalPlan::AsyncSourcer(_) => {}
-                PhysicalPlan::TableScan(_) | PhysicalPlan::CteScan(_) => {}
+                PhysicalPlan::TableScan(_)
+                | PhysicalPlan::AsyncSourcer(_)
+                | PhysicalPlan::CteScan(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }

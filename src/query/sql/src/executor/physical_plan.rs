@@ -1157,7 +1157,6 @@ impl PhysicalPlan {
             | PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
-            | PhysicalPlan::DeleteFinal(_)
             | PhysicalPlan::CteScan(_) => None,
         }
     }
