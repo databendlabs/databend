@@ -26,9 +26,7 @@ use common_catalog::plan::InternalColumn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
-use common_expression::types::DataType;
 use common_expression::ColumnId;
-use common_expression::ColumnIndex;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
@@ -37,7 +35,9 @@ use enum_as_inner::EnumAsInner;
 
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
+use crate::binder::column_binding::ColumnBinding;
 use crate::binder::window::WindowInfo;
+use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::optimizer::StatInfo;
@@ -83,28 +83,6 @@ pub enum Visibility {
     UnqualifiedWildcardInVisible,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
-pub struct ColumnBinding {
-    /// Database name of this `ColumnBinding` in current context
-    pub database_name: Option<String>,
-    /// Table name of this `ColumnBinding` in current context
-    pub table_name: Option<String>,
-    /// Column Position of this `ColumnBinding` in current context
-    pub column_position: Option<usize>,
-    /// Table index of this `ColumnBinding` in current context
-    pub table_index: Option<IndexType>,
-    /// Column name of this `ColumnBinding` in current context
-    pub column_name: String,
-    /// Column index of ColumnBinding
-    pub index: IndexType,
-
-    pub data_type: Box<DataType>,
-
-    pub visibility: Visibility,
-
-    pub virtual_computed_expr: Option<String>,
-}
-
 #[derive(Clone, Debug)]
 pub struct InternalColumnBinding {
     /// Database name of this `InternalColumnBinding` in current context
@@ -114,8 +92,6 @@ pub struct InternalColumnBinding {
 
     pub internal_column: InternalColumn,
 }
-
-impl ColumnIndex for ColumnBinding {}
 
 #[derive(Debug, Clone)]
 pub enum NameResolutionResult {
@@ -527,17 +503,16 @@ impl BindContext {
         let metadata = metadata.read();
         let table = metadata.table(table_index);
         let column = metadata.column(column_index);
-        let column_binding = ColumnBinding {
-            database_name: Some(table.database().to_string()),
-            table_name: Some(table.name().to_string()),
-            column_position: None,
-            table_index: Some(table_index),
-            column_name: column.name(),
-            index: column_index,
-            data_type: Box::new(column.data_type()),
-            visibility: Visibility::Visible,
-            virtual_computed_expr: None,
-        };
+        let column_binding = ColumnBindingBuilder::new(
+            column.name(),
+            column_index,
+            Box::new(column.data_type()),
+            Visibility::Visible,
+        )
+        .database_name(Some(table.database().to_string()))
+        .table_name(Some(table.name().to_string()))
+        .table_index(Some(table_index))
+        .build();
 
         if new {
             debug_assert!(!self.columns.iter().any(|c| c == &column_binding));

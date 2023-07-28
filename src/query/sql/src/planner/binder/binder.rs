@@ -38,6 +38,7 @@ use common_meta_app::principal::UserDefinedFunction;
 use tracing::warn;
 
 use crate::binder::wrap_cast;
+use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::udf_validator::UDFValidator;
@@ -587,17 +588,8 @@ impl<'a> Binder {
             .metadata
             .write()
             .add_derived_column(column_name.clone(), data_type.clone());
-        ColumnBinding {
-            database_name: None,
-            table_name: None,
-            column_position: None,
-            table_index: None,
-            column_name,
-            index,
-            data_type: Box::new(data_type),
-            visibility: Visibility::Visible,
-            virtual_computed_expr: None,
-        }
+        ColumnBindingBuilder::new(column_name, index, Box::new(data_type), Visibility::Visible)
+            .build()
     }
 
     /// Normalize [[<catalog>].<database>].<object>

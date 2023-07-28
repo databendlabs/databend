@@ -30,13 +30,13 @@ use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast_scalar;
+use crate::binder::ColumnBindingBuilder;
 use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryDesc;
 use crate::BindContext;
-use crate::ColumnBinding;
 use crate::MetadataRef;
 use crate::Visibility;
 
@@ -65,20 +65,14 @@ impl UpdatePlan {
         schema: DataSchema,
         col_indices: Vec<usize>,
     ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
-        let predicate = ScalarExpr::BoundColumnRef(BoundColumnRef {
-            span: None,
-            column: ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_position: None,
-                table_index: None,
-                column_name: PREDICATE_COLUMN_NAME.to_string(),
-                index: schema.num_fields(),
-                data_type: Box::new(DataType::Boolean),
-                visibility: Visibility::Visible,
-                virtual_computed_expr: None,
-            },
-        });
+        let column = ColumnBindingBuilder::new(
+            PREDICATE_COLUMN_NAME.to_string(),
+            schema.num_fields(),
+            Box::new(DataType::Boolean),
+            Visibility::Visible,
+        )
+        .build();
+        let predicate = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
 
         self.update_list.iter().try_fold(
             Vec::with_capacity(self.update_list.len()),

@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_exception::Span;
 use common_expression::types::DataType;
 
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::optimizer::heuristic::subquery_rewriter::FlattenInfo;
@@ -48,7 +49,6 @@ use crate::plans::Scan;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::BaseTableColumn;
-use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
@@ -334,17 +334,13 @@ impl SubqueryRewriter {
                 let column_name = format!("subquery_{}", output_column.index);
                 let right_condition = ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: subquery.span,
-                    column: ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_position: None,
-                        table_index: None,
+                    column: ColumnBindingBuilder::new(
                         column_name,
-                        index: output_column.index,
-                        data_type: output_column.data_type,
-                        visibility: Visibility::Visible,
-                        virtual_computed_expr: None,
-                    },
+                        output_column.index,
+                        output_column.data_type,
+                        Visibility::Visible,
+                    )
+                    .build(),
                 });
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = *subquery.compare_op.as_ref().unwrap();
@@ -433,17 +429,14 @@ impl SubqueryRewriter {
                 group_items.push(ScalarItem {
                     scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_position: None,
-                            table_index: Some(table_index),
-                            column_name: "".to_string(),
-                            index: column_index,
-                            data_type: Box::new(data_types[index].clone()),
-                            visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
-                        },
+                        column: ColumnBindingBuilder::new(
+                            "".to_string(),
+                            column_index,
+                            Box::new(data_types[index].clone()),
+                            Visibility::Visible,
+                        )
+                        .table_index(Some(table_index))
+                        .build(),
                     }),
                     index: column_index,
                 });
@@ -506,17 +499,13 @@ impl SubqueryRewriter {
                 let metadata = self.metadata.read();
                 for derived_column in self.derived_columns.values() {
                     let column_entry = metadata.column(*derived_column);
-                    let column_binding = ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_position: None,
-                        table_index: None,
-                        column_name: column_entry.name(),
-                        index: *derived_column,
-                        data_type: Box::from(column_entry.data_type()),
-                        visibility: Visibility::Visible,
-                        virtual_computed_expr: None,
-                    };
+                    let column_binding = ColumnBindingBuilder::new(
+                        column_entry.name(),
+                        *derived_column,
+                        Box::from(column_entry.data_type()),
+                        Visibility::Visible,
+                    )
+                    .build();
                     items.push(ScalarItem {
                         scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
                             span: None,
@@ -637,17 +626,13 @@ impl SubqueryRewriter {
                                 DataType::from(data_type)
                             }
                         };
-                        ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_position: None,
-                            table_index: None,
-                            column_name: format!("subquery_{}", derived_column),
-                            index: *derived_column,
-                            data_type: Box::from(data_type.clone()),
-                            visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
-                        }
+                        ColumnBindingBuilder::new(
+                            format!("subquery_{}", derived_column),
+                            *derived_column,
+                            Box::from(data_type.clone()),
+                            Visibility::Visible,
+                        )
+                        .build()
                     };
                     group_items.push(ScalarItem {
                         scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -764,17 +749,13 @@ impl SubqueryRewriter {
                     let column_entry = metadata.column(*index);
                     return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: scalar.span(),
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_position: None,
-                            table_index: None,
-                            column_name: column_entry.name(),
-                            index: *index,
-                            data_type: Box::new(column_entry.data_type()),
-                            visibility: column_binding.visibility,
-                            virtual_computed_expr: None,
-                        },
+                        column: ColumnBindingBuilder::new(
+                            column_entry.name(),
+                            *index,
+                            Box::new(column_entry.data_type()),
+                            column_binding.visibility,
+                        )
+                        .build(),
                     }));
                 }
                 Ok(scalar.clone())
@@ -834,33 +815,25 @@ impl SubqueryRewriter {
             let column_entry = metadata.column(*correlated_column);
             let right_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span,
-                column: ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_position: None,
-                    table_index: None,
-                    column_name: column_entry.name(),
-                    index: *correlated_column,
-                    data_type: Box::from(column_entry.data_type()),
-                    visibility: Visibility::Visible,
-                    virtual_computed_expr: None,
-                },
+                column: ColumnBindingBuilder::new(
+                    column_entry.name(),
+                    *correlated_column,
+                    Box::from(column_entry.data_type()),
+                    Visibility::Visible,
+                )
+                .build(),
             });
             let derive_column = self.derived_columns.get(correlated_column).unwrap();
             let column_entry = metadata.column(*derive_column);
             let left_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span,
-                column: ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    table_index: None,
-                    column_position: None,
-                    column_name: column_entry.name(),
-                    index: *derive_column,
-                    data_type: Box::from(column_entry.data_type()),
-                    visibility: Visibility::Visible,
-                    virtual_computed_expr: None,
-                },
+                column: ColumnBindingBuilder::new(
+                    column_entry.name(),
+                    *derive_column,
+                    Box::from(column_entry.data_type()),
+                    Visibility::Visible,
+                )
+                .build(),
             });
             left_conditions.push(left_column);
             right_conditions.push(right_column);
