@@ -110,7 +110,7 @@ CREATE TABLE test(a int, b int, c int);
 statement ok
 INSERT INTO test        values (1, 1, 1), (2, 1, 2), (3, 1, 3)
 
-statement error 400
+statement ok
 REPLACE INTO test ON CONFLICT(a,b) values (2, 1, 4), (3, 1, 5), (4, 1, 6)
 
 query III

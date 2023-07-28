@@ -15,11 +15,11 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::binder::ColumnBindingBuilder;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
 use crate::BindContext;
-use crate::ColumnBinding;
 use crate::ScalarExpr;
 use crate::Visibility;
 
@@ -69,17 +69,13 @@ impl<'a> WindowChecker<'a> {
                     .get(&win.display_name)
                 {
                     let window_info = &self.bind_context.windows.window_functions[*column];
-                    let column_binding = ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_position: None,
-                        table_index: None,
-                        column_name: win.display_name.clone(),
-                        index: window_info.index,
-                        data_type: Box::new(window_info.func.return_type()),
-                        visibility: Visibility::Visible,
-                        virtual_computed_expr: None,
-                    };
+                    let column_binding = ColumnBindingBuilder::new(
+                        win.display_name.clone(),
+                        window_info.index,
+                        Box::new(window_info.func.return_type()),
+                        Visibility::Visible,
+                    )
+                    .build();
                     return Ok(BoundColumnRef {
                         span: None,
                         column: column_binding,

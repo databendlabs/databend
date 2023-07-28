@@ -49,6 +49,7 @@ use super::sort::OrderItem;
 use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
@@ -664,17 +665,13 @@ impl Binder {
                     .metadata
                     .write()
                     .add_derived_column(left_col.column_name.clone(), coercion_types[idx].clone());
-                let column_binding = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_position: None,
-                    table_index: None,
-                    column_name: left_col.column_name.clone(),
-                    index: new_column_index,
-                    data_type: Box::new(coercion_types[idx].clone()),
-                    visibility: Visibility::Visible,
-                    virtual_computed_expr: None,
-                };
+                let column_binding = ColumnBindingBuilder::new(
+                    left_col.column_name.clone(),
+                    new_column_index,
+                    Box::new(coercion_types[idx].clone()),
+                    Visibility::Visible,
+                )
+                .build();
                 let left_coercion_expr = CastExpr {
                     span: left_span,
                     is_try: false,

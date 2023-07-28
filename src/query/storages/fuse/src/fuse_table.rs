@@ -54,6 +54,7 @@ use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
+use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::Statistics as FuseStatistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -560,8 +561,9 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
+        prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
-        self.do_commit(ctx, pipeline, copied_files, overwrite)
+        self.do_commit(ctx, pipeline, copied_files, overwrite, prev_snapshot_id)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_truncate", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
