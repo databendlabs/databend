@@ -149,7 +149,7 @@ tonic-build = { version = "0.9.2" }
 
 # chrono
 chrono = { version = "0.4.24", features = ["serde"] }
-chrono-tz = "0.6.3"
+chrono-tz = { version = "0.6.3", features = ["serde"] }
 
 # memory
 bumpalo = "3.12.0"

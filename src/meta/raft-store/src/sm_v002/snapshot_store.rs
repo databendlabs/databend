@@ -204,7 +204,10 @@ impl SnapshotStoreV002 {
         snapshot_ids.sort();
         // dbg!(&snapshot_ids);
 
-        info!("choose the latest from found snapshots: {:?}", snapshot_ids);
+        info!(
+            "dir: {}; choose the latest from found snapshots: {:?}",
+            dir, snapshot_ids
+        );
 
         let id = if let Some(id) = snapshot_ids.last().cloned() {
             id

@@ -155,6 +155,8 @@ pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvT
     let mut tc = MetaSrvTestContext::new(nid);
     let addr = tc.config.raft_config.raft_api_advertise_host_endpoint();
 
+    dbg!(&tc.config.raft_config.raft_dir);
+
     // boot up a single-node cluster
     let mn = MetaNode::boot(&tc.config).await?;
 

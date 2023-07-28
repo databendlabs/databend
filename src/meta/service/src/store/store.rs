@@ -219,7 +219,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn purge_logs_upto(&mut self, log_id: LogId) -> Result<(), StorageError> {
         info!("purge_logs_upto: {}", log_id);
 

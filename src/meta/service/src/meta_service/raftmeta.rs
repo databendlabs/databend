@@ -825,8 +825,10 @@ impl MetaNode {
     /// Initialized a single node cluster if this node is just created:
     /// - Initializing raft membership.
     /// - Adding current node into the meta data.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip_all)]
     pub async fn init_cluster(&self, node: Node) -> Result<(), MetaStartupError> {
+        info!("init_cluster: node: {:?}", node);
+
         if self.is_opened() {
             info!("It is opened, skip initializing cluster");
             return Ok(());

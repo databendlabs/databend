@@ -143,9 +143,9 @@ fn test_export_3_level() -> anyhow::Result<()> {
     // TODO(1): add tree name: ["state_machine/0",{"Sequences":{"key":"generic-kv","value":159}}]
 
     assert_eq!(got, vec![
-        r#"{"Sequences":{"key":"generic-kv","value":7}}"#,
         r#"{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":3,"node_id":3},"index":3}}}}"#,
         r#"{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}}}}}"#,
+        r#"{"Sequences":{"key":"generic-kv","value":7}}"#,
         r#"{"Nodes":{"key":3,"value":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}}}"#,
         r#"{"GenericKV":{"key":"a","value":{"seq":1,"meta":null,"data":[97,48]}}}"#,
         r#"{"GenericKV":{"key":"d","value":{"seq":7,"meta":null,"data":[100,50]}}}"#,
@@ -167,8 +167,8 @@ fn test_export_2_level_with_meta() -> anyhow::Result<()> {
         .collect::<Vec<_>>();
 
     assert_eq!(got, vec![
-        r#"{"Sequences":{"key":"generic-kv","value":4}}"#,
         r#"{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":null,"membership":{"configs":[],"nodes":{}}}}}}"#,
+        r#"{"Sequences":{"key":"generic-kv","value":4}}"#,
         r#"{"GenericKV":{"key":"a","value":{"seq":4,"meta":{"expire_at":15},"data":[97,49]}}}"#,
         r#"{"GenericKV":{"key":"b","value":{"seq":2,"meta":{"expire_at":5},"data":[98,48]}}}"#,
         r#"{"GenericKV":{"key":"c","value":{"seq":3,"meta":{"expire_at":20},"data":[99,48]}}}"#,
@@ -183,9 +183,9 @@ fn test_export_2_level_with_meta() -> anyhow::Result<()> {
 #[test]
 fn test_import() -> anyhow::Result<()> {
     let exported = vec![
-        r#"{"Sequences":{"key":"generic-kv","value":9}}"#,
         r#"{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":3,"node_id":3},"index":3}}}}"#,
         r#"{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}}}}}"#,
+        r#"{"Sequences":{"key":"generic-kv","value":9}}"#,
         r#"{"Nodes":{"key":3,"value":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}}}"#,
         r#"{"GenericKV":{"key":"a","value":{"seq":7,"meta":{"expire_at":15},"data":[97,49]}}}"#,
         r#"{"GenericKV":{"key":"b","value":{"seq":3,"meta":{"expire_at":5},"data":[98,48]}}}"#,

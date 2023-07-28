@@ -151,6 +151,8 @@ impl<'a> WriterV002<'a> {
 
         fs::rename(&self.temp_path, path)?;
 
+        tracing::info!(snapshot_id = ?snapshot_id, "snapshot committed: file_size: {}; {}", file_size, snapshot_id.to_string());
+
         Ok((snapshot_id, file_size))
     }
 }
