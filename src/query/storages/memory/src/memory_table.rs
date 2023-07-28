@@ -51,6 +51,7 @@ use common_storage::StorageMetrics;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use storages_common_table_meta::meta::SnapshotId;
 
 use crate::memory_part::MemoryPartInfo;
 
@@ -249,6 +250,7 @@ impl Table for MemoryTable {
         pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
+        _prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
         pipeline.try_resize(1)?;
 
