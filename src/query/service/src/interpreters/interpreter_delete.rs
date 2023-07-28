@@ -313,7 +313,7 @@ pub async fn subquery_filter(
 
     let expr = SExpr::create_unary(
         Arc::new(RelOperator::EvalScalar(EvalScalar {
-            projections: vec![],
+            projections: vec![0],
             items: vec![ScalarItem {
                 scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: None,
