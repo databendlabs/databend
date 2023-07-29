@@ -3311,7 +3311,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn drop_catalog(&self, req: DropCatalogReq) -> Result<DropCatalogReply, KVAppError> {
-        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
         let name_key = &req.name_ident;
 
@@ -3346,8 +3346,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let id_to_name_key = CatalogIdToName { catalog_id };
 
             debug!(
-                catalog_id,
-                name_key = debug(&name_key),
+                catalog_id = catalog_id,
+                name_key = as_debug!(&name_key);
                 "catalog keys to delete"
             );
 
@@ -3368,9 +3368,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 let (succ, _) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = debug(&name_key),
-                    id = debug(&id_key),
-                    succ = display(succ),
+                    name = as_debug!(&name_key),
+                    id = as_debug!(&id_key),
+                    succ = succ;
                     "drop_catalog"
                 );
 
