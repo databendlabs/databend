@@ -840,7 +840,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let function_call_with_lambda = map(
         rule! {
             #function_name
-            ~ "(" ~ #subexpr(0) ~ "," ~ #ident ~ RArrow ~ #subexpr(0) ~ ")"
+            ~ "(" ~ #subexpr(0) ~ "," ~ #ident ~ "->" ~ #subexpr(0) ~ ")"
         },
         |(name, _, arg, _, param, _, expr, _)| ExprElement::FunctionCall {
             distinct: false,
