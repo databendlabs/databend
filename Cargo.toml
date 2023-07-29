@@ -170,7 +170,7 @@ async-backtrace = "0.2.2"
 # observability
 logcall = "0.1.4"
 log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
-minitrace = "0.4"
+minitrace = "0.5"
 
 [profile.release]
 debug = 1
@@ -221,5 +221,3 @@ arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e113
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "693c265" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 croaring = { git = "https://github.com/RoaringBitmap/croaring-rs", rev = "13a71b4" }
-minitrace = { git = "https://github.com/tikv/minitrace-rust.git", rev = "19d5ea9d" }
-minitrace-opentelemetry = { git = "https://github.com/tikv/minitrace-rust.git", rev = "19d5ea9d" }

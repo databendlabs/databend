@@ -49,6 +49,7 @@ pub trait Count {
 /// Binds a counter to a `T`.
 ///
 /// It counts the number of instances of `T` with the provided counter `Count`.
+#[derive(Debug)]
 pub struct WithCount<C, T>
 where C: Count
 {

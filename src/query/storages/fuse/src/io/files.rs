@@ -17,8 +17,8 @@ use std::sync::Arc;
 use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use log::info;
 use opendal::Operator;
-use tracing::info;
 
 // File related operations.
 pub struct Files {
@@ -33,8 +33,8 @@ impl Files {
 
     /// Removes a batch of files asynchronously by splitting a list of file locations into smaller groups of size 1000,
     /// and then deleting each group of files using the delete_files function.
-    #[tracing::instrument(level = "debug", skip_all)]
-    #[async_backtrace::framed]
+    #[minitrace::trace]
+    // #[async_backtrace::framed]
     pub async fn remove_file_in_batch(
         &self,
         file_locations: impl IntoIterator<Item = impl AsRef<str>>,

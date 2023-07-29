@@ -163,7 +163,7 @@ impl IcebergTable {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, _ctx))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,

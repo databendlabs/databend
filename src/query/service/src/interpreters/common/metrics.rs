@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::sync::Mutex;
+use metrics::increment_gauge;
 
-use common_meta_kvapi::kvapi;
-use test_harness::test;
+// the time used in executing the whole replace-into statement
+pub fn metrics_inc_replace_execution_time_ms(c: u64) {
+    increment_gauge!("replace_into_time_execution_ms", c as f64);
+}
 
-use crate::testing::meta_service_test_harness;
-use crate::tests::service::MetaSrvBuilder;
-
-#[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
-async fn test_metasrv_kv_api() -> anyhow::Result<()> {
-    let builder = MetaSrvBuilder {
-        test_contexts: Arc::new(Mutex::new(vec![])),
-    };
-
-    kvapi::TestSuite {}.test_all(builder).await
+// the time used in executing the mutation (upsert) part of the replace-into statement
+pub fn metrics_inc_replace_mutation_time_ms(c: u64) {
+    increment_gauge!("replace_into_time_mutation_ms", c as f64);
 }

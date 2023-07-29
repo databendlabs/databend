@@ -22,7 +22,7 @@ use byteorder::WriteBytesExt;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use tracing::error;
+use log::error;
 
 use crate::api::rpc::packets::ProgressInfo;
 

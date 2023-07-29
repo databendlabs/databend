@@ -22,7 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use itertools::Itertools;
-use tracing::error;
+use log::error;
 
 use crate::block::DataBlock;
 use crate::expression::Expr;

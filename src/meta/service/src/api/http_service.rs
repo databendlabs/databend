@@ -26,14 +26,14 @@ use common_http::pprof::debug_pprof_handler;
 use common_http::HttpError;
 use common_http::HttpShutdownHandler;
 use common_meta_types::MetaNetworkError;
+use log::info;
+use log::warn;
 use poem::get;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
 use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Route;
-use tracing::info;
-use tracing::warn;
 
 use crate::configs::Config;
 use crate::meta_service::MetaNode;

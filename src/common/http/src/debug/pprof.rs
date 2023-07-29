@@ -14,10 +14,10 @@
 
 use common_base::base::tokio::time::Duration;
 use common_base::base::Profiling;
+use log::info;
 use poem::error::InternalServerError;
 use poem::web::Query;
 use poem::IntoResponse;
-use tracing::info;
 
 use crate::debug::PProfRequest;
 
