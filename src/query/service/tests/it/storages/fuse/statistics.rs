@@ -431,8 +431,8 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> common_exception::Resu
         let data_value_min = Scalar::String(min_expr.clone().into_bytes());
         let data_value_max = Scalar::String(max_expr.clone().into_bytes());
 
-        let trimmed_min = data_value_min.clone().trim_min();
-        let trimmed_max = data_value_max.clone().trim_max();
+        let trimmed_min = data_value_min.clone().trim_min(STATS_STRING_PREFIX_LEN);
+        let trimmed_max = data_value_max.clone().trim_max(STATS_STRING_PREFIX_LEN);
 
         let meaningless_to_collect_max = is_degenerated_case(max_expr.as_str());
 

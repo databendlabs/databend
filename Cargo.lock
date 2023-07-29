@@ -2703,6 +2703,7 @@ dependencies = [
  "common-storage",
  "futures",
  "futures-util",
+ "itertools",
  "jsonb",
  "log",
  "metrics",
