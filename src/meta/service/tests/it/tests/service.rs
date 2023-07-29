@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::fs;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -105,24 +106,7 @@ pub struct MetaSrvTestContext {
 
 impl Drop for MetaSrvTestContext {
     fn drop(&mut self) {
-        info!(
-            "Drop MetaSrvTestContext, raft_dir: {:?}",
-            self.config.raft_config.raft_dir
-        );
-
-        let raft_dir = &self.config.raft_config.raft_dir;
-        let res = fs::remove_dir_all(raft_dir);
-        if let Err(e) = res {
-            warn!(
-                "Drop MetaSrvTestContext: can not remove raft_dir {:?}, {:?}",
-                raft_dir, e
-            );
-        } else {
-            info!(
-                "Drop MetaSrvTestContext: OK removed raft_dir {:?}",
-                raft_dir
-            )
-        }
+        self.rm_raft_dir("Drop MetaSrvTestContext");
     }
 }
 
@@ -174,10 +158,27 @@ impl MetaSrvTestContext {
 
         info!("new test context config: {:?}", config);
 
-        MetaSrvTestContext {
+        let c = MetaSrvTestContext {
             config,
             meta_node: None,
             grpc_srv: None,
+        };
+
+        c.rm_raft_dir("new MetaSrvTestContext");
+
+        c
+    }
+
+    pub fn rm_raft_dir(&self, msg: impl fmt::Display + Copy) {
+        let raft_dir = &self.config.raft_config.raft_dir;
+
+        info!("{}: about to remove raft_dir: {:?}", msg, raft_dir);
+
+        let res = fs::remove_dir_all(raft_dir);
+        if let Err(e) = res {
+            warn!("{}: can not remove raft_dir {:?}, {:?}", msg, raft_dir, e);
+        } else {
+            info!("{}: OK removed raft_dir {:?}", msg, raft_dir)
         }
     }
 
