@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
+use log::warn;
 use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
@@ -166,7 +167,7 @@ impl Drop for PipelinePushingExecutor {
         }
 
         if let Err(cause) = self.sender.send(None) {
-            tracing::warn!("Executor send last data is failure {:?}", cause);
+            warn!("Executor send last data is failure {:?}", cause);
         }
     }
 }

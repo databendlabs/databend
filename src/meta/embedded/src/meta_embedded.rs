@@ -22,8 +22,8 @@ use common_meta_raft_store::state_machine::StateMachine;
 pub use common_meta_sled_store::init_temp_sled_db;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
+use log::warn;
 use once_cell::sync::Lazy;
-use tracing::warn;
 
 /// Local storage that provides the API defined by `kvapi::KVApi+SchemaApi`.
 ///

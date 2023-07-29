@@ -20,6 +20,7 @@ use common_meta_app::principal::UserSetting;
 use common_meta_app::principal::UserSettingValue;
 use common_meta_types::MatchSeq;
 use common_users::UserApiProvider;
+use log::warn;
 
 use crate::settings::ChangeValue;
 use crate::settings::Settings;
@@ -91,7 +92,7 @@ impl Settings {
                 .insert(name.clone(), match default_settings.settings.get(&name) {
                     None => {
                         // the settings may be deprecated
-                        tracing::warn!("Ignore deprecated global setting {} = {}", name, val);
+                        warn!("Ignore deprecated global setting {} = {}", name, val);
                         continue;
                     }
                     Some(default_setting_value) => match &default_setting_value.value {

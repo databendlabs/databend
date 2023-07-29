@@ -15,6 +15,8 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod grpc;
+use common_tracing::QueryLogConfig;
+use common_tracing::TracingConfig;
 use grpc::export_meta;
 
 mod snapshot;
@@ -29,9 +31,7 @@ use common_meta_raft_store::config::get_default_raft_advertise_host;
 use common_tracing::init_logging;
 use common_tracing::Config as LogConfig;
 use common_tracing::FileConfig;
-use common_tracing::QueryLogConfig;
 use common_tracing::StderrConfig;
-use common_tracing::TracingConfig;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;

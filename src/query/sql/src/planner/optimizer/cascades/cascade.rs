@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::debug;
 
 use super::explore_rules::get_explore_rule_set;
 use crate::optimizer::cascades::scheduler::Scheduler;
@@ -87,7 +88,7 @@ impl CascadesOptimizer {
         scheduler.add_task(Task::OptimizeGroup(root_task));
         scheduler.run(self)?;
 
-        tracing::debug!("Memo:\n{}", display_memo(&self.memo, &self.best_cost_map)?);
+        debug!("Memo:\n{}", display_memo(&self.memo, &self.best_cost_map)?);
 
         self.find_optimal_plan(root_index)
     }

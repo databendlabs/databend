@@ -20,6 +20,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::Expr;
 use common_expression::TableSchema;
+use log::debug;
 use storages_common_index::RangeIndex;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
@@ -97,7 +98,7 @@ impl HivePartitionPruner {
                 filtered_partitions.push(partitions[idx].clone());
             }
         }
-        tracing::debug!("hive pruned partitions: {:?}", filtered_partitions);
+        debug!("hive pruned partitions: {:?}", filtered_partitions);
         Ok(filtered_partitions)
     }
 }

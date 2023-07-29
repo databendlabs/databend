@@ -16,12 +16,12 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use common_base::base::tokio;
 use common_meta_kvapi::kvapi;
-use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
 use maplit::btreeset;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::meta_node::start_meta_node_cluster;
 use crate::tests::meta_node::start_meta_node_leader;
 use crate::tests::service::MetaSrvTestContext;
@@ -68,7 +68,8 @@ impl kvapi::ApiBuilder<Arc<MetaNode>> for MetaNodeUnitTestBuilder {
     }
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_node_kv_api() -> anyhow::Result<()> {
     let builder = MetaNodeUnitTestBuilder {
         test_contexts: Arc::new(Mutex::new(vec![])),

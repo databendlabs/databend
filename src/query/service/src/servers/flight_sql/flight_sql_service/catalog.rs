@@ -26,6 +26,7 @@ use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use futures_util::stream;
+use log::warn;
 use tonic::Status;
 
 use crate::servers::flight_sql::flight_sql_service::DoGetStream;
@@ -81,7 +82,7 @@ impl CatalogInfoProvider {
                 let tables = match catalog.list_tables(tenant.as_str(), db_name).await {
                     Ok(tables) => tables,
                     Err(err) if err.code() == ErrorCode::EMPTY_SHARE_ENDPOINT_CONFIG => {
-                        tracing::warn!("list tables failed on db {}: {}", db.name(), err);
+                        warn!("list tables failed on db {}: {}", db.name(), err);
                         continue;
                     }
                     Err(err) => return Err(err),

@@ -40,12 +40,12 @@ use common_meta_types::RaftError;
 use common_meta_types::TypeConfig;
 use common_meta_types::VoteRequest;
 use common_meta_types::VoteResponse;
+use log::debug;
+use log::info;
 use openraft::async_trait::async_trait;
 use openraft::RaftNetwork;
 use tonic::client::GrpcService;
 use tonic::transport::channel::Channel;
-use tracing::debug;
-use tracing::info;
 
 use crate::metrics::raft_metrics;
 use crate::raft_client::RaftClient;
@@ -61,14 +61,16 @@ impl ItemManager for ChannelManager {
     type Item = Channel;
     type Error = tonic::transport::Error;
 
-    #[tracing::instrument(level = "info", err(Debug))]
+    #[logcall::logcall(err = "debug")]
+    #[minitrace::trace]
     async fn build(&self, addr: &Self::Key) -> Result<Channel, tonic::transport::Error> {
         tonic::transport::Endpoint::new(addr.clone())?
             .connect()
             .await
     }
 
-    #[tracing::instrument(level = "debug", err(Debug))]
+    #[logcall::logcall(err = "debug")]
+    #[minitrace::trace]
     async fn check(&self, mut ch: Channel) -> Result<Channel, tonic::transport::Error> {
         futures::future::poll_fn(|cx| ch.poll_ready(cx)).await?;
         Ok(ch)
@@ -164,7 +166,8 @@ pub struct NetworkConnection {
 }
 
 impl NetworkConnection {
-    #[tracing::instrument(level = "debug", skip_all, fields(id=self.id), err(Debug))]
+    #[logcall::logcall(err = "debug")]
+    #[minitrace::trace]
     pub async fn make_client(&self) -> Result<RaftClient, MetaNetworkError> {
         let target = self.target;
 
@@ -176,7 +179,7 @@ impl NetworkConnection {
 
         let addr = format!("http://{}", endpoint);
 
-        debug!("connect: target={}: {}", target, addr);
+        debug!(id = self.id; "connect: target={}: {}", target, addr);
 
         match self.conn_pool.get(&addr).await {
             Ok(channel) => {
@@ -211,15 +214,17 @@ impl NetworkConnection {
 
 #[async_trait]
 impl RaftNetwork<TypeConfig> for NetworkConnection {
-    #[tracing::instrument(level = "debug", skip_all, fields(id=self.id, target=self.target), err(Debug))]
+    #[logcall::logcall(err = "debug")]
+    #[minitrace::trace]
     async fn send_append_entries(
         &mut self,
         rpc: AppendEntriesRequest,
     ) -> Result<AppendEntriesResponse, RPCError<RaftError>> {
         debug!(
-            "send_append_entries target: {}, rpc: {}",
-            self.target,
-            rpc.summary()
+            id = self.id,
+            target = self.target,
+            rpc = rpc.summary();
+            "send_append_entries",
         );
 
         let mut client = self
@@ -274,15 +279,17 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip_all, fields(id=self.id, target=self.target), err(Debug))]
+    #[logcall::logcall(err = "debug")]
+    #[minitrace::trace]
     async fn send_install_snapshot(
         &mut self,
         rpc: InstallSnapshotRequest,
     ) -> Result<InstallSnapshotResponse, RPCError<RaftError<InstallSnapshotError>>> {
         info!(
-            "send_install_snapshot target: {}, rpc: {}",
-            self.target,
-            rpc.summary()
+            id = self.id,
+            target = self.target,
+            rpc = rpc.summary();
+            "send_install_snapshot"
         );
 
         let start = Instant::now();
@@ -351,9 +358,10 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip_all, fields(id=self.id, target=self.target), err(Debug))]
+    #[logcall::logcall(err = "debug")]
+    #[minitrace::trace]
     async fn send_vote(&mut self, rpc: VoteRequest) -> Result<VoteResponse, RPCError<RaftError>> {
-        info!("send_vote: target: {} rpc: {}", self.target, rpc.summary());
+        info!(id = self.id, target = self.target, rpc = rpc.summary(); "send_vote");
 
         let mut client = self
             .make_client()
@@ -415,11 +423,9 @@ impl RaftNetworkFactory<TypeConfig> for Network {
         target: NodeId,
         node: &MembershipNode,
     ) -> Self::Network {
-        tracing::info!(
+        info!(
             "new raft communication client: id:{}, target:{}, node:{}",
-            self.sto.id,
-            target,
-            node
+            self.sto.id, target, node
         );
 
         NetworkConnection {

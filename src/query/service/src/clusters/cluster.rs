@@ -48,11 +48,11 @@ use futures::future::select;
 use futures::future::Either;
 use futures::Future;
 use futures::StreamExt;
+use log::error;
+use log::warn;
 use metrics::gauge;
 use rand::thread_rng;
 use rand::Rng;
-use tracing::error;
-use tracing::warn;
 
 use crate::api::FlightClient;
 
@@ -372,12 +372,11 @@ impl ClusterDiscovery {
                 if let Some(local_addr) = self.api_provider.get_local_addr().await? {
                     let local_socket_addr = SocketAddr::from_str(&local_addr)?;
                     let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
-                    tracing::warn!(
+                    warn!(
                         "Used loopback or unspecified address as cluster flight address. \
                         we rewrite it(\"{}\" -> \"{}\") for other nodes can connect it.\
                         If your has proxy between nodes, you can specify the node's IP address in the configuration file.",
-                        address,
-                        new_addr
+                        address, new_addr
                     );
 
                     address = new_addr;
