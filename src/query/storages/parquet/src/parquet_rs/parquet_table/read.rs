@@ -218,7 +218,7 @@ fn calc_parallelism(ctx: &Arc<dyn TableContext>, plan: &DataSourcePlan) -> Resul
     }
     let num_deserializer = max_threads.min(max_by_memory).max(1);
 
-    tracing::info!(
+    log::info!(
         "loading {num_partitions} partitions \
         with {num_deserializer} deserializers, \
         according to \
