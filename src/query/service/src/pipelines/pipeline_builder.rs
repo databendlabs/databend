@@ -244,7 +244,7 @@ impl PipelineBuilder {
         )?;
 
         let to_table = self.ctx.build_table_by_table_info(
-            &copy_plan.catalog_name,
+            &copy_plan.catalog_info,
             &copy_plan.table_info,
             None,
         )?;

@@ -95,21 +95,19 @@ impl CatalogManager {
             let creator = catalog_creators.get(&CatalogType::Hive).ok_or_else(|| {
                 ErrorCode::BadArguments(format!("unknown catalog type: {:?}", CatalogType::Hive))
             })?;
-            let ctl = creator
-                .try_create(Arc::new(CatalogInfo {
-                    id: CatalogId { catalog_id: 0 },
-                    name_ident: CatalogNameIdent {
-                        tenant: tenant.clone(),
-                        catalog_name: name.clone(),
-                    },
-                    meta: CatalogMeta {
-                        catalog_option: CatalogOption::Hive(HiveCatalogOption {
-                            address: hive_ctl_cfg.address.clone(),
-                        }),
-                        created_on: Utc::now(),
-                    },
-                }))
-                .await?;
+            let ctl = creator.try_create(&CatalogInfo {
+                id: CatalogId { catalog_id: 0 },
+                name_ident: CatalogNameIdent {
+                    tenant: tenant.clone(),
+                    catalog_name: name.clone(),
+                },
+                meta: CatalogMeta {
+                    catalog_option: CatalogOption::Hive(HiveCatalogOption {
+                        address: hive_ctl_cfg.address.clone(),
+                    }),
+                    created_on: Utc::now(),
+                },
+            })?;
             external_catalogs.insert(name.clone(), ctl);
         }
 
@@ -130,6 +128,22 @@ impl CatalogManager {
     /// `get_default_catalog` to allow users fetch default catalog without async.
     pub fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
         Ok(self.default_catalog.clone())
+    }
+
+    /// build_catalog builds a catalog from catalog info.
+    pub fn build_catalog(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
+        let typ = info.meta.catalog_option.catalog_type();
+
+        if typ == CatalogType::Default {
+            return Ok(self.default_catalog.clone());
+        }
+
+        let creator = self
+            .catalog_creators
+            .get(&typ)
+            .ok_or_else(|| ErrorCode::BadArguments(format!("unknown catalog type: {:?}", typ)))?;
+
+        creator.try_create(info)
     }
 
     /// Get a catalog from manager.
@@ -154,13 +168,7 @@ impl CatalogManager {
             .get_catalog(GetCatalogReq::new(&self.tenant, catalog_name))
             .await?;
 
-        let typ = info.meta.catalog_option.catalog_type();
-        let creator = self
-            .catalog_creators
-            .get(&typ)
-            .ok_or_else(|| ErrorCode::BadArguments(format!("unknown catalog type: {:?}", typ)))?;
-
-        creator.try_create(info).await
+        self.build_catalog(&info)
     }
 
     /// Create a new catalog.
@@ -213,13 +221,7 @@ impl CatalogManager {
             .await?;
 
         for info in infos {
-            let typ = info.meta.catalog_option.catalog_type();
-            let creator = self.catalog_creators.get(&typ).ok_or_else(|| {
-                ErrorCode::UnknownCatalogType(format!("unknown catalog type: {:?}", typ))
-            })?;
-
-            let catalog = creator.try_create(info).await?;
-            catalogs.push(catalog);
+            catalogs.push(self.build_catalog(&info)?);
         }
 
         Ok(catalogs)

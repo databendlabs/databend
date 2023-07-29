@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
+use common_catalog::catalog::CatalogCreator;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
 use common_catalog::table_args::TableArgs;
@@ -85,9 +86,6 @@ use crate::catalogs::default::ImmutableCatalog;
 use crate::catalogs::default::MutableCatalog;
 use crate::storages::Table;
 use crate::table_functions::TableFunctionFactory;
-
-#[derive(Debug)]
-pub struct DatabaseCatalogCreator;
 
 /// Combine two catalogs together
 /// - read/search like operations are always performed at

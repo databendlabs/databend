@@ -87,9 +87,8 @@ pub struct StorageDescription {
     pub support_cluster_key: bool,
 }
 
-#[async_trait::async_trait]
 pub trait CatalogCreator: Send + Sync + Debug {
-    async fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>>;
+    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>>;
 }
 
 #[async_trait::async_trait]

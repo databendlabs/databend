@@ -211,7 +211,7 @@ impl CopyInterpreter {
                     // which is not correct. We should generate a new id
                     plan_id: 0,
                     ignore_result: select_interpreter.get_ignore_result(),
-                    catalog_name: plan.catalog_name.clone(),
+                    catalog_info: plan.catalog_name.clone(),
                     database_name: plan.database_name.clone(),
                     table_name: plan.table_name.clone(),
                     required_source_schema: plan.required_source_schema.clone(),
@@ -413,7 +413,7 @@ impl CopyInterpreter {
                 build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?
             }
             CopyPlanType::CopyIntoTableFromQuery(plan) => {
-                catalog_name = plan.catalog_name.clone();
+                catalog_name = plan.catalog_info.clone();
                 database_name = plan.database_name.clone();
                 table_name = plan.table_name.clone();
                 stage_info = plan.stage_table_info.stage_info.clone();

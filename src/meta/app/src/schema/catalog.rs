@@ -40,15 +40,20 @@ impl Display for CatalogType {
 /// different options for creating catalogs
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum CatalogOption {
-    // hms_address
+    /// The default catalog.
+    ///
+    /// It's not allowed to create a new default catalog.
+    Default,
+    // Catalog option for hive.
     Hive(HiveCatalogOption),
-    // Uri location for iceberg
+    // Catalog option for Iceberg.
     Iceberg(IcebergCatalogOption),
 }
 
 impl CatalogOption {
     pub fn catalog_type(&self) -> CatalogType {
         match self {
+            CatalogOption::Default => CatalogType::Default,
             CatalogOption::Hive(_) => CatalogType::Hive,
             CatalogOption::Iceberg(_) => CatalogType::Iceberg,
         }
@@ -72,6 +77,33 @@ pub struct CatalogInfo {
     pub id: CatalogId,
     pub name_ident: CatalogNameIdent,
     pub meta: CatalogMeta,
+}
+
+impl CatalogInfo {
+    /// Get the catalog type via catalog info.
+    pub fn catalog_type(&self) -> CatalogType {
+        self.meta.catalog_option.catalog_type()
+    }
+
+    /// Get the catalog name via catalog info.
+    pub fn catalog_name(&self) -> &str {
+        &self.name_ident.catalog_name
+    }
+
+    /// Create a new default catalog info.
+    pub fn new_default(tenant: &str) -> CatalogInfo {
+        Self {
+            id: CatalogId { catalog_id: 0 },
+            name_ident: CatalogNameIdent {
+                tenant: tenant.to_string(),
+                catalog_name: "default".to_string(),
+            },
+            meta: CatalogMeta {
+                catalog_option: CatalogOption::Default,
+                created_on: Default::default(),
+            },
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

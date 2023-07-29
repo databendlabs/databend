@@ -92,14 +92,13 @@ pub const HIVE_CATALOG: &str = "hive";
 #[derive(Debug)]
 pub struct HiveCreator;
 
-#[async_trait]
 impl CatalogCreator for HiveCreator {
-    async fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
+    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
         let opt = match &info.meta.catalog_option {
-            CatalogOption::Iceberg(_) => unreachable!(
-                "trying to create hive catalog from iceberg options, must be an internal bug"
-            ),
             CatalogOption::Hive(opt) => opt,
+            _ => unreachable!(
+                "trying to create hive catalog from other catalog, must be an internal bug"
+            ),
         };
 
         let catalog: Arc<dyn Catalog> = Arc::new(HiveCatalog::try_create(

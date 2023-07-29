@@ -50,6 +50,8 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::CatalogType;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::InputError;
@@ -131,11 +133,11 @@ impl QueryContext {
     /// TODO(xuanwo): we should support build table via table info in the future.
     pub fn build_table_by_table_info(
         &self,
-        _catalog_name: &str,
+        catalog_info: &CatalogInfo,
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self.shared.catalog_manager.get_default_catalog()?;
+        let catalog = self.shared.catalog_manager.build_catalog(catalog_info);
         match table_args {
             None => catalog.get_table_by_info(table_info),
             Some(table_args) => Ok(catalog

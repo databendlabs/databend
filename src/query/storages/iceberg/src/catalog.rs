@@ -89,18 +89,17 @@ pub const ICEBERG_CATALOG: &str = "iceberg";
 #[derive(Debug)]
 pub struct IcebergCreator;
 
-#[async_trait]
 impl CatalogCreator for IcebergCreator {
-    async fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
+    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
         let opt = match &info.meta.catalog_option {
-            CatalogOption::Hive(_) => unreachable!(
-                "trying to create iceberg catalog from hive options, must be an internal bug"
-            ),
             CatalogOption::Iceberg(opt) => opt,
+            _ => unreachable!(
+                "trying to create iceberg catalog from other catalog, must be an internal bug"
+            ),
         };
 
         let ctl_name = &info.name_ident.catalog_name;
-        let data_operator = DataOperator::try_create(&opt.storage_params).await?;
+        let data_operator = DataOperator::try_new(&opt.storage_params)?;
         let catalog: Arc<dyn Catalog> =
             Arc::new(IcebergCatalog::try_create(ctl_name, data_operator)?);
 
