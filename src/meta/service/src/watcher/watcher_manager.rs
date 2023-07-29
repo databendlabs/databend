@@ -27,10 +27,10 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::Change;
 use common_meta_types::SeqV;
+use log::info;
+use log::warn;
 use prost::Message;
 use tonic::Status;
-use tracing::info;
-use tracing::warn;
 
 use super::WatchStreamHandle;
 use crate::metrics::network_metrics;
@@ -116,7 +116,7 @@ impl EventDispatcher {
         event_tx
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[minitrace::trace]
     async fn main(mut self) {
         loop {
             if let Some(event) = self.event_rx.recv().await {
@@ -188,7 +188,7 @@ impl EventDispatcher {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub fn add_watcher(
         &mut self,
         create: WatchRequest,
@@ -216,7 +216,7 @@ impl EventDispatcher {
         Ok(watcher)
     }
 
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     pub fn remove_watcher(&mut self, key: &RangeMapKey<String, WatcherId>) {
         info!("remove_watcher: {:?}", key);
 

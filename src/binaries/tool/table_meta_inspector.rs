@@ -28,6 +28,7 @@ use common_exception::Result;
 use common_storage::init_operator;
 use common_storage::StorageConfig;
 use databend_query::GlobalServices;
+use log::info;
 use opendal::services::Fs;
 use opendal::Operator;
 use serde::Deserialize;
@@ -37,7 +38,6 @@ use serfig::parsers::Toml;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use tokio::io::AsyncReadExt;
-use tracing::info;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, version = &**DATABEND_COMMIT_VERSION, author)]

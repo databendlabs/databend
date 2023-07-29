@@ -21,9 +21,9 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_io::prelude::FormatSettings;
+use log::debug;
+use log::info;
 use serde_json::Value as JsonValue;
-use tracing::debug;
-use tracing::info;
 
 use crate::servers::http::v1::json_block::block_to_json_value;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelReceiver;

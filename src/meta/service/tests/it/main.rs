@@ -23,4 +23,5 @@ mod configs;
 mod grpc;
 mod meta_node;
 mod store;
+mod testing;
 mod tests;

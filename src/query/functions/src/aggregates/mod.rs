@@ -34,6 +34,7 @@ mod aggregate_min_max_any;
 mod aggregate_null_result;
 mod aggregate_quantile_cont;
 mod aggregate_quantile_disc;
+mod aggregate_quantile_tdigest;
 mod aggregate_retention;
 mod aggregate_scalar_state;
 mod aggregate_skewness;

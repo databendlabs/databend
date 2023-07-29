@@ -50,7 +50,9 @@ chrono = { workspace = true }
 futures = "0.3.24"
 futures-util = "0.3.24"
 itertools = "0.10.5"
+log = { workspace = true }
 metrics = "0.20.1"
+minitrace = { workspace = true }
 opendal = { workspace = true }
 parquet-format-safe = "0.2"
 rand = "0.8.5"
@@ -60,6 +62,6 @@ sha2 = "0.10.6"
 siphasher = "0.3.10"
 streaming-decompression = "0.1.2"
 sys-info = "0.9"
-tracing = "0.1.36"
+
 typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }

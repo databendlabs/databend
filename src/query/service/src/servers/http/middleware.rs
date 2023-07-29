@@ -23,6 +23,8 @@ use headers::authorization::Credentials;
 use http::header::AUTHORIZATION;
 use http::HeaderMap;
 use http::HeaderValue;
+use log::error;
+use log::warn;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::http::StatusCode;
@@ -33,8 +35,6 @@ use poem::IntoResponse;
 use poem::Middleware;
 use poem::Request;
 use poem::Response;
-use tracing::error;
-use tracing::warn;
 
 use super::v1::HttpQueryContext;
 use crate::auth::AuthMgr;

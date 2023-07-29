@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_sql::plans::CreateUDFPlan;
 use common_users::UserApiProvider;
+use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -41,9 +42,11 @@ impl Interpreter for CreateUserUDFInterpreter {
         "CreateUserUDFInterpreter"
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_user_udf_execute");
+
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let udf = plan.udf;
