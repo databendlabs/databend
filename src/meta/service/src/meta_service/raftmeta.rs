@@ -994,7 +994,7 @@ impl MetaNode {
 
         let forward = req.forward_to_leader;
 
-        let mut n_retry = 17;
+        let mut n_retry = 20;
         let mut slp = Duration::from_millis(200);
 
         loop {
@@ -1169,6 +1169,8 @@ impl MetaNode {
         node_id: &NodeId,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, ForwardRPCError> {
+        debug!("forward_to: {} {:?}", node_id, req);
+
         let endpoint = self
             .sto
             .get_node_endpoint(node_id)
