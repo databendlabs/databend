@@ -178,7 +178,7 @@ impl kvapi::TestSuite {
         assert_eq!(None, res.result);
 
         // do not care seq
-        let res = kv.upsert_kv(UpsertKVReq::update(test_key, b"v2")).await?;
+        let _res = kv.upsert_kv(UpsertKVReq::update(test_key, b"v2")).await?;
         // dbg!("update with v2", &res);
 
         let res = kv.upsert_kv(UpsertKVReq::delete(test_key)).await?;
@@ -252,12 +252,12 @@ impl kvapi::TestSuite {
             .unwrap()
             .as_secs();
 
-        let x = kv
+        let _res = kv
             .upsert_kv(UpsertKVReq::update("k1", b"v1").with(KVMeta {
                 expire_at: Some(now + 2),
             }))
             .await?;
-        // dbg!("upsert non expired k1", x);
+        // dbg!("upsert non expired k1", _res);
 
         info!("---get unexpired");
         {
@@ -283,7 +283,7 @@ impl kvapi::TestSuite {
         info!("--- expired entry act as if it does not exist, an ADD op should apply");
         {
             // dbg!("start upsert expired k1");
-            let x = kv
+            let _res = kv
                 .upsert_kv(
                     UpsertKVReq::update("k1", b"v1")
                         .with(MatchSeq::Exact(0))
@@ -292,9 +292,9 @@ impl kvapi::TestSuite {
                         }),
                 )
                 .await?;
-            // dbg!("update expired k1", x);
+            // dbg!("update expired k1", _res);
 
-            let x = kv
+            let _res = kv
                 .upsert_kv(
                     UpsertKVReq::update("k2", b"v2")
                         .with(MatchSeq::Exact(0))
@@ -303,7 +303,7 @@ impl kvapi::TestSuite {
                         }),
                 )
                 .await?;
-            // dbg!("update non expired k2", x);
+            // dbg!("update non expired k2", _res);
 
             info!("--- mget should not return expired");
             let res = kv.mget_kv(&["k1".to_string(), "k2".to_string()]).await?;
