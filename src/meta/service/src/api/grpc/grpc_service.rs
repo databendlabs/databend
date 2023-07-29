@@ -19,6 +19,7 @@ use std::task::Poll;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
 use common_base::base::tokio::sync::mpsc;
+use common_base::base::tokio::time::Instant;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
 use common_meta_client::MetaGrpcReq;
@@ -163,6 +164,8 @@ impl MetaService for MetaServiceImpl {
         network_metrics::incr_recv_bytes(r.get_ref().encoded_len() as u64);
 
         let req: MetaGrpcReq = r.try_into()?;
+
+        let t0 = Instant::now();
         info!("Received MetaGrpcReq: {:?}", req);
 
         let m = &self.meta_node;
@@ -184,6 +187,9 @@ impl MetaService for MetaServiceImpl {
                 RaftReply::from(res)
             }
         };
+
+        let elapsed = t0.elapsed();
+        info!("Handled(elapsed: {:?}) MetaGrpcReq: {:?}", elapsed, req);
 
         network_metrics::incr_request_result(reply.error.is_empty());
         network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
