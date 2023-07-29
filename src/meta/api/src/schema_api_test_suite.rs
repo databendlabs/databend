@@ -45,6 +45,7 @@ use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::DeleteTableLockRevReq;
+use common_meta_app::schema::DropCatalogReq;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
@@ -296,7 +297,7 @@ impl SchemaApiTestSuite {
         suite
             .virtual_column_create_list_drop(&b.build().await)
             .await?;
-        suite.catalog_create_get_list(&b.build().await).await?;
+        suite.catalog_create_get_list_drop(&b.build().await).await?;
 
         Ok(())
     }
@@ -1320,7 +1321,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn catalog_create_get_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn catalog_create_get_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let catalog_name = "catalog1";
 
@@ -1356,6 +1357,19 @@ impl SchemaApiTestSuite {
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].name_ident.tenant, "tenant1");
         assert_eq!(got[0].name_ident.catalog_name, "catalog1");
+
+        let _ = mt
+            .drop_catalog(DropCatalogReq {
+                if_exists: false,
+                name_ident: CatalogNameIdent {
+                    tenant: tenant.to_string(),
+                    catalog_name: catalog_name.to_string(),
+                },
+            })
+            .await?;
+
+        let got = mt.list_catalogs(ListCatalogReq::new("tenant1")).await?;
+        assert_eq!(got.len(), 0);
 
         Ok(())
     }
