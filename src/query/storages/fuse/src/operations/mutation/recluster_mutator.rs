@@ -24,8 +24,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::Scalar;
-use log::debug;
 use itertools::Itertools;
+use log::debug;
 use storages_common_table_meta::meta::BlockMeta;
 
 use crate::operations::common::BlockMetaIndex;
