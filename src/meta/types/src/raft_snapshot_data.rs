@@ -36,18 +36,17 @@ pub struct SnapshotData {
 }
 
 impl SnapshotData {
-    pub async fn open(path: String) -> Result<Self, io::Error> {
-        let f = fs::OpenOptions::new()
+    pub fn open(path: String) -> Result<Self, io::Error> {
+        let f = std::fs::OpenOptions::new()
             .create(false)
             .create_new(false)
             .read(true)
-            .open(&path)
-            .await?;
+            .open(&path)?;
 
         Ok(SnapshotData {
             is_temp: false,
             path,
-            f,
+            f: fs::File::from_std(f),
         })
     }
 

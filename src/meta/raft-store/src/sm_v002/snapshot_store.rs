@@ -242,7 +242,7 @@ impl SnapshotStoreV002 {
 
         let path = self.snapshot_path(snapshot_id);
 
-        let d = SnapshotData::open(path.clone()).await.map_err(|e| {
+        let d = SnapshotData::open(path.clone()).map_err(|e| {
             error!("failed to open snapshot file({}): {}", path, e);
             SnapshotStoreError::read(e).with_meta("opening snapshot file", path)
         })?;
