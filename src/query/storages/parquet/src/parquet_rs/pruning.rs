@@ -271,7 +271,7 @@ impl PartitionPruner {
             self.columns_to_read.len(),
         );
 
-        tracing::info!(
+        log::info!(
             "copy {num_large_partitions} large partitions and {} small partitions.",
             partitions.len() - num_large_partitions
         );
