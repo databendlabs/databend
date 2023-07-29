@@ -18,7 +18,6 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
-use common_catalog::catalog::CatalogCreator;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
 use common_catalog::table_args::TableArgs;
@@ -26,6 +25,7 @@ use common_catalog::table_function::TableFunction;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -142,6 +142,10 @@ impl Catalog for DatabaseCatalog {
 
     fn name(&self) -> String {
         "default".to_string()
+    }
+
+    fn info(&self) -> CatalogInfo {
+        CatalogInfo::new_default()
     }
 
     #[async_backtrace::framed]

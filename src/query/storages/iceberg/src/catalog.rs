@@ -98,10 +98,9 @@ impl CatalogCreator for IcebergCreator {
             ),
         };
 
-        let ctl_name = &info.name_ident.catalog_name;
         let data_operator = DataOperator::try_new(&opt.storage_params)?;
         let catalog: Arc<dyn Catalog> =
-            Arc::new(IcebergCatalog::try_create(ctl_name, data_operator)?);
+            Arc::new(IcebergCatalog::try_create(info.clone(), data_operator)?);
 
         Ok(catalog)
     }
@@ -115,8 +114,9 @@ impl CatalogCreator for IcebergCreator {
 /// - Table metadata are saved in external Iceberg storage
 #[derive(Clone, Debug)]
 pub struct IcebergCatalog {
-    /// name of this iceberg table
-    name: String,
+    /// info of this iceberg table.
+    info: CatalogInfo,
+
     /// underlying storage access operator
     operator: DataOperator,
 }
@@ -137,11 +137,8 @@ impl IcebergCatalog {
     /// Such catalog will be seen as an `flatten` catalogs,
     /// a `default` database will be generated directly
     #[tracing::instrument(level = "debug", skip(operator))]
-    pub fn try_create(name: &str, operator: DataOperator) -> Result<Self> {
-        Ok(Self {
-            name: name.to_string(),
-            operator,
-        })
+    pub fn try_create(info: CatalogInfo, operator: DataOperator) -> Result<Self> {
+        Ok(Self { info, operator })
     }
 
     /// list read databases
@@ -172,7 +169,10 @@ impl IcebergCatalog {
 #[async_trait]
 impl Catalog for IcebergCatalog {
     fn name(&self) -> String {
-        self.name.to_string()
+        self.info.name_ident.catalog_name.clone()
+    }
+    fn info(&self) -> CatalogInfo {
+        self.info.clone()
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -195,7 +195,9 @@ impl Catalog for IcebergCatalog {
         let db_root = DataOperator::try_create(&db_sp).await?;
 
         Ok(Arc::new(IcebergDatabase::create(
-            &self.name, db_name, db_root,
+            &self.name(),
+            db_name,
+            db_root,
         )))
     }
 

@@ -153,6 +153,9 @@ impl ModifyTableColumnInterpreter {
             .try_lock(self.ctx.clone(), table_info.clone())
             .await?;
 
+        let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
+        let catalog_info = catalog.info();
+
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let prev_snapshot_id = match fuse_table.read_table_snapshot().await {
             Ok(snapshot) => snapshot.map(|snapshot| snapshot.snapshot_id),
@@ -236,7 +239,7 @@ impl ModifyTableColumnInterpreter {
             PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
                 plan_id: select_plan.get_id(),
                 input: Box::new(select_plan),
-                catalog: self.plan.catalog.clone(),
+                catalog_info,
                 table_info: new_table.get_table_info().clone(),
                 select_schema: Arc::new(Arc::new(schema).into()),
                 select_column_bindings,

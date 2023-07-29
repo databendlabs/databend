@@ -94,7 +94,11 @@ pub trait CatalogCreator: Send + Sync + Debug {
 #[async_trait::async_trait]
 pub trait Catalog: DynClone + Send + Sync + Debug {
     /// Catalog itself
+
+    // Get the name of the catalog.
     fn name(&self) -> String;
+    // Get the info of the catalog.
+    fn info(&self) -> CatalogInfo;
 
     /// Database.
 

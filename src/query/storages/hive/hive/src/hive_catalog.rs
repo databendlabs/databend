@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use common_base::base::tokio;
 use common_catalog::catalog::Catalog;
 use common_catalog::catalog::CatalogCreator;
@@ -101,10 +100,8 @@ impl CatalogCreator for HiveCreator {
             ),
         };
 
-        let catalog: Arc<dyn Catalog> = Arc::new(HiveCatalog::try_create(
-            &info.name_ident.catalog_name,
-            &opt.address,
-        )?);
+        let catalog: Arc<dyn Catalog> =
+            Arc::new(HiveCatalog::try_create(info.clone(), &opt.address)?);
 
         Ok(catalog)
     }
@@ -112,16 +109,16 @@ impl CatalogCreator for HiveCreator {
 
 #[derive(Clone, Debug)]
 pub struct HiveCatalog {
-    name: String,
+    info: CatalogInfo,
 
     /// address of hive meta store service
     client_address: String,
 }
 
 impl HiveCatalog {
-    pub fn try_create(name: &str, hms_address: impl Into<String>) -> Result<HiveCatalog> {
+    pub fn try_create(info: CatalogInfo, hms_address: impl Into<String>) -> Result<HiveCatalog> {
         Ok(HiveCatalog {
-            name: name.to_string(),
+            info,
             client_address: hms_address.into(),
         })
     }
@@ -273,7 +270,11 @@ impl Catalog for HiveCatalog {
     }
 
     fn name(&self) -> String {
-        self.name.clone()
+        self.info.name_ident.catalog_name.clone()
+    }
+
+    fn info(&self) -> CatalogInfo {
+        self.info.clone()
     }
 
     #[async_backtrace::framed]

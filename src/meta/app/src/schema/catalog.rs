@@ -91,11 +91,12 @@ impl CatalogInfo {
     }
 
     /// Create a new default catalog info.
-    pub fn new_default(tenant: &str) -> CatalogInfo {
+    pub fn new_default() -> CatalogInfo {
         Self {
             id: CatalogId { catalog_id: 0 },
             name_ident: CatalogNameIdent {
-                tenant: tenant.to_string(),
+                // tenant for default catalog is not used.
+                tenant: "".to_string(),
                 catalog_name: "default".to_string(),
             },
             meta: CatalogMeta {

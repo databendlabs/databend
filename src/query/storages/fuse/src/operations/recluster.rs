@@ -169,9 +169,10 @@ impl FuseTable {
             PruningStatistics::default(),
         )?;
         let table_info = self.get_table_info();
+        let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
         let description = statistics.get_description(&table_info.desc);
         let plan = DataSourcePlan {
-            catalog: table_info.catalog().to_string(),
+            catalog_info,
             source_info: DataSourceInfo::TableSource(table_info.clone()),
             output_schema: table_info.schema(),
             parts,

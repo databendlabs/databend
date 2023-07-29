@@ -40,6 +40,7 @@ use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -598,6 +599,10 @@ struct FakedCatalog {
 impl Catalog for FakedCatalog {
     fn name(&self) -> String {
         "FakedCatalog".to_string()
+    }
+
+    fn info(&self) -> CatalogInfo {
+        self.cat.info()
     }
 
     async fn get_database(&self, _tenant: &str, _db_name: &str) -> Result<Arc<dyn Database>> {

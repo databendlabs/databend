@@ -21,6 +21,7 @@ use common_catalog::catalog::Catalog;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -121,7 +122,11 @@ impl Catalog for ImmutableCatalog {
     }
 
     fn name(&self) -> String {
-        "DefaultImmutable".to_string()
+        "default".to_string()
+    }
+
+    fn info(&self) -> CatalogInfo {
+        CatalogInfo::new_default()
     }
 
     #[async_backtrace::framed]

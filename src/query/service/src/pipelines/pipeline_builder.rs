@@ -263,7 +263,7 @@ impl PipelineBuilder {
         distributed_plan: &DistributedCopyIntoTableFromStage,
     ) -> Result<()> {
         let to_table = self.ctx.build_table_by_table_info(
-            &distributed_plan.catalog_name,
+            &distributed_plan.catalog_info,
             &distributed_plan.table_info,
             None,
         )?;
@@ -299,7 +299,7 @@ impl PipelineBuilder {
     fn build_delete_partial(&mut self, delete: &DeletePartial) -> Result<()> {
         let table =
             self.ctx
-                .build_table_by_table_info(&delete.catalog_name, &delete.table_info, None)?;
+                .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         table.add_deletion_source(
             self.ctx.clone(),
@@ -333,7 +333,7 @@ impl PipelineBuilder {
         self.build_pipeline(&delete.input)?;
         let table =
             self.ctx
-                .build_table_by_table_info(&delete.catalog_name, &delete.table_info, None)?;
+                .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
         table.chain_mutation_pipes(
@@ -1453,7 +1453,7 @@ impl PipelineBuilder {
         }
 
         let table = self.ctx.build_table_by_table_info(
-            &insert_select.catalog,
+            &insert_select.catalog_info,
             &insert_select.table_info,
             None,
         )?;
