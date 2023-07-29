@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod grant;
-mod metrics;
-mod table;
-mod util;
+use metrics::increment_gauge;
 
-pub use grant::validate_grant_object_exists;
-pub use table::check_referenced_computed_columns;
-pub use util::check_deduplicate_label;
+// the time used in executing the whole replace-into statement
+pub fn metrics_inc_replace_execution_time_ms(c: u64) {
+    increment_gauge!("replace_into_time_execution_ms", c as f64);
+}
 
-pub use self::metrics::*;
+// the time used in executing the mutation (upsert) part of the replace-into statement
+pub fn metrics_inc_replace_mutation_time_ms(c: u64) {
+    increment_gauge!("replace_into_time_mutation_ms", c as f64);
+}
