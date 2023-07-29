@@ -3272,7 +3272,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 }
             };
 
-            // Create catalog by inserting these record:
+            // Delete catalog by deleting these record:
             // (tenant, catalog_name) -> catalog_id
             // (catalog_id) -> catalog_meta
             // (catalog_id) -> (tenant, catalog_name)
@@ -3282,7 +3282,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             debug!(
                 catalog_id,
                 name_key = debug(&name_key),
-                "catalog id to delete"
+                "catalog keys to delete"
             );
 
             {
