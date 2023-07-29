@@ -105,13 +105,23 @@ pub struct MetaSrvTestContext {
 
 impl Drop for MetaSrvTestContext {
     fn drop(&mut self) {
+        info!(
+            "Drop MetaSrvTestContext, raft_dir: {:?}",
+            self.config.raft_config.raft_dir
+        );
+
         let raft_dir = &self.config.raft_config.raft_dir;
         let res = fs::remove_dir_all(raft_dir);
         if let Err(e) = res {
             warn!(
-                "Drop MetaSrvTestContext: can not remove raft dir {:?}, {:?}",
+                "Drop MetaSrvTestContext: can not remove raft_dir {:?}, {:?}",
                 raft_dir, e
             );
+        } else {
+            info!(
+                "Drop MetaSrvTestContext: OK removed raft_dir {:?}",
+                raft_dir
+            )
         }
     }
 }
