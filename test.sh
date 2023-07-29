@@ -21,7 +21,7 @@ echo "src/meta/service/Cargo.toml"
 } | while read x; do
 
     # --no-fail-fast \
-RUST_TEST_THREADS=2 RUST_BACKTRACE=full /Users/drdrxp/.cargo/bin/cargo test \
+RUST_TEST_THREADS=2 RUST_BACKTRACE=full cargo test \
     --color=always \
     --manifest-path $x --  --exact -Z unstable-options --show-output
 done
