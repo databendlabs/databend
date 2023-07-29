@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_ast::ast::ExplainKind;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
-use tracing::error;
+use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
 use super::interpreter_index_create::CreateIndexInterpreter;

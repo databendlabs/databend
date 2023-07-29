@@ -15,13 +15,13 @@
 use std::fs::File;
 use std::io::Read;
 
-use common_base::base::tokio;
 use common_base::base::Stoppable;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
-use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
@@ -29,7 +29,8 @@ use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
 // TODO(zhihanz) add tls fail case
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_http_service_tls_server() -> anyhow::Result<()> {
     let mut conf = Config::default();
     let addr_str = "127.0.0.1:30002";

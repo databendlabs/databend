@@ -85,7 +85,7 @@ impl PageIndex {
         }))
     }
 
-    #[tracing::instrument(level = "debug", name = "page_index_eval", skip_all)]
+    #[minitrace::trace(name = "page_index_eval")]
     pub fn apply(&self, stats: &Option<ClusterStatistics>) -> Result<(bool, Option<Range<usize>>)> {
         let stats = match stats {
             Some(stats) => stats,

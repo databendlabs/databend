@@ -47,6 +47,8 @@ use futures::AsyncRead;
 use futures::AsyncReadExt;
 use futures::AsyncSeek;
 use futures::AsyncSeekExt;
+use log::debug;
+use log::info;
 use opendal::Operator;
 use serde::Deserializer;
 use serde::Serializer;
@@ -373,10 +375,9 @@ impl AligningStateTrait for ParquetAligningState {
         } else {
             let file_in_memory = self.buffers.concat();
             let size = file_in_memory.len();
-            tracing::debug!(
+            debug!(
                 "aligning parquet file {} of {} bytes",
-                self.split_info.file.path,
-                size,
+                self.split_info.file.path, size,
             );
             let mut cursor = Cursor::new(file_in_memory);
             let file_meta = read_metadata(&mut cursor)?;
@@ -391,7 +392,7 @@ impl AligningStateTrait for ParquetAligningState {
                     fields.clone(),
                 )?)
             }
-            tracing::info!(
+            info!(
                 "align parquet file {} of {} bytes to {} row groups",
                 self.split_info.file.path,
                 size,

@@ -30,6 +30,7 @@ use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
+use itertools::Itertools;
 use jsonb::Value as JsonbValue;
 use serde_json::json;
 use serde_json::Value as JsonValue;
@@ -37,6 +38,7 @@ use storages_common_table_meta::meta::SegmentInfo;
 
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
+use crate::table_functions::cmp_with_null;
 use crate::FuseTable;
 use crate::Table;
 
@@ -87,11 +89,11 @@ impl<'a> ClusteringInformation<'a> {
         }
         let snapshot = snapshot.unwrap();
 
-        // Gather all cluster statistics points to a sorted Map.
+        // Gather all cluster statistics points to a hash Map.
         // Key: The cluster statistics points.
         // Value: 0: The block indexes with key as min value;
         //        1: The block indexes with key as max value;
-        let mut points_map: BTreeMap<Vec<Scalar>, (Vec<u64>, Vec<u64>)> = BTreeMap::new();
+        let mut points_map: HashMap<Vec<Scalar>, (Vec<u64>, Vec<u64>)> = HashMap::new();
         let mut constant_block_count = 0;
         let mut unclustered_block_count = 0;
         let mut index = 0;
@@ -141,13 +143,16 @@ impl<'a> ClusteringInformation<'a> {
         // key: the block index.
         // value: (overlaps, depth).
         let mut unfinished_parts: HashMap<u64, (usize, usize)> = HashMap::new();
-        for (_, (start, end)) in points_map.into_iter() {
+        for (_, (start, end)) in points_map
+            .into_iter()
+            .sorted_by(|(a, _), (b, _)| a.iter().cmp_by(b.iter(), cmp_with_null))
+        {
             let point_depth = unfinished_parts.len() + start.len();
 
-            for (_, val) in unfinished_parts.iter_mut() {
-                val.0 += start.len();
-                val.1 = cmp::max(val.1, point_depth);
-            }
+            unfinished_parts.values_mut().for_each(|(overlaps, depth)| {
+                *overlaps += start.len();
+                *depth = cmp::max(*depth, point_depth);
+            });
 
             start.iter().for_each(|&idx| {
                 unfinished_parts.insert(idx, (point_depth - 1, point_depth));

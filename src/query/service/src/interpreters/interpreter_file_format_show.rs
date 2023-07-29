@@ -21,6 +21,7 @@ use common_expression::DataSchemaRef;
 use common_expression::FromData;
 use common_sql::plans::ShowFileFormatsPlan;
 use common_users::UserApiProvider;
+use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -49,9 +50,11 @@ impl Interpreter for ShowFileFormatsInterpreter {
         self.plan.schema()
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "show_file_formats_execute");
+
         let user_mgr = UserApiProvider::instance();
         let tenant = self.ctx.get_tenant();
         let mut formats = user_mgr.get_file_formats(&tenant).await?;

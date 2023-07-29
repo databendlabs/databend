@@ -39,6 +39,7 @@ use common_meta_app::principal::GrantObject;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use log::warn;
 
 use crate::columns_table::generate_unique_object;
 use crate::table::AsyncOneBlockSystemTable;
@@ -191,11 +192,7 @@ where TablesTable<T>: HistoryAware
                         // is easy to get errors with invalid configs, but system.tables is better not
                         // to be affected by it.
                         if db.get_db_info().meta.from_share.is_some() {
-                            tracing::warn!(
-                                "list tables failed on sharing db {}: {}",
-                                db.name(),
-                                err
-                            );
+                            warn!("list tables failed on sharing db {}: {}", db.name(), err);
                             continue;
                         }
                         return Err(err);

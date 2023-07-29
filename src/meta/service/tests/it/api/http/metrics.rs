@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
 use common_metrics::init_default_metrics_recorder;
 use databend_meta::api::http::v1::metrics::metrics_handler;
-use databend_meta::init_meta_ut;
+use log::info;
 use maplit::btreeset;
 use poem::get;
 use poem::http::Method;
@@ -26,11 +25,13 @@ use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
-use tracing::info;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::meta_node::start_meta_node_cluster;
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_metrics() -> anyhow::Result<()> {
     init_default_metrics_recorder();
 

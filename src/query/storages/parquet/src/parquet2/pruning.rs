@@ -42,6 +42,7 @@ use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_storage::read_parquet_metas_in_parallel;
 use common_storage::ColumnNodes;
+use log::info;
 use opendal::Operator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
@@ -312,7 +313,7 @@ impl PartitionPruner {
             self.columns_to_read.len(),
         );
 
-        tracing::info!(
+        info!(
             "copy {num_large_partitions} large partitions and {} small partitions.",
             partitions.len() - num_large_partitions
         );

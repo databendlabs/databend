@@ -29,11 +29,11 @@ use common_cache::FileSize;
 use common_cache::LruCache;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::error;
+use log::warn;
 use parking_lot::RwLock;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
-use tracing::error;
-use tracing::warn;
 
 use crate::CacheAccessor;
 

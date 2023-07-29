@@ -47,8 +47,8 @@ use databend_query::procedures::admins::suggested_background_tasks::SuggestedBac
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
-use tracing::info;
-use tracing::warn;
+use log::info;
+use log::warn;
 
 use crate::background_service::session::create_session;
 use crate::background_service::CompactionJob;

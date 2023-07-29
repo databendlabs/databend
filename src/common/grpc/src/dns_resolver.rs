@@ -30,6 +30,7 @@ use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
 use hyper::service::Service;
 use hyper::Uri;
+use log::info;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
@@ -37,7 +38,6 @@ use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
 use tonic::transport::Endpoint;
-use tracing::info;
 use trust_dns_resolver::TokioAsyncResolver;
 
 use crate::RpcClientTlsConfig;

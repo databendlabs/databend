@@ -36,6 +36,8 @@ use common_pipeline_core::InputError;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use common_storage::StageFileInfo;
+use log::debug;
+use log::warn;
 use opendal::Operator;
 
 use crate::input_formats::input_pipeline::AligningStateTrait;
@@ -172,7 +174,7 @@ impl AligningStateRowDelimiter {
             self.common.offset += size;
             self.common.rows += rows.len();
             self.common.batch_id += 1;
-            tracing::debug!(
+            debug!(
                 "align batch {}, {} + {} + {} bytes to {} rows",
                 output.batch_id,
                 size_last_remain,
@@ -259,7 +261,7 @@ impl AligningStateRowDelimiter {
             self.common.offset += len;
             self.common.rows += num_rows;
             self.common.batch_id += 1;
-            tracing::debug!(
+            debug!(
                 "align batch {}, {} + {} + {} bytes to {} rows",
                 output.batch_id,
                 size_last_remain,
@@ -299,7 +301,7 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
                 start_row_in_split: self.common.rows,
                 start_row_of_split: self.split_info.start_row_text(),
             };
-            tracing::debug!(
+            debug!(
                 "align flush batch {}, bytes = {}, start_row = {}",
                 row_batch.batch_id,
                 self.tail_of_last_batch.len(),
@@ -399,12 +401,9 @@ impl<T: InputFormatTextBase> InputFormat for T {
             if compress_alg.is_none() && T::is_splittable() && split_size > 0 {
                 let split_offsets = split_by_size(size, split_size);
                 let num_file_splits = split_offsets.len();
-                tracing::debug!(
+                debug!(
                     "split file {} of size {} to {} {} bytes splits",
-                    path,
-                    size,
-                    num_file_splits,
-                    split_size
+                    path, size, num_file_splits, split_size
                 );
                 let file = Arc::new(FileInfo {
                     path,
@@ -543,7 +542,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningStateMaybeCompressed
             if let Some(decoder) = &self.decompressor {
                 let state = decoder.state();
                 if !matches!(state, DecompressState::Done | DecompressState::Reading) {
-                    tracing::warn!("decompressor end with state {:?}", state)
+                    warn!("decompressor end with state {:?}", state)
                 }
             }
             self.state.align_flush()?
@@ -663,10 +662,9 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
             let r = T::deserialize(self, b)?;
             self.merge_map(r, file_name);
             let mem = self.memory_size();
-            tracing::debug!(
+            debug!(
                 "chunk builder added new batch: row {} size {}",
-                self.num_rows,
-                mem
+                self.num_rows, mem
             );
             if self.num_rows >= self.ctx.block_compact_thresholds.min_rows_per_block
                 || mem > self.ctx.block_compact_thresholds.max_bytes_per_block

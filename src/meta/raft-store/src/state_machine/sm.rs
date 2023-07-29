@@ -62,12 +62,15 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
 use common_meta_types::With;
+use log::as_debug;
+use log::as_display;
+use log::debug;
+use log::error;
+use log::info;
+use log::warn;
 use num::FromPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
 
 use crate::config::RaftConfig;
 use crate::key_spaces::ClientLastResps;
@@ -151,14 +154,14 @@ impl StateMachine {
         &self.blocking_config
     }
 
-    #[tracing::instrument(level = "debug", skip(config), fields(config_id=%config.config_id, prefix=%config.sled_tree_prefix))]
     pub fn tree_name(config: &RaftConfig, sm_id: u64) -> String {
         config.tree_name(format!("{}/{}", TREE_STATE_MACHINE, sm_id))
     }
 
-    #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
+    #[minitrace::trace]
     pub fn clean(config: &RaftConfig, sm_id: u64) -> Result<(), MetaStorageError> {
         let tree_name = StateMachine::tree_name(config, sm_id);
+        debug!("cleaning tree: {}", &tree_name);
 
         let db = get_sled_db();
 
@@ -168,11 +171,12 @@ impl StateMachine {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
+    #[minitrace::trace]
     pub async fn open(config: &RaftConfig, sm_id: u64) -> Result<StateMachine, MetaStorageError> {
         let db = get_sled_db();
 
         let tree_name = StateMachine::tree_name(config, sm_id);
+        debug!("opening tree: {}", &tree_name);
 
         let sm_tree = SledTree::open(&db, &tree_name, config.is_sync())?;
 
@@ -241,9 +245,9 @@ impl StateMachine {
         if cfg!(debug_assertions) {
             let sl = self.blocking_config().dump_snapshot;
             if !sl.is_zero() {
-                tracing::warn!("start    build snapshot sleep 1000s");
+                warn!("start    build snapshot sleep 1000s");
                 std::thread::sleep(sl);
-                tracing::warn!("finished build snapshot sleep 1000s");
+                warn!("finished build snapshot sleep 1000s");
             }
         }
 
@@ -291,10 +295,10 @@ impl StateMachine {
     /// If a duplicated log entry is detected by checking data.txid, no update
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
-    #[tracing::instrument(level = "debug", skip(self, entry), fields(log_id=%entry.log_id))]
+    #[minitrace::trace]
     pub async fn apply(&self, entry: &Entry) -> Result<AppliedState, MetaStorageError> {
         info!("apply: summary: {}", entry.summary(),);
-        debug!("sled tx start: {:?}", entry);
+        debug!(log_id = as_display!(&entry.log_id); "sled tx start: {:?}", entry);
 
         let log_id = &entry.log_id;
         let log_time_ms = Self::get_log_time(entry);
@@ -386,7 +390,7 @@ impl StateMachine {
     /// Retrieve the proposing time from a raft-log.
     ///
     /// Only `Normal` log has a time embedded.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     fn get_log_time(entry: &Entry) -> u64 {
         match &entry.payload {
             EntryPayload::Normal(data) => match data.time_ms {
@@ -407,7 +411,7 @@ impl StateMachine {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    #[minitrace::trace]
     fn apply_add_node_cmd(
         &self,
         node_id: &u64,
@@ -434,7 +438,7 @@ impl StateMachine {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    #[minitrace::trace]
     fn apply_remove_node_cmd(
         &self,
         node_id: &u64,
@@ -451,14 +455,14 @@ impl StateMachine {
         Ok((prev, None).into())
     }
 
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     fn apply_update_kv_cmd(
         &self,
         upsert_kv: &UpsertKV,
         txn_tree: &mut TransactionSledTree,
         log_time_ms: u64,
     ) -> Result<AppliedState, MetaStorageError> {
-        debug!(upsert_kv = debug(upsert_kv), "apply_update_kv_cmd");
+        debug!(upsert_kv = as_debug!(upsert_kv); "apply_update_kv_cmd");
 
         let (expired, prev, result) = Self::txn_upsert_kv(txn_tree, upsert_kv, log_time_ms)?;
 
@@ -506,13 +510,13 @@ impl StateMachine {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree, cond))]
+    #[minitrace::trace]
     fn txn_execute_one_condition(
         &self,
         txn_tree: &TransactionSledTree,
         cond: &TxnCondition,
     ) -> Result<bool, MetaStorageError> {
-        debug!(cond = display(cond), "txn_execute_one_condition");
+        debug!(cond = as_display!(cond); "txn_execute_one_condition");
 
         let key = cond.key.clone();
 
@@ -548,14 +552,14 @@ impl StateMachine {
         Ok(false)
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree, condition))]
+    #[minitrace::trace]
     fn txn_execute_condition(
         &self,
         txn_tree: &TransactionSledTree,
         condition: &Vec<TxnCondition>,
     ) -> Result<bool, MetaStorageError> {
         for cond in condition {
-            debug!(condition = display(cond), "txn_execute_condition");
+            debug!(condition = as_display!(cond); "txn_execute_condition");
 
             if !self.txn_execute_one_condition(txn_tree, cond)? {
                 return Ok(false);
@@ -700,7 +704,7 @@ impl StateMachine {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree, op, resp))]
+    #[minitrace::trace]
     fn txn_execute_operation(
         &self,
         txn_tree: &mut TransactionSledTree,
@@ -709,7 +713,7 @@ impl StateMachine {
         resp: &mut TxnReply,
         log_time_ms: u64,
     ) -> Result<(), MetaStorageError> {
-        debug!(op = display(op), "txn execute TxnOp");
+        debug!(op = as_display!(op); "txn execute TxnOp");
         match &op.request {
             Some(txn_op::Request::Get(get)) => {
                 self.txn_execute_get_operation(txn_tree, get, resp)?;
@@ -735,7 +739,7 @@ impl StateMachine {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree, req))]
+    #[minitrace::trace]
     fn apply_txn_cmd(
         &self,
         req: &TxnRequest,
@@ -743,7 +747,7 @@ impl StateMachine {
         kv_pairs: Option<&(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>,
         log_time_ms: u64,
     ) -> Result<AppliedState, MetaStorageError> {
-        debug!(txn = display(req), "apply txn cmd");
+        debug!(txn = as_display!(req); "apply txn cmd");
 
         let condition = &req.condition;
 
@@ -785,7 +789,7 @@ impl StateMachine {
     /// Already applied log should be filtered out before passing into this function.
     /// This is the only entry to modify state machine.
     /// The `cmd` is always committed by raft before applying.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     pub fn apply_cmd(
         &self,
         cmd: &Cmd,
@@ -822,7 +826,7 @@ impl StateMachine {
     /// Before applying, list expired keys to clean.
     ///
     /// Apply is done in a sled-txn tree, which does not provide listing function.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     pub fn list_expired_kvs(
         &self,
         log_time_ms: u64,
@@ -854,7 +858,7 @@ impl StateMachine {
     /// Remove expired key-values, and corresponding secondary expiration index record.
     ///
     /// This should be done inside a sled-transaction.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     fn clean_expired_kvs(
         &self,
         txn_tree: &mut TransactionSledTree,

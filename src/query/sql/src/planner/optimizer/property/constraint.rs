@@ -19,6 +19,7 @@ use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
 use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
+use log::info;
 use ordered_float::OrderedFloat;
 use z3::ast::Bool;
 use z3::ast::Dynamic;
@@ -180,7 +181,7 @@ fn transform_predicate_expr<'ctx>(
     ctx: &'ctx Context,
     scalar: &mut ScalarExpr,
 ) -> Option<Dynamic<'ctx>> {
-    tracing::info!("Transforming: {:?}", scalar);
+    info!("Transforming: {:?}", scalar);
     match scalar {
         ScalarExpr::FunctionCall(func) => {
             if let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) {

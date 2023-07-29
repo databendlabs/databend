@@ -47,7 +47,7 @@ use common_storages_factory::Table;
 use common_storages_fuse::table_functions::string_literal;
 use common_storages_fuse::TableContext;
 use common_storages_view::view_table::VIEW_ENGINE;
-use tracing::info;
+use log::info;
 
 pub struct GPT2SQLTable {
     prompt: String,

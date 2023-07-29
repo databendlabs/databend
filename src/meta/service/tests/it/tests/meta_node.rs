@@ -24,8 +24,8 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::Opened;
+use log::info;
 use maplit::btreeset;
-use tracing::info;
 
 use crate::tests::service::MetaSrvTestContext;
 

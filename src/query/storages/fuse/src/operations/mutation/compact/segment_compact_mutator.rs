@@ -17,13 +17,13 @@ use std::time::Instant;
 
 use common_catalog::table::Table;
 use common_exception::Result;
+use log::info;
 use metrics::gauge;
 use opendal::Operator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use table_lock::TableLockHandlerWrapper;
-use tracing::info;
 
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
@@ -246,7 +246,7 @@ impl<'a> SegmentCompactor<'a> {
                     number_segments,
                     start.elapsed().as_secs()
                 );
-                info!(status);
+                info!("{}", &status);
                 (status_callback)(status);
             }
 

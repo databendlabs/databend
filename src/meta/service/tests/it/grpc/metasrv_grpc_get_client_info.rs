@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use databend_meta::init_meta_ut;
 use pretty_assertions::assert_eq;
 use regex::Regex;
+use test_harness::test;
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+use crate::testing::meta_service_test_harness;
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_get_client_info() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Get client ip

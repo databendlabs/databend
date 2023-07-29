@@ -12,36 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod fake_key_spaces;
-pub mod fake_state_machine_meta;
-
 use std::sync::Once;
 
-use common_base::base::GlobalSequence;
-use common_meta_sled_store::get_sled_db;
+use common_base::base::tokio;
 use common_tracing::closure_name;
 use common_tracing::init_logging;
 use common_tracing::Config;
 use minitrace::prelude::*;
 
-pub struct SledTestContext {
-    pub tree_name: String,
-    pub db: sled::Db,
-}
-
-/// Create a new context for testing sled
-pub fn new_sled_test_context() -> SledTestContext {
-    SledTestContext {
-        tree_name: format!("test-{}-", next_seq()),
-        db: get_sled_db(),
-    }
-}
-
-fn next_seq() -> u32 {
-    29000u32 + (GlobalSequence::next() as u32)
-}
-
-pub fn sled_test_harness<F, Fut>(test: F)
+pub fn meta_service_test_harness<F, Fut>(test: F)
 where
     F: FnOnce() -> Fut + 'static,
     Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
@@ -49,13 +28,25 @@ where
     setup_test();
 
     let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(1)
+        .worker_threads(3)
         .enable_all()
         .build()
         .unwrap();
     let root = Span::root(closure_name::<F>(), SpanContext::random());
     let test = test().in_span(root);
     rt.block_on(test).unwrap();
+
+    shutdown_test();
+}
+
+pub fn meta_service_test_harness_sync<F>(test: F)
+where F: FnOnce() -> anyhow::Result<()> + 'static {
+    setup_test();
+
+    let root = Span::root(closure_name::<F>(), SpanContext::random());
+    let _guard = root.set_local_parent();
+
+    test().unwrap();
 
     shutdown_test();
 }
