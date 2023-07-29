@@ -79,6 +79,8 @@ use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::DeleteTableLockRevReq;
+use common_meta_app::schema::DropCatalogReply;
+use common_meta_app::schema::DropCatalogReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -3304,6 +3306,81 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         };
 
         Ok(Arc::new(catalog))
+    }
+
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
+    async fn drop_catalog(&self, req: DropCatalogReq) -> Result<DropCatalogReply, KVAppError> {
+        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+
+        let name_key = &req.name_ident;
+
+        let ctx = &func_name!();
+
+        let mut trials = txn_trials(None, ctx);
+
+        loop {
+            trials.next().unwrap()?;
+
+            let res =
+                get_catalog_or_err(self, name_key, format!("drop_catalog: {}", &name_key)).await;
+
+            let (_, catalog_id, catalog_meta_seq, _) = match res {
+                Ok(x) => x,
+                Err(e) => {
+                    if let KVAppError::AppError(AppError::UnknownCatalog(_)) = e {
+                        if req.if_exists {
+                            return Ok(DropCatalogReply {});
+                        }
+                    }
+
+                    return Err(e);
+                }
+            };
+
+            // Delete catalog by deleting these record:
+            // (tenant, catalog_name) -> catalog_id
+            // (catalog_id) -> catalog_meta
+            // (catalog_id) -> (tenant, catalog_name)
+            let id_key = CatalogId { catalog_id };
+            let id_to_name_key = CatalogIdToName { catalog_id };
+
+            debug!(
+                catalog_id = catalog_id,
+                name_key = as_debug!(&name_key);
+                "catalog keys to delete"
+            );
+
+            {
+                let condition = vec![txn_cond_seq(&id_key, Eq, catalog_meta_seq)];
+                let if_then = vec![
+                    txn_op_del(name_key),        // (tenant, catalog_name) -> catalog_id
+                    txn_op_del(&id_key),         // (catalog_id) -> catalog_meta
+                    txn_op_del(&id_to_name_key), /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
+                ];
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
+                let (succ, _) = send_txn(self, txn_req).await?;
+
+                debug!(
+                    name = as_debug!(&name_key),
+                    id = as_debug!(&id_key),
+                    succ = succ;
+                    "drop_catalog"
+                );
+
+                if succ {
+                    break;
+                }
+            }
+        }
+
+        Ok(DropCatalogReply {})
     }
 
     #[logcall::logcall("debug")]
