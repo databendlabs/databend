@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use crate::planner::plans::operator::Operator;
 use common_exception::Result;
 
 use crate::optimizer::rule::Rule;
@@ -22,6 +21,7 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::planner::plans::operator::Operator;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::PatternPlan;
