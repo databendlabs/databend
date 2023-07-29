@@ -95,11 +95,7 @@ impl FuseTable {
             DEFAULT_AVG_DEPTH_THRESHOLD,
         );
         let block_count = snapshot.summary.block_count;
-        let threshold = if block_count > 100 {
-            block_count as f64 * avg_depth_threshold
-        } else {
-            1.0
-        };
+        let threshold = (block_count as f64 * avg_depth_threshold).max(1.0);
         let mut mutator = ReclusterMutator::try_create(ctx.clone(), threshold, block_thresholds)?;
 
         let schema = self.table_info.schema();
