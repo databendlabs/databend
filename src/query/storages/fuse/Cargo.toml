@@ -49,8 +49,8 @@ backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 chrono = { workspace = true }
 futures = "0.3.24"
 futures-util = "0.3.24"
-log = { workspace = true }
 itertools = "0.10.5"
+log = { workspace = true }
 metrics = "0.20.1"
 minitrace = { workspace = true }
 opendal = { workspace = true }
