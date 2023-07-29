@@ -353,11 +353,22 @@ impl UnusedColumnPruner {
                 ))
             }
 
-            RelOperator::RuntimeFilterSource(p) => Ok(SExpr::create_binary(
-                Arc::new(RelOperator::RuntimeFilterSource(p.clone())),
-                Arc::new(self.keep_required_columns(expr.child(0)?, required.clone())?),
-                Arc::new(self.keep_required_columns(expr.child(1)?, required)?),
-            )),
+            RelOperator::RuntimeFilterSource(p) => {
+                let left = p
+                    .left_runtime_filters
+                    .iter()
+                    .fold(required.clone(), |acc, v| {
+                        acc.union(&v.1.used_columns()).cloned().collect()
+                    });
+                let right = p.right_runtime_filters.iter().fold(required, |acc, v| {
+                    acc.union(&v.1.used_columns()).cloned().collect()
+                });
+                Ok(SExpr::create_binary(
+                    Arc::new(RelOperator::RuntimeFilterSource(p.clone())),
+                    Arc::new(self.keep_required_columns(expr.child(0)?, left)?),
+                    Arc::new(self.keep_required_columns(expr.child(1)?, right)?),
+                ))
+            }
 
             RelOperator::DummyTableScan(_) => Ok(expr.clone()),
 
