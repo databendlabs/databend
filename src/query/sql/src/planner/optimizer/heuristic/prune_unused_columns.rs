@@ -365,8 +365,8 @@ impl UnusedColumnPruner {
                 });
                 Ok(SExpr::create_binary(
                     Arc::new(RelOperator::RuntimeFilterSource(p.clone())),
-                    Arc::new(self.keep_required_columns(expr.child(1)?, right)?),
                     Arc::new(self.keep_required_columns(expr.child(0)?, left)?),
+                    Arc::new(self.keep_required_columns(expr.child(1)?, right)?),
                 ))
             }
 

@@ -28,7 +28,7 @@ mod join;
 mod kill;
 mod limit;
 mod materialized_cte;
-mod operator;
+pub mod operator;
 mod pattern;
 mod plan;
 mod presign;
