@@ -170,7 +170,12 @@ impl crate::parquet_reader::ParquetReader for ParquetReader {
         let mut reader = row_group
             .get_record_batch_reader(part.num_rows, selection)
             .unwrap();
-        let batch = reader.next().unwrap().unwrap();
+        let batch = reader.next().unwrap().map_err(|e| {
+            ErrorCode::BadBytes(format!(
+                "Cannot read parquet file, error: {:?}",
+                e.to_string()
+            ))
+        })?;
         DataBlock::from_record_batch(&batch)
             .map_err(|e| {
                 ErrorCode::BadBytes(format!(
