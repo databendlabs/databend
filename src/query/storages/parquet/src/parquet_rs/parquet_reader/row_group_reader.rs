@@ -33,16 +33,6 @@ pub struct InMemoryRowGroup {
 }
 
 impl InMemoryRowGroup {
-    // pub fn new(metadata: RowGroupMetaData, column_chunks: Vec<Vec<u8>>) -> Self {
-    //     InMemoryRowGroup {
-    //         metadata,
-    //         column_chunks: column_chunks
-    //             .iter()
-    //             .map(|x| Arc::new(Bytes::from(x.clone())))
-    //             .collect(),
-    //     }
-    // }
-
     pub fn get_record_batch_reader(
         &self,
         batch_size: usize,

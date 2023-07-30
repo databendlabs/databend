@@ -70,8 +70,8 @@ where D: serde::Deserializer<'de> {
     let list_ident = i_prot.read_list_begin().unwrap();
     let mut schema_elements: Vec<SchemaElement> = Vec::with_capacity(list_ident.size as usize);
     for _ in 0..list_ident.size {
-        let list_elem_12 = SchemaElement::read_from_in_protocol(&mut i_prot).unwrap();
-        schema_elements.push(list_elem_12);
+        let list_elem = SchemaElement::read_from_in_protocol(&mut i_prot).unwrap();
+        schema_elements.push(list_elem);
     }
     i_prot.read_list_end().unwrap();
     let schema = types::from_thrift(&schema_elements).unwrap();
@@ -154,7 +154,6 @@ mod tests {
         fields.push(Arc::new(bag));
 
         let schema = Type::group_type_builder("schema")
-            // .with_repetition(Repetition::REPEATED)
             .with_fields(&mut fields)
             .build()?;
         Ok(Arc::new(SchemaDescriptor::new(Arc::new(schema))))
