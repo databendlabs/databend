@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
+use common_ast::ast::Lambda;
 use common_ast::ast::Literal;
 use common_ast::ast::Window;
 use common_ast::Visitor;
@@ -52,6 +53,7 @@ impl<'a> Visitor<'a> for SrfCollector {
         args: &'a [Expr],
         params: &'a [Literal],
         over: &'a Option<Window>,
+        lambda: &'a Option<Lambda>,
     ) {
         if BUILTIN_FUNCTIONS
             .get_property(&name.name)
@@ -66,6 +68,7 @@ impl<'a> Visitor<'a> for SrfCollector {
                 args: args.to_vec(),
                 params: params.to_vec(),
                 window: over.clone(),
+                lambda: lambda.clone(),
             });
         } else {
             for arg in args.iter() {

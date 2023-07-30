@@ -66,6 +66,9 @@ fn encode_operator_attribute(attr: &OperatorAttribute) -> jsonb::Value {
         OperatorAttribute::ProjectSet(project_attr) => {
             (&serde_json::json!({ "functions": project_attr.functions })).into()
         }
+        OperatorAttribute::Lambda(lambda_attr) => {
+            (&serde_json::json!({ "scalars": lambda_attr.scalars })).into()
+        }
         OperatorAttribute::Limit(limit_attr) => (&serde_json::json!({
             "limit": limit_attr.limit,
             "offset": limit_attr.offset,

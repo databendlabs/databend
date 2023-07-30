@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use common_ast::ast::ColumnID;
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
+use common_ast::ast::Lambda;
 use common_ast::ast::Literal;
 use common_ast::ast::Window;
 use common_ast::walk_expr;
@@ -89,6 +90,7 @@ impl<'ast> Visitor<'ast> for UDFValidator {
         args: &'ast [Expr],
         _params: &'ast [Literal],
         over: &'ast Option<Window>,
+        lambda: &'ast Option<Lambda>,
     ) {
         let name = name.to_string();
         if !is_builtin_function(&name) && self.name.eq_ignore_ascii_case(&name) {
@@ -119,6 +121,9 @@ impl<'ast> Visitor<'ast> for UDFValidator {
                     self.visit_identifier(&reference.window_name);
                 }
             }
+        }
+        if let Some(lambda) = lambda {
+            walk_expr(self, &lambda.expr)
         }
     }
 }
