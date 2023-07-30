@@ -12,12 +12,12 @@ test = false
 
 [features]
 heapsize = ["heapsize_"]
-amortized = ["ritelinked/ahash-amortized", "ritelinked/inline-more-amortized"]
 
 [dependencies]
 
 # Crates.io dependencies
-ritelinked = { version = "0.3.2", default-features = false, features = ["ahash", "inline-more"] }
+hashlink = "0.8"
+hashbrown = "0.14"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 heapsize_ = { package = "heapsize", version = "0.4.2", optional = true }
