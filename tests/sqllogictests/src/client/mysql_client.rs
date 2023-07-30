@@ -48,16 +48,33 @@ impl MySQLClient {
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
         let start = Instant::now();
-        let rows: Vec<Row> = self.conn.query(sql).await?;
+        let res = self.conn.query(sql).await;
+
         let elapsed = start.elapsed();
+
         if self.bench
             && !(sql.trim_start().starts_with("set") || sql.trim_start().starts_with("analyze"))
         {
             println!("{elapsed:?}");
         }
-        if self.debug {
-            println!("Running sql with mysql client: [{sql}] ({elapsed:?})");
+
+        let rows: Vec<Row> = match res {
+            Ok(rows) => {
+                if self.debug {
+                    println!("Running sql with mysql client: [{sql}] ({elapsed:?})");
+                };
+                rows
+            }
+            Err(err) => {
+                if self.debug {
+                    println!(
+                        "Running sql with mysql client: [{sql}] ({elapsed:?}); error: ({err:?})"
+                    );
+                };
+                return Err(err.into());
+            }
         };
+
         let mut parsed_rows = Vec::with_capacity(rows.len());
         for row in rows.into_iter() {
             let mut parsed_row = Vec::new();
