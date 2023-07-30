@@ -51,9 +51,9 @@ backon = "0.4"
 clap = { workspace = true }
 derive_more = { workspace = true }
 futures = "0.3.24"
+itertools = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
-itertools = { workspace = true }
 maplit = "1.0.2"
 metrics = "0.20.1"
 minitrace = { workspace = true }
