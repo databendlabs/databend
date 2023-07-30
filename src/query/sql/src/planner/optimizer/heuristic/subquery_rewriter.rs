@@ -178,6 +178,7 @@ impl SubqueryRewriter {
             ScalarExpr::ConstantExpr(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::WindowFunction(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::AggregateFunction(_) => Ok((scalar.clone(), s_expr.clone())),
+            ScalarExpr::LambdaFunction(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::FunctionCall(func) => {
                 let mut args = vec![];
                 let mut s_expr = s_expr.clone();

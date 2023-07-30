@@ -222,6 +222,7 @@ pub trait Visitor<'ast>: Sized {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn visit_function_call(
         &mut self,
         _span: Span,
@@ -230,6 +231,7 @@ pub trait Visitor<'ast>: Sized {
         args: &'ast [Expr],
         _params: &'ast [Literal],
         over: &'ast Option<Window>,
+        lambda: &'ast Option<Lambda>,
     ) {
         for arg in args {
             walk_expr(self, arg);
@@ -237,6 +239,9 @@ pub trait Visitor<'ast>: Sized {
 
         if let Some(over) = over {
             self.visit_window(over);
+        }
+        if let Some(lambda) = lambda {
+            walk_expr(self, &lambda.expr)
         }
     }
 
