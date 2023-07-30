@@ -28,7 +28,7 @@ use common_sharing::ShareEndpointManager;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
 use common_storages_iceberg::IcebergCreator;
-use common_tracing::QueryLogger;
+use common_tracing::GlobalLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use storages_common_cache_manager::CacheManager;
