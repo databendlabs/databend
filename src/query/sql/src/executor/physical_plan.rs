@@ -66,6 +66,8 @@ pub struct TableScan {
     pub stat_info: Option<PlanStatsInfo>,
 
     pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
+
+    pub agg_index_output_schema: Option<DataSchemaRef>,
 }
 
 impl TableScan {
@@ -92,6 +94,9 @@ impl TableScan {
     }
 
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        if let Some(agg_index_output_schema) = &self.agg_index_output_schema {
+            return Ok(agg_index_output_schema.clone());
+        }
         let fields = TableScan::output_fields(self.source.schema(), &self.name_mapping)?;
         Ok(DataSchemaRefExt::create(fields))
     }
