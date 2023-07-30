@@ -79,7 +79,7 @@ use crate::binder::copy::parse_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
-use crate::binder::ColumnBinding;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
@@ -736,17 +736,20 @@ impl Binder {
             .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), blocks)?;
         // Get the fields in the cte
         let mut fields = vec![];
-        for column in cte_info.columns.iter() {
+        let mut offsets = vec![];
+        for (idx, column) in cte_info.columns.iter().enumerate() {
             fields.push(DataField::new(
                 column.index.to_string().as_str(),
                 *column.data_type.clone(),
-            ))
+            ));
+            offsets.push(idx);
         }
         let cte_scan = SExpr::create_leaf(Arc::new(
             CteScan {
                 cte_idx: (cte_info.cte_idx, cte_info.used_count),
                 fields,
                 // It is safe to unwrap here because we have checked that the cte is materialized.
+                offsets,
                 stat: cte_info.stat_info.clone().unwrap(),
             }
             .into(),
@@ -840,21 +843,22 @@ impl Binder {
                     virtual_computed_expr,
                     ..
                 }) => {
-                    let column_binding = ColumnBinding {
-                        database_name: Some(database_name.to_string()),
-                        table_name: Some(table.name().to_string()),
-                        table_index: Some(*table_index),
-                        column_name: column_name.clone(),
-                        column_position: *column_position,
-                        index: *column_index,
-                        data_type: Box::new(DataType::from(data_type)),
-                        visibility: if path_indices.is_some() {
+                    let column_binding = ColumnBindingBuilder::new(
+                        column_name.clone(),
+                        *column_index,
+                        Box::new(DataType::from(data_type)),
+                        if path_indices.is_some() {
                             Visibility::InVisible
                         } else {
                             Visibility::Visible
                         },
-                        virtual_computed_expr: virtual_computed_expr.clone(),
-                    };
+                    )
+                    .table_name(Some(table.name().to_string()))
+                    .database_name(Some(database_name.to_string()))
+                    .table_index(Some(*table_index))
+                    .column_position(*column_position)
+                    .virtual_computed_expr(virtual_computed_expr.clone())
+                    .build();
                     bind_context.add_column_binding(column_binding);
                     if path_indices.is_none() && virtual_computed_expr.is_none() {
                         if let Some(col_id) = *leaf_index {

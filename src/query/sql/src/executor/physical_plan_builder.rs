@@ -61,6 +61,7 @@ use super::Sort;
 use super::TableScan;
 use super::WindowFunction;
 use crate::binder::wrap_cast;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_join;
@@ -93,7 +94,6 @@ use crate::plans::Window as LogicalWindow;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;
 use crate::BaseTableColumn;
-use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
@@ -925,21 +925,15 @@ impl PhysicalPlanBuilder {
                         .zip(common_types)
                         .filter(|(f, common_ty)| f.data_type() != *common_ty)
                         .map(|(f, common_ty)| {
+                            let column = ColumnBindingBuilder::new(
+                                f.name().clone(),
+                                f.name().parse().unwrap(),
+                                Box::new(f.data_type().clone()),
+                                Visibility::Visible,
+                            )
+                            .build();
                             let cast_expr = wrap_cast(
-                                &ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                    span: None,
-                                    column: ColumnBinding {
-                                        database_name: None,
-                                        table_name: None,
-                                        column_position: None,
-                                        table_index: None,
-                                        column_name: f.name().clone(),
-                                        index: f.name().parse().unwrap(),
-                                        data_type: Box::new(f.data_type().clone()),
-                                        visibility: Visibility::Visible,
-                                        virtual_computed_expr: None,
-                                    },
-                                }),
+                                &ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column }),
                                 common_ty,
                             );
                             ScalarItem {
@@ -1108,6 +1102,7 @@ impl PhysicalPlanBuilder {
                 plan_id: self.next_plan_id(),
                 cte_idx: cte_scan.cte_idx,
                 output_schema: DataSchemaRefExt::create(cte_scan.fields.clone()),
+                offsets: cte_scan.offsets.clone(),
             })),
 
             RelOperator::MaterializedCte(op) => {

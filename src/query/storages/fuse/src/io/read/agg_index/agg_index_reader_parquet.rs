@@ -20,9 +20,9 @@ use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
 use common_expression::DataBlock;
+use log::debug;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::SingleColumnMeta;
-use tracing::debug;
 
 use super::AggIndexReader;
 use crate::io::ReadSettings;

@@ -57,7 +57,9 @@ fn test_agg() {
     test_agg_approx_count_distinct(file, eval_aggr);
     test_agg_quantile_disc(file, eval_aggr);
     test_agg_quantile_cont(file, eval_aggr);
+    test_agg_quantile_tdigest(file, eval_aggr);
     test_agg_median(file, eval_aggr);
+    test_agg_median_tdigest(file, eval_aggr);
     test_agg_array_agg(file, eval_aggr);
     test_agg_string_agg(file, eval_aggr);
     test_agg_bitmap_count(file, eval_aggr);
@@ -88,7 +90,9 @@ fn test_agg_group_by() {
     test_agg_skewness(file, simulate_two_groups_group_by);
     test_agg_quantile_disc(file, simulate_two_groups_group_by);
     test_agg_quantile_cont(file, simulate_two_groups_group_by);
+    test_agg_quantile_tdigest(file, simulate_two_groups_group_by);
     test_agg_median(file, simulate_two_groups_group_by);
+    test_agg_median_tdigest(file, simulate_two_groups_group_by);
     test_agg_window_funnel(file, simulate_two_groups_group_by);
     test_agg_approx_count_distinct(file, simulate_two_groups_group_by);
     test_agg_array_agg(file, simulate_two_groups_group_by);
@@ -434,6 +438,21 @@ fn test_agg_median(file: &mut impl Write, simulator: impl AggregationSimulator) 
     run_agg_ast(file, "median(x_null)", get_example().as_slice(), simulator);
 }
 
+fn test_agg_median_tdigest(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "median_tdigest(a)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "median_tdigest(x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
 fn test_agg_window_funnel(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(
         file,
@@ -562,6 +581,21 @@ fn test_agg_bitmap(file: &mut impl Write, simulator: impl AggregationSimulator) 
     run_agg_ast(
         file,
         "bitmap_intersect(bm)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_quantile_tdigest(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "quantile_tdigest(0.8)(a)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "quantile_tdigest(0.8)(x_null)",
         get_example().as_slice(),
         simulator,
     );

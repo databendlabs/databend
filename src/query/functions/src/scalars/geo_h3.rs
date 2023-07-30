@@ -14,9 +14,11 @@
 
 use common_expression::types::map::KvPair;
 use common_expression::types::ArrayType;
+use common_expression::types::BooleanType;
 use common_expression::types::Float64Type;
 use common_expression::types::UInt32Type;
 use common_expression::types::UInt64Type;
+use common_expression::types::UInt8Type;
 use common_expression::types::F64;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
@@ -24,6 +26,7 @@ use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
 use h3o::CellIndex;
 use h3o::LatLng;
+use h3o::Resolution;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry
@@ -90,4 +93,58 @@ pub fn register(registry: &mut FunctionRegistry) {
                 },
             ),
         );
+
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, BooleanType, _, _>(
+        "h3_is_valid",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt64Type, BooleanType>(|h3, builder, _| {
+            if CellIndex::try_from(h3).is_ok() {
+                builder.push(true);
+            } else {
+                builder.push(false);
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, UInt8Type, _, _>(
+        "h3_get_resolution",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt64Type, UInt8Type>(|h3, builder, ctx| {
+            match CellIndex::try_from(h3) {
+                Ok(index) => builder.push(index.resolution().into()),
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.push(0);
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt8Type, Float64Type, _, _>(
+        "h3_edge_length_m",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt8Type, Float64Type>(|r, builder, ctx| {
+            match Resolution::try_from(r) {
+                Ok(rr) => builder.push(rr.edge_length_m().into()),
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.push(0.0.into());
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt8Type, Float64Type, _, _>(
+        "h3_edge_length_km",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt8Type, Float64Type>(|r, builder, ctx| {
+            match Resolution::try_from(r) {
+                Ok(rr) => builder.push(rr.edge_length_km().into()),
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.push(0.0.into());
+                }
+            }
+        }),
+    );
 }

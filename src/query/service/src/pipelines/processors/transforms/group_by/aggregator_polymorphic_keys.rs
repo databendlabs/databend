@@ -43,7 +43,7 @@ use common_hashtable::PartitionedHashMap;
 use common_hashtable::ShortStringHashMap;
 use common_hashtable::StringHashMap;
 use ethnum::U256;
-use tracing::info;
+use log::info;
 
 use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
 use super::aggregator_keys_iter::LargeFixedKeysColumnIter;

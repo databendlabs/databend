@@ -25,6 +25,7 @@ use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_sql::BloomIndexColumns;
+use log::warn;
 use opendal::Operator;
 use storages_common_index::BloomIndex;
 use storages_common_index::FilterEvalResult;
@@ -165,7 +166,7 @@ impl BloomPruner for BloomPrunerCreator {
                 Ok(v) => v,
                 Err(e) => {
                     // swallow exceptions intentionally, corrupted index should not prevent execution
-                    tracing::warn!("failed to apply bloom pruner, returning true. {}", e);
+                    warn!("failed to apply bloom pruner, returning true. {}", e);
                     true
                 }
             }

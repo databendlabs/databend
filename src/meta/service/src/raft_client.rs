@@ -17,12 +17,13 @@ use common_meta_types::Endpoint;
 use common_meta_types::GrpcConfig;
 use common_meta_types::NodeId;
 use common_metrics::counter;
+use log::debug;
 use tonic::transport::channel::Channel;
-use tracing::debug;
 
 use crate::metrics::raft_metrics;
 
 /// A metrics reporter of active raft peers.
+#[derive(Debug)]
 pub struct PeerCounter {
     target: NodeId,
     endpoint: Endpoint,

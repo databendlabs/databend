@@ -28,11 +28,13 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::IndexType;
 
 #[derive(Clone, Debug)]
 pub struct CteScan {
     pub cte_idx: (usize, usize),
     pub fields: Vec<DataField>,
+    pub offsets: Vec<IndexType>,
     pub stat: Arc<StatInfo>,
 }
 

@@ -18,7 +18,6 @@
 use std::ops::Deref;
 use std::time::Duration;
 
-use common_base::base::tokio;
 use common_grpc::ConnectionFactory;
 use common_meta_client::from_digit_ver;
 use common_meta_client::to_digit_ver;
@@ -26,17 +25,19 @@ use common_meta_client::MetaGrpcClient;
 use common_meta_client::METACLI_COMMIT_SEMVER;
 use common_meta_client::MIN_METASRV_SEMVER;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
-use databend_meta::init_meta_ut;
 use databend_meta::version::MIN_METACLI_SEMVER;
+use log::debug;
+use log::info;
 use semver::Version;
-use tracing::debug;
-use tracing::info;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::start_metasrv;
 
 /// - Test client version < serverside min-compatible-client-ver.
 /// - Test metasrv version < client min-compatible-metasrv-ver.
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_metasrv_handshake() -> anyhow::Result<()> {
     fn smaller_ver(v: &Version) -> Version {
         if v.major > 0 {

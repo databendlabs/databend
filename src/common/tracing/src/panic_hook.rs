@@ -16,7 +16,7 @@ use std::backtrace::Backtrace;
 use std::panic::PanicInfo;
 
 use common_base::runtime::LimitMemGuard;
-use tracing::error;
+use log::error;
 
 pub fn set_panic_hook() {
     // Set a panic hook that records the panic as a `tracing` event at the
@@ -40,13 +40,13 @@ pub fn log_panic(panic: &PanicInfo) {
 
     if let Some(location) = panic.location() {
         error!(
-            message = %panic,
-            backtrace = %backtrace_str,
-            panic.file = location.file(),
-            panic.line = location.line(),
-            panic.column = location.column(),
+            backtrace = &backtrace_str,
+            "panic.file" = location.file(),
+            "panic.line" = location.line(),
+            "panic.column" = location.column();
+            "{}", panic,
         );
     } else {
-        error!(message = %panic, backtrace = %backtrace_str);
+        error!(backtrace = backtrace_str; "{}", panic);
     }
 }

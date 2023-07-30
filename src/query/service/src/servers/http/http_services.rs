@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_http::HttpError;
 use common_http::HttpShutdownHandler;
 use common_meta_types::anyerror::AnyError;
+use log::info;
 use poem::get;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
@@ -32,7 +33,6 @@ use poem::put;
 use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Route;
-use tracing::info;
 
 use super::v1::upload_to_stage;
 use crate::auth::AuthMgr;

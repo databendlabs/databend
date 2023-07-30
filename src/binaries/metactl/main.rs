@@ -15,6 +15,8 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod grpc;
+use common_tracing::QueryLogConfig;
+use common_tracing::TracingConfig;
 use grpc::export_meta;
 
 mod snapshot;
@@ -203,6 +205,8 @@ async fn main() -> anyhow::Result<()> {
             format: "text".to_string(),
         },
         stderr: StderrConfig::default(),
+        query: QueryLogConfig::default(),
+        tracing: TracingConfig::from_env(),
     };
 
     let _guards = init_logging("metactl", &log_config);
