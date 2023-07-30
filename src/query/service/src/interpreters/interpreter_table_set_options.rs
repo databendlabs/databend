@@ -21,9 +21,9 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MatchSeq;
 use common_sql::plans::SetOptionsPlan;
 use common_storages_fuse::TableContext;
+use log::error;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
-use tracing::error;
 
 use super::interpreter_table_create::is_valid_block_per_segment;
 use super::interpreter_table_create::is_valid_bloom_index_columns;
@@ -61,14 +61,14 @@ impl Interpreter for SetOptionsInterpreter {
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
         if self.plan.set_options.get(OPT_KEY_STORAGE_FORMAT).is_some() {
-            error!(error_str);
+            error!("{}", &error_str);
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "can't change {} for alter table statement",
                 OPT_KEY_STORAGE_FORMAT
             )));
         }
         if self.plan.set_options.get(OPT_KEY_DATABASE_ID).is_some() {
-            error!(error_str);
+            error!("{}", &error_str);
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "can't change {} for alter table statement",
                 OPT_KEY_DATABASE_ID
@@ -77,7 +77,7 @@ impl Interpreter for SetOptionsInterpreter {
         for table_option in self.plan.set_options.iter() {
             let key = table_option.0.to_lowercase();
             if !is_valid_create_opt(&key) {
-                error!(error_str);
+                error!("{}", &error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
                     "table option {key} is invalid for alter table statement",
                 )));

@@ -56,7 +56,7 @@ impl GlobalServices {
 
         let app_name_shuffle = format!("{}-{}", config.query.tenant_id, config.query.cluster_id);
 
-        QueryLogger::init(app_name_shuffle, &config.log)?;
+        GlobalLogger::init(&app_name_shuffle, &config.log);
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
         GlobalQueryRuntime::init(config.storage.num_cpus as usize)?;
 

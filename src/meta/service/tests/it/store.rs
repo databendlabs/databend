@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_raft_store::state_machine::SerializableSnapshot;
@@ -32,16 +31,20 @@ use common_meta_types::StorageError;
 use common_meta_types::StoredMembership;
 use common_meta_types::TypeConfig;
 use common_meta_types::Vote;
-use databend_meta::init_meta_ut;
+use common_tracing::func_name;
 use databend_meta::meta_service::raftmeta::LogStore;
 use databend_meta::meta_service::raftmeta::SMStore;
 use databend_meta::store::RaftStore;
 use databend_meta::Opened;
+use log::debug;
+use log::info;
 use maplit::btreeset;
+use minitrace::prelude::*;
 use pretty_assertions::assert_eq;
-use tracing::debug;
-use tracing::info;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
+use crate::testing::meta_service_test_harness_sync;
 use crate::tests::service::MetaSrvTestContext;
 
 struct MetaStoreBuilder {}
@@ -58,17 +61,19 @@ impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaSto
     }
 }
 
-#[test]
+#[test(harness = meta_service_test_harness_sync)]
+#[minitrace::trace]
 fn test_impl_raft_storage() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
+    let root = Span::root(func_name!(), SpanContext::random());
+    let _guard = root.set_local_parent();
 
     common_meta_sled_store::openraft::testing::Suite::test_all(MetaStoreBuilder {})?;
 
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_store_restart() -> anyhow::Result<()> {
     // - Create a meta store
     // - Update meta store
@@ -121,7 +126,8 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Apply logs
@@ -158,7 +164,8 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Apply logs
@@ -199,7 +206,8 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Feed logs

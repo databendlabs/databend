@@ -189,6 +189,9 @@ impl Display for DropCatalogReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DropCatalogReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetCatalogReq {
     pub inner: CatalogNameIdent,
 }

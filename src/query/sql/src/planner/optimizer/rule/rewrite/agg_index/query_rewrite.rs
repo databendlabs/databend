@@ -24,7 +24,7 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use itertools::Itertools;
-use tracing::info;
+use log::info;
 
 use crate::binder::split_conjunctions;
 use crate::binder::ColumnBindingBuilder;

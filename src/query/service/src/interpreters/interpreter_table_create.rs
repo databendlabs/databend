@@ -46,6 +46,7 @@ use common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
 use common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use common_users::UserApiProvider;
+use log::error;
 use once_cell::sync::Lazy;
 use storages_common_cache::LoadParams;
 use storages_common_index::BloomIndex;
@@ -59,7 +60,6 @@ use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use tracing::error;
 
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
@@ -402,7 +402,7 @@ pub fn is_valid_block_per_segment(options: &BTreeMap<String, String>) -> Result<
         let blocks_per_segment = value.parse::<u64>()?;
         let error_str = "invalid block_per_segment option, can't be over 1000";
         if blocks_per_segment > 1000 {
-            error!(error_str);
+            error!("{}", &error_str);
             return Err(ErrorCode::TableOptionInvalid(error_str));
         }
     }
@@ -417,7 +417,7 @@ pub fn is_valid_row_per_block(options: &BTreeMap<String, String>) -> Result<()> 
         let error_str = "invalid row_per_block option, can't be over 1000000";
 
         if row_per_block > DEFAULT_BLOCK_MAX_ROWS as u64 {
-            error!(error_str);
+            error!("{}", error_str);
             return Err(ErrorCode::TableOptionInvalid(error_str));
         }
     }

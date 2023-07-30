@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
 use common_meta_sled_store::SledItem;
 use common_meta_sled_store::SledTree;
 use common_meta_types::new_log_id;
@@ -21,20 +20,19 @@ use common_meta_types::Entry;
 use common_meta_types::EntryPayload;
 use common_meta_types::LogEntry;
 use common_meta_types::UpsertKV;
+use log::info;
 use pretty_assertions::assert_eq;
 use sled::IVec;
-use testing::new_sled_test_context;
+use test_harness::test;
 
-use crate::init_sled_ut;
-use crate::testing;
 use crate::testing::fake_key_spaces::Logs;
+use crate::testing::new_sled_test_context;
+use crate::testing::sled_test_harness;
 
 /// Feed some data to two trees, iterate them and check output.
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_sled_iter() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
     let logs: Vec<Entry> = vec![
         Entry {
             log_id: new_log_id(1, 0, 2),
@@ -51,7 +49,7 @@ async fn test_sled_iter() -> anyhow::Result<()> {
         },
     ];
 
-    tracing::info!("--- init some data");
+    info!("--- init some data");
     let t1 = {
         let tc = new_sled_test_context();
 

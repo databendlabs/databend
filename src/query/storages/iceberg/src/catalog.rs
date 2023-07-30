@@ -136,13 +136,13 @@ impl IcebergCatalog {
     ///
     /// Such catalog will be seen as an `flatten` catalogs,
     /// a `default` database will be generated directly
-    #[tracing::instrument(level = "debug", skip(operator))]
+    #[minitrace::trace]
     pub fn try_create(info: CatalogInfo, operator: DataOperator) -> Result<Self> {
         Ok(Self { info, operator })
     }
 
     /// list read databases
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn list_database_from_read(&self) -> Result<Vec<Arc<dyn Database>>> {
         let op = self.operator.operator();
@@ -175,7 +175,7 @@ impl Catalog for IcebergCatalog {
         self.info.clone()
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let rel_path = format!("{db_name}/");
@@ -240,7 +240,7 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn get_table(
         &self,

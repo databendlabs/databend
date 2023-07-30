@@ -28,7 +28,7 @@ use common_sql::plans::OptimizeTablePlan;
 use common_sql::plans::Plan;
 use common_sql::plans::Replace;
 use common_sql::NameResolutionContext;
-use tracing::info;
+use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::metrics_inc_replace_execution_time_ms;

@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_meta_app::schema::CatalogOption;
 use common_sql::plans::CreateCatalogPlan;
 use common_storages_fuse::TableContext;
+use log::debug;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -44,9 +45,11 @@ impl Interpreter for CreateCatalogInterpreter {
         "CreateCatalogInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_catalog_execute");
+
         if let CatalogOption::Iceberg(opt) = &self.plan.meta.catalog_option {
             if !opt.storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
                 return Err(ErrorCode::CatalogNotSupported(

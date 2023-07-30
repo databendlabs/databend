@@ -26,8 +26,8 @@ use common_expression::Value;
 use common_sql::plans::ShowCreateTablePlan;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
+use log::debug;
 use storages_common_table_meta::table::is_internal_opt_key;
-use tracing::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

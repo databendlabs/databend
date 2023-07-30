@@ -34,13 +34,13 @@ use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_sql::evaluator::BlockOperator;
+use log::info;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
-use tracing::info;
 
 use crate::io::write_data;
 use crate::io::BlockBuilder;

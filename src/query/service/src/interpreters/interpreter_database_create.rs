@@ -22,6 +22,7 @@ use common_meta_types::MatchSeq;
 use common_sharing::ShareEndpointManager;
 use common_sql::plans::CreateDatabasePlan;
 use common_users::UserApiProvider;
+use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -93,9 +94,11 @@ impl Interpreter for CreateDatabaseInterpreter {
         "CreateDatabaseInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_database_execute");
+
         let tenant = self.plan.tenant.clone();
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;

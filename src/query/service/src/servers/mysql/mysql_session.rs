@@ -23,10 +23,10 @@ use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use log::error;
+use log::warn;
 use opensrv_mysql::AsyncMysqlIntermediary;
 use opensrv_mysql::IntermediaryOptions;
-use tracing::error;
-use tracing::warn;
 
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::sessions::Session;

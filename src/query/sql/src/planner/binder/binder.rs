@@ -35,7 +35,7 @@ use common_expression::Expr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserDefinedFunction;
-use tracing::warn;
+use log::warn;
 
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;

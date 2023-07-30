@@ -15,7 +15,7 @@
 use common_ast::ast::ShowColumnsStmt;
 use common_ast::ast::ShowLimit;
 use common_exception::Result;
-use tracing::debug;
+use log::debug;
 
 use crate::normalize_identifier;
 use crate::plans::Plan;

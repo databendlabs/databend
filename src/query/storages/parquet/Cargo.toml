@@ -31,9 +31,9 @@ async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
 futures = "0.3.24"
+log = { workspace = true }
 opendal = { workspace = true }
 serde = { workspace = true }
-tracing = "0.1.36"
 typetag = "0.2.3"
 
 [dev-dependencies]

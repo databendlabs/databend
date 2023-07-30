@@ -27,7 +27,7 @@ use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::CatalogInfo;
 use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
-use tracing::info;
+use log::info;
 
 use crate::plans::Plan;
 

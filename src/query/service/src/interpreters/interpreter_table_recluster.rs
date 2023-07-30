@@ -18,6 +18,7 @@ use std::time::SystemTime;
 use common_catalog::plan::PushDownInfo;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
@@ -75,7 +76,7 @@ impl Interpreter for ReclusterTableInterpreter {
         {
             let status = "recluster: begin to run recluster";
             ctx.set_status_info(status);
-            tracing::info!(status);
+            info!("{}", status);
         }
         let mut times = 0;
         let mut block_count = 0;
@@ -128,7 +129,7 @@ impl Interpreter for ReclusterTableInterpreter {
                     start.elapsed().map_or(0, |d| d.as_secs())
                 );
                 ctx.set_status_info(&status);
-                tracing::info!(status);
+                info!("{}", &status);
             }
 
             if !plan.is_final || times >= MAX_RECLUSTER_TIMES {

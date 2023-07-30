@@ -30,7 +30,7 @@ use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::share::ShareNameIdent;
-use tracing::debug;
+use log::debug;
 
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;

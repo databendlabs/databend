@@ -23,6 +23,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::TableSchemaRef;
+use log::info;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::FormatVersion;
@@ -30,7 +31,6 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
-use tracing::info;
 
 use super::ConflictResolveContext;
 use super::SnapshotChanges;

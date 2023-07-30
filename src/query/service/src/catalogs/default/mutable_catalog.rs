@@ -89,7 +89,7 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
-use tracing::info;
+use log::info;
 
 use super::catalog_context::CatalogContext;
 use crate::databases::Database;

@@ -649,17 +649,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-entry"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c54fb3976c0d3c2730a4c0904061fb6b3d255e7e67a56939955ef8ce6aa4175f"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "async-io"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1769,6 +1758,9 @@ dependencies = [
  "enquote",
  "futures",
  "libc",
+ "log",
+ "logcall",
+ "minitrace",
  "num_cpus",
  "once_cell",
  "parking_lot 0.12.1",
@@ -1781,7 +1773,6 @@ dependencies = [
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
  "tokio",
- "tracing",
  "uuid",
 ]
 
@@ -1793,7 +1784,7 @@ dependencies = [
  "cargo-license",
  "cargo_metadata 0.15.3",
  "gix 0.42.0",
- "tracing",
+ "log",
  "vergen",
 ]
 
@@ -1870,13 +1861,13 @@ dependencies = [
  "common-users",
  "databend-thrift",
  "hex",
+ "log",
  "once_cell",
  "pretty_assertions",
  "semver",
  "serde",
  "serfig",
  "strum 0.24.1",
- "tracing",
 ]
 
 [[package]]
@@ -1946,6 +1937,7 @@ dependencies = [
  "itertools",
  "jsonb",
  "lexical-core",
+ "log",
  "match-template",
  "micromarshal",
  "num-traits",
@@ -1957,7 +1949,6 @@ dependencies = [
  "serde",
  "serde_json",
  "terminal_size",
- "tracing",
  "typetag",
  "unicode-segmentation",
 ]
@@ -2050,11 +2041,11 @@ dependencies = [
  "common-exception",
  "hyper",
  "jwt-simple",
+ "log",
  "once_cell",
  "serde",
  "thiserror",
  "tonic 0.9.2",
- "tracing",
  "trust-dns-resolver",
 ]
 
@@ -2088,12 +2079,12 @@ dependencies = [
  "common-base",
  "common-exception",
  "futures",
+ "log",
  "poem",
  "pretty_assertions",
  "serde",
  "tempfile",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -2164,12 +2155,14 @@ dependencies = [
  "common-protos",
  "common-tracing",
  "enumflags2",
+ "log",
+ "logcall",
  "maplit",
+ "minitrace",
  "serde",
  "serde_json",
  "thiserror",
  "tonic 0.9.2",
- "tracing",
 ]
 
 [[package]]
@@ -2218,6 +2211,9 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "futures",
+ "log",
+ "logcall",
+ "minitrace",
  "once_cell",
  "parking_lot 0.12.1",
  "prost",
@@ -2226,7 +2222,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tonic 0.9.2",
- "tracing",
 ]
 
 [[package]]
@@ -2242,9 +2237,9 @@ dependencies = [
  "common-meta-sled-store",
  "common-meta-stoerr",
  "common-meta-types",
+ "log",
  "once_cell",
  "tempfile",
- "tracing",
 ]
 
 [[package]]
@@ -2254,10 +2249,11 @@ dependencies = [
  "anyhow",
  "async-trait",
  "common-meta-types",
+ "log",
+ "minitrace",
  "serde",
  "thiserror",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -2284,7 +2280,6 @@ name = "common-meta-raft-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-entry",
  "async-trait",
  "byteorder",
  "chrono",
@@ -2300,7 +2295,9 @@ dependencies = [
  "derive_more",
  "hostname",
  "lazy_static",
+ "log",
  "maplit",
+ "minitrace",
  "num",
  "once_cell",
  "openraft 0.8.4",
@@ -2309,7 +2306,8 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "tracing",
+ "test-harness",
+ "tokio",
 ]
 
 [[package]]
@@ -2323,6 +2321,8 @@ dependencies = [
  "common-meta-stoerr",
  "common-meta-types",
  "common-tracing",
+ "log",
+ "minitrace",
  "once_cell",
  "openraft 0.8.4",
  "pretty_assertions",
@@ -2330,8 +2330,9 @@ dependencies = [
  "serde_json",
  "sled",
  "tempfile",
+ "test-harness",
  "thiserror",
- "tracing",
+ "tokio",
 ]
 
 [[package]]
@@ -2356,8 +2357,8 @@ dependencies = [
  "common-meta-embedded",
  "common-meta-kvapi",
  "common-meta-types",
+ "log",
  "tokio-stream",
- "tracing",
 ]
 
 [[package]]
@@ -2389,6 +2390,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-exception",
+ "log",
  "metrics",
  "metrics-exporter-prometheus",
  "once_cell",
@@ -2397,7 +2399,6 @@ dependencies = [
  "prometheus-parse",
  "serde",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -2464,11 +2465,12 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-util",
+ "log",
+ "minitrace",
  "opendal",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
- "tracing",
  "typetag",
  "xml-rs",
 ]
@@ -2541,11 +2543,11 @@ dependencies = [
  "common-users",
  "dashmap",
  "itertools",
+ "log",
  "num_cpus",
  "once_cell",
  "serde",
  "sys-info",
- "tracing",
 ]
 
 [[package]]
@@ -2571,7 +2573,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -2615,6 +2616,7 @@ dependencies = [
  "enum-as-inner",
  "globiter",
  "itertools",
+ "log",
  "num-derive",
  "num-traits",
  "once_cell",
@@ -2628,7 +2630,6 @@ dependencies = [
  "simsearch",
  "storages-common-table-meta",
  "time 0.3.17",
- "tracing",
  "url",
  "z3",
 ]
@@ -2707,7 +2708,9 @@ dependencies = [
  "futures-util",
  "itertools",
  "jsonb",
+ "log",
  "metrics",
+ "minitrace",
  "opendal",
  "parquet-format-safe",
  "rand 0.8.5",
@@ -2724,7 +2727,6 @@ dependencies = [
  "streaming-decompression",
  "sys-info",
  "table-lock",
- "tracing",
  "typetag",
  "uuid",
 ]
@@ -2752,6 +2754,8 @@ dependencies = [
  "common-storage",
  "databend-thrift",
  "futures",
+ "log",
+ "minitrace",
  "opendal",
  "ordered-float 3.7.0",
  "serde",
@@ -2759,7 +2763,6 @@ dependencies = [
  "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-table-meta",
- "tracing",
  "typetag",
 ]
 
@@ -2784,10 +2787,10 @@ dependencies = [
  "dashmap",
  "futures",
  "icelake",
+ "minitrace",
  "opendal",
  "parquet",
  "serde",
- "tracing",
  "typetag",
 ]
 
@@ -2860,12 +2863,12 @@ dependencies = [
  "common-sql",
  "common-storage",
  "futures",
+ "log",
  "opendal",
  "serde",
  "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",
- "tracing",
  "typetag",
 ]
 
@@ -2948,10 +2951,10 @@ dependencies = [
  "common-pipeline-transforms",
  "common-storage",
  "dashmap",
+ "log",
  "opendal",
  "parking_lot 0.12.1",
  "serde",
- "tracing",
  "typetag",
  "uuid",
 ]
@@ -2983,6 +2986,7 @@ dependencies = [
  "common-users",
  "itertools",
  "jsonb",
+ "log",
  "once_cell",
  "parking_lot 0.12.1",
  "serde",
@@ -2992,7 +2996,6 @@ dependencies = [
  "storages-common-cache",
  "storages-common-cache-manager",
  "tikv-jemalloc-ctl",
- "tracing",
  "typetag",
  "walkdir",
 ]
@@ -3012,7 +3015,6 @@ name = "common-tracing"
 version = "0.1.0"
 dependencies = [
  "common-base",
- "common-exception",
  "console-subscriber",
  "defer",
  "fern",
@@ -3022,14 +3024,11 @@ dependencies = [
  "minitrace-opentelemetry",
  "opentelemetry",
  "opentelemetry-jaeger",
- "sentry-tracing",
  "serde",
  "serde_json",
  "tonic 0.9.2",
  "tracing",
  "tracing-appender",
- "tracing-log",
- "tracing-opentelemetry",
  "tracing-subscriber",
 ]
 
@@ -3050,13 +3049,13 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "jwt-simple",
+ "log",
  "p256 0.13.0",
  "parking_lot 0.12.1",
  "pretty_assertions",
  "reqwest",
  "serde",
  "serde_json",
- "tracing",
  "wiremock",
 ]
 
@@ -3625,6 +3624,8 @@ dependencies = [
  "databend-query",
  "enterprise-query",
  "limits-rs",
+ "log",
+ "minitrace",
  "opendal",
  "poem",
  "sentry",
@@ -3636,7 +3637,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.9.2",
- "tracing",
  "url",
 ]
 
@@ -3646,7 +3646,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "async-entry",
  "async-trait",
  "backon",
  "clap 3.2.23",
@@ -3668,8 +3667,11 @@ dependencies = [
  "env_logger",
  "futures",
  "itertools",
+ "log",
+ "logcall",
  "maplit",
  "metrics",
+ "minitrace",
  "once_cell",
  "poem",
  "pretty_assertions",
@@ -3683,12 +3685,10 @@ dependencies = [
  "sled",
  "temp-env",
  "tempfile",
+ "test-harness",
  "tokio-stream",
  "tonic 0.9.2",
  "tonic-reflection",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -3778,10 +3778,12 @@ dependencies = [
  "itertools",
  "jsonb",
  "jwt-simple",
+ "log",
  "lz4",
  "maplit",
  "match-template",
  "metrics",
+ "minitrace",
  "mysql_async",
  "naive-cityhash",
  "num",
@@ -3820,7 +3822,6 @@ dependencies = [
  "toml 0.7.3",
  "tonic 0.9.2",
  "tower",
- "tracing",
  "typetag",
  "unicode-segmentation",
  "url",
@@ -4179,12 +4180,12 @@ dependencies = [
  "futures-util",
  "jsonb",
  "jwt-simple",
+ "log",
  "opendal",
  "storages-common-cache",
  "storages-common-table-meta",
  "table-lock",
  "tempfile",
- "tracing",
  "vacuum-handler",
  "virtual-columns-handler",
 ]
@@ -6750,6 +6751,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "logcall"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4abc7eef9e6fd624accfb9f7f031909825a03f41209508e172a6c84a69353b57"
+dependencies = [
+ "proc-macro-error 1.0.4",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "logos"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7016,8 +7029,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "minitrace"
-version = "0.4.1"
-source = "git+https://github.com/tikv/minitrace-rust.git?rev=19d5ea9d#19d5ea9dc43c4a7d8b6a358d1a5ef52ae775d5b8"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bdc5c5a697f93f25a109f36988a60ce534c05b944afb8ef3c1498e131638133"
 dependencies = [
  "defer",
  "futures",
@@ -7031,8 +7045,9 @@ dependencies = [
 
 [[package]]
 name = "minitrace-macro"
-version = "0.4.1"
-source = "git+https://github.com/tikv/minitrace-rust.git?rev=19d5ea9d#19d5ea9dc43c4a7d8b6a358d1a5ef52ae775d5b8"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2277f13e7d585f02062590b3496cc0ca862aefadd24888efa01d50843605b79"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -7042,8 +7057,9 @@ dependencies = [
 
 [[package]]
 name = "minitrace-opentelemetry"
-version = "0.4.1"
-source = "git+https://github.com/tikv/minitrace-rust.git?rev=19d5ea9d#19d5ea9dc43c4a7d8b6a358d1a5ef52ae775d5b8"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d61606cd574afbd111bb32e3f78f96e3aab3c86703ac74ece63b6ee51c104b7"
 dependencies = [
  "futures",
  "log",
@@ -7671,7 +7687,6 @@ version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed41783a5bf567688eb38372f2b7a8530f5a607a4b49d38dd7573236c23ca7e2"
 dependencies = [
- "fnv",
  "futures-channel",
  "futures-util",
  "indexmap 1.9.2",
@@ -7689,8 +7704,6 @@ checksum = "8b3a2a91fdbfdd4d212c0dcc2ab540de2c2bcbbd90be17de7a7daf8822d010c1"
 dependencies = [
  "async-trait",
  "crossbeam-channel",
- "dashmap",
- "fnv",
  "futures-channel",
  "futures-executor",
  "futures-util",
@@ -9595,17 +9608,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sentry-tracing"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f4eda5496b64975306ce37b7ccdc5f264fd1da25c1d5aac324b460edab29ded"
-dependencies = [
- "sentry-core",
- "tracing-core",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "sentry-types"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10135,11 +10137,11 @@ dependencies = [
  "crc32fast",
  "crossbeam-channel",
  "hex",
+ "log",
  "metrics",
  "parking_lot 0.12.1",
  "siphasher",
  "tempfile",
- "tracing",
 ]
 
 [[package]]
@@ -10169,11 +10171,11 @@ dependencies = [
  "common-functions",
  "criterion",
  "match-template",
+ "minitrace",
  "rand 0.8.5",
  "serde",
  "storages-common-table-meta",
  "thiserror",
- "tracing",
  "xorfilter-rs",
 ]
 
@@ -10184,10 +10186,10 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-functions",
+ "log",
  "serde",
  "storages-common-index",
  "storages-common-table-meta",
- "tracing",
  "typetag",
 ]
 
@@ -10513,8 +10515,8 @@ dependencies = [
  "common-license",
  "common-meta-app",
  "futures",
+ "log",
  "rand 0.8.5",
- "tracing",
 ]
 
 [[package]]
@@ -10587,6 +10589,17 @@ name = "termtree"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95059e91184749cb66be6dc994f67f182b6d897cb3df74a5bf66b5e709295fd8"
+
+[[package]]
+name = "test-harness"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e71277381bd8b17eea2126a849dced540862c498398d4dd52405233a5d3cc643"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.27",
+]
 
 [[package]]
 name = "textwrap"
@@ -11056,20 +11069,6 @@ dependencies = [
  "lazy_static",
  "log",
  "tracing-core",
-]
-
-[[package]]
-name = "tracing-opentelemetry"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00a39dcf9bfc1742fa4d6215253b33a6e474be78275884c216fc2a06267b3600"
-dependencies = [
- "once_cell",
- "opentelemetry",
- "tracing",
- "tracing-core",
- "tracing-log",
- "tracing-subscriber",
 ]
 
 [[package]]

@@ -20,10 +20,10 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::warn;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
-use tracing::warn;
 
 use crate::io::SegmentsIO;
 use crate::statistics::reduce_block_statistics;

@@ -149,7 +149,7 @@ impl FlightClient {
     }
 
     // Execute do_action.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn do_action(&mut self, action: FlightAction, timeout: u64) -> Result<Vec<u8>> {
         let action: Action = action.try_into()?;
