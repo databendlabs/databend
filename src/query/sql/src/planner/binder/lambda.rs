@@ -264,6 +264,7 @@ impl Binder {
             scalar_items.sort_by_key(|item| item.index);
             let eval_scalar = EvalScalar {
                 items: scalar_items,
+                projections: vec![],
             };
             new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(new_expr));
         }

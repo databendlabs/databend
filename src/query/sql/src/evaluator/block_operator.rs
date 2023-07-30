@@ -42,7 +42,6 @@ use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
 use crate::executor::LambdaFunctionDesc;
-use crate::IndexType;
 use crate::optimizer::ColumnSet;
 
 /// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
