@@ -201,7 +201,8 @@ impl Binder {
             ScalarExpr::BoundColumnRef(_)
             | ScalarExpr::ConstantExpr(_)
             | ScalarExpr::WindowFunction(_)
-            | ScalarExpr::AggregateFunction(_) => {}
+            | ScalarExpr::AggregateFunction(_)
+            | ScalarExpr::LambdaFunction(_) => {}
         }
         Ok(())
     }

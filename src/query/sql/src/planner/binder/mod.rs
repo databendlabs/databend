@@ -28,6 +28,7 @@ mod insert;
 mod internal_column_factory;
 mod join;
 mod kill;
+mod lambda;
 mod limit;
 mod location;
 mod presign;

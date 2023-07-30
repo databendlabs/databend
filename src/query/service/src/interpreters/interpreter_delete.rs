@@ -56,6 +56,7 @@ use common_sql::Visibility;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
+use log::debug;
 use storages_common_table_meta::meta::TableSnapshot;
 use table_lock::TableLockHandlerWrapper;
 
@@ -91,9 +92,11 @@ impl Interpreter for DeleteInterpreter {
         "DeleteInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", name = "delete_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "delete_interpreter_execute");
+
         let is_distributed = !self.ctx.get_cluster().is_empty();
         let catalog_name = self.plan.catalog_name.as_str();
         let db_name = self.plan.database_name.as_str();

@@ -23,8 +23,8 @@ use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_config::InnerConfig;
 use common_exception::Result;
+use log::warn;
 use parking_lot::Mutex;
-use tracing::warn;
 
 use super::expiring_map::ExpiringMap;
 use super::HttpQueryContext;

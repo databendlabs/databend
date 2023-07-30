@@ -92,7 +92,7 @@ impl BlockReader {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn read_by_meta(
         &self,

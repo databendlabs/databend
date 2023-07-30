@@ -17,13 +17,14 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_sql::plans::CallPlan;
+use common_storages_fuse::TableContext;
+use log::debug;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 
 pub struct CallInterpreter {
     func: Box<dyn Procedure>,
@@ -48,9 +49,11 @@ impl Interpreter for CallInterpreter {
         self.func.schema()
     }
 
-    #[tracing::instrument(level = "debug", name = "call_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "call_interpreter_execute");
+
         let mut build_res = PipelineBuildResult::create();
         self.func
             .eval(

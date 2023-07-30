@@ -431,6 +431,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         args: &'ast [Expr],
         _params: &'ast [Literal],
         _over: &'ast Option<Window>,
+        _lambda: &'ast Option<Lambda>,
     ) {
         let mut children = Vec::with_capacity(args.len());
         for arg in args.iter() {

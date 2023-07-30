@@ -14,7 +14,7 @@ async-compression = { package = "async-compression-issue-150-workaround", versio
 ] }
 bytes = "1"
 futures = "0.3"
-log = "0.4"
+log = { workspace = true }
 pin-project = "1"
 serde = { workspace = true }
 

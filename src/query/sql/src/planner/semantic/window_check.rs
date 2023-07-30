@@ -49,6 +49,17 @@ impl<'a> WindowChecker<'a> {
                 }
                 .into())
             }
+            ScalarExpr::LambdaFunction(lambda) => {
+                if let Some(column_ref) = self
+                    .bind_context
+                    .lambda_info
+                    .lambda_functions_map
+                    .get(&lambda.display_name)
+                {
+                    return Ok(column_ref.clone().into());
+                }
+                Err(ErrorCode::Internal("Window Check: Invalid lambda function"))
+            }
             ScalarExpr::CastExpr(cast) => Ok(CastExpr {
                 span: cast.span,
                 is_try: cast.is_try,

@@ -25,6 +25,8 @@ use crate::plans::Aggregate;
 use crate::plans::CteScan;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
+use crate::plans::Lambda;
+use crate::plans::ProjectSet;
 use crate::plans::Exchange;
 use crate::plans::RelOperator;
 use crate::ColumnEntry;
@@ -368,6 +370,25 @@ impl UnusedColumnPruner {
                     Arc::new(self.keep_required_columns(expr.child(0)?, left)?),
                     Arc::new(self.keep_required_columns(expr.child(1)?, right)?),
                 ))
+            }
+
+            RelOperator::Lambda(p) => {
+                let mut used = vec![];
+                // Keep all columns, as some lambda functions may be arguments to other lambda functions.
+                for s in p.items.iter() {
+                    used.push(s.clone());
+                    s.scalar.used_columns().iter().for_each(|c| {
+                        required.insert(*c);
+                    })
+                }
+                if used.is_empty() {
+                    self.keep_required_columns(expr.child(0)?, required)
+                } else {
+                    Ok(SExpr::create_unary(
+                        Arc::new(RelOperator::Lambda(Lambda { items: used })),
+                        Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
+                    ))
+                }
             }
 
             RelOperator::DummyTableScan(_) => Ok(expr.clone()),

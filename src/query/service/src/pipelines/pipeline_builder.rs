@@ -66,6 +66,7 @@ use common_sql::executor::ExchangeSink;
 use common_sql::executor::ExchangeSource;
 use common_sql::executor::Filter;
 use common_sql::executor::HashJoin;
+use common_sql::executor::Lambda;
 use common_sql::executor::Limit;
 use common_sql::executor::MaterializedCte;
 use common_sql::executor::PhysicalPlan;
@@ -207,6 +208,7 @@ impl PipelineBuilder {
                 self.build_distributed_insert_select(insert_select)
             }
             PhysicalPlan::ProjectSet(project_set) => self.build_project_set(project_set),
+            PhysicalPlan::Lambda(lambda) => self.build_lambda(lambda),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
@@ -747,6 +749,39 @@ impl PipelineBuilder {
                 )))
             }
         })
+    }
+
+    fn build_lambda(&mut self, lambda: &Lambda) -> Result<()> {
+        self.build_pipeline(&lambda.input)?;
+
+        let funcs = lambda.lambda_funcs.clone();
+        let op = BlockOperator::LambdaMap { funcs };
+
+        let input_schema = lambda.input.output_schema()?;
+        let func_ctx = self.ctx.get_function_context()?;
+
+        let num_input_columns = input_schema.num_fields();
+
+        self.main_pipeline.add_transform(|input, output| {
+            let transform =
+                CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone(), num_input_columns);
+
+            if self.enable_profiling {
+                Ok(ProcessorPtr::create(TransformProfileWrapper::create(
+                    transform,
+                    input,
+                    output,
+                    lambda.plan_id,
+                    self.proc_profs.clone(),
+                )))
+            } else {
+                Ok(ProcessorPtr::create(Transformer::create(
+                    input, output, transform,
+                )))
+            }
+        })?;
+
+        Ok(())
     }
 
     fn build_aggregate_expand(&mut self, expand: &AggregateExpand) -> Result<()> {

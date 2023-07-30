@@ -43,7 +43,7 @@ use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
-use tracing::warn;
+use log::warn;
 
 use super::sort::OrderItem;
 use crate::binder::join::JoinConditions;
@@ -165,6 +165,9 @@ impl Binder {
             .normalize_select_list(&mut from_context, &stmt.select_list)
             .await?;
 
+        // analyze lambda
+        self.analyze_lambda(&mut from_context, &mut select_list)?;
+
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
             self.analyze_group_items(&mut from_context, &select_list, group_by)
@@ -231,6 +234,10 @@ impl Binder {
                 &order_items.items,
                 limit,
             )?;
+        }
+
+        if !from_context.lambda_info.lambda_functions.is_empty() {
+            s_expr = self.bind_lambda(&mut from_context, s_expr).await?;
         }
 
         if !from_context.aggregate_info.aggregate_functions.is_empty()
@@ -923,6 +930,7 @@ impl<'a> SelectRewriter<'a> {
                 args,
                 params: vec![],
                 window: None,
+                lambda: None,
             }),
             alias,
         }

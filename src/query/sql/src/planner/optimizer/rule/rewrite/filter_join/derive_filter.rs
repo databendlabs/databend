@@ -168,6 +168,11 @@ fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &
                 replace_column(arg, col_to_scalar)
             }
         }
+        ScalarExpr::LambdaFunction(expr) => {
+            for arg in expr.args.iter_mut() {
+                replace_column(arg, col_to_scalar)
+            }
+        }
         ScalarExpr::CastExpr(expr) => {
             replace_column(&mut expr.argument, col_to_scalar);
         }

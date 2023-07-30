@@ -43,11 +43,11 @@ use common_expression::Value;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
+use log::info;
 use storages_common_index::RangeIndex;
 use storages_common_pruner::RangePruner;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::meta::TableSnapshot;
-use tracing::info;
 
 use crate::metrics::metrics_inc_deletion_block_range_pruned_nums;
 use crate::metrics::metrics_inc_deletion_block_range_pruned_whole_block_nums;

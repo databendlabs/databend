@@ -35,7 +35,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::AccumulatingTransform;
 use common_pipeline_transforms::processors::transforms::AccumulatingTransformer;
-use tracing::info;
+use log::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::AggregateHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;

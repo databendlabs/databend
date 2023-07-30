@@ -53,6 +53,11 @@ pub trait ScalarVisitor: Sized {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
+                                ScalarExpr::LambdaFunction(func) => {
+                                    for arg in &func.args {
+                                        stack.push(RecursionProcessing::Call(arg));
+                                    }
+                                }
                                 ScalarExpr::WindowFunction(WindowFunc {
                                     func,
                                     partition_by,

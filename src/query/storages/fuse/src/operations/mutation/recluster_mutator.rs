@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::Scalar;
 use itertools::Itertools;
+use log::debug;
 use storages_common_table_meta::meta::BlockMeta;
 
 use crate::operations::common::BlockMetaIndex;
@@ -173,10 +174,9 @@ impl ReclusterMutator {
             // round the float to 4 decimal places.
             let average_depth =
                 (10000.0 * sum_depth as f64 / block_depths.len() as f64).round() / 10000.0;
-            tracing::debug!(
+            debug!(
                 "recluster: average_depth: {} in level {}",
-                average_depth,
-                level
+                average_depth, level
             );
             if average_depth <= self.depth_threshold {
                 continue;

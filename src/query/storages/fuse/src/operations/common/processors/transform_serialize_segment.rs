@@ -23,13 +23,13 @@ use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::OutputPort;
+use log::info;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Versioned;
-use tracing::info;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::MutationLogEntry;

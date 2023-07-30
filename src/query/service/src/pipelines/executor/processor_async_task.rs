@@ -28,6 +28,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
 use futures_util::FutureExt;
+use log::warn;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
@@ -77,7 +78,7 @@ impl ProcessorAsyncTask {
                     Either::Left((_, right)) => {
                         inner = right;
                         let active_workers = queue_clone.active_workers();
-                        tracing::warn!(
+                        warn!(
                             "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}",
                             query_id,
                             processor_id,
