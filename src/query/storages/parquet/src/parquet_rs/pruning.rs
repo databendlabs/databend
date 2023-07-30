@@ -60,7 +60,7 @@ pub struct PartitionPruner {
     /// top k information from pushed down information. The usize is the offset of top k column in `schema`.
     pub top_k: Option<(TopK, usize)>,
     // TODO: use limit information for pruning
-    // /// Limit of this query. If there is order by and filter, it will not be used (assign to `usize::MAX`).
+    // Limit of this query. If there is order by and filter, it will not be used (assign to `usize::MAX`).
     // pub limit: usize,
     pub parquet_fast_read_bytes: usize,
     pub compression_ratio: f64,

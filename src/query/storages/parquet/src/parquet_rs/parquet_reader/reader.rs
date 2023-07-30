@@ -109,8 +109,6 @@ impl ParquetReader {
     }
 }
 
-/// Project the schema and get the needed column leaves.
-
 #[async_trait::async_trait]
 impl crate::parquet_reader::ParquetReader for ParquetReader {
     fn output_schema(&self) -> &DataSchema {
