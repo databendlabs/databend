@@ -59,6 +59,6 @@ CREATE SCHEMA system
 statement error 1002
 DROP SCHEMA system
 
-statement error 1006
+statement error 1105
 CREATE SCHEMA catalog_not_exist.t
 
