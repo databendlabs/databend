@@ -169,9 +169,9 @@ impl MetaService for MetaServiceImpl {
         info!("Received MetaGrpcReq: {:?}", req);
 
         let m = &self.meta_node;
-        let reply = match req {
+        let reply = match &req {
             MetaGrpcReq::UpsertKV(a) => {
-                let res = m.upsert_kv(a).await;
+                let res = m.upsert_kv(a.clone()).await;
                 RaftReply::from(res)
             }
             MetaGrpcReq::GetKV(a) => {
