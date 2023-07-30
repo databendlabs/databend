@@ -1,3 +1,0 @@
-query I
-select * from system.clusters where host = '0.0.0.0' or host = '::'
-----
