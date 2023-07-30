@@ -201,8 +201,24 @@ impl CatalogManager {
     ///
     /// Trying to drop default catalog will return an error.
     #[async_backtrace::framed]
-    pub async fn drop_catalog(&self, _: DropCatalogReq) -> Result<()> {
-        todo!()
+    pub async fn drop_catalog(&self, req: DropCatalogReq) -> Result<()> {
+        let catalog_name = &req.name_ident.catalog_name;
+
+        if catalog_name == CATALOG_DEFAULT {
+            return Err(ErrorCode::BadArguments(
+                "default catalog cannot be dropped".to_string(),
+            ));
+        }
+
+        if self.external_catalogs.get(catalog_name).is_some() {
+            return Err(ErrorCode::BadArguments(
+                "catalog already exists that cannot be dropped".to_string(),
+            ));
+        }
+
+        let _ = self.meta.drop_catalog(req).await;
+
+        Ok(())
     }
 
     #[async_backtrace::framed]
