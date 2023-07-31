@@ -40,6 +40,7 @@ use crate::pipelines::processors::transforms::aggregator::serde::transform_excha
 use crate::pipelines::processors::transforms::metrics::{metrics_inc_aggregate_spill_data_serialize_milliseconds, metrics_inc_aggregate_spill_write_bytes, metrics_inc_aggregate_spill_write_count, metrics_inc_aggregate_spill_write_milliseconds};
 use common_hashtable::HashtableLike;
 use crate::pipelines::processors::transforms::aggregator::serde::{AggregateSerdeMeta, exchange_defines};
+use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_spill_writer::spilling_aggregate_payload as local_spilling_aggregate_payload;
 
 pub struct TransformExchangeAggregateSerializer<Method: HashMethodBounds> {
     method: Method,
@@ -88,30 +89,42 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
     fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<DataBlock> {
         let mut serialized_blocks = Vec::with_capacity(meta.blocks.len());
         for (index, mut block) in meta.blocks.into_iter().enumerate() {
-            if index == self.local_pos {
-                serialized_blocks.push(FlightSerialized::DataBlock(block));
-                continue;
-            }
-
-            match block
-                .take_meta()
-                .and_then(AggregateMeta::<Method, usize>::downcast_from)
-            {
+            match AggregateMeta::<Method, usize>::downcast_from(block.take_meta().unwrap()) {
                 None => unreachable!(),
                 Some(AggregateMeta::Spilled(_)) => unreachable!(),
-                Some(AggregateMeta::BucketSpilled(_)) => unreachable!(),
                 Some(AggregateMeta::Serialized(_)) => unreachable!(),
+                Some(AggregateMeta::BucketSpilled(_)) => unreachable!(),
                 Some(AggregateMeta::Partitioned { .. }) => unreachable!(),
+
                 Some(AggregateMeta::Spilling(payload)) => {
-                    serialized_blocks.push(FlightSerialized::Future(spilling_aggregate_payload(
-                        self.operator.clone(),
-                        &self.method,
-                        &self.location_prefix,
-                        &self.params,
-                        payload,
-                    )?));
+                    serialized_blocks.push(FlightSerialized::Future(
+                        match index == self.local_pos {
+                            true => local_spilling_aggregate_payload(
+                                self.operator.clone(),
+                                &self.method,
+                                &self.location_prefix,
+                                &self.params,
+                                payload,
+                            )?,
+                            false => spilling_aggregate_payload(
+                                self.operator.clone(),
+                                &self.method,
+                                &self.location_prefix,
+                                &self.params,
+                                payload,
+                            )?,
+                        },
+                    ));
                 }
+
                 Some(AggregateMeta::HashTable(payload)) => {
+                    if index == self.local_pos {
+                        serialized_blocks.push(FlightSerialized::DataBlock(block.add_meta(
+                            Some(Box::new(AggregateMeta::<Method, usize>::HashTable(payload))),
+                        )?));
+                        continue;
+                    }
+
                     let mut stream =
                         SerializeAggregateStream::create(&self.method, &self.params, payload);
                     let bucket = stream.payload.bucket;
@@ -129,10 +142,6 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
             serialized_blocks,
         )))
     }
-}
-
-fn get_columns(data_block: DataBlock) -> Vec<BlockEntry> {
-    data_block.columns().to_vec()
 }
 
 fn spilling_aggregate_payload<Method: HashMethodBounds>(
@@ -161,7 +170,7 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
         let data_block = serialize_aggregate(method, params, inner_table)?;
 
         let old_write_size = write_size;
-        let columns = get_columns(data_block);
+        let columns = data_block.columns().to_vec();
         let mut columns_data = Vec::with_capacity(columns.len());
         let mut columns_layout = Vec::with_capacity(columns.len());
 

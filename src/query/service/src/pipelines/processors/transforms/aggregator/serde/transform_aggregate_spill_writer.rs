@@ -55,7 +55,7 @@ pub struct TransformAggregateSpillWriter<Method: HashMethodBounds> {
     location_prefix: String,
     spilled_block: Option<DataBlock>,
     spilling_meta: Option<AggregateMeta<Method, usize>>,
-    spilling_future: Option<BoxFuture<'static, Result<()>>>,
+    spilling_future: Option<BoxFuture<'static, Result<DataBlock>>>,
 }
 
 impl<Method: HashMethodBounds> TransformAggregateSpillWriter<Method> {
@@ -150,16 +150,13 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
     fn process(&mut self) -> Result<()> {
         if let Some(spilling_meta) = self.spilling_meta.take() {
             if let AggregateMeta::Spilling(payload) = spilling_meta {
-                let (spilled_block, spilling_future) = spilling_aggregate_payload(
+                self.spilling_future = Some(spilling_aggregate_payload(
                     self.operator.clone(),
                     &self.method,
                     &self.location_prefix,
                     &self.params,
                     payload,
-                )?;
-
-                self.spilled_block = Some(spilled_block);
-                self.spilling_future = Some(spilling_future);
+                )?);
 
                 return Ok(());
             }
@@ -173,15 +170,11 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let Some(spilling_future) = self.spilling_future.take() {
-            return spilling_future.await;
+            self.spilled_block = Some(spilling_future.await?);
         }
 
         Ok(())
     }
-}
-
-fn get_columns(data_block: DataBlock) -> Vec<BlockEntry> {
-    data_block.columns().to_vec()
 }
 
 pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
@@ -190,7 +183,7 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
     location_prefix: &str,
     params: &Arc<AggregatorParams>,
     mut payload: HashTablePayload<PartitionedHashMethod<Method>, usize>,
-) -> Result<(DataBlock, BoxFuture<'static, Result<()>>)> {
+) -> Result<BoxFuture<'static, Result<DataBlock>>> {
     let unique_name = GlobalUniqName::unique();
     let location = format!("{}/{}", location_prefix, unique_name);
 
@@ -206,7 +199,7 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
         let data_block = serialize_aggregate(method, params, inner_table)?;
 
         let begin = write_size;
-        let columns = get_columns(data_block);
+        let columns = data_block.columns().to_vec();
         let mut columns_data = Vec::with_capacity(columns.len());
         let mut columns_layout = Vec::with_capacity(columns.len());
 
@@ -234,41 +227,38 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
         });
     }
 
-    Ok((
-        DataBlock::empty_with_meta(AggregateMeta::<Method, usize>::create_spilled(
-            spilled_buckets_payloads,
-        )),
-        Box::pin(async move {
-            let instant = Instant::now();
+    Ok(Box::pin(async move {
+        let instant = Instant::now();
 
-            let mut write_bytes = 0;
+        let mut write_bytes = 0;
 
-            if !write_data.is_empty() {
-                let mut writer = operator.writer(&location).await?;
-                for write_bucket_data in write_data.into_iter() {
-                    for data in write_bucket_data.into_iter() {
-                        write_bytes += data.len();
-                        writer.write(data).await?;
-                    }
+        if !write_data.is_empty() {
+            let mut writer = operator.writer(&location).await?;
+            for write_bucket_data in write_data.into_iter() {
+                for data in write_bucket_data.into_iter() {
+                    write_bytes += data.len();
+                    writer.write(data).await?;
                 }
-
-                writer.close().await?;
             }
 
-            // perf
-            {
-                metrics_inc_aggregate_spill_write_count();
-                metrics_inc_aggregate_spill_write_bytes(write_bytes as u64);
-                metrics_inc_aggregate_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
-            }
+            writer.close().await?;
+        }
 
-            info!(
-                "Write aggregate spill {} successfully, elapsed: {:?}",
-                location,
-                instant.elapsed()
-            );
+        // perf
+        {
+            metrics_inc_aggregate_spill_write_count();
+            metrics_inc_aggregate_spill_write_bytes(write_bytes as u64);
+            metrics_inc_aggregate_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+        }
 
-            Ok(())
-        }),
-    ))
+        info!(
+            "Write aggregate spill {} successfully, elapsed: {:?}",
+            location,
+            instant.elapsed()
+        );
+
+        Ok(DataBlock::empty_with_meta(
+            AggregateMeta::<Method, usize>::create_spilled(spilled_buckets_payloads),
+        ))
+    }))
 }

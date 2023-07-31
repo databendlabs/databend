@@ -332,14 +332,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
         params: &MergeExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        // pipeline.add_transform(|input, output| {
-        //     Ok(TransformExchangeDeserializer::create(
-        //         input,
-        //         output,
-        //         &params.schema,
-        //     ))
-        // })?;
-
         pipeline.add_transform(|input, output| {
             match self.aggregator_params.aggregate_functions.is_empty() {
                 true => TransformGroupByDeserializer::<Method>::try_create(
@@ -361,14 +353,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
         params: &ShuffleExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        // pipeline.add_transform(|input, output| {
-        //     Ok(TransformExchangeDeserializer::create(
-        //         input,
-        //         output,
-        //         &params.schema,
-        //     ))
-        // })?;
-
         pipeline.add_transform(|input, output| {
             match self.aggregator_params.aggregate_functions.is_empty() {
                 true => TransformGroupByDeserializer::<Method>::try_create(

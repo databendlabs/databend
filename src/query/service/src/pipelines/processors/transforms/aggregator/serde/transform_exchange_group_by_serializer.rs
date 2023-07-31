@@ -54,6 +54,7 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTa
 use crate::pipelines::processors::transforms::aggregator::serde::exchange_defines;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::serialize_group_by;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::SerializeGroupByStream;
+use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_spill_writer::spilling_group_by_payload as local_spilling_group_by_payload;
 use crate::pipelines::processors::transforms::aggregator::serde::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
@@ -163,30 +164,35 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
     fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<DataBlock> {
         let mut serialized_blocks = Vec::with_capacity(meta.blocks.len());
         for (index, mut block) in meta.blocks.into_iter().enumerate() {
-            if index == self.local_pos {
-                serialized_blocks.push(FlightSerialized::DataBlock(DataBlock::empty()));
-                continue;
-            }
-            match block
-                .take_meta()
-                .and_then(AggregateMeta::<Method, ()>::downcast_from)
-            {
+            match AggregateMeta::<Method, ()>::downcast_from(block.take_meta().unwrap()) {
                 None => unreachable!(),
                 Some(AggregateMeta::Spilled(_)) => unreachable!(),
                 Some(AggregateMeta::BucketSpilled(_)) => unreachable!(),
                 Some(AggregateMeta::Serialized(_)) => unreachable!(),
                 Some(AggregateMeta::Partitioned { .. }) => unreachable!(),
                 Some(AggregateMeta::Spilling(payload)) => {
-                    serialized_blocks.push(FlightSerialized::Future(spilling_group_by_payload(
-                        self.operator.clone(),
-                        &self.method,
-                        &self.location_prefix,
-                        payload,
-                    )?));
+                    serialized_blocks.push(FlightSerialized::Future(
+                        match index == self.local_pos {
+                            true => local_spilling_group_by_payload(
+                                self.operator.clone(),
+                                &self.method,
+                                &self.location_prefix,
+                                payload,
+                            )?,
+                            false => spilling_group_by_payload(
+                                self.operator.clone(),
+                                &self.method,
+                                &self.location_prefix,
+                                payload,
+                            )?,
+                        },
+                    ));
                 }
                 Some(AggregateMeta::HashTable(payload)) => {
                     if index == self.local_pos {
-                        serialized_blocks.push(FlightSerialized::DataBlock(block));
+                        serialized_blocks.push(FlightSerialized::DataBlock(block.add_meta(
+                            Some(Box::new(AggregateMeta::<Method, ()>::HashTable(payload))),
+                        )?));
                         continue;
                     }
 
