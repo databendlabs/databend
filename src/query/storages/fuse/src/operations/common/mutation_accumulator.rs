@@ -256,8 +256,6 @@ impl MutationAccumulator {
                     .map(|(path, _segment, format_version)| (path.clone(), *format_version))
                     .chain(merged_segments)
                     .collect();
-                info!("merged_segments:{:?}", merged_segments);
-                info!("append_segments:{:?}", self.appended_segments);
                 match self.kind {
                     MutationKind::Insert => ConflictResolveContext::AppendOnly((
                         SnapshotMerged {
