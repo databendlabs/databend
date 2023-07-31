@@ -503,11 +503,10 @@ impl Binder {
                         .await
                 } else {
                     // Other table functions always reside is default catalog
-                    let table_meta: Arc<dyn TableFunction> = self
-                        .catalogs
-                        .get_catalog(CATALOG_DEFAULT)
-                        .await?
-                        .get_table_function(&func_name.name, table_args)?;
+                    let table_meta: Arc<dyn TableFunction> =
+                        self.catalogs
+                            .get_default_catalog()?
+                            .get_table_function(&func_name.name, table_args)?;
                     let table = table_meta.as_table();
                     let table_alias_name = if let Some(table_alias) = alias {
                         Some(
@@ -923,7 +922,7 @@ impl Binder {
         travel_point: &Option<NavigationPoint>,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with catalog
-        let catalog = self.catalogs.get_catalog(catalog_name).await?;
+        let catalog = self.catalogs.get_catalog(tenant, catalog_name).await?;
         let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
 
         if let Some(tp) = travel_point {
@@ -984,7 +983,7 @@ impl Binder {
         catalog_name: &str,
         table_id: MetaId,
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        let catalog = self.catalogs.get_catalog(catalog_name).await?;
+        let catalog = self.catalogs.get_catalog(tenant, catalog_name).await?;
         let index_metas = catalog
             .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
             .await?;

@@ -43,7 +43,6 @@ pub const CATALOG_DEFAULT: &str = "default";
 
 pub struct CatalogManager {
     pub meta: MetaStore,
-    pub tenant: String,
 
     /// default_catalog is the DEFAULT catalog.
     pub default_catalog: Arc<dyn Catalog>,
@@ -113,7 +112,6 @@ impl CatalogManager {
 
         let catalog_manager = Self {
             meta,
-            tenant,
             default_catalog,
             external_catalogs,
             catalog_creators,
@@ -153,7 +151,7 @@ impl CatalogManager {
     /// DEFAULT catalog is handled specially via `get_default_catalog`. Other catalogs
     /// will be fetched from metasrv.
     #[async_backtrace::framed]
-    pub async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+    pub async fn get_catalog(&self, tenant: &str, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         if catalog_name == CATALOG_DEFAULT {
             return self.get_default_catalog();
         }
@@ -165,7 +163,7 @@ impl CatalogManager {
         // Get catalog from metasrv.
         let info = self
             .meta
-            .get_catalog(GetCatalogReq::new(&self.tenant, catalog_name))
+            .get_catalog(GetCatalogReq::new(tenant, catalog_name))
             .await?;
 
         self.build_catalog(&info)
@@ -222,7 +220,7 @@ impl CatalogManager {
     }
 
     #[async_backtrace::framed]
-    pub async fn list_catalogs(&self) -> Result<Vec<Arc<dyn Catalog>>> {
+    pub async fn list_catalogs(&self, tenant: &str) -> Result<Vec<Arc<dyn Catalog>>> {
         let mut catalogs = vec![self.get_default_catalog()?];
 
         // insert external catalogs.
@@ -231,10 +229,7 @@ impl CatalogManager {
         }
 
         // fecth catalogs from metasrv.
-        let infos = self
-            .meta
-            .list_catalogs(ListCatalogReq::new(&self.tenant))
-            .await?;
+        let infos = self.meta.list_catalogs(ListCatalogReq::new(tenant)).await?;
 
         for info in infos {
             catalogs.push(self.build_catalog(&info)?);

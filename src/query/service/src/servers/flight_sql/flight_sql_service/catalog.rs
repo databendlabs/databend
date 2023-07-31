@@ -55,11 +55,11 @@ impl CatalogInfoProvider {
         let catalogs: Vec<(String, Arc<dyn Catalog>)> = if let Some(catalog_name) = catalog_name {
             vec![(
                 catalog_name.clone(),
-                catalog_mgr.get_catalog(&catalog_name).await?,
+                catalog_mgr.get_catalog(&tenant, &catalog_name).await?,
             )]
         } else {
             catalog_mgr
-                .list_catalogs()
+                .list_catalogs(&tenant)
                 .await?
                 .iter()
                 .map(|r| (r.name(), r.clone()))

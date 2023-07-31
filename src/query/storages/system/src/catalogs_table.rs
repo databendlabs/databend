@@ -47,13 +47,13 @@ impl AsyncSystemTable for CatalogsTable {
     #[async_backtrace::framed]
     async fn get_full_data(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let mgr = CatalogManager::instance();
 
         let catalog_names = mgr
-            .list_catalogs()
+            .list_catalogs(&ctx.get_tenant())
             .await?
             .into_iter()
             .map(|v| v.name().into_bytes())

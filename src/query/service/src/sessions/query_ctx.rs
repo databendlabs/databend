@@ -398,7 +398,7 @@ impl TableContext for QueryContext {
     async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
-            .get_catalog(catalog_name.as_ref())
+            .get_catalog(&self.get_tenant(), catalog_name.as_ref())
             .await
     }
 
