@@ -54,6 +54,7 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTa
 use crate::pipelines::processors::transforms::aggregator::serde::exchange_defines;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::serialize_group_by;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::SerializeGroupByStream;
+use crate::pipelines::processors::transforms::aggregator::serde::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_data_serialize_milliseconds;
@@ -162,11 +163,6 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
     fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<DataBlock> {
         let mut serialized_blocks = Vec::with_capacity(meta.blocks.len());
         for (index, mut block) in meta.blocks.into_iter().enumerate() {
-            if index == self.local_pos {
-                serialized_blocks.push(FlightSerialized::DataBlock(block));
-                continue;
-            }
-
             match block
                 .take_meta()
                 .and_then(AggregateMeta::<Method, ()>::downcast_from)
@@ -184,6 +180,11 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                     )?));
                 }
                 Some(AggregateMeta::HashTable(payload)) => {
+                    if index == self.local_pos {
+                        serialized_blocks.push(FlightSerialized::DataBlock(block));
+                        continue;
+                    }
+
                     let mut stream = SerializeGroupByStream::create(&self.method, payload);
                     let bucket = stream.payload.bucket;
                     serialized_blocks.push(FlightSerialized::DataBlock(match stream.next() {
@@ -296,9 +297,12 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
                 )),
             ]);
 
-            let data_block = data_block.add_meta(Some(
-                AggregateMeta::<Method, ()>::create_spilled(-1, location.clone(), 0..0, vec![]),
-            ))?;
+            let data_block = data_block.add_meta(Some(AggregateSerdeMeta::create_spilled(
+                -1,
+                location.clone(),
+                0..0,
+                vec![],
+            )))?;
 
             let ipc_fields = exchange_defines::spilled_ipc_fields();
             let write_options = exchange_defines::spilled_write_options();

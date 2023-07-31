@@ -39,7 +39,7 @@ use crate::pipelines::processors::transforms::aggregator::serde::transform_aggre
 use crate::pipelines::processors::transforms::aggregator::serde::transform_exchange_group_by_serializer::{FlightSerialized, FlightSerializedMeta};
 use crate::pipelines::processors::transforms::metrics::{metrics_inc_aggregate_spill_data_serialize_milliseconds, metrics_inc_aggregate_spill_write_bytes, metrics_inc_aggregate_spill_write_count, metrics_inc_aggregate_spill_write_milliseconds};
 use common_hashtable::HashtableLike;
-use crate::pipelines::processors::transforms::aggregator::serde::exchange_defines;
+use crate::pipelines::processors::transforms::aggregator::serde::{AggregateSerdeMeta, exchange_defines};
 
 pub struct TransformExchangeAggregateSerializer<Method: HashMethodBounds> {
     method: Method,
@@ -225,9 +225,12 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
                 )),
             ]);
 
-            let data_block = data_block.add_meta(Some(
-                AggregateMeta::<Method, usize>::create_spilled(-1, location.clone(), 0..0, vec![]),
-            ))?;
+            let data_block = data_block.add_meta(Some(AggregateSerdeMeta::create_spilled(
+                -1,
+                location.clone(),
+                0..0,
+                vec![],
+            )))?;
 
             let ipc_fields = exchange_defines::spilled_ipc_fields();
             let write_options = exchange_defines::spilled_write_options();

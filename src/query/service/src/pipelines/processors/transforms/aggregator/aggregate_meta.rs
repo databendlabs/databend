@@ -45,6 +45,12 @@ impl SerializedPayload {
     }
 }
 
+pub struct BucketSpilledPayload {
+    pub bucket: isize,
+    pub data_range: Range<u64>,
+    pub columns_layout: Vec<usize>,
+}
+
 pub struct SpilledPayload {
     pub bucket: isize,
     pub location: String,
