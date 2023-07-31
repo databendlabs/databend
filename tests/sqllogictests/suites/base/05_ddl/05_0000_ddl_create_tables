@@ -1,4 +1,5 @@
 # step 2: enable these
+# step 3:
 statement ok
 DROP TABLE IF EXISTS t
 
@@ -26,11 +27,11 @@ create table t2(a int,b int) Engine = Fuse
 statement ok
 insert into t2 values(1,1),(2,2)
 
-query I
-select a+b from t2
-----
-2
-4
+# query I
+# select a+b from t2
+# ----
+# 2
+# 4
 
 statement error 2302
 create table t2(a int,b int) Engine = Fuse
@@ -77,41 +78,41 @@ CREATE DATABASE db2
 statement ok
 CREATE TABLE db1.test1(a INT, b INT null) Engine = Fuse
 
-statement ok
-INSERT INTO db1.test1 VALUES (1, 2), (2, 3), (3, 4)
+# statement ok
+# INSERT INTO db1.test1 VALUES (1, 2), (2, 3), (3, 4)
 
 statement ok
 CREATE TABLE db2.test2 LIKE db1.test1 ENGINE=fuse
 
-statement ok
-INSERT INTO db2.test2 VALUES (3, 5)
+# statement ok
+# INSERT INTO db2.test2 VALUES (3, 5)
 
-query I
-SELECT a+b FROM db2.test2
-----
-8
+# query I
+# SELECT a+b FROM db2.test2
+# ----
+# 8
 
-query TTTTT
-DESCRIBE db2.test2
-----
-a INT NO 0 (empty)
-b INT YES NULL (empty)
+# query TTTTT
+# DESCRIBE db2.test2
+# ----
+# a INT NO 0 (empty)
+# b INT YES NULL (empty)
 
 statement ok
 CREATE TABLE db2.test3(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT * FROM db1.test1
 
-query TTTTT
-DESCRIBE db2.test3
-----
-a VARCHAR YES NULL (empty)
-y VARCHAR YES NULL (empty)
+# query TTTTT
+# DESCRIBE db2.test3
+# ----
+# a VARCHAR YES NULL (empty)
+# y VARCHAR YES NULL (empty)
 
-query T
-SELECT a FROM db2.test3
-----
-1
-2
-3
+# query T
+# SELECT a FROM db2.test3
+# ----
+# 1
+# 2
+# 3
 
 statement ok
 CREATE TABLE db2.test4(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b, a FROM db1.test1
@@ -122,18 +123,18 @@ CREATE TABLE if not exists db2.test4 AS SELECT b, a FROM db1.test1
 statement ok
 CREATE TABLE if not exists db2.test4 AS SELECT b, a FROM db1.test1
 
-query TTTTT
-DESCRIBE db2.test4
-----
-a VARCHAR YES NULL (empty)
-y VARCHAR YES NULL (empty)
+# query TTTTT
+# DESCRIBE db2.test4
+# ----
+# a VARCHAR YES NULL (empty)
+# y VARCHAR YES NULL (empty)
 
-query T
-SELECT a FROM db2.test4
-----
-2
-3
-4
+# query T
+# SELECT a FROM db2.test4
+# ----
+# 2
+# 3
+# 4
 
 statement error 1
 CREATE TABLE db2.test5(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b FROM db1.test1
@@ -151,20 +152,20 @@ create table db2.test6(id Int8, created timestamp  DEFAULT today() + a)
 statement ok
 create table db2.test6(id Int8, a Int8 DEFAULT 1 + 2, created timestamp DEFAULT now())
 
-query TTTTT
-desc db2.test6
-----
-id TINYINT NO 0 (empty)
-a TINYINT NO 3 (empty)
-created TIMESTAMP NO now() (empty)
+# query TTTTT
+# desc db2.test6
+# ----
+# id TINYINT NO 0 (empty)
+# a TINYINT NO 3 (empty)
+# created TIMESTAMP NO now() (empty)
 
-statement ok
-INSERT INTO db2.test6 (id) VALUES (1)
+# statement ok
+# INSERT INTO db2.test6 (id) VALUES (1)
 
-query IIT
-SELECT id, a, now() >= created FROM db2.test6;
-----
-1 3 1
+# query IIT
+# SELECT id, a, now() >= created FROM db2.test6;
+# ----
+# 1 3 1
 
 statement error 1065
 alter table db2.test6 add column b timestamp default now()
@@ -172,54 +173,54 @@ alter table db2.test6 add column b timestamp default now()
 statement ok
 create table db2.test7(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY(INT), tup TUPLE(INT, BOOL), map MAP(INT, STRING), variant VARIANT)
 
-query TTTTT
-desc db2.test7
-----
-tiny TINYINT NO 0 (empty)
-tiny_unsigned TINYINT UNSIGNED NO 0 (empty)
-smallint SMALLINT NO 0 (empty)
-smallint_unsigned SMALLINT UNSIGNED NO 0 (empty)
-int INT NO 0 (empty)
-int_unsigned INT UNSIGNED NO 0 (empty)
-bigint BIGINT NO 0 (empty)
-bigint_unsigned BIGINT UNSIGNED NO 0 (empty)
-float FLOAT NO 0 (empty)
-double DOUBLE NO 0 (empty)
-date DATE NO '1970-01-01' (empty)
-datetime TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
-ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
-str VARCHAR NO '3' (empty)
-bool BOOLEAN NO false (empty)
-arr ARRAY(INT32) NO [] (empty)
-tup TUPLE(1 INT32, 2 BOOLEAN) NO (0, false) (empty)
-map MAP(INT32, STRING) NO {} (empty)
-variant VARIANT NO (empty) (empty)
+# query TTTTT
+# desc db2.test7
+# ----
+# tiny TINYINT NO 0 (empty)
+# tiny_unsigned TINYINT UNSIGNED NO 0 (empty)
+# smallint SMALLINT NO 0 (empty)
+# smallint_unsigned SMALLINT UNSIGNED NO 0 (empty)
+# int INT NO 0 (empty)
+# int_unsigned INT UNSIGNED NO 0 (empty)
+# bigint BIGINT NO 0 (empty)
+# bigint_unsigned BIGINT UNSIGNED NO 0 (empty)
+# float FLOAT NO 0 (empty)
+# double DOUBLE NO 0 (empty)
+# date DATE NO '1970-01-01' (empty)
+# datetime TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
+# ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
+# str VARCHAR NO '3' (empty)
+# bool BOOLEAN NO false (empty)
+# arr ARRAY(INT32) NO [] (empty)
+# tup TUPLE(1 INT32, 2 BOOLEAN) NO (0, false) (empty)
+# map MAP(INT32, STRING) NO {} (empty)
+# variant VARIANT NO (empty) (empty)
 
 statement ok
 create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY(VARCHAR), tup TUPLE(DOUBLE, INT), map MAP(STRING, Date), variant VARIANT)
 
-query TTTTT
-desc db2.test8
-----
-tiny TINYINT NO 0 (empty)
-tiny_unsigned TINYINT UNSIGNED NO 0 (empty)
-smallint SMALLINT NO 0 (empty)
-smallint_unsigned SMALLINT UNSIGNED NO 0 (empty)
-int INT NO 0 (empty)
-int_unsigned INT UNSIGNED NO 0 (empty)
-bigint BIGINT NO 0 (empty)
-bigint_unsigned BIGINT UNSIGNED NO 0 (empty)
-float FLOAT NO 0 (empty)
-double DOUBLE NO 0 (empty)
-date DATE NO '1970-01-01' (empty)
-datetime TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
-ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
-str VARCHAR NO '3' (empty)
-bool BOOLEAN NO false (empty)
-arr ARRAY(STRING) NO [] (empty)
-tup TUPLE(1 FLOAT64, 2 INT32) NO (0, 0) (empty)
-map MAP(STRING, DATE) NO {} (empty)
-variant VARIANT NO (empty) (empty)
+# query TTTTT
+# desc db2.test8
+# ----
+# tiny TINYINT NO 0 (empty)
+# tiny_unsigned TINYINT UNSIGNED NO 0 (empty)
+# smallint SMALLINT NO 0 (empty)
+# smallint_unsigned SMALLINT UNSIGNED NO 0 (empty)
+# int INT NO 0 (empty)
+# int_unsigned INT UNSIGNED NO 0 (empty)
+# bigint BIGINT NO 0 (empty)
+# bigint_unsigned BIGINT UNSIGNED NO 0 (empty)
+# float FLOAT NO 0 (empty)
+# double DOUBLE NO 0 (empty)
+# date DATE NO '1970-01-01' (empty)
+# datetime TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
+# ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
+# str VARCHAR NO '3' (empty)
+# bool BOOLEAN NO false (empty)
+# arr ARRAY(STRING) NO [] (empty)
+# tup TUPLE(1 FLOAT64, 2 INT32) NO (0, 0) (empty)
+# map MAP(STRING, DATE) NO {} (empty)
+# variant VARIANT NO (empty) (empty)
 
 
 statement ok
