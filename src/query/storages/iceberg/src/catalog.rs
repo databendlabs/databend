@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_catalog::catalog::Catalog;
+use common_catalog::catalog::CatalogCreator;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
 use common_catalog::table::Table;
@@ -24,6 +25,8 @@ use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -83,16 +86,37 @@ use crate::database::IcebergDatabase;
 
 pub const ICEBERG_CATALOG: &str = "iceberg";
 
+#[derive(Debug)]
+pub struct IcebergCreator;
+
+impl CatalogCreator for IcebergCreator {
+    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
+        let opt = match &info.meta.catalog_option {
+            CatalogOption::Iceberg(opt) => opt,
+            _ => unreachable!(
+                "trying to create iceberg catalog from other catalog, must be an internal bug"
+            ),
+        };
+
+        let data_operator = DataOperator::try_new(&opt.storage_params)?;
+        let catalog: Arc<dyn Catalog> =
+            Arc::new(IcebergCatalog::try_create(info.clone(), data_operator)?);
+
+        Ok(catalog)
+    }
+}
+
 /// `Catalog` for a external iceberg storage
 ///
 /// - Metadata of databases are saved in meta store
 /// - Instances of `Database` are created from reading subdirectories of
 ///    Iceberg table
 /// - Table metadata are saved in external Iceberg storage
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct IcebergCatalog {
-    /// name of this iceberg table
-    name: String,
+    /// info of this iceberg table.
+    info: CatalogInfo,
+
     /// underlying storage access operator
     operator: DataOperator,
 }
@@ -113,11 +137,8 @@ impl IcebergCatalog {
     /// Such catalog will be seen as an `flatten` catalogs,
     /// a `default` database will be generated directly
     #[minitrace::trace]
-    pub fn try_create(name: &str, operator: DataOperator) -> Result<Self> {
-        Ok(Self {
-            name: name.to_string(),
-            operator,
-        })
+    pub fn try_create(info: CatalogInfo, operator: DataOperator) -> Result<Self> {
+        Ok(Self { info, operator })
     }
 
     /// list read databases
@@ -147,6 +168,13 @@ impl IcebergCatalog {
 
 #[async_trait]
 impl Catalog for IcebergCatalog {
+    fn name(&self) -> String {
+        self.info.name_ident.catalog_name.clone()
+    }
+    fn info(&self) -> CatalogInfo {
+        self.info.clone()
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
@@ -167,7 +195,9 @@ impl Catalog for IcebergCatalog {
         let db_root = DataOperator::try_create(&db_sp).await?;
 
         Ok(Arc::new(IcebergDatabase::create(
-            &self.name, db_name, db_root,
+            &self.name(),
+            db_name,
+            db_root,
         )))
     }
 

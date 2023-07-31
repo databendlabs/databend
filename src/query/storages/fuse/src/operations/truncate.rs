@@ -67,7 +67,7 @@ impl FuseTable {
 
             let table_id = self.table_info.ident.table_id;
             let table_version = self.table_info.ident.seq;
-            let catalog = ctx.get_catalog(self.table_info.catalog())?;
+            let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
 
             // commit table meta to meta server.
             // `truncate_table` is not supposed to be retry-able, thus we use

@@ -37,7 +37,7 @@ pub async fn validate_grant_object_exists(
                 return Ok(());
             }
 
-            let catalog = ctx.get_catalog(catalog_name)?;
+            let catalog = ctx.get_catalog(catalog_name).await?;
             if !catalog
                 .exists_table(tenant.as_str(), database_name, table_name)
                 .await?
@@ -49,7 +49,7 @@ pub async fn validate_grant_object_exists(
             }
         }
         GrantObject::Database(catalog_name, database_name) => {
-            let catalog = ctx.get_catalog(catalog_name)?;
+            let catalog = ctx.get_catalog(catalog_name).await?;
             if !catalog
                 .exists_database(tenant.as_str(), database_name)
                 .await?

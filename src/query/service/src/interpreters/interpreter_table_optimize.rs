@@ -84,7 +84,7 @@ impl OptimizeTableInterpreter {
             && matches!(target, CompactTarget::Blocks);
 
         // check if the table is locked.
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let reply = catalog
             .list_table_lock_revs(table.get_table_info().ident.table_id)
             .await?;
@@ -179,7 +179,8 @@ async fn purge(
     // currently, context caches the table, we have to "refresh"
     // the table by using the catalog API directly
     let table = ctx
-        .get_catalog(&plan.catalog)?
+        .get_catalog(&plan.catalog)
+        .await?
         .get_table(ctx.get_tenant().as_str(), &plan.database, &plan.table)
         .await?;
 
