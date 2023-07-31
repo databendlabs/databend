@@ -50,7 +50,7 @@ pub mod exchange_defines {
     use common_expression::DataSchema;
     use once_cell::sync::OnceCell;
 
-    fn spilled_schema() -> DataSchema {
+    pub fn spilled_schema() -> DataSchema {
         DataSchema::new(vec![
             DataField::new("bucket", DataType::Number(NumberDataType::Int64)),
             DataField::new("data_range_start", DataType::Number(NumberDataType::UInt64)),
@@ -68,8 +68,7 @@ pub mod exchange_defines {
         IPC_SCHEMA.get_or_init(|| {
             let schema = spilled_schema();
 
-            let arrow_schema = schema.to_arrow();
-            arrow_schema.fields
+            schema.to_arrow().fields
         })
     }
 

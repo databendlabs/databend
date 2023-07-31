@@ -121,19 +121,24 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
         if let Some(block_meta) = data_block.take_meta() {
             if let Some(block_meta) = AggregateMeta::<Method, ()>::downcast_from(block_meta) {
                 match block_meta {
+                    AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::Spilled(payload) => {
-                        self.output.push_data(Ok(DataBlock::empty_with_meta(
-                            AggregateSerdeMeta::create_spilled(
-                                payload.bucket,
-                                payload.location,
-                                payload.data_range,
-                                payload.columns_layout,
-                            ),
-                        )));
-                        return Ok(Event::NeedConsume);
+                        // for payload in payload {
+                        //     self.output.push_data(Ok(DataBlock::empty_with_meta(
+                        //         AggregateSerdeMeta::create_spilled(
+                        //             payload.bucket,
+                        //             payload.location,
+                        //             payload.data_range,
+                        //             payload.columns_layout,
+                        //         ),
+                        //     )));
+                        // }
+                        //
+                        // return Ok(Event::NeedConsume);
+                        unreachable!()
                     }
                     AggregateMeta::HashTable(payload) => {
                         self.input_data =

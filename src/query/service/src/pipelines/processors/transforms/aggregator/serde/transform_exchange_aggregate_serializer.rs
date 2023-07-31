@@ -99,6 +99,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
             {
                 None => unreachable!(),
                 Some(AggregateMeta::Spilled(_)) => unreachable!(),
+                Some(AggregateMeta::BucketSpilled(_)) => unreachable!(),
                 Some(AggregateMeta::Serialized(_)) => unreachable!(),
                 Some(AggregateMeta::Partitioned { .. }) => unreachable!(),
                 Some(AggregateMeta::Spilling(payload)) => {

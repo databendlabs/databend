@@ -35,7 +35,6 @@ use crate::api::ExchangeSorting;
 use crate::api::FlightScatter;
 use crate::api::MergeExchangeParams;
 use crate::api::ShuffleExchangeParams;
-use crate::api::TransformExchangeDeserializer;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
@@ -75,7 +74,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
                         AggregateMeta::Partitioned { .. } => unreachable!(),
                         AggregateMeta::Serialized(v) => Ok(v.bucket),
                         AggregateMeta::HashTable(v) => Ok(v.bucket),
-                        AggregateMeta::Spilling(_) | AggregateMeta::Spilled(_) => Ok(-1),
+                        AggregateMeta::Spilled(_)
+                        | AggregateMeta::Spilling(_)
+                        | AggregateMeta::BucketSpilled(_) => Ok(-1),
                     },
                 }
             }
@@ -143,6 +144,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                 let mut blocks = Vec::with_capacity(self.buckets);
                 match block_meta {
                     AggregateMeta::Spilled(_) => unreachable!(),
+                    AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Spilling(payload) => {

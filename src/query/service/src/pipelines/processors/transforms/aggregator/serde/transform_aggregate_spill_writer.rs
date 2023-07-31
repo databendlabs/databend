@@ -34,6 +34,7 @@ use opendal::Operator;
 use tracing::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_serializer::serialize_aggregate;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -195,10 +196,9 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
 
     let mut write_size = 0;
     let mut write_data = Vec::with_capacity(256);
-    let mut spilled_blocks = VecDeque::with_capacity(256);
+    let mut spilled_buckets_payloads = Vec::with_capacity(256);
     for (bucket, inner_table) in payload.cell.hashtable.iter_tables_mut().enumerate() {
         if inner_table.len() == 0 {
-            spilled_blocks.push_back(DataBlock::empty());
             continue;
         }
 
@@ -214,7 +214,7 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
             let column = column.value.as_column().unwrap();
             let column_data = serialize_column(column);
             write_size += column_data.len() as u64;
-            columns_layout.push(column_data.len());
+            columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);
         }
 
@@ -226,18 +226,21 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
         }
 
         write_data.push(columns_data);
-        spilled_blocks.push_back(DataBlock::empty_with_meta(
-            AggregateMeta::<Method, usize>::create_spilled(
-                bucket as isize,
-                location.clone(),
-                begin..write_size,
-                columns_layout,
-            ),
-        ));
+        spilled_buckets_payloads.push(BucketSpilledPayload {
+            bucket: bucket as isize,
+            location: location.clone(),
+            data_range: begin..write_size,
+            columns_layout,
+        });
     }
 
     Ok((
-        spilled_blocks,
+        VecDeque::from_iter(vec![DataBlock::empty_with_meta(AggregateMeta::<
+            Method,
+            usize,
+        >::create_spilled(
+            spilled_buckets_payloads
+        ))]),
         Box::pin(async move {
             let instant = Instant::now();
 
