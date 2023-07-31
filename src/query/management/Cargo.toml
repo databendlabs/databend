@@ -13,6 +13,9 @@ doctest = false
 test = false
 
 [dependencies]
+async-backtrace = { workspace = true }
+async-trait = "0.1.57"
+chrono = { workspace = true }
 common-base = { path = "../../common/base" }
 common-exception = { path = "../../common/exception" }
 common-functions = { path = "../functions" }
@@ -23,9 +26,6 @@ common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 common-proto-conv = { path = "../../meta/proto-conv" }
 common-protos = { path = "../../meta/protos" }
-chrono = { workspace = true }
-async-backtrace = { workspace = true }
-async-trait = "0.1.57"
 serde_json = { workspace = true }
 
 [dev-dependencies]

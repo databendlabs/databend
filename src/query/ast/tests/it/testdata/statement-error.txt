@@ -258,7 +258,7 @@ error:
   --> SQL:1:15
   |
 1 | GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant';
-  | ----- ------  ^^^ expected `USAGE`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, or 5 more ...
+  | ----- ------  ^^^ expected `USAGE`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, or 6 more ...
   | |     |        
   | |     while parsing <privileges> ON <privileges_level>
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
@@ -293,7 +293,7 @@ error:
   --> SQL:1:24
   |
 1 | REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';
-  | ------ ------          ^^^ expected `USAGE`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, or 5 more ...
+  | ------ ------          ^^^ expected `USAGE`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, or 6 more ...
   | |      |                
   | |      while parsing <privileges> ON <privileges_level>
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`

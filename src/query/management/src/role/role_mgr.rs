@@ -49,8 +49,8 @@ use crate::role::role_api::RoleApi;
 
 static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
 
+// TODO(Zhihanz) unify built in role in management crate
 pub const BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
-pub const BUILTIN_ROLE_PUBLIC: &str = "public";
 
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
@@ -232,7 +232,7 @@ impl RoleMgr {
         &self,
         from: &String,
         to: &String,
-        catalog: &String,
+        catalog: &str,
         db_name: &String,
     ) -> common_exception::Result<()> {
         let meta_api = self.meta_api.clone();
@@ -251,8 +251,8 @@ impl RoleMgr {
                 .await?;
             let mut db_meta = db_info.meta.clone();
             // if current owner is not none and not from, return error
-            if !db_meta.owner.is_none()
-                && from.clone() != BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()
+            if db_meta.owner.is_some()
+                && from.clone() != *BUILTIN_ROLE_ACCOUNT_ADMIN
                 && db_meta.owner.as_ref().unwrap().owner_role_name != from.clone()
             {
                 return Err(ErrorCode::IllegalGrant(format!(
@@ -277,11 +277,11 @@ impl RoleMgr {
             });
 
             from_role_data.grants.revoke_privileges(
-                &GrantObject::Database(catalog.clone(), db_name.clone()),
+                &GrantObject::Database(catalog.to_string(), db_name.clone()),
                 UserPrivilegeSet::from(UserPrivilegeType::Ownership),
             );
             to_role_data.grants.grant_privileges(
-                &GrantObject::Database(catalog.clone(), db_name.clone()),
+                &GrantObject::Database(catalog.to_string(), db_name.clone()),
                 UserPrivilegeSet::from(UserPrivilegeType::Ownership),
             );
             let from_data = serde_json::to_vec(&from_role_data)?;
@@ -320,7 +320,7 @@ impl RoleMgr {
         &self,
         from: &String,
         to: &String,
-        catalog: &String,
+        catalog: &str,
         db_name: &String,
         table_name: &String,
     ) -> common_exception::Result<()> {
@@ -340,7 +340,7 @@ impl RoleMgr {
                 .await?;
             let mut table_meta = table_info.meta.clone();
             // if current owner is not none and not from, return error
-            if !table_meta.owner.is_none()
+            if table_meta.owner.is_some()
                 && table_meta.owner.as_ref().unwrap().owner_role_name != from.clone()
             {
                 return Err(ErrorCode::IllegalGrant(format!(
@@ -366,11 +366,11 @@ impl RoleMgr {
             });
 
             from_role_data.grants.revoke_privileges(
-                &GrantObject::Table(catalog.clone(), db_name.clone(), table_name.clone()),
+                &GrantObject::Table(catalog.to_string(), db_name.clone(), table_name.clone()),
                 UserPrivilegeSet::from(UserPrivilegeType::Ownership),
             );
             to_role_data.grants.grant_privileges(
-                &GrantObject::Table(catalog.clone(), db_name.clone(), table_name.clone()),
+                &GrantObject::Table(catalog.to_string(), db_name.clone(), table_name.clone()),
                 UserPrivilegeSet::from(UserPrivilegeType::Ownership),
             );
             let from_data = serde_json::to_vec(&from_role_data)?;

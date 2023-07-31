@@ -18,4 +18,3 @@ mod role_mgr;
 pub use role_api::RoleApi;
 pub use role_mgr::RoleMgr;
 pub use role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
-pub use role_mgr::BUILTIN_ROLE_PUBLIC;

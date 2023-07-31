@@ -79,7 +79,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (47, "2023-07-03: Add: catalog.proto/CatalogMeta",),
     (48, "2023-07-04: Add: ManualTriggerParams on background_job", ),
     (49, "2023-07-14: Add: user.proto/NetworkPolicy", ),
-    (50, "2023-07-20: Add: user.proto/UserOption::network_policy", )
+    (50, "2023-07-20: Add: user.proto/UserOption::network_policy", ),
+    (51, "2023-07-31: Add: TableMeta and DatabaseMeta add Ownership", )
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

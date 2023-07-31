@@ -135,7 +135,7 @@ impl AccessChecker for PrivilegeAccess {
                     Ok(())
                 } else {
                     Err(ErrorCode::PermissionDenied(format!(
-                        "Permission denied, user {} don't have privilege for database {}",
+                        "Permission denied, user {} don't have usage privilege for database {}",
                         identity, database
                     )))
                 };
