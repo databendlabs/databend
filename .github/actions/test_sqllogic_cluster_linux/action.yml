@@ -19,7 +19,7 @@ runs:
     - name: Download artifact
       uses: ./.github/actions/artifact_download
       with:
-        sha: ${{ github.sha }}
+        sha: 29f17a101667b65411de31d9e2068679ff262852
         target: ${{ inputs.target }}
         artifacts: sqllogictests,meta,query
 
