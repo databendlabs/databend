@@ -193,7 +193,7 @@ debug = true
 overflow-checks = false
 
 [profile.dev]
-# split-debuginfo = "unpacked"
+split-debuginfo = "unpacked"
 overflow-checks = false
 # wait until https://github.com/rust-lang/rust/issues/100142 fixed
 incremental = false
@@ -208,7 +208,7 @@ rustc-demangle = { opt-level = 3 }
 
 [profile.test]
 opt-level = 0
-debug = true
+debug = 0
 codegen-units = 16
 lto = false
 debug-assertions = true
