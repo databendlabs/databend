@@ -106,5 +106,11 @@ SHOW CREATE TABLE `05_0003_at_t3`
 ----
 05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT,   `c` INT ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
 
+statement error 1301
+ALTER TABLE `05_0003_at_t3` MODIFY COLUMN c decimal(5,2)
+
+statement ok
+ALTER TABLE `05_0003_at_t3` MODIFY COLUMN c float
+
 statement ok
 DROP TABLE IF EXISTS `05_0003_at_t3`
