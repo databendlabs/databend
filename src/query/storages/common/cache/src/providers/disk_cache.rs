@@ -70,7 +70,7 @@ impl From<&DiskCacheKey> for PathBuf {
 impl<C> DiskCache<C>
 where C: Cache<String, u64, DefaultHashBuilder, FileSize>
 {
-    /// Create an `DiskCache` with `ritelinked::DefaultHashBuilder` that stores files in `path`,
+    /// Create an `DiskCache` with `hashbrown::hash_map::DefaultHashBuilder` that stores files in `path`,
     /// limited to `size` bytes.
     ///
     /// Existing files in `path` will be stored with their last-modified time from the filesystem

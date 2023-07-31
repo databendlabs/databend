@@ -147,7 +147,7 @@ impl CopyInterpreter {
     ) -> Result<(PhysicalPlan, Vec<StageFileInfo>)> {
         let to_table = self
             .ctx
-            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
+            .get_table(&plan.catalog_info.catalog_name(), &plan.database_name, &plan.table_name)
             .await?;
         let files = plan.collect_files(self.ctx.as_ref()).await?;
         let source = if let Some(ref query) = plan.query {
@@ -170,7 +170,7 @@ impl CopyInterpreter {
                 stage_table
                     .read_plan_with_catalog(
                         self.ctx.clone(),
-                        plan.catalog_name.to_string(),
+                        plan.catalog_info.catalog_name().to_string(),
                         None,
                         None,
                         false,
@@ -223,7 +223,7 @@ impl CopyInterpreter {
             stage_table
                 .read_plan_with_catalog(
                     ctx.clone(),
-                    plan.catalog_name.to_string(),
+                    plan.catalog_info.catalog_name().to_string(),
                     None,
                     None,
                     false,

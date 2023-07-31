@@ -543,7 +543,7 @@ impl PipelineBuilder {
     fn build_delete_partial(&mut self, delete: &DeletePartial) -> Result<()> {
         let table =
             self.ctx
-                .build_table_by_table_info(&delete.catalog_name, &delete.table_info, None)?;
+                .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         table.add_deletion_source(
             self.ctx.clone(),
@@ -577,7 +577,7 @@ impl PipelineBuilder {
         self.build_pipeline(&plan.input)?;
         let table =
             self.ctx
-                .build_table_by_table_info(&plan.catalog_name, &plan.table_info, None)?;
+                .build_table_by_table_info(&plan.catalog_info, &plan.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
         table.chain_mutation_pipes(
@@ -1729,10 +1729,11 @@ impl PipelineBuilder {
                 })?;
         }
 
-        let table = self
-            .ctx
-            .get_catalog(&insert_select.catalog)?
-            .get_table_by_info(&insert_select.table_info)?;
+        let table = self.ctx.build_table_by_table_info(
+            &insert_select.catalog_info,
+            &insert_select.table_info,
+            None,
+        )?;
 
         let source_schema = insert_schema;
         build_fill_missing_columns_pipeline(
