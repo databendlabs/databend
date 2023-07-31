@@ -17,6 +17,7 @@
 mod catalog;
 mod database;
 mod index;
+mod ownership;
 mod table;
 mod virtual_column;
 
@@ -41,6 +42,7 @@ pub use database::RenameDatabaseReq;
 pub use database::UndropDatabaseReply;
 pub use database::UndropDatabaseReq;
 pub use index::*;
+pub use ownership::Ownership;
 pub use table::CountTablesKey;
 pub use table::CountTablesReply;
 pub use table::CountTablesReq;

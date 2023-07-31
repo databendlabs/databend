@@ -94,7 +94,11 @@ impl UserApiProvider {
     }
 
     pub fn get_role_api_client(&self, tenant: &str) -> Result<Arc<impl RoleApi>> {
-        Ok(Arc::new(RoleMgr::create(self.client.clone(), tenant)?))
+        Ok(Arc::new(RoleMgr::create(
+            self.client.clone(),
+            Arc::new(self.meta.clone()),
+            tenant,
+        )?))
     }
 
     pub fn get_stage_api_client(&self, tenant: &str) -> Result<Arc<dyn StageApi>> {

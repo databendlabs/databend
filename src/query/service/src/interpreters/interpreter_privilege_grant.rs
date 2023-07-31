@@ -18,8 +18,10 @@ use common_exception::Result;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserPrivilegeSet;
+use common_meta_app::principal::UserPrivilegeType::Ownership;
 use common_sql::plans::GrantPrivilegePlan;
 use common_users::UserApiProvider;
+use tracing::info;
 
 use crate::interpreters::common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
@@ -65,9 +67,25 @@ impl Interpreter for GrantPrivilegeInterpreter {
                     .await?;
             }
             PrincipalIdentity::Role(role) => {
-                user_mgr
-                    .grant_privileges_to_role(&tenant, &role, plan.on, plan.priv_types)
-                    .await?;
+                if plan.priv_types.has_privilege(Ownership) {
+                    match self.ctx.get_current_role() {
+                        Some(from) => {
+                            info!("grant ownership from role: {}", from.name);
+                            user_mgr
+                                .grant_ownership_to_role(&tenant, &from.name, &role, plan.on)
+                                .await?;
+                        }
+                        None => {
+                            return Err(common_exception::ErrorCode::UnknownRole(
+                                "No current role, cannot grant ownership",
+                            ));
+                        }
+                    }
+                } else {
+                    user_mgr
+                        .grant_privileges_to_role(&tenant, &role, plan.on, plan.priv_types)
+                        .await?;
+                }
             }
         }
 

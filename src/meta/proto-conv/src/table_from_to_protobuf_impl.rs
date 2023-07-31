@@ -227,6 +227,10 @@ impl FromToProto for mt::TableMeta {
             } else {
                 Some(p.column_mask_policy)
             },
+            owner: match p.owner {
+                Some(owner) => Some(mt::Ownership::from_pb(owner)?),
+                None => None,
+            },
         };
         Ok(v)
     }
@@ -265,6 +269,10 @@ impl FromToProto for mt::TableMeta {
             column_mask_policy: match &self.column_mask_policy {
                 Some(column_mask_policy) => column_mask_policy.clone(),
                 None => BTreeMap::new(),
+            },
+            owner: match self.owner.as_ref() {
+                Some(o) => Some(o.to_pb()?),
+                None => None,
             },
         };
         Ok(p)

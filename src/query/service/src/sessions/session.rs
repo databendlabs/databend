@@ -320,7 +320,11 @@ impl Session {
         let current_role = self.get_current_role();
         let role_verified = current_role
             .as_ref()
-            .map(|r| r.grants.verify_privilege(object, privilege.clone()))
+            .map(|r| {
+                r.grants
+                    .verify_privilege(object, vec![UserPrivilegeType::Ownership])
+                    || r.grants.verify_privilege(object, privilege.clone())
+            })
             .unwrap_or(false);
         let current_role_name = current_role.map(|r| r.name).unwrap_or("".to_string());
         if role_verified {

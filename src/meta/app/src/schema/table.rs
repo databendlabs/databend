@@ -31,6 +31,7 @@ use common_meta_types::MetaId;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
+use crate::schema::Ownership;
 use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
 use crate::share::ShareTableInfoMap;
@@ -237,6 +238,8 @@ pub struct TableMeta {
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
     pub column_mask_policy: Option<BTreeMap<String, String>>,
+
+    pub owner: Option<Ownership>,
 }
 
 impl TableMeta {
@@ -334,6 +337,7 @@ impl Default for TableMeta {
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
             column_mask_policy: None,
+            owner: None,
         }
     }
 }
