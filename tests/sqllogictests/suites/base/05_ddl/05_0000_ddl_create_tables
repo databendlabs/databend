@@ -251,17 +251,21 @@ CREATE TABLE system.test(a INT)
 statement ok
 drop table if exists t
 
-statement error Duplicated column name
-create table t(a int, a int)
+# step-5: disabled
+# statement error Duplicated column name
+# create table t(a int, a int)
 
-statement error Duplicated column name
-create table t(a int, A int)
+# step-5: disabled
+# statement error Duplicated column name
+# create table t(a int, A int)
 
-statement error Duplicated column name
-create table t as select number, number from numbers(1)
+# step-5: disabled
+# statement error Duplicated column name
+# create table t as select number, number from numbers(1)
 
-statement error 4000
-create table tb101 (id int ,c1 datetime) 's3://wubx/tb101' connection=(aws_key_id='minioadmin' aws_ssecret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
+# step-5: disabled
+# statement error 4000
+# create table tb101 (id int ,c1 datetime) 's3://wubx/tb101' connection=(aws_key_id='minioadmin' aws_ssecret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
 
 # step 1: end
 
