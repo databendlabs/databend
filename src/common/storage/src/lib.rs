@@ -54,7 +54,7 @@ pub use parquet2::infer_schema_with_extension;
 pub use parquet2::read_parquet_metas_in_parallel;
 pub use parquet2::read_parquet_schema_async;
 
-mod parquet_rs;
+pub mod parquet_rs;
 pub use parquet_rs::read_parquet_schema_async_rs;
 
 mod stage;

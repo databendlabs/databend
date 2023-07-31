@@ -58,7 +58,8 @@ impl Interpreter for RenameTableColumnInterpreter {
 
         let tbl = self
             .ctx
-            .get_catalog(catalog_name)?
+            .get_catalog(catalog_name)
+            .await?
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await
             .ok();
@@ -78,7 +79,7 @@ impl Interpreter for RenameTableColumnInterpreter {
                 )));
             }
 
-            let catalog = self.ctx.get_catalog(catalog_name)?;
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
             let mut new_table_meta = table.get_table_info().meta.clone();
 
             is_valid_column(&self.plan.new_column)?;

@@ -243,8 +243,12 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
             copy_plan.ignore_result,
         )?;
-        let catalog = self.ctx.get_catalog(&copy_plan.catalog_name)?;
-        let to_table = catalog.get_table_by_info(&copy_plan.table_info)?;
+
+        let to_table = self.ctx.build_table_by_table_info(
+            &copy_plan.catalog_info,
+            &copy_plan.table_info,
+            None,
+        )?;
         build_append_data_pipeline(
             self.ctx.clone(),
             &mut self.main_pipeline,
@@ -259,8 +263,11 @@ impl PipelineBuilder {
         &mut self,
         distributed_plan: &DistributedCopyIntoTableFromStage,
     ) -> Result<()> {
-        let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
-        let to_table = catalog.get_table_by_info(&distributed_plan.table_info)?;
+        let to_table = self.ctx.build_table_by_table_info(
+            &distributed_plan.catalog_info,
+            &distributed_plan.table_info,
+            None,
+        )?;
         let stage_table_info = distributed_plan.stage_table_info.clone();
         let stage_table = StageTable::try_create(stage_table_info)?;
         stage_table.set_block_thresholds(distributed_plan.thresholds);
@@ -293,7 +300,7 @@ impl PipelineBuilder {
     fn build_delete_partial(&mut self, delete: &DeletePartial) -> Result<()> {
         let table =
             self.ctx
-                .build_table_by_table_info(&delete.catalog_name, &delete.table_info, None)?;
+                .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         table.add_deletion_source(
             self.ctx.clone(),
@@ -327,7 +334,7 @@ impl PipelineBuilder {
         self.build_pipeline(&delete.input)?;
         let table =
             self.ctx
-                .build_table_by_table_info(&delete.catalog_name, &delete.table_info, None)?;
+                .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
         table.chain_mutation_pipes(
@@ -1480,10 +1487,11 @@ impl PipelineBuilder {
                 })?;
         }
 
-        let table = self
-            .ctx
-            .get_catalog(&insert_select.catalog)?
-            .get_table_by_info(&insert_select.table_info)?;
+        let table = self.ctx.build_table_by_table_info(
+            &insert_select.catalog_info,
+            &insert_select.table_info,
+            None,
+        )?;
 
         let source_schema = insert_schema;
         build_fill_missing_columns_pipeline(

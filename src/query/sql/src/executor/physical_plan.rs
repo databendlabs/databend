@@ -35,6 +35,7 @@ use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_storage::StageFileInfo;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -819,7 +820,7 @@ impl UnionAll {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DistributedCopyIntoTableFromStage {
     pub plan_id: u32,
-    pub catalog_name: String,
+    pub catalog_info: CatalogInfo,
     pub database_name: String,
     pub table_name: String,
     // ... into table(<columns>) ..  -> <columns>
@@ -850,7 +851,7 @@ impl DistributedCopyIntoTableFromStage {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoTableFromQuery {
     pub plan_id: u32,
-    pub catalog_name: String,
+    pub catalog_info: CatalogInfo,
     pub database_name: String,
     pub table_name: String,
 
@@ -886,7 +887,7 @@ pub struct DistributedInsertSelect {
     pub plan_id: u32,
 
     pub input: Box<PhysicalPlan>,
-    pub catalog: String,
+    pub catalog_info: CatalogInfo,
     pub table_info: TableInfo,
     pub insert_schema: DataSchemaRef,
     pub select_schema: DataSchemaRef,
@@ -926,7 +927,7 @@ pub struct DeletePartial {
     pub parts: Partitions,
     pub filter: RemoteExpr<String>,
     pub table_info: TableInfo,
-    pub catalog_name: String,
+    pub catalog_info: CatalogInfo,
     pub col_indices: Vec<usize>,
     pub query_row_id_col: bool,
 }
@@ -948,7 +949,7 @@ pub struct DeleteFinal {
     pub input: Box<PhysicalPlan>,
     pub snapshot: TableSnapshot,
     pub table_info: TableInfo,
-    pub catalog_name: String,
+    pub catalog_info: CatalogInfo,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
