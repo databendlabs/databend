@@ -211,10 +211,30 @@ impl Binder {
                                     cte_info.columns = cte_bind_ctx.columns.clone();
                                 },
                             );
+                            self.set_m_cte_bound_ctx(cte_info.cte_idx, cte_bind_ctx.clone());
                             cte_bind_ctx
                         } else {
-                            bind_context.clone()
+                            // If the cte has been bound, get the bound context from `Binder`'s `m_cte_bound_ctx`
+                            let mut bound_ctx =
+                                self.m_cte_bound_ctx.get(&cte_info.cte_idx).unwrap().clone();
+                            // Resolve the alias name for the bound cte.
+                            let alias_table_name = alias
+                                .as_ref()
+                                .map(|alias| {
+                                    normalize_identifier(&alias.name, &self.name_resolution_ctx)
+                                        .name
+                                })
+                                .unwrap_or_else(|| table_name.to_string());
+                            for column in bound_ctx.columns.iter_mut() {
+                                column.database_name = None;
+                                column.table_name = Some(alias_table_name.clone());
+                            }
+                            // Pass parent to bound_ctx
+                            bound_ctx.parent = bind_context.parent.clone();
+                            bound_ctx
                         };
+                        // `bind_context` is the main BindContext for the whole query
+                        // Update the `used_count` which will be used in runtime phase
                         bind_context
                             .ctes_map
                             .entry(table_name.clone())
@@ -402,6 +422,7 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
+                    self.m_cte_bound_ctx.clone(),
                 );
                 let table_args = bind_table_args(&mut scalar_binder, params, named_params).await?;
 
