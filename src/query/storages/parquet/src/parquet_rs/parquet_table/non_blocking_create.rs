@@ -14,47 +14,58 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::metadata::SchemaDescriptor;
+use arrow_schema::Schema as ArrowSchema;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::StageInfo;
-use common_storage::infer_schema_with_extension;
+use common_storage::init_stage_operator;
+use common_storage::parquet_rs::infer_schema_with_extension;
+use common_storage::parquet_rs::read_metadata_async;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
+use parquet::schema::types::SchemaDescPtr;
 
 use super::table::create_parquet_table_info;
-use super::Parquet2Table;
+use crate::parquet_rs::parquet_table::blocking_create::get_compression_ratio;
+use crate::ParquetTable;
 
-impl Parquet2Table {
-    pub fn blocking_create(
-        operator: Operator,
-        read_options: ParquetReadOptions,
+impl ParquetTable {
+    #[async_backtrace::framed]
+    pub async fn create(
         stage_info: StageInfo,
         files_info: StageFilesInfo,
+        read_options: ParquetReadOptions,
         files_to_read: Option<Vec<StageFileInfo>>,
     ) -> Result<Arc<dyn Table>> {
+        let operator = init_stage_operator(&stage_info)?;
+        if operator.info().can_blocking() {
+            return Self::blocking_create(
+                operator,
+                read_options,
+                stage_info,
+                files_info,
+                files_to_read,
+            );
+        }
         let first_file = match &files_to_read {
             Some(files) => files[0].path.clone(),
-            None => files_info.blocking_first_file(&operator)?.path,
+            None => files_info.first_file(&operator).await?.path.clone(),
         };
 
         let (arrow_schema, schema_descr, compression_ratio) =
-            Self::blocking_prepare_metas(&first_file, operator.clone())?;
+            Self::prepare_metas(&first_file, operator.clone()).await?;
 
-        let table_info = create_parquet_table_info(arrow_schema.clone());
+        let table_info = create_parquet_table_info(arrow_schema.clone())?;
 
-        Ok(Arc::new(Parquet2Table {
+        Ok(Arc::new(ParquetTable {
             table_info,
             arrow_schema,
-            schema_descr,
             operator,
             read_options,
+            schema_descr,
             stage_info,
             files_info,
             files_to_read,
@@ -63,44 +74,23 @@ impl Parquet2Table {
         }))
     }
 
-    fn blocking_prepare_metas(
+    #[async_backtrace::framed]
+    async fn prepare_metas(
         path: &str,
         operator: Operator,
-    ) -> Result<(ArrowSchema, SchemaDescriptor, f64)> {
+    ) -> Result<(ArrowSchema, SchemaDescPtr, f64)> {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let mut reader = operator.blocking().reader(path)?;
-        let first_meta = pread::read_metadata(&mut reader).map_err(|e| {
-            ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
-        })?;
-
+        let size = operator.stat(path).await?.content_length();
+        let first_meta = read_metadata_async(path, &operator, Some(size))
+            .await
+            .map_err(|e| {
+                ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
+            })?;
         let arrow_schema = infer_schema_with_extension(&first_meta)?;
         let compression_ratio = get_compression_ratio(&first_meta);
-        let schema_descr = first_meta.schema_descr;
+        let schema_descr = first_meta.file_metadata().schema_descr_ptr();
         Ok((arrow_schema, schema_descr, compression_ratio))
-    }
-}
-
-pub fn get_compression_ratio(filemeta: &FileMetaData) -> f64 {
-    let compressed_size: usize = filemeta
-        .row_groups
-        .iter()
-        .map(|g| g.compressed_size())
-        .sum();
-    let uncompressed_size: usize = filemeta
-        .row_groups
-        .iter()
-        .map(|g| {
-            g.columns()
-                .iter()
-                .map(|c| c.uncompressed_size() as usize)
-                .sum::<usize>()
-        })
-        .sum();
-    if compressed_size == 0 {
-        1.0
-    } else {
-        (uncompressed_size as f64) / (compressed_size as f64)
     }
 }
