@@ -241,7 +241,6 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
             table_index: plan.table_index,
             stat_info: plan.stat_info.clone(),
             internal_column: plan.internal_column.clone(),
-            agg_index_output_schema: plan.agg_index_output_schema.clone(),
         }))
     }
 

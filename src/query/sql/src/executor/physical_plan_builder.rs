@@ -36,7 +36,6 @@ use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::FunctionContext;
 use common_expression::RawExpr;
@@ -421,17 +420,13 @@ impl PhysicalPlanBuilder {
             )
             .await?;
 
-        let agg_index_output_schema = if let Some(agg_index) = &scan.agg_index {
+        if let Some(agg_index) = &scan.agg_index {
             let source_schema = source.schema();
             let push_down = source.push_downs.as_mut().unwrap();
             let output_fields = TableScan::output_fields(source_schema, &name_mapping)?;
-            let (agg_index, agg_index_output_schema) =
-                Self::build_agg_index(agg_index, &output_fields)?;
+            let agg_index = Self::build_agg_index(agg_index, &output_fields)?;
             push_down.agg_index = Some(agg_index);
-            Some(agg_index_output_schema)
-        } else {
-            None
-        };
+        }
         let internal_column = if project_internal_columns.is_empty() {
             None
         } else {
@@ -444,14 +439,13 @@ impl PhysicalPlanBuilder {
             table_index: scan.table_index,
             stat_info: Some(stat_info),
             internal_column,
-            agg_index_output_schema,
         }))
     }
 
     fn build_agg_index(
         agg: &planner::plans::AggIndexInfo,
         source_fields: &[DataField],
-    ) -> Result<(AggIndexInfo, DataSchemaRef)> {
+    ) -> Result<AggIndexInfo> {
         // Build projection
         let used_columns = agg.used_columns();
         let mut col_indices = Vec::with_capacity(used_columns.len());
@@ -479,7 +473,6 @@ impl PhysicalPlanBuilder {
                 )
             })
             .transpose()?;
-        let mut fields = source_fields.to_vec();
         let selection = agg
             .selection
             .iter()
@@ -487,12 +480,6 @@ impl PhysicalPlanBuilder {
                 let offset = source_fields
                     .iter()
                     .position(|f| sel.index.to_string() == f.name().as_str());
-                if offset.is_none() {
-                    fields.push(DataField::new(
-                        &sel.index.to_string(),
-                        sel.scalar.data_type()?,
-                    ))
-                }
                 Ok((
                     sel.scalar
                         .as_expr()?
@@ -504,20 +491,16 @@ impl PhysicalPlanBuilder {
                 ))
             })
             .collect::<Result<Vec<_>>>()?;
-        let agg_index_output_schema = DataSchemaRefExt::create(fields);
 
-        Ok((
-            AggIndexInfo {
-                index_id: agg.index_id,
-                filter,
-                selection,
-                schema: agg.schema.clone(),
-                actual_table_field_len: source_fields.len(),
-                is_agg: agg.is_agg,
-                projection,
-            },
-            agg_index_output_schema,
-        ))
+        Ok(AggIndexInfo {
+            index_id: agg.index_id,
+            filter,
+            selection,
+            schema: agg.schema.clone(),
+            actual_table_field_len: source_fields.len(),
+            is_agg: agg.is_agg,
+            projection,
+        })
     }
 
     #[async_recursion::async_recursion]
@@ -557,7 +540,6 @@ impl PhysicalPlanBuilder {
                         estimated_rows: 1.0,
                     }),
                     internal_column: None,
-                    agg_index_output_schema: None,
                 }))
             }
             RelOperator::Join(join) => {
@@ -1473,23 +1455,8 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         let input_schema = input.output_schema()?;
 
-        // TODO(Dousir9/RinChanNOW)
-        // The following code is only used to handle agg index and we need a better rewrite for agg index.
-        let input_fields = input_schema.fields();
         let exprs = eval_scalar
             .items
-            .iter()
-            .filter(|item| {
-                for field in input_fields.iter() {
-                    if field.name().as_str() == item.index.to_string() {
-                        return false;
-                    }
-                }
-                true
-            })
-            .collect::<Vec<_>>();
-
-        let exprs = exprs
             .iter()
             .map(|item| {
                 let expr = item

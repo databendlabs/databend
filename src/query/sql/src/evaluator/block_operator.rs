@@ -76,43 +76,52 @@ impl BlockOperator {
             return Ok(DataBlock::empty());
         }
         match self {
-            BlockOperator::Map { .. } | BlockOperator::Filter { .. }
-                if input
+            BlockOperator::Map { exprs, projections } => {
+                let data_block = if input
                     .get_meta()
                     .and_then(AggIndexMeta::downcast_ref_from)
-                    .is_some() =>
-            {
-                // It's from aggregating index.
-                Ok(input)
-            }
-            BlockOperator::Map { exprs, projections } => {
-                for expr in exprs {
-                    let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                    let result = evaluator.run(expr)?;
-                    let col = BlockEntry::new(expr.data_type().clone(), result);
-                    input.add_column(col);
-                }
+                    .is_some()
+                {
+                    // It's from aggregating index.
+                    input
+                } else {
+                    for expr in exprs {
+                        let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
+                        let result = evaluator.run(expr)?;
+                        let col = BlockEntry::new(expr.data_type().clone(), result);
+                        input.add_column(col);
+                    }
+                    input
+                };
                 match projections {
-                    Some(projections) => Ok(input.project(projections)),
-                    None => Ok(input),
+                    Some(projections) => Ok(data_block.project(projections)),
+                    None => Ok(data_block),
                 }
             }
 
             BlockOperator::Filter { projections, expr } => {
                 assert_eq!(expr.data_type(), &DataType::Boolean);
-
-                let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
-                let column_nums = input.num_columns();
-                let mut columns = Vec::with_capacity(projections.len());
-                for index in 0..column_nums {
-                    if !projections.contains(&index) {
-                        continue;
+                if input
+                    .get_meta()
+                    .and_then(AggIndexMeta::downcast_ref_from)
+                    .is_some()
+                {
+                    // It's from aggregating index.
+                    Ok(input)
+                } else {
+                    let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
+                    let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
+                    let column_nums = input.num_columns();
+                    let mut columns = Vec::with_capacity(projections.len());
+                    for index in 0..column_nums {
+                        if !projections.contains(&index) {
+                            continue;
+                        }
+                        columns.push(input.get_by_offset(index).clone());
                     }
-                    columns.push(input.get_by_offset(index).clone());
+                    let data_block = DataBlock::new(columns, input.num_rows());
+                    data_block.filter_boolean_value(&filter)
                 }
-                let data_block = DataBlock::new(columns, input.num_rows());
-                data_block.filter_boolean_value(&filter)
             }
 
             BlockOperator::Project { projection } => {
