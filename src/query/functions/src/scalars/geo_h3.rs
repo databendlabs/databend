@@ -199,10 +199,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 .and_then(|index| {
                     CellIndex::try_from(a_h3)
                         .map_err(|e| e.to_string())
-                        .map(|a_index| match index.is_neighbor_with(a_index) {
-                            Ok(b) => b,
-                            Err(_) => false,
-                        })
+                        .map(|a_index| index.is_neighbor_with(a_index).unwrap_or(false))
                 }) {
                 Ok(b) => builder.push(b),
                 Err(e) => {
@@ -232,7 +229,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                         }
                         Err(err) => {
-                            ctx.set_error(builder.len(), err.to_string());
+                            ctx.set_error(builder.len(), err);
                             builder.put_item(0);
                         }
                     }
@@ -260,7 +257,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 Err(err) => {
-                    ctx.set_error(builder.len(), err.to_string());
+                    ctx.set_error(builder.len(), err);
                     builder.push(0);
                 }
             }
