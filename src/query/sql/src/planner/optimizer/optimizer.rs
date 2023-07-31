@@ -19,7 +19,7 @@ use common_ast::ast::ExplainKind;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use tracing::info;
+use log::info;
 
 use super::cost::CostContext;
 use super::format::display_memo;

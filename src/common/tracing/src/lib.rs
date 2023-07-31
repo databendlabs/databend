@@ -17,27 +17,20 @@
 #![deny(unused_crate_dependencies)]
 
 mod config;
-mod logging;
 mod minitrace;
 mod panic_hook;
-mod tracing_to_jaeger;
 
-pub use config::Config;
-pub use config::FileConfig;
-pub use config::QueryLogConfig;
-pub use config::StderrConfig;
-pub use config::TracingConfig;
-pub use logging::init_logging;
-pub use logging::init_query_logger;
-pub use logging::QueryLogger;
-pub use panic_hook::log_panic;
-pub use panic_hook::set_panic_hook;
-pub use tracing_to_jaeger::extract_remote_span_as_parent;
-pub use tracing_to_jaeger::inject_span_to_tonic_request;
-// pub use crate::minitrace::init_logging;
-// pub use crate::minitrace::inject_span_to_tonic_request;
-// pub use crate::minitrace::start_trace_for_remote_request;
-// pub use crate::minitrace::GlobalLogger;
+pub use crate::config::Config;
+pub use crate::config::FileConfig;
+pub use crate::config::QueryLogConfig;
+pub use crate::config::StderrConfig;
+pub use crate::config::TracingConfig;
+pub use crate::minitrace::init_logging;
+pub use crate::minitrace::inject_span_to_tonic_request;
+pub use crate::minitrace::start_trace_for_remote_request;
+pub use crate::minitrace::GlobalLogger;
+pub use crate::panic_hook::log_panic;
+pub use crate::panic_hook::set_panic_hook;
 
 #[macro_export]
 macro_rules! func_name {

@@ -42,6 +42,7 @@ use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_storage::read_parquet_metas_in_parallel;
 use common_storage::ColumnNodes;
+use log::info;
 use opendal::Operator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
@@ -312,7 +313,7 @@ impl PartitionPruner {
             self.columns_to_read.len(),
         );
 
-        tracing::info!(
+        info!(
             "copy {num_large_partitions} large partitions and {} small partitions.",
             partitions.len() - num_large_partitions
         );
@@ -515,7 +516,7 @@ mod tests {
     use common_sql::plans::ConstantExpr;
     use common_sql::plans::FunctionCall;
     use common_sql::plans::ScalarExpr;
-    use common_sql::ColumnBinding;
+    use common_sql::ColumnBindingBuilder;
     use common_sql::Visibility;
     use common_storage::ColumnNodes;
     use storages_common_pruner::RangePrunerCreator;
@@ -730,17 +731,13 @@ mod tests {
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            table_index: None,
-                            column_name: "col1".to_string(),
-                            column_position: None,
-                            index: 0,
-                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
-                            visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
-                        },
+                        column: ColumnBindingBuilder::new(
+                            "col1".to_string(),
+                            0,
+                            Box::new(DataType::Number(NumberDataType::Int32)),
+                            Visibility::Visible,
+                        )
+                        .build(),
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
@@ -765,17 +762,13 @@ mod tests {
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            table_index: None,
-                            column_name: "col1".to_string(),
-                            column_position: None,
-                            index: 0,
-                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
-                            visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
-                        },
+                        column: ColumnBindingBuilder::new(
+                            "col1".to_string(),
+                            0,
+                            Box::new(DataType::Number(NumberDataType::Int32)),
+                            Visibility::Visible,
+                        )
+                        .build(),
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
@@ -800,17 +793,13 @@ mod tests {
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            table_index: None,
-                            column_name: "col1".to_string(),
-                            column_position: None,
-                            index: 0,
-                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
-                            visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
-                        },
+                        column: ColumnBindingBuilder::new(
+                            "col1".to_string(),
+                            0,
+                            Box::new(DataType::Number(NumberDataType::Int32)),
+                            Visibility::Visible,
+                        )
+                        .build(),
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
@@ -845,17 +834,13 @@ mod tests {
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            table_index: None,
-                            column_name: "col1".to_string(),
-                            column_position: None,
-                            index: 0,
-                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
-                            visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
-                        },
+                        column: ColumnBindingBuilder::new(
+                            "col1".to_string(),
+                            0,
+                            Box::new(DataType::Number(NumberDataType::Int32)),
+                            Visibility::Visible,
+                        )
+                        .build(),
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
@@ -881,17 +866,13 @@ mod tests {
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            table_index: None,
-                            column_name: "col1".to_string(),
-                            column_position: None,
-                            index: 0,
-                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
-                            visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
-                        },
+                        column: ColumnBindingBuilder::new(
+                            "col1".to_string(),
+                            0,
+                            Box::new(DataType::Number(NumberDataType::Int32)),
+                            Visibility::Visible,
+                        )
+                        .build(),
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
@@ -917,17 +898,13 @@ mod tests {
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            table_index: None,
-                            column_name: "col1".to_string(),
-                            column_position: None,
-                            index: 0,
-                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
-                            visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
-                        },
+                        column: ColumnBindingBuilder::new(
+                            "col1".to_string(),
+                            0,
+                            Box::new(DataType::Number(NumberDataType::Int32)),
+                            Visibility::Visible,
+                        )
+                        .build(),
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
@@ -953,17 +930,13 @@ mod tests {
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            table_index: None,
-                            column_name: "col1".to_string(),
-                            column_position: None,
-                            index: 0,
-                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
-                            visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
-                        },
+                        column: ColumnBindingBuilder::new(
+                            "col1".to_string(),
+                            0,
+                            Box::new(DataType::Number(NumberDataType::Int32)),
+                            Visibility::Visible,
+                        )
+                        .build(),
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,

@@ -26,10 +26,11 @@ common-storage = { path = "../../../common/storage" }
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 dashmap = "5.4.0"
+log = { workspace = true }
 opendal = { workspace = true }
 parking_lot = "0.12.1"
 serde = { workspace = true }
-tracing = "0.1.36"
+
 typetag = "0.2.6"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 

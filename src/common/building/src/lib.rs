@@ -21,7 +21,7 @@ use std::env;
 use std::path::Path;
 
 use gix::Repository;
-use tracing::error;
+use log::error;
 use vergen::EmitBuilder;
 
 /// Setup building environment:

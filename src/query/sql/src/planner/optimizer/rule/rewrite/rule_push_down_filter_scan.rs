@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
+use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
@@ -26,6 +27,7 @@ use crate::plans::CastExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -33,7 +35,6 @@ use crate::plans::Scan;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
-use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -95,17 +96,17 @@ impl RulePushDownFilterScan {
                         .iter()
                         .find(|table_entry| table_entry.index() == base_column.table_index)
                     {
-                        let column_binding = ColumnBinding {
-                            database_name: Some(table_entry.database().to_string()),
-                            table_name: Some(table_entry.name().to_string()),
-                            column_position: None,
-                            table_index: Some(table_entry.index()),
-                            column_name: base_column.column_name.clone(),
-                            index: base_column.column_index,
-                            data_type: column.column.data_type.clone(),
-                            visibility: column.column.visibility.clone(),
-                            virtual_computed_expr: column.column.virtual_computed_expr.clone(),
-                        };
+                        let column_binding = ColumnBindingBuilder::new(
+                            base_column.column_name.clone(),
+                            base_column.column_index,
+                            column.column.data_type.clone(),
+                            column.column.visibility.clone(),
+                        )
+                        .table_name(Some(table_entry.name().to_string()))
+                        .database_name(Some(table_entry.database().to_string()))
+                        .table_index(Some(table_entry.index()))
+                        .virtual_computed_expr(column.column.virtual_computed_expr.clone())
+                        .build();
                         let bound_column_ref = BoundColumnRef {
                             span: column.span,
                             column: column_binding,
@@ -208,6 +209,23 @@ impl RulePushDownFilterScan {
                     args,
                     return_type: agg_func.return_type.clone(),
                     display_name: agg_func.display_name.clone(),
+                }))
+            }
+            ScalarExpr::LambdaFunction(lambda_func) => {
+                let args = lambda_func
+                    .args
+                    .iter()
+                    .map(|arg| Self::replace_view_column(arg, table_entries, column_entries))
+                    .collect::<Result<Vec<ScalarExpr>>>()?;
+
+                Ok(ScalarExpr::LambdaFunction(LambdaFunc {
+                    span: lambda_func.span,
+                    func_name: lambda_func.func_name.clone(),
+                    display_name: lambda_func.display_name.clone(),
+                    args,
+                    params: lambda_func.params.clone(),
+                    lambda_expr: lambda_func.lambda_expr.clone(),
+                    return_type: lambda_func.return_type.clone(),
                 }))
             }
             ScalarExpr::FunctionCall(func) => {

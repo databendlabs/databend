@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::TableInfo;
-use tracing::info;
+use log::info;
 
 use crate::TableLockHeartbeat;
 

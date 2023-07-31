@@ -27,8 +27,8 @@ use common_formats::field_encoder::FieldEncoderRowBased;
 use common_formats::field_encoder::FieldEncoderValues;
 use common_io::prelude::FormatSettings;
 use futures_util::StreamExt;
+use log::error;
 use opensrv_mysql::*;
-use tracing::error;
 
 /// Reports progress information as string, intend to be put into the mysql Ok packet.
 /// Mainly for decoupling with concrete type like `QueryContext`

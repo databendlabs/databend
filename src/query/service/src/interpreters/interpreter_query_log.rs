@@ -24,11 +24,9 @@ use common_exception::Result;
 use common_storages_system::LogType;
 use common_storages_system::QueryLogElement;
 use common_storages_system::QueryLogQueue;
-use common_tracing::QueryLogger;
+use log::error;
+use log::info;
 use serde_json;
-use tracing::error;
-use tracing::info;
-use tracing::subscriber;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -61,13 +59,7 @@ fn error_fields(log_type: LogType, err: Option<ErrorCode>) -> (LogType, i32, Str
 impl InterpreterQueryLog {
     fn write_log(event: QueryLogElement) -> Result<()> {
         let event_str = serde_json::to_string(&event)?;
-        if let Some(logger) = QueryLogger::instance().get_subscriber() {
-            subscriber::with_default(logger, || {
-                info!("{}", event_str);
-            });
-        } else {
-            info!("{}", event_str);
-        };
+        info!(target: "query", "{}", event_str);
         QueryLogQueue::instance()?.append_data(event)
     }
 

@@ -20,6 +20,7 @@ use common_meta_app::principal::StageType;
 use common_meta_types::MatchSeq;
 use common_sql::plans::CreateStagePlan;
 use common_users::UserApiProvider;
+use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -44,9 +45,11 @@ impl Interpreter for CreateUserStageInterpreter {
         "CreateUserStageInterpreter"
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_user_stage_execute");
+
         let plan = self.plan.clone();
         let user_mgr = UserApiProvider::instance();
         let user_stage = plan.stage_info;

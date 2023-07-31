@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
 use common_meta_sled_store::SledTree;
 use common_meta_types::new_log_id;
 use common_meta_types::Cmd;
@@ -22,11 +21,8 @@ use common_meta_types::LogEntry;
 use common_meta_types::LogIndex;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
-use testing::new_sled_test_context;
-use tracing::Instrument;
+use test_harness::test;
 
-use crate::init_sled_ut;
-use crate::testing;
 use crate::testing::fake_key_spaces::Files;
 use crate::testing::fake_key_spaces::GenericKV;
 use crate::testing::fake_key_spaces::Logs;
@@ -34,12 +30,12 @@ use crate::testing::fake_key_spaces::StateMachineMeta;
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey::Initialized;
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey::LastApplied;
 use crate::testing::fake_state_machine_meta::StateMachineMetaValue;
+use crate::testing::new_sled_test_context;
+use crate::testing::sled_test_harness;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_sled_tree_open() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
     let tc = new_sled_test_context();
     let db = &tc.db;
     SledTree::open(db, tc.tree_name, true)?;
@@ -47,11 +43,9 @@ async fn test_sled_tree_open() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_as_range() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
     // This test assumes the following order.
     // to check the range boundary.
     // assert!(Logs::PREFIX < StateMachineMeta::PREFIX);
@@ -120,11 +114,9 @@ async fn test_as_range() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_last() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
     // This test assumes the following order.
     // To ensure a last() does not returns item from another key space with smaller prefix
     // assert!(Logs::PREFIX < StateMachineMeta::PREFIX);
@@ -177,11 +169,9 @@ async fn test_key_space_last() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_append() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.tree_name, true)?;
@@ -233,11 +223,9 @@ async fn test_key_space_append() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_append_and_range_get() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.tree_name, true)?;
@@ -305,11 +293,9 @@ async fn test_key_space_append_and_range_get() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_range_kvs() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.tree_name, true)?;
@@ -342,11 +328,9 @@ async fn test_key_space_range_kvs() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_scan_prefix() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.tree_name, true)?;
@@ -386,11 +370,9 @@ async fn test_key_space_scan_prefix() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_insert() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.tree_name, true)?;
@@ -445,11 +427,9 @@ async fn test_key_space_insert() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_get() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.tree_name, true)?;
@@ -484,11 +464,9 @@ async fn test_key_space_get() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_range_remove() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.tree_name, true)?;
@@ -542,11 +520,9 @@ async fn test_key_space_range_remove() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_key_space_multi_types() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.tree_name, true)?;
@@ -609,41 +585,36 @@ async fn test_key_space_multi_types() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[test(harness = sled_test_harness)]
+#[minitrace::trace]
 async fn test_export() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
+    let log_tree = tree.key_space::<Logs>();
 
-    async {
-        let tc = new_sled_test_context();
-        let db = &tc.db;
-        let tree = SledTree::open(db, tc.tree_name, true)?;
-        let log_tree = tree.key_space::<Logs>();
+    let logs: Vec<Entry> = vec![
+        Entry {
+            log_id: new_log_id(1, 0, 2),
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: new_log_id(3, 0, 4),
+            payload: EntryPayload::Normal(LogEntry {
+                txid: None,
+                time_ms: None,
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
+            }),
+        },
+    ];
 
-        let logs: Vec<Entry> = vec![
-            Entry {
-                log_id: new_log_id(1, 0, 2),
-                payload: EntryPayload::Blank,
-            },
-            Entry {
-                log_id: new_log_id(3, 0, 4),
-                payload: EntryPayload::Normal(LogEntry {
-                    txid: None,
-                    time_ms: None,
-                    cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
-                }),
-            },
-        ];
+    log_tree.append(logs.clone()).await?;
 
-        log_tree.append(logs.clone()).await?;
+    let data = tree.export()?;
 
-        let data = tree.export()?;
-
-        for kv in data.iter() {
-            println!("{:?}", kv);
-        }
-
-        Ok(())
+    for kv in data.iter() {
+        println!("{:?}", kv);
     }
-    .instrument(ut_span)
-    .await
+
+    Ok(())
 }

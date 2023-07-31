@@ -70,7 +70,7 @@ impl RangeIndex {
         }))
     }
 
-    #[tracing::instrument(level = "debug", name = "range_filter_eval", skip_all)]
+    #[minitrace::trace(name = "range_filter_eval")]
     pub fn apply<F>(&self, stats: &StatisticsOfColumns, column_is_default: F) -> Result<bool>
     where F: Fn(&ColumnId) -> bool {
         let input_domains = self

@@ -29,7 +29,7 @@ use common_meta_types::MetaAPIError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
-use tracing::info;
+use log::info;
 
 use crate::meta_service::MetaNode;
 
@@ -59,7 +59,7 @@ impl kvapi::KVApi for MetaNode {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
         let res = self
             .consistent_read(GetKVReq {
@@ -70,7 +70,7 @@ impl kvapi::KVApi for MetaNode {
         Ok(res)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, Self::Error> {
         let res = self
             .consistent_read(MGetKVReq {
@@ -81,7 +81,7 @@ impl kvapi::KVApi for MetaNode {
         Ok(res)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
         let res = self
             .consistent_read(ListKVReq {
@@ -92,7 +92,7 @@ impl kvapi::KVApi for MetaNode {
         Ok(res)
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn))]
+    #[minitrace::trace]
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         info!("MetaNode::transaction(): {}", txn);
         let ent = LogEntry::new(Cmd::Transaction(txn));

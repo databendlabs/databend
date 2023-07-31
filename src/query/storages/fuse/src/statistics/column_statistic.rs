@@ -64,7 +64,7 @@ pub fn gen_columns_statistics(
 
         if mins.len() > 0 {
             min = if let Some(v) = mins.index(0) {
-                if let Some(v) = v.to_owned().trim_min() {
+                if let Some(v) = v.to_owned().trim_min(STATS_STRING_PREFIX_LEN) {
                     v
                 } else {
                     continue;
@@ -76,7 +76,7 @@ pub fn gen_columns_statistics(
 
         if maxs.len() > 0 {
             max = if let Some(v) = maxs.index(0) {
-                if let Some(v) = v.to_owned().trim_max() {
+                if let Some(v) = v.to_owned().trim_max(STATS_STRING_PREFIX_LEN) {
                     v
                 } else {
                     continue;
@@ -206,24 +206,24 @@ pub mod traverse {
 // the trimmed max should be larger than the non-trimmed one (if possible).
 // and the trimmed min should be lesser than the non-trimmed one (if possible).
 pub trait Trim: Sized {
-    fn trim_min(self) -> Option<Self>;
-    fn trim_max(self) -> Option<Self>;
+    fn trim_min(self, trim_len: usize) -> Option<Self>;
+    fn trim_max(self, trim_len: usize) -> Option<Self>;
 }
 
 pub const STATS_REPLACEMENT_CHAR: char = '\u{FFFD}';
 pub const STATS_STRING_PREFIX_LEN: usize = 16;
 
 impl Trim for Scalar {
-    fn trim_min(self) -> Option<Self> {
+    fn trim_min(self, trim_len: usize) -> Option<Self> {
         match self {
             Scalar::String(bytes) => match String::from_utf8(bytes) {
                 Ok(mut v) => {
-                    if v.len() <= STATS_STRING_PREFIX_LEN {
+                    if v.len() <= trim_len {
                         Some(Scalar::String(v.into_bytes()))
                     } else {
                         // find the character boundary to prevent String::truncate from panic
                         let vs = v.as_str();
-                        let slice = match vs.char_indices().nth(STATS_STRING_PREFIX_LEN) {
+                        let slice = match vs.char_indices().nth(trim_len) {
                             None => vs,
                             Some((idx, _)) => &vs[..idx],
                         };
@@ -244,23 +244,23 @@ impl Trim for Scalar {
         }
     }
 
-    fn trim_max(self) -> Option<Self> {
+    fn trim_max(self, trim_len: usize) -> Option<Self> {
         match self {
             Scalar::String(bytes) => match String::from_utf8(bytes) {
                 Ok(v) => {
-                    if v.len() <= STATS_STRING_PREFIX_LEN {
+                    if v.len() <= trim_len {
                         // if number of bytes is lesser, just return
                         Some(Scalar::String(v.into_bytes()))
                     } else {
                         // no need to trim, less than STRING_PREFIX_LEN chars
                         let number_of_chars = v.as_str().chars().count();
-                        if number_of_chars <= STATS_STRING_PREFIX_LEN {
+                        if number_of_chars <= trim_len {
                             return Some(Scalar::String(v.into_bytes()));
                         }
 
                         // slice the input (at the boundary of chars), takes at most STRING_PREFIX_LEN chars
                         let vs = v.as_str();
-                        let sliced = match vs.char_indices().nth(STATS_STRING_PREFIX_LEN) {
+                        let sliced = match vs.char_indices().nth(trim_len) {
                             None => vs,
                             Some((idx, _)) => &vs[..idx],
                         };
@@ -279,7 +279,7 @@ impl Trim for Scalar {
                         let replacement_point = idx?;
 
                         // rebuild the string (since the len of result string is rather small)
-                        let mut r = String::with_capacity(STATS_STRING_PREFIX_LEN);
+                        let mut r = String::with_capacity(trim_len);
                         for (i, c) in sliced.char_indices() {
                             if i < replacement_point {
                                 r.push(c)

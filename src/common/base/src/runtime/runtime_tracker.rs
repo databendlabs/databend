@@ -56,8 +56,8 @@ use std::task::Context;
 use std::task::Poll;
 
 use bytesize::ByteSize;
+use log::info;
 use pin_project_lite::pin_project;
-use tracing::info;
 
 /// The root tracker.
 ///

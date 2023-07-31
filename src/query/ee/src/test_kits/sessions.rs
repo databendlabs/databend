@@ -18,7 +18,7 @@ use common_tracing::set_panic_hook;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::test_kits::TestGuard;
 use databend_query::GlobalServices;
-use tracing::info;
+use log::info;
 
 use crate::test_kits::mock_services::MockServices;
 

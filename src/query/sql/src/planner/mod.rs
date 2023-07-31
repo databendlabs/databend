@@ -30,6 +30,7 @@ pub use binder::parse_result_scan_args;
 pub use binder::BindContext;
 pub use binder::Binder;
 pub use binder::ColumnBinding;
+pub use binder::ColumnBindingBuilder;
 pub use binder::ScalarBinder;
 pub use binder::ScalarVisitor;
 pub use binder::SelectBuilder;

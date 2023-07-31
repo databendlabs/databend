@@ -43,12 +43,13 @@ use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
-use tracing::warn;
+use log::warn;
 
 use super::sort::OrderItem;
 use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
@@ -164,6 +165,9 @@ impl Binder {
             .normalize_select_list(&mut from_context, &stmt.select_list)
             .await?;
 
+        // analyze lambda
+        self.analyze_lambda(&mut from_context, &mut select_list)?;
+
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
             self.analyze_group_items(&mut from_context, &select_list, group_by)
@@ -230,6 +234,10 @@ impl Binder {
                 &order_items.items,
                 limit,
             )?;
+        }
+
+        if !from_context.lambda_info.lambda_functions.is_empty() {
+            s_expr = self.bind_lambda(&mut from_context, s_expr).await?;
         }
 
         if !from_context.aggregate_info.aggregate_functions.is_empty()
@@ -664,17 +672,13 @@ impl Binder {
                     .metadata
                     .write()
                     .add_derived_column(left_col.column_name.clone(), coercion_types[idx].clone());
-                let column_binding = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_position: None,
-                    table_index: None,
-                    column_name: left_col.column_name.clone(),
-                    index: new_column_index,
-                    data_type: Box::new(coercion_types[idx].clone()),
-                    visibility: Visibility::Visible,
-                    virtual_computed_expr: None,
-                };
+                let column_binding = ColumnBindingBuilder::new(
+                    left_col.column_name.clone(),
+                    new_column_index,
+                    Box::new(coercion_types[idx].clone()),
+                    Visibility::Visible,
+                )
+                .build();
                 let left_coercion_expr = CastExpr {
                     span: left_span,
                     is_try: false,
@@ -923,6 +927,7 @@ impl<'a> SelectRewriter<'a> {
                 args,
                 params: vec![],
                 window: None,
+                lambda: None,
             }),
             alias,
         }

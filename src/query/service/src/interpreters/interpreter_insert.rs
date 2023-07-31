@@ -258,6 +258,7 @@ impl Interpreter for InsertInterpreter {
                     &mut build_res.main_pipeline,
                     None,
                     self.plan.overwrite,
+                    None,
                 )?;
 
                 return Ok(build_res);
