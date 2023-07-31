@@ -15,11 +15,13 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-/// Config for tracing.
+/// Config for logging.
 #[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
 pub struct Config {
     pub file: FileConfig,
     pub stderr: StderrConfig,
+    pub query: QueryLogConfig,
+    pub tracing: TracingConfig,
 }
 
 impl Config {
@@ -34,8 +36,17 @@ impl Config {
             },
             stderr: StderrConfig {
                 on: true,
-                level: "INFO".to_string(),
+                level: "WARN".to_string(),
                 format: "text".to_string(),
+            },
+            query: QueryLogConfig {
+                on: true,
+                dir: "./.databend/logs/query-details".to_string(),
+            },
+            tracing: TracingConfig {
+                on: true,
+                capture_log_level: "TRACE".to_string(),
+                jaeger_endpoint: "http://localhost:14268/api/traces".to_string(),
             },
         }
     }
@@ -100,6 +111,75 @@ impl Default for StderrConfig {
             on: false,
             level: "INFO".to_string(),
             format: "text".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct QueryLogConfig {
+    pub on: bool,
+    pub dir: String,
+}
+
+impl Display for QueryLogConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "enabled={}, dir={}", self.on, self.dir)
+    }
+}
+
+impl Default for QueryLogConfig {
+    fn default() -> Self {
+        Self {
+            on: true,
+            dir: "./.databend/logs/query-details".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct TracingConfig {
+    pub on: bool,
+    pub capture_log_level: String,
+    pub jaeger_endpoint: String,
+}
+
+impl TracingConfig {
+    // TODO: make this config public instead of inferring from env.
+    pub fn from_env() -> Self {
+        let capture_log_level = std::env::var("DATABEND_TRACING_CAPTURE_LOG_LEVEL")
+            .unwrap_or_else(|_| "INFO".to_string());
+        let jaeger_endpoint = std::env::var("DATABEND_JAEGER_ENDPOINT");
+        Self {
+            on: jaeger_endpoint.is_ok(),
+            capture_log_level,
+            jaeger_endpoint: jaeger_endpoint.unwrap_or_default(),
+        }
+    }
+}
+
+impl Display for TracingConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "enabled={}{}, capture_log_level={}(To override: DATABEND_TRACING_CAPTURE_LOG_LEVEL=info), jaeger_endpoint={}",
+            self.on,
+            if !self.on {
+                "(To enable: DATABEND_JAEGER_ENDPOINT=http://localhost:14268/api/traces)"
+            } else {
+                ""
+            },
+            self.capture_log_level,
+            self.jaeger_endpoint
+        )
+    }
+}
+
+impl Default for TracingConfig {
+    fn default() -> Self {
+        Self {
+            on: false,
+            capture_log_level: "INFO".to_string(),
+            jaeger_endpoint: "".to_string(),
         }
     }
 }

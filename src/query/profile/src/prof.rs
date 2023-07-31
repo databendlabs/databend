@@ -62,8 +62,10 @@ pub enum OperatorType {
     Filter,
     ProjectSet,
     EvalScalar,
+    Lambda,
     Limit,
     TableScan,
+    CteScan,
     Sort,
     UnionAll,
     Project,
@@ -83,6 +85,7 @@ impl Display for OperatorType {
             OperatorType::Filter => write!(f, "Filter"),
             OperatorType::ProjectSet => write!(f, "ProjectSet"),
             OperatorType::EvalScalar => write!(f, "EvalScalar"),
+            OperatorType::Lambda => write!(f, "Lambda"),
             OperatorType::Limit => write!(f, "Limit"),
             OperatorType::TableScan => write!(f, "TableScan"),
             OperatorType::Sort => write!(f, "Sort"),
@@ -93,6 +96,7 @@ impl Display for OperatorType {
             OperatorType::Exchange => write!(f, "Exchange"),
             OperatorType::RuntimeFilter => write!(f, "RuntimeFilter"),
             OperatorType::Insert => write!(f, "Insert"),
+            OperatorType::CteScan => write!(f, "CteScan"),
         }
     }
 }
@@ -132,11 +136,13 @@ pub enum OperatorAttribute {
     Filter(FilterAttribute),
     EvalScalar(EvalScalarAttribute),
     ProjectSet(ProjectSetAttribute),
+    Lambda(LambdaAttribute),
     Limit(LimitAttribute),
     TableScan(TableScanAttribute),
     Sort(SortAttribute),
     Window(WindowAttribute),
     Exchange(ExchangeAttribute),
+    CteScan(CteScanAttribute),
     Empty,
 }
 
@@ -170,6 +176,11 @@ pub struct ProjectSetAttribute {
 }
 
 #[derive(Debug, Clone)]
+pub struct LambdaAttribute {
+    pub scalars: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct FilterAttribute {
     pub predicate: String,
 }
@@ -188,6 +199,11 @@ pub struct SortAttribute {
 #[derive(Debug, Clone)]
 pub struct TableScanAttribute {
     pub qualified_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct CteScanAttribute {
+    pub cte_idx: usize,
 }
 
 #[derive(Debug, Clone)]

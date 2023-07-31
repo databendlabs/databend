@@ -27,9 +27,9 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::Sink;
 use common_pipeline_sinks::Sinker;
+use log::warn;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
-use tracing::warn;
 
 use crate::pipelines::executor::executor_settings::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;

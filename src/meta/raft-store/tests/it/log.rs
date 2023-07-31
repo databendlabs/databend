@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
 use common_meta_raft_store::log::RaftLog;
 use common_meta_types::new_log_id;
 use common_meta_types::Cmd;
@@ -20,15 +19,13 @@ use common_meta_types::Entry;
 use common_meta_types::EntryPayload;
 use common_meta_types::LogEntry;
 use common_meta_types::UpsertKV;
+use test_harness::test;
 
-use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
+use crate::testing::raft_store_test_harness;
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_log_open() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -37,11 +34,8 @@ async fn test_raft_log_open() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -104,11 +98,8 @@ async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_log_insert() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -138,11 +129,8 @@ async fn test_raft_log_insert() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_log_get() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -176,11 +164,8 @@ async fn test_raft_log_get() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_log_last() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -209,11 +194,8 @@ async fn test_raft_log_last() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_log_range_remove() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let db = &tc.db;

@@ -32,10 +32,11 @@ use common_meta_types::NodeId;
 use common_meta_types::RaftError;
 use common_meta_types::SeqV;
 use common_metrics::counter::Count;
+use log::as_debug;
+use log::debug;
+use log::info;
 use maplit::btreemap;
 use maplit::btreeset;
-use tracing::debug;
-use tracing::info;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
@@ -65,12 +66,12 @@ impl<'a> MetaLeader<'a> {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, req), fields(target=%req.forward_to_leader))]
+    #[minitrace::trace]
     pub async fn handle_request(
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaOperationError> {
-        debug!("handle_forwardable_req: {:?}", req);
+        debug!(req = as_debug!(&req), target = req.forward_to_leader; "handle_forwardable_req");
 
         match req.body {
             ForwardRequestBody::Ping => Ok(ForwardResponse::Pong),
@@ -121,7 +122,7 @@ impl<'a> MetaLeader<'a> {
     /// - Adds the node to membership to let it become a voter.
     ///
     /// If the node is already in cluster membership, it still returns Ok.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn join(&self, req: JoinRequest) -> Result<(), RaftError<ClientWriteError>> {
         let node_id = req.node_id;
         let endpoint = req.endpoint;
@@ -162,7 +163,7 @@ impl<'a> MetaLeader<'a> {
     /// - Remove the node from cluster.
     ///
     /// If the node is not in cluster membership, it still returns Ok.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn leave(&self, req: LeaveRequest) -> Result<(), MetaOperationError> {
         let node_id = req.node_id;
 
@@ -195,7 +196,7 @@ impl<'a> MetaLeader<'a> {
     /// Write a log through local raft node and return the states before and after applying the log.
     ///
     /// If the raft node is not a leader, it returns MetaRaftError::ForwardToLeader.
-    #[tracing::instrument(level = "debug", skip(self, entry))]
+    #[minitrace::trace]
     pub async fn write(
         &self,
         mut entry: LogEntry,

@@ -28,13 +28,16 @@ use super::ProjectSet;
 use super::RowFetch;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
+use crate::executor::CteScan;
 use crate::executor::EvalScalar;
 use crate::executor::Exchange;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::Filter;
 use crate::executor::HashJoin;
+use crate::executor::Lambda;
 use crate::executor::Limit;
+use crate::executor::MaterializedCte;
 use crate::executor::PhysicalPlan;
 use crate::executor::Project;
 use crate::executor::RangeJoin;
@@ -81,6 +84,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::DeletePartial(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::DeleteFinal(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
+            PhysicalPlan::Lambda(lambda) => write!(f, "{}", lambda)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::DistributedCopyIntoTableFromStage(copy_into_table_from_stage) => {
@@ -89,6 +93,8 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::CopyIntoTableFromQuery(copy_into_table_from_query) => {
                 write!(f, "{}", copy_into_table_from_query)?
             }
+            PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
+            PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -103,6 +109,18 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
 impl Display for TableScan {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "TableScan: [{}]", self.source.source_info.desc())
+    }
+}
+
+impl Display for CteScan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CteScan: [{}]", self.cte_idx.0)
+    }
+}
+
+impl Display for MaterializedCte {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MaterializedCte")
     }
 }
 
@@ -400,5 +418,24 @@ impl Display for ProjectSet {
             "ProjectSet: set-returning functions : {}",
             scalars.join(", ")
         )
+    }
+}
+
+impl Display for Lambda {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let scalars = self
+            .lambda_funcs
+            .iter()
+            .map(|func| {
+                let arg_exprs = func.arg_exprs.join(", ");
+                let params = func.params.join(", ");
+                let lambda_expr = func.lambda_expr.as_expr(&BUILTIN_FUNCTIONS).sql_display();
+                format!(
+                    "{}({}, {} -> {})",
+                    func.func_name, arg_exprs, params, lambda_expr
+                )
+            })
+            .collect::<Vec<String>>();
+        write!(f, "Lambda functions : {}", scalars.join(", "))
     }
 }

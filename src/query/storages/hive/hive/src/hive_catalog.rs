@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_catalog::catalog::Catalog;
+use common_catalog::catalog::CatalogCreator;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
 use common_catalog::table::Table;
@@ -27,6 +28,8 @@ use common_exception::Result;
 use common_hive_meta_store::Partition;
 use common_hive_meta_store::TThriftHiveMetastoreSyncClient;
 use common_hive_meta_store::ThriftHiveMetastoreSyncClient;
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -51,6 +54,7 @@ use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -84,15 +88,37 @@ use crate::hive_table::HiveTable;
 
 pub const HIVE_CATALOG: &str = "hive";
 
-#[derive(Clone)]
+#[derive(Debug)]
+pub struct HiveCreator;
+
+impl CatalogCreator for HiveCreator {
+    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
+        let opt = match &info.meta.catalog_option {
+            CatalogOption::Hive(opt) => opt,
+            _ => unreachable!(
+                "trying to create hive catalog from other catalog, must be an internal bug"
+            ),
+        };
+
+        let catalog: Arc<dyn Catalog> =
+            Arc::new(HiveCatalog::try_create(info.clone(), &opt.address)?);
+
+        Ok(catalog)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct HiveCatalog {
+    info: CatalogInfo,
+
     /// address of hive meta store service
     client_address: String,
 }
 
 impl HiveCatalog {
-    pub fn try_create(hms_address: impl Into<String>) -> Result<HiveCatalog> {
+    pub fn try_create(info: CatalogInfo, hms_address: impl Into<String>) -> Result<HiveCatalog> {
         Ok(HiveCatalog {
+            info,
             client_address: hms_address.into(),
         })
     }
@@ -145,7 +171,7 @@ impl HiveCatalog {
         Ok(partitions)
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn get_partition_names(
         &self,
@@ -243,8 +269,15 @@ impl Catalog for HiveCatalog {
         self
     }
 
-    #[async_backtrace::framed]
-    #[tracing::instrument(level = "info", skip(self))]
+    fn name(&self) -> String {
+        self.info.name_ident.catalog_name.clone()
+    }
+
+    fn info(&self) -> CatalogInfo {
+        self.info.clone()
+    }
+
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let client = self.get_client()?;
@@ -306,7 +339,7 @@ impl Catalog for HiveCatalog {
     }
 
     // Get one table by db and table name.
-    #[tracing::instrument(level = "info", skip(self))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn get_table(
         &self,
@@ -480,6 +513,11 @@ impl Catalog for HiveCatalog {
 
     #[async_backtrace::framed]
     async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_indexes_by_table_id(&self, _req: ListIndexesByIdReq) -> Result<Vec<u64>> {
         unimplemented!()
     }
 

@@ -28,6 +28,7 @@ use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_users::RoleCacheManager;
 use common_users::BUILTIN_ROLE_PUBLIC;
+use log::debug;
 use parking_lot::RwLock;
 
 use crate::clusters::ClusterDiscovery;
@@ -373,7 +374,7 @@ impl Session {
 
 impl Drop for Session {
     fn drop(&mut self) {
-        tracing::debug!("Drop session {}", self.id.clone());
+        debug!("Drop session {}", self.id.clone());
         SessionManager::instance().destroy_session(&self.id.clone());
     }
 }

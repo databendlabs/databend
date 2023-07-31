@@ -27,10 +27,10 @@ use common_sql::plans::Plan;
 use common_sql::PlanExtras;
 use common_sql::Planner;
 use futures::StreamExt;
+use log::error;
+use log::info;
 use serde::Deserialize;
 use serde::Serialize;
-use tracing::error;
-use tracing::info;
 use ExecuteState::*;
 
 use crate::interpreters::Interpreter;

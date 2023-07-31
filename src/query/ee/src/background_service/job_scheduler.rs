@@ -27,7 +27,8 @@ use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundJobState;
 use common_meta_app::background::BackgroundJobType;
 use dashmap::DashMap;
-use tracing::info;
+use log::as_debug;
+use log::info;
 
 use crate::background_service::job::BoxedJob;
 use crate::background_service::job::Job;
@@ -92,7 +93,7 @@ impl JobScheduler {
     pub async fn start(&self) -> Result<()> {
         let one_shot_jobs = &self.one_shot_jobs;
         if !one_shot_jobs.is_empty() {
-            info!(background = true, "start one_shot jobs");
+            info!(background = true; "start one_shot jobs");
             Self::check_and_run_jobs(one_shot_jobs).await;
             let mut finished_one_shot_jobs = vec![];
             while let Some(i) = self.finish_rx.clone().lock().await.recv().await {
@@ -102,7 +103,7 @@ impl JobScheduler {
                 }
             }
         }
-        info!(background = true, "start scheduled jobs");
+        info!(background = true; "start scheduled jobs");
         self.start_scheduled_jobs(self.job_tick_interval).await?;
 
         Ok(())
@@ -117,12 +118,12 @@ impl JobScheduler {
         loop {
             match self.suspend_rx.lock().await.try_recv() {
                 Ok(_) => {
-                    info!(background = true, "suspend scheduled jobs");
+                    info!(background = true; "suspend scheduled jobs");
                     break;
                 }
                 Err(TryRecvError::Disconnected) => {
                     info!(
-                        background = true,
+                        background = true;
                         "suspend channel closed, suspend scheduled jobs"
                     );
                     break;
@@ -159,9 +160,9 @@ impl JobScheduler {
             let mut status = info.job_status.clone().unwrap();
             status.next_task_scheduled_time = params.get_next_running_time(Utc::now());
             job.update_job_status(status.clone()).await?;
-            info!(background = true, next_scheduled_time = ?status.next_task_scheduled_time, "Running job");
+            info!(background = true, next_scheduled_time = as_debug!(&status.next_task_scheduled_time); "Running job");
         } else {
-            info!(background = true, "Running execute job");
+            info!(background = true; "Running execute job");
         }
 
         tokio::spawn(async move { job.run().await });

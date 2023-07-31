@@ -39,6 +39,7 @@ use common_meta_app::principal::GrantObject;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use log::warn;
 
 use crate::columns_table::generate_unique_object;
 use crate::table::AsyncOneBlockSystemTable;
@@ -107,9 +108,10 @@ where TablesTable<T>: HistoryAware
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
         let ctls: Vec<(String, Arc<dyn Catalog>)> = catalog_mgr
-            .catalogs
+            .list_catalogs(&tenant)
+            .await?
             .iter()
-            .map(|e| (e.key().to_string(), e.value().clone()))
+            .map(|e| (e.name(), e.clone()))
             .collect();
 
         let mut catalogs = vec![];
@@ -191,11 +193,7 @@ where TablesTable<T>: HistoryAware
                         // is easy to get errors with invalid configs, but system.tables is better not
                         // to be affected by it.
                         if db.get_db_info().meta.from_share.is_some() {
-                            tracing::warn!(
-                                "list tables failed on sharing db {}: {}",
-                                db.name(),
-                                err
-                            );
+                            warn!("list tables failed on sharing db {}: {}", db.name(), err);
                             continue;
                         }
                         return Err(err);

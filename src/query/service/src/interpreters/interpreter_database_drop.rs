@@ -42,7 +42,7 @@ impl Interpreter for DropDatabaseInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let resp = catalog.drop_database(self.plan.clone().into()).await?;
         if let Some(spec_vec) = resp.spec_vec {
             let mut share_table_into = Vec::with_capacity(spec_vec.len());

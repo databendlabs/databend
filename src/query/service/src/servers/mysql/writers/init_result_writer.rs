@@ -15,8 +15,8 @@
 use common_base::base::tokio::io::AsyncWrite;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::error;
 use opensrv_mysql::*;
-use tracing::error;
 
 pub struct DFInitResultWriter<'a, W: AsyncWrite + Send + Unpin> {
     inner: Option<InitWriter<'a, W>>,

@@ -24,11 +24,14 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::Scalar;
+use itertools::Itertools;
+use log::debug;
 use storages_common_table_meta::meta::BlockMeta;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
+use crate::table_functions::cmp_with_null;
 
 #[derive(Clone)]
 pub struct ReclusterMutator {
@@ -86,7 +89,7 @@ impl ReclusterMutator {
 
             let mut total_rows = 0;
             let mut total_bytes = 0;
-            let mut points_map: BTreeMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
+            let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
             for (i, (_, meta)) in block_metas.iter().enumerate() {
                 if let Some(stats) = &meta.cluster_stats {
                     points_map
@@ -127,7 +130,11 @@ impl ReclusterMutator {
             let mut block_depths = Vec::new();
             let mut point_overlaps: Vec<Vec<usize>> = Vec::new();
             let mut unfinished_parts: HashMap<usize, usize> = HashMap::new();
-            for (i, (_, (start, end))) in points_map.into_iter().enumerate() {
+            for (i, (_, (start, end))) in points_map
+                .into_iter()
+                .sorted_by(|(a, _), (b, _)| a.iter().cmp_by(b.iter(), cmp_with_null))
+                .enumerate()
+            {
                 let point_depth = if unfinished_parts.len() == 1 && Self::check_point(&start, &end)
                 {
                     1
@@ -144,9 +151,9 @@ impl ReclusterMutator {
                     Ordering::Less => (),
                 }
 
-                for (_, val) in unfinished_parts.iter_mut() {
-                    *val = cmp::max(*val, point_depth);
-                }
+                unfinished_parts
+                    .values_mut()
+                    .for_each(|val| *val = cmp::max(*val, point_depth));
 
                 start.iter().for_each(|&idx| {
                     unfinished_parts.insert(idx, point_depth);
@@ -167,10 +174,9 @@ impl ReclusterMutator {
             // round the float to 4 decimal places.
             let average_depth =
                 (10000.0 * sum_depth as f64 / block_depths.len() as f64).round() / 10000.0;
-            tracing::debug!(
+            debug!(
                 "recluster: average_depth: {} in level {}",
-                average_depth,
-                level
+                average_depth, level
             );
             if average_depth <= self.depth_threshold {
                 continue;

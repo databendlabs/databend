@@ -44,7 +44,10 @@ use common_meta_types::Snapshot;
 use common_meta_types::SnapshotMeta;
 use common_meta_types::StorageError;
 use common_meta_types::StorageIOError;
-use tracing::info;
+use log::as_display;
+use log::debug;
+use log::info;
+use log::warn;
 
 use crate::export::vec_kv_to_json;
 use crate::metrics::raft_metrics;
@@ -111,13 +114,13 @@ impl StoreInner {
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create one.
     /// Otherwise it panic
-    #[tracing::instrument(level = "debug", skip_all, fields(config_id=%config.config_id))]
+    #[minitrace::trace]
     pub async fn open_create(
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
     ) -> Result<StoreInner, MetaStartupError> {
-        info!("open: {:?}, create: {:?}", open, create);
+        info!(config_id = as_display!(&config.config_id); "open: {:?}, create: {:?}", open, create);
 
         let db = get_sled_db();
 
@@ -157,11 +160,11 @@ impl StoreInner {
         self.state_machine.write().await
     }
 
-    #[tracing::instrument(level = "debug", skip_all, fields(id=self.id))]
+    #[minitrace::trace]
     pub(crate) async fn do_build_snapshot(&self) -> Result<Snapshot, StorageError> {
         // NOTE: building snapshot is guaranteed to be serialized called by RaftCore.
 
-        info!("log compaction start");
+        info!(id = self.id; "log compaction start");
 
         // Dump the data of a snapshot
         let (snap, last_applied_log, last_membership, snapshot_id) = {
@@ -197,9 +200,9 @@ impl StoreInner {
             #[allow(clippy::collapsible_if)]
             if cfg!(debug_assertions) {
                 if !sl.is_zero() {
-                    tracing::warn!("start    serializing snapshot sleep 1000s");
+                    warn!("start    serializing snapshot sleep 1000s");
                     std::thread::sleep(sl);
-                    tracing::warn!("finished serializing snapshot sleep 1000s");
+                    warn!("finished serializing snapshot sleep 1000s");
                 }
             }
             serde_json::to_vec(&snap)
@@ -228,7 +231,7 @@ impl StoreInner {
             *current_snapshot = Some(snapshot);
         }
 
-        info!(snapshot_size = snapshot_size, "log compaction complete");
+        info!(snapshot_size = snapshot_size; "log compaction complete");
 
         Ok(Snapshot {
             meta: snap_meta,
@@ -237,7 +240,7 @@ impl StoreInner {
     }
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
-    #[tracing::instrument(level = "debug", skip(self, data))]
+    #[minitrace::trace]
     pub async fn do_install_snapshot(&self, data: &[u8]) -> Result<(), MetaStorageError> {
         let mut sm = self.state_machine.write().await;
 
@@ -306,7 +309,7 @@ impl StoreInner {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn export(&self) -> Result<Vec<String>, std::io::Error> {
         let mut res = vec![];
 
@@ -387,7 +390,7 @@ impl StoreInner {
         let sm = self.state_machine.read().await;
         let ms = sm.get_membership()?;
 
-        tracing::debug!("in-statemachine membership: {:?}", ms);
+        debug!("in-statemachine membership: {:?}", ms);
 
         let membership = match &ms {
             Some(membership) => membership.membership(),
@@ -395,7 +398,7 @@ impl StoreInner {
         };
 
         let ids = list_ids(membership);
-        tracing::debug!("filtered node ids: {:?}", ids);
+        debug!("filtered node ids: {:?}", ids);
         let mut ns = vec![];
 
         for id in ids {

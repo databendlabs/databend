@@ -22,10 +22,10 @@ use common_base::base::tokio::sync::Notify;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::info;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
-use tracing::info;
 
 use crate::api::rpc::DatabendQueryFlightService;
 use crate::servers::Server as DatabendQueryServer;

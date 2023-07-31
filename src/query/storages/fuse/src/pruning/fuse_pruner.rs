@@ -30,6 +30,7 @@ use common_expression::SEGMENT_NAME_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::field_default_value;
 use common_sql::BloomIndexColumns;
+use log::warn;
 use opendal::Operator;
 use storages_common_index::RangeIndex;
 use storages_common_pruner::BlockMetaIndex;
@@ -47,7 +48,6 @@ use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
-use tracing::warn;
 
 use crate::pruning::segment_pruner::SegmentPruner;
 use crate::pruning::BlockPruner;

@@ -25,7 +25,7 @@ use common_license::license_manager::get_license_manager;
 use common_sql::plans::DescDatamaskPolicyPlan;
 use common_users::UserApiProvider;
 use data_mask_feature::get_datamask_handler;
-use tracing::warn;
+use log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

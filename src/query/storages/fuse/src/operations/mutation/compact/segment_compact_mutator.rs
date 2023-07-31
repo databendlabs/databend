@@ -17,13 +17,13 @@ use std::time::Instant;
 
 use common_catalog::table::Table;
 use common_exception::Result;
+use log::info;
 use metrics::gauge;
 use opendal::Operator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use table_lock::TableLockHandlerWrapper;
-use tracing::info;
 
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
@@ -246,7 +246,7 @@ impl<'a> SegmentCompactor<'a> {
                     number_segments,
                     start.elapsed().as_secs()
                 );
-                info!(status);
+                info!("{}", &status);
                 (status_callback)(status);
             }
 
@@ -291,6 +291,7 @@ impl<'a> SegmentCompactor<'a> {
             self.fragmented_segments.push((segment_info, location));
             self.compact_fragments().await?;
         } else {
+            // JackTan25: I think this won't happen, right? so need to remove this branch??
             // no choice but to compact the fragmented segments collected so far.
             // in this situation, after compaction, the size of compacted segments may be
             // lesser than threshold. this happens if the size of segment BEFORE compaction

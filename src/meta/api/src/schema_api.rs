@@ -31,6 +31,8 @@ use common_meta_app::schema::CreateVirtualColumnReply;
 use common_meta_app::schema::CreateVirtualColumnReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DeleteTableLockRevReq;
+use common_meta_app::schema::DropCatalogReply;
+use common_meta_app::schema::DropCatalogReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -54,6 +56,7 @@ use common_meta_app::schema::ListCatalogReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListDroppedTableResp;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
@@ -133,6 +136,11 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: ListIndexesReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
+
+    async fn list_indexes_by_table_id(
+        &self,
+        req: ListIndexesByIdReq,
+    ) -> Result<Vec<u64>, KVAppError>;
 
     // virtual column
 
@@ -231,6 +239,8 @@ pub trait SchemaApi: Send + Sync {
     -> Result<CreateCatalogReply, KVAppError>;
 
     async fn get_catalog(&self, req: GetCatalogReq) -> Result<Arc<CatalogInfo>, KVAppError>;
+
+    async fn drop_catalog(&self, req: DropCatalogReq) -> Result<DropCatalogReply, KVAppError>;
 
     async fn list_catalogs(&self, req: ListCatalogReq)
     -> Result<Vec<Arc<CatalogInfo>>, KVAppError>;

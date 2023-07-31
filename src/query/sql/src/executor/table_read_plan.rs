@@ -39,10 +39,10 @@ use common_users::UserApiProvider;
 use data_mask_feature::get_datamask_handler;
 use parking_lot::RwLock;
 
+use crate::binder::ColumnBindingBuilder;
 use crate::plans::BoundColumnRef;
 use crate::resolve_type_name_by_str;
 use crate::BindContext;
-use crate::ColumnBinding;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::ScalarExpr;
@@ -84,6 +84,8 @@ impl ToReadDataSourcePlan for dyn Table {
         internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
         dry_run: bool,
     ) -> Result<DataSourcePlan> {
+        let catalog_info = ctx.get_catalog(&catalog).await?.info();
+
         let (statistics, parts) = if let Some(PushDownInfo {
             filter:
                 Some(RemoteExpr::Constant {
@@ -189,17 +191,13 @@ impl ToReadDataSourcePlan for dyn Table {
                                 let data_type = (&table_data_type).into();
                                 let bound_column = BoundColumnRef {
                                     span: None,
-                                    column: ColumnBinding {
-                                        column_position: None,
-                                        database_name: None,
-                                        table_name: None,
-                                        table_index: None,
-                                        column_name: arg_name.to_string(),
-                                        index: i,
-                                        data_type: Box::new(data_type),
-                                        visibility: Visibility::Visible,
-                                        virtual_computed_expr: None,
-                                    },
+                                    column: ColumnBindingBuilder::new(
+                                        arg_name.to_string(),
+                                        i,
+                                        Box::new(data_type),
+                                        Visibility::Visible,
+                                    )
+                                    .build(),
                                 };
                                 let scalar_expr = ScalarExpr::BoundColumnRef(bound_column);
                                 aliases.push((arg_name.clone(), scalar_expr));
@@ -239,7 +237,7 @@ impl ToReadDataSourcePlan for dyn Table {
         // TODO pass in catalog name
 
         Ok(DataSourcePlan {
-            catalog,
+            catalog_info,
             source_info,
             output_schema,
             parts,

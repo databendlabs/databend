@@ -1,0 +1,10 @@
+1	2	3
+a	VARCHAR	NO	''	
+b	INT	NO	0	
+c	INT	NO	0	
+1.0	2
+a	FLOAT	NO	0	
+b	VARCHAR	NO	''	
+c	INT	NO	0	
+ERROR 1105 (HY000) at line 1: Internal. Code: 1001, Text = invalid float literal while evaluating function `to_float32('a')`.
+ERROR 1105 (HY000) at line 1: UnknownColumn. Code: 1058, Text = Cannot find column b.

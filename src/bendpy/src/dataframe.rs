@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use arrow::pyarrow::PyArrowConvert;
 use arrow::pyarrow::PyArrowType;
+use arrow::pyarrow::ToPyArrow;
 use arrow_schema::Schema as ArrowSchema;
 use common_exception::Result;
 use common_expression::DataBlock;

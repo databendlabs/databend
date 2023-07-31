@@ -30,8 +30,8 @@ use databend_query::test_kits::utils::generate_snapshot_with_segments;
 use databend_query::test_kits::utils::query_count;
 use enterprise_query::storages::fuse::do_vacuum;
 use enterprise_query::storages::fuse::do_vacuum_drop_tables;
-use enterprise_query::storages::fuse::operations::vacuum::get_snapshot_referenced_files;
-use enterprise_query::storages::fuse::operations::vacuum::SnapshotReferencedFiles;
+use enterprise_query::storages::fuse::operations::vacuum_table::get_snapshot_referenced_files;
+use enterprise_query::storages::fuse::operations::vacuum_table::SnapshotReferencedFiles;
 
 async fn check_files_existence(
     fixture: &TestFixture,
@@ -324,6 +324,43 @@ async fn test_fuse_do_vacuum() -> Result<()> {
         )
         .await?;
     }
+
+    // first set retention_period as a bigger value cause `do_vacuum` does not vacuum files
+    table_ctx.get_settings().set_retention_period(1024)?;
+
+    // do gc.
+    {
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let table = fixture.latest_default_table().await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
+        do_vacuum(fuse_table, table_ctx, retention_time, false).await?;
+    }
+
+    // check that after do_vacuum, files number has not changed
+    {
+        let expected_num_of_snapshot = 3;
+        let expected_num_of_segment = 2 + (orphan_segment_file_num * 3) as u32;
+        let expected_num_of_blocks =
+            2 + (orphan_segment_file_num * orphan_block_per_segment_num * 3) as u32;
+        let expected_num_of_index = expected_num_of_blocks;
+        let expected_num_of_ts = 0;
+        check_data_dir(
+            &fixture,
+            "do_gc_orphan_files: verify generate retention files and referenced files",
+            expected_num_of_snapshot,
+            expected_num_of_ts,
+            expected_num_of_segment,
+            expected_num_of_blocks,
+            expected_num_of_index,
+            Some(()),
+            None,
+        )
+        .await?;
+    }
+
+    // set retention_period as a smaller value cause `do_vacuum` gc files
+    table_ctx.get_settings().set_retention_period(0)?;
 
     // do gc.
     {

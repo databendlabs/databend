@@ -18,6 +18,7 @@ use std::time::SystemTime;
 use common_catalog::plan::PushDownInfo;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
@@ -75,7 +76,7 @@ impl Interpreter for ReclusterTableInterpreter {
         {
             let status = "recluster: begin to run recluster";
             ctx.set_status_info(status);
-            tracing::info!(status);
+            info!("{}", status);
         }
         let mut times = 0;
         let mut block_count = 0;
@@ -83,12 +84,13 @@ impl Interpreter for ReclusterTableInterpreter {
         loop {
             let table = self
                 .ctx
-                .get_catalog(&plan.catalog)?
+                .get_catalog(&plan.catalog)
+                .await?
                 .get_table(tenant.as_str(), &plan.database, &plan.table)
                 .await?;
 
             // check if the table is locked.
-            let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
             let reply = catalog
                 .list_table_lock_revs(table.get_table_info().ident.table_id)
                 .await?;
@@ -127,7 +129,7 @@ impl Interpreter for ReclusterTableInterpreter {
                     start.elapsed().map_or(0, |d| d.as_secs())
                 );
                 ctx.set_status_info(&status);
-                tracing::info!(status);
+                info!("{}", &status);
             }
 
             if !plan.is_final || times >= MAX_RECLUSTER_TIMES {

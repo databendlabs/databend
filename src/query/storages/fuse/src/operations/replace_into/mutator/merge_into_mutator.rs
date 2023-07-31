@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use ahash::AHashMap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -33,13 +34,13 @@ use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_sql::evaluator::BlockOperator;
+use log::info;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
-use tracing::info;
 
 use crate::io::write_data;
 use crate::io::BlockBuilder;
@@ -48,10 +49,14 @@ use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
 use crate::io::WriteSettings;
+use crate::metrics::metrics_inc_replace_accumulated_merge_action_time_ms;
+use crate::metrics::metrics_inc_replace_apply_deletion_time_ms;
 use crate::metrics::metrics_inc_replace_block_number_after_pruning;
 use crate::metrics::metrics_inc_replace_block_number_totally_loaded;
 use crate::metrics::metrics_inc_replace_block_number_write;
 use crate::metrics::metrics_inc_replace_block_of_zero_row_deleted;
+use crate::metrics::metrics_inc_replace_number_accumulated_merge_action;
+use crate::metrics::metrics_inc_replace_number_apply_deletion;
 use crate::metrics::metrics_inc_replace_row_number_after_pruning;
 use crate::metrics::metrics_inc_replace_row_number_totally_loaded;
 use crate::metrics::metrics_inc_replace_row_number_write;
@@ -179,6 +184,9 @@ impl MergeIntoOperationAggregator {
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, merge_into_operation: MergeIntoOperation) -> Result<()> {
         let aggregation_ctx = &self.aggregation_ctx;
+        metrics_inc_replace_number_accumulated_merge_action();
+
+        let start = Instant::now();
         match merge_into_operation {
             MergeIntoOperation::Delete(partitions) => {
                 for (segment_index, (path, ver)) in &aggregation_ctx.segment_locations {
@@ -225,13 +233,19 @@ impl MergeIntoOperationAggregator {
                         }
                     }
 
-                    metrics_inc_replace_block_number_after_pruning(
-                        self.deletion_accumulator.deletions.len() as u64,
+                    let num_blocks_mutated = self.deletion_accumulator.deletions.values().fold(
+                        0,
+                        |acc, blocks_may_have_row_deletion| {
+                            acc + blocks_may_have_row_deletion.len()
+                        },
                     );
+
+                    metrics_inc_replace_block_number_after_pruning(num_blocks_mutated as u64);
                 }
             }
             MergeIntoOperation::None => {}
         }
+        metrics_inc_replace_accumulated_merge_action_time_ms(start.elapsed().as_millis() as u64);
         Ok(())
     }
 }
@@ -240,6 +254,8 @@ impl MergeIntoOperationAggregator {
 impl MergeIntoOperationAggregator {
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
+        metrics_inc_replace_number_apply_deletion();
+        let start = Instant::now();
         let mut mutation_logs = Vec::new();
         let aggregation_ctx = &self.aggregation_ctx;
         let io_runtime = GlobalIORuntime::instance();
@@ -305,6 +321,8 @@ impl MergeIntoOperationAggregator {
                 mutation_logs.push(segment_mutation_log);
             }
         }
+
+        metrics_inc_replace_apply_deletion_time_ms(start.elapsed().as_millis() as u64);
 
         Ok(Some(MutationLogs {
             entries: mutation_logs,

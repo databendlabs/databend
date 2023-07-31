@@ -33,8 +33,11 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
+use crate::plans::materialized_cte::MaterializedCte;
 use crate::plans::runtime_filter_source::RuntimeFilterSource;
+use crate::plans::CteScan;
 use crate::plans::Exchange;
+use crate::plans::Lambda;
 use crate::plans::ProjectSet;
 use crate::plans::Window;
 
@@ -64,6 +67,7 @@ pub trait Operator {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RelOp {
     Scan,
+    CteScan,
     Join,
     EvalScalar,
     Filter,
@@ -76,6 +80,8 @@ pub enum RelOp {
     RuntimeFilterSource,
     Window,
     ProjectSet,
+    MaterializedCte,
+    Lambda,
 
     // Pattern
     Pattern,
@@ -85,6 +91,7 @@ pub enum RelOp {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RelOperator {
     Scan(Scan),
+    CteScan(CteScan),
     Join(Join),
     EvalScalar(EvalScalar),
     Filter(Filter),
@@ -97,6 +104,8 @@ pub enum RelOperator {
     RuntimeFilterSource(RuntimeFilterSource),
     Window(Window),
     ProjectSet(ProjectSet),
+    MaterializedCte(MaterializedCte),
+    Lambda(Lambda),
 
     Pattern(PatternPlan),
 }
@@ -118,6 +127,9 @@ impl Operator for RelOperator {
             RelOperator::RuntimeFilterSource(rel_op) => rel_op.rel_op(),
             RelOperator::ProjectSet(rel_op) => rel_op.rel_op(),
             RelOperator::Window(rel_op) => rel_op.rel_op(),
+            RelOperator::CteScan(rel_op) => rel_op.rel_op(),
+            RelOperator::MaterializedCte(rel_op) => rel_op.rel_op(),
+            RelOperator::Lambda(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -137,6 +149,9 @@ impl Operator for RelOperator {
             RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::ProjectSet(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Window(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::CteScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::MaterializedCte(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::Lambda(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -156,6 +171,9 @@ impl Operator for RelOperator {
             RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::ProjectSet(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Window(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::CteScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::MaterializedCte(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::Lambda(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -175,6 +193,9 @@ impl Operator for RelOperator {
             RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::ProjectSet(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::Window(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::CteScan(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::MaterializedCte(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::Lambda(rel_op) => rel_op.derive_cardinality(rel_expr),
         }
     }
 
@@ -228,6 +249,15 @@ impl Operator for RelOperator {
             RelOperator::ProjectSet(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
+            RelOperator::CteScan(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::MaterializedCte(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::Lambda(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
         }
     }
 }
@@ -247,6 +277,46 @@ impl TryFrom<RelOperator> for Scan {
         } else {
             Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to LogicalGet",
+            ))
+        }
+    }
+}
+
+impl From<CteScan> for RelOperator {
+    fn from(value: CteScan) -> Self {
+        Self::CteScan(value)
+    }
+}
+
+impl TryFrom<RelOperator> for CteScan {
+    type Error = ErrorCode;
+
+    fn try_from(value: RelOperator) -> Result<Self> {
+        if let RelOperator::CteScan(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(
+                "Cannot downcast RelOperator to CteScan",
+            ))
+        }
+    }
+}
+
+impl From<MaterializedCte> for RelOperator {
+    fn from(value: MaterializedCte) -> Self {
+        Self::MaterializedCte(value)
+    }
+}
+
+impl TryFrom<RelOperator> for MaterializedCte {
+    type Error = ErrorCode;
+
+    fn try_from(value: RelOperator) -> Result<Self> {
+        if let RelOperator::MaterializedCte(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(
+                "Cannot downcast RelOperator to MaterializedCte",
             ))
         }
     }
@@ -489,6 +559,24 @@ impl TryFrom<RelOperator> for ProjectSet {
             Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to ProjectSet",
             ))
+        }
+    }
+}
+
+impl From<Lambda> for RelOperator {
+    fn from(value: Lambda) -> Self {
+        Self::Lambda(value)
+    }
+}
+
+impl TryFrom<RelOperator> for Lambda {
+    type Error = ErrorCode;
+
+    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
+        if let RelOperator::Lambda(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal("Cannot downcast RelOperator to Lambda"))
         }
     }
 }

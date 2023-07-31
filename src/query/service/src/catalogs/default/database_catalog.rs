@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_catalog::catalog::Catalog;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
 use common_catalog::table_args::TableArgs;
@@ -22,6 +25,7 @@ use common_catalog::table_function::TableFunction;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -50,6 +54,7 @@ use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDroppedTableReq;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -75,9 +80,8 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
-use tracing::info;
+use log::info;
 
-use crate::catalogs::catalog::Catalog;
 use crate::catalogs::default::ImmutableCatalog;
 use crate::catalogs::default::MutableCatalog;
 use crate::storages::Table;
@@ -95,6 +99,12 @@ pub struct DatabaseCatalog {
     mutable_catalog: Arc<dyn Catalog>,
     /// table function engine factories
     table_function_factory: Arc<TableFunctionFactory>,
+}
+
+impl Debug for DatabaseCatalog {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DefaultCatalog").finish_non_exhaustive()
+    }
 }
 
 impl DatabaseCatalog {
@@ -128,6 +138,14 @@ impl DatabaseCatalog {
 impl Catalog for DatabaseCatalog {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn name(&self) -> String {
+        "default".to_string()
+    }
+
+    fn info(&self) -> CatalogInfo {
+        CatalogInfo::new_default()
     }
 
     #[async_backtrace::framed]
@@ -510,6 +528,11 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
         self.mutable_catalog.list_indexes(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn list_indexes_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>> {
+        self.mutable_catalog.list_indexes_by_table_id(req).await
     }
 
     // Virtual column

@@ -22,6 +22,7 @@ use common_meta_app::principal::UserPrivilegeType::Ownership;
 use common_sql::plans::GrantPrivilegePlan;
 use common_users::UserApiProvider;
 use tracing::info;
+use log::debug;
 
 use crate::interpreters::common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
@@ -47,9 +48,11 @@ impl Interpreter for GrantPrivilegeInterpreter {
         "GrantPrivilegeInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "grant_privilege_execute");
+
         let plan = self.plan.clone();
 
         validate_grant_privileges(&plan.on, plan.priv_types)?;

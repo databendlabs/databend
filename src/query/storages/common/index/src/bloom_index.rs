@@ -152,7 +152,7 @@ pub enum FilterEvalResult {
 
 impl BloomIndex {
     /// Load a filter directly from the source table's schema and the corresponding filter parquet file.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     pub fn from_filter_block(
         func_ctx: FunctionContext,
         filter_schema: TableSchemaRef,
@@ -320,7 +320,7 @@ impl BloomIndex {
     /// This happens when the data doesn't show up in the filter.
     ///
     /// Otherwise return `Uncertain`.
-    #[tracing::instrument(level = "debug", name = "block_filter_index_eval", skip_all)]
+    #[minitrace::trace(name = "block_filter_index_eval")]
     pub fn apply(
         &self,
         mut expr: Expr<String>,

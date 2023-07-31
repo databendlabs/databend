@@ -544,7 +544,7 @@ impl AccessChecker for PrivilegeAccess {
                     session
                         .validate_privilege(
                             &GrantObject::Table(
-                                plan.catalog_name.to_string(),
+                                plan.catalog_info.catalog_name().to_string(),
                                 plan.database_name.to_string(),
                                 plan.table_name.to_string(),
                             ),

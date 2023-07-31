@@ -207,7 +207,8 @@ impl Interpreter for InsertInterpreter {
                     _ => unreachable!(),
                 };
 
-                let catalog = self.plan.catalog.clone();
+                let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+                let catalog_info = catalog.info();
 
                 let insert_select_plan = match select_plan {
                     PhysicalPlan::Exchange(ref mut exchange) => {
@@ -219,7 +220,7 @@ impl Interpreter for InsertInterpreter {
                                 // which is not correct. We should generate a new id for insert.
                                 plan_id: exchange.plan_id,
                                 input,
-                                catalog,
+                                catalog_info,
                                 table_info: table1.get_table_info().clone(),
                                 select_schema: plan.schema(),
                                 select_column_bindings,
@@ -236,7 +237,7 @@ impl Interpreter for InsertInterpreter {
                             // which is not correct. We should generate a new id for insert.
                             plan_id: other_plan.get_id(),
                             input: Box::new(other_plan),
-                            catalog,
+                            catalog_info,
                             table_info: table1.get_table_info().clone(),
                             select_schema: plan.schema(),
                             select_column_bindings,
@@ -258,6 +259,7 @@ impl Interpreter for InsertInterpreter {
                     &mut build_res.main_pipeline,
                     None,
                     self.plan.overwrite,
+                    None,
                 )?;
 
                 return Ok(build_res);

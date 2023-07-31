@@ -20,7 +20,8 @@ use common_sql::plans::RemoveStagePlan;
 use common_storage::StageFilesInfo;
 use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
-use tracing::error;
+use log::debug;
+use log::error;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -44,9 +45,11 @@ impl Interpreter for RemoveUserStageInterpreter {
         "RemoveUserStageInterpreter"
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "remove_user_stage_execute");
+
         let plan = self.plan.clone();
         let op = StageTable::get_op(&self.plan.stage)?;
         let pattern = if plan.pattern.is_empty() {

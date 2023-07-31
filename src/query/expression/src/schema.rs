@@ -224,6 +224,10 @@ impl DataSchema {
             .find(|&(_, c)| c.name() == name)
     }
 
+    pub fn set_field_type(&mut self, i: FieldIndex, data_type: DataType) {
+        self.fields[i].data_type = data_type;
+    }
+
     pub fn rename_field(&mut self, i: FieldIndex, new_name: &str) {
         self.fields[i].name = new_name.to_string();
     }
