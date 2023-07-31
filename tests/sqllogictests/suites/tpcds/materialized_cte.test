@@ -3,6 +3,7 @@ set sandbox_tenant = 'test_tenant';
 
 statement ok
 use tpcds;
+
 # Q1
 onlyif mysql
 query I
