@@ -22,6 +22,7 @@ use std::time::Instant;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::future;
+use log::warn;
 use tokio::runtime::Builder;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
@@ -307,11 +308,11 @@ impl Drop for Dropper {
         if let Some(close_sender) = self.close.take() {
             if close_sender.send(()).is_ok() {
                 match self.join_handler.take().unwrap().join() {
-                    Err(e) => tracing::warn!("Runtime dropper panic, {:?}", e),
+                    Err(e) => warn!("Runtime dropper panic, {:?}", e),
                     Ok(true) => {
                         // When the runtime shutdown is blocked for more than 3 seconds,
                         // we will print the backtrace in the warn log, which will help us debug.
-                        tracing::warn!(
+                        warn!(
                             "Runtime dropper is blocked 3 seconds, runtime name: {:?}, drop backtrace: {:?}",
                             self.name,
                             Backtrace::capture()

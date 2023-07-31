@@ -34,6 +34,7 @@ use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
 use common_pipeline_core::InputError;
 use csv_core::ReadRecordResult;
+use log::debug;
 
 use crate::input_formats::impls::input_format_tsv::format_column_error;
 use crate::input_formats::AligningStateCommon;
@@ -320,7 +321,7 @@ impl AligningStateTextBased for CsvReaderState {
 
         out_tmp.truncate(out_pos);
         if row_batch.row_ends.is_empty() {
-            tracing::debug!(
+            debug!(
                 "csv aligner: {} + {} bytes => 0 rows",
                 self.out.len(),
                 buf_in.len(),
@@ -332,7 +333,7 @@ impl AligningStateTextBased for CsvReaderState {
 
             self.common.batch_id += 1;
             self.out.extend_from_slice(&out_tmp[row_batch_end..]);
-            tracing::debug!(
+            debug!(
                 "csv aligner: {} + {} bytes => {} rows + {} bytes remain",
                 last_remain.len(),
                 buf_in.len(),
@@ -377,7 +378,7 @@ impl AligningStateTextBased for CsvReaderState {
                 res.push(row_batch);
 
                 self.common.batch_id += 1;
-                tracing::debug!(
+                debug!(
                     "csv aligner flush last row of {} bytes",
                     last_batch_remain_len,
                 );

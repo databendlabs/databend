@@ -26,6 +26,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_schema_type;
 use common_expression::infer_table_schema;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
@@ -44,11 +45,13 @@ use common_settings::Settings;
 use parking_lot::RwLock;
 
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::ExprContext;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::CastExpr;
 use crate::BaseTableColumn;
+use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IdentifierNormalizer;
 use crate::Metadata;
@@ -335,6 +338,54 @@ pub fn parse_computed_expr_to_string(
         &mut ast,
     );
     Ok(format!("{:#}", ast))
+}
+
+pub fn parse_lambda_expr(
+    ctx: Arc<dyn TableContext>,
+    column_name: &str,
+    data_type: &DataType,
+    ast: &AExpr,
+) -> Result<Box<(ScalarExpr, DataType)>> {
+    let settings = Settings::create("".to_string());
+    let mut bind_context = BindContext::new();
+    let mut metadata = Metadata::default();
+
+    bind_context.set_expr_context(ExprContext::InLambdaFunction);
+    bind_context.add_column_binding(ColumnBinding {
+        database_name: None,
+        table_name: None,
+        column_position: None,
+        table_index: None,
+        column_name: column_name.to_string(),
+        index: 0,
+        data_type: Box::new(data_type.clone()),
+        visibility: Visibility::Visible,
+        virtual_computed_expr: None,
+    });
+
+    let table_type = infer_schema_type(data_type)?;
+    metadata.add_base_table_column(
+        column_name.to_string(),
+        table_type,
+        0,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let mut type_checker = TypeChecker::new(
+        &mut bind_context,
+        ctx.clone(),
+        &name_resolution_ctx,
+        Arc::new(RwLock::new(metadata)),
+        &[],
+        false,
+        false,
+    );
+
+    block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))
 }
 
 #[derive(Default)]

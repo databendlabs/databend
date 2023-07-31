@@ -20,9 +20,9 @@ use common_exception::Result;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_pipeline_transforms::processors::transforms::transform_accumulating_async::AsyncAccumulatingTransform;
+use log::debug;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
-use tracing::debug;
 
 use crate::operations::common::mutation_accumulator::MutationKind;
 use crate::operations::common::CommitMeta;

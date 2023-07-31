@@ -60,14 +60,16 @@ use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
+use common_storages_parquet::Parquet2Table;
 use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultScan;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
+use log::debug;
+use log::info;
 use parking_lot::RwLock;
-use tracing::debug;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -258,6 +260,7 @@ impl TableContext for QueryContext {
             DataSourceInfo::StageSource(stage_info) => {
                 self.build_external_by_table_info(&plan.catalog, stage_info, plan.tbl_args.clone())
             }
+            DataSourceInfo::Parquet2Source(table_info) => Parquet2Table::from_info(table_info),
             DataSourceInfo::ParquetSource(table_info) => ParquetTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
         }
@@ -303,7 +306,7 @@ impl TableContext for QueryContext {
     fn set_status_info(&self, info: &str) {
         // set_status_info is not called frequently, so we can use info! here.
         // make it easier to match the status to the log.
-        tracing::info!("{}: {}", self.get_id(), info);
+        info!("{}: {}", self.get_id(), info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
     }

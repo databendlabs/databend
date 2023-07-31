@@ -15,13 +15,14 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_base::base::tokio;
 use common_meta_kvapi::kvapi;
-use databend_meta::init_meta_ut;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvBuilder;
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_metasrv_kv_api() -> anyhow::Result<()> {
     let builder = MetaSrvBuilder {
         test_contexts: Arc::new(Mutex::new(vec![])),

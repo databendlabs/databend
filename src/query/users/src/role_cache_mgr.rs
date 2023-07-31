@@ -22,8 +22,8 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::GlobalInstance;
 use common_exception::Result;
 use common_meta_app::principal::RoleInfo;
+use log::warn;
 use parking_lot::RwLock;
-use tracing::warn;
 
 use crate::role_util::find_all_related_roles;
 use crate::UserApiProvider;

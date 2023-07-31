@@ -29,9 +29,9 @@ use common_storage::StageFilesInfo;
 use opendal::Operator;
 
 use super::table::create_parquet_table_info;
-use super::ParquetTable;
+use super::Parquet2Table;
 
-impl ParquetTable {
+impl Parquet2Table {
     pub fn blocking_create(
         operator: Operator,
         read_options: ParquetReadOptions,
@@ -49,7 +49,7 @@ impl ParquetTable {
 
         let table_info = create_parquet_table_info(arrow_schema.clone());
 
-        Ok(Arc::new(ParquetTable {
+        Ok(Arc::new(Parquet2Table {
             table_info,
             arrow_schema,
             schema_descr,

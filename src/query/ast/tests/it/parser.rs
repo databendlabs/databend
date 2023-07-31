@@ -662,6 +662,8 @@ fn test_expr() {
         r#"COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)"#,
+        r#"ARRAY_APPLY([1,2,3], x -> x + 1)"#,
+        r#"ARRAY_FILTER(col, y -> y % 2 = 0)"#,
     ];
 
     for case in cases {

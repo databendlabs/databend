@@ -28,6 +28,9 @@ use common_expression::DataBlock;
 use common_pipeline_core::Pipeline;
 use futures::AsyncRead;
 use futures_util::AsyncReadExt;
+use log::debug;
+use log::error;
+use log::warn;
 
 use crate::input_formats::transform_deserializer::DeserializeTransformer;
 use crate::input_formats::Aligner;
@@ -159,7 +162,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
 
         let ctx_clone = ctx.clone();
         GlobalIORuntime::instance().spawn(async move {
-            tracing::debug!("start copy splits feeder");
+            debug!("start copy splits feeder");
             for s in &ctx_clone.splits {
                 let (data_tx, data_rx) = tokio::sync::mpsc::channel(ctx.num_prefetch_per_split());
                 let split_clone = s.clone();
@@ -168,9 +171,9 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                     if let Err(e) =
                         Self::copy_reader_with_aligner(ctx_clone2, split_clone, data_tx).await
                     {
-                        tracing::error!("copy split reader error: {:?}", e);
+                        error!("copy split reader error: {:?}", e);
                     } else {
-                        tracing::debug!("copy split reader stopped");
+                        debug!("copy split reader stopped");
                     }
                 }));
                 if split_tx
@@ -184,7 +187,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                     break;
                 };
             }
-            tracing::debug!("end copy splits feeder");
+            debug!("end copy splits feeder");
         });
 
         Ok(())
@@ -230,14 +233,14 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         unimplemented!()
     }
 
-    #[tracing::instrument(level = "debug", skip(ctx, batch_tx))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn copy_reader_with_aligner(
         ctx: Arc<InputContext>,
         split_info: Arc<SplitInfo>,
         batch_tx: Sender<Result<Self::ReadBatch>>,
     ) -> Result<()> {
-        tracing::debug!("started");
+        debug!("started");
         let operator = ctx.source.get_operator()?;
         let offset = split_info.offset as u64;
         let size = split_info.size;
@@ -261,14 +264,14 @@ pub trait InputFormatPipe: Sized + Send + 'static {
             } else {
                 total_read += n;
                 batch.truncate(n);
-                tracing::debug!("read {} bytes", n);
+                debug!("read {} bytes", n);
                 if let Err(e) = batch_tx.send(Ok(batch.into())).await {
-                    tracing::warn!("fail to send ReadBatch: {}", e);
+                    warn!("fail to send ReadBatch: {}", e);
                     break;
                 }
             }
         }
-        tracing::debug!("finished");
+        debug!("finished");
         Ok(())
     }
 }

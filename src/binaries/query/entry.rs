@@ -37,7 +37,7 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
-use tracing::info;
+use log::info;
 
 use crate::local;
 
@@ -243,6 +243,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!("Logging:");
     println!("    file: {}", conf.log.file);
     println!("    stderr: {}", conf.log.stderr);
+    println!("    query: {}", conf.log.query);
+    println!("    tracing: {}", conf.log.tracing);
     println!(
         "Meta: {}",
         if conf.meta.is_embedded_meta()? {
@@ -353,17 +355,19 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
 #[cfg(not(target_os = "macos"))]
 fn check_max_open_files() {
+    use log::warn;
+
     let limits = match limits_rs::get_own_limits() {
         Ok(limits) => limits,
         Err(err) => {
-            tracing::warn!("get system limit of databend-query failed: {:?}", err);
+            warn!("get system limit of databend-query failed: {:?}", err);
             return;
         }
     };
     let max_open_files_limit = limits.max_open_files.soft;
     if let Some(max_open_files) = max_open_files_limit {
         if max_open_files < 65535 {
-            tracing::warn!(
+            warn!(
                 "The open file limit is too low for the databend-query. Please consider increase it by running `ulimit -n 65535`"
             );
         }

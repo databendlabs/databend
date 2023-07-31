@@ -50,8 +50,8 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
+use log::debug;
 use parking_lot::RwLock;
-use tracing::debug;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::select::MaxColumnPosition;
@@ -667,8 +667,10 @@ impl<'a> Binder {
         }
         plan.stage_table_info.files_to_copy = Some(need_copy_file_infos.clone());
 
+        let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
             .bind_stage_table(
+                table_ctx,
                 bind_context,
                 plan.stage_table_info.stage_info.clone(),
                 plan.stage_table_info.files_info.clone(),

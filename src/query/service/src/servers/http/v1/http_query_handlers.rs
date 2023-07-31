@@ -14,6 +14,8 @@
 
 use common_exception::ErrorCode;
 use common_expression::DataSchemaRef;
+use log::error;
+use log::info;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;
@@ -26,8 +28,6 @@ use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
-use tracing::error;
-use tracing::info;
 
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;

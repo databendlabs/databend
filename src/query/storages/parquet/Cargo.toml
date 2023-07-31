@@ -12,6 +12,9 @@ doctest = false
 test = false
 
 [dependencies]
+arrow-buffer = "43.0.0"
+arrow-schema = "43.0.0"
+bytes = "1.4.0"
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
@@ -23,6 +26,9 @@ common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-storage = { path = "../../../common/storage" }
 
+ethnum = { workspace = true }
+parquet = "43.0.0"
+
 storages-common-index = { path = "../common/index" }
 storages-common-pruner = { path = "../common/pruner" }
 storages-common-table-meta = { path = "../common/table-meta" }
@@ -31,9 +37,9 @@ async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
 futures = "0.3.24"
+log = { workspace = true }
 opendal = { workspace = true }
 serde = { workspace = true }
-tracing = "0.1.36"
 typetag = "0.2.3"
 
 [dev-dependencies]

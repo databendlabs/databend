@@ -28,10 +28,11 @@ use common_expression::TableSchemaRef;
 use common_expression::TopKSorter;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
+use log::info;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 
-use super::ParquetTable;
+use super::Parquet2Table;
 use crate::parquet2::parquet_reader::Parquet2Reader;
 use crate::parquet_part::ParquetPart;
 use crate::processors::AsyncParquetSource;
@@ -39,7 +40,7 @@ use crate::processors::ParquetDeserializeTransform;
 use crate::processors::ParquetPrewhereInfo;
 use crate::processors::SyncParquetSource;
 
-impl ParquetTable {
+impl Parquet2Table {
     fn build_filter(filter: &RemoteExpr<String>, schema: &DataSchema) -> Expr {
         filter
             .as_expr(&BUILTIN_FUNCTIONS)
@@ -218,7 +219,7 @@ fn calc_parallelism(ctx: &Arc<dyn TableContext>, plan: &DataSourcePlan) -> Resul
     }
     let num_deserializer = max_threads.min(max_by_memory).max(1);
 
-    tracing::info!(
+    info!(
         "loading {num_partitions} partitions \
         with {num_deserializer} deserializers, \
         according to \

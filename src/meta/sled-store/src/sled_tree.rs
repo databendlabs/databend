@@ -21,12 +21,12 @@ use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::Change;
 use common_meta_types::SeqV;
+use log::debug;
+use log::warn;
 use sled::transaction::ConflictableTransactionError;
 use sled::transaction::TransactionResult;
 use sled::transaction::TransactionalTree;
 use sled::IVec;
-use tracing::debug;
-use tracing::warn;
 
 use crate::sled::transaction::TransactionError;
 use crate::store::Store;
@@ -216,7 +216,7 @@ impl SledTree {
     }
 
     /// Delete kvs that are in `range`.
-    #[tracing::instrument(level = "debug", skip(self, range))]
+    #[minitrace::trace]
     pub(crate) async fn range_remove<KV, R>(
         &self,
         range: R,
@@ -358,7 +358,7 @@ impl SledTree {
         )
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     async fn flush_async(&self, flush: bool) -> Result<(), MetaStorageError> {
         if flush && self.sync {
             self.tree.flush_async().await?;

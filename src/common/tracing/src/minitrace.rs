@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(dead_code)]
-
 use std::borrow::Cow;
 use std::fmt;
 use std::io::Write;
@@ -69,7 +67,7 @@ pub fn inject_span_to_tonic_request<T>(msg: impl tonic::IntoRequest<T>) -> tonic
 
 #[allow(dyn_drop)]
 pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync + 'static>> {
-    let mut guards: Vec<Box<dyn Drop + Send + Sync + 'static>> = vec![];
+    let mut guards: Vec<Box<dyn Drop + Send + Sync + 'static>> = Vec::new();
 
     // Initialize tracing reporter
     if cfg.tracing.on {
@@ -95,7 +93,6 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
     }
 
     // Initialize logging
-    // let mut logger = fern::Dispatch::new();
     let mut normal_logger = fern::Dispatch::new();
     let mut query_logger = fern::Dispatch::new();
 

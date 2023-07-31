@@ -21,7 +21,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use tracing::debug;
+use log::debug;
 
 use crate::base::tokio;
 use crate::base::tokio::time::sleep;
@@ -117,7 +117,8 @@ where
     ///
     /// When returning an existent one, `check()` will be called on it to ensure it is still valid.
     /// E.g., when returning a tcp connection.
-    #[tracing::instrument(level = "debug", err(Debug))]
+    #[logcall::logcall(err = "debug")]
+    #[minitrace::trace]
     pub async fn get(&self, key: &Mgr::Key) -> Result<Mgr::Item, Mgr::Error> {
         let pool_item = self.get_pool_item(key);
 

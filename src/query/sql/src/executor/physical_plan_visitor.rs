@@ -28,6 +28,7 @@ use super::ExchangeSink;
 use super::ExchangeSource;
 use super::Filter;
 use super::HashJoin;
+use super::Lambda;
 use super::Limit;
 use super::PhysicalPlan;
 use super::Project;
@@ -64,6 +65,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
+            PhysicalPlan::Lambda(plan) => self.replace_lambda(plan),
             PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
             PhysicalPlan::DeletePartial(plan) => self.replace_delete_partial(plan),
             PhysicalPlan::DeleteFinal(plan) => self.replace_delete_final(plan),
@@ -368,6 +370,16 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
+    fn replace_lambda(&mut self, plan: &Lambda) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::Lambda(Lambda {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            lambda_funcs: plan.lambda_funcs.clone(),
+            stat_info: plan.stat_info.clone(),
+        }))
+    }
+
     fn replace_runtime_filter_source(
         &mut self,
         plan: &RuntimeFilterSource,
@@ -444,6 +456,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::ProjectSet(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit)
+                }
+                PhysicalPlan::Lambda(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit)
                 }
                 PhysicalPlan::DistributedCopyIntoTableFromStage(_) => {}

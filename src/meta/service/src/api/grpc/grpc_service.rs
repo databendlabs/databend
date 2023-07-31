@@ -38,7 +38,11 @@ use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_metrics::counter::Count;
+use common_tracing::func_name;
 use futures::StreamExt;
+use log::debug;
+use log::info;
+use minitrace::prelude::*;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
@@ -48,8 +52,6 @@ use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
-use tracing::debug;
-use tracing::info;
 
 use crate::meta_service::meta_service_impl::GrpcStream;
 use crate::meta_service::MetaNode;
@@ -98,7 +100,7 @@ impl MetaService for MetaServiceImpl {
     type HandshakeStream = GrpcStream<HandshakeResponse>;
 
     // rpc handshake first
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     async fn handshake(
         &self,
         request: Request<Streaming<HandshakeRequest>>,
@@ -156,34 +158,39 @@ impl MetaService for MetaServiceImpl {
     }
 
     async fn kv_api(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        let _guard = RequestInFlight::guard();
+        let root = common_tracing::start_trace_for_remote_request(func_name!(), &r);
+        let reply = async {
+            self.check_token(r.metadata())?;
+            network_metrics::incr_recv_bytes(r.get_ref().encoded_len() as u64);
+            let _guard = RequestInFlight::guard();
 
-        self.check_token(r.metadata())?;
-        common_tracing::extract_remote_span_as_parent(&r);
-        network_metrics::incr_recv_bytes(r.get_ref().encoded_len() as u64);
+            let req: MetaGrpcReq = r.try_into()?;
+            info!("Received MetaGrpcReq: {:?}", req);
 
-        let req: MetaGrpcReq = r.try_into()?;
-        info!("Received MetaGrpcReq: {:?}", req);
+            let m = &self.meta_node;
+            let reply = match req {
+                MetaGrpcReq::UpsertKV(a) => {
+                    let res = m.upsert_kv(a).await;
+                    RaftReply::from(res)
+                }
+                MetaGrpcReq::GetKV(a) => {
+                    let res = m.get_kv(&a.key).await;
+                    RaftReply::from(res)
+                }
+                MetaGrpcReq::MGetKV(a) => {
+                    let res = m.mget_kv(&a.keys).await;
+                    RaftReply::from(res)
+                }
+                MetaGrpcReq::ListKV(a) => {
+                    let res = m.prefix_list_kv(&a.prefix).await;
+                    RaftReply::from(res)
+                }
+            };
 
-        let m = &self.meta_node;
-        let reply = match req {
-            MetaGrpcReq::UpsertKV(a) => {
-                let res = m.upsert_kv(a).await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::GetKV(a) => {
-                let res = m.get_kv(&a.key).await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::MGetKV(a) => {
-                let res = m.mget_kv(&a.keys).await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::ListKV(a) => {
-                let res = m.prefix_list_kv(&a.prefix).await;
-                RaftReply::from(res)
-            }
-        };
+            Ok::<_, tonic::Status>(reply)
+        }
+        .in_span(root)
+        .await?;
 
         network_metrics::incr_request_result(reply.error.is_empty());
         network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
@@ -195,35 +202,38 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: Request<TxnRequest>,
     ) -> Result<Response<TxnReply>, Status> {
-        self.check_token(request.metadata())?;
-        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let _guard = RequestInFlight::guard();
+        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        async {
+            self.check_token(request.metadata())?;
+            network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+            let _guard = RequestInFlight::guard();
 
-        common_tracing::extract_remote_span_as_parent(&request);
+            let request = request.into_inner();
 
-        let request = request.into_inner();
+            info!("Receive txn_request: {}", request);
 
-        info!("Receive txn_request: {}", request);
+            let ret = self.meta_node.transaction(request).await;
+            network_metrics::incr_request_result(ret.is_ok());
 
-        let ret = self.meta_node.transaction(request).await;
-        network_metrics::incr_request_result(ret.is_ok());
+            let body = match ret {
+                Ok(resp) => TxnReply {
+                    success: resp.success,
+                    error: "".to_string(),
+                    responses: resp.responses,
+                },
+                Err(err) => TxnReply {
+                    success: false,
+                    error: serde_json::to_string(&err).expect("fail to serialize"),
+                    responses: vec![],
+                },
+            };
 
-        let body = match ret {
-            Ok(resp) => TxnReply {
-                success: resp.success,
-                error: "".to_string(),
-                responses: resp.responses,
-            },
-            Err(err) => TxnReply {
-                success: false,
-                error: serde_json::to_string(&err).expect("fail to serialize"),
-                responses: vec![],
-            },
-        };
+            network_metrics::incr_sent_bytes(body.encoded_len() as u64);
 
-        network_metrics::incr_sent_bytes(body.encoded_len() as u64);
-
-        Ok(Response::new(body))
+            Ok(Response::new(body))
+        }
+        .in_span(root)
+        .await
     }
 
     type ExportStream =
@@ -251,7 +261,7 @@ impl MetaService for MetaServiceImpl {
     type WatchStream =
         Pin<Box<dyn Stream<Item = Result<WatchResponse, tonic::Status>> + Send + Sync + 'static>>;
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     async fn watch(
         &self,
         request: Request<WatchRequest>,

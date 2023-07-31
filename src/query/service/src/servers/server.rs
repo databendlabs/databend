@@ -24,9 +24,9 @@ use common_base::base::SignalType;
 use common_exception::Result;
 use futures::stream::Abortable;
 use futures::StreamExt;
+use log::error;
+use log::info;
 use tokio_stream::wrappers::TcpListenerStream;
-use tracing::error;
-use tracing::info;
 
 use crate::clusters::ClusterDiscovery;
 use crate::sessions::SessionManager;

@@ -26,6 +26,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use log::debug;
 
 use crate::input_formats::input_pipeline::AligningStateTrait;
 use crate::input_formats::input_pipeline::InputFormatPipe;
@@ -145,13 +146,13 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                     Ok(Ok(split)) => {
                         self.state = Some(I::try_create_align_state(&self.ctx, &split.info)?);
                         self.batch_rx = Some(split.rx);
-                        tracing::debug!("aligner recv new split {}", &split.info);
+                        debug!("aligner recv new split {}", &split.info);
                     }
                     Ok(Err(e)) => {
                         return Err(e);
                     }
                     Err(_) => {
-                        tracing::debug!("aligner no more split");
+                        debug!("aligner no more split");
                         self.no_more_split = true;
                     }
                 },
@@ -159,21 +160,18 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                     if let Some(rx) = self.batch_rx.as_mut() {
                         match rx.recv().await {
                             Some(Ok(batch)) => {
-                                tracing::debug!("aligner recv new batch");
+                                debug!("aligner recv new batch");
                                 self.read_batch = Some(batch)
                             }
                             Some(Err(e)) => {
                                 return Err(e);
                             }
                             None => {
-                                tracing::debug!("aligner recv end of current split");
+                                debug!("aligner recv end of current split");
                                 if let Some(reader) = state.read_beyond_end() {
                                     let end = reader.read().await?;
                                     if !end.is_empty() {
-                                        tracing::debug!(
-                                            "aligner read {} bytes beyond end",
-                                            end.len()
-                                        );
+                                        debug!("aligner read {} bytes beyond end", end.len());
                                         let batch = I::ReadBatch::from(end);
                                         self.read_batch = Some(batch);
                                     }

@@ -58,9 +58,9 @@ use std::fmt;
 use std::hash::BuildHasher;
 use std::hash::Hash;
 
-use ritelinked::linked_hash_map;
-use ritelinked::DefaultHashBuilder;
-use ritelinked::LinkedHashMap;
+use hashbrown::hash_map::DefaultHashBuilder;
+use hashlink::linked_hash_map;
+use hashlink::LinkedHashMap;
 
 use crate::cache::Cache;
 use crate::meter::count_meter::Count;
@@ -195,7 +195,7 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        self.map.get_refresh(k).map(|v| v as &V)
+        self.get_mut(k).map(|v| &*v)
     }
 
     /// Returns a mutable reference to the value corresponding to the given key in the cache, if
@@ -224,7 +224,13 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        self.map.get_refresh(k)
+        match self.map.raw_entry_mut().from_key(k) {
+            linked_hash_map::RawEntryMut::Occupied(mut occupied) => {
+                occupied.to_back();
+                Some(occupied.into_mut())
+            }
+            linked_hash_map::RawEntryMut::Vacant(_) => None,
+        }
     }
 
     /// Returns a reference to the value corresponding to the key in the cache or `None` if it is
