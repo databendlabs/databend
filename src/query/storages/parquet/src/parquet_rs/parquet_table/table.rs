@@ -15,19 +15,19 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::parquet::metadata::SchemaDescriptor;
+use arrow_schema::DataType as ArrowDataType;
+use arrow_schema::Field as ArrowField;
+use arrow_schema::Schema as ArrowSchema;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Parquet2TableInfo;
 use common_catalog::plan::ParquetReadOptions;
+use common_catalog::plan::ParquetTableInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchema;
 use common_meta_app::principal::StageInfo;
@@ -37,10 +37,11 @@ use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
+use parquet::schema::types::SchemaDescPtr;
 
 use crate::utils::naive_parquet_table_info;
 
-pub struct Parquet2Table {
+pub struct ParquetTable {
     pub(super) read_options: ParquetReadOptions,
     pub(super) stage_info: StageInfo,
     pub(super) files_info: StageFilesInfo,
@@ -49,17 +50,17 @@ pub struct Parquet2Table {
 
     pub(super) table_info: TableInfo,
     pub(super) arrow_schema: ArrowSchema,
-    pub(super) schema_descr: SchemaDescriptor,
+    pub(super) schema_descr: SchemaDescPtr,
     pub(super) files_to_read: Option<Vec<StageFileInfo>>,
     pub(super) schema_from: String,
     pub(super) compression_ratio: f64,
 }
 
-impl Parquet2Table {
-    pub fn from_info(info: &Parquet2TableInfo) -> Result<Arc<dyn Table>> {
+impl ParquetTable {
+    pub fn from_info(info: &ParquetTableInfo) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&info.stage_info)?;
 
-        Ok(Arc::new(Parquet2Table {
+        Ok(Arc::new(ParquetTable {
             table_info: info.table_info.clone(),
             arrow_schema: info.arrow_schema.clone(),
             operator,
@@ -75,7 +76,7 @@ impl Parquet2Table {
 }
 
 #[async_trait::async_trait]
-impl Table for Parquet2Table {
+impl Table for ParquetTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -101,7 +102,7 @@ impl Table for Parquet2Table {
     }
 
     fn get_data_source_info(&self) -> DataSourceInfo {
-        DataSourceInfo::Parquet2Source(Parquet2TableInfo {
+        DataSourceInfo::ParquetSource(ParquetTableInfo {
             table_info: self.table_info.clone(),
             arrow_schema: self.arrow_schema.clone(),
             read_options: self.read_options,
@@ -140,30 +141,40 @@ impl Table for Parquet2Table {
     }
 }
 
-fn lower_field_name(field: &mut ArrowField) {
-    field.name = field.name.to_lowercase();
-    match &mut field.data_type {
-        ArrowDataType::List(f)
-        | ArrowDataType::LargeList(f)
-        | ArrowDataType::FixedSizeList(f, _) => {
-            lower_field_name(f.as_mut());
+fn lower_field_name(field: ArrowField) -> ArrowField {
+    let name = field.name().to_lowercase();
+    let field = field.with_name(name);
+    match &field.data_type() {
+        ArrowDataType::List(f) => {
+            let inner = lower_field_name(f.as_ref().clone());
+            field.with_data_type(ArrowDataType::List(Arc::new(inner)))
         }
-        ArrowDataType::Struct(ref mut fields) => {
-            for f in fields {
-                lower_field_name(f);
-            }
+        ArrowDataType::Struct(fields) => {
+            let typ = ArrowDataType::Struct(
+                fields
+                    .iter()
+                    .map(|f| lower_field_name(f.as_ref().clone()))
+                    .collect::<Vec<_>>()
+                    .into(),
+            );
+            field.with_data_type(typ)
         }
-        _ => {}
+        _ => field,
     }
 }
 
-pub(crate) fn arrow_to_table_schema(mut schema: ArrowSchema) -> TableSchema {
-    schema.fields.iter_mut().for_each(|f| {
-        lower_field_name(f);
-    });
-    TableSchema::from(&schema)
+pub(crate) fn arrow_to_table_schema(schema: ArrowSchema) -> Result<TableSchema> {
+    let fields = schema
+        .fields
+        .iter()
+        .map(|f| Arc::new(lower_field_name(f.as_ref().clone())))
+        .collect::<Vec<_>>();
+    let schema = ArrowSchema::new_with_metadata(fields, schema.metadata().clone());
+    TableSchema::try_from(&schema).map_err(ErrorCode::from_std_error)
 }
 
-pub(super) fn create_parquet_table_info(schema: ArrowSchema) -> TableInfo {
-    naive_parquet_table_info(arrow_to_table_schema(schema).into())
+pub(super) fn create_parquet_table_info(schema: ArrowSchema) -> Result<TableInfo> {
+    Ok(naive_parquet_table_info(
+        arrow_to_table_schema(schema)?.into(),
+    ))
 }
