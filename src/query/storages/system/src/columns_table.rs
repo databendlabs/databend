@@ -150,7 +150,7 @@ impl ColumnsTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<Vec<(String, String, TableField)>> {
         let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
+        let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
 
         let mut tables = Vec::new();
         let mut databases = Vec::new();

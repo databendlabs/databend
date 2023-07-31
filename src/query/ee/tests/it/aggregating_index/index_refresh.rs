@@ -61,7 +61,7 @@ async fn create_index(ctx: Arc<QueryContext>, index_name: &str, query: &str) -> 
     let plan = plan_sql(ctx.clone(), &sql).await?;
 
     if let Plan::CreateIndex(plan) = plan {
-        let catalog = ctx.get_catalog("default")?;
+        let catalog = ctx.get_catalog("default").await?;
         let create_index_req = CreateIndexReq {
             if_not_exists: plan.if_not_exists,
             name_ident: IndexNameIdent {

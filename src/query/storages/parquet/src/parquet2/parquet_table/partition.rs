@@ -26,12 +26,12 @@ use storages_common_index::RangeIndex;
 use storages_common_pruner::RangePrunerCreator;
 
 use super::table::arrow_to_table_schema;
-use super::ParquetTable;
+use super::Parquet2Table;
 use crate::parquet2::project_parquet_schema;
 use crate::parquet2::pruning::build_column_page_pruners;
 use crate::parquet2::pruning::PartitionPruner;
 
-impl ParquetTable {
+impl Parquet2Table {
     pub(crate) fn create_pruner(
         &self,
         ctx: Arc<dyn TableContext>,

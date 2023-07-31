@@ -18,7 +18,10 @@
 mod parquet2;
 mod parquet_part;
 mod parquet_reader;
+mod parquet_rs;
 mod processors;
+mod utils;
 
-pub use parquet2::ParquetTable;
+pub use parquet2::Parquet2Table;
 pub(crate) use parquet_part::ParquetPart;
+pub use parquet_rs::ParquetTable;
