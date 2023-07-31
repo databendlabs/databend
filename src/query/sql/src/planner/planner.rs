@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::Expr;
@@ -102,6 +103,7 @@ impl Planner {
                     CatalogManager::instance(),
                     name_resolution_ctx,
                     metadata.clone(),
+                    HashMap::new(),
                 );
                 let plan = binder.bind(&stmt).await?;
 

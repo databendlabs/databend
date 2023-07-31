@@ -39,7 +39,7 @@ use log::warn;
 
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
-use crate::normalize_identifier;
+use crate::{IndexType, normalize_identifier};
 use crate::optimizer::SExpr;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
@@ -79,6 +79,7 @@ pub struct Binder {
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
+    pub m_cte_bind_ctx: HashMap<IndexType, BindContext>,
 }
 
 impl<'a> Binder {
@@ -87,12 +88,14 @@ impl<'a> Binder {
         catalogs: Arc<CatalogManager>,
         name_resolution_ctx: NameResolutionContext,
         metadata: MetadataRef,
+        m_cte_bind_ctx: HashMap<IndexType, BindContext>,
     ) -> Self {
         Binder {
             ctx,
             catalogs,
             name_resolution_ctx,
             metadata,
+            m_cte_bind_ctx,
         }
     }
 

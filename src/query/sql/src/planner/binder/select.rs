@@ -410,6 +410,7 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
+        scalar_binder.set_m_cte_bind_ctx(self.m_cte_bind_ctx.clone());
         scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = Filter {

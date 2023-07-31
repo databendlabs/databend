@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::Engine;
@@ -442,6 +443,7 @@ async fn plan_sql(
         CatalogManager::instance(),
         name_resolution_ctx,
         metadata,
+        HashMap::new(),
     );
     let tokens = tokenize_sql(sql)?;
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;

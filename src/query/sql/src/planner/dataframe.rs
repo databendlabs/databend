@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::ColumnID;
@@ -78,6 +79,7 @@ impl Dataframe {
             CatalogManager::instance(),
             name_resolution_ctx,
             metadata.clone(),
+            HashMap::new(),
         );
 
         let mut bind_context = BindContext::new();

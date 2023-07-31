@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::Expr;
@@ -24,7 +25,7 @@ use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::ScalarExpr;
-use crate::MetadataRef;
+use crate::{IndexType, MetadataRef};
 
 /// Helper for binding scalar expression with `BindContext`.
 pub struct ScalarBinder<'a> {
@@ -32,6 +33,7 @@ pub struct ScalarBinder<'a> {
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
+    m_cte_bind_ctx: HashMap<IndexType, BindContext>,
     aliases: &'a [(String, ScalarExpr)],
     allow_pushdown: bool,
     forbid_udf: bool,
@@ -50,10 +52,15 @@ impl<'a> ScalarBinder<'a> {
             ctx,
             name_resolution_ctx,
             metadata,
+            m_cte_bind_ctx: Default::default(),
             aliases,
             allow_pushdown: false,
             forbid_udf: false,
         }
+    }
+
+    pub fn set_m_cte_bind_ctx(&mut self, m_cte_bind_ctx: HashMap<IndexType, BindContext>) {
+        self.m_cte_bind_ctx = m_cte_bind_ctx;
     }
 
     pub fn allow_pushdown(&mut self) {
@@ -75,6 +82,7 @@ impl<'a> ScalarBinder<'a> {
             self.allow_pushdown,
             self.forbid_udf,
         );
+        type_checker.set_m_cte_bind_ctx(self.m_cte_bind_ctx.clone());
         Ok(*type_checker.resolve(expr).await?)
     }
 

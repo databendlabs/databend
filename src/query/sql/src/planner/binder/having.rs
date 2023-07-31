@@ -47,6 +47,7 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
+        scalar_binder.set_m_cte_bind_ctx(self.m_cte_bind_ctx.clone());
         let (scalar, _) = scalar_binder.bind(having).await?;
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
         Ok((rewriter.visit(&scalar)?, having.span()))

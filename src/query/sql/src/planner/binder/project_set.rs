@@ -122,6 +122,7 @@ impl Binder {
                             self.metadata.clone(),
                             &[],
                         );
+                        scalar_binder.set_m_cte_bind_ctx(self.m_cte_bind_ctx.clone());
                         let (scalar, _) = scalar_binder.bind(arg).await?;
                         arguments.push(scalar);
                     }

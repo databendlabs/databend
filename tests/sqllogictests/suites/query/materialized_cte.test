@@ -72,3 +72,17 @@ with t1 as materialized (select number as a from numbers(10)), t2 as (select a a
 7
 8
 9
+
+query I
+with t1 as materialized (select number as a from numbers(10)) select t2.a from t1 as t2 join t1 as t3 on t2.a = t3.a;
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9

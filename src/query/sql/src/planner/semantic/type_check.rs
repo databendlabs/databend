@@ -75,7 +75,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::NameResolutionResult;
 use crate::optimizer::RelExpr;
-use crate::parse_lambda_expr;
+use crate::{IndexType, parse_lambda_expr};
 use crate::planner::metadata::optimize_remove_count_args;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
@@ -119,6 +119,7 @@ pub struct TypeChecker<'a> {
     func_ctx: FunctionContext,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
+    m_cte_bind_ctx: HashMap<IndexType, BindContext>,
 
     aliases: &'a [(String, ScalarExpr)],
 
@@ -150,12 +151,17 @@ impl<'a> TypeChecker<'a> {
             func_ctx,
             name_resolution_ctx,
             metadata,
+            m_cte_bind_ctx: Default::default(),
             aliases,
             in_aggregate_function: false,
             in_window_function: false,
             allow_pushdown,
             forbid_udf,
         }
+    }
+
+    pub fn set_m_cte_bind_ctx(&mut self, m_cte_bind_ctx: HashMap<IndexType, BindContext>) {
+        self.m_cte_bind_ctx = m_cte_bind_ctx;
     }
 
     #[allow(dead_code)]
@@ -1964,11 +1970,13 @@ impl<'a> TypeChecker<'a> {
             CatalogManager::instance(),
             self.name_resolution_ctx.clone(),
             self.metadata.clone(),
+            self.m_cte_bind_ctx.clone(),
         );
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
         let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery).await?;
+
 
         if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
             && output_context.columns.len() > 1

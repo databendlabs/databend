@@ -209,9 +209,20 @@ impl Binder {
                                     cte_info.columns = cte_bind_ctx.columns.clone();
                                 },
                             );
+                            self.m_cte_bind_ctx.insert(cte_info.cte_idx, cte_bind_ctx.clone());
                             cte_bind_ctx
                         } else {
-                            bind_context.clone()
+                            let mut cte_bind_ctx = self.m_cte_bind_ctx.get(&cte_info.cte_idx).unwrap().clone();
+                            let alias_table_name = alias
+                                .as_ref()
+                                .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
+                                .unwrap_or_else(|| table_name.to_string());
+                            for column in cte_bind_ctx.columns.iter_mut() {
+                                column.database_name = None;
+                                column.table_name = Some(alias_table_name.clone());
+                            }
+                            cte_bind_ctx.parent = bind_context.parent.clone();
+                            cte_bind_ctx
                         };
                         bind_context
                             .ctes_map
@@ -401,6 +412,7 @@ impl Binder {
                     self.metadata.clone(),
                     &[],
                 );
+                scalar_binder.set_m_cte_bind_ctx(self.m_cte_bind_ctx.clone());
                 let table_args = bind_table_args(&mut scalar_binder, params, named_params).await?;
 
                 let func_name = normalize_identifier(name, &self.name_resolution_ctx);

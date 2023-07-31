@@ -240,6 +240,7 @@ impl Binder {
                         self.metadata.clone(),
                         &prev_aliases,
                     );
+                    scalar_binder.set_m_cte_bind_ctx(self.m_cte_bind_ctx.clone());
                     scalar_binder.allow_pushdown();
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
 
@@ -281,6 +282,7 @@ impl Binder {
                     self.metadata.clone(),
                     &[],
                 );
+                scalar_binder.set_m_cte_bind_ctx(self.m_cte_bind_ctx.clone());
                 let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
                 let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL)?;
 
