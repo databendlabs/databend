@@ -90,7 +90,6 @@
 #![feature(lazy_cell)]
 
 mod catalog;
-mod context;
 mod database;
 mod partition;
 mod table;

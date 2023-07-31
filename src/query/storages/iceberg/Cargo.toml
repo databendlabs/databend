@@ -32,3 +32,4 @@ opendal = { workspace = true }
 parquet = "43.0.0"
 serde = { workspace = true }
 typetag = "0.2"
+tokio = { workspace = true }
