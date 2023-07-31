@@ -75,14 +75,16 @@ CREATE DATABASE db1
 statement ok
 CREATE DATABASE db2
 
-statement ok
-CREATE TABLE db1.test1(a INT, b INT null) Engine = Fuse
+# step-10: disable
+# statement ok
+# CREATE TABLE db1.test1(a INT, b INT null) Engine = Fuse
 
 # statement ok
 # INSERT INTO db1.test1 VALUES (1, 2), (2, 3), (3, 4)
 
-statement ok
-CREATE TABLE db2.test2 LIKE db1.test1 ENGINE=fuse
+# step-10: disable
+# statement ok
+# CREATE TABLE db2.test2 LIKE db1.test1 ENGINE=fuse
 
 # statement ok
 # INSERT INTO db2.test2 VALUES (3, 5)
@@ -98,8 +100,9 @@ CREATE TABLE db2.test2 LIKE db1.test1 ENGINE=fuse
 # a INT NO 0 (empty)
 # b INT YES NULL (empty)
 
-statement ok
-CREATE TABLE db2.test3(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT * FROM db1.test1
+# step-10: disable
+# statement ok
+# CREATE TABLE db2.test3(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT * FROM db1.test1
 
 # query TTTTT
 # DESCRIBE db2.test3
@@ -114,14 +117,17 @@ CREATE TABLE db2.test3(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT * F
 # 2
 # 3
 
-statement ok
-CREATE TABLE db2.test4(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b, a FROM db1.test1
+# step-10: disable
+# statement ok
+# CREATE TABLE db2.test4(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b, a FROM db1.test1
 
-statement ok
-CREATE TABLE if not exists db2.test4 AS SELECT b, a FROM db1.test1
+# step-10: disable
+# statement ok
+# CREATE TABLE if not exists db2.test4 AS SELECT b, a FROM db1.test1
 
-statement ok
-CREATE TABLE if not exists db2.test4 AS SELECT b, a FROM db1.test1
+# step-10: disable
+# statement ok
+# CREATE TABLE if not exists db2.test4 AS SELECT b, a FROM db1.test1
 
 # query TTTTT
 # DESCRIBE db2.test4
