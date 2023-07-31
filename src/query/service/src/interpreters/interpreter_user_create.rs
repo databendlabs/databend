@@ -22,6 +22,7 @@ use common_meta_app::principal::UserQuota;
 use common_meta_types::MatchSeq;
 use common_sql::plans::CreateUserPlan;
 use common_users::UserApiProvider;
+use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -46,9 +47,11 @@ impl Interpreter for CreateUserInterpreter {
         "CreateUserInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_user_execute");
+
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
 

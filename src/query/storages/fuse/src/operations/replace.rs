@@ -183,6 +183,7 @@ impl FuseTable {
                 input,
                 None,
                 false,
+                None,
             )
         })?;
         Ok(())

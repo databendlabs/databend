@@ -30,8 +30,8 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use common_sql::executor::MutationKind;
 use common_sql::plans::PREDICATE_COLUMN_NAME;
+use log::info;
 use storages_common_table_meta::meta::TableSnapshot;
-use tracing::info;
 
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::mutation::MutationAction;
@@ -292,7 +292,7 @@ impl FuseTable {
                     total_tasks
                 );
                 ctx.set_status_info(&status);
-                info!(status);
+                info!("{}", status);
             }
         }
 

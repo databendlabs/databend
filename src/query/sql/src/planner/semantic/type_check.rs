@@ -62,6 +62,7 @@ use common_functions::aggregates::AggregateCountFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use common_functions::GENERAL_WINDOW_FUNCTIONS;
 use common_users::UserApiProvider;
 use simsearch::SimSearch;
@@ -70,9 +71,11 @@ use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::NameResolutionResult;
 use crate::optimizer::RelExpr;
+use crate::parse_lambda_expr;
 use crate::planner::metadata::optimize_remove_count_args;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
@@ -81,6 +84,7 @@ use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::NtileFunction;
 use crate::plans::ScalarExpr;
@@ -349,6 +353,7 @@ impl<'a> TypeChecker<'a> {
                             args: args.iter().copied().cloned().collect(),
                             params: vec![],
                             window: None,
+                            lambda: None,
                         })
                         .await?
                     } else {
@@ -574,6 +579,7 @@ impl<'a> TypeChecker<'a> {
                                 args: vec![*operand.clone(), c.clone()],
                                 params: vec![],
                                 window: None,
+                                lambda: None,
                             };
                             arguments.push(equal_expr)
                         }
@@ -624,6 +630,7 @@ impl<'a> TypeChecker<'a> {
                 args,
                 params,
                 window,
+                lambda,
             } => {
                 let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
                 let func_name = func_name.as_str();
@@ -638,6 +645,8 @@ impl<'a> TypeChecker<'a> {
                             .all_function_names()
                             .into_iter()
                             .chain(AggregateFunctionFactory::instance().registered_names())
+                            .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
+                            .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(
                                 Self::all_rewritable_scalar_function()
                                     .iter()
@@ -699,6 +708,15 @@ impl<'a> TypeChecker<'a> {
 
                 let name = func_name.to_lowercase();
                 if GENERAL_WINDOW_FUNCTIONS.contains(&name.as_str()) {
+                    if matches!(
+                        self.bind_context.expr_context,
+                        ExprContext::InLambdaFunction
+                    ) {
+                        return Err(ErrorCode::SemanticError(
+                            "window functions can not be used in lambda function".to_string(),
+                        )
+                        .set_span(*span));
+                    }
                     // general window function
                     if window.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
@@ -711,6 +729,16 @@ impl<'a> TypeChecker<'a> {
                     self.resolve_window(*span, display_name, window, func)
                         .await?
                 } else if AggregateFunctionFactory::instance().contains(&name) {
+                    if matches!(
+                        self.bind_context.expr_context,
+                        ExprContext::InLambdaFunction
+                    ) {
+                        return Err(ErrorCode::SemanticError(
+                            "aggregate functions can not be used in lambda function".to_string(),
+                        )
+                        .set_span(*span));
+                    }
+
                     let in_window = self.in_window_function;
                     self.in_window_function = self.in_window_function || window.is_some();
                     let (new_agg_func, data_type) = self
@@ -726,6 +754,93 @@ impl<'a> TypeChecker<'a> {
                     } else {
                         // aggregate function
                         Box::new((new_agg_func.into(), data_type))
+                    }
+                } else if GENERAL_LAMBDA_FUNCTIONS.contains(&name.as_str()) {
+                    if matches!(
+                        self.bind_context.expr_context,
+                        ExprContext::InLambdaFunction
+                    ) {
+                        return Err(ErrorCode::SemanticError(
+                            "lambda functions can not be used in lambda function".to_string(),
+                        )
+                        .set_span(*span));
+                    }
+                    if lambda.is_none() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "function {name} must have a lambda expression",
+                        )));
+                    }
+                    let lambda = lambda.as_ref().unwrap();
+
+                    let params = lambda
+                        .params
+                        .iter()
+                        .map(|param| param.name.clone())
+                        .collect::<Vec<_>>();
+
+                    // TODO: support multiple params
+                    if params.len() != 1 {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "incorrect number of parameters in lambda function, {name} expects 1 parameter",
+                        )));
+                    }
+
+                    if args.len() != 1 {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "invalid arguments for lambda function, {name} expects 1 argument"
+                        )));
+                    }
+                    let box (arg, arg_type) = self.resolve(args[0]).await?;
+                    match arg_type.remove_nullable() {
+                        // Empty array will always return an Empty array
+                        DataType::EmptyArray => Box::new((
+                            ConstantExpr {
+                                span: *span,
+                                value: Scalar::EmptyArray,
+                            }
+                            .into(),
+                            DataType::EmptyArray,
+                        )),
+                        DataType::Array(box inner_ty) => {
+                            let box (lambda_expr, lambda_type) = parse_lambda_expr(
+                                self.ctx.clone(),
+                                &params[0],
+                                &inner_ty,
+                                &lambda.expr,
+                            )?;
+
+                            let return_type = if name == "array_filter" {
+                                if lambda_type.remove_nullable() == DataType::Boolean {
+                                    arg_type
+                                } else {
+                                    return Err(ErrorCode::SemanticError(
+                                        "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
+                                    ));
+                                }
+                            } else if arg_type.is_nullable() {
+                                DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type))))
+                            } else {
+                                DataType::Array(Box::new(lambda_type))
+                            };
+                            Box::new((
+                                LambdaFunc {
+                                    span: *span,
+                                    func_name: name.clone(),
+                                    display_name: format!("{:#}", expr),
+                                    args: vec![arg],
+                                    params: vec![(params[0].clone(), inner_ty)],
+                                    lambda_expr: Box::new(lambda_expr),
+                                    return_type: Box::new(return_type.clone()),
+                                }
+                                .into(),
+                                return_type,
+                            ))
+                        }
+                        _ => {
+                            return Err(ErrorCode::SemanticError(
+                                "invalid arguments for lambda function, argument data type must be array".to_string()
+                            ));
+                        }
                     }
                 } else {
                     // Scalar function
@@ -2028,6 +2143,7 @@ impl<'a> TypeChecker<'a> {
                         args: vec![arg_x.clone()],
                         params: vec![],
                         window: None,
+                        lambda: None,
                     })
                     .await,
                 )
@@ -2064,6 +2180,7 @@ impl<'a> TypeChecker<'a> {
                         args: vec![(*arg).clone()],
                         params: vec![],
                         window: None,
+                        lambda: None,
                     };
 
                     new_args.push(is_not_null_expr);
@@ -2750,17 +2867,16 @@ impl<'a> TypeChecker<'a> {
         }
 
         let data_type = DataType::Nullable(Box::new(DataType::Variant));
-        let virtual_column = ColumnBinding {
-            database_name: column.database_name.clone(),
-            table_name: column.table_name.clone(),
-            column_position: None,
-            table_index: Some(table_index),
-            column_name: name,
+        let virtual_column = ColumnBindingBuilder::new(
+            name,
             index,
-            data_type: Box::new(data_type.clone()),
-            visibility: Visibility::InVisible,
-            virtual_computed_expr: None,
-        };
+            Box::new(data_type.clone()),
+            Visibility::InVisible,
+        )
+        .database_name(column.database_name.clone())
+        .table_name(column.table_name.clone())
+        .table_index(Some(table_index))
+        .build();
         let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
             span: None,
             column: virtual_column,
@@ -2947,6 +3063,7 @@ impl<'a> TypeChecker<'a> {
                     args,
                     params,
                     window,
+                    lambda,
                 } => Ok(Expr::FunctionCall {
                     span: *span,
                     distinct: *distinct,
@@ -2957,6 +3074,7 @@ impl<'a> TypeChecker<'a> {
                         .collect::<Result<Vec<Expr>>>()?,
                     params: params.clone(),
                     window: window.clone(),
+                    lambda: lambda.clone(),
                 }),
                 Expr::Case {
                     span,

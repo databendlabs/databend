@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 
 use common_exception::Result;
+use log::debug;
 
 use super::tasks::Task;
 use super::CascadesOptimizer;
@@ -48,7 +49,7 @@ impl Scheduler {
             self.scheduled_task_count += 1;
         }
 
-        tracing::debug!(
+        debug!(
             "CascadesOptimizer: scheduled {} tasks",
             self.scheduled_task_count
         );

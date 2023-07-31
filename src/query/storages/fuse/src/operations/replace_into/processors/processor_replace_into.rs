@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -33,6 +34,7 @@ use common_sql::executor::OnConflictField;
 use storages_common_table_meta::meta::ColumnStatistics;
 use tracing::error;
 
+use crate::metrics::metrics_inc_replace_process_input_block_time_ms;
 use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
 
 pub struct ReplaceIntoProcessor {
@@ -162,7 +164,9 @@ impl Processor for ReplaceIntoProcessor {
 
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
+            let start = Instant::now();
             let merge_into_action = self.replace_into_mutator.process_input_block(&data_block)?;
+            metrics_inc_replace_process_input_block_time_ms(start.elapsed().as_millis() as u64);
             if !self.target_table_empty {
                 self.output_data_merge_into_action =
                     Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));

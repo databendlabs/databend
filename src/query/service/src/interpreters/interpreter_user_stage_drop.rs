@@ -20,7 +20,8 @@ use common_meta_app::principal::StageType;
 use common_sql::plans::DropStagePlan;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
-use tracing::info;
+use log::debug;
+use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -45,9 +46,11 @@ impl Interpreter for DropUserStageInterpreter {
         "DropUserStageInterpreter"
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_user_stage_execute");
+
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();

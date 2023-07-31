@@ -37,6 +37,7 @@ use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::Filter;
 use crate::executor::HashJoin;
+use crate::executor::Lambda;
 use crate::executor::Limit;
 use crate::executor::MaterializedCte;
 use crate::executor::PhysicalPlan;
@@ -85,6 +86,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::DeletePartial(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::MutationAggregate(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
+            PhysicalPlan::Lambda(lambda) => write!(f, "{}", lambda)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::CopyIntoTable(copy_into_table) => write!(f, "{}", copy_into_table)?,
@@ -428,5 +430,24 @@ impl Display for Deduplicate {
 impl Display for ReplaceInto {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Replace")
+    }
+}
+
+impl Display for Lambda {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let scalars = self
+            .lambda_funcs
+            .iter()
+            .map(|func| {
+                let arg_exprs = func.arg_exprs.join(", ");
+                let params = func.params.join(", ");
+                let lambda_expr = func.lambda_expr.as_expr(&BUILTIN_FUNCTIONS).sql_display();
+                format!(
+                    "{}({}, {} -> {})",
+                    func.func_name, arg_exprs, params, lambda_expr
+                )
+            })
+            .collect::<Vec<String>>();
+        write!(f, "Lambda functions : {}", scalars.join(", "))
     }
 }

@@ -188,6 +188,9 @@ fn test_statement() {
         r#"ALTER TABLE t RENAME COLUMN a TO b;"#,
         r#"ALTER TABLE t DROP COLUMN b;"#,
         r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;"#,
+        r#"ALTER TABLE t MODIFY COLUMN a int, COLUMN b float;"#,
+        r#"ALTER TABLE t MODIFY COLUMN a int;"#,
+        r#"ALTER TABLE t MODIFY COLUMN a DROP STORED;"#,
         r#"ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);"#,
         r#"ALTER DATABASE IF EXISTS ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
@@ -659,6 +662,8 @@ fn test_expr() {
         r#"COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)"#,
+        r#"ARRAY_APPLY([1,2,3], x -> x + 1)"#,
+        r#"ARRAY_FILTER(col, y -> y % 2 = 0)"#,
     ];
 
     for case in cases {

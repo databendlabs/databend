@@ -21,8 +21,8 @@ use std::time::Instant;
 use common_exception::Result;
 use common_storages_fuse::io::SnapshotLiteExtended;
 use common_storages_fuse::io::SnapshotsIO;
+use log::info;
 use storages_common_table_meta::meta::Location;
-use tracing::info;
 
 #[async_backtrace::framed]
 pub async fn get_snapshot_referenced_segments<T>(
@@ -84,7 +84,7 @@ where
                 segments.len(),
                 start.elapsed().as_secs()
             );
-            info!(status);
+            info!("{}", status);
             (status_callback)(status);
         }
     }

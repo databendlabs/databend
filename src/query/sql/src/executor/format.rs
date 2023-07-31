@@ -29,6 +29,7 @@ use super::EvalScalar;
 use super::Exchange;
 use super::Filter;
 use super::HashJoin;
+use super::Lambda;
 use super::Limit;
 use super::MutationAggregate;
 use super::PhysicalPlan;
@@ -182,6 +183,7 @@ fn to_format_tree(
             delete_final_to_format_tree(plan.as_ref(), metadata, profs)
         }
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::Lambda(plan) => lambda_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RuntimeFilterSource(plan) => {
             runtime_filter_source_to_format_tree(plan, metadata, profs)
         }
@@ -995,6 +997,45 @@ fn project_set_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "ProjectSet".to_string(),
+        children,
+    ))
+}
+
+fn lambda_to_format_tree(
+    plan: &Lambda,
+    metadata: &MetadataRef,
+    prof_span_set: &SharedProcessorProfiles,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+
+    children.extend(vec![FormatTreeNode::new(format!(
+        "lambda functions: {}",
+        plan.lambda_funcs
+            .iter()
+            .map(|func| {
+                let arg_exprs = func.arg_exprs.join(", ");
+                let params = func.params.join(", ");
+                let lambda_expr = func.lambda_expr.as_expr(&BUILTIN_FUNCTIONS).sql_display();
+                format!(
+                    "{}({}, {} -> {})",
+                    func.func_name, arg_exprs, params, lambda_expr
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))]);
+
+    children.extend(vec![to_format_tree(&plan.input, metadata, prof_span_set)?]);
+
+    Ok(FormatTreeNode::with_children(
+        "Lambda".to_string(),
         children,
     ))
 }

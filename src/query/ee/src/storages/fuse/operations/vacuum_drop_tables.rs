@@ -19,9 +19,9 @@ use common_catalog::table::Table;
 use common_exception::Result;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
+use log::info;
 use opendal::EntryMode;
 use opendal::Metakey;
-use tracing::info;
 
 #[async_backtrace::framed]
 async fn do_vacuum_drop_table(

@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
+use common_ast::ast::Lambda;
 use common_ast::ast::Literal;
 use common_ast::ast::Window;
 use common_ast::Visitor;
@@ -25,6 +26,7 @@ use common_exception::Span;
 use common_expression::FunctionKind;
 use common_functions::BUILTIN_FUNCTIONS;
 
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
@@ -34,7 +36,6 @@ use crate::plans::ProjectSet;
 use crate::plans::SrfItem;
 use crate::BindContext;
 use crate::Binder;
-use crate::ColumnBinding;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
@@ -52,6 +53,7 @@ impl<'a> Visitor<'a> for SrfCollector {
         args: &'a [Expr],
         params: &'a [Literal],
         over: &'a Option<Window>,
+        lambda: &'a Option<Lambda>,
     ) {
         if BUILTIN_FUNCTIONS
             .get_property(&name.name)
@@ -66,6 +68,7 @@ impl<'a> Visitor<'a> for SrfCollector {
                 args: args.to_vec(),
                 params: params.to_vec(),
                 window: over.clone(),
+                lambda: lambda.clone(),
             });
         } else {
             for arg in args.iter() {
@@ -154,17 +157,13 @@ impl Binder {
                 .metadata
                 .write()
                 .add_derived_column(name.clone(), srf_expr.data_type().clone());
-            let column = ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_position: None,
-                table_index: None,
-                column_name: name.clone(),
-                index: column_index,
-                data_type: Box::new(srf_expr.data_type().clone()),
-                visibility: Visibility::InVisible,
-                virtual_computed_expr: None,
-            };
+            let column = ColumnBindingBuilder::new(
+                name.clone(),
+                column_index,
+                Box::new(srf_expr.data_type().clone()),
+                Visibility::InVisible,
+            )
+            .build();
 
             let item = SrfItem {
                 scalar: srf_scalar,

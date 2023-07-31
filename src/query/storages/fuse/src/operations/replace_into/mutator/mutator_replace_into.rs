@@ -37,8 +37,8 @@ use common_expression::Value;
 use common_functions::aggregates::eval_aggr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::OnConflictField;
+use log::info;
 use storages_common_table_meta::meta::ColumnStatistics;
-use tracing::info;
 
 use crate::metrics::metrics_inc_replace_original_row_number;
 use crate::metrics::metrics_inc_replace_partition_number;

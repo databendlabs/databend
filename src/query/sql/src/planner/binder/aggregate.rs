@@ -34,6 +34,7 @@ use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
@@ -44,6 +45,7 @@ use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -209,6 +211,25 @@ impl<'a> AggregateRewriter<'a> {
                 }
                 .into())
             }
+
+            ScalarExpr::LambdaFunction(lambda_func) => {
+                let new_args = lambda_func
+                    .args
+                    .iter()
+                    .map(|arg| self.visit(arg))
+                    .collect::<Result<Vec<_>>>()?;
+
+                Ok(LambdaFunc {
+                    span: lambda_func.span,
+                    func_name: lambda_func.func_name.clone(),
+                    display_name: lambda_func.display_name.clone(),
+                    args: new_args,
+                    params: lambda_func.params.clone(),
+                    lambda_expr: lambda_func.lambda_expr.clone(),
+                    return_type: lambda_func.return_type.clone(),
+                }
+                .into())
+            }
         }
     }
 
@@ -233,20 +254,14 @@ impl<'a> AggregateRewriter<'a> {
                     .add_derived_column(name.clone(), arg.data_type()?);
 
                 // Generate a ColumnBinding for each argument of aggregates
-                let column_binding = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-
-                    // TODO(leiysky): use a more reasonable name, since aggregate arguments
-                    // can not be referenced, the name is only for debug
-                    column_position: None,
-                    table_index: None,
-                    column_name: name,
+                let column_binding = ColumnBindingBuilder::new(
+                    name,
                     index,
-                    data_type: Box::new(arg.data_type()?),
-                    visibility: Visibility::Visible,
-                    virtual_computed_expr: None,
-                };
+                    Box::new(arg.data_type()?),
+                    Visibility::Visible,
+                )
+                .build();
+
                 replaced_args.push(
                     BoundColumnRef {
                         span: arg.span(),

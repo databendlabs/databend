@@ -59,6 +59,7 @@ impl VisitorMut for AggregatingIndexRewriter {
                     args: vec![],
                     params: vec![],
                     window: None,
+                    lambda: None,
                 };
             }
             _ => {}

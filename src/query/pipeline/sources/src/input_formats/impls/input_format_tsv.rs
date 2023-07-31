@@ -30,6 +30,7 @@ use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::TsvFileFormatParams;
 use common_pipeline_core::InputError;
+use log::debug;
 
 use crate::input_formats::AligningStateRowDelimiter;
 use crate::input_formats::BlockBuilder;
@@ -203,7 +204,7 @@ impl InputFormatTextBase for InputFormatTSV {
         builder: &mut BlockBuilder<Self>,
         batch: RowBatch,
     ) -> Result<HashMap<u16, InputError>> {
-        tracing::debug!(
+        debug!(
             "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",
             batch.split_info.file.path,
             batch.batch_id,

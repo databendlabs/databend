@@ -66,8 +66,9 @@ use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
+use log::debug;
+use log::info;
 use parking_lot::RwLock;
-use tracing::debug;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -303,7 +304,7 @@ impl TableContext for QueryContext {
     fn set_status_info(&self, info: &str) {
         // set_status_info is not called frequently, so we can use info! here.
         // make it easier to match the status to the log.
-        tracing::info!("{}: {}", self.get_id(), info);
+        info!("{}: {}", self.get_id(), info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
     }

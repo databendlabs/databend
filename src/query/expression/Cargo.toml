@@ -36,6 +36,7 @@ hex = "0.4.3"
 itertools = "0.10"
 jsonb = { workspace = true }
 lexical-core = "0.8.5"
+log = { workspace = true }
 match-template = "0.0.1"
 micromarshal = "0.4.0"
 num-traits = "0.2.15"
@@ -46,7 +47,7 @@ rust_decimal = "1.26"
 serde = { workspace = true }
 serde_json = { workspace = true }
 terminal_size = "0.2.6"
-tracing = "0.1.36"
+
 typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
 

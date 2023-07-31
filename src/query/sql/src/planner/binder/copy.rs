@@ -50,8 +50,8 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
+use log::debug;
 use parking_lot::RwLock;
-use tracing::debug;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::select::MaxColumnPosition;

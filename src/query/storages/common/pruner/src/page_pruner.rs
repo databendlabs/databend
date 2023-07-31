@@ -20,6 +20,7 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
+use log::warn;
 use storages_common_index::PageIndex;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ClusterStatistics;
@@ -51,7 +52,7 @@ impl PagePruner for PageIndex {
             Ok(r) => r,
             Err(e) => {
                 // swallow exceptions intentionally, corrupted index should not prevent execution
-                tracing::warn!("failed to page filter, returning true. {}", e);
+                warn!("failed to page filter, returning true. {}", e);
                 (true, None)
             }
         }

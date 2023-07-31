@@ -34,7 +34,8 @@ use common_sql::plans::CopyIntoTablePlan;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use common_storages_stage::StageTable;
-use tracing::info;
+use log::debug;
+use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
@@ -136,7 +137,7 @@ impl CopyInterpreter {
 
     fn set_status(&self, status: &str) {
         self.ctx.set_status_info(status);
-        info!(status);
+        info!("{}", status);
     }
 
     #[async_backtrace::framed]
@@ -243,9 +244,11 @@ impl Interpreter for CopyInterpreter {
         "CopyInterpreterV2"
     }
 
-    #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace(name = "copy_interpreter_execute_v2")]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_interpreter_execute_v2");
+
         if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }

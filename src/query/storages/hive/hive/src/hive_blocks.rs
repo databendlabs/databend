@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
+use log::debug;
 
 use crate::HiveBlockFilter;
 use crate::HivePartInfo;
@@ -64,7 +65,7 @@ impl HiveBlocks {
                 self.valid_rowgroups.push(idx);
             }
         }
-        tracing::debug!(
+        debug!(
             "hive parquet predict pushdown have pruned {} rowgroups",
             pruned_rg_cnt
         );

@@ -18,8 +18,8 @@ use common_arrow::arrow::chunk::Chunk;
 use common_arrow::native::read as nread;
 use common_exception::Result;
 use common_expression::DataBlock;
+use log::debug;
 use storages_common_table_meta::meta::ColumnMeta;
-use tracing::debug;
 
 use super::AggIndexReader;
 use crate::io::BlockReader;
