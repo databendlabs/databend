@@ -190,7 +190,6 @@ pub fn optimize_query(
         result = optimize_distributed_query(ctx.clone(), &result)?;
     }
     result = heuristic.optimize(result, &RESIDUAL_RULES)?;
-
     Ok(result)
 }
 

@@ -479,6 +479,7 @@ impl PhysicalPlanBuilder {
                 )
             })
             .transpose()?;
+        let mut fields = source_fields.to_vec();
         let selection = agg
             .selection
             .iter()
@@ -486,6 +487,12 @@ impl PhysicalPlanBuilder {
                 let offset = source_fields
                     .iter()
                     .position(|f| sel.index.to_string() == f.name().as_str());
+                if offset.is_none() {
+                    fields.push(DataField::new(
+                        &sel.index.to_string(),
+                        sel.scalar.data_type()?,
+                    ))
+                }
                 Ok((
                     sel.scalar
                         .as_expr()?
@@ -497,12 +504,6 @@ impl PhysicalPlanBuilder {
                 ))
             })
             .collect::<Result<Vec<_>>>()?;
-
-        let mut fields = Vec::with_capacity(selection.len());
-        for item in agg.selection.iter() {
-            let data_type = item.scalar.data_type()?;
-            fields.push(DataField::new(&item.index.to_string(), data_type));
-        }
         let agg_index_output_schema = DataSchemaRefExt::create(fields);
 
         Ok((

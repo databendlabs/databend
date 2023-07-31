@@ -19,11 +19,14 @@ use common_catalog::plan::AggIndexMeta;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::BooleanType;
+use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use opendal::Operator;
 use storages_common_table_meta::table::TableCompression;
@@ -42,7 +45,7 @@ pub struct AggIndexReader {
     filter: Option<Expr>,
 
     /// The size of the output fields of a table scan plan without the index.
-    _actual_table_field_len: usize,
+    actual_table_field_len: usize,
     // If the index is the result of an aggregation query.
     is_agg: bool,
 }
@@ -76,7 +79,7 @@ impl AggIndexReader {
             func_ctx,
             selection,
             filter,
-            _actual_table_field_len: agg.actual_table_field_len,
+            actual_table_field_len: agg.actual_table_field_len,
             is_agg: agg.is_agg,
             compression,
         })
@@ -103,13 +106,24 @@ impl AggIndexReader {
 
         // 2. Compute the output block
         // Fill dummy columns first.
-        let mut output_columns = Vec::with_capacity(self.selection.len());
+        let mut output_columns = vec![
+            BlockEntry {
+                data_type: DataType::Null,
+                value: Value::Scalar(Scalar::Null),
+            };
+            self.actual_table_field_len
+        ];
         let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        for (expr, _) in self.selection.iter() {
+        for (expr, offset) in self.selection.iter() {
             let data_type = expr.data_type().clone();
             let value = evaluator.run(expr)?;
             let col = BlockEntry { data_type, value };
-            output_columns.push(col);
+
+            if let Some(pos) = offset {
+                output_columns[*pos] = col;
+            } else {
+                output_columns.push(col);
+            }
         }
 
         Ok(DataBlock::new_with_meta(
