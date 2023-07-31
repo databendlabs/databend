@@ -502,7 +502,7 @@ impl PipelineBuilder {
     fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
         let catalog = self.ctx.get_catalog(&copy.catalog_name)?;
         let to_table = catalog.get_table_by_info(&copy.table_info)?;
-        match &copy.source {
+        let source_schema = match &copy.source {
             CopyIntoTableSource::Query(input) => {
                 self.build_pipeline(&input.plan)?;
                 Self::render_result_set(
@@ -512,18 +512,20 @@ impl PipelineBuilder {
                     &mut self.main_pipeline,
                     input.ignore_result,
                 )?;
+                input.query_source_schema.clone()
             }
             CopyIntoTableSource::Stage(source) => {
                 let stage_table = StageTable::try_create(copy.stage_table_info.clone())?;
                 stage_table.set_block_thresholds(to_table.get_block_thresholds());
                 stage_table.read_data(self.ctx.clone(), source, &mut self.main_pipeline)?;
+                copy.required_source_schema.clone()
             }
-        }
+        };
         build_append_data_pipeline(
             self.ctx.clone(),
             &mut self.main_pipeline,
             copy,
-            copy.required_source_schema.clone(),
+            source_schema,
             to_table,
         )?;
         Ok(())
