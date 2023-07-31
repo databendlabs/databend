@@ -59,9 +59,10 @@ impl AsyncSystemTable for DatabasesTable {
         let tenant = ctx.get_tenant();
         let catalogs = CatalogManager::instance();
         let catalogs: Vec<(String, Arc<dyn Catalog>)> = catalogs
-            .catalogs
+            .list_catalogs(&tenant)
+            .await?
             .iter()
-            .map(|e| (e.key().clone(), e.value().clone()))
+            .map(|e| (e.name(), e.clone()))
             .collect();
 
         let mut catalog_names = vec![];

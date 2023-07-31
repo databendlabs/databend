@@ -41,7 +41,7 @@ impl TableLockHandler for RealTableLockHandler {
         ctx: Arc<dyn TableContext>,
         table_info: TableInfo,
     ) -> Result<TableLockHeartbeat> {
-        let catalog = ctx.get_catalog(table_info.catalog())?;
+        let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
         // get a new table lock revision.
         let res = catalog

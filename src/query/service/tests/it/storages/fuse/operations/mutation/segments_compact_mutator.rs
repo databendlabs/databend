@@ -67,7 +67,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
     let qry = "create table t(c int)  block_per_segment=10";
     execute_command(ctx.clone(), qry).await?;
 
-    let catalog = ctx.get_catalog("default")?;
+    let catalog = ctx.get_catalog("default").await?;
 
     let num_inserts = 9;
     append_rows(ctx.clone(), num_inserts).await?;
@@ -109,7 +109,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let create_tbl_command = "create table t(c int)  block_per_segment=10";
     execute_command(ctx.clone(), create_tbl_command).await?;
 
-    let catalog = ctx.get_catalog("default")?;
+    let catalog = ctx.get_catalog("default").await?;
 
     let num_inserts = 9;
     append_rows(ctx.clone(), num_inserts).await?;
@@ -166,7 +166,7 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
     let create_tbl_command = "create table t(c int)  block_per_segment=10";
     execute_command(ctx.clone(), create_tbl_command).await?;
 
-    let catalog = ctx.get_catalog("default")?;
+    let catalog = ctx.get_catalog("default").await?;
 
     let num_inserts = 9;
     append_rows(ctx.clone(), num_inserts).await?;

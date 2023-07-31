@@ -153,7 +153,11 @@ impl CopyInterpreter {
     ) -> Result<Option<CopyPlanType>> {
         let ctx = self.ctx.clone();
         let to_table = ctx
-            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
+            .get_table(
+                plan.catalog_info.catalog_name(),
+                &plan.database_name,
+                &plan.table_name,
+            )
             .await?;
         let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
         let files = plan.collect_files(&table_ctx).await?;
@@ -168,7 +172,7 @@ impl CopyInterpreter {
                 stage_table
                     .read_plan_with_catalog(
                         self.ctx.clone(),
-                        plan.catalog_name.to_string(),
+                        plan.catalog_info.catalog_name().to_string(),
                         None,
                         None,
                         false,
@@ -184,7 +188,7 @@ impl CopyInterpreter {
                     // TODO(leiysky): we reuse the id of exchange here,
                     // which is not correct. We should generate a new id for insert.
                     plan_id: 0,
-                    catalog_name: plan.catalog_name.clone(),
+                    catalog_info: plan.catalog_info.clone(),
                     database_name: plan.database_name.clone(),
                     table_name: plan.table_name.clone(),
                     required_values_schema: plan.required_values_schema.clone(),
@@ -212,7 +216,7 @@ impl CopyInterpreter {
                     // which is not correct. We should generate a new id
                     plan_id: 0,
                     ignore_result: select_interpreter.get_ignore_result(),
-                    catalog_name: plan.catalog_name.clone(),
+                    catalog_info: plan.catalog_info.clone(),
                     database_name: plan.database_name.clone(),
                     table_name: plan.table_name.clone(),
                     required_source_schema: plan.required_source_schema.clone(),
@@ -251,7 +255,7 @@ impl CopyInterpreter {
             stage_table
                 .read_plan_with_catalog(
                     ctx.clone(),
-                    plan.catalog_name.to_string(),
+                    plan.catalog_info.catalog_name().to_string(),
                     None,
                     None,
                     false,
@@ -271,7 +275,7 @@ impl CopyInterpreter {
         &self,
         plan: &CopyIntoTablePlan,
     ) -> Result<PipelineBuildResult> {
-        let catalog = plan.catalog_name.as_str();
+        let catalog = plan.catalog_info.catalog_name();
         let database = plan.database_name.as_str();
         let table = plan.table_name.as_str();
 
@@ -380,7 +384,7 @@ impl CopyInterpreter {
         distributed_plan: &CopyPlanType,
     ) -> Result<PipelineBuildResult> {
         let (
-            catalog_name,
+            catalog_info,
             database_name,
             table_name,
             stage_info,
@@ -391,7 +395,7 @@ impl CopyInterpreter {
         );
         let mut build_res = match distributed_plan {
             CopyPlanType::DistributedCopyIntoTableFromStage(plan) => {
-                catalog_name = plan.catalog_name.clone();
+                catalog_info = plan.catalog_info.clone();
                 database_name = plan.database_name.clone();
                 table_name = plan.table_name.clone();
                 stage_info = plan.stage_table_info.stage_info.clone();
@@ -414,7 +418,7 @@ impl CopyInterpreter {
                 build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?
             }
             CopyPlanType::CopyIntoTableFromQuery(plan) => {
-                catalog_name = plan.catalog_name.clone();
+                catalog_info = plan.catalog_info.clone();
                 database_name = plan.database_name.clone();
                 table_name = plan.table_name.clone();
                 stage_info = plan.stage_table_info.stage_info.clone();
@@ -437,7 +441,7 @@ impl CopyInterpreter {
         };
         let to_table = self
             .ctx
-            .get_table(&catalog_name, &database_name, &table_name)
+            .get_table(catalog_info.catalog_name(), &database_name, &table_name)
             .await?;
 
         // commit.
