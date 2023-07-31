@@ -29,7 +29,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'log'     | 'log_query_enabled'                        | 'null'                                                         | ''       |
 | 'log'     | 'query_enabled'                            | 'false'                                                        | ''       |
 | 'log'     | 'stderr.format'                            | 'text'                                                         | ''       |
-| 'log'     | 'stderr.level'                             | 'INFO'                                                         | ''       |
+| 'log'     | 'stderr.level'                             | 'WARN'                                                         | ''       |
 | 'log'     | 'stderr.on'                                | 'true'                                                         | ''       |
 | 'meta'    | 'auto_sync_interval'                       | '0'                                                            | ''       |
 | 'meta'    | 'client_timeout_in_second'                 | '10'                                                           | ''       |
