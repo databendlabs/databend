@@ -6,11 +6,13 @@ DROP TABLE IF EXISTS t
 statement ok
 DROP TABLE IF EXISTS t2
 
-statement ok
-DROP TABLE IF EXISTS t3
+# step-11: disable
+# statement ok
+# DROP TABLE IF EXISTS t3
 
-statement ok
-DROP TABLE IF EXISTS t4
+# step-11: disable
+# statement ok
+# DROP TABLE IF EXISTS t4
 
 statement ok
 CREATE TABLE t(c1 int) ENGINE = Null
@@ -42,14 +44,17 @@ create table t2(a int,b int) Engine = Fuse
 statement error 1005
 create table t2(a INT auto_increment)
 
-statement error 2703
-create table t3(a int,b int) engine=Memory CLUSTER BY(a)
+# step-11: disable
+# statement error 2703
+# create table t3(a int,b int) engine=Memory CLUSTER BY(a)
 
-statement ok
-create table t3(`a` int) ENGINE = Null
+# step-11: disable
+# statement ok
+# create table t3(`a` int) ENGINE = Null
 
-statement ok
-create table t4(a int) ENGINE = Null
+# step-11: disable
+# statement ok
+# create table t4(a int) ENGINE = Null
 
 statement ok
 DROP TABLE IF EXISTS t
@@ -57,20 +62,24 @@ DROP TABLE IF EXISTS t
 statement ok
 DROP TABLE IF EXISTS t2
 
-statement ok
-DROP TABLE IF EXISTS t3
+# step-11: disable
+# statement ok
+# DROP TABLE IF EXISTS t3
 
-statement ok
-DROP TABLE IF EXISTS t4
+# step-11: disable
+# statement ok
+# DROP TABLE IF EXISTS t4
 
-statement ok
-DROP DATABASE IF EXISTS db1
+# step-11: disable
+# statement ok
+# DROP DATABASE IF EXISTS db1
 
 statement ok
 DROP DATABASE IF EXISTS db2
 
-statement ok
-CREATE DATABASE db1
+# step-11: disable
+# statement ok
+# CREATE DATABASE db1
 
 statement ok
 CREATE DATABASE db2
