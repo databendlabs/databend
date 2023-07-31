@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::table_context::TableContext;
@@ -36,10 +37,12 @@ use common_sql::plans::Plan;
 use common_sql::plans::Replace;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
+use log::info;
 use storages_common_table_meta::meta::TableSnapshot;
-use tracing::info;
 
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::metrics_inc_replace_execution_time_ms;
+use crate::interpreters::common::metrics_inc_replace_mutation_time_ms;
 use crate::interpreters::interpreter_copy::CopyInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -76,6 +79,8 @@ impl Interpreter for ReplaceInterpreter {
         }
 
         self.check_on_conflicts()?;
+        let start = Instant::now();
+
         let physical_plan = self.build_physical_plan().await?;
         let mut pipeline =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
@@ -95,7 +100,8 @@ impl Interpreter for ReplaceInterpreter {
             let catalog = self.plan.catalog.clone();
             let database = self.plan.database.to_string();
             let table = self.plan.table.to_string();
-            pipeline.main_pipeline.set_on_finished(|err| {
+            pipeline.main_pipeline.set_on_finished(move |err| {
+                metrics_inc_replace_mutation_time_ms(start.elapsed().as_millis() as u64);
                     if err.is_none() {
                         info!("execute replace into finished successfully. running table optimization job.");
                          match  GlobalIORuntime::instance().block_on({
@@ -142,6 +148,7 @@ impl Interpreter for ReplaceInterpreter {
 
                         return Ok(());
                     }
+                    metrics_inc_replace_execution_time_ms(start.elapsed().as_millis() as u64);
                     Ok(())
                 });
         }

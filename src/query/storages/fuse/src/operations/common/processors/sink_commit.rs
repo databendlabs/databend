@@ -38,7 +38,6 @@ use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use table_lock::TableLockHandlerWrapper;
 use table_lock::TableLockHeartbeat;
-use tracing::info;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_inc_commit_aborts;

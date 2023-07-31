@@ -32,7 +32,6 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_sql::executor::OnConflictField;
 use storages_common_table_meta::meta::ColumnStatistics;
-use tracing::error;
 
 use crate::metrics::metrics_inc_replace_process_input_block_time_ms;
 use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
@@ -124,7 +123,6 @@ impl Processor for ReplaceIntoProcessor {
         let mut pushed_something = false;
         if self.output_port_append_data.can_push() {
             if let Some(data) = self.output_data_append.take() {
-                error!("replace into processor: output data: {:?}", data);
                 self.output_port_append_data.push_data(Ok(data));
                 pushed_something = true;
             }
@@ -149,7 +147,6 @@ impl Processor for ReplaceIntoProcessor {
                 {
                     // no pending data (being sent to down streams)
                     self.input_data = Some(self.input_port.pull_data().unwrap()?);
-                    error!("replace into processor: input data: {:?}", self.input_data);
                     Ok(Event::Sync)
                 } else {
                     // data pending
