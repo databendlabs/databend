@@ -36,7 +36,7 @@ impl Config {
             },
             stderr: StderrConfig {
                 on: true,
-                level: "INFO".to_string(),
+                level: "WARN".to_string(),
                 format: "text".to_string(),
             },
             query: QueryLogConfig {
