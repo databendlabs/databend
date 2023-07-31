@@ -3,7 +3,7 @@ import React, { FC, ReactElement } from 'react';
 import styles from './styles.module.scss';
 import { Close } from '../Icons';
 import { useSessionStorageState } from 'ahooks';
-import CheckIcon from './Check';
+import CheckIcon from './CheckIcon';
 const TryCloudCard: FC = (): ReactElement=> {
   const [hidden, setHiddenFlag] = useSessionStorageState('DATABEND_TOC_CARD', {
     defaultValue: ''
