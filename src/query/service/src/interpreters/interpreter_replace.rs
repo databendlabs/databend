@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::Deduplicate;
+use common_sql::executor::Exchange;
 use common_sql::executor::MutationAggregate;
 use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
@@ -186,6 +187,7 @@ impl ReplaceInterpreter {
             Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))
         });
 
+        let is_distributed = !self.ctx.get_cluster().is_empty();
         let table_is_empty = base_snapshot.segments.is_empty();
         let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let max_threads = self.ctx.get_settings().get_max_threads()?;
@@ -204,6 +206,14 @@ impl ReplaceInterpreter {
             table_schema: plan.schema.clone(),
             table_level_range_index,
         }));
+        if is_distributed {
+            root = Box::new(PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: root,
+                kind: common_sql::executor::FragmentKind::Expansive,
+                keys: vec![],
+            }));
+        }
         root = Box::new(PhysicalPlan::ReplaceInto(ReplaceInto {
             input: root,
             segment_partition_num,
@@ -213,6 +223,14 @@ impl ReplaceInterpreter {
             on_conflicts,
             snapshot: (*base_snapshot).clone(),
         }));
+        if is_distributed {
+            root = Box::new(PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: root,
+                kind: common_sql::executor::FragmentKind::Merge,
+                keys: vec![],
+            }));
+        }
         root = Box::new(PhysicalPlan::MutationAggregate(Box::new(
             MutationAggregate {
                 input: root,
