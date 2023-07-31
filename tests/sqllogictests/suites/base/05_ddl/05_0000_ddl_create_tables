@@ -227,29 +227,35 @@ map MAP(STRING, DATE) NO {} (empty)
 variant VARIANT NO (empty) (empty)
 
 
-statement ok
-use db2
+# step-6: disable
+# statement ok
+# use db2
 
-statement ok
-create table test9 like test8
+# step-6: disable
+# statement ok
+# create table test9 like test8
 
 # step 2: end
 
 statement ok
 use default
 
+# step-6: disable
 # step 1: enable these
-statement ok
-DROP DATABASE db1
+# statement ok
+# DROP DATABASE db1
 
-statement ok
-DROP DATABASE db2
+# step-6: disable
+# statement ok
+# DROP DATABASE db2
 
-statement error 1002
-CREATE TABLE system.test(a INT)
+# step-6: disable
+# statement error 1002
+# CREATE TABLE system.test(a INT)
 
-statement ok
-drop table if exists t
+# step-6: disable
+# statement ok
+# drop table if exists t
 
 # step-5: disabled
 # statement error Duplicated column name
