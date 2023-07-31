@@ -40,24 +40,24 @@ jobs:
           echo "license=$(cat license.key | base64 -w 0)" >> $GITHUB_OUTPUT
           cat license.json
 
-  build:
-    name: build_${{ matrix.arch }}_${{ matrix.libc }}
-    runs-on: [self-hosted, X64, Linux, 16c32g]
-    strategy:
-      matrix:
-        include:
-          - { arch: x86_64, libc: gnu }
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          # fetch all tags, metasrv and metaclient need tag as its version.
-          fetch-depth: 0
-      - uses: ./.github/actions/build_linux
-        timeout-minutes: 30
-        with:
-          sha: ${{ github.sha }}
-          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
-          artifacts: all
+  # build:
+  #   name: build_${{ matrix.arch }}_${{ matrix.libc }}
+  #   runs-on: [self-hosted, X64, Linux, 16c32g]
+  #   strategy:
+  #     matrix:
+  #       include:
+  #         - { arch: x86_64, libc: gnu }
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #       with:
+  #         # fetch all tags, metasrv and metaclient need tag as its version.
+  #         fetch-depth: 0
+  #     - uses: ./.github/actions/build_linux
+  #       timeout-minutes: 30
+  #       with:
+  #         sha: ${{ github.sha }}
+  #         target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+  #         artifacts: all
 
 #  build_other:
 #    name: build_${{ matrix.arch }}_${{ matrix.libc }}
@@ -242,7 +242,7 @@ jobs:
   sqllogic_cluster:
     name: sqllogic_cluster_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g]
-    needs: build
+    # needs: build
     strategy:
       matrix:
         dirs:
