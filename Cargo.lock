@@ -2856,6 +2856,7 @@ dependencies = [
 name = "common-storages-parquet"
 version = "0.1.0"
 dependencies = [
+ "arrow-buffer",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
@@ -2872,6 +2873,7 @@ dependencies = [
  "common-pipeline-sources",
  "common-sql",
  "common-storage",
+ "ethnum",
  "futures",
  "log",
  "opendal",
