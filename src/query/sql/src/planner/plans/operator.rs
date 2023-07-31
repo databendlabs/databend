@@ -37,6 +37,7 @@ use crate::plans::materialized_cte::MaterializedCte;
 use crate::plans::runtime_filter_source::RuntimeFilterSource;
 use crate::plans::CteScan;
 use crate::plans::Exchange;
+use crate::plans::Lambda;
 use crate::plans::ProjectSet;
 use crate::plans::Window;
 
@@ -80,6 +81,7 @@ pub enum RelOp {
     Window,
     ProjectSet,
     MaterializedCte,
+    Lambda,
 
     // Pattern
     Pattern,
@@ -103,6 +105,7 @@ pub enum RelOperator {
     Window(Window),
     ProjectSet(ProjectSet),
     MaterializedCte(MaterializedCte),
+    Lambda(Lambda),
 
     Pattern(PatternPlan),
 }
@@ -126,6 +129,7 @@ impl Operator for RelOperator {
             RelOperator::Window(rel_op) => rel_op.rel_op(),
             RelOperator::CteScan(rel_op) => rel_op.rel_op(),
             RelOperator::MaterializedCte(rel_op) => rel_op.rel_op(),
+            RelOperator::Lambda(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -147,6 +151,7 @@ impl Operator for RelOperator {
             RelOperator::Window(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::CteScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::Lambda(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -168,6 +173,7 @@ impl Operator for RelOperator {
             RelOperator::Window(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::CteScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::Lambda(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -189,6 +195,7 @@ impl Operator for RelOperator {
             RelOperator::Window(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::CteScan(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::Lambda(rel_op) => rel_op.derive_cardinality(rel_expr),
         }
     }
 
@@ -246,6 +253,9 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::MaterializedCte(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::Lambda(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
         }
@@ -549,6 +559,24 @@ impl TryFrom<RelOperator> for ProjectSet {
             Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to ProjectSet",
             ))
+        }
+    }
+}
+
+impl From<Lambda> for RelOperator {
+    fn from(value: Lambda) -> Self {
+        Self::Lambda(value)
+    }
+}
+
+impl TryFrom<RelOperator> for Lambda {
+    type Error = ErrorCode;
+
+    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
+        if let RelOperator::Lambda(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal("Cannot downcast RelOperator to Lambda"))
         }
     }
 }

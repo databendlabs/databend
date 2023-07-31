@@ -39,6 +39,7 @@ pub enum ScalarExpr {
     ConstantExpr(ConstantExpr),
     WindowFunction(WindowFunc),
     AggregateFunction(AggregateFunction),
+    LambdaFunction(LambdaFunc),
     FunctionCall(FunctionCall),
     CastExpr(CastExpr),
     SubqueryExpr(SubqueryExpr),
@@ -64,6 +65,13 @@ impl ScalarExpr {
                 result
             }
             ScalarExpr::AggregateFunction(scalar) => {
+                let mut result = ColumnSet::new();
+                for scalar in &scalar.args {
+                    result = result.union(&scalar.used_columns()).cloned().collect();
+                }
+                result
+            }
+            ScalarExpr::LambdaFunction(scalar) => {
                 let mut result = ColumnSet::new();
                 for scalar in &scalar.args {
                     result = result.union(&scalar.used_columns()).cloned().collect();
@@ -107,6 +115,13 @@ impl ScalarExpr {
                 }
                 Ok(result)
             }
+            ScalarExpr::LambdaFunction(scalar) => {
+                let mut result = vec![];
+                for scalar in &scalar.args {
+                    result.append(&mut scalar.used_tables(metadata.clone())?);
+                }
+                Ok(result)
+            }
             ScalarExpr::CastExpr(scalar) => scalar.argument.used_tables(metadata),
             ScalarExpr::WindowFunction(_) | ScalarExpr::SubqueryExpr(_) => {
                 Err(ErrorCode::Unimplemented(
@@ -142,8 +157,11 @@ impl ScalarExpr {
             ScalarExpr::WindowFunction(_)
             | ScalarExpr::AggregateFunction(_)
             | ScalarExpr::SubqueryExpr(_) => false,
-            ScalarExpr::FunctionCall(expr) => {
-                expr.arguments.iter().all(|arg| arg.valid_for_clustering())
+            ScalarExpr::FunctionCall(func) => {
+                func.arguments.iter().all(|arg| arg.valid_for_clustering())
+            }
+            ScalarExpr::LambdaFunction(func) => {
+                func.args.iter().all(|arg| arg.valid_for_clustering())
             }
             ScalarExpr::CastExpr(expr) => expr.argument.valid_for_clustering(),
         }
@@ -221,6 +239,24 @@ impl TryFrom<ScalarExpr> for WindowFunc {
             Ok(value)
         } else {
             Err(ErrorCode::Internal("Cannot downcast Scalar to WindowFunc"))
+        }
+    }
+}
+
+impl From<LambdaFunc> for ScalarExpr {
+    fn from(v: LambdaFunc) -> Self {
+        Self::LambdaFunction(v)
+    }
+}
+
+impl TryFrom<ScalarExpr> for LambdaFunc {
+    type Error = ErrorCode;
+
+    fn try_from(value: ScalarExpr) -> Result<Self> {
+        if let ScalarExpr::LambdaFunction(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal("Cannot downcast Scalar to LambdaFunc"))
         }
     }
 }
@@ -411,6 +447,19 @@ pub struct WindowOrderBy {
     pub asc: Option<bool>,
     // Optional `NULLS FIRST` or `NULLS LAST`
     pub nulls_first: Option<bool>,
+}
+
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct LambdaFunc {
+    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
+    pub span: Span,
+    pub func_name: String,
+    pub display_name: String,
+    pub args: Vec<ScalarExpr>,
+    pub params: Vec<(String, DataType)>,
+    pub lambda_expr: Box<ScalarExpr>,
+    pub return_type: Box<DataType>,
 }
 
 #[derive(Clone, Debug, Educe)]

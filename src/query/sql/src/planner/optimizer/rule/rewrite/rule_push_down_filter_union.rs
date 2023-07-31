@@ -29,6 +29,7 @@ use crate::plans::CastExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -244,6 +245,23 @@ fn replace_column_binding(
                 .map(|arg| replace_column_binding(index_pairs, arg))
                 .collect::<Result<Vec<_>>>()?,
         })),
+        ScalarExpr::LambdaFunction(lambda_func) => {
+            let args = lambda_func
+                .args
+                .into_iter()
+                .map(|arg| replace_column_binding(index_pairs, arg))
+                .collect::<Result<Vec<ScalarExpr>>>()?;
+
+            Ok(ScalarExpr::LambdaFunction(LambdaFunc {
+                span: lambda_func.span,
+                func_name: lambda_func.func_name.clone(),
+                display_name: lambda_func.display_name.clone(),
+                args,
+                params: lambda_func.params.clone(),
+                lambda_expr: lambda_func.lambda_expr.clone(),
+                return_type: lambda_func.return_type,
+            }))
+        }
         ScalarExpr::CastExpr(expr) => Ok(ScalarExpr::CastExpr(CastExpr {
             span: expr.span,
             is_try: expr.is_try,

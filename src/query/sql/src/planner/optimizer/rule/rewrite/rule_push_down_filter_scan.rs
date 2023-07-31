@@ -27,6 +27,7 @@ use crate::plans::CastExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -208,6 +209,23 @@ impl RulePushDownFilterScan {
                     args,
                     return_type: agg_func.return_type.clone(),
                     display_name: agg_func.display_name.clone(),
+                }))
+            }
+            ScalarExpr::LambdaFunction(lambda_func) => {
+                let args = lambda_func
+                    .args
+                    .iter()
+                    .map(|arg| Self::replace_view_column(arg, table_entries, column_entries))
+                    .collect::<Result<Vec<ScalarExpr>>>()?;
+
+                Ok(ScalarExpr::LambdaFunction(LambdaFunc {
+                    span: lambda_func.span,
+                    func_name: lambda_func.func_name.clone(),
+                    display_name: lambda_func.display_name.clone(),
+                    args,
+                    params: lambda_func.params.clone(),
+                    lambda_expr: lambda_func.lambda_expr.clone(),
+                    return_type: lambda_func.return_type.clone(),
                 }))
             }
             ScalarExpr::FunctionCall(func) => {
