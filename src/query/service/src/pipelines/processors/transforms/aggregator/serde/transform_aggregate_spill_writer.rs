@@ -53,7 +53,7 @@ pub struct TransformAggregateSpillWriter<Method: HashMethodBounds> {
 
     operator: Operator,
     location_prefix: String,
-    spilled_blocks: VecDeque<DataBlock>,
+    spilled_block: Option<DataBlock>,
     spilling_meta: Option<AggregateMeta<Method, usize>>,
     spilling_future: Option<BoxFuture<'static, Result<()>>>,
 }
@@ -74,7 +74,7 @@ impl<Method: HashMethodBounds> TransformAggregateSpillWriter<Method> {
             params,
             operator,
             location_prefix,
-            spilled_blocks: VecDeque::new(),
+            spilled_block: None,
             spilling_meta: None,
             spilling_future: None,
         })
@@ -107,7 +107,7 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
             return Ok(Event::Async);
         }
 
-        while let Some(spilled_block) = self.spilled_blocks.pop_front() {
+        while let Some(spilled_block) = self.spilled_block.take() {
             if !spilled_block.is_empty() || spilled_block.get_meta().is_some() {
                 self.output.push_data(Ok(spilled_block));
                 return Ok(Event::NeedConsume);
@@ -150,7 +150,7 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
     fn process(&mut self) -> Result<()> {
         if let Some(spilling_meta) = self.spilling_meta.take() {
             if let AggregateMeta::Spilling(payload) = spilling_meta {
-                let (spilled_blocks, spilling_future) = spilling_aggregate_payload(
+                let (spilled_block, spilling_future) = spilling_aggregate_payload(
                     self.operator.clone(),
                     &self.method,
                     &self.location_prefix,
@@ -158,7 +158,7 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
                     payload,
                 )?;
 
-                self.spilled_blocks = spilled_blocks;
+                self.spilled_block = Some(spilled_block);
                 self.spilling_future = Some(spilling_future);
 
                 return Ok(());
@@ -190,7 +190,7 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
     location_prefix: &str,
     params: &Arc<AggregatorParams>,
     mut payload: HashTablePayload<PartitionedHashMethod<Method>, usize>,
-) -> Result<(VecDeque<DataBlock>, BoxFuture<'static, Result<()>>)> {
+) -> Result<(DataBlock, BoxFuture<'static, Result<()>>)> {
     let unique_name = GlobalUniqName::unique();
     let location = format!("{}/{}", location_prefix, unique_name);
 
@@ -235,12 +235,9 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
     }
 
     Ok((
-        VecDeque::from_iter(vec![DataBlock::empty_with_meta(AggregateMeta::<
-            Method,
-            usize,
-        >::create_spilled(
-            spilled_buckets_payloads
-        ))]),
+        DataBlock::empty_with_meta(AggregateMeta::<Method, usize>::create_spilled(
+            spilled_buckets_payloads,
+        )),
         Box::pin(async move {
             let instant = Instant::now();
 
