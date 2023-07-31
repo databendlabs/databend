@@ -21,7 +21,6 @@ use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_app::principal::UserPrivilegeType::Ownership;
 use common_sql::plans::GrantPrivilegePlan;
 use common_users::UserApiProvider;
-use tracing::info;
 use log::debug;
 
 use crate::interpreters::common::validate_grant_object_exists;
@@ -73,7 +72,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
                 if plan.priv_types.has_privilege(Ownership) {
                     match self.ctx.get_current_role() {
                         Some(from) => {
-                            info!("grant ownership from role: {}", from.name);
+                            debug!("grant ownership from role: {}", from.name);
                             user_mgr
                                 .grant_ownership_to_role(&tenant, &from.name, &role, plan.on)
                                 .await?;
