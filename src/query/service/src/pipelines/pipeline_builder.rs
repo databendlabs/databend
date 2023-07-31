@@ -279,14 +279,14 @@ impl PipelineBuilder {
             on_conflicts,
             table_is_empty,
             table_info,
-            catalog_name,
+            catalog_info,
             select_ctx,
             table_level_range_index,
             table_schema,
         } = deduplicate;
         let tbl = self
             .ctx
-            .build_table_by_table_info(catalog_name, table_info, None)?;
+            .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let target_schema: Arc<DataSchema> = Arc::new(table_schema.clone().into());
         self.build_pipeline(input)?;
@@ -368,12 +368,12 @@ impl PipelineBuilder {
             block_thresholds,
             table_info,
             on_conflicts,
-            catalog_name,
+            catalog_info,
             snapshot,
         } = replace;
         let table = self
             .ctx
-            .build_table_by_table_info(catalog_name, table_info, None)?;
+            .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, *block_thresholds)?;
@@ -500,8 +500,9 @@ impl PipelineBuilder {
     }
 
     fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
-        let catalog = self.ctx.get_catalog(&copy.catalog_name)?;
-        let to_table = catalog.get_table_by_info(&copy.table_info)?;
+        let to_table =
+            self.ctx
+                .build_table_by_table_info(&copy.catalog_info, &copy.table_info, None)?;
         let source_schema = match &copy.source {
             CopyIntoTableSource::Query(input) => {
                 self.build_pipeline(&input.plan)?;

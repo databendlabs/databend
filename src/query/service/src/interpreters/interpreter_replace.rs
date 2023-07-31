@@ -163,6 +163,7 @@ impl ReplaceInterpreter {
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
+        let catalog = self.ctx.get_catalog(&plan.catalog).await?;
         let schema = table.schema();
         let mut on_conflicts = Vec::with_capacity(plan.on_conflict_fields.len());
         for f in &plan.on_conflict_fields {
@@ -208,7 +209,7 @@ impl ReplaceInterpreter {
             on_conflicts: on_conflicts.clone(),
             table_is_empty,
             table_info: table_info.clone(),
-            catalog_name: plan.catalog.clone(),
+            catalog_info: catalog.info(),
             select_ctx,
             table_schema: plan.schema.clone(),
             table_level_range_index,
@@ -226,7 +227,7 @@ impl ReplaceInterpreter {
             segment_partition_num,
             block_thresholds: fuse_table.get_block_thresholds(),
             table_info: table_info.clone(),
-            catalog_name: plan.catalog.clone(),
+            catalog_info: catalog.info(),
             on_conflicts,
             snapshot: (*base_snapshot).clone(),
         }));
@@ -243,7 +244,7 @@ impl ReplaceInterpreter {
                 input: root,
                 snapshot: (*base_snapshot).clone(),
                 table_info: table_info.clone(),
-                catalog_name: plan.catalog.clone(),
+                catalog_info: catalog.info(),
                 mutation_kind: MutationKind::Replace,
             },
         )));

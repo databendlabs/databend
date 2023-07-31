@@ -789,7 +789,7 @@ impl UnionAll {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoTable {
-    pub catalog_info:CatalogInfo,
+    pub catalog_info: CatalogInfo,
     pub required_values_schema: DataSchemaRef,
     pub values_consts: Vec<Scalar>,
     pub required_source_schema: DataSchemaRef,
@@ -918,7 +918,7 @@ pub struct Deduplicate {
     pub on_conflicts: Vec<OnConflictField>,
     pub table_is_empty: bool,
     pub table_info: TableInfo,
-    pub catalog_name: String,
+    pub catalog_info: CatalogInfo,
     pub table_schema: TableSchemaRef,
     pub select_ctx: Option<SelectCtx>,
     pub table_level_range_index: HashMap<ColumnId, ColumnStatistics>,
@@ -943,7 +943,7 @@ pub struct ReplaceInto {
     pub block_thresholds: BlockThresholds,
     pub table_info: TableInfo,
     pub on_conflicts: Vec<OnConflictField>,
-    pub catalog_name: String,
+    pub catalog_info: CatalogInfo,
     pub snapshot: TableSnapshot,
 }
 

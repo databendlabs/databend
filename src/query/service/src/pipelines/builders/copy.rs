@@ -109,7 +109,11 @@ pub async fn build_commit_data_pipeline(
     files: &[StageFileInfo],
 ) -> Result<()> {
     let to_table = ctx
-        .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
+        .get_table(
+            plan.catalog_info.catalog_name(),
+            &plan.database_name,
+            &plan.table_name,
+        )
         .await?;
     // Source node will do:
     // 1. commit

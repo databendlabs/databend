@@ -147,7 +147,11 @@ impl CopyInterpreter {
     ) -> Result<(PhysicalPlan, Vec<StageFileInfo>)> {
         let to_table = self
             .ctx
-            .get_table(&plan.catalog_info.catalog_name(), &plan.database_name, &plan.table_name)
+            .get_table(
+                plan.catalog_info.catalog_name(),
+                &plan.database_name,
+                &plan.table_name,
+            )
             .await?;
         let files = plan.collect_files(self.ctx.as_ref()).await?;
         let source = if let Some(ref query) = plan.query {
@@ -181,7 +185,7 @@ impl CopyInterpreter {
         };
 
         let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-            catalog_name: plan.catalog_name.clone(),
+            catalog_info: plan.catalog_info.clone(),
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
             required_source_schema: plan.required_source_schema.clone(),
