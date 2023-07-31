@@ -1,27 +1,7 @@
-# step-13: disable
-# step 2: enable these
-# step 3:
+
+# step-14: disable
 # statement ok
-# DROP TABLE IF EXISTS t
-
-# step-13: disable
-# statement ok
-# CREATE TABLE t(c1 int) ENGINE = Null
-
-# step-13: disable
-# statement ok
-# CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = Null
-
-# step-13: disable
-# statement error 2302
-# CREATE TABLE t(c1 int) ENGINE = Null
-
-# step-13: disable
-# statement ok
-# DROP TABLE IF EXISTS t
-
-statement ok
-DROP DATABASE IF EXISTS db2
+# DROP DATABASE IF EXISTS db2
 
 
 statement ok
@@ -68,6 +48,7 @@ create table tt_v2 (id int) engine=fuse SNAPSHOT_LOCATION='xx'
 
 
 
-statement error 1301
-create table t(a int) x=x
+# step-14: disable
+# statement error 1301
+# create table t(a int) x=x
 
