@@ -2802,6 +2802,7 @@ dependencies = [
  "opendal",
  "parquet",
  "serde",
+ "tokio",
  "typetag",
 ]
 

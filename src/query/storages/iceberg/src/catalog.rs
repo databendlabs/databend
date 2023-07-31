@@ -81,8 +81,8 @@ use common_storage::DataOperator;
 use futures::TryStreamExt;
 use opendal::Metakey;
 
-use crate::context::ICEBERG_CONTEXT;
 use crate::database::IcebergDatabase;
+use crate::table::IcebergTable;
 
 pub const ICEBERG_CATALOG: &str = "iceberg";
 
@@ -227,9 +227,19 @@ impl Catalog for IcebergCatalog {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        ICEBERG_CONTEXT.get(&table_info.desc).ok_or_else(|| {
-            ErrorCode::UnknownTable(format!("Table {} does not exist", table_info.desc))
-        })
+        let table_sp = match table_info.meta.storage_params.clone() {
+            Some(sp) => sp,
+            None => {
+                return Err(ErrorCode::BadArguments(
+                    "table storage params not set, this is not a valid table info for iceberg table",
+                ));
+            }
+        };
+
+        let op = DataOperator::try_new(&table_sp)?;
+        let table = IcebergTable::try_new(op, table_info.clone())?;
+
+        Ok(Arc::new(table))
     }
 
     #[async_backtrace::framed]
