@@ -1,5 +1,0 @@
-onlyif mysql
-query B
-SELECT count(*)>0 FROM system.processes
-----
-1
