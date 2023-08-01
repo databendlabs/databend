@@ -68,7 +68,7 @@ impl Interpreter for DropTableInterpreter {
                     &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
                 )));
             }
-            let catalog = self.ctx.get_catalog(catalog_name)?;
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
 
             let resp = catalog
                 .drop_table_by_id(DropTableByIdReq {

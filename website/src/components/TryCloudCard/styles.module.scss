@@ -1,9 +1,9 @@
 .card {
   background-color: var(--color-primary-light-default);
   border-radius: 8px;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
   padding: 1rem;
-  margin-top: 24px;
+  margin-top: 12px;
   position: relative;
   z-index: 2;
   color: var(--color-text-0);
@@ -21,7 +21,24 @@
   .desc {
     font-size: 14px;
     font-weight: 400;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    .descItem {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      span:first-child {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 24px!important;
+      }
+      span:last-child {
+        flex: 1;
+      }
+    }
   }
   .button {
     border: none;

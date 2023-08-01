@@ -53,7 +53,7 @@ impl TableLockHeartbeat {
             let shutdown_notify = self.shutdown_notify.clone();
 
             async move {
-                let catalog = ctx.get_catalog(table_info.catalog())?;
+                let catalog = ctx.get_catalog(table_info.catalog()).await?;
                 let mut notified = Box::pin(shutdown_notify.notified());
                 while !shutdown_flag.load(Ordering::Relaxed) {
                     let mills = {

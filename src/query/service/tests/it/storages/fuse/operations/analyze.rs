@@ -70,7 +70,9 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
     // truncate table
     {
         let ctx = fixture.ctx();
-        let catalog = ctx.get_catalog(fixture.default_catalog_name().as_str())?;
+        let catalog = ctx
+            .get_catalog(fixture.default_catalog_name().as_str())
+            .await?;
         let table = catalog
             .get_table(ctx.get_tenant().as_str(), &db, &tbl)
             .await?;
@@ -81,7 +83,9 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
     // optimize after truncate table, ts file location will become None
     {
         let ctx = fixture.ctx();
-        let catalog = ctx.get_catalog(fixture.default_catalog_name().as_str())?;
+        let catalog = ctx
+            .get_catalog(fixture.default_catalog_name().as_str())
+            .await?;
         let table = catalog
             .get_table(ctx.get_tenant().as_str(), &db, &tbl)
             .await?;

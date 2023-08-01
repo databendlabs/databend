@@ -327,7 +327,7 @@ impl Interpreter for RefreshIndexInterpreter {
 }
 
 async fn modify_last_update(ctx: Arc<QueryContext>, req: UpdateIndexReq) -> Result<()> {
-    let catalog = ctx.get_catalog(&ctx.get_current_catalog())?;
+    let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
     let handler = get_agg_index_handler();
     let _ = handler.do_update_index(catalog, req).await?;
     Ok(())

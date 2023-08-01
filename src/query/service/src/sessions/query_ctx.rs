@@ -50,6 +50,7 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::InputError;
@@ -60,6 +61,7 @@ use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
+use common_storages_parquet::Parquet2Table;
 use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultScan;
 use common_storages_stage::StageTable;
@@ -128,14 +130,16 @@ impl QueryContext {
         })
     }
 
-    // Build fuse/system normal table by table info.
+    /// Build fuse/system normal table by table info.
+    ///
+    /// TODO(xuanwo): we should support build table via table info in the future.
     pub fn build_table_by_table_info(
         &self,
-        catalog_name: &str,
+        catalog_info: &CatalogInfo,
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self.get_catalog(catalog_name)?;
+        let catalog = self.shared.catalog_manager.build_catalog(catalog_info)?;
         match table_args {
             None => catalog.get_table_by_info(table_info),
             Some(table_args) => Ok(catalog
@@ -149,7 +153,7 @@ impl QueryContext {
     // 's3://' here is a s3 external stage, and build it to the external table.
     fn build_external_by_table_info(
         &self,
-        _catalog: &str,
+        _catalog: &CatalogInfo,
         table_info: &StageTableInfo,
         _table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
@@ -159,7 +163,9 @@ impl QueryContext {
     #[async_backtrace::framed]
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
         let tenant_id = self.get_tenant();
-        let catalog = self.get_catalog(self.get_current_catalog().as_str())?;
+        let catalog = self
+            .get_catalog(self.get_current_catalog().as_str())
+            .await?;
         match catalog
             .get_database(tenant_id.as_str(), &new_database_name)
             .await
@@ -263,12 +269,17 @@ impl TableContext for QueryContext {
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
-            DataSourceInfo::TableSource(table_info) => {
-                self.build_table_by_table_info(&plan.catalog, table_info, plan.tbl_args.clone())
-            }
-            DataSourceInfo::StageSource(stage_info) => {
-                self.build_external_by_table_info(&plan.catalog, stage_info, plan.tbl_args.clone())
-            }
+            DataSourceInfo::TableSource(table_info) => self.build_table_by_table_info(
+                &plan.catalog_info,
+                table_info,
+                plan.tbl_args.clone(),
+            ),
+            DataSourceInfo::StageSource(stage_info) => self.build_external_by_table_info(
+                &plan.catalog_info,
+                stage_info,
+                plan.tbl_args.clone(),
+            ),
+            DataSourceInfo::Parquet2Source(table_info) => Parquet2Table::from_info(table_info),
             DataSourceInfo::ParquetSource(table_info) => ParquetTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
         }
@@ -405,10 +416,16 @@ impl TableContext for QueryContext {
         self.fragment_id.fetch_add(1, Ordering::Release)
     }
 
-    fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+    #[async_backtrace::framed]
+    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
-            .get_catalog(catalog_name.as_ref())
+            .get_catalog(&self.get_tenant(), catalog_name.as_ref())
+            .await
+    }
+
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
+        self.shared.catalog_manager.get_default_catalog()
     }
 
     fn get_id(&self) -> String {
@@ -631,7 +648,7 @@ impl TableContext for QueryContext {
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let tenant = self.get_tenant();
-        let catalog = self.get_catalog(catalog_name)?;
+        let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
             .get_table(&tenant, database_name, table_name)
             .await?;

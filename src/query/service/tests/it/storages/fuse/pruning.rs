@@ -109,7 +109,7 @@ async fn test_block_pruner() -> Result<()> {
     let _ = interpreter.execute(ctx.clone()).await?;
 
     // get table
-    let catalog = ctx.get_catalog("default")?;
+    let catalog = ctx.get_catalog("default").await?;
     let table = catalog
         .get_table(
             fixture.default_tenant().as_str(),

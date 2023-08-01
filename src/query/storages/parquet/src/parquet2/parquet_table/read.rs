@@ -32,7 +32,7 @@ use log::info;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 
-use super::ParquetTable;
+use super::Parquet2Table;
 use crate::parquet2::parquet_reader::Parquet2Reader;
 use crate::parquet_part::ParquetPart;
 use crate::processors::AsyncParquetSource;
@@ -40,7 +40,7 @@ use crate::processors::ParquetDeserializeTransform;
 use crate::processors::ParquetPrewhereInfo;
 use crate::processors::SyncParquetSource;
 
-impl ParquetTable {
+impl Parquet2Table {
     fn build_filter(filter: &RemoteExpr<String>, schema: &DataSchema) -> Expr {
         filter
             .as_expr(&BUILTIN_FUNCTIONS)

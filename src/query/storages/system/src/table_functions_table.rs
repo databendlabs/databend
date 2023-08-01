@@ -42,7 +42,7 @@ impl SyncSystemTable for TableFunctionsTable {
     }
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let func_names = ctx.get_catalog("default")?.list_table_functions();
+        let func_names = ctx.get_default_catalog()?.list_table_functions();
         let names = func_names.iter().map(|s| s.as_str()).collect::<Vec<_>>();
         Ok(DataBlock::new_from_columns(vec![StringType::from_data(
             names,
