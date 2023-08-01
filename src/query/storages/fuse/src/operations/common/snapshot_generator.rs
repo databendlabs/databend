@@ -387,13 +387,13 @@ impl SnapshotGenerator for AppendGenerator {
                                 } else {
                                     (0, Some(1))
                                 };
-                                let col_stat = ColumnStatistics {
-                                    min: default_value.to_owned(),
-                                    max: default_value.to_owned(),
+                                let col_stat = ColumnStatistics::new(
+                                    default_value.to_owned(),
+                                    default_value.to_owned(),
                                     null_count,
-                                    in_memory_size: 0,
+                                    0,
                                     distinct_of_values,
-                                };
+                                );
                                 summary.col_stats.insert(*col_id, col_stat);
                             }
                         });

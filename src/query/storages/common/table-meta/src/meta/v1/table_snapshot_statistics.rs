@@ -18,7 +18,7 @@ use common_expression::ColumnId;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::statistics::FormatVersion;
+use crate::meta::FormatVersion;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;
 
