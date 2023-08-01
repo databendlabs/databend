@@ -38,6 +38,7 @@ use common_functions::aggregates::eval_aggr;
 use common_functions::BUILTIN_FUNCTIONS;
 use log::info;
 use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::MinMax;
 
 use crate::metrics::metrics_inc_replace_original_row_number;
 use crate::metrics::metrics_inc_replace_partition_number;
@@ -122,7 +123,7 @@ impl ReplaceIntoMutator {
                         .into_iter()
                         .map(|min_max| match min_max {
                             MinMax::Point(v) => (v.clone(), v),
-                            MinMax::Range((min, max)) => (min, max),
+                            MinMax::Range(min, max) => (min, max),
                         })
                         .collect::<Vec<_>>();
                     let key_hashes = partition.digests;
@@ -153,7 +154,7 @@ impl ReplaceIntoMutator {
                 let value = column.row_scalar(row_idx)?;
                 let stats = column_stats.get(&field.table_field.column_id);
                 if let Some(stats) = stats {
-                    should_keep = !(value < stats.min.as_ref() || value > stats.max.as_ref());
+                    should_keep = !(value < stats.min().as_ref() || value > stats.max().as_ref());
                     if !should_keep {
                         // if one column outsides the table level range, no need to check other columns
                         break;
@@ -287,19 +288,11 @@ impl ReplaceIntoMutator {
 }
 
 #[derive(Debug)]
-enum MinMax {
-    // min eq max
-    Point(Scalar),
-    // inclusive on both sides, min < max
-    Range((Scalar, Scalar)),
-}
-
-#[derive(Debug)]
 struct Partition {
     // digests of on-conflict fields, of all the rows in this partition
     digests: HashSet<UniqueKeyDigest>,
     // min max of all the on-conflict fields in this partition
-    columns_min_max: Vec<MinMax>,
+    columns_min_max: Vec<MinMax<Scalar>>,
 }
 
 impl Partition {
@@ -330,23 +323,7 @@ impl Partition {
         self.digests.insert(row_digest);
         for (column_idx, min_max) in self.columns_min_max.iter_mut().enumerate() {
             let value: Scalar = column_values[column_idx].row_scalar(row_idx)?.to_owned();
-            match min_max {
-                MinMax::Point(v) => {
-                    if value > *v {
-                        *min_max = MinMax::Range((v.clone(), value))
-                    } else if value != *v {
-                        // value < *v
-                        *min_max = MinMax::Range((value, v.clone()))
-                    }
-                }
-                MinMax::Range((min, max)) => {
-                    if value > *max {
-                        *max = value
-                    } else if value < *min {
-                        *min = value
-                    }
-                }
-            }
+            min_max.update(value);
         }
         Ok(())
     }

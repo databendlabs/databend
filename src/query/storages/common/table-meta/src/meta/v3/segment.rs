@@ -22,7 +22,7 @@ use super::frozen;
 use crate::meta::format::decode_segment_header;
 use crate::meta::format::read_and_deserialize;
 use crate::meta::format::SegmentHeader;
-use crate::meta::statistics::FormatVersion;
+use crate::meta::FormatVersion;
 use crate::meta::MetaEncoding;
 use crate::meta::Versioned;
 

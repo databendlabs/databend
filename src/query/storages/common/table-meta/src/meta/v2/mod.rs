@@ -14,8 +14,12 @@
 
 mod segment;
 mod snapshot;
+pub mod statistics;
 
 pub use segment::BlockMeta;
 pub use segment::ColumnMeta;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;
+pub use statistics::ClusterStatistics;
+pub use statistics::ColumnStatistics;
+pub use statistics::Statistics;
