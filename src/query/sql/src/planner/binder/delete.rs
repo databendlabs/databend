@@ -87,6 +87,7 @@ impl<'a> Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            self.m_cte_bound_ctx.clone(),
         );
 
         let (selection, subquery_desc) = self

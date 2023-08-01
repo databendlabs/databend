@@ -409,6 +409,7 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             aliases,
+            self.m_cte_bound_ctx.clone(),
         );
         scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
@@ -40,6 +41,7 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
+use crate::IndexType;
 use crate::MetadataRef;
 
 pub struct JoinConditions {
@@ -89,6 +91,7 @@ impl Binder {
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
+            self.m_cte_bound_ctx.clone(),
             join.op.clone(),
             &left_context,
             &right_context,
@@ -367,6 +370,7 @@ struct JoinConditionResolver<'a> {
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
+    m_cte_bound_ctx: HashMap<IndexType, BindContext>,
     join_op: JoinOperator,
     left_context: &'a BindContext,
     right_context: &'a BindContext,
@@ -380,6 +384,7 @@ impl<'a> JoinConditionResolver<'a> {
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
+        m_cte_bound_ctx: HashMap<IndexType, BindContext>,
         join_op: JoinOperator,
         left_context: &'a BindContext,
         right_context: &'a BindContext,
@@ -390,6 +395,7 @@ impl<'a> JoinConditionResolver<'a> {
             ctx,
             name_resolution_ctx,
             metadata,
+            m_cte_bound_ctx,
             join_op,
             left_context,
             right_context,
@@ -514,6 +520,7 @@ impl<'a> JoinConditionResolver<'a> {
             self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            self.m_cte_bound_ctx.clone(),
         );
         // Given two tables: t1(a, b), t2(a, b)
         // A predicate can be regarded as an equi-predicate iff:
@@ -664,6 +671,7 @@ impl<'a> JoinConditionResolver<'a> {
             self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            self.m_cte_bound_ctx.clone(),
         );
         let (predicate, _) = scalar_binder.bind(predicate).await?;
         let predicate_used_columns = predicate.used_columns();
