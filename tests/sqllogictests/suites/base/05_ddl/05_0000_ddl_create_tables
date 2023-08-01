@@ -8,11 +8,6 @@ SELECT id, a FROM test6;
 ----
 
 
-# query IIT
-# SELECT id, a, now() >= created FROM test6;
-# ----
-
-
 statement error 3001
 create table tt_v2 (id int) engine=fuse SNAPSHOT_LOCATION='xx';
 
