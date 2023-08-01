@@ -530,6 +530,23 @@ impl DataBlock {
         }
         DataBlock::new_with_meta(columns, self.num_rows, self.meta)
     }
+
+    #[inline]
+    pub fn project_with_agg_index(
+        self,
+        projections: &HashSet<usize>,
+        agg_functions_len: usize,
+    ) -> Self {
+        let mut columns = Vec::with_capacity(projections.len());
+        let agg_functions_offset = self.columns.len() - agg_functions_len;
+        for (index, column) in self.columns.into_iter().enumerate() {
+            if !projections.contains(&index) && index < agg_functions_offset {
+                continue;
+            }
+            columns.push(column);
+        }
+        DataBlock::new_with_meta(columns, self.num_rows, self.meta)
+    }
 }
 
 impl TryFrom<DataBlock> for ArrowChunk<ArrayRef> {

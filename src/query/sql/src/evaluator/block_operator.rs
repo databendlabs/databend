@@ -77,13 +77,19 @@ impl BlockOperator {
         }
         match self {
             BlockOperator::Map { exprs, projections } => {
-                let data_block = if input
+                let agg_index_functions_len = input
                     .get_meta()
                     .and_then(AggIndexMeta::downcast_ref_from)
-                    .is_some()
-                {
+                    .map(|agg_index_meta| agg_index_meta.agg_functions_len);
+
+                if let Some(agg_index_functions_len) = agg_index_functions_len {
                     // It's from aggregating index.
-                    input
+                    match projections {
+                        Some(projections) => {
+                            Ok(input.project_with_agg_index(projections, agg_index_functions_len))
+                        }
+                        None => Ok(input),
+                    }
                 } else {
                     for expr in exprs {
                         let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
@@ -91,35 +97,28 @@ impl BlockOperator {
                         let col = BlockEntry::new(expr.data_type().clone(), result);
                         input.add_column(col);
                     }
-                    input
-                };
-                match projections {
-                    Some(projections) => Ok(data_block.project(projections)),
-                    None => Ok(data_block),
+                    match projections {
+                        Some(projections) => Ok(input.project(projections)),
+                        None => Ok(input),
+                    }
                 }
             }
 
             BlockOperator::Filter { projections, expr } => {
                 assert_eq!(expr.data_type(), &DataType::Boolean);
-                if input
+
+                let agg_index_functions_len = input
                     .get_meta()
                     .and_then(AggIndexMeta::downcast_ref_from)
-                    .is_some()
-                {
+                    .map(|agg_index_meta| agg_index_meta.agg_functions_len);
+
+                if let Some(agg_index_functions_len) = agg_index_functions_len {
                     // It's from aggregating index.
-                    Ok(input)
+                    Ok(input.project_with_agg_index(projections, agg_index_functions_len))
                 } else {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                     let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
-                    let column_nums = input.num_columns();
-                    let mut columns = Vec::with_capacity(projections.len());
-                    for index in 0..column_nums {
-                        if !projections.contains(&index) {
-                            continue;
-                        }
-                        columns.push(input.get_by_offset(index).clone());
-                    }
-                    let data_block = DataBlock::new(columns, input.num_rows());
+                    let data_block = input.project(projections);
                     data_block.filter_boolean_value(&filter)
                 }
             }
