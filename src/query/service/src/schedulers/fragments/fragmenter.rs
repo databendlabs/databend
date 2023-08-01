@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::FragmentKind;
+use common_sql::executor::QueryCtx;
 
 use crate::api::BroadcastExchange;
 use crate::api::DataExchange;
@@ -140,11 +141,24 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::TableScan(plan.clone()))
     }
 
+    // TODO(Sky): remove rebudant code
     fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
-        if let CopyIntoTableSource::Stage(_) = plan.source {
-            self.state = State::SelectLeaf;
+        match &plan.source {
+            CopyIntoTableSource::Stage(_) => {
+                self.state = State::SelectLeaf;
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
+            }
+            CopyIntoTableSource::Query(query_ctx) => {
+                let input = self.replace(&query_ctx.plan)?;
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+                    source: CopyIntoTableSource::Query(Box::new(QueryCtx {
+                        plan: input,
+                        ..*query_ctx.clone()
+                    })),
+                    ..plan.clone()
+                })))
+            }
         }
-        Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
     }
 
     fn replace_delete_partial(
