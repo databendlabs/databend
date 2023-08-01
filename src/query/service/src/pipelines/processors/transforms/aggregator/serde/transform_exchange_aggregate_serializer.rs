@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_exception::Result;
-use common_expression::{BlockEntry, BlockMetaInfoDowncast, DataSchemaRef, FromData};
+use common_expression::{BlockMetaInfoDowncast, DataSchemaRef, FromData};
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;

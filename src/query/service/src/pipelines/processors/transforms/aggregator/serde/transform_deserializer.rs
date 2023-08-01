@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -35,9 +34,7 @@ use common_expression::DataSchemaRef;
 use common_io::prelude::BinaryRead;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
 use common_pipeline_transforms::processors::transforms::UnknownMode;
@@ -50,7 +47,6 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Bucket
 use crate::pipelines::processors::transforms::aggregator::serde::exchange_defines;
 use crate::pipelines::processors::transforms::aggregator::serde::serde_meta::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::BUCKET_TYPE;
-use crate::pipelines::processors::transforms::aggregator::serde::SPILLED_TYPE;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 
 pub struct TransformDeserializer<Method: HashMethodBounds, V: Send + Sync + 'static> {
@@ -113,65 +109,73 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
                 None => {
                     self.deserialize_data_block(dict, &fragment_data, fields, schema, &self.schema)?
                 }
-                Some(meta) => match meta.typ == BUCKET_TYPE {
-                    true => self.deserialize_data_block(
-                        dict,
-                        &fragment_data,
-                        fields,
-                        schema,
-                        &self.schema,
-                    )?,
-                    false => {
-                        let fields = exchange_defines::spilled_fields();
-                        let schema = exchange_defines::spilled_ipc_schema();
-                        let data_schema = Arc::new(exchange_defines::spilled_schema());
-                        let data_block = self.deserialize_data_block(
-                            dict,
-                            &fragment_data,
-                            fields,
-                            schema,
-                            &data_schema,
-                        )?;
+                Some(meta) => {
+                    return match meta.typ == BUCKET_TYPE {
+                        true => Ok(DataBlock::empty_with_meta(
+                            AggregateMeta::<Method, V>::create_serialized(
+                                meta.bucket,
+                                self.deserialize_data_block(
+                                    dict,
+                                    &fragment_data,
+                                    fields,
+                                    schema,
+                                    &self.schema,
+                                )?,
+                            ),
+                        )),
+                        false => {
+                            let fields = exchange_defines::spilled_fields();
+                            let schema = exchange_defines::spilled_ipc_schema();
+                            let data_schema = Arc::new(exchange_defines::spilled_schema());
+                            let data_block = self.deserialize_data_block(
+                                dict,
+                                &fragment_data,
+                                fields,
+                                schema,
+                                &data_schema,
+                            )?;
 
-                        let columns = data_block
-                            .columns()
-                            .iter()
-                            .map(|c| c.value.clone().into_column())
-                            .try_collect::<Vec<_>>()
-                            .unwrap();
+                            let columns = data_block
+                                .columns()
+                                .iter()
+                                .map(|c| c.value.clone().into_column())
+                                .try_collect::<Vec<_>>()
+                                .unwrap();
 
-                        let buckets = NumberType::<i64>::try_downcast_column(&columns[0]).unwrap();
-                        let data_range_start =
-                            NumberType::<u64>::try_downcast_column(&columns[1]).unwrap();
-                        let data_range_end =
-                            NumberType::<u64>::try_downcast_column(&columns[2]).unwrap();
-                        let columns_layout =
-                            ArrayType::<UInt64Type>::try_downcast_column(&columns[3]).unwrap();
+                            let buckets =
+                                NumberType::<i64>::try_downcast_column(&columns[0]).unwrap();
+                            let data_range_start =
+                                NumberType::<u64>::try_downcast_column(&columns[1]).unwrap();
+                            let data_range_end =
+                                NumberType::<u64>::try_downcast_column(&columns[2]).unwrap();
+                            let columns_layout =
+                                ArrayType::<UInt64Type>::try_downcast_column(&columns[3]).unwrap();
 
-                        let columns_layout_data = columns_layout.values.as_slice();
+                            let columns_layout_data = columns_layout.values.as_slice();
 
-                        let mut buckets_payload = Vec::with_capacity(data_block.num_rows());
-                        for index in 0..data_block.num_rows() {
-                            unsafe {
-                                buckets_payload.push(BucketSpilledPayload {
-                                    bucket: *buckets.get_unchecked(index) as isize,
-                                    location: meta.location.clone().unwrap(),
-                                    data_range: *data_range_start.get_unchecked(index)
-                                        ..*data_range_end.get_unchecked(index),
-                                    columns_layout: columns_layout_data[columns_layout.offsets
-                                        [index]
-                                        as usize
-                                        ..columns_layout.offsets[index + 1] as usize]
-                                        .to_vec(),
-                                });
+                            let mut buckets_payload = Vec::with_capacity(data_block.num_rows());
+                            for index in 0..data_block.num_rows() {
+                                unsafe {
+                                    buckets_payload.push(BucketSpilledPayload {
+                                        bucket: *buckets.get_unchecked(index) as isize,
+                                        location: meta.location.clone().unwrap(),
+                                        data_range: *data_range_start.get_unchecked(index)
+                                            ..*data_range_end.get_unchecked(index),
+                                        columns_layout: columns_layout_data[columns_layout.offsets
+                                            [index]
+                                            as usize
+                                            ..columns_layout.offsets[index + 1] as usize]
+                                            .to_vec(),
+                                    });
+                                }
                             }
-                        }
 
-                        return Ok(DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, V>::create_spilled(buckets_payload),
-                        ));
-                    }
-                },
+                            Ok(DataBlock::empty_with_meta(
+                                AggregateMeta::<Method, V>::create_spilled(buckets_payload),
+                            ))
+                        }
+                    };
+                }
             },
         };
 
@@ -213,17 +217,13 @@ where
     const NAME: &'static str = "TransformDeserializer";
 
     fn transform(&mut self, mut meta: ExchangeDeserializeMeta) -> Result<DataBlock> {
-        let ss = match meta.packet.pop().unwrap() {
+        match meta.packet.pop().unwrap() {
             DataPacket::ErrorCode(v) => Err(v),
             DataPacket::Dictionary(_) => unreachable!(),
             DataPacket::FetchProgress => unreachable!(),
             DataPacket::SerializeProgress { .. } => unreachable!(),
             DataPacket::FragmentData(v) => self.recv_data(meta.packet, v),
-        }?;
-
-        println!("block: \n {}", ss.to_string());
-
-        Ok(ss)
+        }
     }
 }
 
