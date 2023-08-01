@@ -297,7 +297,11 @@ impl HttpQuery {
             None => {}
         };
 
-        let user_agent = request.headers.get("User-Agent").cloned().unwrap_or_default();
+        let user_agent = request
+            .headers
+            .get("User-Agent")
+            .cloned()
+            .unwrap_or_default();
         ctx.set_ua(user_agent.to_string());
 
         let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
