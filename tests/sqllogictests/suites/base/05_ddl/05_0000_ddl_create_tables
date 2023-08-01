@@ -1,35 +1,25 @@
 
-statement ok
-CREATE DATABASE db2
 
 
+
 statement ok
-create table db2.test6(id Int8, a Int8 DEFAULT 1 + 2, created timestamp DEFAULT now())
+create table test6(id Int8, a Int8 DEFAULT 1 + 2, created timestamp DEFAULT now())
 
 
 # step-8: enalbed
 # step-7: disable
 # enabled step-4
 statement ok
-INSERT INTO db2.test6 (id) VALUES (1)
+INSERT INTO test6 (id) VALUES (1)
+
 
 # step-8: enalbed
 # step-7: disable
 # enabled step-4
 query IIT
-SELECT id, a, now() >= created FROM db2.test6;
+SELECT id, a, now() >= created FROM test6;
 ----
 1 3 1
-
-
-# step-16: diable
-# statement ok
-# use default
-
-
-# step-16: diable
-# statement ok
-# drop table if exists tt_v2
 
 
 statement error 3001
