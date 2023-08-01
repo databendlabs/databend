@@ -66,7 +66,7 @@ impl Interpreter for GenerateVirtualColumnsInterpreter {
             .ctx
             .get_table(&catalog_name, &db_name, &tbl_name)
             .await?;
-        let catalog = self.ctx.get_catalog(&catalog_name)?;
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
 
         let list_virtual_columns_req = ListVirtualColumnsReq {
             tenant,

@@ -71,7 +71,7 @@ impl Interpreter for DropViewInterpreter {
                 )));
             }
 
-            let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
             catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: self.plan.if_exists,

@@ -18,5 +18,5 @@ mod projection;
 pub(crate) mod pruning;
 mod statistics;
 
-pub use parquet_table::ParquetTable;
+pub use parquet_table::Parquet2Table;
 use projection::project_parquet_schema;

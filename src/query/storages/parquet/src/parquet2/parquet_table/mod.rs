@@ -19,4 +19,4 @@ mod read;
 mod table;
 
 pub(crate) use table::arrow_to_table_schema;
-pub use table::ParquetTable;
+pub use table::Parquet2Table;

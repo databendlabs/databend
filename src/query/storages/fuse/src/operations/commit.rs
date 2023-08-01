@@ -203,7 +203,7 @@ impl FuseTable {
         new_table_meta.updated_on = Utc::now();
 
         // 2. prepare the request
-        let catalog = ctx.get_catalog(table_info.catalog())?;
+        let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
