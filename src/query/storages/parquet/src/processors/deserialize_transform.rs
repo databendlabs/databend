@@ -77,7 +77,7 @@ pub struct ParquetDeserializeTransform {
     scan_progress: Arc<Progress>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    output_data: Option<DataBlock>,
+    output_data: Vec<DataBlock>,
 
     // data from input
     parts: VecDeque<(PartInfoPtr, ParquetPartData)>,
@@ -116,7 +116,7 @@ impl ParquetDeserializeTransform {
                 scan_progress,
                 input,
                 output,
-                output_data: None,
+                output_data: vec![],
 
                 parts: VecDeque::new(),
 
@@ -141,7 +141,7 @@ impl ParquetDeserializeTransform {
             bytes: data_block.memory_size(),
         };
         self.scan_progress.incr(&progress_values);
-        self.output_data = Some(data_block);
+        self.output_data.push(data_block);
         Ok(())
     }
 
@@ -331,7 +331,7 @@ impl Processor for ParquetDeserializeTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data_block) = self.output_data.take() {
+        if let Some(data_block) = self.output_data.pop() {
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
