@@ -29,7 +29,6 @@ use common_storage::DataOperator;
 use opendal::EntryMode;
 use opendal::Metakey;
 
-use crate::context::ICEBERG_CONTEXT;
 use crate::table::IcebergTable;
 
 #[derive(Clone, Debug)]
@@ -98,9 +97,6 @@ impl Database for IcebergDatabase {
         )
         .await?;
         let tbl = Arc::new(tbl) as Arc<dyn Table>;
-
-        // Update context
-        ICEBERG_CONTEXT.insert(&tbl.get_table_info().desc, tbl.clone());
 
         Ok(tbl)
     }

@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
+use common_meta_app::schema::CatalogInfo;
 
 use crate::plan::datasource::datasource_info::DataSourceInfo;
 use crate::plan::PartStatistics;
@@ -27,8 +28,7 @@ use crate::table_args::TableArgs;
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DataSourcePlan {
-    // TODO catalog id is better
-    pub catalog: String,
+    pub catalog_info: CatalogInfo,
     pub source_info: DataSourceInfo,
 
     pub output_schema: TableSchemaRef,
