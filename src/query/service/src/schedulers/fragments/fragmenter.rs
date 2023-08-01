@@ -141,7 +141,7 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::TableScan(plan.clone()))
     }
 
-    // TODO(Sky): remove rebudant code
+    //  TODO(Sky): remove rebudant code
     fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
         match &plan.source {
             CopyIntoTableSource::Stage(_) => {
