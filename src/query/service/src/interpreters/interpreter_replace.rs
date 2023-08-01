@@ -20,6 +20,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
+use common_meta_app::principal::StageInfo;
 use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::Deduplicate;
 // use common_sql::executor::Exchange;
@@ -35,6 +36,7 @@ use common_sql::plans::OptimizeTableAction;
 use common_sql::plans::OptimizeTablePlan;
 use common_sql::plans::Plan;
 use common_sql::plans::Replace;
+use common_storage::StageFileInfo;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use log::info;
@@ -48,6 +50,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::OptimizeTableInterpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::pipelines::builders::set_copy_on_finished;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -58,11 +61,16 @@ use crate::sessions::QueryContext;
 pub struct ReplaceInterpreter {
     ctx: Arc<QueryContext>,
     plan: Replace,
+    files: Option<Vec<StageFileInfo>>,
 }
 
 impl ReplaceInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Replace) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ReplaceInterpreter { ctx, plan }))
+        Ok(Arc::new(ReplaceInterpreter {
+            ctx,
+            plan,
+            files: None,
+        }))
     }
 }
 
@@ -81,11 +89,24 @@ impl Interpreter for ReplaceInterpreter {
         self.check_on_conflicts()?;
         let start = Instant::now();
 
-        let physical_plan = self.build_physical_plan().await?;
+        // replace
+        let (physical_plan, purge_info) = self.build_physical_plan().await?;
         let mut pipeline =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
 
+        // purge
+        if let Some((files, stage_info)) = purge_info {
+            set_copy_on_finished(
+                self.ctx.clone(),
+                files,
+                stage_info.copy_options.purge,
+                stage_info.clone(),
+                &mut pipeline.main_pipeline,
+            )?;
+        }
+
+        // recluster
         let plan = &self.plan;
         let table = self
             .ctx
@@ -157,7 +178,9 @@ impl Interpreter for ReplaceInterpreter {
 }
 
 impl ReplaceInterpreter {
-    async fn build_physical_plan(&self) -> Result<Box<PhysicalPlan>> {
+    async fn build_physical_plan(
+        &self,
+    ) -> Result<(Box<PhysicalPlan>, Option<(Vec<StageFileInfo>, StageInfo)>)> {
         let plan = &self.plan;
         let table = self
             .ctx
@@ -201,8 +224,14 @@ impl ReplaceInterpreter {
         let max_threads = self.ctx.get_settings().get_max_threads()?;
         let segment_partition_num =
             std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
+        let mut purge_info = None;
         let (mut root, select_ctx) = self
-            .connect_input_source(self.ctx.clone(), &self.plan.source, self.plan.schema())
+            .connect_input_source(
+                self.ctx.clone(),
+                &self.plan.source,
+                self.plan.schema(),
+                &mut purge_info,
+            )
             .await?;
         root = Box::new(PhysicalPlan::Deduplicate(Deduplicate {
             input: root,
@@ -248,7 +277,7 @@ impl ReplaceInterpreter {
                 mutation_kind: MutationKind::Replace,
             },
         )));
-        Ok(root)
+        Ok((root, purge_info))
     }
     fn check_on_conflicts(&self) -> Result<()> {
         if self.plan.on_conflict_fields.is_empty() {
@@ -265,6 +294,7 @@ impl ReplaceInterpreter {
         ctx: Arc<QueryContext>,
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
+        purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo)>,
     ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>)> {
         match source {
             InsertInputSource::Values(data) => self
@@ -279,10 +309,14 @@ impl ReplaceInterpreter {
                     CopyPlan::IntoTable(copy_into_table_plan) => {
                         let interpreter =
                             CopyInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                        interpreter
+                        let (physical_plan, files) = interpreter
                             .build_physical_plan(copy_into_table_plan)
-                            .await
-                            .map(|x| (Box::new(x.0), None))
+                            .await?;
+                        *purge_info = Some((
+                            files,
+                            copy_into_table_plan.stage_table_info.stage_info.clone(),
+                        ));
+                        Ok((Box::new(physical_plan), None))
                     }
                     _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
                 },
