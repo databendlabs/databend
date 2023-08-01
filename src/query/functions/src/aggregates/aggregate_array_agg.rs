@@ -104,8 +104,8 @@ where
             match inner_type.remove_nullable() {
                 DataType::Decimal(decimal_type) => {
                     let size = decimal_type.size();
-                    let deciaml_val = val.as_decimal().unwrap();
-                    let new_val = match deciaml_val {
+                    let decimal_val = val.as_decimal().unwrap();
+                    let new_val = match decimal_val {
                         DecimalScalar::Decimal128(v, _) => {
                             ScalarRef::Decimal(DecimalScalar::Decimal128(*v, size))
                         }
@@ -209,8 +209,8 @@ where
                     match inner_type.remove_nullable() {
                         DataType::Decimal(decimal_type) => {
                             let size = decimal_type.size();
-                            let deciaml_val = val.as_decimal().unwrap();
-                            let new_val = match deciaml_val {
+                            let decimal_val = val.as_decimal().unwrap();
+                            let new_val = match decimal_val {
                                 DecimalScalar::Decimal128(v, _) => {
                                     ScalarRef::Decimal(DecimalScalar::Decimal128(*v, size))
                                 }
