@@ -38,9 +38,10 @@ use common_meta_types::StorageError;
 use common_meta_types::StoredMembership;
 use common_meta_types::TypeConfig;
 use common_meta_types::Vote;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
+use log::as_debug;
+use log::debug;
+use log::error;
+use log::info;
 
 use crate::metrics::raft_metrics;
 use crate::metrics::server_metrics;
@@ -62,7 +63,7 @@ impl RaftStore {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip_all, fields(config_id=%config.config_id))]
+    #[minitrace::trace]
     pub async fn open_create(
         config: &RaftConfig,
         open: Option<()>,
@@ -125,12 +126,12 @@ impl RaftLogReader<TypeConfig> for RaftStore {
         })
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
+    #[minitrace::trace]
     async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send + Sync>(
         &mut self,
         range: RB,
     ) -> Result<Vec<Entry>, StorageError> {
-        debug!("try_get_log_entries: range: {:?}", range);
+        debug!(id = self.id; "try_get_log_entries: range: {:?}", range);
 
         match self
             .log
@@ -148,7 +149,7 @@ impl RaftLogReader<TypeConfig> for RaftStore {
 
 #[async_trait]
 impl RaftSnapshotBuilder<TypeConfig> for RaftStore {
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
+    #[minitrace::trace]
     async fn build_snapshot(&mut self) -> Result<Snapshot, StorageError> {
         self.do_build_snapshot().await
     }
@@ -167,9 +168,9 @@ impl RaftStorage<TypeConfig> for RaftStore {
         self.clone()
     }
 
-    #[tracing::instrument(level = "debug", skip(self, hs), fields(id=self.id))]
+    #[minitrace::trace]
     async fn save_vote(&mut self, hs: &Vote) -> Result<(), StorageError> {
-        info!("save_vote: {:?}", hs);
+        info!(id = self.id, hs = as_debug!(hs); "save_vote");
 
         match self
             .raft_state
@@ -187,9 +188,9 @@ impl RaftStorage<TypeConfig> for RaftStore {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
+    #[minitrace::trace]
     async fn delete_conflict_logs_since(&mut self, log_id: LogId) -> Result<(), StorageError> {
-        info!("delete_conflict_logs_since: {}", log_id);
+        info!(id = self.id; "delete_conflict_logs_since: {}", log_id);
 
         match self
             .log
@@ -205,9 +206,9 @@ impl RaftStorage<TypeConfig> for RaftStore {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
+    #[minitrace::trace]
     async fn purge_logs_upto(&mut self, log_id: LogId) -> Result<(), StorageError> {
-        info!("purge_logs_upto: {}", log_id);
+        info!(id = self.id, log_id = as_debug!(&log_id); "purge_logs_upto");
 
         if let Err(err) = self
             .log
@@ -231,7 +232,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(self, entries), fields(id=self.id))]
+    #[minitrace::trace]
     async fn append_to_log<I: IntoIterator<Item = Entry> + Send>(
         &mut self,
         entries: I,
@@ -259,7 +260,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, entries), fields(id=self.id))]
+    #[minitrace::trace]
     async fn apply_to_state_machine(
         &mut self,
         entries: &[Entry],
@@ -288,13 +289,13 @@ impl RaftStorage<TypeConfig> for RaftStore {
         Ok(res)
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
+    #[minitrace::trace]
     async fn begin_receiving_snapshot(&mut self) -> Result<Box<SnapshotData>, StorageError> {
         server_metrics::incr_applying_snapshot(1);
         Ok(Box::new(Cursor::new(Vec::new())))
     }
 
-    #[tracing::instrument(level = "debug", skip(self, snapshot), fields(id=self.id))]
+    #[minitrace::trace]
     async fn install_snapshot(
         &mut self,
         meta: &SnapshotMeta,
@@ -303,7 +304,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
         // TODO(xp): disallow installing a snapshot with smaller last_applied.
 
         info!(
-            { snapshot_size = snapshot.get_ref().len() },
+            id = self.id,
+            snapshot_size = snapshot.get_ref().len();
             "decoding snapshot for installation"
         );
         server_metrics::incr_applying_snapshot(-1);
@@ -333,9 +335,9 @@ impl RaftStorage<TypeConfig> for RaftStore {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
+    #[minitrace::trace]
     async fn get_current_snapshot(&mut self) -> Result<Option<Snapshot>, StorageError> {
-        info!("get snapshot start");
+        info!(id = self.id; "get snapshot start");
         let snap = match &*self.current_snapshot.read().await {
             Some(snapshot) => {
                 let data = snapshot.data.clone();
@@ -352,7 +354,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
         snap
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     async fn read_vote(&mut self) -> Result<Option<Vote>, StorageError> {
         match self
             .raft_state

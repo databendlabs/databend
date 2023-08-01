@@ -2,8 +2,8 @@
 title: "This Week in Databend #102"
 date: 2023-07-16
 slug: 2023-07-16-databend-weekly
-cover_url: 'weekly/weekly-102.png'
-image: 'weekly/weekly-102.png'
+cover_url: 'weekly/weekly-102.jpg'
+image: 'weekly/weekly-102.jpg'
 tags: [weekly]
 description: "Stay up to date with the latest weekly developments on Databend!"
 contributors:

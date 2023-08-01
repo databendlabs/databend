@@ -35,10 +35,12 @@ use common_expression::Expr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserDefinedFunction;
-use tracing::warn;
+use log::warn;
 
 use crate::binder::wrap_cast;
+use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
+use crate::optimizer::SExpr;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CallPlan;
@@ -50,7 +52,9 @@ use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
+use crate::plans::MaterializedCte;
 use crate::plans::Plan;
+use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
@@ -58,7 +62,6 @@ use crate::plans::ShowRolesPlan;
 use crate::plans::UseDatabasePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
-use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::TypeChecker;
@@ -153,7 +156,22 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let plan = match stmt {
             Statement::Query(query) => {
-                let (s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                // Wrap `LogicalMaterializedCte` to `s_expr`
+                for materialized_cte in bind_context.materialized_ctes.iter() {
+                    let mut left_output_columns = vec![];
+                    for cte in bind_context.ctes_map.values() {
+                        if cte.cte_idx == materialized_cte.0 {
+                            left_output_columns = cte.columns.clone();
+                            break;
+                        }
+                    }
+                    s_expr = SExpr::create_binary(
+                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: materialized_cte.0})),
+                        Arc::new(materialized_cte.1.clone()),
+                        Arc::new(s_expr),
+                    );
+                }
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
                     Some(format_statement(stmt.clone())?)
                 } else {
@@ -560,12 +578,9 @@ impl<'a> Binder {
         Ok(plan)
     }
 
-    /// Create a new ColumnBinding with assigned index
-    pub(crate) fn create_column_binding(
+    /// Create a new ColumnBinding for derived column
+    pub(crate) fn create_derived_column_binding(
         &mut self,
-        database_name: Option<String>,
-        table_name: Option<String>,
-        table_index: Option<IndexType>,
         column_name: String,
         data_type: DataType,
     ) -> ColumnBinding {
@@ -573,17 +588,8 @@ impl<'a> Binder {
             .metadata
             .write()
             .add_derived_column(column_name.clone(), data_type.clone());
-        ColumnBinding {
-            database_name,
-            table_name,
-            column_position: None,
-            table_index,
-            column_name,
-            index,
-            data_type: Box::new(data_type),
-            visibility: Visibility::Visible,
-            virtual_computed_expr: None,
-        }
+        ColumnBindingBuilder::new(column_name, index, Box::new(data_type), Visibility::Visible)
+            .build()
     }
 
     /// Normalize [[<catalog>].<database>].<object>

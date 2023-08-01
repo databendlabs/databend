@@ -15,7 +15,7 @@
 use common_ast::ast::ShowColumnsStmt;
 use common_ast::ast::ShowLimit;
 use common_exception::Result;
-use tracing::debug;
+use log::debug;
 
 use crate::normalize_identifier;
 use crate::plans::Plan;
@@ -43,11 +43,11 @@ impl Binder {
             None => self.ctx.get_current_catalog(),
             Some(ident) => {
                 let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
-                self.ctx.get_catalog(&catalog)?;
+                self.ctx.get_catalog(&catalog).await?;
                 catalog
             }
         };
-        let catalog = self.ctx.get_catalog(&catalog_name)?;
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let database = match database {
             None => self.ctx.get_current_database(),
             Some(ident) => {

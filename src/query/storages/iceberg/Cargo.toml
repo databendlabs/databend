@@ -19,16 +19,16 @@ common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-storage = { path = "../../../common/storage" }
 
-arrow-array = "40.0.0"
-arrow-schema = "40.0.0"
+arrow-array = "43.0.0"
+arrow-schema = "43.0.0"
 async-backtrace = { workspace = true }
 async-trait = "0.1"
 chrono = { workspace = true }
-dashmap = "5"
 futures = "0.3"
-icelake = { version = "0.0.6", features = ["arrow_schema", "io_parquet"] }
+icelake = { version = "0.0.9" }
+minitrace = { workspace = true }
 opendal = { workspace = true }
-parquet = "40.0.0"
+parquet = "43.0.0"
 serde = { workspace = true }
-tracing = "0.1"
+tokio = { workspace = true }
 typetag = "0.2"

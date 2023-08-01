@@ -15,26 +15,14 @@
 pub mod fake_key_spaces;
 pub mod fake_state_machine_meta;
 
+use std::sync::Once;
+
 use common_base::base::GlobalSequence;
 use common_meta_sled_store::get_sled_db;
-
-/// 1. Open a temp sled::Db for all tests.
-/// 2. Initialize a global tracing.
-/// 3. Create a span for a test case. One needs to enter it by `span.enter()` and keeps the guard held.
-#[macro_export]
-macro_rules! init_sled_ut {
-    () => {{
-        let t = tempfile::tempdir().expect("create temp dir to sled db");
-
-        common_meta_sled_store::init_temp_sled_db(t);
-        let guards =
-            common_tracing::init_logging("sled_unittests", &common_tracing::Config::new_testing());
-
-        let name = common_tracing::func_name!();
-        let span = tracing::debug_span!("ut", "{}", name.split("::").last().unwrap());
-        (guards, span)
-    }};
-}
+use common_tracing::closure_name;
+use common_tracing::init_logging;
+use common_tracing::Config;
+use minitrace::prelude::*;
 
 pub struct SledTestContext {
     pub tree_name: String,
@@ -49,6 +37,40 @@ pub fn new_sled_test_context() -> SledTestContext {
     }
 }
 
-pub fn next_seq() -> u32 {
+fn next_seq() -> u32 {
     29000u32 + (GlobalSequence::next() as u32)
+}
+
+pub fn sled_test_harness<F, Fut>(test: F)
+where
+    F: FnOnce() -> Fut + 'static,
+    Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
+{
+    setup_test();
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    let root = Span::root(closure_name::<F>(), SpanContext::random());
+    let test = test().in_span(root);
+    rt.block_on(test).unwrap();
+
+    shutdown_test();
+}
+
+fn setup_test() {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        let t = tempfile::tempdir().expect("create temp dir to sled db");
+        common_meta_sled_store::init_temp_sled_db(t);
+
+        let guards = init_logging("meta_unittests", &Config::new_testing());
+        Box::leak(Box::new(guards));
+    });
+}
+
+fn shutdown_test() {
+    minitrace::flush();
 }

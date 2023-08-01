@@ -37,6 +37,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use log::debug;
 use opendal::Operator;
 
 use crate::hive_parquet_block_reader::DataBlockDeserializer;
@@ -350,7 +351,7 @@ impl Processor for HiveTableSource {
             State::ReadMeta(Some(part)) => {
                 if self.delay > 0 {
                     sleep(Duration::from_millis(self.delay as u64)).await;
-                    tracing::debug!("sleep for {}ms", self.delay);
+                    debug!("sleep for {}ms", self.delay);
                     self.delay = 0;
                 }
                 let part = HivePartInfo::from_part(&part)?;

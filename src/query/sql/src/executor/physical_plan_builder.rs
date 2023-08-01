@@ -14,6 +14,7 @@
 
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -53,6 +54,7 @@ use super::AggregatePartial;
 use super::EvalScalar;
 use super::Exchange as PhysicalExchange;
 use super::Filter;
+use super::Lambda;
 use super::Limit;
 use super::NthValueFunctionDesc;
 use super::ProjectSet;
@@ -61,13 +63,17 @@ use super::Sort;
 use super::TableScan;
 use super::WindowFunction;
 use crate::binder::wrap_cast;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_join;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
+use crate::executor::CteScan;
 use crate::executor::FragmentKind;
 use crate::executor::LagLeadDefault;
 use crate::executor::LagLeadFunctionDesc;
+use crate::executor::LambdaFunctionDesc;
+use crate::executor::MaterializedCte;
 use crate::executor::NtileFunctionDesc;
 use crate::executor::PhysicalJoinType;
 use crate::executor::PhysicalPlan;
@@ -91,7 +97,6 @@ use crate::plans::Window as LogicalWindow;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;
 use crate::BaseTableColumn;
-use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
@@ -367,8 +372,12 @@ impl PhysicalPlanBuilder {
                     .unwrap();
                 let index = self
                     .metadata
-                    .write()
-                    .add_internal_column(scan.table_index, internal_column.clone());
+                    .read()
+                    .row_id_index_by_table_index(scan.table_index);
+                debug_assert!(index.is_some());
+                // Safe to unwrap: if lazy_columns is not empty, the `analyze_lazy_materialization` have been called
+                // and the row_id index of the table_index has been generated.
+                let index = index.unwrap();
                 entry.insert(index);
                 project_internal_columns.insert(index, internal_column);
             }
@@ -504,7 +513,7 @@ impl PhysicalPlanBuilder {
             RelOperator::DummyTableScan(_) => {
                 let catalogs = CatalogManager::instance();
                 let table = catalogs
-                    .get_catalog(CATALOG_DEFAULT)?
+                    .get_default_catalog()?
                     .get_table(self.ctx.get_tenant().as_str(), "system", "one")
                     .await?;
 
@@ -919,21 +928,15 @@ impl PhysicalPlanBuilder {
                         .zip(common_types)
                         .filter(|(f, common_ty)| f.data_type() != *common_ty)
                         .map(|(f, common_ty)| {
+                            let column = ColumnBindingBuilder::new(
+                                f.name().clone(),
+                                f.name().parse().unwrap(),
+                                Box::new(f.data_type().clone()),
+                                Visibility::Visible,
+                            )
+                            .build();
                             let cast_expr = wrap_cast(
-                                &ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                    span: None,
-                                    column: ColumnBinding {
-                                        database_name: None,
-                                        table_name: None,
-                                        column_position: None,
-                                        table_index: None,
-                                        column_name: f.name().clone(),
-                                        index: f.name().parse().unwrap(),
-                                        data_type: Box::new(f.data_type().clone()),
-                                        visibility: Visibility::Visible,
-                                        virtual_computed_expr: None,
-                                    },
-                                }),
+                                &ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column }),
                                 common_ty,
                             );
                             ScalarItem {
@@ -1094,6 +1097,128 @@ impl PhysicalPlanBuilder {
                     input: Box::new(input),
                     srf_exprs,
                     unused_indices,
+                    stat_info: Some(stat_info),
+                }))
+            }
+
+            RelOperator::CteScan(cte_scan) => Ok(PhysicalPlan::CteScan(CteScan {
+                plan_id: self.next_plan_id(),
+                cte_idx: cte_scan.cte_idx,
+                output_schema: DataSchemaRefExt::create(cte_scan.fields.clone()),
+                offsets: cte_scan.offsets.clone(),
+            })),
+
+            RelOperator::MaterializedCte(op) => {
+                Ok(PhysicalPlan::MaterializedCte(MaterializedCte {
+                    plan_id: self.next_plan_id(),
+                    left: Box::new(self.build(s_expr.child(0)?).await?),
+                    right: Box::new(self.build(s_expr.child(1)?).await?),
+                    cte_idx: op.cte_idx,
+                    left_output_columns: op.left_output_columns.clone(),
+                }))
+            }
+
+            RelOperator::Lambda(lambda) => {
+                let input = self.build(s_expr.child(0)?).await?;
+                let input_schema = input.output_schema()?;
+                let mut index = input_schema.num_fields();
+                let mut lambda_index_map = HashMap::new();
+                let lambda_funcs = lambda
+                    .items
+                    .iter()
+                    .map(|item| {
+                        if let ScalarExpr::LambdaFunction(func) = &item.scalar {
+                            let arg_indices = func
+                                .args
+                                .iter()
+                                .map(|arg| {
+                                    match arg {
+                                        ScalarExpr::BoundColumnRef(col) => {
+                                            let index = input_schema
+                                                .index_of(&col.column.index.to_string())
+                                                .unwrap();
+                                            Ok(index)
+                                        }
+                                        ScalarExpr::LambdaFunction(inner_func) => {
+                                            // nested lambda function as an argument of parent lambda function
+                                            let index = lambda_index_map.get(&inner_func.display_name).unwrap();
+                                            Ok(*index)
+                                        }
+                                        _ => {
+                                            Err(ErrorCode::Internal(
+                                                "lambda function's argument must be a BoundColumnRef or LambdaFunction"
+                                                    .to_string(),
+                                            ))
+                                        }
+                                    }
+                                })
+                                .collect::<Result<Vec<_>>>()?;
+
+                            lambda_index_map.insert(
+                                func.display_name.clone(),
+                                index,
+                            );
+                            index += 1;
+
+                            let arg_exprs = func
+                                .args
+                                .iter()
+                                .map(|arg| {
+                                    let expr = arg.as_expr()?;
+                                    let remote_expr = expr.as_remote_expr();
+                                    Ok(remote_expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                                })
+                                .collect::<Result<Vec<_>>>()?;
+
+                            let params = func
+                                .params
+                                .iter()
+                                .map(|(param, _)| param.clone())
+                                .collect::<Vec<_>>();
+
+                            // build schema for lambda expr.
+                            let mut field_index = 0;
+                            let lambda_fields = func
+                                .params
+                                .iter()
+                                .map(|(_, ty)| {
+                                    let field = DataField::new(&field_index.to_string(), ty.clone());
+                                    field_index += 1;
+                                    field
+                                })
+                                .collect::<Vec<_>>();
+                            let lambda_schema = DataSchema::new(lambda_fields);
+
+                            let expr = func
+                                .lambda_expr
+                                .resolve_and_check(&lambda_schema)?
+                                .project_column_ref(|index| {
+                                    lambda_schema.index_of(&index.to_string()).unwrap()
+                                });
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                            let lambda_expr = expr.as_remote_expr();
+
+                            let lambda_func = LambdaFunctionDesc {
+                                func_name: func.func_name.clone(),
+                                output_column: item.index,
+                                arg_indices,
+                                arg_exprs,
+                                params,
+                                lambda_expr,
+                                data_type: func.return_type.clone(),
+                            };
+                            Ok(lambda_func)
+                        } else {
+                            Err(ErrorCode::Internal("Expected lambda function".to_string()))
+                        }
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                Ok(PhysicalPlan::Lambda(Lambda {
+                    plan_id: self.next_plan_id(),
+                    input: Box::new(input),
+                    lambda_funcs,
                     stat_info: Some(stat_info),
                 }))
             }

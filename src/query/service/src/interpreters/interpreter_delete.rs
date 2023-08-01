@@ -27,7 +27,9 @@ use common_expression::DataBlock;
 use common_expression::RemoteExpr;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
+use common_sql::binder::ColumnBindingBuilder;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::executor::DeleteFinal;
 use common_sql::executor::DeletePartial;
@@ -53,6 +55,7 @@ use common_sql::Visibility;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
+use log::debug;
 use storages_common_table_meta::meta::TableSnapshot;
 use table_lock::TableLockHandlerWrapper;
 
@@ -88,9 +91,11 @@ impl Interpreter for DeleteInterpreter {
         "DeleteInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", name = "delete_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "delete_interpreter_execute");
+
         let is_distributed = !self.ctx.get_cluster().is_empty();
         let catalog_name = self.plan.catalog_name.as_str();
         let db_name = self.plan.database_name.as_str();
@@ -105,10 +110,11 @@ impl Interpreter for DeleteInterpreter {
             .try_lock(self.ctx.clone(), table_info.clone())
             .await?;
 
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        let catalog_info = catalog.info();
+
         // refresh table.
-        let tbl = self
-            .ctx
-            .get_catalog(catalog_name)?
+        let tbl = catalog
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
 
@@ -124,17 +130,16 @@ impl Interpreter for DeleteInterpreter {
                 Some(self.plan.database_name.as_str()),
                 self.plan.table_name.as_str(),
             );
-            let row_id_column_binding = ColumnBinding {
-                database_name: Some(self.plan.database_name.clone()),
-                table_name: Some(self.plan.table_name.clone()),
-                column_position: None,
-                table_index,
-                column_name: ROW_ID_COL_NAME.to_string(),
-                index: self.plan.subquery_desc[0].index,
-                data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-                visibility: Visibility::InVisible,
-                virtual_computed_expr: None,
-            };
+            let row_id_column_binding = ColumnBindingBuilder::new(
+                ROW_ID_COL_NAME.to_string(),
+                self.plan.subquery_desc[0].index,
+                Box::new(DataType::Number(NumberDataType::UInt64)),
+                Visibility::InVisible,
+            )
+            .database_name(Some(self.plan.database_name.clone()))
+            .table_name(Some(self.plan.table_name.clone()))
+            .table_index(table_index)
+            .build();
             let mut filters = VecDeque::new();
             for subquery_desc in &self.plan.subquery_desc {
                 let filter = subquery_filter(
@@ -234,7 +239,7 @@ impl Interpreter for DeleteInterpreter {
                 fuse_table.get_table_info().clone(),
                 col_indices,
                 snapshot,
-                self.plan.catalog_name.clone(),
+                catalog_info,
                 is_distributed,
                 query_row_id_col,
             )?;
@@ -269,7 +274,7 @@ impl DeleteInterpreter {
         table_info: TableInfo,
         col_indices: Vec<usize>,
         snapshot: TableSnapshot,
-        catalog_name: String,
+        catalog_info: CatalogInfo,
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
@@ -277,7 +282,7 @@ impl DeleteInterpreter {
             parts: partitions,
             filter,
             table_info: table_info.clone(),
-            catalog_name: catalog_name.clone(),
+            catalog_info: catalog_info.clone(),
             col_indices,
             query_row_id_col,
         }));
@@ -295,7 +300,7 @@ impl DeleteInterpreter {
             input: Box::new(root),
             snapshot,
             table_info,
-            catalog_name,
+            catalog_info,
         })))
     }
 }

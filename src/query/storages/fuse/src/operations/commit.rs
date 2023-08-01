@@ -19,6 +19,7 @@ use std::time::Duration;
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
 use backoff::ExponentialBackoffBuilder;
+use chrono::Utc;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
@@ -33,19 +34,21 @@ use common_meta_types::MatchSeq;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use log::debug;
+use log::info;
+use log::warn;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use tracing::info;
-use tracing::warn;
 
 use super::common::MutationKind;
 use crate::io::MetaWriter;
@@ -75,18 +78,16 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
+        prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
             let aggregator = TableMutationAggregator::create(
+                self,
                 ctx.clone(),
                 vec![],
                 Statistics::default(),
-                self.get_block_thresholds(),
-                self.meta_location_generator().clone(),
-                self.schema(),
-                self.get_operator(),
                 MutationKind::Insert,
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
@@ -104,6 +105,7 @@ impl FuseTable {
                 input,
                 None,
                 false,
+                prev_snapshot_id,
             )
         })?;
 
@@ -198,9 +200,10 @@ impl FuseTable {
             number_of_segments: Some(snapshot.segments.len() as u64),
             number_of_blocks: Some(stats.block_count),
         };
+        new_table_meta.updated_on = Utc::now();
 
         // 2. prepare the request
-        let catalog = ctx.get_catalog(table_info.catalog())?;
+        let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
@@ -286,6 +289,7 @@ impl FuseTable {
 
         let mut latest_snapshot = base_snapshot.clone();
         let mut latest_table_info = &self.table_info;
+        let default_cluster_key_id = self.cluster_key_id();
 
         // holding the reference of latest table during retries
         let mut latest_table_ref: Arc<dyn Table>;
@@ -308,6 +312,7 @@ impl FuseTable {
                 &base_summary,
                 concurrently_appended_segment_locations,
                 schema,
+                default_cluster_key_id,
             )
             .await?;
             snapshot_tobe_committed.segments = segments_tobe_committed;
@@ -328,7 +333,7 @@ impl FuseTable {
                     match backoff.next_backoff() {
                         Some(d) => {
                             let name = self.table_info.name.clone();
-                            tracing::debug!(
+                            debug!(
                                 "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
                                 d.as_millis(),
                                 name.as_str(),
@@ -412,6 +417,7 @@ impl FuseTable {
         base_summary: &Statistics,
         concurrently_appended_segment_locations: &[Location],
         schema: TableSchemaRef,
+        default_cluster_key_id: Option<u32>,
     ) -> Result<(Vec<Location>, Statistics)> {
         if concurrently_appended_segment_locations.is_empty() {
             Ok((base_segments.to_owned(), base_summary.clone()))
@@ -431,8 +437,11 @@ impl FuseTable {
             let mut new_statistics = base_summary.clone();
             for result in concurrent_appended_segment_infos.into_iter() {
                 let concurrent_appended_segment = result?;
-                new_statistics =
-                    merge_statistics(&new_statistics, &concurrent_appended_segment.summary);
+                new_statistics = merge_statistics(
+                    &new_statistics,
+                    &concurrent_appended_segment.summary,
+                    default_cluster_key_id,
+                );
             }
             Ok((new_segments, new_statistics))
         }

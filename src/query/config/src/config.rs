@@ -43,7 +43,9 @@ use common_meta_app::tenant::TenantQuota;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
+use common_tracing::QueryLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
+use common_tracing::TracingConfig;
 use common_users::idm_config::IDMConfig as InnerIDMConfig;
 use serde::Deserialize;
 use serde::Serialize;
@@ -1717,9 +1719,18 @@ impl TryInto<InnerLogConfig> for LogConfig {
             file.dir = self.dir.to_string();
         }
 
+        let query = QueryLogConfig {
+            on: true,
+            dir: format!("{}/query-details", &file.dir),
+        };
+
+        let tracing = TracingConfig::from_env();
+
         Ok(InnerLogConfig {
             file,
             stderr: self.stderr.try_into()?,
+            query,
+            tracing,
         })
     }
 }
@@ -2238,6 +2249,8 @@ pub struct DiskCacheConfig {
 }
 
 mod cache_config_converters {
+    use log::warn;
+
     use super::*;
 
     impl From<InnerConfig> for Config {
@@ -2273,7 +2286,7 @@ mod cache_config_converters {
                 catalogs.insert(k, catalog);
             }
             if !self.catalog.address.is_empty() || !self.catalog.protocol.is_empty() {
-                tracing::warn!(
+                warn!(
                     "`catalog` is planned to be deprecated, please add catalog in `catalogs` instead"
                 );
                 let hive = self.catalog.try_into()?;

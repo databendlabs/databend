@@ -23,6 +23,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::future::Either;
+use log::warn;
 
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_client::FlightSender;
@@ -61,7 +62,7 @@ impl StatisticsSender {
                         Either::Right((Ok(Some(error_code)), _recv)) => {
                             let data = DataPacket::ErrorCode(error_code);
                             if let Err(error_code) = tx.send(data).await {
-                                tracing::warn!(
+                                warn!(
                                     "Cannot send data via flight exchange, cause: {:?}",
                                     error_code
                                 );
@@ -82,7 +83,7 @@ impl StatisticsSender {
                 }
 
                 if let Err(error) = Self::send_statistics(&ctx, &tx).await {
-                    tracing::warn!("Statistics send has error, cause: {:?}.", error);
+                    warn!("Statistics send has error, cause: {:?}.", error);
                 }
             }
         });
@@ -100,7 +101,7 @@ impl StatisticsSender {
         let join_handle = self.join_handle.take();
         futures::executor::block_on(async move {
             if let Err(error_code) = shutdown_flag_sender.send(error).await {
-                tracing::warn!(
+                warn!(
                     "Cannot send data via flight exchange, cause: {:?}",
                     error_code
                 );

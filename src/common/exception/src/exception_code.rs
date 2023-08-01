@@ -145,6 +145,8 @@ build_exceptions! {
     ColumnReferencedByComputedColumn(1117),
     // The table is not a clustered table.
     UnclusteredTable(1118),
+    UnknownCatalog(11119),
+    UnknownCatalogType(11120),
 
     // Data Related Errors
 

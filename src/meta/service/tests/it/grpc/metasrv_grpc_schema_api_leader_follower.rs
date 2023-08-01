@@ -13,13 +13,15 @@
 // limitations under the License.
 
 //! Test metasrv SchemaApi by writing to leader and then reading from a follower.
-use common_base::base::tokio;
-use common_meta_api::SchemaApiTestSuite;
-use databend_meta::init_meta_ut;
 
+use common_meta_api::SchemaApiTestSuite;
+use test_harness::test;
+
+use crate::testing::meta_service_test_harness;
 use crate::tests::service::start_metasrv_cluster;
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1]).await?;
 
@@ -31,7 +33,8 @@ async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
         .await
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_api_list_database() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1]).await?;
 
@@ -43,7 +46,8 @@ async fn test_meta_api_list_database() -> anyhow::Result<()> {
         .await
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1]).await?;
 
@@ -54,7 +58,8 @@ async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
         .await
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_api_list_table() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1]).await?;
 

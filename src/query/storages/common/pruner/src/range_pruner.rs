@@ -20,6 +20,7 @@ use common_expression::ColumnId;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
+use log::warn;
 use storages_common_index::RangeIndex;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::StatisticsOfColumns;
@@ -73,7 +74,7 @@ impl RangePruner for RangeIndex {
             Ok(r) => r,
             Err(e) => {
                 // swallow exceptions intentionally, corrupted index should not prevent execution
-                tracing::warn!("failed to range filter, returning true. {}", e);
+                warn!("failed to range filter, returning true. {}", e);
                 true
             }
         }

@@ -42,6 +42,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_storage::DataOperator;
+use tokio::sync::OnceCell;
 
 use crate::partition::IcebergPartInfo;
 use crate::table_source::IcebergTableSource;
@@ -53,30 +54,34 @@ pub struct IcebergTable {
     info: TableInfo,
     op: opendal::Operator,
 
-    table: icelake::Table,
+    table: OnceCell<icelake::Table>,
 }
 
 impl IcebergTable {
     /// create a new table on the table directory
-    ///
-    /// TODO: we should use icelake Table instead.
+    #[async_backtrace::framed]
+    pub fn try_new(dop: DataOperator, info: TableInfo) -> Result<IcebergTable> {
+        Ok(Self {
+            info,
+            op: dop.operator(),
+            table: OnceCell::new(),
+        })
+    }
+
+    /// create a new table on the table directory
     #[async_backtrace::framed]
     pub async fn try_create(
         catalog: &str,
         database: &str,
         table_name: &str,
-        tbl_root: DataOperator,
+        dop: DataOperator,
     ) -> Result<IcebergTable> {
-        let op = tbl_root.operator();
-        let mut table = icelake::Table::new(op.clone());
-        table
-            .load()
+        let op = dop.operator();
+        let table = icelake::Table::open_with_op(op.clone())
             .await
             .map_err(|e| ErrorCode::ReadTableDataError(format!("Cannot load metadata: {e:?}")))?;
 
-        let meta = table.current_table_metadata().map_err(|e| {
-            ErrorCode::ReadTableDataError(format!("Cannot get current table metadata: {e:?}"))
-        })?;
+        let meta = table.current_table_metadata();
 
         // Build arrow schema from iceberg metadata.
         let arrow_schema: ArrowSchema = meta
@@ -111,13 +116,29 @@ impl IcebergTable {
                 catalog: catalog.to_string(),
                 engine: "iceberg".to_string(),
                 created_on: Utc::now(),
-                storage_params: Some(tbl_root.params()),
+                storage_params: Some(dop.params()),
                 ..Default::default()
             },
             ..Default::default()
         };
 
-        Ok(Self { info, op, table })
+        Ok(Self {
+            info,
+            op,
+            table: OnceCell::new_with(Some(table)),
+        })
+    }
+
+    async fn table(&self) -> Result<&icelake::Table> {
+        let op = self.op.clone();
+
+        self.table
+            .get_or_try_init(|| async {
+                icelake::Table::open_with_op(op).await.map_err(|e| {
+                    ErrorCode::ReadTableDataError(format!("Cannot load metadata: {e:?}"))
+                })
+            })
+            .await
     }
 
     pub fn do_read_data(
@@ -167,13 +188,15 @@ impl IcebergTable {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, _ctx))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let data_files = self.table.current_data_files().await.map_err(|e| {
+        let table = self.table().await?;
+
+        let data_files = table.current_data_files().await.map_err(|e| {
             ErrorCode::ReadTableDataError(format!("Cannot get current data files: {e:?}"))
         })?;
 
@@ -181,8 +204,7 @@ impl IcebergTable {
             .into_iter()
             .map(|v: icelake::types::DataFile| match v.file_format {
                 icelake::types::DataFileFormat::Parquet => Arc::new(Box::new(IcebergPartInfo {
-                    path: self
-                        .table
+                    path: table
                         .rel_path(&v.file_path)
                         .expect("file path must be rel to table"),
                     size: v.file_size_in_bytes as u64,

@@ -52,10 +52,13 @@ use common_pipeline_sources::SyncSourcer;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
+use log::info;
+use log::trace;
 use opendal::EntryMode;
 use opendal::Metakey;
 use opendal::Operator;
 use storages_common_index::RangeIndex;
+use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use super::hive_catalog::HiveCatalog;
@@ -389,7 +392,7 @@ impl HiveTable {
         partition_keys: Vec<String>,
         filter_expression: Option<Expr<String>>,
     ) -> Result<Vec<(String, Option<String>)>> {
-        let hive_catalog = ctx.get_catalog(CATALOG_HIVE)?;
+        let hive_catalog = ctx.get_catalog(CATALOG_HIVE).await?;
         let hive_catalog = hive_catalog.as_any().downcast_ref::<HiveCatalog>().unwrap();
 
         // todo may use get_partition_names_ps to filter
@@ -398,17 +401,15 @@ impl HiveTable {
             .get_partition_names(table_info[0].to_string(), table_info[1].to_string(), -1)
             .await?;
 
-        if tracing::enabled!(tracing::Level::TRACE) {
-            let partition_num = partition_names.len();
-            if partition_num < 100000 {
-                tracing::trace!(
-                    "get {} partitions from hive metastore:{:?}",
-                    partition_num,
-                    partition_names
-                );
-            } else {
-                tracing::trace!("get {} partitions from hive metastore", partition_num);
-            }
+        let partition_num = partition_names.len();
+        if partition_num < 100000 {
+            trace!(
+                "get {} partitions from hive metastore:{:?}",
+                partition_num,
+                partition_names
+            );
+        } else {
+            trace!("get {} partitions from hive metastore", partition_num);
         }
 
         if let Some(expr) = filter_expression {
@@ -418,13 +419,11 @@ impl HiveTable {
             partition_names = partition_pruner.prune(partition_names)?;
         }
 
-        if tracing::enabled!(tracing::Level::TRACE) {
-            tracing::trace!(
-                "after partition prune, {} partitions:{:?}",
-                partition_names.len(),
-                partition_names
-            )
-        }
+        trace!(
+            "after partition prune, {} partitions:{:?}",
+            partition_names.len(),
+            partition_names
+        );
 
         let partitions = hive_catalog
             .get_partitions(
@@ -480,7 +479,7 @@ impl HiveTable {
         Ok(vec![(location, None)])
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn list_files_from_dirs(
         &self,
@@ -512,7 +511,7 @@ impl HiveTable {
         Ok(all_files)
     }
 
-    #[tracing::instrument(level = "info", skip(self, ctx))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,
@@ -521,19 +520,15 @@ impl HiveTable {
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         let dirs = self.get_query_locations(ctx.clone(), &push_downs).await?;
-        if tracing::enabled!(tracing::Level::TRACE) {
-            tracing::trace!("{} query locations: {:?}", dirs.len(), dirs);
-        }
+        trace!("{} query locations: {:?}", dirs.len(), dirs);
 
         let all_files = self.list_files_from_dirs(dirs).await?;
-        if tracing::enabled!(tracing::Level::TRACE) {
-            tracing::trace!("{} hive files: {:?}", all_files.len(), all_files);
-        }
+        trace!("{} hive files: {:?}", all_files.len(), all_files);
 
         let splitter = HiveFileSplitter::create(128 * 1024 * 1024_u64);
         let partitions = splitter.get_splits(all_files);
 
-        tracing::info!(
+        info!(
             "read partition, partition num:{}, elapsed:{:?}",
             partitions.len(),
             start.elapsed()
@@ -597,6 +592,7 @@ impl Table for HiveTable {
         _pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
         _overwrite: bool,
+        _prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "commit_insertion operation for table {} is not implemented, table engine is {}",

@@ -18,10 +18,12 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::runtime::execute_futures_in_parallel;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::TableSchemaRef;
+use log::info;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::FormatVersion;
@@ -29,7 +31,6 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
-use tracing::info;
 
 use super::ConflictResolveContext;
 use super::SnapshotChanges;
@@ -46,6 +47,7 @@ use crate::operations::mutation::SegmentIndex;
 use crate::statistics::reducers::deduct_statistics_mut;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
+use crate::FuseTable;
 
 #[derive(Default)]
 struct BlockMutations {
@@ -93,6 +95,7 @@ pub struct MutationAccumulator {
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
     thresholds: BlockThresholds,
+    default_cluster_key_id: Option<u32>,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
     deleted_segments: Vec<MutationDeletedSegment>,
@@ -106,23 +109,20 @@ pub struct MutationAccumulator {
 }
 
 impl MutationAccumulator {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         ctx: Arc<dyn TableContext>,
-        schema: TableSchemaRef,
-        dal: Operator,
-        location_gen: TableMetaLocationGenerator,
-        thresholds: BlockThresholds,
+        table: &FuseTable,
         base_segments: Vec<Location>,
         summary: Statistics,
         kind: MutationKind,
     ) -> Self {
         MutationAccumulator {
             ctx,
-            schema,
-            dal,
-            location_gen,
-            thresholds,
+            schema: table.schema(),
+            dal: table.get_operator(),
+            location_gen: table.meta_location_generator().clone(),
+            thresholds: table.get_block_thresholds(),
+            default_cluster_key_id: table.cluster_key_id(),
             mutations: HashMap::new(),
             appended_segments: vec![],
             base_segments,
@@ -187,7 +187,11 @@ impl MutationAccumulator {
         for s in &self.deleted_segments {
             removed_segment_indexes.push(s.deleted_segment.index);
             added_segments.push(None);
-            merge_statistics_mut(&mut removed_statistics, &s.deleted_segment.segment_info.1);
+            merge_statistics_mut(
+                &mut removed_statistics,
+                &s.deleted_segment.segment_info.1,
+                self.default_cluster_key_id,
+            );
         }
         for chunk in segment_indices.chunks(chunk_size) {
             let results = self.partial_apply(chunk.to_vec()).await?;
@@ -195,13 +199,21 @@ impl MutationAccumulator {
                 if let Some((location, summary)) = result.new_segment_info {
                     // replace the old segment location with the new one.
                     self.abort_operation.add_segment(location.clone());
-                    merge_statistics_mut(&mut added_statistics, &summary);
+                    merge_statistics_mut(
+                        &mut added_statistics,
+                        &summary,
+                        self.default_cluster_key_id,
+                    );
                     added_segments.push(Some((location, SegmentInfo::VERSION)));
                 } else {
                     added_segments.push(None);
                 }
                 removed_segment_indexes.push(result.index);
-                merge_statistics_mut(&mut removed_statistics, &result.origin_summary);
+                merge_statistics_mut(
+                    &mut removed_statistics,
+                    &result.origin_summary,
+                    self.default_cluster_key_id,
+                );
             }
 
             // Refresh status
@@ -218,7 +230,11 @@ impl MutationAccumulator {
         }
 
         for (_path, new_segment, _format_version) in &self.appended_segments {
-            merge_statistics_mut(&mut self.summary, &new_segment.summary);
+            merge_statistics_mut(
+                &mut self.summary,
+                &new_segment.summary,
+                self.default_cluster_key_id,
+            );
         }
 
         let conflict_resolve_context = match self.kind {
@@ -232,7 +248,11 @@ impl MutationAccumulator {
                 })
             }
             _ => {
-                merge_statistics_mut(&mut self.summary, &added_statistics);
+                merge_statistics_mut(
+                    &mut self.summary,
+                    &added_statistics,
+                    self.default_cluster_key_id,
+                );
                 deduct_statistics_mut(&mut self.summary, &removed_statistics);
                 let merged_segments = ConflictResolveContext::merge_segments(
                     std::mem::take(&mut self.base_segments),
@@ -246,10 +266,13 @@ impl MutationAccumulator {
                     .chain(merged_segments)
                     .collect();
                 match self.kind {
-                    MutationKind::Insert => ConflictResolveContext::AppendOnly(SnapshotMerged {
-                        merged_segments,
-                        merged_statistics: self.summary.clone(),
-                    }),
+                    MutationKind::Insert => ConflictResolveContext::AppendOnly((
+                        SnapshotMerged {
+                            merged_segments,
+                            merged_statistics: self.summary.clone(),
+                        },
+                        self.schema.clone(),
+                    )),
                     _ => ConflictResolveContext::LatestSnapshotAppendOnly(SnapshotMerged {
                         merged_segments,
                         merged_statistics: self.summary.clone(),
@@ -271,6 +294,7 @@ impl MutationAccumulator {
             let schema = self.schema.clone();
             let op = self.dal.clone();
             let location_gen = self.location_gen.clone();
+            let default_cluster_key_id = self.default_cluster_key_id;
 
             tasks.push(async move {
                 // read the old segment
@@ -294,7 +318,8 @@ impl MutationAccumulator {
                     // assign back the mutated blocks to segment
                     let new_blocks = block_editor.into_values().collect::<Vec<_>>();
                     // re-calculate the segment statistics
-                    let new_summary = reduce_block_metas(&new_blocks, thresholds);
+                    let new_summary =
+                        reduce_block_metas(&new_blocks, thresholds, default_cluster_key_id);
                     // create new segment info
                     let new_segment = SegmentInfo::new(new_blocks, new_summary.clone());
 

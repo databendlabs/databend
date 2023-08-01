@@ -27,13 +27,13 @@ use common_http::stack::debug_dump_stack;
 use common_http::HttpError;
 use common_http::HttpShutdownHandler;
 use common_meta_types::anyerror::AnyError;
+use log::info;
+use log::warn;
 use poem::get;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
 use poem::Endpoint;
 use poem::Route;
-use tracing::info;
-use tracing::warn;
 
 use crate::servers::Server;
 

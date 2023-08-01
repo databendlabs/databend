@@ -180,6 +180,7 @@ pub enum Expr {
         args: Vec<Expr>,
         params: Vec<Literal>,
         window: Option<Window>,
+        lambda: Option<Lambda>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
@@ -374,6 +375,12 @@ pub enum WindowFrameBound {
     Preceding(Option<Box<Expr>>),
     /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
     Following(Option<Box<Expr>>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Lambda {
+    pub params: Vec<Identifier>,
+    pub expr: Box<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -882,6 +889,21 @@ impl Display for WindowSpec {
     }
 }
 
+impl Display for Lambda {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.params.len() == 1 {
+            write!(f, "{}", self.params[0])?;
+        } else {
+            write!(f, "(")?;
+            write_comma_separated_list(f, self.params.clone())?;
+            write!(f, ")")?;
+        }
+        write!(f, " -> {}", self.expr)?;
+
+        Ok(())
+    }
+}
+
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1043,6 +1065,7 @@ impl Display for Expr {
                 args,
                 params,
                 window,
+                lambda,
                 ..
             } => {
                 write!(f, "{name}")?;
@@ -1056,6 +1079,9 @@ impl Display for Expr {
                     write!(f, "DISTINCT ")?;
                 }
                 write_comma_separated_list(f, args)?;
+                if let Some(lambda) = lambda {
+                    write!(f, ", {lambda}")?;
+                }
                 write!(f, ")")?;
 
                 if let Some(window) = window {

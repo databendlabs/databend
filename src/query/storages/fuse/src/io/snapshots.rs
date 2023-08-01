@@ -26,6 +26,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::stream::StreamExt;
 use futures_util::TryStreamExt;
+use log::info;
+use log::warn;
+use minitrace::prelude::*;
 use opendal::EntryMode;
 use opendal::Metakey;
 use opendal::Operator;
@@ -35,9 +38,6 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotLite;
-use tracing::info;
-use tracing::warn;
-use tracing::Instrument;
 
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
@@ -120,7 +120,7 @@ impl SnapshotsIO {
         Ok(TableSnapshotLite::from((snapshot.as_ref(), ver)))
     }
 
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn read_snapshot_lites(
         &self,
@@ -136,7 +136,7 @@ impl SnapshotsIO {
                     self.operator.clone(),
                     min_snapshot_timestamp,
                 )
-                .instrument(tracing::debug_span!("read_snapshot"))
+                .in_span(Span::enter_with_local_parent("read_snapshot"))
             })
         });
 
@@ -196,7 +196,7 @@ impl SnapshotsIO {
                     snapshot_files.len(),
                     start.elapsed().as_secs()
                 );
-                info!(status);
+                info!("{}", status);
                 (status_callback)(status);
             }
         }
@@ -288,7 +288,7 @@ impl SnapshotsIO {
     }
 
     // If `ignore_timestamp` is true, ignore filter out snapshots which have larger (artificial)timestamp
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn read_snapshot_lite_extends(
         &self,
@@ -306,7 +306,7 @@ impl SnapshotsIO {
                     root_snapshot.clone(),
                     ignore_timestamp,
                 )
-                .instrument(tracing::debug_span!("read_snapshot"))
+                .in_span(Span::enter_with_local_parent("read_snapshot"))
             })
         });
 

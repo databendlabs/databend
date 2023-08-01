@@ -27,7 +27,7 @@
 use std::time::Instant;
 
 use common_metrics::counter;
-use tracing::error;
+use log::error;
 
 fn f64_of(b: bool) -> f64 {
     if b { 1_f64 } else { 0_f64 }

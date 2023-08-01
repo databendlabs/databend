@@ -15,7 +15,6 @@
 use chrono::DateTime;
 use chrono::Utc;
 use common_catalog::catalog::CatalogManager;
-use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_config::GlobalConfig;
 use common_exception::Result;
 use poem::web::Json;
@@ -44,7 +43,7 @@ pub struct TenantTableInfo {
 }
 
 async fn load_tenant_tables(tenant: &str) -> Result<TenantTablesResponse> {
-    let catalog = CatalogManager::instance().get_catalog(CATALOG_DEFAULT)?;
+    let catalog = CatalogManager::instance().get_default_catalog()?;
     let databases = catalog.list_databases(tenant).await?;
 
     let mut table_infos: Vec<TenantTableInfo> = vec![];

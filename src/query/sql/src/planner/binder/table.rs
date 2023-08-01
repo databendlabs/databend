@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::default::Default;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -39,6 +40,7 @@ use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
+use common_catalog::table_context::TableContext;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -46,6 +48,7 @@ use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
+use common_expression::DataField;
 use common_expression::FunctionKind;
 use common_expression::Scalar;
 use common_expression::TableDataType;
@@ -63,6 +66,7 @@ use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
+use common_storages_parquet::Parquet2Table;
 use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultCacheMetaManager;
 use common_storages_result_cache::ResultCacheReader;
@@ -71,18 +75,21 @@ use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
+use parking_lot::RwLock;
 
 use crate::binder::copy::parse_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
-use crate::binder::ColumnBinding;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::CteScan;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
@@ -179,10 +186,46 @@ impl Binder {
                     None
                 };
                 // Check and bind common table expression
-                if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
-                    return self
-                        .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
-                        .await;
+                let ctes_map = bind_context.ctes_map.clone();
+                if let Some(cte_info) = ctes_map.get(&table_name) {
+                    return if !cte_info.materialized {
+                        self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                            .await
+                    } else {
+                        let mut new_bind_context = if cte_info.used_count == 0 {
+                            let (cte_s_expr, mut cte_bind_ctx) = self
+                                .bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                                .await?;
+                            cte_bind_ctx
+                                .materialized_ctes
+                                .insert((cte_info.cte_idx, cte_s_expr.clone()));
+                            let stat_info =
+                                RelExpr::with_s_expr(&cte_s_expr).derive_cardinality()?;
+                            // Add `materialized_cte` to bind_context.
+                            bind_context
+                                .materialized_ctes
+                                .insert((cte_info.cte_idx, cte_s_expr));
+                            bind_context.ctes_map.entry(table_name.clone()).and_modify(
+                                |cte_info| {
+                                    cte_info.stat_info = Some(stat_info);
+                                    cte_info.columns = cte_bind_ctx.columns.clone();
+                                },
+                            );
+                            cte_bind_ctx
+                        } else {
+                            bind_context.clone()
+                        };
+                        bind_context
+                            .ctes_map
+                            .entry(table_name.clone())
+                            .and_modify(|cte_info| {
+                                cte_info.used_count += 1;
+                            });
+                        new_bind_context.ctes_map = bind_context.ctes_map.clone();
+                        let s_expr =
+                            self.bind_cte_scan(bind_context.ctes_map.get(&table_name).unwrap())?;
+                        Ok((s_expr, new_bind_context))
+                    };
                 }
 
                 let tenant = self.ctx.get_tenant();
@@ -212,7 +255,7 @@ impl Binder {
                             }
                             if let Some(cte_info) = parent.unwrap().ctes_map.get(&table_name) {
                                 return self
-                                    .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
+                                    .bind_cte(*span, bind_context, &table_name, alias, cte_info)
                                     .await;
                             }
                             parent = parent.unwrap().parent.as_ref();
@@ -448,6 +491,7 @@ impl Binder {
                                 params: vec![],
                                 args: params.clone(),
                                 window: None,
+                                lambda: None,
                             }),
                             alias: None,
                         }],
@@ -461,10 +505,10 @@ impl Binder {
                         .await
                 } else {
                     // Other table functions always reside is default catalog
-                    let table_meta: Arc<dyn TableFunction> = self
-                        .catalogs
-                        .get_catalog(CATALOG_DEFAULT)?
-                        .get_table_function(&func_name.name, table_args)?;
+                    let table_meta: Arc<dyn TableFunction> =
+                        self.catalogs
+                            .get_default_catalog()?
+                            .get_table_function(&func_name.name, table_args)?;
                     let table = table_meta.as_table();
                     let table_alias_name = if let Some(table_alias) = alias {
                         Some(
@@ -524,7 +568,8 @@ impl Binder {
                     pattern: options.pattern.clone(),
                     files: options.files.clone(),
                 };
-                self.bind_stage_table(bind_context, stage_info, files_info, alias, None)
+                let table_ctx = self.ctx.clone();
+                self.bind_stage_table(table_ctx, bind_context, stage_info, files_info, alias, None)
                     .await
             }
             TableReference::Join { .. } => unreachable!(),
@@ -534,6 +579,7 @@ impl Binder {
     #[async_backtrace::framed]
     pub(crate) async fn bind_stage_table(
         &mut self,
+        table_ctx: Arc<dyn TableContext>,
         bind_context: &BindContext,
         stage_info: StageInfo,
         files_info: StageFilesInfo,
@@ -542,10 +588,25 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         let table = match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
+                let use_parquet2 = table_ctx.get_settings().get_use_parquet2()?;
                 let read_options = ParquetReadOptions::default();
-
-                ParquetTable::create(stage_info.clone(), files_info, read_options, files_to_copy)
+                if use_parquet2 {
+                    Parquet2Table::create(
+                        stage_info.clone(),
+                        files_info,
+                        read_options,
+                        files_to_copy,
+                    )
                     .await?
+                } else {
+                    ParquetTable::create(
+                        stage_info.clone(),
+                        files_info,
+                        read_options,
+                        files_to_copy,
+                    )
+                    .await?
+                }
             }
             FileFormatParams::NdJson(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(
@@ -689,8 +750,35 @@ impl Binder {
         Ok((result_expr, result_ctx))
     }
 
+    fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
+        let blocks = Arc::new(RwLock::new(vec![]));
+        self.ctx
+            .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), blocks)?;
+        // Get the fields in the cte
+        let mut fields = vec![];
+        let mut offsets = vec![];
+        for (idx, column) in cte_info.columns.iter().enumerate() {
+            fields.push(DataField::new(
+                column.index.to_string().as_str(),
+                *column.data_type.clone(),
+            ));
+            offsets.push(idx);
+        }
+        let cte_scan = SExpr::create_leaf(Arc::new(
+            CteScan {
+                cte_idx: (cte_info.cte_idx, cte_info.used_count),
+                fields,
+                // It is safe to unwrap here because we have checked that the cte is materialized.
+                offsets,
+                stat: cte_info.stat_info.clone().unwrap(),
+            }
+            .into(),
+        ));
+        Ok(cte_scan)
+    }
+
     #[async_backtrace::framed]
-    async fn bind_cte(
+    pub(crate) async fn bind_cte(
         &mut self,
         span: Span,
         bind_context: &BindContext,
@@ -704,8 +792,10 @@ impl Binder {
             columns: vec![],
             aggregate_info: Default::default(),
             windows: Default::default(),
+            lambda_info: Default::default(),
             in_grouping: false,
-            ctes_map: Box::new(DashMap::new()),
+            ctes_map: Box::default(),
+            materialized_ctes: HashSet::new(),
             view_info: None,
             srfs: Default::default(),
             expr_context: ExprContext::default(),
@@ -774,21 +864,22 @@ impl Binder {
                     virtual_computed_expr,
                     ..
                 }) => {
-                    let column_binding = ColumnBinding {
-                        database_name: Some(database_name.to_string()),
-                        table_name: Some(table.name().to_string()),
-                        table_index: Some(*table_index),
-                        column_name: column_name.clone(),
-                        column_position: *column_position,
-                        index: *column_index,
-                        data_type: Box::new(DataType::from(data_type)),
-                        visibility: if path_indices.is_some() {
+                    let column_binding = ColumnBindingBuilder::new(
+                        column_name.clone(),
+                        *column_index,
+                        Box::new(DataType::from(data_type)),
+                        if path_indices.is_some() {
                             Visibility::InVisible
                         } else {
                             Visibility::Visible
                         },
-                        virtual_computed_expr: virtual_computed_expr.clone(),
-                    };
+                    )
+                    .table_name(Some(table.name().to_string()))
+                    .database_name(Some(database_name.to_string()))
+                    .table_index(Some(*table_index))
+                    .column_position(*column_position)
+                    .virtual_computed_expr(virtual_computed_expr.clone())
+                    .build();
                     bind_context.add_column_binding(column_binding);
                     if path_indices.is_none() && virtual_computed_expr.is_none() {
                         if let Some(col_id) = *leaf_index {
@@ -850,7 +941,7 @@ impl Binder {
         travel_point: &Option<NavigationPoint>,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with catalog
-        let catalog = self.catalogs.get_catalog(catalog_name)?;
+        let catalog = self.catalogs.get_catalog(tenant, catalog_name).await?;
         let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
 
         if let Some(tp) = travel_point {
@@ -911,7 +1002,7 @@ impl Binder {
         catalog_name: &str,
         table_id: MetaId,
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        let catalog = self.catalogs.get_catalog(catalog_name)?;
+        let catalog = self.catalogs.get_catalog(tenant, catalog_name).await?;
         let index_metas = catalog
             .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
             .await?;

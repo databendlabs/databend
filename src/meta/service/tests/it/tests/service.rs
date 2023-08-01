@@ -31,11 +31,11 @@ use databend_meta::configs;
 use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;
 use databend_meta::meta_service::MetaNode;
-use tracing::info;
-use tracing::warn;
+use log::info;
+use log::warn;
 
 // Start one random service and get the session manager.
-#[tracing::instrument(level = "info")]
+#[minitrace::trace]
 pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
     let mut tc = MetaSrvTestContext::new(0);
 

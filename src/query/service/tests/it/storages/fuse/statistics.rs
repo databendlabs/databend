@@ -222,6 +222,78 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
     Ok(())
 }
 
+#[test]
+fn test_reduce_cluster_statistics() -> common_exception::Result<()> {
+    let default_cluster_key_id = Some(0);
+    let cluster_stats_0 = Some(ClusterStatistics {
+        cluster_key_id: 0,
+        min: vec![Scalar::from(2i64)],
+        max: vec![Scalar::from(4i64)],
+        level: 0,
+        pages: None,
+    });
+
+    let cluster_stats_1 = Some(ClusterStatistics {
+        cluster_key_id: 0,
+        min: vec![Scalar::from(1i64)],
+        max: vec![Scalar::from(3i64)],
+        level: 1,
+        pages: None,
+    });
+
+    let res_0 = reducers::reduce_cluster_statistics(
+        &[cluster_stats_0.clone(), cluster_stats_1.clone()],
+        default_cluster_key_id,
+    );
+    let expect = Some(ClusterStatistics {
+        cluster_key_id: 0,
+        min: vec![Scalar::from(1i64)],
+        max: vec![Scalar::from(4i64)],
+        level: 1,
+        pages: None,
+    });
+    assert_eq!(res_0, expect);
+
+    let res_1 = reducers::reduce_cluster_statistics(
+        &[cluster_stats_0.clone(), None],
+        default_cluster_key_id,
+    );
+    assert_eq!(res_1, None);
+
+    let res_2 = reducers::reduce_cluster_statistics(&[cluster_stats_0, cluster_stats_1], Some(1));
+    assert_eq!(res_2, None);
+
+    // multi cluster keys.
+    let multi_cluster_stats_0 = Some(ClusterStatistics {
+        cluster_key_id: 0,
+        min: vec![Scalar::from(1i64), Scalar::from(4i64)],
+        max: vec![Scalar::from(1i64), Scalar::from(4i64)],
+        level: 0,
+        pages: None,
+    });
+    let multi_cluster_stats_2 = Some(ClusterStatistics {
+        cluster_key_id: 0,
+        min: vec![Scalar::from(3i64), Scalar::from(2i64)],
+        max: vec![Scalar::from(3i64), Scalar::from(2i64)],
+        level: 0,
+        pages: None,
+    });
+    let res_3 = reducers::reduce_cluster_statistics(
+        &[multi_cluster_stats_0, multi_cluster_stats_2],
+        default_cluster_key_id,
+    );
+    let expect = Some(ClusterStatistics {
+        cluster_key_id: 0,
+        min: vec![Scalar::from(1i64), Scalar::from(4i64)],
+        max: vec![Scalar::from(3i64), Scalar::from(2i64)],
+        level: 0,
+        pages: None,
+    });
+    assert_eq!(res_3, expect);
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_accumulator() -> common_exception::Result<()> {
     let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
@@ -239,8 +311,8 @@ async fn test_accumulator() -> common_exception::Result<()> {
         stats_acc.add_with_block_meta(block_meta);
     }
 
-    assert_eq!(10, stats_acc.blocks_statistics.len());
-    assert!(stats_acc.index_size > 0);
+    assert_eq!(10, stats_acc.blocks_metas.len());
+    assert!(stats_acc.summary_row_count > 0);
     Ok(())
 }
 
@@ -359,8 +431,8 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> common_exception::Resu
         let data_value_min = Scalar::String(min_expr.clone().into_bytes());
         let data_value_max = Scalar::String(max_expr.clone().into_bytes());
 
-        let trimmed_min = data_value_min.clone().trim_min();
-        let trimmed_max = data_value_max.clone().trim_max();
+        let trimmed_min = data_value_min.clone().trim_min(STATS_STRING_PREFIX_LEN);
+        let trimmed_max = data_value_max.clone().trim_max(STATS_STRING_PREFIX_LEN);
 
         let meaningless_to_collect_max = is_degenerated_case(max_expr.as_str());
 
@@ -504,7 +576,7 @@ fn char_len(value: &[u8]) -> usize {
 fn test_reduce_block_meta() -> common_exception::Result<()> {
     // case 1: empty input should return the default statistics
     let block_metas: Vec<BlockMeta> = vec![];
-    let reduced = reduce_block_metas(&block_metas, BlockThresholds::default());
+    let reduced = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
     assert_eq!(Statistics::default(), reduced);
 
     // case 2: accumulated variants of size index should be as expected
@@ -542,7 +614,7 @@ fn test_reduce_block_meta() -> common_exception::Result<()> {
         blocks.push(block_meta);
     }
 
-    let stats = reduce_block_metas(&blocks, BlockThresholds::default());
+    let stats = reduce_block_metas(&blocks, BlockThresholds::default(), None);
 
     assert_eq!(acc_row_count, stats.row_count);
     assert_eq!(acc_block_size, stats.uncompressed_byte_size);

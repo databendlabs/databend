@@ -19,9 +19,9 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use futures::Future;
+use log::error;
+use log::info;
 use tokio::sync::broadcast;
-use tracing::error;
-use tracing::info;
 
 use super::Stoppable;
 

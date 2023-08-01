@@ -1,4 +1,5 @@
-FROM debian:bullseye
+FROM debian:bookworm
+
 ARG TARGETPLATFORM
 ENV TERM=dumb
 ENV DEBIAN_FRONTEND=noninteractive

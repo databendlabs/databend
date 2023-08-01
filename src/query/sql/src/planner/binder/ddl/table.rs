@@ -69,17 +69,18 @@ use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
+use log::debug;
+use log::error;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use tracing::debug;
-use tracing::error;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
@@ -115,7 +116,6 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::BindContext;
-use crate::ColumnBinding;
 use crate::Planner;
 use crate::SelectBuilder;
 
@@ -358,7 +358,8 @@ impl Binder {
             Some(ident) => {
                 let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
                 self.ctx
-                    .get_catalog(&ctl_name)?
+                    .get_catalog(&ctl_name)
+                    .await?
                     .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
                 Ok(database)
@@ -500,7 +501,7 @@ impl Binder {
             //
             // Later, when database id is kept, let say in `TableInfo`, we can
             // safely eliminate this "FUSE" constant and the table meta option entry.
-            let catalog = self.ctx.get_catalog(&catalog)?;
+            let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog
                 .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
@@ -777,12 +778,11 @@ impl Binder {
                     comment,
                 })))
             }
-            AlterTableAction::ModifyColumn { column, action } => {
+            AlterTableAction::ModifyColumn { action } => {
                 Ok(Plan::ModifyTableColumn(Box::new(ModifyTableColumnPlan {
                     catalog,
                     database,
                     table,
-                    column: column.to_string(),
                     action: action.clone(),
                 })))
             }
@@ -1340,17 +1340,14 @@ impl Binder {
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
         for (index, field) in schema.fields().iter().enumerate() {
-            let column = ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_position: None,
-                table_index: None,
-                column_name: field.name().clone(),
+            let column = ColumnBindingBuilder::new(
+                field.name().clone(),
                 index,
-                data_type: Box::new(DataType::from(field.data_type())),
-                visibility: Visibility::Visible,
-                virtual_computed_expr: None,
-            };
+                Box::new(DataType::from(field.data_type())),
+                Visibility::Visible,
+            )
+            .build();
+
             bind_context.columns.push(column);
         }
         let mut scalar_binder = ScalarBinder::new(
@@ -1381,6 +1378,14 @@ impl Binder {
                 )));
             }
 
+            let data_type = expr.data_type();
+            if !Self::valid_cluster_key_type(data_type) {
+                return Err(ErrorCode::InvalidClusterKeys(format!(
+                    "Unsupported data type '{}' for cluster by expression `{:#}`",
+                    data_type, cluster_by
+                )));
+            }
+
             let mut cluster_by = cluster_by.clone();
             walk_expr_mut(
                 &mut IdentifierNormalizer {
@@ -1392,5 +1397,18 @@ impl Binder {
         }
 
         Ok(cluster_keys)
+    }
+
+    fn valid_cluster_key_type(data_type: &DataType) -> bool {
+        let inner_type = data_type.remove_nullable();
+        matches!(
+            inner_type,
+            DataType::Number(_)
+                | DataType::String
+                | DataType::Timestamp
+                | DataType::Date
+                | DataType::Boolean
+                | DataType::Decimal(_)
+        )
     }
 }

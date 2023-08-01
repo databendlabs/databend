@@ -91,6 +91,7 @@ impl FuseTable {
             options,
             self.meta_location_generator().clone(),
             self.operator.clone(),
+            self.cluster_key_id(),
         )?;
 
         if !segment_mutator.target_select().await? {
@@ -196,6 +197,7 @@ impl FuseTable {
                 input,
                 None,
                 true,
+                None,
             )
         })?;
 

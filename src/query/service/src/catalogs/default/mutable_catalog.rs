@@ -13,12 +13,16 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use chrono::Utc;
+use common_catalog::catalog::Catalog;
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -57,6 +61,7 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
@@ -84,10 +89,9 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
-use tracing::info;
+use log::info;
 
 use super::catalog_context::CatalogContext;
-use crate::catalogs::catalog::Catalog;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
@@ -104,6 +108,12 @@ use crate::storages::Table;
 pub struct MutableCatalog {
     ctx: CatalogContext,
     tenant: String,
+}
+
+impl Debug for MutableCatalog {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MutableCatalog").finish_non_exhaustive()
+    }
 }
 
 impl MutableCatalog {
@@ -175,6 +185,14 @@ impl MutableCatalog {
 impl Catalog for MutableCatalog {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn name(&self) -> String {
+        "default".to_string()
+    }
+
+    fn info(&self) -> CatalogInfo {
+        CatalogInfo::new_default()
     }
 
     #[async_backtrace::framed]
@@ -256,6 +274,11 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
         Ok(self.ctx.meta.list_indexes(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_indexes_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>> {
+        Ok(self.ctx.meta.list_indexes_by_table_id(req).await?)
     }
 
     // Virtual column

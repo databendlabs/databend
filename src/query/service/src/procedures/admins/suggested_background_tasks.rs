@@ -31,9 +31,9 @@ use common_expression::FromOptData;
 use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
 use common_sql::Planner;
+use log::error;
+use log::info;
 use tokio_stream::StreamExt;
-use tracing::error;
-use tracing::info;
 
 use crate::interpreters::InterpreterFactory;
 use crate::procedures::OneBlockProcedure;
@@ -131,7 +131,7 @@ impl SuggestedBackgroundTasksProcedure {
         ctx.set_origin(Origin::BuiltInProcedure);
         info!(
             background = true,
-            tenant = ctx.get_tenant(),
+            tenant = ctx.get_tenant();
             "list all lsuggestions"
         );
         Self::get_suggested_compaction_tasks(ctx).await

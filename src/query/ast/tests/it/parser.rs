@@ -188,6 +188,9 @@ fn test_statement() {
         r#"ALTER TABLE t RENAME COLUMN a TO b;"#,
         r#"ALTER TABLE t DROP COLUMN b;"#,
         r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;"#,
+        r#"ALTER TABLE t MODIFY COLUMN a int, COLUMN b float;"#,
+        r#"ALTER TABLE t MODIFY COLUMN a int;"#,
+        r#"ALTER TABLE t MODIFY COLUMN a DROP STORED;"#,
         r#"ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);"#,
         r#"ALTER DATABASE IF EXISTS ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
@@ -515,8 +518,9 @@ fn test_query() {
         r#"select * from customer natural full join orders"#,
         r#"select * from customer natural join orders left outer join detail using (id)"#,
         r#"with t2(tt) as (select a from t) select t2.tt from t2  where t2.tt > 1"#,
+        r#"with t2(tt) as materialized (select a from t) select t2.tt from t2  where t2.tt > 1"#,
         r#"with t2 as (select a from t) select t2.a from t2  where t2.a > 1"#,
-        r#"with t2(tt) as (select a from t), t3 as (select * from t), t4 as (select a from t where a > 1) select t2.tt, t3.a, t4.a from t2, t3, t4 where t2.tt > 1"#,
+        r#"with t2(tt) as materialized (select a from t), t3 as materialized (select * from t), t4 as (select a from t where a > 1) select t2.tt, t3.a, t4.a from t2, t3, t4 where t2.tt > 1"#,
         r#"with recursive t2(tt) as (select a from t1 union select tt from t2) select t2.tt from t2"#,
         r#"select c_count cc, count(*) as custdist, sum(c_acctbal) as totacctbal
             from customer, orders ODS,
@@ -658,6 +662,8 @@ fn test_expr() {
         r#"COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)"#,
+        r#"ARRAY_APPLY([1,2,3], x -> x + 1)"#,
+        r#"ARRAY_FILTER(col, y -> y % 2 = 0)"#,
     ];
 
     for case in cases {

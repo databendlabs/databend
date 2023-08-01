@@ -43,6 +43,7 @@ use common_pipeline_sources::input_formats::SplitInfo;
 use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
 use dashmap::DashMap;
+use log::debug;
 use opendal::Operator;
 use parking_lot::Mutex;
 
@@ -206,7 +207,7 @@ impl Table for StageTable {
             self.table_info.is_select,
             projection,
         )?);
-        tracing::debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
+        debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
         Ok(())
     }

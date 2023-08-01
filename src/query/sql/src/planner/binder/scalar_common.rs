@@ -29,7 +29,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::WindowFuncType;
 
 // Visitor that find Expressions that match a particular predicate
-struct Finder<'a, F>
+pub struct Finder<'a, F>
 where F: Fn(&ScalarExpr) -> bool
 {
     find_fn: &'a F,
@@ -39,13 +39,15 @@ where F: Fn(&ScalarExpr) -> bool
 impl<'a, F> Finder<'a, F>
 where F: Fn(&ScalarExpr) -> bool
 {
-    /// Create a new finder with the `test_fn`
-    #[allow(dead_code)]
-    fn new(find_fn: &'a F) -> Self {
+    pub fn new(find_fn: &'a F) -> Self {
         Self {
             find_fn,
             scalars: Vec::new(),
         }
+    }
+
+    pub fn scalars(&self) -> &[ScalarExpr] {
+        &self.scalars
     }
 }
 
@@ -197,6 +199,10 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
                     .all(|arg| prune_by_children(&arg.expr, columns))
         }
         ScalarExpr::AggregateFunction(scalar) => scalar
+            .args
+            .iter()
+            .all(|arg| prune_by_children(arg, columns)),
+        ScalarExpr::LambdaFunction(scalar) => scalar
             .args
             .iter()
             .all(|arg| prune_by_children(arg, columns)),

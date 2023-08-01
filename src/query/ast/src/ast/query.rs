@@ -59,6 +59,7 @@ pub struct With {
 pub struct CTE {
     pub span: Span,
     pub alias: TableAlias,
+    pub materialized: bool,
     pub query: Query,
 }
 
@@ -98,6 +99,8 @@ pub struct SelectStmt {
 pub enum GroupBy {
     /// GROUP BY expr [, expr]*
     Normal(Vec<Expr>),
+    /// GROUP By ALL
+    All,
     /// GROUP BY GROUPING SETS ( GroupSet [, GroupSet]* )
     ///
     /// GroupSet := (expr [, expr]*) | expr
@@ -601,6 +604,9 @@ impl Display for SelectStmt {
             match self.group_by.as_ref().unwrap() {
                 GroupBy::Normal(exprs) => {
                     write_comma_separated_list(f, exprs)?;
+                }
+                GroupBy::All => {
+                    write!(f, "ALL")?;
                 }
                 GroupBy::GroupingSets(sets) => {
                     write!(f, "GROUPING SETS (")?;

@@ -18,6 +18,7 @@ use common_exception::Result;
 use common_sql::plans::DropRolePlan;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
+use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -42,9 +43,11 @@ impl Interpreter for DropRoleInterpreter {
         "DropRoleInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_role_execute");
+
         // TODO: add privilege check about DROP role
         let plan = self.plan.clone();
         let role_name = plan.role_name.clone();

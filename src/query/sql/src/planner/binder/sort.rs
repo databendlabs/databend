@@ -35,6 +35,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
@@ -155,10 +156,7 @@ impl Binder {
                             if let ScalarExpr::BoundColumnRef(col) = &rewrite_scalar {
                                 col.column.clone()
                             } else {
-                                self.create_column_binding(
-                                    None,
-                                    None,
-                                    None,
+                                self.create_derived_column_binding(
                                     format!("{:#}", order.expr),
                                     rewrite_scalar.data_type()?,
                                 )
@@ -342,6 +340,24 @@ impl Binder {
                         params: params.clone(),
                         args,
                         return_type: return_type.clone(),
+                    }))
+                }
+                ScalarExpr::LambdaFunction(lambda_func) => {
+                    let args = lambda_func
+                        .args
+                        .iter()
+                        .map(|arg| {
+                            self.rewrite_scalar_with_replacement(bind_context, arg, replacement_fn)
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    Ok(ScalarExpr::LambdaFunction(LambdaFunc {
+                        span: lambda_func.span,
+                        func_name: lambda_func.func_name.clone(),
+                        display_name: lambda_func.display_name.clone(),
+                        args,
+                        params: lambda_func.params.clone(),
+                        lambda_expr: lambda_func.lambda_expr.clone(),
+                        return_type: lambda_func.return_type.clone(),
                     }))
                 }
                 window @ ScalarExpr::WindowFunction(_) => {

@@ -61,7 +61,9 @@ async fn test_compact() -> Result<()> {
     execute_command(ctx.clone(), qry.as_str()).await?;
 
     // compact
-    let catalog = ctx.get_catalog(fixture.default_catalog_name().as_str())?;
+    let catalog = ctx
+        .get_catalog(fixture.default_catalog_name().as_str())
+        .await?;
     let table = catalog
         .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
         .await?;
@@ -76,7 +78,9 @@ async fn test_compact() -> Result<()> {
     }
 
     // compact
-    let catalog = ctx.get_catalog(fixture.default_catalog_name().as_str())?;
+    let catalog = ctx
+        .get_catalog(fixture.default_catalog_name().as_str())
+        .await?;
     let table = catalog
         .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
         .await?;
@@ -183,7 +187,7 @@ async fn test_safety() -> Result<()> {
 
         let mut summary = Statistics::default();
         for seg in &segment_infos {
-            merge_statistics_mut(&mut summary, &seg.summary);
+            merge_statistics_mut(&mut summary, &seg.summary, None);
         }
 
         let mut block_ids = HashSet::new();

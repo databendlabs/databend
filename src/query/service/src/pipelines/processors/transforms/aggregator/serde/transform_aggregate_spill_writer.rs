@@ -28,8 +28,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
 use futures_util::future::BoxFuture;
+use log::info;
 use opendal::Operator;
-use tracing::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::BucketSpilledPayload;

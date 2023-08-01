@@ -105,7 +105,7 @@ members = [
 [workspace.dependencies]
 # databend maintains:
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.37", features = [
+opendal = { version = "0.39", features = [
     "layers-tracing",
     "layers-metrics",
     "services-ipfs",
@@ -147,7 +147,7 @@ tonic-build = { version = "0.9.2" }
 
 # chrono
 chrono = { version = "0.4.24", features = ["serde"] }
-chrono-tz = "0.6.3"
+chrono-tz = { version = "0.6.3", features = ["serde"] }
 
 # memory
 bumpalo = "3.12.0"
@@ -166,6 +166,11 @@ tokio = { version = "1.26.0", features = ["full"] }
 
 # backtrace
 async-backtrace = "0.2.2"
+
+# observability
+logcall = "0.1.4"
+log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
+minitrace = "0.5"
 
 [profile.release]
 debug = 1
@@ -211,7 +216,8 @@ rpath = false
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
 
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "031bc7bc" }
 arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e11341" }
-parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
+parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "693c265" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 croaring = { git = "https://github.com/RoaringBitmap/croaring-rs", rev = "13a71b4" }

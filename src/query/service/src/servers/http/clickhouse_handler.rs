@@ -35,6 +35,9 @@ use common_sql::plans::Plan;
 use common_sql::Planner;
 use futures::StreamExt;
 use http::HeaderMap;
+use log::debug;
+use log::info;
+use log::warn;
 use naive_cityhash::cityhash128;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
@@ -50,7 +53,6 @@ use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
-use tracing::info;
 
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
@@ -512,10 +514,9 @@ async fn gen_batches(
     let mut is_start = true;
     let mut start = 0;
     let path = "clickhouse_insert".to_string();
-    tracing::debug!(
+    debug!(
         "begin sending {} bytes, batch_size={}",
-        buf_size,
-        batch_size
+        buf_size, batch_size
     );
     while start < buf_size {
         let data = if buf_size - start >= batch_size {
@@ -524,7 +525,7 @@ async fn gen_batches(
             buf[start..].to_vec()
         };
 
-        tracing::debug!("sending read {} bytes", data.len());
+        debug!("sending read {} bytes", data.len());
         if let Err(e) = tx
             .send(Ok(StreamingReadBatch {
                 data,
@@ -534,7 +535,7 @@ async fn gen_batches(
             }))
             .await
         {
-            tracing::warn!("clickhouse handler fail to send ReadBatch: {}", e);
+            warn!("clickhouse handler fail to send ReadBatch: {}", e);
         }
         is_start = false;
         start += batch_size;

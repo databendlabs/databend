@@ -331,7 +331,6 @@ pub enum AlterTableAction {
         new_column: Identifier,
     },
     ModifyColumn {
-        column: Identifier,
         action: ModifyColumnAction,
     },
     DropColumn {
@@ -373,8 +372,8 @@ impl Display for AlterTableAction {
             AlterTableAction::AddColumn { column } => {
                 write!(f, "ADD COLUMN {column}")
             }
-            AlterTableAction::ModifyColumn { column, action } => {
-                write!(f, "MODIFY COLUMN {column} {action}")
+            AlterTableAction::ModifyColumn { action } => {
+                write!(f, "MODIFY COLUMN {action}")
             }
             AlterTableAction::DropColumn { column } => {
                 write!(f, "DROP COLUMN {column}")
@@ -721,15 +720,38 @@ impl Display for ColumnDefinition {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ModifyColumnAction {
-    SetMaskingPolicy(String),
-    ConvertStoredComputedColumn,
+    // (column name id, masking policy name)
+    SetMaskingPolicy(Identifier, String),
+    // vec<(column name id, type name)>
+    SetDataType(Vec<(Identifier, TypeName)>),
+    // column name id
+    ConvertStoredComputedColumn(Identifier),
 }
 
 impl Display for ModifyColumnAction {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match &self {
-            ModifyColumnAction::SetMaskingPolicy(name) => write!(f, "SET MASKING POLICY {}", name)?,
-            ModifyColumnAction::ConvertStoredComputedColumn => write!(f, "DROP STORED")?,
+            ModifyColumnAction::SetMaskingPolicy(column, name) => {
+                write!(f, "{} SET MASKING POLICY {}", column, name)?
+            }
+            ModifyColumnAction::SetDataType(column_type_name_vec) => {
+                let ret = column_type_name_vec
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (column, type_name))| {
+                        if i > 0 {
+                            format!(" COLUMN {} {}", column, type_name)
+                        } else {
+                            format!("{} {}", column, type_name)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                write!(f, "{}", ret)?
+            }
+            ModifyColumnAction::ConvertStoredComputedColumn(column) => {
+                write!(f, "{} DROP STORED", column)?
+            }
         }
 
         Ok(())

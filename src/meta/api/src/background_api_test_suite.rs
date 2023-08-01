@@ -36,7 +36,7 @@ use common_meta_app::background::UpdateBackgroundJobStatusReq;
 use common_meta_app::background::UpdateBackgroundTaskReq;
 use common_meta_kvapi::kvapi;
 use common_meta_types::MetaError;
-use tracing::info;
+use log::info;
 
 use crate::background_api::BackgroundApi;
 use crate::SchemaApi;
@@ -103,7 +103,7 @@ impl BackgroundApiTestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     async fn update_background_tasks<MT: BackgroundApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -194,7 +194,7 @@ impl BackgroundApiTestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     async fn update_background_jobs<MT: BackgroundApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,

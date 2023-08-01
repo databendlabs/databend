@@ -36,6 +36,7 @@ use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_storage::StageFileInfo;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -94,6 +95,41 @@ impl TableScan {
 
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let fields = TableScan::output_fields(self.source.schema(), &self.name_mapping)?;
+        Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct CteScan {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+    pub cte_idx: (IndexType, IndexType),
+    pub output_schema: DataSchemaRef,
+    pub offsets: Vec<IndexType>,
+}
+
+impl CteScan {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(self.output_schema.clone())
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct MaterializedCte {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
+    pub left: Box<PhysicalPlan>,
+    pub right: Box<PhysicalPlan>,
+    pub cte_idx: IndexType,
+    pub left_output_columns: Vec<ColumnBinding>,
+}
+
+impl MaterializedCte {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let fields = self.right.output_schema()?.fields().clone();
         Ok(DataSchemaRefExt::create(fields))
     }
 }
@@ -393,6 +429,43 @@ impl Window {
             &self.index.to_string(),
             self.func.data_type()?,
         ));
+        Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct LambdaFunctionDesc {
+    pub func_name: String,
+    pub output_column: IndexType,
+    pub arg_indices: Vec<IndexType>,
+    pub arg_exprs: Vec<String>,
+    pub params: Vec<String>,
+    pub lambda_expr: RemoteExpr,
+    pub data_type: Box<DataType>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Lambda {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
+    pub input: Box<PhysicalPlan>,
+    pub lambda_funcs: Vec<LambdaFunctionDesc>,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl Lambda {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = input_schema.fields().clone();
+        for lambda_func in self.lambda_funcs.iter() {
+            let name = lambda_func.output_column.to_string();
+            let data_type = lambda_func.data_type.clone();
+            fields.push(DataField::new(&name, *data_type));
+        }
         Ok(DataSchemaRefExt::create(fields))
     }
 }
@@ -713,7 +786,7 @@ impl UnionAll {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DistributedCopyIntoTableFromStage {
     pub plan_id: u32,
-    pub catalog_name: String,
+    pub catalog_info: CatalogInfo,
     pub database_name: String,
     pub table_name: String,
     // ... into table(<columns>) ..  -> <columns>
@@ -744,7 +817,7 @@ impl DistributedCopyIntoTableFromStage {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoTableFromQuery {
     pub plan_id: u32,
-    pub catalog_name: String,
+    pub catalog_info: CatalogInfo,
     pub database_name: String,
     pub table_name: String,
 
@@ -780,7 +853,7 @@ pub struct DistributedInsertSelect {
     pub plan_id: u32,
 
     pub input: Box<PhysicalPlan>,
-    pub catalog: String,
+    pub catalog_info: CatalogInfo,
     pub table_info: TableInfo,
     pub insert_schema: DataSchemaRef,
     pub select_schema: DataSchemaRef,
@@ -820,7 +893,7 @@ pub struct DeletePartial {
     pub parts: Partitions,
     pub filter: RemoteExpr<String>,
     pub table_info: TableInfo,
-    pub catalog_name: String,
+    pub catalog_info: CatalogInfo,
     pub col_indices: Vec<usize>,
     pub query_row_id_col: bool,
 }
@@ -842,7 +915,7 @@ pub struct DeleteFinal {
     pub input: Box<PhysicalPlan>,
     pub snapshot: TableSnapshot,
     pub table_info: TableInfo,
-    pub catalog_name: String,
+    pub catalog_info: CatalogInfo,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -880,6 +953,7 @@ pub enum PhysicalPlan {
     AggregatePartial(AggregatePartial),
     AggregateFinal(AggregateFinal),
     Window(Window),
+    Lambda(Lambda),
     Sort(Sort),
     Limit(Limit),
     RowFetch(RowFetch),
@@ -888,6 +962,8 @@ pub enum PhysicalPlan {
     Exchange(Exchange),
     UnionAll(UnionAll),
     RuntimeFilterSource(RuntimeFilterSource),
+    CteScan(CteScan),
+    MaterializedCte(MaterializedCte),
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
@@ -925,6 +1001,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregatePartial(v) => v.plan_id,
             PhysicalPlan::AggregateFinal(v) => v.plan_id,
             PhysicalPlan::Window(v) => v.plan_id,
+            PhysicalPlan::Lambda(v) => v.plan_id,
             PhysicalPlan::Sort(v) => v.plan_id,
             PhysicalPlan::Limit(v) => v.plan_id,
             PhysicalPlan::RowFetch(v) => v.plan_id,
@@ -940,6 +1017,8 @@ impl PhysicalPlan {
             // for distributed_copy_into_table, planId is useless
             PhysicalPlan::DistributedCopyIntoTableFromStage(v) => v.plan_id,
             PhysicalPlan::CopyIntoTableFromQuery(v) => v.plan_id,
+            PhysicalPlan::CteScan(v) => v.plan_id,
+            PhysicalPlan::MaterializedCte(v) => v.plan_id,
         }
     }
 
@@ -953,6 +1032,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregatePartial(plan) => plan.output_schema(),
             PhysicalPlan::AggregateFinal(plan) => plan.output_schema(),
             PhysicalPlan::Window(plan) => plan.output_schema(),
+            PhysicalPlan::Lambda(plan) => plan.output_schema(),
             PhysicalPlan::Sort(plan) => plan.output_schema(),
             PhysicalPlan::Limit(plan) => plan.output_schema(),
             PhysicalPlan::RowFetch(plan) => plan.output_schema(),
@@ -969,6 +1049,8 @@ impl PhysicalPlan {
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
             PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoTableFromQuery(plan) => plan.output_schema(),
+            PhysicalPlan::CteScan(plan) => plan.output_schema(),
+            PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
         }
     }
 
@@ -982,6 +1064,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregatePartial(_) => "AggregatePartial".to_string(),
             PhysicalPlan::AggregateFinal(_) => "AggregateFinal".to_string(),
             PhysicalPlan::Window(_) => "Window".to_string(),
+            PhysicalPlan::Lambda(_) => "Lambda".to_string(),
             PhysicalPlan::Sort(_) => "Sort".to_string(),
             PhysicalPlan::Limit(_) => "Limit".to_string(),
             PhysicalPlan::RowFetch(_) => "RowFetch".to_string(),
@@ -1000,12 +1083,14 @@ impl PhysicalPlan {
                 "DistributedCopyIntoTableFromStage".to_string()
             }
             PhysicalPlan::CopyIntoTableFromQuery(_) => "CopyIntoTableFromQuery".to_string(),
+            PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
+            PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
         }
     }
 
     pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         match self {
-            PhysicalPlan::TableScan(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::TableScan(_) | PhysicalPlan::CteScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Project(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -1013,6 +1098,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregatePartial(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregateFinal(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Window(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::Lambda(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Sort(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Limit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::RowFetch(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -1040,6 +1126,9 @@ impl PhysicalPlan {
             ),
             PhysicalPlan::DistributedCopyIntoTableFromStage(_) => Box::new(std::iter::empty()),
             PhysicalPlan::CopyIntoTableFromQuery(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::MaterializedCte(plan) => Box::new(
+                std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
+            ),
         }
     }
 
@@ -1051,6 +1140,7 @@ impl PhysicalPlan {
             PhysicalPlan::Project(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::EvalScalar(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Window(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::Lambda(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Sort(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Limit(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Exchange(plan) => plan.input.try_find_single_data_source(),
@@ -1065,11 +1155,13 @@ impl PhysicalPlan {
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)
             | PhysicalPlan::RangeJoin(_)
+            | PhysicalPlan::MaterializedCte(_)
             | PhysicalPlan::AggregateExpand(_)
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_)
             | PhysicalPlan::DeletePartial(_)
-            | PhysicalPlan::DeleteFinal(_) => None,
+            | PhysicalPlan::DeleteFinal(_)
+            | PhysicalPlan::CteScan(_) => None,
         }
     }
 }

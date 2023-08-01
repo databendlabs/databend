@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use arrow::pyarrow::PyArrowConvert;
 use arrow::pyarrow::PyArrowType;
+use arrow::pyarrow::ToPyArrow;
 use arrow_schema::Schema as ArrowSchema;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -70,6 +70,15 @@ impl PyDataFrame {
         let blocks = self.collect(py)?;
         let bs = self.get_box();
         Ok(blocks.box_render(bs.bs_max_display_rows, bs.bs_max_width, bs.bs_max_width))
+    }
+
+    #[pyo3(signature = (num=20))]
+    fn show(&self, py: Python, num: usize) -> PyResult<()> {
+        let blocks = self.collect(py)?;
+        let bs = self.get_box();
+        let res = blocks.box_render(num, bs.bs_max_width, bs.bs_max_width);
+        println!("{}", res);
+        Ok(())
     }
 
     pub fn collect(&self, py: Python) -> PyResult<PyDataBlocks> {

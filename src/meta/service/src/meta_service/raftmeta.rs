@@ -33,6 +33,8 @@ use common_grpc::DNSResolver;
 use common_meta_client::reply_to_api_result;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::GenericKV;
+use common_meta_raft_store::ondisk::DataVersion;
+use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::storage::Adaptor;
 use common_meta_sled_store::openraft::ChangeMembers;
@@ -65,16 +67,18 @@ use common_meta_types::RaftMetrics;
 use common_meta_types::TypeConfig;
 use futures::channel::oneshot;
 use itertools::Itertools;
+use log::as_debug;
+use log::as_display;
+use log::debug;
+use log::error;
+use log::info;
+use log::warn;
 use maplit::btreemap;
+use minitrace::prelude::*;
 use openraft::Config;
 use openraft::Raft;
 use openraft::ServerState;
 use openraft::SnapshotPolicy;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
-use tracing::warn;
-use tracing::Instrument;
 
 use crate::configs::Config as MetaConfig;
 use crate::message::ForwardRequest;
@@ -88,6 +92,7 @@ use crate::meta_service::RaftServiceImpl;
 use crate::metrics::server_metrics;
 use crate::network::Network;
 use crate::store::RaftStore;
+use crate::version::METASRV_COMMIT_VERSION;
 use crate::watcher::DispatcherSender;
 use crate::watcher::EventDispatcher;
 use crate::watcher::EventDispatcherHandle;
@@ -98,6 +103,12 @@ use crate::Opened;
 #[derive(serde::Serialize)]
 pub struct MetaNodeStatus {
     pub id: NodeId,
+
+    /// The build version of meta-service binary.
+    pub binary_version: String,
+
+    /// The version of the data this meta-service is serving.
+    pub data_version: DataVersion,
 
     /// The raft service endpoint for internal communication
     pub endpoint: String,
@@ -295,7 +306,7 @@ impl MetaNode {
     }
 
     /// Start the grpc service for raft communication and meta operation API.
-    #[tracing::instrument(level = "debug", skip(mn))]
+    #[minitrace::trace]
     pub async fn start_grpc(
         mn: Arc<MetaNode>,
         host: &str,
@@ -366,7 +377,7 @@ impl MetaNode {
     /// Open or create a meta node.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     pub async fn open_create(
         config: &RaftConfig,
         open: Option<()>,
@@ -408,7 +419,7 @@ impl MetaNode {
     /// Optionally boot a single node cluster.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     pub async fn open_create_boot(
         config: &RaftConfig,
         open: Option<()>,
@@ -423,7 +434,7 @@ impl MetaNode {
         Ok(mn)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn stop(&self) -> Result<i32, MetaError> {
         let mut rx = self.raft.metrics();
 
@@ -515,9 +526,7 @@ impl MetaNode {
 
             Ok::<(), AnyError>(())
         };
-
-        let span = tracing::span!(tracing::Level::INFO, "watch-metrics");
-        let h = tokio::task::spawn(fut.instrument(span));
+        let h = tokio::task::spawn(fut.in_span(Span::enter_with_local_parent("watch-metrics")));
 
         {
             let mut jh = mn.join_handles.lock().await;
@@ -527,9 +536,9 @@ impl MetaNode {
 
     /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
     /// according to config.
-    #[tracing::instrument(level = "debug", skip(config))]
+    #[minitrace::trace]
     pub async fn start(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
-        info!(?config, "start()");
+        info!(config = as_debug!(config); "start()");
         let mn = Self::do_start(config).await?;
         info!("Done starting MetaNode: {:?}", config);
         Ok(mn)
@@ -538,7 +547,7 @@ impl MetaNode {
     /// Leave the cluster if `--leave` is specified.
     ///
     /// Return whether it has left the cluster.
-    #[tracing::instrument(level = "info", skip_all)]
+    #[minitrace::trace]
     pub async fn leave_cluster(conf: &RaftConfig) -> Result<bool, MetaManagementError> {
         if conf.leave_via.is_empty() {
             info!("'--leave-via' is empty, do not need to leave cluster");
@@ -613,7 +622,7 @@ impl MetaNode {
     /// Join to an existent cluster if:
     /// - `--join` is specified
     /// - and this node is not in a cluster.
-    #[tracing::instrument(level = "info", skip(conf, self))]
+    #[minitrace::trace]
     pub async fn join_cluster(
         &self,
         conf: &RaftConfig,
@@ -641,7 +650,7 @@ impl MetaNode {
         Ok(Ok(()))
     }
 
-    #[tracing::instrument(level = "info", skip(conf, self))]
+    #[minitrace::trace]
     async fn do_join_cluster(
         &self,
         conf: &RaftConfig,
@@ -685,7 +694,7 @@ impl MetaNode {
         ))))
     }
 
-    #[tracing::instrument(level = "info", skip(conf, self))]
+    #[minitrace::trace]
     async fn join_via(
         &self,
         conf: &RaftConfig,
@@ -820,7 +829,7 @@ impl MetaNode {
 
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
-    #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.raft_config.config_id.as_str()))]
+    #[minitrace::trace]
     pub async fn boot(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
         let mn = Self::open_create(&config.raft_config, None, Some(())).await?;
         mn.init_cluster(config.get_node()).await?;
@@ -830,7 +839,7 @@ impl MetaNode {
     /// Initialized a single node cluster if this node is just created:
     /// - Initializing raft membership.
     /// - Adding current node into the meta data.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn init_cluster(&self, node: Node) -> Result<(), MetaStartupError> {
         if self.is_opened() {
             info!("It is opened, skip initializing cluster");
@@ -858,7 +867,7 @@ impl MetaNode {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn get_node(&self, node_id: &NodeId) -> Result<Option<Node>, MetaStorageError> {
         // inconsistent get: from local state machine
 
@@ -867,7 +876,7 @@ impl MetaNode {
         Ok(n)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn get_nodes(&self) -> Result<Vec<Node>, MetaStorageError> {
         // inconsistent get: from local state machine
 
@@ -906,6 +915,8 @@ impl MetaNode {
 
         Ok(MetaNodeStatus {
             id: self.sto.id,
+            binary_version: METASRV_COMMIT_VERSION.as_str().to_string(),
+            data_version: DATA_VERSION,
             endpoint: endpoint.to_string(),
             db_size,
             state: format!("{:?}", metrics.state),
@@ -931,7 +942,7 @@ impl MetaNode {
         Ok(last_seq.unwrap_or_default().0)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn get_grpc_advertise_addrs(&self) -> Result<Vec<String>, MetaStorageError> {
         // inconsistent get: from local state machine
 
@@ -954,7 +965,7 @@ impl MetaNode {
         Ok(endpoints)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn consistent_read<Request, Reply>(&self, req: Request) -> Result<Reply, MetaAPIError>
     where
         Request: Into<ForwardRequestBody> + Debug,
@@ -988,12 +999,12 @@ impl MetaNode {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip_all, fields(target=%req.forward_to_leader))]
+    #[minitrace::trace]
     pub async fn handle_forwardable_request(
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaAPIError> {
-        debug!("handle_forwardable_request: {:?}", req);
+        debug!(target = as_display!(&req.forward_to_leader), req = as_debug!(&req); "handle_forwardable_request");
 
         let forward = req.forward_to_leader;
 
@@ -1073,7 +1084,7 @@ impl MetaNode {
     /// Return a MetaLeader if `self` believes it is the leader.
     ///
     /// Otherwise it returns the leader in a ForwardToLeader error.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn assume_leader(&self) -> Result<MetaLeader<'_>, ForwardToLeader> {
         let leader_id = self.get_leader().await.map_err(|e| {
             error!("raft metrics rx closed: {}", e);
@@ -1121,7 +1132,7 @@ impl MetaNode {
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
-    #[tracing::instrument(level = "debug", skip(self, req))]
+    #[minitrace::trace]
     pub async fn write(&self, req: LogEntry) -> Result<AppliedState, MetaAPIError> {
         debug!("req: {:?}", req);
 
@@ -1139,7 +1150,7 @@ impl MetaNode {
 
     /// Try to get the leader from the latest metrics of the local raft node.
     /// If leader is absent, wait for an metrics update in which a leader is set.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn get_leader(&self) -> Result<Option<NodeId>, RecvError> {
         let mut rx = self.raft.metrics();
 
@@ -1166,7 +1177,7 @@ impl MetaNode {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn forward_to(
         &self,
         node_id: &NodeId,

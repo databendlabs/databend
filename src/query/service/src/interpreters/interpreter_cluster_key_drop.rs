@@ -43,7 +43,7 @@ impl Interpreter for DropTableClusterKeyInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(&plan.catalog)?;
+        let catalog = self.ctx.get_catalog(&plan.catalog).await?;
 
         let table = catalog
             .get_table(tenant.as_str(), &plan.database, &plan.table)

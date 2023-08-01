@@ -24,8 +24,8 @@ use common_meta_types::Node;
 use databend_meta::api::http::v1::cluster_state::nodes_handler;
 use databend_meta::api::http::v1::cluster_state::status_handler;
 use databend_meta::api::HttpService;
-use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
+use log::info;
 use poem::get;
 use poem::http::Method;
 use poem::http::StatusCode;
@@ -35,15 +35,17 @@ use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
-use tracing::info;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_cluster_nodes() -> anyhow::Result<()> {
     let tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
@@ -84,7 +86,8 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_cluster_state() -> anyhow::Result<()> {
     let tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
@@ -130,7 +133,8 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     let addr_str = "127.0.0.1:30003";
 

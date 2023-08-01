@@ -47,7 +47,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let create_tbl_command = "create table t(c int)";
     execute_command(ctx.clone(), create_tbl_command).await?;
 
-    let catalog = ctx.get_catalog("default")?;
+    let catalog = ctx.get_catalog("default").await?;
 
     let num_inserts = 3;
     append_rows(ctx.clone(), num_inserts).await?;
@@ -141,7 +141,11 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
         };
         let compact_segment = segment_reader.read(&param).await?;
         let segment_info = SegmentInfo::try_from(compact_segment.as_ref())?;
-        merge_statistics_mut(&mut segment_summary, &segment_info.summary);
+        merge_statistics_mut(
+            &mut segment_summary,
+            &segment_info.summary,
+            fuse_table.cluster_key_id(),
+        );
     }
 
     // analyze

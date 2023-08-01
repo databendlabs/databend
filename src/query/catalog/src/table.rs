@@ -37,6 +37,7 @@ use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
 use common_storage::StorageMetrics;
+use storages_common_table_meta::meta::SnapshotId;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
@@ -222,8 +223,9 @@ pub trait Table: Sync + Send {
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
+        prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, copied_files, pipeline, overwrite);
+        let (_, _, _, _, _) = (ctx, copied_files, pipeline, overwrite, prev_snapshot_id);
 
         Ok(())
     }
@@ -382,7 +384,7 @@ pub trait TableExt: Table {
         let table_info = self.get_table_info();
         let name = table_info.name.clone();
         let tid = table_info.ident.table_id;
-        let catalog = ctx.get_catalog(table_info.catalog())?;
+        let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
         let table_info: TableInfo = TableInfo {
             ident,

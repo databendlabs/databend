@@ -53,7 +53,7 @@ impl AsyncSystemTable for IndexesTable {
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
+        let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
         let indexes = catalog
             .list_indexes(ListIndexesReq {
                 tenant,
