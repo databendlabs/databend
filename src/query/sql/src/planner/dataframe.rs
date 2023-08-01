@@ -178,6 +178,7 @@ impl Dataframe {
                 args: vec![],
                 params: vec![],
                 window: None,
+                lambda: None,
             }),
             alias: None,
         }];
@@ -213,11 +214,17 @@ impl Dataframe {
 
     pub async fn aggregate(
         mut self,
-        groupby: Vec<Expr>,
-        columns: &[&str],
+        groupby: GroupBy,
+        aggr_expr: Vec<Expr>,
         having: Option<Expr>,
     ) -> Result<Self> {
-        let select_list = parse_cols(self.bind_context.output_schema(), columns)?;
+        let select_list: Vec<SelectTarget> = aggr_expr
+            .into_iter()
+            .map(|expr| SelectTarget::AliasedExpr {
+                expr: Box::new(expr),
+                alias: None,
+            })
+            .collect();
 
         let select_list = self
             .binder
@@ -230,15 +237,9 @@ impl Dataframe {
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
 
-        if !groupby.is_empty() {
-            self.binder
-                .analyze_group_items(
-                    &mut self.bind_context,
-                    &select_list,
-                    &GroupBy::Normal(groupby),
-                )
-                .await?;
-        }
+        self.binder
+            .analyze_group_items(&mut self.bind_context, &select_list, &groupby)
+            .await?;
 
         if !self
             .bind_context
@@ -321,22 +322,15 @@ impl Dataframe {
     pub async fn sort(
         mut self,
         columns: &[&str],
-        order_by: &[&str],
-        asc: Option<bool>,
-        nulls_first: Option<bool>,
+        order_by: Vec<(Expr, Option<bool>, Option<bool>)>,
         distinct: bool,
     ) -> Result<Self> {
         let select_list = parse_cols(self.bind_context.output_schema(), columns)?;
 
         let mut order = vec![];
-        for i in order_by {
+        for (expr, asc, nulls_first) in order_by {
             order.push(OrderByExpr {
-                expr: Expr::ColumnRef {
-                    span: None,
-                    database: None,
-                    table: None,
-                    column: ColumnID::Name(Identifier::from_name_with_quoted(*i, Some('`'))),
-                },
+                expr,
                 asc,
                 nulls_first,
             });

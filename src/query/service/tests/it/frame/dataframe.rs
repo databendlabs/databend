@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::ColumnID;
 use common_ast::ast::Expr;
+use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
@@ -104,7 +105,23 @@ async fn test_dataframe() -> Result<()> {
         let df = Dataframe::scan(query_ctx.clone(), Some("system"), "engines")
             .await
             .unwrap()
-            .sort(&["Engine"], &["Engine"], Some(true), Some(false), false)
+            .sort(
+                &["Engine"],
+                vec![(
+                    Expr::ColumnRef {
+                        span: None,
+                        database: None,
+                        table: None,
+                        column: ColumnID::Name(Identifier::from_name_with_quoted(
+                            "Engine",
+                            Some('`'),
+                        )),
+                    },
+                    Some(true),
+                    Some(false),
+                )],
+                false,
+            )
             .await
             .unwrap();
 
@@ -144,13 +161,18 @@ async fn test_dataframe() -> Result<()> {
             .await
             .unwrap()
             .aggregate(
+                GroupBy::Normal(vec![Expr::ColumnRef {
+                    span: None,
+                    database: Some(Identifier::from_name("system")),
+                    table: Some(Identifier::from_name("engines")),
+                    column: ColumnID::Name(Identifier::from_name_with_quoted("Engine", Some('`'))),
+                }]),
                 vec![Expr::ColumnRef {
                     span: None,
                     database: Some(Identifier::from_name("system")),
                     table: Some(Identifier::from_name("engines")),
                     column: ColumnID::Name(Identifier::from_name_with_quoted("Engine", Some('`'))),
                 }],
-                &["Engine"],
                 Some(Expr::BinaryOp {
                     span: None,
                     op: BinaryOperator::Eq,
