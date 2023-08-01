@@ -101,7 +101,7 @@ impl Interpreter for ReplaceInterpreter {
                 self.ctx.clone(),
                 files,
                 stage_info.copy_options.purge,
-                stage_info.clone(),
+                stage_info,
                 &mut pipeline.main_pipeline,
             )?;
         }
