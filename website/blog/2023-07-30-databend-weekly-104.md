@@ -66,7 +66,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Developing with Databend using Node.js
 
-Databend now provides Databend Driver Node.js Binding, which means you can easily build applications integrated with Databend using Node.js.
+Databend now provides Databend Driver Node.js Binding, which means you can easily build and integrate applications with Databend using Node.js.
 
 ```javascript
 const { Client } = require('databend-driver');
@@ -115,8 +115,8 @@ If you are interested in learning more, please check out the resources listed be
 
 We have also made these improvements to Databend that we hope you will find helpful:
 
-- Supported `GROUP BY ALL`.
-- Speeded up CTE by materialization.
+- Added support for `GROUP BY ALL`.
+- Added the capability to speed up Common Table Expressions (CTEs) by materialization. 
 - Added Geo functions: `h3_to_geo`, `h3_to_geo_boundary`, `h3_k_ring`, `h3_is_valid`,`h3_get_resolution`, `h3_edge_length_m` and `h3_edge_length_km`.
 - Added array lambda functions: `array_transform`, `array_apply` and `array_filter`.
 
