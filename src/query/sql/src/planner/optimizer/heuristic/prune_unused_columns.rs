@@ -26,6 +26,7 @@ use crate::plans::CteScan;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::Lambda;
+use crate::plans::MaterializedCte;
 use crate::plans::ProjectSet;
 use crate::plans::RelOperator;
 use crate::ColumnEntry;
@@ -327,8 +328,18 @@ impl UnusedColumnPruner {
                     .intersection(&right_used_column)
                     .cloned()
                     .collect::<ColumnSet>();
+
+                let mut required_output_columns = vec![];
+                for column in cte.left_output_columns.iter() {
+                    if left_required.contains(&column.index) {
+                        required_output_columns.push(column.clone());
+                    }
+                }
                 Ok(SExpr::create_binary(
-                    Arc::new(RelOperator::MaterializedCte(cte.clone())),
+                    Arc::new(RelOperator::MaterializedCte(MaterializedCte {
+                        left_output_columns: required_output_columns,
+                        cte_idx: cte.cte_idx,
+                    })),
                     Arc::new(self.keep_required_columns(expr.child(0)?, left_required)?),
                     Arc::new(self.keep_required_columns(expr.child(1)?, required)?),
                 ))
