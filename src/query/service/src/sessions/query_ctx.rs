@@ -85,6 +85,7 @@ use crate::storages::Table;
 const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum Origin {
     #[default]
@@ -236,6 +237,15 @@ impl QueryContext {
         self.shared.attach_stage(attachment);
     }
 
+    pub fn set_ua(&self, ua: String) {
+        *self.shared.user_agent.write() = ua;
+    }
+
+    fn get_ua(&self) -> String {
+        let ua = self.shared.user_agent.read();
+        ua.clone()
+    }
+
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
     }
@@ -307,6 +317,16 @@ impl TableContext for QueryContext {
         info!("{}: {}", self.get_id(), info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
+    }
+
+    fn get_ua(&self) -> String {
+        let ua = self.shared.user_agent.read();
+        ua.clone()
+    }
+
+    fn set_ua(&self, info: &str) {
+        let mut ua = self.shared.user_agent.write();
+        *ua = info.to_string();
     }
 
     fn get_partition(&self) -> Option<PartInfoPtr> {

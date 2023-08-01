@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
@@ -67,6 +68,7 @@ pub struct HttpQueryRequest {
     #[serde(default = "default_as_true")]
     pub string_fields: bool,
     pub stage_attachment: Option<StageAttachmentConf>,
+    pub headers: HashMap<String, String>,
 }
 
 impl Debug for HttpQueryRequest {
@@ -294,6 +296,9 @@ impl HttpQuery {
             }),
             None => {}
         };
+
+        let user_agent = request.headers.get("User-Agent").unwrap_or_default();
+        ctx.set_ua(user_agent.to_string());
 
         let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
         let start_time = Instant::now();

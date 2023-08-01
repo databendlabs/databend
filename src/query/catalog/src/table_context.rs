@@ -93,6 +93,8 @@ pub trait TableContext: Send + Sync {
     fn get_result_progress_value(&self) -> ProgressValues;
     fn get_status_info(&self) -> String;
     fn set_status_info(&self, info: &str);
+    fn get_ua(&self) -> String;
+    fn set_ua(&self, info: &str);
 
     fn get_partition(&self) -> Option<PartInfoPtr>;
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr>;

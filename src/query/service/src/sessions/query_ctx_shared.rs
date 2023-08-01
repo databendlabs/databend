@@ -85,6 +85,9 @@ pub struct QueryContextShared {
     pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
+
+    // Client User-Agent
+    pub(in crate::sessions) user_agent: Arc<RwLock<String>>,
     /// Key is (cte index, used_count), value contains cte's materialized blocks
     pub(in crate::sessions) materialized_cte_tables: MaterializedCtesBlocks,
 }
@@ -120,6 +123,7 @@ impl QueryContextShared {
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
+            user_agent: Arc::new(RwLock::new("null".to_string())),
             materialized_cte_tables: Arc::new(Default::default()),
         }))
     }
