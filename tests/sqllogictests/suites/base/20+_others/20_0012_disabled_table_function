@@ -1,2 +1,0 @@
-statement error 1025
-select * from read_parquet('aaa');
