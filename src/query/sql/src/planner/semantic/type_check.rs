@@ -100,6 +100,7 @@ use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
+use crate::IndexType;
 use crate::MetadataRef;
 use crate::TypeCheck;
 use crate::Visibility;
@@ -119,6 +120,7 @@ pub struct TypeChecker<'a> {
     func_ctx: FunctionContext,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
+    m_cte_bound_ctx: HashMap<IndexType, BindContext>,
 
     aliases: &'a [(String, ScalarExpr)],
 
@@ -150,12 +152,17 @@ impl<'a> TypeChecker<'a> {
             func_ctx,
             name_resolution_ctx,
             metadata,
+            m_cte_bound_ctx: Default::default(),
             aliases,
             in_aggregate_function: false,
             in_window_function: false,
             allow_pushdown,
             forbid_udf,
         }
+    }
+
+    pub fn set_m_cte_bound_ctx(&mut self, m_cte_bound_ctx: HashMap<IndexType, BindContext>) {
+        self.m_cte_bound_ctx = m_cte_bound_ctx;
     }
 
     #[allow(dead_code)]
@@ -1965,6 +1972,9 @@ impl<'a> TypeChecker<'a> {
             self.name_resolution_ctx.clone(),
             self.metadata.clone(),
         );
+        for (cte_idx, bound_ctx) in self.m_cte_bound_ctx.iter() {
+            binder.set_m_cte_bound_ctx(*cte_idx, bound_ctx.clone());
+        }
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));

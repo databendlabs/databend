@@ -29,10 +29,10 @@ use common_storage::StageFilesInfo;
 use opendal::Operator;
 
 use super::table::create_parquet_table_info;
-use super::ParquetTable;
+use super::Parquet2Table;
 use crate::parquet2::parquet_table::blocking_create::get_compression_ratio;
 
-impl ParquetTable {
+impl Parquet2Table {
     #[async_backtrace::framed]
     pub async fn create(
         stage_info: StageInfo,
@@ -60,7 +60,7 @@ impl ParquetTable {
 
         let table_info = create_parquet_table_info(arrow_schema.clone());
 
-        Ok(Arc::new(ParquetTable {
+        Ok(Arc::new(Parquet2Table {
             table_info,
             arrow_schema,
             operator,

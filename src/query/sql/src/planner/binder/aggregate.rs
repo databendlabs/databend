@@ -630,6 +630,7 @@ impl Binder {
                 &self.name_resolution_ctx,
                 self.metadata.clone(),
                 &[],
+                self.m_cte_bound_ctx.clone(),
             );
             let (scalar_expr, _) = scalar_binder
                 .bind(expr)

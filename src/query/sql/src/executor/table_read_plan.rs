@@ -84,6 +84,8 @@ impl ToReadDataSourcePlan for dyn Table {
         internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
         dry_run: bool,
     ) -> Result<DataSourcePlan> {
+        let catalog_info = ctx.get_catalog(&catalog).await?.info();
+
         let (statistics, parts) = if let Some(PushDownInfo {
             filter:
                 Some(RemoteExpr::Constant {
@@ -238,7 +240,7 @@ impl ToReadDataSourcePlan for dyn Table {
         // TODO pass in catalog name
 
         Ok(DataSourcePlan {
-            catalog,
+            catalog_info,
             source_info,
             output_schema,
             parts,

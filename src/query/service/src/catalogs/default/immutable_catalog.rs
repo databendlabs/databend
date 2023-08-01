@@ -13,11 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_catalog::catalog::Catalog;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -69,7 +73,6 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
 
-use crate::catalogs::catalog::Catalog;
 use crate::catalogs::InMemoryMetas;
 use crate::catalogs::SYS_DB_ID_BEGIN;
 use crate::catalogs::SYS_TBL_ID_BEGIN;
@@ -85,6 +88,12 @@ pub struct ImmutableCatalog {
     info_schema_db: Arc<InformationSchemaDatabase>,
     sys_db: Arc<SystemDatabase>,
     sys_db_meta: Arc<InMemoryMetas>,
+}
+
+impl Debug for ImmutableCatalog {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImmutableCatalog").finish_non_exhaustive()
+    }
 }
 
 impl ImmutableCatalog {
@@ -110,6 +119,14 @@ impl ImmutableCatalog {
 impl Catalog for ImmutableCatalog {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn name(&self) -> String {
+        "default".to_string()
+    }
+
+    fn info(&self) -> CatalogInfo {
+        CatalogInfo::new_default()
     }
 
     #[async_backtrace::framed]
