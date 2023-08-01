@@ -51,7 +51,7 @@ impl AsyncSystemTable for EnginesTable {
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         // TODO passing catalog name
-        let table_engine_descriptors = ctx.get_catalog(CATALOG_DEFAULT)?.get_table_engines();
+        let table_engine_descriptors = ctx.get_catalog(CATALOG_DEFAULT).await?.get_table_engines();
         let mut engine_name = Vec::with_capacity(table_engine_descriptors.len());
         let mut engine_comment = Vec::with_capacity(table_engine_descriptors.len());
         for descriptor in &table_engine_descriptors {

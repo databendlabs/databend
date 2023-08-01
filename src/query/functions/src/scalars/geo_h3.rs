@@ -147,4 +147,120 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         }),
     );
+
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, UInt8Type, _, _>(
+        "h3_get_base_cell",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt64Type, UInt8Type>(|h3, builder, ctx| {
+            match CellIndex::try_from(h3) {
+                Ok(index) => builder.push(index.base_cell().into()),
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.push(0);
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt8Type, Float64Type, _, _>(
+        "h3_hex_area_m2",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt8Type, Float64Type>(|r, builder, ctx| {
+            match Resolution::try_from(r) {
+                Ok(rr) => builder.push(rr.area_m2().into()),
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.push(0.0.into());
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt8Type, Float64Type, _, _>(
+        "h3_hex_area_km2",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt8Type, Float64Type>(|r, builder, ctx| {
+            match Resolution::try_from(r) {
+                Ok(rr) => builder.push(rr.area_km2().into()),
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.push(0.0.into());
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<UInt64Type, UInt64Type, BooleanType, _, _>(
+        "h3_indexes_are_neighbors",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<UInt64Type, UInt64Type, BooleanType>(
+            |h3, a_h3, builder, ctx| match CellIndex::try_from(h3)
+                .map_err(|e| e.to_string())
+                .and_then(|index| {
+                    CellIndex::try_from(a_h3)
+                        .map_err(|e| e.to_string())
+                        .map(|a_index| index.is_neighbor_with(a_index).unwrap_or(false))
+                }) {
+                Ok(b) => builder.push(b),
+                Err(e) => {
+                    ctx.set_error(builder.len(), e);
+                    builder.push(false);
+                }
+            },
+        ),
+    );
+
+    registry
+        .register_passthrough_nullable_2_arg::<UInt64Type, UInt8Type, ArrayType<UInt64Type>, _, _>(
+            "h3_to_children",
+            |_, _, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<UInt64Type, UInt8Type, ArrayType<UInt64Type>>(
+                |h3, r, builder, ctx| {
+                    match CellIndex::try_from(h3)
+                        .map_err(|e| e.to_string())
+                        .and_then(|index| {
+                            Resolution::try_from(r)
+                                .map_err(|e| e.to_string())
+                                .map(|rr| index.children(rr))
+                        }) {
+                        Ok(index_iter) => {
+                            for child in index_iter {
+                                builder.put_item(child.into());
+                            }
+                        }
+                        Err(err) => {
+                            ctx.set_error(builder.len(), err);
+                            builder.put_item(0);
+                        }
+                    }
+                    builder.commit_row();
+                },
+            ),
+        );
+
+    registry.register_passthrough_nullable_2_arg::<UInt64Type, UInt8Type, UInt64Type, _, _>(
+        "h3_to_parent",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<UInt64Type, UInt8Type, UInt64Type>(|h3, r, builder, ctx| {
+            match CellIndex::try_from(h3)
+                .map_err(|e| e.to_string())
+                .and_then(|index| {
+                    Resolution::try_from(r)
+                        .map_err(|e| e.to_string())
+                        .map(|rr| index.parent(rr))
+                }) {
+                Ok(parent) => {
+                    if let Some(p) = parent {
+                        builder.push(p.into());
+                    } else {
+                        builder.push(0);
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(builder.len(), err);
+                    builder.push(0);
+                }
+            }
+        }),
+    );
 }

@@ -27,6 +27,7 @@ use common_expression::DataBlock;
 use common_expression::RemoteExpr;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_sql::binder::ColumnBindingBuilder;
 use common_sql::executor::cast_expr_to_non_null_boolean;
@@ -109,10 +110,11 @@ impl Interpreter for DeleteInterpreter {
             .try_lock(self.ctx.clone(), table_info.clone())
             .await?;
 
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        let catalog_info = catalog.info();
+
         // refresh table.
-        let tbl = self
-            .ctx
-            .get_catalog(catalog_name)?
+        let tbl = catalog
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
 
@@ -237,7 +239,7 @@ impl Interpreter for DeleteInterpreter {
                 fuse_table.get_table_info().clone(),
                 col_indices,
                 snapshot,
-                self.plan.catalog_name.clone(),
+                catalog_info,
                 is_distributed,
                 query_row_id_col,
             )?;
@@ -272,7 +274,7 @@ impl DeleteInterpreter {
         table_info: TableInfo,
         col_indices: Vec<usize>,
         snapshot: TableSnapshot,
-        catalog_name: String,
+        catalog_info: CatalogInfo,
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
@@ -280,7 +282,7 @@ impl DeleteInterpreter {
             parts: partitions,
             filter,
             table_info: table_info.clone(),
-            catalog_name: catalog_name.clone(),
+            catalog_info: catalog_info.clone(),
             col_indices,
             query_row_id_col,
         }));
@@ -298,7 +300,7 @@ impl DeleteInterpreter {
             input: Box::new(root),
             snapshot,
             table_info,
-            catalog_name,
+            catalog_info,
         })))
     }
 }

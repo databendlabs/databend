@@ -372,8 +372,14 @@ impl AggregationContext {
 
         let mut bitmap = MutableBitmap::new();
         for row in 0..num_rows {
-            let hash = row_hash_of_columns(&columns, row)?;
-            bitmap.push(!deleted_key_hashes.contains(&hash));
+            if let Some(hash) = row_hash_of_columns(&columns, row)? {
+                // some row hash means on-conflict columns of this row contains non-null values
+                // let's check it out
+                bitmap.push(!deleted_key_hashes.contains(&hash));
+            } else {
+                // otherwise, keep this row
+                bitmap.push(true);
+            }
         }
 
         let delete_nums = bitmap.unset_bits();

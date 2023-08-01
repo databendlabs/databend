@@ -129,7 +129,10 @@ impl Binder {
         }
 
         let index_name = self.normalize_object_identifier(index);
-        let catalog = self.ctx.get_catalog(&self.ctx.get_current_catalog())?;
+        let catalog = self
+            .ctx
+            .get_catalog(&self.ctx.get_current_catalog())
+            .await?;
         let get_index_req = GetIndexReq {
             name_ident: IndexNameIdent {
                 tenant: self.ctx.get_tenant(),
