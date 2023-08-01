@@ -10,6 +10,7 @@ import useGetReleases from '@site/src/hooks/useGetReleases';
 import Card from '@site/src/components/BaseComponents/Card';
 import Tag from '@site/src/components/BaseComponents/Tag';
 import { Apple, Linux } from '@site/src/components/Icons';
+import Ubuntu from '@site/src/components/Icons/Ubuntu';
 
 const Releases: FC = (): ReactElement => {
   const { 
@@ -17,13 +18,19 @@ const Releases: FC = (): ReactElement => {
     tagName
   } = useGetReleases();
   const { filterBody, assets: latestAssets, published_at, prerelease} = releasesList[0];
-  function Icons({isApple, size = 24}): ReactElement {
+  function Icons({isApple, size = 24, isUbuntu}): ReactElement {
     return (
       <>
         {
           isApple
           ? <Apple size={size}/>
-          : <Linux size={size}/>
+          : <>
+            {
+              isUbuntu
+              ? <Ubuntu size={size}></Ubuntu>
+              : <Linux size={size}/>
+            }
+            </>
         }
       </>
     )
@@ -45,15 +52,15 @@ const Releases: FC = (): ReactElement => {
             <div className={styles.nowAssets}>
               {
                 latestAssets?.map((asset, index)=> {
-                  const { isApple, browser_download_url, osTypeDesc, formatSize } = asset;
+                  const { isApple, browser_download_url, osTypeDesc, formatSize, isUbuntu } = asset;
                   return (
                     <Card 
                       href={browser_download_url}
                       isDownload 
                       key={index} 
-                      className={clsx(styles.nowItem, !isApple && styles.nowItemLinux)} 
+                      className={clsx(styles.nowItem, !isApple && styles.nowItemLinux, isUbuntu && styles.nowItemLinuxUbuntu)} 
                       padding={[8, 16]}>
-                      <Icons isApple={isApple}></Icons>
+                      <Icons isApple={isApple} isUbuntu={isUbuntu}></Icons>
                       <div className={styles.right}>
                         <div>{osTypeDesc}</div>
                         <div>Size: {formatSize}</div>
@@ -89,14 +96,14 @@ const Releases: FC = (): ReactElement => {
                     <div className={styles.downArea}>
                       {
                         release.assets?.map((asset, ind)=> {
-                          const { isApple, browser_download_url, osType} =  asset;
+                          const { isApple, browser_download_url, osType, isUbuntu} =  asset;
                           return (
                             <Card  
                               key={ind}
                               href={browser_download_url}
-                              className={clsx(styles.button, !isApple && styles.buttonLinux)} 
+                              className={clsx(styles.button, !isApple && styles.buttonLinux, isUbuntu && styles.buttonLinuxUbuntu)} 
                               padding={[5, 12]}>
-                              <Icons size={12} isApple={isApple}></Icons>
+                              <Icons size={12} isApple={isApple} isUbuntu={isUbuntu}></Icons>
                               <span>{osType}</span>
                             </Card>
                           )
