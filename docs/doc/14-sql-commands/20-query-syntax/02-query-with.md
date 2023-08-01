@@ -1,8 +1,13 @@
 ---
 title: WITH
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-Databend supports common table expressions (CTEs) and allows you to use a WITH clause to define one or multiple named temporary result sets that are used by the query that follows. The "temporary" means that the result sets will be not permanently stored anywhere in the database schema. They act as temporary views that are only available to the query that follows.
+<FunctionDescription description="Introduced or updated: v1.2.38"/>
+
+Databend supports common table expressions (CTEs) with a WITH clause, allowing you to define one or multiple named temporary result sets used by the following query. The term "temporary" implies that the result sets are not permanently stored in the database schema. They act as temporary views only accessible to the following query.
+
+Databend introduces the "Materialized" parameter for CTEs, allowing you to decide whether a CTE should be materialized or remain temporary. It is recommended to use the "Materialized" parameter for CTEs involving complex computations or large datasets to improve query performance by storing results on a physical storage medium. However, for simpler CTEs with limited usages, using "Materialized" may not be necessary. The decision should consider the trade-offs between performance gains and storage utilization.
 
 When a query with a WITH clause is executed, the CTEs within the WITH clause are evaluated and executed first. This produces one or multiple temporary result sets. Then the query is executed using the temporary result sets that were produced by the WITH clause. 
 
@@ -36,25 +41,19 @@ ORDER  BY customername;
 
 ```sql    
 WITH
-        <cte_name1> [ ( <cte_column_list> ) ] AS ( SELECT ...  )
-    [ , <cte_name2> [ ( <cte_column_list> ) ] AS ( SELECT ...  ) ]
-    [ , <cte_nameN> [ ( <cte_column_list> ) ] AS ( SELECT ...  ) ]
+        <cte_name1> [ ( <cte_column_list> ) ] AS [MATERIALIZED] ( SELECT ...  )
+    [ , <cte_name2> [ ( <cte_column_list> ) ] AS [MATERIALIZED] ( SELECT ...  ) ]
+    [ , <cte_nameN> [ ( <cte_column_list> ) ] AS [MATERIALIZED] ( SELECT ...  ) ]
 SELECT ...
 ```
 
-Where:
-
-`WITH`: Initiates the WITH clause.
-
-`<cte_name1>, <cte_nameN>`: The CTE name.
-
-`<cte_column_list>`: The names of the columns in the CTE.
-
-- A CTE can refer to any CTEs in the same WITH clause that are defined before.
-
-- When you have multiple CTEs, separate them with commas.
-
-`SELECT ...`: CTEs are mainly used with the SELECT statement.
+| Parameter               	| Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           	|
+|-------------------------	|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------	|
+| WITH                    	| Initiates the WITH clause.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            	|
+| cte_name1 ... cte_nameN 	| The CTE names. When you have multiple CTEs, separate them with commas.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                	|
+| cte_column_list         	| The names of the columns in the CTE. A CTE can refer to any CTEs in the same WITH clause that are defined before.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     	|
+| MATERIALIZED            	| "Materialized" is an optional keyword used when defining CTEs to indicate whether the CTE should be materialized. By using the "Materialized" keyword, you instruct Databend to store the result of the specified CTE on a physical storage medium, avoiding redundant computations when needed. Materialized CTEs improve query performance, especially when dealing with complex computations or large datasets. If you don't use the "Materialized" keyword, the CTE will be defined in the regular way, and its result will be recomputed each time the CTE is used in the query. 	|
+| SELECT ...              	| CTEs are mainly used with the SELECT statement.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       	|
 
 ## Examples
 
