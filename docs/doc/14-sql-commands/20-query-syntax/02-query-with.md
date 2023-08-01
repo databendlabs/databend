@@ -62,7 +62,7 @@ WHERE order_count > 2;
   </TabItem>
   <TabItem value="MATERIALIZED" label="MATERIALIZED">
 
-In this case, we use the MATERIALIZED keyword, which means the CTE customer_orders will not be inlined. Instead, the CTE's result will be calculated and stored in memory during the CTE definition's execution. Later, when executing the main query, Databend will directly retrieve the pre-computed result from memory, avoiding the overhead of repeatedly executing the CTE.
+In this case, we use the MATERIALIZED keyword, which means the CTE customer_orders will not be inlined. Instead, the CTE's result will be calculated and stored in memory during the CTE definition's execution. Later, when executing the main query, Databend will directly retrieve the pre-computed result from memory. If a query uses a CTE more than once, this also helps avoid the overhead of repeatedly executing the CTE.
 
 ```sql
 WITH customer_orders AS MATERIALIZED (
