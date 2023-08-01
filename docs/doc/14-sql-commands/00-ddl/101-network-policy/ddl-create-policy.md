@@ -2,6 +2,10 @@
 title: CREATE NETWORK POLICY
 ---
 
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="Introduced: v1.2.26"/>
+
 Creates a new network policy in Databend.
 
 ## Syntax
