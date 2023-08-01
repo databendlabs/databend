@@ -378,10 +378,6 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::String(self.client_address.as_bytes().to_vec()).as_ref());
-        columns
-            .next()
-            .unwrap()
-            .push(Scalar::String(self.user_agent.as_bytes().to_vec()).as_ref());
         // Exception.
         columns
             .next()
