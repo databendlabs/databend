@@ -54,6 +54,7 @@ pub struct TransformExchangeAggregateSerializer<Method: HashMethodBounds> {
 }
 
 impl<Method: HashMethodBounds> TransformExchangeAggregateSerializer<Method> {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,

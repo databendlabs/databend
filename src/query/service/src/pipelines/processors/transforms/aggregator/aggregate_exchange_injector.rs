@@ -323,8 +323,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
             ))
         })?;
 
-        pipeline
-            .add_transform(|input, output| TransformExchangeAsyncBarrier::try_create(input, output))
+        pipeline.add_transform(TransformExchangeAsyncBarrier::try_create)
     }
 
     fn apply_merge_deserializer(
