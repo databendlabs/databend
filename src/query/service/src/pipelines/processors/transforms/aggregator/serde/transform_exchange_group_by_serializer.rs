@@ -44,8 +44,8 @@ use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
 use common_pipeline_transforms::processors::transforms::UnknownMode;
 use futures_util::future::BoxFuture;
+use log::info;
 use opendal::Operator;
-use tracing::info;
 
 use crate::api::serialize_block;
 use crate::api::ExchangeShuffleMeta;

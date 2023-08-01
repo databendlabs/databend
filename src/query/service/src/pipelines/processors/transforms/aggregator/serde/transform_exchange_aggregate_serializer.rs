@@ -23,7 +23,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::Processor;
 use futures_util::future::BoxFuture;
 use opendal::Operator;
-use tracing::info;
+use log::info;
 use common_arrow::arrow::io::flight::{default_ipc_fields, WriteOptions};
 use common_arrow::arrow::io::ipc::IpcField;
 use common_base::base::GlobalUniqName;
