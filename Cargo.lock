@@ -2798,7 +2798,6 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-storage",
- "dashmap",
  "futures",
  "icelake",
  "minitrace",
