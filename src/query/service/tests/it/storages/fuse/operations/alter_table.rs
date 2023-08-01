@@ -51,7 +51,7 @@ async fn check_segment_column_ids(
     expected_column_ids: Option<Vec<ColumnId>>,
     expected_column_min_max: Option<Vec<(ColumnId, (Scalar, Scalar))>>,
 ) -> Result<()> {
-    let catalog = fixture.ctx().get_catalog("default")?;
+    let catalog = fixture.ctx().get_catalog("default").await?;
     // get the latest tbl
     let table = catalog
         .get_table(
@@ -193,7 +193,8 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
     // get the latest tbl
     let table = fixture
         .ctx()
-        .get_catalog(&catalog_name)?
+        .get_catalog(&catalog_name)
+        .await?
         .get_table(
             fixture.default_tenant().as_str(),
             fixture.default_db_name().as_str(),

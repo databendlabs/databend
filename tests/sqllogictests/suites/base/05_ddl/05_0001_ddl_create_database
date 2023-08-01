@@ -27,7 +27,7 @@ CREATE DATABASE system
 statement error 1002
 DROP DATABASE system
 
-statement error 1006
+statement error 11119
 CREATE DATABASE catalog_not_exist.t
 
 statement ok
@@ -59,6 +59,6 @@ CREATE SCHEMA system
 statement error 1002
 DROP SCHEMA system
 
-statement error 1006
+statement error 11119
 CREATE SCHEMA catalog_not_exist.t
 

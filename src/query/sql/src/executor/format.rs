@@ -231,14 +231,20 @@ fn distributed_copy_into_table_from_stage(
 ) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::new(format!(
         "copy into table {}.{}.{} from {:?}",
-        plan.catalog_name, plan.database_name, plan.table_name, plan.source
+        plan.catalog_info.catalog_name(),
+        plan.database_name,
+        plan.table_name,
+        plan.source
     )))
 }
 
 fn copy_into_table_from_query(plan: &CopyIntoTableFromQuery) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::new(format!(
         "copy into table {}.{}.{} from {:?}",
-        plan.catalog_name, plan.database_name, plan.table_name, plan.input
+        plan.catalog_info.catalog_name(),
+        plan.database_name,
+        plan.table_name,
+        plan.input
     )))
 }
 

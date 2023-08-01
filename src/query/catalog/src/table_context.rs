@@ -108,7 +108,8 @@ pub trait TableContext: Send + Sync {
     fn get_query_str(&self) -> String;
 
     fn get_fragment_id(&self) -> usize;
-    fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
+    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
     fn check_aborting(&self) -> Result<()>;

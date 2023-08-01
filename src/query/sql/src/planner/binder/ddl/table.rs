@@ -358,7 +358,8 @@ impl Binder {
             Some(ident) => {
                 let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
                 self.ctx
-                    .get_catalog(&ctl_name)?
+                    .get_catalog(&ctl_name)
+                    .await?
                     .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
                 Ok(database)
@@ -500,7 +501,7 @@ impl Binder {
             //
             // Later, when database id is kept, let say in `TableInfo`, we can
             // safely eliminate this "FUSE" constant and the table meta option entry.
-            let catalog = self.ctx.get_catalog(&catalog)?;
+            let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog
                 .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
@@ -834,6 +835,7 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
+                    self.m_cte_bound_ctx.clone(),
                 );
 
                 let push_downs = if let Some(expr) = selection {
@@ -1355,6 +1357,7 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            self.m_cte_bound_ctx.clone(),
         );
         // cluster keys cannot be a udf expression.
         scalar_binder.forbid_udf();

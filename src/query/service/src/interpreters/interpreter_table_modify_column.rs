@@ -39,12 +39,15 @@ use common_sql::executor::PhysicalPlanBuilder;
 use common_sql::plans::ModifyTableColumnPlan;
 use common_sql::plans::Plan;
 use common_sql::resolve_type_name;
+use common_sql::BloomIndexColumns;
 use common_sql::Planner;
 use common_storages_fuse::FuseTable;
 use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
 use common_users::UserApiProvider;
 use data_mask_feature::get_datamask_handler;
+use storages_common_index::BloomIndex;
+use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use table_lock::TableLockHandlerWrapper;
 
 use super::common::check_referenced_computed_columns;
@@ -153,11 +156,21 @@ impl ModifyTableColumnInterpreter {
             .try_lock(self.ctx.clone(), table_info.clone())
             .await?;
 
+        let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
+        let catalog_info = catalog.info();
+
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let prev_snapshot_id = match fuse_table.read_table_snapshot().await {
-            Ok(snapshot) => snapshot.map(|snapshot| snapshot.snapshot_id),
-            _ => None,
-        };
+        let prev_snapshot_id = fuse_table
+            .read_table_snapshot()
+            .await
+            .map_or(None, |v| v.map(|snapshot| snapshot.snapshot_id));
+
+        let mut bloom_index_cols = vec![];
+        if let Some(v) = table_info.options().get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
+            if let BloomIndexColumns::Specify(cols) = v.parse::<BloomIndexColumns>()? {
+                bloom_index_cols = cols;
+            }
+        }
 
         for (column, type_name) in column_name_types {
             let column = column.to_string();
@@ -173,6 +186,17 @@ impl ModifyTableColumnInterpreter {
                         Arc::new(data_schema),
                         &column,
                     )?;
+
+                    // If the column is defined in bloom index columns,
+                    // check whether the data type is supported for bloom index.
+                    if bloom_index_cols.iter().any(|v| v.as_str() == column)
+                        && !BloomIndex::supported_type(&new_type)
+                    {
+                        return Err(ErrorCode::TableOptionInvalid(format!(
+                            "Unsupported data type '{}' for bloom index",
+                            new_type
+                        )));
+                    }
                     new_schema.fields[i].data_type = new_type;
                 }
             } else {
@@ -195,10 +219,10 @@ impl ModifyTableColumnInterpreter {
             .enumerate()
             .for_each(|(index, field)| {
                 if index != schema.fields().len() - 1 {
-                    sql = format!("{} {},", sql, field.name.clone());
+                    sql = format!("{} `{}`,", sql, field.name.clone());
                 } else {
                     sql = format!(
-                        "{} {} from {}.{}",
+                        "{} `{}` from `{}`.`{}`",
                         sql,
                         field.name.clone(),
                         self.plan.database,
@@ -236,7 +260,7 @@ impl ModifyTableColumnInterpreter {
             PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
                 plan_id: select_plan.get_id(),
                 input: Box::new(select_plan),
-                catalog: self.plan.catalog.clone(),
+                catalog_info,
                 table_info: new_table.get_table_info().clone(),
                 select_schema: Arc::new(Arc::new(schema).into()),
                 select_column_bindings,
@@ -352,7 +376,8 @@ impl Interpreter for ModifyTableColumnInterpreter {
 
         let tbl = self
             .ctx
-            .get_catalog(catalog_name)?
+            .get_catalog(catalog_name)
+            .await?
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await
             .ok();
@@ -377,7 +402,7 @@ impl Interpreter for ModifyTableColumnInterpreter {
             )));
         }
 
-        let catalog = self.ctx.get_catalog(catalog_name)?;
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
         let table_meta = table.get_table_info().meta.clone();
 
         // NOTICE: if we support modify column data type,

@@ -12,4 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common_catalog::catalog::Catalog;
+mod column_nodes;
+mod convert;
+mod parquet_reader;
+mod parquet_table;
+mod projection;
+pub(crate) mod pruning;
+mod statistics;
+
+pub use parquet_table::ParquetTable;
