@@ -37,6 +37,7 @@ use common_license::license_manager::get_license_manager;
 use common_settings::Settings;
 use common_users::UserApiProvider;
 use data_mask_feature::get_datamask_handler;
+use log::info;
 use parking_lot::RwLock;
 
 use crate::binder::ColumnBindingBuilder;
@@ -226,6 +227,8 @@ impl ToReadDataSourcePlan for dyn Table {
                                 let scalar = type_checker.resolve(&ast_expr).await?;
                                 let expr = scalar.0.as_expr()?.project_column_ref(|col| col.index);
                                 mask_policy_map.insert(i, expr.as_remote_expr());
+                            } else {
+                                info!("cannot find mask policy {}/{}", tenant, mask_policy);
                             }
                         }
                     }
