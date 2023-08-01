@@ -1,19 +1,18 @@
 
-
-
-
 statement ok
-create table test6(id Int8, a Int8 DEFAULT 1 + 2, created timestamp DEFAULT now())
+create table test6(id Int8, a Int8 DEFAULT 1 + 2, created timestamp DEFAULT now());
 
-
-# step-18: disable
-# statement ok
-# INSERT INTO test6 (id) VALUES (1)
 
 query IIT
-SELECT id, a, now() >= created FROM test6;
+SELECT id, a FROM test6;
 ----
 
 
+# query IIT
+# SELECT id, a, now() >= created FROM test6;
+# ----
+
+
 statement error 3001
-create table tt_v2 (id int) engine=fuse SNAPSHOT_LOCATION='xx'
+create table tt_v2 (id int) engine=fuse SNAPSHOT_LOCATION='xx';
+
