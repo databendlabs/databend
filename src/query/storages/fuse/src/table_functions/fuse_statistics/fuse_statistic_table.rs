@@ -178,7 +178,8 @@ impl AsyncSource for FuseStatisticSource {
         let tenant_id = self.ctx.get_tenant();
         let tbl = self
             .ctx
-            .get_catalog(CATALOG_DEFAULT)?
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
             .get_table(
                 tenant_id.as_str(),
                 self.arg_database_name.as_str(),

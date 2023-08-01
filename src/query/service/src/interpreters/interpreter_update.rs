@@ -84,7 +84,8 @@ impl Interpreter for UpdateInterpreter {
         // refresh table.
         let tbl = self
             .ctx
-            .get_catalog(catalog_name)?
+            .get_catalog(catalog_name)
+            .await?
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
 

@@ -1814,10 +1814,13 @@ dependencies = [
  "chrono",
  "common-arrow",
  "common-base",
+ "common-config",
  "common-exception",
  "common-expression",
  "common-io",
+ "common-meta-api",
  "common-meta-app",
+ "common-meta-store",
  "common-meta-types",
  "common-pipeline-core",
  "common-settings",
@@ -2799,6 +2802,7 @@ dependencies = [
  "opendal",
  "parquet",
  "serde",
+ "tokio",
  "typetag",
 ]
 

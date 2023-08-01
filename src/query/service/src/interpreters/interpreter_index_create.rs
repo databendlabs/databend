@@ -66,7 +66,7 @@ impl Interpreter for CreateIndexInterpreter {
             ));
         }
 
-        let catalog = self.ctx.get_catalog(&catalog)?;
+        let catalog = self.ctx.get_catalog(&catalog).await?;
 
         let create_index_req = CreateIndexReq {
             if_not_exists: self.plan.if_not_exists,
