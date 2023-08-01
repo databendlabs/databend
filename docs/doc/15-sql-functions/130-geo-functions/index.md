@@ -17,10 +17,16 @@ Geography Functions in SQL.
 | **H3_GET_RESOLUTION(h3)**                               | Returns the resolution of the given [H3](https://eng.uber.com/h3/) index.  | **H3_GET_RESOLUTION(644325524701193974)**             | 15                    |
 | **H3_EDGE_LENGTH_M(res)**                               | Returns the average hexagon edge length in meters at the given resolution. Excludes pentagons.  | **H3_EDGE_LENGTH_M(1)**             | 418676.0055         |
 | **H3_EDGE_LENGTH_KM(res)**                              | Returns the average hexagon edge length in  kilometers at the given resolution. Excludes pentagons.   | **H3_EDGE_LENGTH_KM(1)**     | 418.6760055  |
+| **H3_GET_BASE_CELL(h3)**                                | Returns the base cell number of the given [H3](https://eng.uber.com/h3/) index.   | **H3_GET_BASE_CELL(644325524701193974)**     |  8  |
+| **H3_HEX_AREA_M2(res)**                                 | Returns the average hexagon area in square meters at the given resolution. Excludes pentagons.   | **H3_HEX_AREA_M2(1)**     |  6.097884417941339e11  |
+| **H3_HEX_AREA_KM2(res)**                                | Returns the average hexagon area in square kilometers at the given resolution. Excludes pentagons.   | **H3_HEX_AREA_KM2(1)**     |  609788.4417941332  |
+| **H3_INDEXES_ARE_NEIGHBORS(h3, a_h3)**                  | Returns whether or not the provided [H3](https://eng.uber.com/h3/) indexes are neighbors.   | **H3_INDEXES_ARE_NEIGHBORS(644325524701193974, 644325524701193897)**     |  1  |
+| **H3_TO_CHILDREN(h3, child_res)**                       | Returns the indexes contained by `h3` at resolution `child_res`.      | **H3_TO_CHILDREN(635318325446452991, 14)**     |  [639821925073823431,639821925073823439,639821925073823447,639821925073823455,639821925073823463,639821925073823471,639821925073823479]  |
+| **H3_TO_PARENT(h3, parent_res)**                        | Returns the parent index containing the `h3` at resolution `parent_res`.      | **H3_TO_PARENT(635318325446452991, 12)**     |  630814725819082751  |
 
 :::note
 
-- `GEO_TO_H3(lon, lat, res)` returning 0 means an error occurred.
+- `GEO_TO_H3(lon, lat, res)`, `H3_TO_PARENT(h3, parent_res)` returning 0 means an error occurred.
 - `POINT_IN_POLYGON((x,y), [(a,b), (c,d), (e,f) ... ])` A polygon is a closed shape connected by coordinate pairs in the order they appear. Changing the order of coordinate pairs can result in a different shape.
 
 :::
