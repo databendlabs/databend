@@ -84,12 +84,13 @@ impl Interpreter for ReclusterTableInterpreter {
         loop {
             let table = self
                 .ctx
-                .get_catalog(&plan.catalog)?
+                .get_catalog(&plan.catalog)
+                .await?
                 .get_table(tenant.as_str(), &plan.database, &plan.table)
                 .await?;
 
             // check if the table is locked.
-            let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
             let reply = catalog
                 .list_table_lock_revs(table.get_table_info().ident.table_id)
                 .await?;

@@ -46,7 +46,7 @@ impl Interpreter for RenameTableInterpreter {
         // TODO check privileges
         // You must have ALTER and DROP privileges for the original table,
         // and CREATE and INSERT privileges for the new table.
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         catalog
             .rename_table(RenameTableReq {
                 if_exists: self.plan.if_exists,
