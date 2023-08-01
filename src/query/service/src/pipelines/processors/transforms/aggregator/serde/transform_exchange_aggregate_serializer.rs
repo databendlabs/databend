@@ -89,13 +89,17 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
     fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<DataBlock> {
         let mut serialized_blocks = Vec::with_capacity(meta.blocks.len());
         for (index, mut block) in meta.blocks.into_iter().enumerate() {
+            if block.is_empty() && block.get_meta().is_none() {
+                serialized_blocks.push(FlightSerialized::DataBlock(block));
+                continue;
+            }
+
             match AggregateMeta::<Method, usize>::downcast_from(block.take_meta().unwrap()) {
                 None => unreachable!(),
                 Some(AggregateMeta::Spilled(_)) => unreachable!(),
                 Some(AggregateMeta::Serialized(_)) => unreachable!(),
                 Some(AggregateMeta::BucketSpilled(_)) => unreachable!(),
                 Some(AggregateMeta::Partitioned { .. }) => unreachable!(),
-
                 Some(AggregateMeta::Spilling(payload)) => {
                     serialized_blocks.push(FlightSerialized::Future(
                         match index == self.local_pos {
