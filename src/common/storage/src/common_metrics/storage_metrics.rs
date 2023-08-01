@@ -24,6 +24,7 @@ use std::time::Instant;
 use async_trait::async_trait;
 use bytes::Bytes;
 use opendal::raw::oio;
+use opendal::raw::oio::Streamer;
 use opendal::raw::Accessor;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccessor;
@@ -307,6 +308,11 @@ impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
     #[async_backtrace::framed]
     async fn abort(&mut self) -> Result<()> {
         self.inner.abort().await
+    }
+
+    #[async_backtrace::framed]
+    async fn sink(&mut self, size: u64, s: Streamer) -> Result<()> {
+        self.inner.sink(size, s).await
     }
 
     #[async_backtrace::framed]
