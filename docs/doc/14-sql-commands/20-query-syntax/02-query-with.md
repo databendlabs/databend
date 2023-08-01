@@ -7,8 +7,6 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 Databend supports common table expressions (CTEs) with a WITH clause, allowing you to define one or multiple named temporary result sets used by the following query. The term "temporary" implies that the result sets are not permanently stored in the database schema. They act as temporary views only accessible to the following query.
 
-Databend introduces the "Materialized" parameter for CTEs, allowing you to decide whether a CTE should be materialized or remain temporary. It is recommended to use the "Materialized" parameter for CTEs involving complex computations or large datasets to improve query performance by storing results on a physical storage medium. However, for simpler CTEs with limited usages, using "Materialized" may not be necessary. The decision should consider the trade-offs between performance gains and storage utilization.
-
 When a query with a WITH clause is executed, the CTEs within the WITH clause are evaluated and executed first. This produces one or multiple temporary result sets. Then the query is executed using the temporary result sets that were produced by the WITH clause. 
 
 This is a simple demonstration that helps you understand how CTEs work in a query: The WITH clause defines a CTE and produces a result set that holds all customers who are from the Québec province. The main query filters the customers who live in the Montréal region from the ones in the Québec province.
@@ -37,6 +35,51 @@ WHERE  city = 'Montréal'
 ORDER  BY customername; 
 ```
 
+## Inline or Materialized?
+
+When using a CTE in a query, you can control whether the CTE is inline or materialized by using the MATERIALIZED keyword. Inlining means the CTE's definition is directly embedded within the main query, while materializing the CTE means calculating its result once and storing it in memory, reducing repetitive CTE execution.
+
+Suppose we have a table called *orders*, storing customer order information, including order number, customer ID, and order date. Now, we want to count the total number of orders for each customer and display only those customers with more than two orders.
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs>
+  <TabItem value="inline" label="inline" default>
+
+In this query, the CTE customer_orders will be inlined during query execution. Databend will directly embed the definition of customer_orders within the main query to create a single execution plan.
+
+```sql
+WITH customer_orders AS (
+    SELECT customer_id, COUNT(*) AS order_count
+    FROM orders
+    GROUP BY customer_id
+)
+SELECT customer_id
+FROM customer_orders
+WHERE order_count > 2;
+```
+  </TabItem>
+  <TabItem value="MATERIALIZED" label="MATERIALIZED">
+
+In this case, we use the MATERIALIZED keyword, which means the CTE customer_orders will not be inlined. Instead, the CTE's result will be calculated and stored in memory during the CTE definition's execution. Later, when executing the main query, Databend will directly retrieve the pre-computed result from memory, avoiding the overhead of repeatedly executing the CTE.
+
+```sql
+WITH customer_orders AS MATERIALIZED (
+    SELECT customer_id, COUNT(*) AS order_count
+    FROM orders
+    GROUP BY customer_id
+)
+SELECT customer_id
+FROM customer_orders
+WHERE order_count > 2;
+```
+This can significantly improve performance for complex CTEs or situations where the CTE's result is used multiple times. However, as the CTE is no longer inlined, the query optimizer may find it difficult to push the CTE's conditions into the main query or optimize the join order, potentially leading to decreased overall query performance. 
+
+  </TabItem>
+</Tabs>
+
+
 ## Syntax
 
 ```sql    
@@ -52,7 +95,7 @@ SELECT ...
 | WITH                    	| Initiates the WITH clause.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            	|
 | cte_name1 ... cte_nameN 	| The CTE names. When you have multiple CTEs, separate them with commas.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                	|
 | cte_column_list         	| The names of the columns in the CTE. A CTE can refer to any CTEs in the same WITH clause that are defined before.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     	|
-| MATERIALIZED            	| "Materialized" is an optional keyword used when defining CTEs to indicate whether the CTE should be materialized. By using the "Materialized" keyword, you instruct Databend to store the result of the specified CTE on a physical storage medium, avoiding redundant computations when needed. Materialized CTEs improve query performance, especially when dealing with complex computations or large datasets. If you don't use the "Materialized" keyword, the CTE will be defined in the regular way, and its result will be recomputed each time the CTE is used in the query. 	|
+| MATERIALIZED            	| "Materialized" is an optional keyword used when defining CTEs to indicate whether the CTE should be materialized. 	|
 | SELECT ...              	| CTEs are mainly used with the SELECT statement.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       	|
 
 ## Examples
