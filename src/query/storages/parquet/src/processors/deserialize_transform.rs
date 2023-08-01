@@ -49,6 +49,7 @@ use opendal::Operator;
 use crate::parquet_part::ParquetPart;
 use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_part::ParquetSmallFilesPart;
+use crate::parquet_reader::BlockIterator;
 use crate::parquet_reader::IndexedReaders;
 use crate::parquet_reader::ParquetPartData;
 use crate::parquet_reader::ParquetReader;
@@ -81,6 +82,7 @@ pub struct ParquetDeserializeTransform {
 
     // data from input
     parts: VecDeque<(PartInfoPtr, ParquetPartData)>,
+    current_row_group: Option<Box<dyn BlockIterator>>,
 
     src_schema: DataSchemaRef,
     output_schema: DataSchemaRef,
@@ -120,6 +122,7 @@ impl ParquetDeserializeTransform {
 
                 parts: VecDeque::new(),
 
+                current_row_group: None,
                 src_schema,
                 output_schema,
 
@@ -189,7 +192,6 @@ impl ParquetDeserializeTransform {
             .row_selection
             .as_ref()
             .map(|sel| intervals_to_bitmap(sel, part.num_rows));
-
         // this means it's empty projection
         if readers.is_empty() {
             let data_block = DataBlock::new(vec![], part.num_rows);
@@ -303,7 +305,17 @@ impl ParquetDeserializeTransform {
             }
             None => {
                 let chunks = self.remain_reader.read_from_readers(readers)?;
-                self.remain_reader.deserialize(part, chunks, row_selection)
+                let mut current_row_group =
+                    self.remain_reader
+                        .get_deserializer(part, chunks, row_selection)?;
+                let block = match current_row_group.next() {
+                    None => return Ok(None),
+                    Some(block) => block?,
+                };
+                if current_row_group.has_next() {
+                    self.current_row_group = Some(current_row_group)
+                }
+                Ok(block)
             }
         }?;
 
@@ -336,7 +348,7 @@ impl Processor for ParquetDeserializeTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if !self.parts.is_empty() {
+        if self.current_row_group.is_some() || !self.parts.is_empty() {
             if !self.input.has_data() {
                 self.input.set_need_data();
             }
@@ -362,6 +374,15 @@ impl Processor for ParquetDeserializeTransform {
     }
 
     fn process(&mut self) -> Result<()> {
+        if let Some(deserializer) = &mut self.current_row_group {
+            let data_block = deserializer.next().unwrap()?;
+            self.output_data.push(data_block);
+            if !deserializer.has_next() {
+                self.current_row_group = None
+            }
+            return Ok(());
+        }
+
         if let Some((part, data)) = self.parts.pop_front() {
             let part = ParquetPart::from_part(&part)?;
             match (&part, data) {
