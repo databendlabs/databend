@@ -12,8 +12,8 @@ Modifies an existing network policy in Databend.
 
 ```sql
 ALTER NETWORK POLICY [IF EXISTS] policy_name
-    SET ALLOWED_IP_LIST=('allowed_ip1', 'allowed_ip2', ...)
-    BLOCKED_IP_LIST=('blocked_ip1', 'blocked_ip2', ...)
+    SET [ALLOWED_IP_LIST=('allowed_ip1', 'allowed_ip2', ...)]
+    [BLOCKED_IP_LIST=('blocked_ip1', 'blocked_ip2', ...)]
     [COMMENT='comment']
 ```
 
@@ -23,6 +23,10 @@ ALTER NETWORK POLICY [IF EXISTS] policy_name
 | ALLOWED_IP_LIST 	| Specifies a comma-separated list of allowed IP address ranges to update for the policy. This overwrites the existing allowed IP address list with the new one provided.                                                                                               	|
 | BLOCKED_IP_LIST 	| Specifies a comma-separated list of blocked IP address ranges to update for the policy. This overwrites the existing blocked IP address list with the new one provided. If this parameter is set to an empty list (), it removes all blocked IP address restrictions. 	|
 | COMMENT         	| An optional parameter used to update the description or comment associated with the network policy.                                                                                                                                                                   	|
+
+:::note
+This command provides the flexibility to update either the allowed IP list or the blocked IP list, while leaving the other list unchanged. Both ALLOWED_IP_LIST and BLOCKED_IP_LIST are optional parameters.
+:::
 
 ## Examples
 
