@@ -44,6 +44,7 @@ impl RowScalarValue for Value<AnyType> {
     }
 }
 
+// for row contains null value, None will be returned
 pub fn row_hash_of_columns(
     column_values: &[&Value<AnyType>],
     row_idx: usize,
