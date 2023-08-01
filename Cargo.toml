@@ -125,7 +125,6 @@ openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alph
 derive_more = "0.99.17"
 lazy_static = "1.4.0"
 itertools = "0.10.5"
-more-iter = { git = "https://github.com/drmingdrmer/more-iter", tag = "v0.1.2" }
 
 # error
 anyhow = { version = "1.0.65" }
