@@ -247,7 +247,7 @@ impl QueryContext {
         *self.shared.user_agent.write() = ua;
     }
 
-    fn get_ua(&self) -> String {
+    pub fn get_ua(&self) -> String {
         let ua = self.shared.user_agent.read();
         ua.clone()
     }
@@ -328,16 +328,6 @@ impl TableContext for QueryContext {
         info!("{}: {}", self.get_id(), info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
-    }
-
-    fn get_ua(&self) -> String {
-        let ua = self.shared.user_agent.read();
-        ua.clone()
-    }
-
-    fn set_ua(&self, info: &str) {
-        let mut ua = self.shared.user_agent.write();
-        *ua = info.to_string();
     }
 
     fn get_partition(&self) -> Option<PartInfoPtr> {
