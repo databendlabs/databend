@@ -4,7 +4,7 @@ title: SHOW NETWORK POLICIES
 
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced: v1.2.26"/>
+<FunctionDescription description="Introduced or updated: v1.2.26"/>
 
 Displays a list of all existing network policies in Databend. It provides information about the available network policies, including their names and whether they have any allowed or blocked IP address lists configured.
 

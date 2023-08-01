@@ -4,7 +4,7 @@ title: ALTER NETWORK POLICY
 
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced: v1.2.26"/>
+<FunctionDescription description="Introduced or updated: v1.2.26"/>
 
 Modifies an existing network policy in Databend. 
 
