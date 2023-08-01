@@ -83,3 +83,15 @@ if __name__ == "__main__":
         mycursor.execute("select * from data_mask_test")
         data = mycursor.fetchall()
         print(data)
+
+        sql = " drop MASKING POLICY if exists maska"
+        mycursor.execute(sql)
+        mycursor.execute("select * from data_mask_test")
+        data = mycursor.fetchall()
+        print(data)
+
+        sql = " drop MASKING POLICY if exists maskb"
+        mycursor.execute(sql)
+        mycursor.execute("select * from data_mask_test")
+        data = mycursor.fetchall()
+        print(data)
