@@ -19,6 +19,7 @@ use async_trait::async_trait;
 use common_auth::RefreshableToken;
 use common_exception::ErrorCode;
 use http::Request;
+use http::Response;
 use http::StatusCode;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
@@ -26,13 +27,11 @@ use opendal::layers::RetryLayer;
 use opendal::layers::TracingLayer;
 use opendal::raw::new_request_build_error;
 use opendal::raw::parse_content_length;
-use opendal::raw::parse_error_response;
 use opendal::raw::parse_etag;
 use opendal::raw::parse_last_modified;
 use opendal::raw::Accessor;
 use opendal::raw::AccessorInfo;
 use opendal::raw::AsyncBody;
-use opendal::raw::ErrorResponse;
 use opendal::raw::HttpClient;
 use opendal::raw::IncomingAsyncBody;
 use opendal::raw::OpRead;
@@ -177,9 +176,7 @@ impl Accessor for SharedAccessor {
                 .expect("content_length must be valid");
             Ok((RpRead::new(content_length), resp.into_body()))
         } else {
-            let er = parse_error_response(resp).await?;
-            let err = parse_error(er);
-            Err(err)
+            Err(parse_error(resp).await)
         }
     }
 
@@ -227,17 +224,16 @@ impl Accessor for SharedAccessor {
             StatusCode::NOT_FOUND if path.ends_with('/') => {
                 Ok(RpStat::new(Metadata::new(EntryMode::DIR)))
             }
-            _ => {
-                let er = parse_error_response(resp).await?;
-                let err = parse_error(er);
-                Err(err)
-            }
+            _ => Err(parse_error(resp).await),
         }
     }
 }
 
-pub fn parse_error(er: ErrorResponse) -> Error {
-    let (kind, retryable) = match er.status_code() {
+pub async fn parse_error(er: Response<IncomingAsyncBody>) -> Error {
+    let (part, body) = er.into_parts();
+    let message = body.bytes().await.unwrap_or_default();
+
+    let (kind, retryable) = match part.status {
         StatusCode::NOT_FOUND => (ErrorKind::NotFound, false),
         StatusCode::FORBIDDEN => (ErrorKind::PermissionDenied, false),
         StatusCode::INTERNAL_SERVER_ERROR
@@ -247,7 +243,7 @@ pub fn parse_error(er: ErrorResponse) -> Error {
         _ => (ErrorKind::Unexpected, false),
     };
 
-    let mut err = Error::new(kind, &er.to_string());
+    let mut err = Error::new(kind, &String::from_utf8_lossy(&message));
 
     if retryable {
         err = err.set_temporary();
