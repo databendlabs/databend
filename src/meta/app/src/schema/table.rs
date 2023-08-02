@@ -621,7 +621,9 @@ pub struct SetTableColumnMaskPolicyReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct SetTableColumnMaskPolicyReply {}
+pub struct SetTableColumnMaskPolicyReply {
+    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableOptionReply {

@@ -2930,7 +2930,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(SetTableColumnMaskPolicyReply {});
+                return Ok(SetTableColumnMaskPolicyReply {
+                    share_table_info: get_share_table_info_map(self, &new_table_meta).await?,
+                });
             }
         }
 

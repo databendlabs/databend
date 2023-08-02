@@ -188,6 +188,7 @@ fn test_statement() {
         r#"ALTER TABLE t RENAME COLUMN a TO b;"#,
         r#"ALTER TABLE t DROP COLUMN b;"#,
         r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;"#,
+        r#"ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY;"#,
         r#"ALTER TABLE t MODIFY COLUMN a int, COLUMN b float;"#,
         r#"ALTER TABLE t MODIFY COLUMN a int;"#,
         r#"ALTER TABLE t MODIFY COLUMN a DROP STORED;"#,
