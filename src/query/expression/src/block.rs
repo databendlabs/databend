@@ -520,7 +520,7 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn project(self, projections: &HashSet<usize>) -> Self {
+    pub fn project(mut self, projections: &HashSet<usize>) -> Self {
         let mut columns = Vec::with_capacity(projections.len());
         for (index, column) in self.columns.into_iter().enumerate() {
             if !projections.contains(&index) {
@@ -528,7 +528,8 @@ impl DataBlock {
             }
             columns.push(column);
         }
-        DataBlock::new_with_meta(columns, self.num_rows, self.meta)
+        self.columns = columns;
+        self
     }
 
     #[inline]

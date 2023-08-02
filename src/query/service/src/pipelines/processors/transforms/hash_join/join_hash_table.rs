@@ -212,10 +212,9 @@ impl JoinHashTable {
 
     pub(crate) fn probe_join(
         &self,
-        input: &DataBlock,
+        mut input: DataBlock,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let mut input = (*input).clone();
         if matches!(
             self.hash_join_desc.join_type,
             JoinType::Right | JoinType::RightSingle | JoinType::Full
@@ -281,16 +280,8 @@ impl JoinHashTable {
             probe_state.valids = valids;
         }
 
-        let column_nums = input.num_columns();
-        let mut columns = Vec::with_capacity(self.probe_projections.len());
-        for index in 0..column_nums {
-            if !&self.probe_projections.contains(&index) {
-                continue;
-            }
-            columns.push(input.get_by_offset(index).clone())
-        }
-        let is_probe_projected = !columns.is_empty();
-        let input = DataBlock::new(columns, input.num_rows());
+        let input = input.project(&self.probe_projections);
+        let is_probe_projected = input.num_columns() > 0;
 
         if self.fast_return()?
             && matches!(

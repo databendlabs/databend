@@ -118,7 +118,7 @@ impl UnusedColumnPruner {
                 });
                 Ok(SExpr::create_binary(
                     Arc::new(RelOperator::Join(
-                        p.replace_projections(pre_projections, projections),
+                        p.clone().replace_projections(pre_projections, projections),
                     )),
                     Arc::new(self.keep_required_columns(
                         expr.child(0)?,
@@ -163,7 +163,9 @@ impl UnusedColumnPruner {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
                 Ok(SExpr::create_unary(
-                    Arc::new(RelOperator::Filter(p.replace_projections(projections))),
+                    Arc::new(RelOperator::Filter(
+                        p.clone().replace_projections(projections),
+                    )),
                     Arc::new(self.keep_required_columns(expr.child(0)?, used)?),
                 ))
             }
@@ -284,7 +286,9 @@ impl UnusedColumnPruner {
                 // Columns that are not used by the parent plan don't need to be kept.
                 // Repeating the rows to as many as the results of SRF may result in an OOM.
                 Ok(SExpr::create_unary(
-                    Arc::new(RelOperator::ProjectSet(p.replace_projections(projections))),
+                    Arc::new(RelOperator::ProjectSet(
+                        p.clone().replace_projections(projections),
+                    )),
                     Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                 ))
             }

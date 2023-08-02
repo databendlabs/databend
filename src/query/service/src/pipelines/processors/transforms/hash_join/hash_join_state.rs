@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_sql::plans::JoinType;
 
 use super::ProbeState;
@@ -27,7 +26,7 @@ pub trait HashJoinState: Send + Sync {
     fn build(&self, input: DataBlock) -> Result<()>;
 
     /// Probe the hash table and retrieve matched rows as DataBlocks.
-    fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>>;
+    fn probe(&self, input: DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>>;
 
     fn interrupt(&self);
 
@@ -102,7 +101,4 @@ pub trait HashJoinState: Send + Sync {
 
     /// Get join type
     fn join_type(&self) -> JoinType;
-
-    /// Get join type
-    fn probe_schema(&self) -> DataSchemaRef;
 }

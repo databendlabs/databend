@@ -83,7 +83,7 @@ impl TransformHashJoinProbe {
         Ok(join_state)
     }
 
-    fn probe(&mut self, block: &DataBlock) -> Result<()> {
+    fn probe(&mut self, block: DataBlock) -> Result<()> {
         self.probe_state.clear();
         let data_blocks = self.join_state.probe(block, &mut self.probe_state)?;
         if !data_blocks.is_empty() {
@@ -215,7 +215,7 @@ impl Processor for TransformHashJoinProbe {
             HashJoinStep::Probe => {
                 if let Some(data) = self.input_data.pop_front() {
                     let data = data.convert_to_full();
-                    self.probe(&data)?;
+                    self.probe(data)?;
                 }
                 Ok(())
             }

@@ -74,12 +74,7 @@ impl HashJoinState for JoinHashTable {
         }
     }
 
-    /// Get join type
-    fn probe_schema(&self) -> DataSchemaRef {
-        self.probe_schema.clone()
-    }
-
-    fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
+    fn probe(&self, input: DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match self.hash_join_desc.join_type {
             JoinType::Inner
             | JoinType::LeftSemi

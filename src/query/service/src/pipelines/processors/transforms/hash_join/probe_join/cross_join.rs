@@ -23,7 +23,7 @@ use crate::pipelines::processors::JoinHashTable;
 impl JoinHashTable {
     pub(crate) fn probe_cross_join(
         &self,
-        input: &DataBlock,
+        input: DataBlock,
         _probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
         let build_blocks = self.row_space.datablocks();
@@ -34,23 +34,8 @@ impl JoinHashTable {
         if build_num_rows == 0 || input_num_rows == 0 {
             return Ok(vec![]);
         }
-
-        let column_nums = input.num_columns();
-        let mut columns = Vec::with_capacity(self.probe_projections.len());
-        for index in 0..column_nums {
-            if !self.probe_projections.contains(&index) {
-                continue;
-            }
-            columns.push(input.get_by_offset(index).clone())
-        }
-
-        let probe_block = if columns.is_empty() {
-            DataBlock::empty()
-        } else {
-            DataBlock::new(columns, input_num_rows)
-        };
+        let probe_block = input.project(&self.probe_projections);
         let build_block = DataBlock::concat(&build_blocks)?;
-
         let mut result_blocks = Vec::with_capacity(input_num_rows);
         for i in 0..input_num_rows {
             result_blocks.push(self.merge_with_constant_block(

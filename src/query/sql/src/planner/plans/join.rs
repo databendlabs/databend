@@ -186,21 +186,13 @@ impl Join {
 
     #[inline]
     pub fn replace_projections(
-        &self,
+        mut self,
         pre_projections: Vec<IndexType>,
         projections: Vec<IndexType>,
     ) -> Self {
-        Self {
-            pre_projections,
-            projections,
-            left_conditions: self.left_conditions.clone(),
-            right_conditions: self.right_conditions.clone(),
-            non_equi_conditions: self.non_equi_conditions.clone(),
-            join_type: self.join_type.clone(),
-            marker_index: self.marker_index,
-            from_correlated_subquery: self.from_correlated_subquery,
-            contain_runtime_filter: self.contain_runtime_filter,
-        }
+        self.pre_projections = pre_projections;
+        self.projections = projections;
+        self
     }
 
     fn inner_join_cardinality(

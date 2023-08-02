@@ -51,12 +51,9 @@ impl Filter {
     }
 
     #[inline]
-    pub fn replace_projections(&self, projections: Vec<IndexType>) -> Self {
-        Self {
-            projections,
-            predicates: self.predicates.clone(),
-            is_having: self.is_having,
-        }
+    pub fn replace_projections(mut self, projections: Vec<IndexType>) -> Self {
+        self.projections = projections;
+        self
     }
 }
 

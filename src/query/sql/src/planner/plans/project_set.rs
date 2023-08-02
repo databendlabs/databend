@@ -46,11 +46,9 @@ pub struct ProjectSet {
 
 impl ProjectSet {
     #[inline]
-    pub fn replace_projections(&self, projections: Vec<IndexType>) -> Self {
-        Self {
-            projections,
-            srfs: self.srfs.clone(),
-        }
+    pub fn replace_projections(mut self, projections: Vec<IndexType>) -> Self {
+        self.projections = projections;
+        self
     }
 }
 
