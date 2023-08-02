@@ -47,7 +47,7 @@ import TabItem from '@theme/TabItem';
 <Tabs>
   <TabItem value="Inline" label="Inline" default>
 
-In this query, the CTE *customer_orders* will be inlined during query execution. Databend will directly embed the definition of *customer_orders* within the main query to create a single execution plan.
+In this query, the CTE *customer_orders* will be inlined during query execution. Databend will directly embed the definition of *customer_orders* within the main query.
 
 ```sql
 WITH customer_orders AS (
