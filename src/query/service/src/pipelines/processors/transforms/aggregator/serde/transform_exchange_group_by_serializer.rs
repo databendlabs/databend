@@ -251,6 +251,7 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
         let columns = get_columns(data_block);
         let mut columns_data = Vec::with_capacity(columns.len());
         let mut columns_layout = Vec::with_capacity(columns.len());
+
         for column in columns.into_iter() {
             let column = column.value.as_column().unwrap();
             let column_data = serialize_column(column);
@@ -277,16 +278,24 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
         let instant = Instant::now();
 
         if !write_data.is_empty() {
-            let mut write_bytes = 0;
-            let mut writer = operator.writer(&location).await?;
-            for write_bucket_data in write_data.into_iter() {
-                for data in write_bucket_data.into_iter() {
-                    write_bytes += data.len();
-                    writer.write(data).await?;
-                }
-            }
+            let write_data = write_data
+                .into_iter()
+                .flat_map(|nested| nested.into_iter().flatten())
+                .collect::<Vec<_>>();
 
-            writer.close().await?;
+            let write_bytes = write_data.len();
+            operator.write(&location, write_data).await?;
+            // // write_data.into_iter()
+            // let mut write_bytes = 0;
+            // let mut writer = operator.writer(&location).await?;
+            // for write_bucket_data in write_data.into_iter() {
+            //     for data in write_bucket_data.into_iter() {
+            //         write_bytes += data.len();
+            //         writer.write(data).await?;
+            //     }
+            // }
+            //
+            // writer.close().await?;
 
             // perf
             {
