@@ -814,7 +814,9 @@ impl Binder {
             windows: Default::default(),
             lambda_info: Default::default(),
             in_grouping: false,
-            ctes_map: bind_context.ctes_map.clone(),
+            ctes_map: if bind_context.materialized_ctes.is_empty() {
+                Default::default()
+            } else {bind_context.ctes_map.clone()},
             materialized_ctes: bind_context.materialized_ctes.clone(),
             view_info: None,
             srfs: Default::default(),
