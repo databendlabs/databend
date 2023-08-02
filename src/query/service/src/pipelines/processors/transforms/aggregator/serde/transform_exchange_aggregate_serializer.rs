@@ -85,7 +85,7 @@ impl<Method: HashMethodBounds> TransformExchangeAggregateSerializer<Method> {
 impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
     for TransformExchangeAggregateSerializer<Method>
 {
-    const NAME: &'static str = "TransformScatterAggregateSpillWriter";
+    const NAME: &'static str = "TransformExchangeAggregateSerializer";
 
     fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<DataBlock> {
         let mut serialized_blocks = Vec::with_capacity(meta.blocks.len());

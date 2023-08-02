@@ -39,7 +39,7 @@ impl TransformExchangeAsyncBarrier {
 
 #[async_trait::async_trait]
 impl AsyncTransform for TransformExchangeAsyncBarrier {
-    const NAME: &'static str = "TransformScatterGroupBySerializer";
+    const NAME: &'static str = "TransformExchangeAsyncBarrier";
 
     async fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
         if let Some(meta) = data

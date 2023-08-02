@@ -159,7 +159,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
     for TransformExchangeGroupBySerializer<Method>
 {
     const UNKNOWN_MODE: UnknownMode = UnknownMode::Error;
-    const NAME: &'static str = "TransformScatterGroupBySpillWriter";
+    const NAME: &'static str = "TransformExchangeGroupBySerializer";
 
     fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<DataBlock> {
         let mut serialized_blocks = Vec::with_capacity(meta.blocks.len());
