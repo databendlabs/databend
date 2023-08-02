@@ -35,6 +35,7 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -42,9 +43,11 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_storage::DataOperator;
+use storages_common_pruner::RangePrunerCreator;
 use tokio::sync::OnceCell;
 
 use crate::partition::IcebergPartInfo;
+use crate::stats::get_stats_of_data_file;
 use crate::table_source::IcebergTableSource;
 
 /// accessor wrapper as a table
@@ -192,7 +195,8 @@ impl IcebergTable {
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let table = self.table().await?;
 
@@ -200,21 +204,37 @@ impl IcebergTable {
             ErrorCode::ReadTableDataError(format!("Cannot get current data files: {e:?}"))
         })?;
 
+        let filter = push_downs
+            .as_ref()
+            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+
+        let schema = self.schema();
+
+        let pruner =
+            RangePrunerCreator::try_create(ctx.get_function_context()?, &schema, filter.as_ref())?;
+
         let partitions = data_files
             .into_iter()
+            .filter(|df| {
+                if let Some(stats) = get_stats_of_data_file(&schema, df) {
+                    pruner.should_keep(&stats, None)
+                } else {
+                    true
+                }
+            })
             .map(|v: icelake::types::DataFile| match v.file_format {
-                icelake::types::DataFileFormat::Parquet => Arc::new(Box::new(IcebergPartInfo {
+                icelake::types::DataFileFormat::Parquet => Ok(Arc::new(Box::new(IcebergPartInfo {
                     path: table
                         .rel_path(&v.file_path)
                         .expect("file path must be rel to table"),
                     size: v.file_size_in_bytes as u64,
                 })
-                    as Box<dyn PartInfo>),
-                _ => {
-                    unimplemented!("Only parquet format is supported for iceberg table")
-                }
+                    as Box<dyn PartInfo>)),
+                _ => Err(ErrorCode::Unimplemented(
+                    "Only parquet format is supported for iceberg table",
+                )),
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
 
         Ok((
             PartStatistics::default(),
@@ -245,12 +265,11 @@ impl Table for IcebergTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        // TODO: we will support push down later.
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
         // TODO: we will support dry run later.
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        self.do_read_partitions(ctx).await
+        self.do_read_partitions(ctx, push_downs).await
     }
 
     fn read_data(
