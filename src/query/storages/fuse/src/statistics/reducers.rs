@@ -72,13 +72,10 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 .max_by(|x, y| x.cmp(y))
                 .unwrap_or(Scalar::Null);
 
-            acc.insert(*id, ColumnStatistics {
-                min,
-                max,
-                null_count,
-                in_memory_size,
-                distinct_of_values: None,
-            });
+            acc.insert(
+                *id,
+                ColumnStatistics::new(min, max, null_count, in_memory_size, None),
+            );
             acc
         })
 }
@@ -115,13 +112,13 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
     let max = max_stats.into_iter().max_by(|x, y| x.cmp(y)).unwrap();
     let level = levels.into_iter().max().unwrap_or(0);
 
-    Some(ClusterStatistics {
+    Some(ClusterStatistics::new(
         cluster_key_id,
         min,
         max,
         level,
-        pages: None,
-    })
+        None,
+    ))
 }
 
 pub fn merge_statistics(

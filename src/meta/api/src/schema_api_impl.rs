@@ -47,6 +47,8 @@ use common_meta_app::app_error::UnknownTableId;
 use common_meta_app::app_error::VirtualColumnAlreadyExists;
 use common_meta_app::app_error::WrongShare;
 use common_meta_app::app_error::WrongShareObject;
+use common_meta_app::data_mask::MaskpolicyTableIdList;
+use common_meta_app::data_mask::MaskpolicyTableIdListKey;
 use common_meta_app::schema::CatalogId;
 use common_meta_app::schema::CatalogIdToName;
 use common_meta_app::schema::CatalogInfo;
@@ -118,6 +120,9 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyAction;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableId;
@@ -2836,6 +2841,106 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
     #[logcall::logcall("debug")]
     #[minitrace::trace]
+    async fn set_table_column_mask_policy(
+        &self,
+        req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply, KVAppError> {
+        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        let tbid = TableId {
+            table_id: req.table_id,
+        };
+        let req_seq = req.seq;
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+            let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
+                get_pb_value(self, &tbid).await?;
+
+            debug!(ident = as_display!(&tbid); "set_table_column_mask_policy");
+
+            if tb_meta_seq == 0 || table_meta.is_none() {
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(req.table_id, "set_table_column_mask_policy"),
+                )));
+            }
+            if req_seq.match_seq(tb_meta_seq).is_err() {
+                return Err(KVAppError::AppError(AppError::from(
+                    TableVersionMismatched::new(
+                        req.table_id,
+                        req.seq,
+                        tb_meta_seq,
+                        "set_table_column_mask_policy",
+                    ),
+                )));
+            }
+
+            // upsert column mask policy
+            let table_meta = table_meta.unwrap();
+
+            let mut new_table_meta = table_meta.clone();
+            if new_table_meta.column_mask_policy.is_none() {
+                let column_mask_policy = BTreeMap::default();
+                new_table_meta.column_mask_policy = Some(column_mask_policy);
+            }
+
+            match &req.action {
+                SetTableColumnMaskPolicyAction::Set(new_mask_name, _old_mask_name) => {
+                    new_table_meta
+                        .column_mask_policy
+                        .as_mut()
+                        .unwrap()
+                        .insert(req.column.clone(), new_mask_name.clone());
+                }
+                SetTableColumnMaskPolicyAction::Unset(_) => {
+                    new_table_meta
+                        .column_mask_policy
+                        .as_mut()
+                        .unwrap()
+                        .remove(&req.column);
+                }
+            }
+
+            let mut txn_req = TxnRequest {
+                condition: vec![
+                    // table is not changed
+                    txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                ],
+                if_then: vec![
+                    txn_op_put(&tbid, serialize_struct(&new_table_meta)?), // tb_id -> tb_meta
+                ],
+                else_then: vec![],
+            };
+
+            let _ = update_mask_policy(
+                self,
+                &req.action,
+                &mut txn_req.condition,
+                &mut txn_req.if_then,
+                req.tenant.clone(),
+                req.table_id,
+            )
+            .await;
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                id = as_debug!(&tbid),
+                succ = succ;
+                "set_table_column_mask_policy"
+            );
+
+            if succ {
+                return Ok(SetTableColumnMaskPolicyReply {});
+            }
+        }
+
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("set_table_column_mask_policy", TXN_MAX_RETRY_TIMES),
+        )))
+    }
+
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
     async fn get_drop_table_infos(
         &self,
         req: ListDroppedTableReq,
@@ -4136,4 +4241,81 @@ pub fn catalog_has_to_exist(
     } else {
         Ok(())
     }
+}
+
+async fn update_mask_policy_table_id_list(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+    tenant: String,
+    name: String,
+    table_id: u64,
+    add: bool,
+) -> Result<(), KVAppError> {
+    let id_list_key = MaskpolicyTableIdListKey { tenant, name };
+
+    let (id_list_seq, id_list_opt): (_, Option<MaskpolicyTableIdList>) =
+        get_pb_value(kv_api, &id_list_key).await?;
+    if let Some(mut id_list) = id_list_opt {
+        if add {
+            id_list.id_list.insert(table_id);
+        } else {
+            id_list.id_list.remove(&table_id);
+        }
+
+        condition.push(txn_cond_seq(&id_list_key, Eq, id_list_seq));
+        if_then.push(txn_op_put(&id_list_key, serialize_struct(&id_list)?));
+    }
+
+    Ok(())
+}
+
+async fn update_mask_policy(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    action: &SetTableColumnMaskPolicyAction,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+    tenant: String,
+    table_id: u64,
+) -> Result<(), KVAppError> {
+    match action {
+        SetTableColumnMaskPolicyAction::Set(new_mask_name, old_mask_name_opt) => {
+            update_mask_policy_table_id_list(
+                kv_api,
+                condition,
+                if_then,
+                tenant.clone(),
+                new_mask_name.clone(),
+                table_id,
+                true,
+            )
+            .await?;
+            if let Some(old_mask_name) = old_mask_name_opt {
+                update_mask_policy_table_id_list(
+                    kv_api,
+                    condition,
+                    if_then,
+                    tenant.clone(),
+                    old_mask_name.clone(),
+                    table_id,
+                    false,
+                )
+                .await?;
+            }
+        }
+        SetTableColumnMaskPolicyAction::Unset(mask_name) => {
+            update_mask_policy_table_id_list(
+                kv_api,
+                condition,
+                if_then,
+                tenant.clone(),
+                mask_name.clone(),
+                table_id,
+                false,
+            )
+            .await?;
+        }
+    }
+
+    Ok(())
 }
