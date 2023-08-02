@@ -20,6 +20,8 @@ These functions help you extract and summarize data from databases to gain valua
 | [COUNT](aggregate-count.md)                                 | Counts the number of rows that meet certain criteria                      | 
 | [COVAR_POP](aggregate-covar-pop.md)                         | Returns the population covariance of a set of number pairs                | 
 | [COVAR_SAMP](aggregate-covar-samp.md)                       | Returns the sample covariance of a set of number pairs                    | 
+| [GROUP_ARRAY_MOVING_AVG](aggregate-group-array-moving-avg.md) | Returns an array with elements calculates the moving average of input values  |
+| [GROUP_ARRAY_MOVING_SUM](aggregate-group-array-moving-sum.md) | Returns an array with elements calculates the moving sum of input values  |
 | [KURTOSIS](aggregate-kurtosis.md)                           | Calculates the excess kurtosis of a set of values                         | 
 | [MAX_IF](aggregate-max-if.md)                               | Finds the maximum value for rows meeting a condition                      | 
 | [MAX](aggregate-max.md)                                     | Finds the largest value in a specific column                              | 
