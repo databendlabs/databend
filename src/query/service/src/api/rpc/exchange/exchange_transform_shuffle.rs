@@ -117,8 +117,7 @@ impl OutputsBuffer {
     }
 
     pub fn is_fill(&self, index: usize) -> bool {
-        // self.inner[index].blocks.len() == self.capacity
-        false
+        self.inner[index].blocks.len() == self.capacity
     }
 
     pub fn pop(&mut self, index: usize) -> Option<DataBlock> {
@@ -182,6 +181,10 @@ impl Processor for ExchangeShuffleTransform {
     fn event(&mut self) -> Result<Event> {
         loop {
             if !self.try_push_outputs() {
+                for input in &self.inputs {
+                    input.set_need_data();
+                }
+
                 return Ok(Event::NeedConsume);
             }
 

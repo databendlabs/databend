@@ -205,24 +205,16 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
         if !write_data.is_empty() {
             let instant = Instant::now();
 
-            let write_data = write_data
-                .into_iter()
-                .flat_map(|nested| nested.into_iter().flatten())
-                .collect::<Vec<_>>();
+            let mut write_bytes = 0;
+            let mut writer = operator.writer(&location).await?;
+            for write_bucket_data in write_data.into_iter() {
+                for data in write_bucket_data.into_iter() {
+                    write_bytes += data.len();
+                    writer.write(data).await?;
+                }
+            }
 
-            let write_bytes = write_data.len();
-            operator.write(&location, write_data).await?;
-
-            // let mut write_bytes = 0;
-            // let mut writer = operator.writer(&location).await?;
-            // for write_bucket_data in write_data.into_iter() {
-            //     for data in write_bucket_data.into_iter() {
-            //         write_bytes += data.len();
-            //         writer.write(data).await?;
-            //     }
-            // }
-            //
-            // writer.close().await?;
+            writer.close().await?;
 
             // perf
             {

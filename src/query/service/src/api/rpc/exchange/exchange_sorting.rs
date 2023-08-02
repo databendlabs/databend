@@ -83,10 +83,6 @@ impl Processor for TransformExchangeSorting {
             return Ok(Event::Finished);
         }
 
-        if !self.output.can_push() {
-            return Ok(Event::NeedConsume);
-        }
-
         let mut unready_inputs = false;
         let mut all_inputs_finished = true;
         for (index, input) in self.inputs.iter().enumerate() {
@@ -107,6 +103,10 @@ impl Processor for TransformExchangeSorting {
 
                 unready_inputs = true;
             }
+        }
+
+        if !self.output.can_push() {
+            return Ok(Event::NeedConsume);
         }
 
         if all_inputs_finished && self.buffer_len == 0 {
