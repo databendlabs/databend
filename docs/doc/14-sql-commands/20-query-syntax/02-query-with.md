@@ -78,7 +78,7 @@ JOIN customer_orders co2 ON co1.customer_id = co2.customer_id
 WHERE co1.order_count > 2
   AND co2.order_count > 5;
 ```
-This can significantly improve performance for complex CTEs or situations where the CTE's result is used multiple times. However, as the CTE is no longer inlined, the query optimizer may find it difficult to push the CTE's conditions into the main query or optimize the join order, potentially leading to decreased overall query performance.
+This can significantly improve performance for situations where the CTE's result is used multiple times. However, as the CTE is no longer inlined, the query optimizer may find it difficult to push the CTE's conditions into the main query or optimize the join order, potentially leading to decreased overall query performance.
 
   </TabItem>
 </Tabs>
