@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
@@ -68,7 +67,6 @@ pub struct HttpQueryRequest {
     #[serde(default = "default_as_true")]
     pub string_fields: bool,
     pub stage_attachment: Option<StageAttachmentConf>,
-    pub headers: HashMap<String, String>,
 }
 
 impl Debug for HttpQueryRequest {
@@ -80,7 +78,6 @@ impl Debug for HttpQueryRequest {
             .field("pagination", &self.pagination)
             .field("string_fields", &self.string_fields)
             .field("stage_attachment", &self.stage_attachment)
-            .field("headers", &self.headers)
             .finish()
     }
 }
@@ -278,10 +275,14 @@ impl HttpQuery {
         };
 
         let deduplicate_label = &ctx.deduplicate_label;
+        let user_agent = &ctx.user_agent;
         let ctx = session.create_query_context().await?;
 
         if let Some(label) = deduplicate_label {
             ctx.get_settings().set_deduplicate_label(label.clone())?;
+        }
+        if let Some(ua) = user_agent {
+            ctx.set_ua(ua.clone());
         }
 
         let session_id = session.get_id().clone();
@@ -297,13 +298,6 @@ impl HttpQuery {
             }),
             None => {}
         };
-
-        let user_agent = request
-            .headers
-            .get("User-Agent")
-            .cloned()
-            .unwrap_or_default();
-        ctx.set_ua(user_agent.to_string());
 
         let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
         let start_time = Instant::now();
