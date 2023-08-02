@@ -112,6 +112,7 @@ impl Binder {
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
                         aliases,
+                        self.m_cte_bound_ctx.clone(),
                     );
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
 
@@ -264,6 +265,7 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            self.m_cte_bound_ctx.clone(),
         );
         let mut order_by_items = Vec::with_capacity(order_by.len());
         for order in order_by.iter() {

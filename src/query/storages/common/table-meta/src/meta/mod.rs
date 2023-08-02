@@ -13,11 +13,11 @@
 // limitations under the License.
 
 #![allow(clippy::too_many_arguments)]
-mod statistics;
 
 mod compression;
 mod current;
 mod format;
+mod statistics;
 mod utils;
 mod v0;
 mod v1;
@@ -32,14 +32,7 @@ pub use current::*;
 pub(crate) use format::load_json;
 pub(crate) use format::MetaCompression;
 pub(crate) use format::MetaEncoding;
-pub use statistics::ClusterKey;
-pub use statistics::ClusterStatistics;
-pub use statistics::ColumnStatistics;
-pub use statistics::FormatVersion;
-pub use statistics::Location;
-pub use statistics::SnapshotId;
-pub use statistics::Statistics;
-pub use statistics::StatisticsOfColumns;
+pub use statistics::*;
 // export legacy versioned table meta types locally,
 // currently, used by versioned readers only
 pub(crate) use testing::*;
