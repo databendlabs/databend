@@ -123,7 +123,7 @@ pub struct BindContext {
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
 
-    pub ctes_map: Box<HashMap<String, CteInfo>>,
+    pub ctes_map: Box<Vec<(String, CteInfo)>>,
 
     pub materialized_ctes: HashSet<(IndexType, SExpr)>,
 
