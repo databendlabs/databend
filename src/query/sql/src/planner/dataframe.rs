@@ -281,9 +281,23 @@ impl Dataframe {
         Ok(self)
     }
 
-    pub async fn distinct(mut self, columns: &[&str]) -> Result<Self> {
+    pub async fn distinct_col(self, columns: &[&str]) -> Result<Self> {
         let select_list = parse_cols(self.bind_context.output_schema(), columns)?;
+        self.distinct_target(select_list).await
+    }
 
+    pub async fn distinct(self, select_list: Vec<Expr>) -> Result<Self> {
+        let select_list: Vec<SelectTarget> = select_list
+            .into_iter()
+            .map(|expr| SelectTarget::AliasedExpr {
+                expr: Box::new(expr),
+                alias: None,
+            })
+            .collect();
+        self.distinct_target(select_list).await
+    }
+
+    pub async fn distinct_target(mut self, select_list: Vec<SelectTarget>) -> Result<Self> {
         let mut select_list = self
             .binder
             .normalize_select_list(&mut self.bind_context, select_list.as_slice())
@@ -319,14 +333,38 @@ impl Dataframe {
         Ok(self)
     }
 
-    pub async fn sort(
-        mut self,
+    pub async fn sort_column(
+        self,
         columns: &[&str],
         order_by: Vec<(Expr, Option<bool>, Option<bool>)>,
         distinct: bool,
     ) -> Result<Self> {
         let select_list = parse_cols(self.bind_context.output_schema(), columns)?;
+        self.sort_target(select_list, order_by, distinct).await
+    }
 
+    pub async fn sort(
+        self,
+        select_list: Vec<Expr>,
+        order_by: Vec<(Expr, Option<bool>, Option<bool>)>,
+        distinct: bool,
+    ) -> Result<Self> {
+        let select_list: Vec<SelectTarget> = select_list
+            .into_iter()
+            .map(|expr| SelectTarget::AliasedExpr {
+                expr: Box::new(expr),
+                alias: None,
+            })
+            .collect();
+        self.sort_target(select_list, order_by, distinct).await
+    }
+
+    pub async fn sort_target(
+        mut self,
+        select_list: Vec<SelectTarget>,
+        order_by: Vec<(Expr, Option<bool>, Option<bool>)>,
+        distinct: bool,
+    ) -> Result<Self> {
         let mut order = vec![];
         for (expr, asc, nulls_first) in order_by {
             order.push(OrderByExpr {

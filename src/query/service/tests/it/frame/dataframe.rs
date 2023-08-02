@@ -105,7 +105,7 @@ async fn test_dataframe() -> Result<()> {
         let df = Dataframe::scan(query_ctx.clone(), Some("system"), "engines")
             .await
             .unwrap()
-            .sort(
+            .sort_column(
                 &["Engine"],
                 vec![(
                     Expr::ColumnRef {
@@ -125,7 +125,39 @@ async fn test_dataframe() -> Result<()> {
             .await
             .unwrap();
 
+        let df2 = Dataframe::scan(query_ctx.clone(), Some("system"), "engines")
+            .await
+            .unwrap()
+            .sort(
+                vec![Expr::ColumnRef {
+                    span: None,
+                    database: Some(Identifier::from_name("system")),
+                    table: Some(Identifier::from_name("engines")),
+                    column: ColumnID::Name(Identifier {
+                        name: "Engine".to_string(),
+                        quote: Some('`'),
+                        span: None,
+                    }),
+                }],
+                vec![(
+                    Expr::ColumnRef {
+                        span: None,
+                        database: None,
+                        table: None,
+                        column: ColumnID::Name(Identifier::from_name_with_quoted(
+                            "Engine",
+                            Some('`'),
+                        )),
+                    },
+                    Some(true),
+                    Some(false),
+                )],
+                false,
+            )
+            .await
+            .unwrap();
         test_case(sql, df, fixture.ctx()).await?;
+        test_case(sql, df2, fixture.ctx()).await?;
     }
 
     // filter
@@ -203,11 +235,27 @@ async fn test_dataframe() -> Result<()> {
         let df = Dataframe::scan(query_ctx.clone(), Some("system"), "engines")
             .await
             .unwrap()
-            .distinct(&["Engine"])
+            .distinct_col(&["Engine"])
             .await
             .unwrap();
 
+        let df2 = Dataframe::scan(query_ctx.clone(), Some("system"), "engines")
+            .await
+            .unwrap()
+            .distinct(vec![Expr::ColumnRef {
+                span: None,
+                database: Some(Identifier::from_name("system")),
+                table: Some(Identifier::from_name("engines")),
+                column: ColumnID::Name(Identifier {
+                    name: "Engine".to_string(),
+                    quote: Some('`'),
+                    span: None,
+                }),
+            }])
+            .await
+            .unwrap();
         test_case(sql, df, fixture.ctx()).await?;
+        test_case(sql, df2, fixture.ctx()).await?;
     }
 
     // union
