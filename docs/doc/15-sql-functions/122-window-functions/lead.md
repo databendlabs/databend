@@ -17,6 +17,7 @@ LEAD(expression [, offset [, default]]) OVER (PARTITION BY partition_expression 
 ```
 
 - *offset*: Specifies the number of rows ahead (LEAD) or behind (LAG) the current row within the partition to retrieve the value from. Defaults to 1.
+> Note that setting a negative offset has the same effect as using the [LAG](lag.md) function.
 
 - *default*: Specifies a value to be returned if the LEAD or LAG function encounters a situation where there is no value available due to the offset exceeding the partition's boundaries. Defaults to NULL.
 
