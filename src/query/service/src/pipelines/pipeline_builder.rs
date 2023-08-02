@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -142,7 +143,8 @@ pub struct PipelineBuilder {
     // record the index of join build side pipeline in `pipelines`
     pub index: Option<usize>,
 
-    pub cte_state: Arc<MaterializedCteState>,
+    // Cte -> state, each cte has it's own state
+    pub cte_state: HashMap<IndexType, Arc<MaterializedCteState>>,
 
     enable_profiling: bool,
     proc_profs: SharedProcessorProfiles,
@@ -164,7 +166,7 @@ impl PipelineBuilder {
             proc_profs: prof_span_set,
             exchange_injector: DefaultExchangeInjector::create(),
             index: None,
-            cte_state: Arc::new(MaterializedCteState::new(ctx)),
+            cte_state: Default::default(),
         }
     }
 
@@ -603,7 +605,7 @@ impl PipelineBuilder {
                     self.ctx.clone(),
                     output,
                     cte_scan.cte_idx,
-                    self.cte_state.clone(),
+                    self.cte_state.get(&cte_scan.cte_idx.0).unwrap().clone(),
                     cte_scan.offsets.clone(),
                 )
             },
@@ -1589,7 +1591,6 @@ impl PipelineBuilder {
         self.expand_left_side_pipeline(
             &materialized_cte.left,
             materialized_cte.cte_idx,
-            self.cte_state.clone(),
             &materialized_cte.left_output_columns,
         )?;
         self.build_right_side_pipeline(&materialized_cte.right)
@@ -1599,10 +1600,11 @@ impl PipelineBuilder {
         &mut self,
         left_side: &PhysicalPlan,
         cte_idx: IndexType,
-        state: Arc<MaterializedCteState>,
         left_output_columns: &[ColumnBinding],
     ) -> Result<()> {
         let left_side_ctx = QueryContext::create_from(self.ctx.clone());
+        let state = Arc::new(MaterializedCteState::new(self.ctx.clone()));
+        self.cte_state.insert(cte_idx, state.clone());
         let mut left_side_builder = PipelineBuilder::create(
             left_side_ctx,
             self.enable_profiling,
