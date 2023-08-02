@@ -33,6 +33,7 @@ use crate::parquet_part::ParquetRowGroupPart;
 use crate::ParquetPart;
 
 pub trait BlockIterator: Iterator<Item = Result<DataBlock>> + Send {
+    /// checking has_next() after next can avoid processor from entering SYNC for nothing.
     fn has_next(&self) -> bool;
 }
 

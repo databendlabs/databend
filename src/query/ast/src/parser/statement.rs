@@ -1989,6 +1989,13 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
         },
     );
 
+    let unset_mask_policy = map(
+        rule! {
+            #ident ~ UNSET ~ MASKING ~ POLICY
+        },
+        |(column, _, _, _)| ModifyColumnAction::UnsetMaskingPolicy(column),
+    );
+
     let convert_stored_computed_column = map(
         rule! {
             #ident ~ DROP ~ STORED
@@ -2011,6 +2018,7 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
 
     rule!(
         #set_mask_policy
+        | #unset_mask_policy
         | #convert_stored_computed_column
         | #modify_column_type
     )(i)
