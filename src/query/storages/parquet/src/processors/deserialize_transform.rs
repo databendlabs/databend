@@ -304,6 +304,7 @@ impl ParquetDeserializeTransform {
                 }
             }
             None => {
+                // for now only use current_row_group when prewhere_info is None
                 let chunks = self.remain_reader.read_from_readers(readers)?;
                 let mut current_row_group =
                     self.remain_reader
@@ -393,14 +394,7 @@ impl Processor for ParquetDeserializeTransform {
                 }
                 (ParquetPart::SmallFiles(p), ParquetPartData::SmallFiles(buffers)) => {
                     let blocks = self.process_small_files(p, buffers)?;
-                    if !blocks.is_empty() {
-                        let block = if blocks.len() > 1 {
-                            DataBlock::concat(&blocks)?
-                        } else {
-                            blocks[0].clone()
-                        };
-                        self.add_block(block)?;
-                    }
+                    self.add_block(DataBlock::concat(&blocks)?)?;
                 }
                 _ => {
                     unreachable!("wrong type ParquetPartData for ParquetPart")
