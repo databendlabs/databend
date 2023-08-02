@@ -39,15 +39,15 @@ ORDER  BY customername;
 
 When using a CTE in a query, you can control whether the CTE is inline or materialized by using the MATERIALIZED keyword. Inlining means the CTE's definition is directly embedded within the main query, while materializing the CTE means calculating its result once and storing it in memory, reducing repetitive CTE execution.
 
-Suppose we have a table called *orders*, storing customer order information, including order number, customer ID, and order date. Now, we want to count the total number of orders for each customer and display only those customers with more than two orders.
+Suppose we have a table called *orders*, storing customer order information, including order number, customer ID, and order date.
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 <Tabs>
-  <TabItem value="inline" label="Inline" default>
+  <TabItem value="Inline" label="Inline" default>
 
-In this query, the CTE customer_orders will be inlined during query execution. Databend will directly embed the definition of customer_orders within the main query to create a single execution plan.
+In this query, the CTE *customer_orders* will be inlined during query execution. Databend will directly embed the definition of *customer_orders* within the main query to create a single execution plan.
 
 ```sql
 WITH customer_orders AS (
@@ -55,14 +55,16 @@ WITH customer_orders AS (
     FROM orders
     GROUP BY customer_id
 )
-SELECT customer_id
-FROM customer_orders
-WHERE order_count > 2;
+SELECT co1.customer_id, co1.order_count, co2.order_count AS other_order_count
+FROM customer_orders co1
+JOIN customer_orders co2 ON co1.customer_id = co2.customer_id
+WHERE co1.order_count > 2
+  AND co2.order_count > 5;
 ```
   </TabItem>
-  <TabItem value="MATERIALIZED" label="MATERIALIZED">
+  <TabItem value="Materialized" label="Materialized">
 
-In this case, we use the MATERIALIZED keyword, which means the CTE customer_orders will not be inlined. Instead, the CTE's result will be calculated and stored in memory during the CTE definition's execution. Later, when executing the main query, Databend will directly retrieve the pre-computed result from memory. If a query uses a CTE more than once, this also helps avoid the overhead of repeatedly executing the CTE.
+In this case, we use the MATERIALIZED keyword, which means the CTE *customer_orders* will not be inlined. Instead, the CTE's result will be calculated and stored in memory during the CTE definition's execution. When executing both instances of the CTE within the main query, Databend will directly retrieve the result from memory, avoiding redundant calculations and potentially improving performance.
 
 ```sql
 WITH customer_orders AS MATERIALIZED (
@@ -70,11 +72,13 @@ WITH customer_orders AS MATERIALIZED (
     FROM orders
     GROUP BY customer_id
 )
-SELECT customer_id
-FROM customer_orders
-WHERE order_count > 2;
+SELECT co1.customer_id, co1.order_count, co2.order_count AS other_order_count
+FROM customer_orders co1
+JOIN customer_orders co2 ON co1.customer_id = co2.customer_id
+WHERE co1.order_count > 2
+  AND co2.order_count > 5;
 ```
-This can significantly improve performance for complex CTEs or situations where the CTE's result is used multiple times. However, as the CTE is no longer inlined, the query optimizer may find it difficult to push the CTE's conditions into the main query or optimize the join order, potentially leading to decreased overall query performance. 
+This can significantly improve performance for complex CTEs or situations where the CTE's result is used multiple times. However, as the CTE is no longer inlined, the query optimizer may find it difficult to push the CTE's conditions into the main query or optimize the join order, potentially leading to decreased overall query performance.
 
   </TabItem>
 </Tabs>
