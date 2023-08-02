@@ -90,7 +90,6 @@ impl Processor for TransformExchangeSorting {
                 continue;
             }
 
-            input.set_need_data();
             all_inputs_finished = false;
             if self.buffer[index].is_none() {
                 if input.has_data() {
@@ -98,11 +97,14 @@ impl Processor for TransformExchangeSorting {
                     let block_number = self.sorting.block_number(&data_block)?;
                     self.buffer[index] = Some((block_number, data_block));
                     self.buffer_len += 1;
+                    input.set_need_data();
                     continue;
                 }
 
                 unready_inputs = true;
             }
+
+            input.set_need_data();
         }
 
         if !self.output.can_push() {
