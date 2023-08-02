@@ -335,7 +335,7 @@ impl HttpQuery {
                     ctx_clone.clone(),
                     block_sender,
                 )
-                    .await
+                .await
                 {
                     InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone());
                     let state = ExecuteStopped {
@@ -437,7 +437,7 @@ impl HttpQuery {
             Err(ErrorCode::AbortedQuery("killed by http")),
             true,
         )
-            .await;
+        .await;
     }
 
     #[async_backtrace::framed]
@@ -450,10 +450,10 @@ impl HttpQuery {
     pub async fn update_expire_time(&self, before_wait: bool) {
         let duration = Duration::from_secs(self.config.result_timeout_secs)
             + if before_wait {
-            Duration::from_secs(self.request.pagination.wait_time_secs as u64)
-        } else {
-            Duration::new(0, 0)
-        };
+                Duration::from_secs(self.request.pagination.wait_time_secs as u64)
+            } else {
+                Duration::new(0, 0)
+            };
         let deadline = Instant::now() + duration;
         let mut t = self.expire_state.lock().await;
         *t = ExpireState::ExpireAt(deadline);
