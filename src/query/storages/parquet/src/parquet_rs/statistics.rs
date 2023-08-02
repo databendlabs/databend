@@ -76,7 +76,7 @@ pub fn collect_row_group_stats(
     Ok(stats)
 }
 
-/// according to https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#json
+/// according to https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
 fn convert_column_statistics(s: &Statistics, typ: DataType) -> ColumnStatistics {
     let (max, min) = if s.has_min_max_set() {
         match s {

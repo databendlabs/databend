@@ -30,6 +30,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
 use parking_lot::RwLock;
 
 use crate::optimizer::optimize;
@@ -43,7 +44,6 @@ use crate::Binder;
 use crate::Metadata;
 use crate::NameResolutionContext;
 
-#[allow(dead_code)]
 pub struct Dataframe {
     query_ctx: Arc<dyn TableContext>,
     binder: Binder,
@@ -51,7 +51,6 @@ pub struct Dataframe {
     s_expr: SExpr,
 }
 
-#[allow(dead_code)]
 impl Dataframe {
     pub async fn scan(
         query_ctx: Arc<dyn TableContext>,
@@ -120,27 +119,7 @@ impl Dataframe {
 
     pub async fn select_columns(self, columns: &[&str]) -> Result<Self> {
         let schema = self.bind_context.output_schema();
-        for column in columns {
-            if schema.field_with_name(column).is_err() {
-                return Err(ErrorCode::UnknownColumn(format!(
-                    "Unknown column: '{}'",
-                    column
-                )));
-            }
-        }
-
-        let select_list: Vec<SelectTarget> = columns
-            .iter()
-            .map(|c| SelectTarget::AliasedExpr {
-                expr: Box::new(Expr::ColumnRef {
-                    span: None,
-                    database: None,
-                    table: None,
-                    column: ColumnID::Name(Identifier::from_name(*c)),
-                }),
-                alias: None,
-            })
-            .collect();
+        let select_list = parse_cols(schema, columns)?;
 
         self.select_targets(&select_list).await
     }
@@ -169,12 +148,14 @@ impl Dataframe {
             .analyze_projection(&bind_context.aggregate_info, &select_list)?;
 
         self.s_expr = self.binder.bind_projection(
-            bind_context,
+            &mut self.bind_context,
             &projections,
             &scalar_items,
-            self.s_expr.clone(),
+            self.s_expr,
         )?;
-        self.s_expr = bind_context.add_internal_column_into_expr(self.s_expr.clone());
+        self.s_expr = self
+            .bind_context
+            .add_internal_column_into_expr(self.s_expr.clone());
 
         Ok(self)
     }
@@ -188,13 +169,56 @@ impl Dataframe {
         Ok(self)
     }
 
+    pub async fn count(mut self) -> Result<Self> {
+        let select_list = [SelectTarget::AliasedExpr {
+            expr: Box::new(Expr::FunctionCall {
+                span: None,
+                distinct: false,
+                name: Identifier::from_name("count"),
+                args: vec![],
+                params: vec![],
+                window: None,
+                lambda: None,
+            }),
+            alias: None,
+        }];
+
+        let mut select_list = self
+            .binder
+            .normalize_select_list(&mut self.bind_context, &select_list)
+            .await?;
+
+        self.binder
+            .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
+
+        let (scalar_items, projections) = self
+            .binder
+            .analyze_projection(&self.bind_context.aggregate_info, &select_list)?;
+
+        self.s_expr = self
+            .binder
+            .bind_aggregate(&mut self.bind_context, self.s_expr)
+            .await?;
+
+        self.s_expr = self.binder.bind_projection(
+            &mut self.bind_context,
+            &projections,
+            &scalar_items,
+            self.s_expr,
+        )?;
+        self.s_expr = self
+            .bind_context
+            .add_internal_column_into_expr(self.s_expr.clone());
+        Ok(self)
+    }
+
     pub async fn aggregate(
         mut self,
-        groupby: Vec<Expr>,
-        select_list: Vec<Expr>,
+        groupby: GroupBy,
+        aggr_expr: Vec<Expr>,
         having: Option<Expr>,
     ) -> Result<Self> {
-        let select_list: Vec<SelectTarget> = select_list
+        let select_list: Vec<SelectTarget> = aggr_expr
             .into_iter()
             .map(|expr| SelectTarget::AliasedExpr {
                 expr: Box::new(expr),
@@ -213,15 +237,9 @@ impl Dataframe {
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
 
-        if !groupby.is_empty() {
-            self.binder
-                .analyze_group_items(
-                    &mut self.bind_context,
-                    &select_list,
-                    &GroupBy::Normal(groupby),
-                )
-                .await?;
-        }
+        self.binder
+            .analyze_group_items(&mut self.bind_context, &select_list, &groupby)
+            .await?;
 
         if !self
             .bind_context
@@ -235,24 +253,22 @@ impl Dataframe {
                 .bind_aggregate(&mut self.bind_context, self.s_expr)
                 .await?;
         }
-        let having = if let Some(having) = &having {
-            Some(
-                self.binder
-                    .analyze_aggregate_having(&mut self.bind_context, &aliases, having)
-                    .await?,
-            )
-        } else {
-            None
-        };
-        if let Some((having, _)) = having {
+
+        if let Some(having) = &having {
+            let (having, _) = self
+                .binder
+                .analyze_aggregate_having(&mut self.bind_context, &aliases, having)
+                .await?;
             self.s_expr = self
                 .binder
                 .bind_having(&mut self.bind_context, having, None, self.s_expr)
                 .await?;
         }
+
         let (scalar_items, projections) = self
             .binder
             .analyze_projection(&self.bind_context.aggregate_info, &select_list)?;
+
         self.s_expr = self.binder.bind_projection(
             &mut self.bind_context,
             &projections,
@@ -265,7 +281,12 @@ impl Dataframe {
         Ok(self)
     }
 
-    pub async fn distinct(mut self, select_list: Vec<Expr>) -> Result<Self> {
+    pub async fn distinct_col(self, columns: &[&str]) -> Result<Self> {
+        let select_list = parse_cols(self.bind_context.output_schema(), columns)?;
+        self.distinct_target(select_list).await
+    }
+
+    pub async fn distinct(self, select_list: Vec<Expr>) -> Result<Self> {
         let select_list: Vec<SelectTarget> = select_list
             .into_iter()
             .map(|expr| SelectTarget::AliasedExpr {
@@ -273,7 +294,10 @@ impl Dataframe {
                 alias: None,
             })
             .collect();
+        self.distinct_target(select_list).await
+    }
 
+    pub async fn distinct_target(mut self, select_list: Vec<SelectTarget>) -> Result<Self> {
         let mut select_list = self
             .binder
             .normalize_select_list(&mut self.bind_context, select_list.as_slice())
@@ -290,7 +314,6 @@ impl Dataframe {
             &mut scalar_items,
             self.s_expr.clone(),
         )?;
-
         self.s_expr = self.binder.bind_projection(
             &mut self.bind_context,
             &projections,
@@ -310,10 +333,20 @@ impl Dataframe {
         Ok(self)
     }
 
+    pub async fn sort_column(
+        self,
+        columns: &[&str],
+        order_by: Vec<(Expr, Option<bool>, Option<bool>)>,
+        distinct: bool,
+    ) -> Result<Self> {
+        let select_list = parse_cols(self.bind_context.output_schema(), columns)?;
+        self.sort_target(select_list, order_by, distinct).await
+    }
+
     pub async fn sort(
-        mut self,
+        self,
         select_list: Vec<Expr>,
-        order_by: &[OrderByExpr],
+        order_by: Vec<(Expr, Option<bool>, Option<bool>)>,
         distinct: bool,
     ) -> Result<Self> {
         let select_list: Vec<SelectTarget> = select_list
@@ -323,7 +356,23 @@ impl Dataframe {
                 alias: None,
             })
             .collect();
+        self.sort_target(select_list, order_by, distinct).await
+    }
 
+    pub async fn sort_target(
+        mut self,
+        select_list: Vec<SelectTarget>,
+        order_by: Vec<(Expr, Option<bool>, Option<bool>)>,
+        distinct: bool,
+    ) -> Result<Self> {
+        let mut order = vec![];
+        for (expr, asc, nulls_first) in order_by {
+            order.push(OrderByExpr {
+                expr,
+                asc,
+                nulls_first,
+            });
+        }
         let select_list = self
             .binder
             .normalize_select_list(&mut self.bind_context, select_list.as_slice())
@@ -343,7 +392,7 @@ impl Dataframe {
                 &mut scalar_items,
                 &aliases,
                 &projections,
-                order_by,
+                &order,
                 distinct,
             )
             .await?;
@@ -441,6 +490,7 @@ impl Dataframe {
         self.bind_context = ctx;
         Ok(self)
     }
+
     pub async fn union(mut self, dataframe: Dataframe) -> Result<Self> {
         let (s_expr, bind_context) = self.binder.bind_union(
             None,
@@ -493,4 +543,28 @@ impl Dataframe {
         }));
         optimize(self.query_ctx, opt_ctx, plan)
     }
+}
+
+fn parse_cols(schema: DataSchemaRef, columns: &[&str]) -> Result<Vec<SelectTarget>> {
+    for column in columns {
+        if schema.field_with_name(column).is_err() {
+            return Err(ErrorCode::UnknownColumn(format!(
+                "Unknown column: '{}'",
+                column
+            )));
+        }
+    }
+
+    Ok(columns
+        .iter()
+        .map(|c| SelectTarget::AliasedExpr {
+            expr: Box::new(Expr::ColumnRef {
+                span: None,
+                database: None,
+                table: None,
+                column: ColumnID::Name(Identifier::from_name_with_quoted(*c, Some('`'))),
+            }),
+            alias: None,
+        })
+        .collect())
 }
