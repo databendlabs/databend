@@ -27,3 +27,10 @@ message DatamaskMeta {
   string create_on = 5;
   optional string update_on = 6;
 }
+
+message MaskpolicyTableIdList {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  repeated uint64 ids = 1;
+}

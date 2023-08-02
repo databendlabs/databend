@@ -3,6 +3,8 @@ const bytes = require('bytes');
 // Define constant
 const LINUX_GENERIC_X86 = 'Linux Generic (x86, 64-bit)';
 const LINUX_GENERIC_ARM = 'Linux Generic (ARM, 64-bit)';
+const LINUX_UBUNTU_X86 = 'Ubuntu (x86, 64-bit)';
+const LINUX_UBUNTU_ARM = 'Ubuntu (ARM, 64-bit)';
 const MAC_X86 = 'Mac Intel Chip (x86, 64-bit)';
 const MAC_ARM = 'Mac Apple Chip (ARM, 64-bit)';
 const GITHUB_DOWNLOAD = 'https://github.com/datafuselabs/databend/releases/download';
@@ -39,15 +41,18 @@ module.exports = function fetchDatabendReleasesPlugin() {
             .map(asset => {
               const isApple = asset.name.includes('apple');
               const isAarch64 = asset.name.includes('aarch64');
+              const isUbuntu = asset.name.includes('linux-gnu');
               const osTypeDesc = isApple
                 ? (isAarch64 ? MAC_ARM : MAC_X86)
-                : (isAarch64 ? LINUX_GENERIC_ARM : LINUX_GENERIC_X86);
+                : (isAarch64 ? (isUbuntu ? LINUX_UBUNTU_ARM : LINUX_GENERIC_ARM) : (isUbuntu ?  LINUX_UBUNTU_X86 :  LINUX_GENERIC_X86));
               return {
                 ...asset,
                 isApple,
+                isUbuntu,
                 osTypeDesc
               }
             })
+            .sort((systemLinux, systemMac) => systemMac.isUbuntu - systemLinux.isUbuntu)
             .sort((systemLinux, systemMac) => systemMac.isApple - systemLinux.isApple)
             .map(asset => {
               return {
@@ -77,7 +82,9 @@ module.exports = function fetchDatabendReleasesPlugin() {
           `databend-${tag_name}-aarch64-apple-darwin.tar.gz`,
           `databend-${tag_name}-x86_64-apple-darwin.tar.gz`,
           `databend-${tag_name}-aarch64-unknown-linux-musl.tar.gz`,
-          `databend-${tag_name}-x86_64-unknown-linux-gnu.tar.gz`
+          `databend-${tag_name}-x86_64-unknown-linux-gnu.tar.gz`,
+          `databend-${tag_name}-aarch64-unknown-linux-gnu.tar.gz`,
+          `databend-${tag_name}-x86_64-unknown-linux-musl.tar.gz`
         ];
         const filteredAssets = assets?.filter(item => {
           return namesDisplayList?.includes(item?.name);

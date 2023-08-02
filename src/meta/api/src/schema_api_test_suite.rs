@@ -24,6 +24,11 @@ use common_expression::types::NumberDataType;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
+use common_meta_app::data_mask::CreateDatamaskReq;
+use common_meta_app::data_mask::DatamaskNameIdent;
+use common_meta_app::data_mask::DropDatamaskReq;
+use common_meta_app::data_mask::MaskpolicyTableIdList;
+use common_meta_app::data_mask::MaskpolicyTableIdListKey;
 use common_meta_app::schema::CatalogMeta;
 use common_meta_app::schema::CatalogNameIdent;
 use common_meta_app::schema::CatalogOption;
@@ -70,6 +75,8 @@ use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyAction;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableId;
@@ -111,6 +118,7 @@ use crate::is_all_db_data_removed;
 use crate::kv_app_error::KVAppError;
 use crate::serialize_struct;
 use crate::testing::get_kv_data;
+use crate::DatamaskApi;
 use crate::SchemaApi;
 use crate::ShareApi;
 
@@ -241,7 +249,7 @@ impl SchemaApiTestSuite {
     pub async fn test_single_node<B, MT>(b: B) -> anyhow::Result<()>
     where
         B: kvapi::ApiBuilder<MT>,
-        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi + DatamaskApi,
     {
         let suite = SchemaApiTestSuite {};
 
@@ -266,6 +274,7 @@ impl SchemaApiTestSuite {
         suite.table_create_get_drop(&b.build().await).await?;
         suite.table_rename(&b.build().await).await?;
         suite.table_update_meta(&b.build().await).await?;
+        suite.table_update_mask_policy(&b.build().await).await?;
         suite.table_upsert_option(&b.build().await).await?;
         suite.table_list(&b.build().await).await?;
         suite.table_list_all(&b.build().await).await?;
@@ -2165,6 +2174,334 @@ impl SchemaApiTestSuite {
                 assert_eq!(ErrorCode::DuplicatedUpsertFiles("").code(), err.code());
             }
         }
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn table_update_mask_policy<
+        MT: SchemaApi + DatamaskApi + kvapi::AsKVApi<Error = MetaError>,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name_1 = "tb1";
+        let tbl_name_2 = "tb2";
+        let mask_name_1 = "mask1";
+        let mask_name_2 = "mask2";
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]))
+        };
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: Default::default(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            info!("create database res: {:?}", res);
+
+            assert_eq!(1, res.db_id, "first database id is 1");
+        }
+
+        let created_on = Utc::now();
+        info!("--- create table");
+        {
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_1.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+            let _res = mt.create_table(req.clone()).await?;
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_2.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+            let _res = mt.create_table(req.clone()).await?;
+        }
+
+        info!("--- create mask policy");
+        {
+            let req = CreateDatamaskReq {
+                if_not_exists: true,
+                name: DatamaskNameIdent {
+                    tenant: tenant.to_string(),
+                    name: mask_name_1.to_string(),
+                },
+                args: vec![],
+                return_type: "".to_string(),
+                body: "".to_string(),
+                comment: None,
+                create_on: created_on,
+            };
+            mt.create_data_mask(req).await?;
+
+            let req = CreateDatamaskReq {
+                if_not_exists: true,
+                name: DatamaskNameIdent {
+                    tenant: tenant.to_string(),
+                    name: mask_name_2.to_string(),
+                },
+                args: vec![],
+                return_type: "".to_string(),
+                body: "".to_string(),
+                comment: None,
+                create_on: created_on,
+            };
+            mt.create_data_mask(req).await?;
+        }
+
+        let table_id_1;
+        info!("--- apply mask1 policy to table 1 and check");
+        {
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_1.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+            let table_id = res.ident.table_id;
+            table_id_1 = table_id;
+
+            let req = SetTableColumnMaskPolicyReq {
+                tenant: tenant.to_string(),
+                seq: MatchSeq::Exact(res.ident.seq),
+                table_id,
+                column: "number".to_string(),
+                action: SetTableColumnMaskPolicyAction::Set(mask_name_1.to_string(), None),
+            };
+            let _ = mt.set_table_column_mask_policy(req).await?;
+            // check table meta
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_1.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+            let mut expect_column_mask_policy = BTreeMap::new();
+            expect_column_mask_policy.insert("number".to_string(), mask_name_1.to_string());
+            assert_eq!(res.meta.column_mask_policy, Some(expect_column_mask_policy));
+            // check mask policy id list
+            let id_list_key = MaskpolicyTableIdListKey {
+                tenant: tenant.to_string(),
+                name: mask_name_1.to_string(),
+            };
+            let id_list: MaskpolicyTableIdList = get_kv_data(mt.as_kv_api(), &id_list_key).await?;
+            let mut expect_id_list = BTreeSet::new();
+            expect_id_list.insert(table_id);
+            assert_eq!(id_list.id_list, expect_id_list);
+        }
+
+        let table_id_2;
+        info!("--- apply mask1 policy to table 2 and check");
+        {
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_2.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+            let table_id = res.ident.table_id;
+            table_id_2 = table_id;
+
+            let req = SetTableColumnMaskPolicyReq {
+                tenant: tenant.to_string(),
+                seq: MatchSeq::Exact(res.ident.seq),
+                table_id,
+                column: "number".to_string(),
+                action: SetTableColumnMaskPolicyAction::Set(mask_name_1.to_string(), None),
+            };
+            let _ = mt.set_table_column_mask_policy(req).await?;
+            // check table meta
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_2.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+            let mut expect_column_mask_policy = BTreeMap::new();
+            expect_column_mask_policy.insert("number".to_string(), mask_name_1.to_string());
+            assert_eq!(res.meta.column_mask_policy, Some(expect_column_mask_policy));
+            // check mask policy id list
+            let id_list_key = MaskpolicyTableIdListKey {
+                tenant: tenant.to_string(),
+                name: mask_name_1.to_string(),
+            };
+            let id_list: MaskpolicyTableIdList = get_kv_data(mt.as_kv_api(), &id_list_key).await?;
+            let mut expect_id_list = BTreeSet::new();
+            expect_id_list.insert(table_id);
+            expect_id_list.insert(table_id_1);
+            assert_eq!(id_list.id_list, expect_id_list);
+        }
+
+        info!("--- apply mask2 policy to table 1 and check");
+        {
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_1.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+
+            let req = SetTableColumnMaskPolicyReq {
+                tenant: tenant.to_string(),
+                seq: MatchSeq::Exact(res.ident.seq),
+                table_id: table_id_1,
+                column: "number".to_string(),
+                action: SetTableColumnMaskPolicyAction::Set(
+                    mask_name_2.to_string(),
+                    Some(mask_name_1.to_string()),
+                ),
+            };
+            let _ = mt.set_table_column_mask_policy(req).await?;
+            // check table meta
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_1.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+            let mut expect_column_mask_policy = BTreeMap::new();
+            expect_column_mask_policy.insert("number".to_string(), mask_name_2.to_string());
+            assert_eq!(res.meta.column_mask_policy, Some(expect_column_mask_policy));
+            // check mask policy id list
+            let id_list_key = MaskpolicyTableIdListKey {
+                tenant: tenant.to_string(),
+                name: mask_name_1.to_string(),
+            };
+            let id_list: MaskpolicyTableIdList = get_kv_data(mt.as_kv_api(), &id_list_key).await?;
+            let mut expect_id_list = BTreeSet::new();
+            expect_id_list.insert(table_id_2);
+            assert_eq!(id_list.id_list, expect_id_list);
+
+            let id_list_key = MaskpolicyTableIdListKey {
+                tenant: tenant.to_string(),
+                name: mask_name_2.to_string(),
+            };
+            let id_list: MaskpolicyTableIdList = get_kv_data(mt.as_kv_api(), &id_list_key).await?;
+            let mut expect_id_list = BTreeSet::new();
+            expect_id_list.insert(table_id_1);
+            assert_eq!(id_list.id_list, expect_id_list);
+        }
+
+        info!("--- unset mask policy of table 1 and check");
+        {
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_1.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+
+            let req = SetTableColumnMaskPolicyReq {
+                tenant: tenant.to_string(),
+                seq: MatchSeq::Exact(res.ident.seq),
+                table_id: table_id_1,
+                column: "number".to_string(),
+                action: SetTableColumnMaskPolicyAction::Unset(mask_name_2.to_string()),
+            };
+            let _ = mt.set_table_column_mask_policy(req).await?;
+
+            // check table meta
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_1.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+            assert_eq!(res.meta.column_mask_policy, None);
+
+            // check mask policy id list
+            let id_list_key = MaskpolicyTableIdListKey {
+                tenant: tenant.to_string(),
+                name: mask_name_2.to_string(),
+            };
+            let id_list: MaskpolicyTableIdList = get_kv_data(mt.as_kv_api(), &id_list_key).await?;
+            let expect_id_list = BTreeSet::new();
+            assert_eq!(id_list.id_list, expect_id_list);
+        }
+
+        info!("--- drop mask policy check");
+        {
+            let req = DropDatamaskReq {
+                if_exists: true,
+                name: DatamaskNameIdent {
+                    tenant: tenant.to_string(),
+                    name: mask_name_1.to_string(),
+                },
+            };
+
+            mt.drop_data_mask(req).await?;
+
+            // check table meta
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_2.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+            assert_eq!(res.meta.column_mask_policy, None);
+
+            // check mask policy id list
+            let id_list_key = MaskpolicyTableIdListKey {
+                tenant: tenant.to_string(),
+                name: mask_name_1.to_string(),
+            };
+            let id_list: Result<MaskpolicyTableIdList, KVAppError> =
+                get_kv_data(mt.as_kv_api(), &id_list_key).await;
+            assert!(id_list.is_err())
+        }
+
         Ok(())
     }
 

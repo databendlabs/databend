@@ -117,15 +117,15 @@ impl<'a> ClusteringInformation<'a> {
                         if cluster_stats.cluster_key_id != default_cluster_key_id {
                             unclustered_block_count += 1;
                         } else {
-                            if cluster_stats.min.eq(&cluster_stats.max) {
+                            if cluster_stats.is_const() {
                                 constant_block_count += 1;
                             }
                             points_map
-                                .entry(cluster_stats.min.clone())
+                                .entry(cluster_stats.min())
                                 .and_modify(|v| v.0.push(index))
                                 .or_insert((vec![index], vec![]));
                             points_map
-                                .entry(cluster_stats.max.clone())
+                                .entry(cluster_stats.max())
                                 .and_modify(|v| v.1.push(index))
                                 .or_insert((vec![], vec![index]));
                             index += 1;

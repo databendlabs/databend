@@ -43,12 +43,14 @@ fn test_to_partitions() -> Result<()> {
     let num_of_col = 10;
     let num_of_block = 5;
 
-    let col_stats_gen = |col_size| ColumnStatistics {
-        min: Scalar::from(1i64),
-        max: Scalar::from(2i64),
-        null_count: 0,
-        in_memory_size: col_size as u64,
-        distinct_of_values: None,
+    let col_stats_gen = |col_size| {
+        ColumnStatistics::new(
+            Scalar::from(1i64),
+            Scalar::from(2i64),
+            0,
+            col_size as u64,
+            None,
+        )
     };
 
     let col_metas_gen = |col_size| {
