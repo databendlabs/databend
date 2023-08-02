@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -26,9 +27,12 @@ use crate::plans::CteScan;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::Lambda;
+use crate::plans::MaterializedCte;
 use crate::plans::ProjectSet;
 use crate::plans::RelOperator;
+use crate::ColumnBinding;
 use crate::ColumnEntry;
+use crate::IndexType;
 use crate::MetadataRef;
 
 pub struct UnusedColumnPruner {
@@ -36,6 +40,8 @@ pub struct UnusedColumnPruner {
 
     /// If exclude lazy columns
     apply_lazy: bool,
+    /// Record cte_idx and the cte's output columns
+    cte_output_columns: HashMap<IndexType, Vec<ColumnBinding>>,
 }
 
 impl UnusedColumnPruner {
@@ -43,10 +49,15 @@ impl UnusedColumnPruner {
         Self {
             metadata,
             apply_lazy,
+            cte_output_columns: Default::default(),
         }
     }
 
-    pub fn remove_unused_columns(&self, expr: &SExpr, require_columns: ColumnSet) -> Result<SExpr> {
+    pub fn remove_unused_columns(
+        &mut self,
+        expr: &SExpr,
+        require_columns: ColumnSet,
+    ) -> Result<SExpr> {
         let mut s_expr = self.keep_required_columns(expr, require_columns)?;
         s_expr.applied_rules = expr.applied_rules.clone();
         Ok(s_expr)
@@ -57,7 +68,7 @@ impl UnusedColumnPruner {
     /// the required columns for each child could be different and we may include columns not needed
     /// by a specific child. Columns should be skipped once we found it not exist in the subtree as we
     /// visit a plan node.
-    fn keep_required_columns(&self, expr: &SExpr, mut required: ColumnSet) -> Result<SExpr> {
+    fn keep_required_columns(&mut self, expr: &SExpr, mut required: ColumnSet) -> Result<SExpr> {
         match expr.plan() {
             RelOperator::Scan(p) => {
                 // add virtual columns to scan
@@ -282,25 +293,22 @@ impl UnusedColumnPruner {
             }
 
             RelOperator::CteScan(scan) => {
-                // Pruner column will be executed twice, the second shouldn't change cte scan
-                if self.apply_lazy {
-                    return Ok(SExpr::create_leaf(Arc::new(RelOperator::CteScan(
-                        CteScan {
-                            cte_idx: scan.cte_idx,
-                            fields: scan.fields.clone(),
-                            offsets: scan.offsets.clone(),
-                            stat: scan.stat.clone(),
-                        },
-                    ))));
-                }
                 let mut used_columns = scan.used_columns()?;
                 used_columns = required.intersection(&used_columns).cloned().collect();
                 let mut pruned_fields = vec![];
                 let mut pruned_offsets = vec![];
-                for (idx, field) in scan.fields.iter().enumerate() {
+                let cte_output_columns = self.cte_output_columns.get(&scan.cte_idx.0).unwrap();
+                for field in scan.fields.iter() {
                     if used_columns.contains(&field.name().parse()?) {
                         pruned_fields.push(field.clone());
-                        pruned_offsets.push(idx);
+                    }
+                }
+                for field in pruned_fields.iter() {
+                    for (offset, col) in cte_output_columns.iter().enumerate() {
+                        if col.index.eq(&field.name().parse::<IndexType>()?) {
+                            pruned_offsets.push(offset);
+                            break;
+                        }
                     }
                 }
                 Ok(SExpr::create_leaf(Arc::new(RelOperator::CteScan(
@@ -314,6 +322,9 @@ impl UnusedColumnPruner {
             }
 
             RelOperator::MaterializedCte(cte) => {
+                if self.apply_lazy {
+                    return Ok(expr.clone());
+                }
                 let left_output_column = RelExpr::with_s_expr(expr)
                     .derive_relational_prop_child(0)?
                     .output_columns
@@ -327,8 +338,20 @@ impl UnusedColumnPruner {
                     .intersection(&right_used_column)
                     .cloned()
                     .collect::<ColumnSet>();
+
+                let mut required_output_columns = vec![];
+                for column in cte.left_output_columns.iter() {
+                    if left_required.contains(&column.index) {
+                        required_output_columns.push(column.clone());
+                    }
+                }
+                self.cte_output_columns
+                    .insert(cte.cte_idx, required_output_columns.clone());
                 Ok(SExpr::create_binary(
-                    Arc::new(RelOperator::MaterializedCte(cte.clone())),
+                    Arc::new(RelOperator::MaterializedCte(MaterializedCte {
+                        left_output_columns: required_output_columns,
+                        cte_idx: cte.cte_idx,
+                    })),
                     Arc::new(self.keep_required_columns(expr.child(0)?, left_required)?),
                     Arc::new(self.keep_required_columns(expr.child(1)?, required)?),
                 ))

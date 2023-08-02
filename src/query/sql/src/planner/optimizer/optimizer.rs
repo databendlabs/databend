@@ -170,7 +170,7 @@ pub fn optimize_query(
             DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result.clone()))?;
         if optimized {
             dphyp_optimized = true;
-            result = heuristic.optimize((*dp_res).clone(), &RESIDUAL_RULES)?;
+            result = heuristic.optimize_expression(&dp_res, &RESIDUAL_RULES)?;
         }
     }
     let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, dphyp_optimized)?;
