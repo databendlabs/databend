@@ -291,9 +291,10 @@ impl Session {
         };
 
         let tenant = self.get_current_tenant();
-        let related_roles = RoleCacheManager::instance()
+        let mut related_roles = RoleCacheManager::instance()
             .find_related_roles(&tenant, &roles)
             .await?;
+        related_roles.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(related_roles)
     }
 
