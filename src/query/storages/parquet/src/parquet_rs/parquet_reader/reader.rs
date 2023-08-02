@@ -203,9 +203,12 @@ impl crate::parquet_reader::ParquetReader for ParquetReader {
 /// A wrapper of [`RecordBatchReader`] that implements [`BlockIterator`].
 struct RowGroupDeserializer {
     reader: ParquetRecordBatchReader,
+
     /// These fields are used to implement has_next().
+    /// num_rows_to_read is rows of row group after selection.
     num_rows_to_read: usize,
     num_rows_readn: usize,
+
     /// These fields are only for logging.
     batch_size: usize,
     seq: usize,
