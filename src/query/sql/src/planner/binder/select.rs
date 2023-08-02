@@ -336,10 +336,12 @@ impl Binder {
         if let Some(with) = &query.with {
             for (idx, cte) in with.ctes.iter().enumerate() {
                 let table_name = cte.alias.name.name.clone();
-                if bind_context.ctes_map.contains_key(&table_name) {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "duplicate cte {table_name}"
-                    )));
+                for cte in bind_context.ctes_map.iter() {
+                    if cte.0 == table_name {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "duplicate cte {table_name}"
+                        )));
+                    }
                 }
                 let cte_info = CteInfo {
                     columns_alias: cte.alias.columns.iter().map(|c| c.name.clone()).collect(),
@@ -350,7 +352,7 @@ impl Binder {
                     stat_info: None,
                     columns: vec![],
                 };
-                bind_context.ctes_map.insert(table_name, cte_info);
+                bind_context.ctes_map.push((table_name, cte_info));
             }
         }
 

@@ -147,3 +147,8 @@ with t1 as materialized (select number as a from numbers(10)), t2 as materialize
 7
 8
 9
+
+query II
+with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select number as b from numbers(20)), t3 as (select b as c from t2) select * from t1 join t3 on t1.a = t3.c;
+----
+
