@@ -212,7 +212,7 @@ impl JoinHashTable {
         } else {
             None
         };
-        let result_block = self.merge_eq_block(build_block, probe_block, input_num_rows);
+        let result_block = self.merge_eq_block(probe_block, build_block, input_num_rows);
 
         Ok(vec![result_block])
     }

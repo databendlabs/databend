@@ -201,7 +201,7 @@ impl JoinHashTable {
                         None
                     };
                     let result_block =
-                        self.merge_eq_block(build_block, probe_block.clone(), occupied);
+                        self.merge_eq_block(probe_block.clone(), build_block, occupied);
 
                     let mut bm = match self.get_other_filters(&result_block, other_predicate)? {
                         (Some(b), _, _) => b.into_mut().right().unwrap(),
@@ -293,7 +293,7 @@ impl JoinHashTable {
         } else {
             None
         };
-        let result_block = self.merge_eq_block(build_block, probe_block.clone(), occupied);
+        let result_block = self.merge_eq_block(probe_block.clone(), build_block, occupied);
 
         let mut bm = match self.get_other_filters(&result_block, other_predicate)? {
             (Some(b), _, _) => b.into_mut().right().unwrap(),

@@ -65,8 +65,8 @@ impl JoinHashTable {
         let marker_block = Some(self.create_marker_block(has_null, markers, input.num_rows())?);
 
         Ok(vec![self.merge_eq_block(
-            marker_block,
             probe_block,
+            marker_block,
             input.num_rows(),
         )])
     }
@@ -160,7 +160,7 @@ impl JoinHashTable {
                     } else {
                         None
                     };
-                    let result_block = self.merge_eq_block(build_block, probe_block, occupied);
+                    let result_block = self.merge_eq_block(probe_block, build_block, occupied);
 
                     let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
                     let filter_viewer =
@@ -233,7 +233,7 @@ impl JoinHashTable {
             } else {
                 None
             };
-            let result_block = self.merge_eq_block(build_block, probe_block, occupied);
+            let result_block = self.merge_eq_block(probe_block, build_block, occupied);
 
             let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
             let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
@@ -267,8 +267,8 @@ impl JoinHashTable {
         let marker_block = Some(self.create_marker_block(has_null, markers, input.num_rows())?);
 
         Ok(vec![self.merge_eq_block(
-            marker_block,
             probe_block,
+            marker_block,
             input.num_rows(),
         )])
     }

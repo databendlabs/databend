@@ -126,7 +126,7 @@ impl JoinHashTable {
                         None
                     };
                     let result_block =
-                        self.merge_eq_block(build_block, probe_block, max_block_size);
+                        self.merge_eq_block(probe_block, build_block, max_block_size);
 
                     if !result_block.is_empty() {
                         if self.hash_join_desc.other_predicate.is_none() {
@@ -253,7 +253,7 @@ impl JoinHashTable {
         } else {
             None
         };
-        let result_block = self.merge_eq_block(build_block, probe_block, matched_num);
+        let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
         if !result_block.is_empty() {
             if self.hash_join_desc.other_predicate.is_none() {

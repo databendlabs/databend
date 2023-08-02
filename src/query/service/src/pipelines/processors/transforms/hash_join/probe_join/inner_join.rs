@@ -110,7 +110,7 @@ impl JoinHashTable {
                     } else {
                         None
                     };
-                    let result_block = self.merge_eq_block(build_block, probe_block, occupied);
+                    let result_block = self.merge_eq_block(probe_block, build_block, occupied);
 
                     probed_blocks.push(result_block);
 
@@ -161,7 +161,7 @@ impl JoinHashTable {
             } else {
                 None
             };
-            let result_block = self.merge_eq_block(build_block, probe_block, occupied);
+            let result_block = self.merge_eq_block(probe_block, build_block, occupied);
 
             probed_blocks.push(result_block);
         }

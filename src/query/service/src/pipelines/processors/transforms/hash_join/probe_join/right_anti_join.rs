@@ -175,7 +175,7 @@ impl JoinHashTable {
                     } else {
                         None
                     };
-                    let result_block = self.merge_eq_block(build_block, probe_block, occupied);
+                    let result_block = self.merge_eq_block(probe_block, build_block, occupied);
 
                     if !result_block.is_empty() {
                         let (bm, all_true, all_false) = self.get_other_filters(
@@ -253,7 +253,7 @@ impl JoinHashTable {
         } else {
             None
         };
-        let result_block = self.merge_eq_block(build_block, probe_block, occupied);
+        let result_block = self.merge_eq_block(probe_block, build_block, occupied);
 
         if !result_block.is_empty() {
             let (bm, all_true, all_false) = self.get_other_filters(

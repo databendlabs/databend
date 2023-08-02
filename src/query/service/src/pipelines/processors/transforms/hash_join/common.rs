@@ -47,8 +47,8 @@ impl JoinHashTable {
     // Merge build chunk and probe chunk that have the same number of rows
     pub(crate) fn merge_eq_block(
         &self,
-        build_block: Option<DataBlock>,
         probe_block: Option<DataBlock>,
+        build_block: Option<DataBlock>,
         num_rows: usize,
     ) -> DataBlock {
         match (probe_block, build_block) {

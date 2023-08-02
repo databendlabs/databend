@@ -660,8 +660,8 @@ impl HashJoinState for JoinHashTable {
                 None
             };
             result_blocks.push(self.merge_eq_block(
-                build_block,
                 probe_block,
+                build_block,
                 build_indexes_occupied,
             ));
 
@@ -850,8 +850,8 @@ impl HashJoinState for JoinHashTable {
                 &build_num_rows,
             )?;
             result_blocks.push(self.merge_eq_block(
-                Some(marker_block),
                 Some(build_block),
+                Some(marker_block),
                 build_indexes_occupied,
             ));
 
