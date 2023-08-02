@@ -61,6 +61,8 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -501,6 +503,14 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog
             .update_table_meta(table_info, req)
             .await
+    }
+
+    #[async_backtrace::framed]
+    async fn set_table_column_mask_policy(
+        &self,
+        req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply> {
+        self.mutable_catalog.set_table_column_mask_policy(req).await
     }
 
     // Table index

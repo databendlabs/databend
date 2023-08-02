@@ -32,6 +32,27 @@ use opendal::Operator;
 use crate::parquet_part::ParquetRowGroupPart;
 use crate::ParquetPart;
 
+pub trait BlockIterator: Iterator<Item = Result<DataBlock>> + Send {
+    /// checking has_next() after next can avoid processor from entering SYNC for nothing.
+    fn has_next(&self) -> bool;
+}
+
+pub struct OneBlock(pub Option<DataBlock>);
+
+impl Iterator for OneBlock {
+    type Item = Result<DataBlock>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Ok(self.0.take()).transpose()
+    }
+}
+
+impl BlockIterator for OneBlock {
+    fn has_next(&self) -> bool {
+        self.0.is_some()
+    }
+}
+
 pub trait SeekRead: std::io::Read + std::io::Seek {}
 
 impl<T> SeekRead for T where T: std::io::Read + std::io::Seek {}
@@ -84,6 +105,16 @@ pub trait ParquetReader: Sync + Send {
         chunks: Vec<(FieldIndex, Vec<u8>)>,
         filter: Option<Bitmap>,
     ) -> Result<DataBlock>;
+
+    fn get_deserializer(
+        &self,
+        part: &ParquetRowGroupPart,
+        chunks: Vec<(FieldIndex, Vec<u8>)>,
+        filter: Option<Bitmap>,
+    ) -> Result<Box<dyn BlockIterator>> {
+        let block = self.deserialize(part, chunks, filter)?;
+        Ok(Box::new(OneBlock(Some(block))))
+    }
 
     fn read_from_readers(&self, readers: &mut IndexedReaders) -> Result<Vec<IndexedChunk>> {
         let mut chunks = Vec::with_capacity(self.columns_to_read().len());

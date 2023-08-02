@@ -14,10 +14,12 @@
 
 use std::io::Write;
 
+use common_expression::types::decimal::Decimal128Type;
 use common_expression::types::number::Int64Type;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::BitmapType;
 use common_expression::types::BooleanType;
+use common_expression::types::DecimalSize;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::Column;
@@ -64,6 +66,8 @@ fn test_agg() {
     test_agg_string_agg(file, eval_aggr);
     test_agg_bitmap_count(file, eval_aggr);
     test_agg_bitmap(file, eval_aggr);
+    test_agg_group_array_moving_avg(file, eval_aggr);
+    test_agg_group_array_moving_sum(file, eval_aggr);
 }
 
 #[test]
@@ -99,6 +103,8 @@ fn test_agg_group_by() {
     test_agg_string_agg(file, simulate_two_groups_group_by);
     test_agg_bitmap_count(file, simulate_two_groups_group_by);
     test_agg_bitmap(file, simulate_two_groups_group_by);
+    test_agg_group_array_moving_avg(file, eval_aggr);
+    test_agg_group_array_moving_sum(file, eval_aggr);
 }
 
 fn gen_bitmap_data() -> Column {
@@ -156,6 +162,16 @@ fn get_example() -> Vec<(&'static str, Column)> {
             ]),
         ),
         ("bm", gen_bitmap_data()),
+        (
+            "dec",
+            Decimal128Type::from_opt_data_with_size(
+                vec![Some(110), Some(220), None, Some(330)],
+                DecimalSize {
+                    precision: 15,
+                    scale: 2,
+                },
+            ),
+        ),
     ]
 }
 
@@ -508,6 +524,7 @@ fn test_agg_array_agg(file: &mut impl Write, simulator: impl AggregationSimulato
         get_example().as_slice(),
         simulator,
     );
+    run_agg_ast(file, "array_agg(dec)", get_example().as_slice(), simulator);
 }
 
 fn test_agg_string_agg(file: &mut impl Write, simulator: impl AggregationSimulator) {
@@ -596,6 +613,120 @@ fn test_agg_quantile_tdigest(file: &mut impl Write, simulator: impl AggregationS
     run_agg_ast(
         file,
         "quantile_tdigest(0.8)(x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_group_array_moving_avg(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "group_array_moving_avg(1)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_avg('a')",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_avg(NULL)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_avg(a)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_avg(2)(b)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_avg(x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_avg(1)(y_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_avg(dec)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_avg(2)(dec)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_group_array_moving_sum(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "group_array_moving_sum(1)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_sum('a')",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_sum(NULL)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_sum(a)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_sum(2)(b)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_sum(x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_sum(1)(y_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_sum(dec)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "group_array_moving_sum(2)(dec)",
         get_example().as_slice(),
         simulator,
     );

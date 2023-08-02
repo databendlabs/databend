@@ -28,6 +28,8 @@ use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -166,6 +168,14 @@ impl Database for DefaultDatabase {
     #[async_backtrace::framed]
     async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
         let res = self.ctx.meta.update_table_meta(req).await?;
+        Ok(res)
+    }
+
+    async fn set_table_column_mask_policy(
+        &self,
+        req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply> {
+        let res = self.ctx.meta.set_table_column_mask_policy(req).await?;
         Ok(res)
     }
 

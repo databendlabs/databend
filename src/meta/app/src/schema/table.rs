@@ -604,6 +604,28 @@ impl Display for UpsertTableOptionReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum SetTableColumnMaskPolicyAction {
+    // new mask name, old mask name(if any)
+    Set(String, Option<String>),
+    // prev mask name
+    Unset(String),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SetTableColumnMaskPolicyReq {
+    pub tenant: String,
+    pub table_id: u64,
+    pub seq: MatchSeq,
+    pub column: String,
+    pub action: SetTableColumnMaskPolicyAction,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SetTableColumnMaskPolicyReply {
+    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableOptionReply {
     pub share_table_info: Option<Vec<ShareTableInfoMap>>,
 }

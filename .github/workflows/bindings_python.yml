@@ -83,6 +83,7 @@ jobs:
         shell: bash
         run: |
           echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
+          echo "JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000" >> $GITHUB_ENV
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
