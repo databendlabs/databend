@@ -63,6 +63,8 @@ use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::IcebergCatalogOption;
+use common_meta_app::schema::IndexId;
+use common_meta_app::schema::IndexIdToName;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::IndexType;
@@ -3074,6 +3076,7 @@ impl SchemaApiTestSuite {
         let tenant = "db_table_gc_out_of_retention_time";
         let db1_name = "db1";
         let tb1_name = "tb1";
+        let idx1_name = "idx1";
         let tbl_name_ident = TableNameIdent {
             tenant: tenant.to_string(),
             db_name: db1_name.to_string(),
@@ -3153,6 +3156,25 @@ impl SchemaApiTestSuite {
             let stage_file: TableCopiedFileInfo = get_kv_data(mt.as_kv_api(), &key).await?;
             assert_eq!(stage_file, stage_info);
         }
+
+        let agg_index_create_req = CreateIndexReq {
+            if_not_exists: true,
+            name_ident: IndexNameIdent {
+                tenant: tenant.to_string(),
+                index_name: idx1_name.to_string(),
+            },
+            meta: IndexMeta {
+                table_id,
+                index_type: IndexType::AGGREGATING,
+                created_on: Utc::now(),
+                dropped_on: None,
+                updated_on: None,
+                query: "select sum(number) from tb1".to_string(),
+            },
+        };
+
+        let res = mt.create_index(agg_index_create_req).await?;
+        let index_id = res.index_id;
 
         // drop the db
         let drop_on = Some(Utc::now() - Duration::days(1));
@@ -3237,6 +3259,20 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &id_mapping).await;
             assert!(meta_res.is_err());
             assert!(mapping_res.is_err());
+        }
+
+        // check table's indexes have been cleaned
+        {
+            let id_key = IndexId { index_id };
+            let id_to_name_key = IndexIdToName { index_id };
+
+            let agg_index_meta: Result<IndexMeta, KVAppError> =
+                get_kv_data(mt.as_kv_api(), &id_key).await;
+            let agg_index_name_ident: Result<IndexNameIdent, KVAppError> =
+                get_kv_data(mt.as_kv_api(), &id_to_name_key).await;
+
+            assert!(agg_index_meta.is_err());
+            assert!(agg_index_name_ident.is_err());
         }
 
         info!("--- assert stage file info has been removed");

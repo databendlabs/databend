@@ -3074,7 +3074,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                     gc_dropped_db_by_id(self, db_id, req.tenant.clone(), db_name).await?
                 }
                 DroppedId::Table(db_id, table_id, table_name) => {
-                    gc_dropped_table_by_id(self, db_id, table_id, table_name).await?
+                    gc_dropped_table_by_id(self, req.tenant.clone(), db_id, table_id, table_name)
+                        .await?
                 }
             }
         }
@@ -4023,7 +4024,10 @@ async fn gc_dropped_db_by_id(
     db_name: String,
 ) -> Result<(), KVAppError> {
     // List tables by tenant, db_id, table_name.
-    let dbid_idlist = DbIdListKey { tenant, db_name };
+    let dbid_idlist = DbIdListKey {
+        tenant: tenant.clone(),
+        db_name,
+    };
     let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
         get_pb_value(kv_api, &dbid_idlist).await?;
 
@@ -4081,6 +4085,7 @@ async fn gc_dropped_db_by_id(
 
                 for tb_id in tb_id_list.id_list {
                     gc_dropped_table_data(kv_api, tb_id, &mut condition, &mut if_then).await?;
+                    gc_dropped_table_index(kv_api, &tenant, tb_id, &mut if_then).await?;
                 }
 
                 let id_key = iter.next().unwrap();
@@ -4116,6 +4121,7 @@ async fn gc_dropped_db_by_id(
 
 async fn gc_dropped_table_by_id(
     kv_api: &impl kvapi::KVApi<Error = MetaError>,
+    tenant: String,
     db_id: u64,
     table_id: u64,
     table_name: String,
@@ -4145,6 +4151,7 @@ async fn gc_dropped_table_by_id(
             txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?),
         ];
         gc_dropped_table_data(kv_api, table_id, &mut condition, &mut if_then).await?;
+        gc_dropped_table_index(kv_api, &tenant, table_id, &mut if_then).await?;
 
         let txn_req = TxnRequest {
             condition,
@@ -4194,6 +4201,78 @@ async fn gc_dropped_table_data(
     if_then.push(txn_op_del(&tbid));
 
     remove_table_copied_files(kv_api, table_id, condition, if_then).await?;
+
+    Ok(())
+}
+
+async fn gc_dropped_table_index(
+    kv_api: &impl kvapi::KVApi<Error = MetaError>,
+    tenant: &str,
+    table_id: u64,
+    if_then: &mut Vec<TxnOp>,
+) -> Result<(), KVAppError> {
+    // Get index id list by `prefix_list` "<prefix>/<tenant>"
+    let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
+        .push_str(tenant)
+        .done();
+
+    let id_list = kv_api.prefix_list_kv(&prefix_key).await?;
+    let mut id_name_list = Vec::with_capacity(id_list.len());
+    for (key, seq) in id_list.iter() {
+        let name_ident = IndexNameIdent::from_str_key(key).map_err(|e| {
+            KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
+        })?;
+        let index_id = deserialize_u64(&seq.data)?;
+        id_name_list.push((index_id.0, name_ident.index_name));
+    }
+
+    if id_name_list.is_empty() {
+        return Ok(());
+    }
+
+    // Get index ids of this table
+    let index_ids = {
+        let index_metas = get_index_metas_by_ids(kv_api, id_name_list).await?;
+        index_metas
+            .into_iter()
+            .filter(|(_, _, meta)| table_id == meta.table_id)
+            .map(|(id, _, _)| id)
+            .collect::<Vec<_>>()
+    };
+
+    let id_to_name_keys = index_ids
+        .iter()
+        .map(|id| IndexIdToName { index_id: *id }.to_string_key())
+        .collect::<Vec<_>>();
+
+    // Get (tenant, index_name) list by index ids
+    let index_name_list: Result<Vec<IndexNameIdent>, MetaNetworkError> = kv_api
+        .mget_kv(&id_to_name_keys)
+        .await?
+        .iter()
+        .filter(|seq_v| seq_v.is_some())
+        .map(|seq_v| {
+            let index_name_ident: IndexNameIdent =
+                deserialize_struct(&seq_v.as_ref().unwrap().data)?;
+            Ok(index_name_ident)
+        })
+        .collect();
+
+    let index_name_list = index_name_list?;
+
+    debug_assert_eq!(index_ids.len(), index_name_list.len());
+
+    for (index_id, index_name_ident) in index_ids.iter().zip(index_name_list.iter()) {
+        let id_key = IndexId {
+            index_id: *index_id,
+        };
+        let id_to_name_key = IndexIdToName {
+            index_id: *index_id,
+        };
+        if_then.push(txn_op_del(&id_key)); // (index_id) -> index_meta
+        if_then.push(txn_op_del(&id_to_name_key)); // __fd_index_id_to_name/<index_id> -> (tenant,index_name)
+        if_then.push(txn_op_del(index_name_ident)); // (tenant, index_name) -> index_id
+    }
 
     Ok(())
 }
