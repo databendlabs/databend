@@ -7,6 +7,7 @@ Requires=network-online.target
 [Service]
 User=databend
 Group=databend
+LimitNOFILE=65535
 ExecStart=/usr/bin/databend-query --config-file /etc/databend/databend-query.toml
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=no

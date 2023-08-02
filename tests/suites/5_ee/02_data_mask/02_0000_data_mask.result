@@ -3,3 +3,5 @@ mask (val STRING,num Int32) STRING CASE WHEN current_role() IN('ANALYST') THEN V
 [(1, 'abc')]
 [(1, '*********')]
 [(200, '*********')]
+[(1, '*********')]
+[(1, 'abc')]

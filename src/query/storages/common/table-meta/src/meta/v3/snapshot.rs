@@ -23,8 +23,8 @@ use serde::Serialize;
 
 use super::frozen;
 use crate::meta::format::read_and_deserialize;
-use crate::meta::statistics::FormatVersion;
 use crate::meta::ClusterKey;
+use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::MetaCompression;
 use crate::meta::MetaEncoding;

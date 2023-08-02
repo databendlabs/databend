@@ -203,7 +203,7 @@ impl PartitionPruner {
                     .zip(row_group_stats.as_ref())
                     .map(|((_, offset), stats)| {
                         let stat = stats[rg_idx].get(&(*offset as u32)).unwrap();
-                        (stat.min.clone(), stat.max.clone())
+                        (stat.min().clone(), stat.max().clone())
                     });
 
                 column_metas.insert(*index, ColumnMeta {

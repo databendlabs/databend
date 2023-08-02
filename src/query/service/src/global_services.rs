@@ -81,10 +81,12 @@ impl GlobalServices {
         // Maybe we can do some refactor to simplify the logic here.
         {
             // Init default catalog.
+
             let default_catalog = DatabaseCatalog::try_create_with_config(config.clone()).await?;
 
-            let mut catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![];
-            catalog_creator.push((CatalogType::Iceberg, Arc::new(IcebergCreator)));
+            #[allow(unused_mut)]
+            let mut catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> =
+                vec![(CatalogType::Iceberg, Arc::new(IcebergCreator))];
             // Register hive catalog.
             #[cfg(feature = "hive")]
             {
