@@ -22,8 +22,8 @@ echo "show databases" | $TEST_USER_CONNECT
 echo "select 'test -- insert'" | $TEST_USER_CONNECT
 echo "insert into t20_0012 values(1),(2)" | $TEST_USER_CONNECT
 ## grant user privileges via role
-echo "GRANT INSERT ON * TO 'test-role1'" | $MYSQL_CLIENT_CONNECT
-echo "GRANT SELECT ON * TO 'test-role2'" | $MYSQL_CLIENT_CONNECT
+echo "GRANT INSERT ON * TO ROLE 'test-role1'" | $MYSQL_CLIENT_CONNECT
+echo "GRANT SELECT ON * TO ROLE 'test-role2'" | $MYSQL_CLIENT_CONNECT
 echo "GRANT ROLE 'test-role1' TO 'test-user'" | $MYSQL_CLIENT_CONNECT
 echo "GRANT ROLE 'test-role2' TO 'test-user'" | $MYSQL_CLIENT_CONNECT
 ## insert data
