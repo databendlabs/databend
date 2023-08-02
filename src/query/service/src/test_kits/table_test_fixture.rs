@@ -121,6 +121,7 @@ impl TestFixture {
             },
         };
         ctx.get_catalog("default")
+            .await
             .unwrap()
             .create_database(plan.into())
             .await
@@ -505,7 +506,8 @@ impl TestFixture {
 
     pub async fn latest_default_table(&self) -> Result<Arc<dyn Table>> {
         self.ctx
-            .get_catalog(CATALOG_DEFAULT)?
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
             .get_table(
                 self.default_tenant().as_str(),
                 self.default_db_name().as_str(),

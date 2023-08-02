@@ -24,6 +24,7 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::schema::CatalogInfo;
 use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
 use log::info;
@@ -78,7 +79,7 @@ impl CopyIntoTableMode {
 
 #[derive(Clone)]
 pub struct CopyIntoTablePlan {
-    pub catalog_name: String,
+    pub catalog_info: CatalogInfo,
     pub database_name: String,
     pub table_name: String,
 
@@ -147,7 +148,7 @@ impl CopyIntoTablePlan {
             ctx.set_status_info("begin filtering out copied files");
             let files = ctx
                 .filter_out_copied_files(
-                    &self.catalog_name,
+                    self.catalog_info.catalog_name(),
                     &self.database_name,
                     &self.table_name,
                     &all_source_file_infos,
@@ -176,7 +177,7 @@ impl CopyIntoTablePlan {
 impl Debug for CopyIntoTablePlan {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let CopyIntoTablePlan {
-            catalog_name,
+            catalog_info,
             database_name,
             table_name,
             validation_mode,
@@ -187,7 +188,8 @@ impl Debug for CopyIntoTablePlan {
         } = self;
         write!(
             f,
-            "Copy into {catalog_name:}.{database_name:}.{table_name:}"
+            "Copy into {:}.{database_name:}.{table_name:}",
+            catalog_info.catalog_name()
         )?;
         write!(f, ", validation_mode: {validation_mode:?}")?;
         write!(f, ", from: {stage_table_info:?}")?;

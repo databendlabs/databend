@@ -161,6 +161,11 @@ select array_aggregate(col1, 'max'), array_aggregate(col1, 'min'), array_aggrega
 ----
 3 1 9
 
+query III
+select array_reduce(col1, 'max'), array_reduce(col1, 'min'), array_reduce(col1, 'sum') from t
+----
+3 1 9
+
 query TTTTT
 select array_sort(col1),array_sort(col2),array_sort(col3),array_sort(col4),array_sort(col5) from t
 ----

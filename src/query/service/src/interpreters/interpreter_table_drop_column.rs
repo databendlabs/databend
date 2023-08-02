@@ -56,7 +56,8 @@ impl Interpreter for DropTableColumnInterpreter {
         let tbl_name = self.plan.table.as_str();
         let table = self
             .ctx
-            .get_catalog(catalog_name)?
+            .get_catalog(catalog_name)
+            .await?
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
 
@@ -86,7 +87,7 @@ impl Interpreter for DropTableColumnInterpreter {
             )?;
         }
 
-        let catalog = self.ctx.get_catalog(catalog_name)?;
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
         let mut new_table_meta = table.get_table_info().meta.clone();
         new_table_meta.drop_column(&self.plan.column)?;
 

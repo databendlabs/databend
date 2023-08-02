@@ -40,6 +40,7 @@ use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -71,6 +72,8 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -218,7 +221,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
             let fixture = TestFixture::new().await;
             fixture.create_default_table().await?;
             let ctx = fixture.ctx();
-            let catalog = ctx.get_catalog("default")?;
+            let catalog = ctx.get_catalog("default").await?;
 
             let table = fixture.latest_default_table().await?;
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -423,7 +426,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_catalog(&self, _catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+    async fn get_catalog(&self, _catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+        Ok(self.catalog.clone())
+    }
+
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
         Ok(self.catalog.clone())
     }
 
@@ -584,7 +591,7 @@ impl TableContext for CtxDelegation {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct FakedCatalog {
     cat: Arc<dyn Catalog>,
     error_injection: Option<ErrorCode>,
@@ -592,6 +599,14 @@ struct FakedCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for FakedCatalog {
+    fn name(&self) -> String {
+        "FakedCatalog".to_string()
+    }
+
+    fn info(&self) -> CatalogInfo {
+        self.cat.info()
+    }
+
     async fn get_database(&self, _tenant: &str, _db_name: &str) -> Result<Arc<dyn Database>> {
         todo!()
     }
@@ -680,6 +695,13 @@ impl Catalog for FakedCatalog {
         } else {
             self.cat.update_table_meta(table_info, req).await
         }
+    }
+
+    async fn set_table_column_mask_policy(
+        &self,
+        _req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply> {
+        todo!()
     }
 
     async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {

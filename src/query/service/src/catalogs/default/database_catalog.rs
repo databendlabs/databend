@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_catalog::catalog::Catalog;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
 use common_catalog::table_args::TableArgs;
@@ -22,6 +25,7 @@ use common_catalog::table_function::TableFunction;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -57,6 +61,8 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -78,7 +84,6 @@ use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
 use log::info;
 
-use crate::catalogs::catalog::Catalog;
 use crate::catalogs::default::ImmutableCatalog;
 use crate::catalogs::default::MutableCatalog;
 use crate::storages::Table;
@@ -96,6 +101,12 @@ pub struct DatabaseCatalog {
     mutable_catalog: Arc<dyn Catalog>,
     /// table function engine factories
     table_function_factory: Arc<TableFunctionFactory>,
+}
+
+impl Debug for DatabaseCatalog {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DefaultCatalog").finish_non_exhaustive()
+    }
 }
 
 impl DatabaseCatalog {
@@ -129,6 +140,14 @@ impl DatabaseCatalog {
 impl Catalog for DatabaseCatalog {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn name(&self) -> String {
+        "default".to_string()
+    }
+
+    fn info(&self) -> CatalogInfo {
+        CatalogInfo::new_default()
     }
 
     #[async_backtrace::framed]
@@ -484,6 +503,14 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog
             .update_table_meta(table_info, req)
             .await
+    }
+
+    #[async_backtrace::framed]
+    async fn set_table_column_mask_policy(
+        &self,
+        req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply> {
+        self.mutable_catalog.set_table_column_mask_policy(req).await
     }
 
     // Table index

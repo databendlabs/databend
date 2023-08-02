@@ -228,12 +228,13 @@ impl ReplaceIntoMutator {
     ) -> Result<ColumnHash> {
         let mut digests = HashSet::new();
         for row_idx in 0..num_rows {
-            let hash = row_hash_of_columns(column_values, row_idx)?;
-            if saw.contains(&hash) {
-                return Ok(ColumnHash::Conflict(row_idx));
+            if let Some(hash) = row_hash_of_columns(column_values, row_idx)? {
+                if saw.contains(&hash) {
+                    return Ok(ColumnHash::Conflict(row_idx));
+                }
+                saw.insert(hash);
+                digests.insert(hash);
             }
-            saw.insert(hash);
-            digests.insert(hash);
         }
         Ok(ColumnHash::NoConflict(digests))
     }
@@ -399,36 +400,37 @@ impl Partitioner {
 
         let mut values_map: HashMap<Scalar, Partition> = HashMap::new();
         for row_idx in 0..data_block.num_rows() {
-            let row_digest = row_hash_of_columns(&column_values, row_idx)?;
+            if let Some(row_digest) = row_hash_of_columns(&column_values, row_idx)? {
+                let cluster_key_value = cluster_key_values.row_scalar(row_idx)?.to_owned();
 
-            let cluster_key_value = cluster_key_values.row_scalar(row_idx)?.to_owned();
+                let bloom_hash = if let Some((idx, typ)) = &self.bloom_filter_column_info {
+                    let most_significant_field =
+                        column_values[*idx].row_scalar(row_idx)?.to_owned();
+                    // TODO too heavy? siphash64 directly?
+                    let hash = BloomIndex::calculate_scalar_digest(
+                        &self.func_ctx,
+                        &most_significant_field,
+                        typ,
+                    )?;
+                    Some(hash)
+                } else {
+                    None
+                };
 
-            let bloom_hash = if let Some((idx, typ)) = &self.bloom_filter_column_info {
-                let most_significant_field = column_values[*idx].row_scalar(row_idx)?.to_owned();
-                // TODO too heavy? siphash64 directly?
-                let hash = BloomIndex::calculate_scalar_digest(
-                    &self.func_ctx,
-                    &most_significant_field,
-                    typ,
-                )?;
-                Some(hash)
-            } else {
-                None
-            };
-
-            match values_map.entry(cluster_key_value) {
-                Entry::Occupied(ref mut entry) => {
-                    entry
-                        .get_mut()
-                        .push_row(row_digest, bloom_hash, &column_values, row_idx)?
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(Partition::try_new_with_row(
-                        row_digest,
-                        bloom_hash,
-                        &column_values,
-                        row_idx,
-                    )?);
+                match values_map.entry(cluster_key_value) {
+                    Entry::Occupied(ref mut entry) => {
+                        entry
+                            .get_mut()
+                            .push_row(row_digest, bloom_hash, &column_values, row_idx)?
+                    }
+                    Entry::Vacant(entry) => {
+                        entry.insert(Partition::try_new_with_row(
+                            row_digest,
+                            bloom_hash,
+                            &column_values,
+                            row_idx,
+                        )?);
+                    }
                 }
             }
         }

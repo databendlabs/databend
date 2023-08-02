@@ -17,10 +17,23 @@ Geography Functions in SQL.
 | **H3_GET_RESOLUTION(h3)**                               | Returns the resolution of the given [H3](https://eng.uber.com/h3/) index.  | **H3_GET_RESOLUTION(644325524701193974)**             | 15                    |
 | **H3_EDGE_LENGTH_M(res)**                               | Returns the average hexagon edge length in meters at the given resolution. Excludes pentagons.  | **H3_EDGE_LENGTH_M(1)**             | 418676.0055         |
 | **H3_EDGE_LENGTH_KM(res)**                              | Returns the average hexagon edge length in  kilometers at the given resolution. Excludes pentagons.   | **H3_EDGE_LENGTH_KM(1)**     | 418.6760055  |
+| **H3_GET_BASE_CELL(h3)**                                | Returns the base cell number of the given [H3](https://eng.uber.com/h3/) index.   | **H3_GET_BASE_CELL(644325524701193974)**     |  8  |
+| **H3_HEX_AREA_M2(res)**                                 | Returns the average hexagon area in square meters at the given resolution. Excludes pentagons.   | **H3_HEX_AREA_M2(1)**     |  6.097884417941339e11  |
+| **H3_HEX_AREA_KM2(res)**                                | Returns the average hexagon area in square kilometers at the given resolution. Excludes pentagons.   | **H3_HEX_AREA_KM2(1)**     |  609788.4417941332  |
+| **H3_INDEXES_ARE_NEIGHBORS(h3, a_h3)**                  | Returns whether or not the provided [H3](https://eng.uber.com/h3/) indexes are neighbors.   | **H3_INDEXES_ARE_NEIGHBORS(644325524701193974, 644325524701193897)**     |  1  |
+| **H3_TO_CHILDREN(h3, child_res)**                       | Returns the indexes contained by `h3` at resolution `child_res`.      | **H3_TO_CHILDREN(635318325446452991, 14)**     |  [639821925073823431,639821925073823439,639821925073823447,639821925073823455,639821925073823463,639821925073823471,639821925073823479]  |
+| **H3_TO_PARENT(h3, parent_res)**                        | Returns the parent index containing the `h3` at resolution `parent_res`.      | **H3_TO_PARENT(635318325446452991, 12)**     |  630814725819082751  |
+| **H3_TO_STRING(h3)**                                    | Converts the representation of the given [H3](https://eng.uber.com/h3/) index to the string representation.        | **H3_TO_STRING(635318325446452991)**     | 8d11aa6a38826ff   |
+| **STRING_TO_H3(h3)**                                    | Converts the string representation to [H3](https://eng.uber.com/h3/) (uint64) representation.        | **STRING_TO_H3('8d11aa6a38826ff')**     | 635318325446452991      |
+| **H3_IS_RES_CLASS_III(h3)**                             | Checks if the given [H3](https://eng.uber.com/h3/) index has a resolution with Class III orientation.           | **H3_IS_RES_CLASS_III(635318325446452991)**     | 1              |
+| **H3_IS_PENTAGON(h3)**                                  | Checks if the given [H3](https://eng.uber.com/h3/) index represents a pentagonal cell.                  | **H3_IS_PENTAGON(599119489002373119)**     | 1           |
+| **H3_GET_FACES(h3)**                                    | Finds all icosahedron faces intersected by the given [H3](https://eng.uber.com/h3/) index. Faces are represented as integers from 0-19.                                  | **H3_GET_FACES(599119489002373119)**     | [0,1,2,3,4]          |
+| **H3_CELL_AREA_M2(h3)**                                 | Returns the exact area of specific cell in square meters.                         | **H3_CELL_AREA_M2(599119489002373119)**     | 127785582.60810876   |
+| **H3_CELL_AREA_RADS2(h3)**                              | Returns the exact area of specific cell in square radians.                    | **H3_CELL_AREA_RADS2(599119489002373119)**     | 3.1482243104279148e-6              |
 
 :::note
 
-- `GEO_TO_H3(lon, lat, res)` returning 0 means an error occurred.
+- `GEO_TO_H3(lon, lat, res)`, `H3_TO_PARENT(h3, parent_res)` returning 0 means an error occurred.
 - `POINT_IN_POLYGON((x,y), [(a,b), (c,d), (e,f) ... ])` A polygon is a closed shape connected by coordinate pairs in the order they appear. Changing the order of coordinate pairs can result in a different shape.
 
 :::

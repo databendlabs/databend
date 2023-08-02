@@ -47,7 +47,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let create_tbl_command = "create table t(c int)";
     execute_command(ctx.clone(), create_tbl_command).await?;
 
-    let catalog = ctx.get_catalog("default")?;
+    let catalog = ctx.get_catalog("default").await?;
 
     let num_inserts = 3;
     append_rows(ctx.clone(), num_inserts).await?;
