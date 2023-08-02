@@ -49,18 +49,20 @@ impl AsyncTransform for TransformExchangeAsyncBarrier {
             let mut futures = Vec::with_capacity(meta.serialized_blocks.len());
 
             for serialized_block in meta.serialized_blocks {
-                // TODO: maybe tokio spawn is better?
-                futures.push(async move {
+                futures.push(common_base::base::tokio::spawn(async move {
                     match serialized_block {
                         FlightSerialized::DataBlock(v) => Ok(v),
                         FlightSerialized::Future(f) => f.await,
                     }
-                });
+                }));
             }
 
-            return Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
-                futures::future::try_join_all(futures).await?,
-            )));
+            return match futures::future::try_join_all(futures).await {
+                Err(_) => Err(ErrorCode::TokioError("Cannot join tokio job")),
+                Ok(spilled_data) => Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
+                    spilled_data.into_iter().collect::<Result<Vec<_>>>()?,
+                ))),
+            };
         }
 
         Err(ErrorCode::Internal(""))
