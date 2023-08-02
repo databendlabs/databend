@@ -1188,10 +1188,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
         let tenant_share_endpoint_name_key = ShareEndpointIdent {
             tenant: req.tenant.clone(),
-            endpoint: match req.endpoint {
-                Some(ref endpoint) => endpoint.clone(),
-                None => "".to_string(),
-            },
+            endpoint: req.endpoint.clone().unwrap_or("".to_string()),
         };
         let share_endpoints = list_keys(self, &tenant_share_endpoint_name_key).await?;
         for share_endpoint in share_endpoints {
@@ -1426,22 +1423,18 @@ async fn get_object_name_from_id(
             let db_id_key = DatabaseIdToName { db_id };
             let (_db_name_seq, db_name): (_, Option<DatabaseNameIdent>) =
                 get_pb_value(kv_api, &db_id_key).await?;
-            match db_name {
-                Some(db_name) => Ok(Some(ShareGrantObjectName::Database(db_name.db_name))),
-                None => Ok(None),
-            }
+            Ok(db_name.map(|db_name| ShareGrantObjectName::Database(db_name.db_name)))
         }
         ShareGrantObject::Table(table_id) => {
             let table_id_key = TableIdToName { table_id };
             let (_db_id_table_name_seq, table_name): (_, Option<DBIdTableName>) =
                 get_pb_value(kv_api, &table_id_key).await?;
-            match table_name {
-                Some(table_name) => Ok(Some(ShareGrantObjectName::Table(
+            Ok(table_name.map(|table_name| {
+                ShareGrantObjectName::Table(
                     database_name.as_ref().unwrap().to_string(),
                     table_name.table_name,
-                ))),
-                None => Ok(None),
-            }
+                )
+            }))
         }
     }
 }

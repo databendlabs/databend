@@ -127,15 +127,11 @@ impl HiveTableSource {
         })))
     }
 
-    fn try_get_partitions(&mut self) -> Result<()> {
-        match self.ctx.get_partition() {
-            None => self.state = State::Finish,
-            Some(part_info) => {
-                self.state = State::ReadMeta(Some(part_info));
-            }
-        }
-
-        Ok(())
+    fn try_get_partitions(&mut self) {
+        self.state = self
+            .ctx
+            .get_partition()
+            .map_or(State::Finish, |part_info| State::ReadMeta(Some(part_info)));
     }
 
     fn exec_prewhere_filter(
@@ -278,12 +274,7 @@ impl Processor for HiveTableSource {
 
     fn event(&mut self) -> Result<Event> {
         if matches!(self.state, State::ReadMeta(None)) {
-            match self.ctx.get_partition() {
-                None => self.state = State::Finish,
-                Some(part_info) => {
-                    self.state = State::ReadMeta(Some(part_info));
-                }
-            }
+            self.try_get_partitions();
         }
 
         if self.output.is_finished() {
@@ -313,7 +304,7 @@ impl Processor for HiveTableSource {
                         self.state = State::ReadPrewhereData(hive_blocks);
                     }
                     false => {
-                        self.try_get_partitions()?;
+                        self.try_get_partitions();
                     }
                 }
             }
@@ -367,7 +358,7 @@ impl Processor for HiveTableSource {
                         self.state = State::ReadPrewhereData(hive_blocks);
                     }
                     false => {
-                        self.try_get_partitions()?;
+                        self.try_get_partitions();
                     }
                 }
                 Ok(())

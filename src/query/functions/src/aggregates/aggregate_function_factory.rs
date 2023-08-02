@@ -277,10 +277,9 @@ impl AggregateFunctionFactory {
         let origin = func_name.as_ref();
         let lowercase_name = origin.to_lowercase();
 
-        match self.case_insensitive_desc.get(&lowercase_name) {
-            Some(desc) => desc.features.is_decomposable,
-            None => false,
-        }
+        self.case_insensitive_desc
+            .get(&lowercase_name)
+            .is_some_and(|desc| desc.features.is_decomposable)
     }
 
     pub fn registered_names(&self) -> Vec<String> {

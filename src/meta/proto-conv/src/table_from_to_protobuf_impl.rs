@@ -176,14 +176,9 @@ impl FromToProto for mt::TableMeta {
     fn from_pb(p: pb::TableMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let schema = match p.schema {
-            None => {
-                return Err(Incompatible {
-                    reason: "TableMeta.schema can not be None".to_string(),
-                });
-            }
-            Some(x) => x,
-        };
+        let schema = p.schema.ok_or(Incompatible {
+            reason: "TableMeta.schema can not be None".to_string(),
+        })?;
 
         let catalog = if p.catalog.is_empty() {
             "default".to_string()
@@ -200,10 +195,7 @@ impl FromToProto for mt::TableMeta {
                 Some(sp) => Some(StorageParams::from_pb(sp)?),
                 None => None,
             },
-            part_prefix: match p.part_prefix {
-                Some(fp) => fp,
-                None => "".to_string(),
-            },
+            part_prefix: p.part_prefix.unwrap_or("".to_string()),
             options: p.options,
             default_cluster_key: p.default_cluster_key,
             cluster_keys: p.cluster_keys,
@@ -262,10 +254,7 @@ impl FromToProto for mt::TableMeta {
             field_comments: self.field_comments.clone(),
             statistics: Some(self.statistics.to_pb()?),
             shared_by: Vec::from_iter(self.shared_by.clone().into_iter()),
-            column_mask_policy: match &self.column_mask_policy {
-                Some(column_mask_policy) => column_mask_policy.clone(),
-                None => BTreeMap::new(),
-            },
+            column_mask_policy: self.column_mask_policy.clone().unwrap_or(BTreeMap::new()),
         };
         Ok(p)
     }

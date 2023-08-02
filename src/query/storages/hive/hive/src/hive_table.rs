@@ -269,10 +269,12 @@ impl HiveTable {
     }
 
     fn get_partition_key_sets(&self) -> HashSet<String> {
-        match &self.table_options.partition_keys {
-            Some(v) => v.iter().cloned().collect::<HashSet<_>>(),
-            None => HashSet::new(),
-        }
+        self.table_options
+            .partition_keys
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .collect()
     }
 
     fn get_projections(&self, push_downs: &Option<PushDownInfo>) -> Result<Vec<usize>> {
@@ -331,16 +333,13 @@ impl HiveTable {
         plan: &DataSourcePlan,
         schema: DataSchemaRef,
     ) -> Result<Arc<Option<Expr>>> {
-        Ok(
-            match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-                None => Arc::new(None),
-                Some(v) => Arc::new(Some(
-                    v.filter
-                        .as_expr(&BUILTIN_FUNCTIONS)
-                        .project_column_ref(|name| schema.index_of(name).unwrap()),
-                )),
-            },
-        )
+        Ok(Arc::new(
+            PushDownInfo::prewhere_of_push_downs(&plan.push_downs).map(|v| {
+                v.filter
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .project_column_ref(|name| schema.index_of(name).unwrap())
+            }),
+        ))
     }
 
     // Build the remain reader.
@@ -447,15 +446,14 @@ impl HiveTable {
         ctx: Arc<dyn TableContext>,
         push_downs: &Option<PushDownInfo>,
     ) -> Result<Vec<(String, Option<String>)>> {
-        let path = match &self.table_options.location {
-            Some(path) => path,
-            None => {
-                return Err(ErrorCode::TableInfoError(format!(
-                    "{}, table location is empty",
-                    self.table_info.name
-                )));
-            }
-        };
+        let path = self
+            .table_options
+            .location
+            .as_ref()
+            .ok_or(ErrorCode::TableInfoError(format!(
+                "{}, table location is empty",
+                self.table_info.name
+            )))?;
 
         if let Some(partition_keys) = &self.table_options.partition_keys {
             if !partition_keys.is_empty() {
@@ -712,10 +710,7 @@ pub fn convert_hdfs_path(hdfs_path: &str, is_dir: bool) -> String {
     if path.starts_with("//") && path.len() > 2 {
         path = &path[2..];
         let next_slash = path.find('/');
-        start = match next_slash {
-            Some(slash) => slash,
-            None => path.len(),
-        };
+        start = next_slash.unwrap_or(path.len());
     }
     path = &path[start..];
 

@@ -45,10 +45,9 @@ impl PartInfo for SystemTablePart {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<SystemTablePart>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<SystemTablePart>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {

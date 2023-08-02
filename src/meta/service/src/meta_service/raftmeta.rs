@@ -923,10 +923,9 @@ impl MetaNode {
             is_leader: metrics.state == openraft::ServerState::Leader,
             current_term: metrics.current_term,
             last_log_index: metrics.last_log_index.unwrap_or(0),
-            last_applied: match metrics.last_applied {
-                Some(id) => id,
-                None => LogId::new(CommittedLeaderId::new(0, 0), 0),
-            },
+            last_applied: metrics
+                .last_applied
+                .unwrap_or(LogId::new(CommittedLeaderId::new(0, 0), 0)),
             leader,
             replication: metrics.replication,
             voters,
