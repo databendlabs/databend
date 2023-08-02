@@ -457,7 +457,7 @@ impl StoreInner {
             let committed = ks
                 .get(&RaftStateKey::Committed)
                 .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?
-                .and_then(|v| Option::<LogId>::from(v));
+                .and_then(Option::<LogId>::from);
 
             let ent_committed = RaftStoreEntry::RaftStateKV {
                 key: RaftStateKey::Committed,
