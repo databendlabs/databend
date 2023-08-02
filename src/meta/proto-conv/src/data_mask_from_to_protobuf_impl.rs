@@ -75,3 +75,27 @@ impl FromToProto for mt::DatamaskMeta {
         Ok(p)
     }
 }
+
+impl FromToProto for mt::MaskpolicyTableIdList {
+    type PB = pb::DbIdList;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: pb::DbIdList) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let v = Self {
+            id_list: p.ids.iter().copied().collect(),
+        };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::DbIdList, Incompatible> {
+        let p = pb::DbIdList {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            ids: self.id_list.iter().copied().collect(),
+        };
+        Ok(p)
+    }
+}

@@ -12,119 +12,100 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use common_base::base::uuid::Uuid;
-use common_expression::converts::from_scalar;
 use common_expression::ColumnId;
-use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
+
+use crate::meta::ColumnStatistics;
 
 pub type FormatVersion = u64;
 pub type SnapshotId = Uuid;
 pub type Location = (String, FormatVersion);
 pub type ClusterKey = (u32, String);
-
 pub type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct ColumnStatistics {
-    pub min: Scalar,
-    pub max: Scalar,
-
-    pub null_count: u64,
-    pub in_memory_size: u64,
-    pub distinct_of_values: Option<u64>,
+pub enum MinMax<T> {
+    // min eq max
+    Point(T),
+    // inclusive on both sides, min < max
+    Range(T, T),
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct ClusterStatistics {
-    pub cluster_key_id: u32,
-    pub min: Vec<Scalar>,
-    pub max: Vec<Scalar>,
-    pub level: i32,
+impl<T: Ord + Clone> MinMax<T> {
+    pub fn new(min: T, max: T) -> Self {
+        if min == max {
+            Self::Point(min)
+        } else {
+            Self::Range(min, max)
+        }
+    }
 
-    // currently it's only used in native engine
-    pub pages: Option<Vec<Scalar>>,
-}
+    pub fn update(&mut self, value: T) {
+        match self {
+            MinMax::Point(v) => {
+                let v = v.clone();
+                match v.cmp(&value) {
+                    Ordering::Less => *self = MinMax::Range(v, value),
+                    Ordering::Greater => *self = MinMax::Range(value, v),
+                    // value cannot be null
+                    Ordering::Equal => (),
+                }
+            }
+            MinMax::Range(min, max) => {
+                if value > *max {
+                    *max = value
+                } else if value < *min {
+                    *min = value
+                }
+            }
+        }
+    }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
-pub struct Statistics {
-    pub row_count: u64,
-    pub block_count: u64,
-    pub perfect_block_count: u64,
+    pub fn min(&self) -> &T {
+        match self {
+            MinMax::Point(v) => v,
+            MinMax::Range(v, _) => v,
+        }
+    }
 
-    pub uncompressed_byte_size: u64,
-    pub compressed_byte_size: u64,
-    pub index_size: u64,
-
-    pub col_stats: HashMap<ColumnId, ColumnStatistics>,
-    pub cluster_stats: Option<ClusterStatistics>,
-}
-
-// conversions from old meta data
-// ----------------------------------------------------------------
-// ----------------------------------------------------------------
-impl ColumnStatistics {
-    pub fn from_v0(
-        v0: &crate::meta::v0::statistics::ColumnStatistics,
-        data_type: &TableDataType,
-    ) -> Self {
-        let data_type = data_type.into();
-        Self {
-            min: from_scalar(&v0.min, &data_type),
-            max: from_scalar(&v0.max, &data_type),
-            null_count: v0.null_count,
-            in_memory_size: v0.in_memory_size,
-            distinct_of_values: None,
+    pub fn max(&self) -> &T {
+        match self {
+            MinMax::Point(v) => v,
+            MinMax::Range(_, v) => v,
         }
     }
 }
 
-impl ClusterStatistics {
-    pub fn from_v0(
-        v0: crate::meta::v0::statistics::ClusterStatistics,
-        data_type: &TableDataType,
-    ) -> Self {
-        let data_type = data_type.into();
-        Self {
-            cluster_key_id: v0.cluster_key_id,
-            min: v0
-                .min
-                .into_iter()
-                .map(|s| from_scalar(&s, &data_type))
-                .collect(),
-            max: v0
-                .max
-                .into_iter()
-                .map(|s| from_scalar(&s, &data_type))
-                .collect(),
-            level: v0.level,
-            pages: None,
-        }
-    }
-}
+#[cfg(test)]
+mod tests {
+    use common_exception::Result;
+    use common_expression::types::NumberScalar;
+    use common_expression::Scalar;
 
-impl Statistics {
-    pub fn from_v0(v0: crate::meta::v0::statistics::Statistics, fields: &[TableField]) -> Self {
-        let col_stats = v0
-            .col_stats
-            .into_iter()
-            .map(|(k, v)| {
-                let t = fields[k as usize].data_type();
-                (k, ColumnStatistics::from_v0(&v, t))
-            })
-            .collect();
-        Self {
-            row_count: v0.row_count,
-            block_count: v0.block_count,
-            perfect_block_count: v0.perfect_block_count,
-            uncompressed_byte_size: v0.uncompressed_byte_size,
-            compressed_byte_size: v0.compressed_byte_size,
-            index_size: v0.index_size,
-            col_stats,
-            cluster_stats: None,
-        }
+    use crate::meta::MinMax;
+
+    #[test]
+    fn test_minmax() -> Result<()> {
+        let a = Scalar::Number(NumberScalar::Int16(1));
+        let b = Scalar::Number(NumberScalar::Int16(2));
+        let mut t1 = MinMax::new(b.clone(), b.clone());
+        assert_eq!(t1, MinMax::Point(Scalar::Number(NumberScalar::Int16(2))));
+        t1.update(a.clone());
+        assert_eq!(&Scalar::Number(NumberScalar::Int16(1)), t1.min());
+        assert_eq!(&Scalar::Number(NumberScalar::Int16(2)), t1.max());
+
+        let mut t2 = MinMax::new(a, Scalar::Null);
+        assert_eq!(
+            t2,
+            MinMax::Range(Scalar::Number(NumberScalar::Int16(1)), Scalar::Null)
+        );
+        t2.update(b);
+        assert_eq!(&Scalar::Number(NumberScalar::Int16(1)), t2.min());
+        assert_eq!(&Scalar::Null, t2.max());
+
+        Ok(())
     }
 }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::Expr as AExpr;
@@ -60,9 +61,14 @@ impl BindContext {
                 exprs
             )));
         }
-        let mut scalar_binder =
-            ScalarBinder::new(self, ctx.clone(), name_resolution_ctx, metadata.clone(), &[
-            ]);
+        let mut scalar_binder = ScalarBinder::new(
+            self,
+            ctx.clone(),
+            name_resolution_ctx,
+            metadata.clone(),
+            &[],
+            HashMap::new(),
+        );
 
         let mut map_exprs = Vec::with_capacity(exprs.len());
         for (i, expr) in exprs.iter().enumerate() {

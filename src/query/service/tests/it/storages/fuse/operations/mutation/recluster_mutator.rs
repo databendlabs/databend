@@ -83,35 +83,35 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
     let mut test_segment_locations = vec![];
     let mut test_block_locations = vec![];
-    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
+    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
         cluster_key_id,
-        min: vec![Scalar::from(1i64)],
-        max: vec![Scalar::from(3i64)],
-        level: 0,
-        pages: None,
-    }))
+        vec![Scalar::from(1i64)],
+        vec![Scalar::from(3i64)],
+        0,
+        None,
+    )))
     .await?;
     test_segment_locations.push(segment_location);
     test_block_locations.push(block_location);
 
-    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
+    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
         cluster_key_id,
-        min: vec![Scalar::from(2i64)],
-        max: vec![Scalar::from(4i64)],
-        level: 0,
-        pages: None,
-    }))
+        vec![Scalar::from(2i64)],
+        vec![Scalar::from(4i64)],
+        0,
+        None,
+    )))
     .await?;
     test_segment_locations.push(segment_location);
     test_block_locations.push(block_location);
 
-    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
+    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
         cluster_key_id,
-        min: vec![Scalar::from(4i64)],
-        max: vec![Scalar::from(5i64)],
-        level: 0,
-        pages: None,
-    }))
+        vec![Scalar::from(4i64)],
+        vec![Scalar::from(5i64)],
+        0,
+        None,
+    )))
     .await?;
     test_segment_locations.push(segment_location);
     test_block_locations.push(block_location);

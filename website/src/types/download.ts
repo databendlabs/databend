@@ -6,6 +6,7 @@ export interface IAssets {
   osTypeDesc?: string;
   osType: string;
   isApple?: boolean;
+  isUbuntu?: boolean;
 }
 
 export interface IRepoResource {
