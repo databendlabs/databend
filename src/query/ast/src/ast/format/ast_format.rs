@@ -1373,6 +1373,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                         format!("Action ModifyColumn column {}", column),
                         format!("Action SetMaskingPolicy {}", mask_name),
                     ),
+                    ModifyColumnAction::UnsetMaskingPolicy(column) => (
+                        format!("Action ModifyColumn column {}", column),
+                        "Action UnsetMaskingPolicy".to_string(),
+                    ),
                     ModifyColumnAction::SetDataType(column_type_name_vec) => {
                         let action_name = "Action ModifyColumn".to_string();
 
