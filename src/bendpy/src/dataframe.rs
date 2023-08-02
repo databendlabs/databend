@@ -76,8 +76,11 @@ impl PyDataFrame {
     fn show(&self, py: Python, num: usize) -> PyResult<()> {
         let blocks = self.collect(py)?;
         let bs = self.get_box();
-        let res = blocks.box_render(num, bs.bs_max_width, bs.bs_max_width);
-        println!("{}", res);
+        let result = blocks.box_render(num, bs.bs_max_width, bs.bs_max_width);
+
+        // Note that println! does not print to the Python debug console and is not visible in notebooks for instance
+        let print = py.import("builtins")?.getattr("print")?;
+        print.call1((result,))?;
         Ok(())
     }
 
