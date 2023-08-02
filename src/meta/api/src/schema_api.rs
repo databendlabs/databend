@@ -65,6 +65,8 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
@@ -211,6 +213,11 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, KVAppError>;
+
+    async fn set_table_column_mask_policy(
+        &self,
+        req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply, KVAppError>;
 
     async fn get_drop_table_infos(
         &self,

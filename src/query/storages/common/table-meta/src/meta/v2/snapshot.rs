@@ -20,11 +20,11 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::monotonically_increased_timestamp;
-use crate::meta::statistics::FormatVersion;
 use crate::meta::trim_timestamp_to_micro_second;
 use crate::meta::v0;
 use crate::meta::v1;
 use crate::meta::ClusterKey;
+use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::SnapshotId;
 use crate::meta::Statistics;
