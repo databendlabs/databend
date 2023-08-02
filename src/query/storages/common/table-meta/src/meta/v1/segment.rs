@@ -19,12 +19,12 @@ use common_expression::ColumnId;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::statistics::FormatVersion;
 use crate::meta::v0::statistics::ClusterStatistics;
 use crate::meta::v0::statistics::ColumnStatistics;
 use crate::meta::v0::statistics::Statistics;
 use crate::meta::v0::ColumnMeta;
 use crate::meta::Compression;
+use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::Versioned;
 

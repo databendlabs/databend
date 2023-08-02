@@ -76,13 +76,13 @@ pub struct BatchStatistics {
 
 impl BatchStatistics {
     pub fn get(&self, index: usize) -> ColumnStatistics {
-        ColumnStatistics {
-            min: unsafe { self.min_values.index_unchecked(index).to_owned() },
-            max: unsafe { self.max_values.index_unchecked(index).to_owned() },
-            null_count: self.null_count[index],
-            in_memory_size: 0, // this field is not used.
-            distinct_of_values: self.distinct_count.as_ref().map(|d| d[index]),
-        }
+        ColumnStatistics::new(
+            unsafe { self.min_values.index_unchecked(index).to_owned() },
+            unsafe { self.max_values.index_unchecked(index).to_owned() },
+            self.null_count[index],
+            0, // this field is not used.
+            self.distinct_count.as_ref().map(|d| d[index]),
+        )
     }
 
     pub fn from_statistics(
