@@ -142,6 +142,10 @@ pub fn enforce_distribution(distribution: &Distribution, s_expr: &SExpr) -> Resu
 }
 
 fn check_merge(s_expr: &SExpr) -> bool {
+    // Todo: support cluster for materialized cte
+    if let RelOperator::CteScan(_) = s_expr.plan.as_ref() {
+        return true;
+    }
     if let RelOperator::Exchange(op) = s_expr.plan.as_ref() {
         if op == &Exchange::Merge {
             return true;
