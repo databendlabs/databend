@@ -119,7 +119,10 @@ jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "fe6835a" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.8", features = ["compat-07", "tracing-log"] }
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.8", features = [
+    "compat-07",
+    "tracing-log",
+] }
 
 # type helper
 derive_more = "0.99.17"
