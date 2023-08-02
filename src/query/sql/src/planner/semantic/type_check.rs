@@ -2040,6 +2040,7 @@ impl<'a> TypeChecker<'a> {
             "last_query_id",
             "array_sort",
             "array_aggregate",
+            "array_reduce",
         ]
     }
 
@@ -2348,7 +2349,7 @@ impl<'a> TypeChecker<'a> {
                         .await,
                 )
             }
-            ("array_aggregate", args) => {
+            ("array_aggregate" | "array_reduce", args) => {
                 if args.len() != 2 {
                     return None;
                 }
@@ -2365,7 +2366,7 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
                 Some(Err(ErrorCode::SemanticError(
-                    "Aggregate function name be a constant string",
+                    "Array aggregate function name be must a constant string",
                 )))
             }
             _ => None,
