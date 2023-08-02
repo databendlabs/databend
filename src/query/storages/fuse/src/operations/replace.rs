@@ -19,6 +19,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::FieldIndex;
 use common_expression::TableField;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
@@ -27,6 +28,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::create_dummy_item;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use log::info;
 use rand::prelude::SliceRandom;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -155,10 +157,42 @@ impl FuseTable {
         let table_is_empty = base_snapshot.segments.is_empty();
         let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let cluster_keys = self.cluster_keys(ctx.clone());
+
+        let most_significant_on_conflict_field_index: Option<FieldIndex> = if !cluster_keys
+            .is_empty()
+            && ctx.get_settings().get_enable_replace_into_bloom_pruning()?
+        {
+            // pick the most significant cluster key as the bloom filter key, by NDV
+            let col_stats_provider = self.column_statistics_provider().await?;
+            let iter = on_conflicts.iter().enumerate().filter_map(|(idx, key)| {
+                let maybe_col_stats =
+                    col_stats_provider.column_statistics(key.table_field.column_id);
+                maybe_col_stats.map(|col_stats| (idx, col_stats.number_of_distinct_values))
+            });
+            // pick the one with the smallest NDV
+            iter.min_by(|l, r| l.1.cmp(&r.1)).map(|v| v.0)
+        } else {
+            None
+        };
+
+        match most_significant_on_conflict_field_index {
+            Some(idx) => {
+                info!(
+                    "replace-into, most_significant_on_conflict_field_index: {:?}, name {}",
+                    idx,
+                    on_conflicts[idx].table_field.name()
+                );
+            }
+            None => {
+                info!("replace-into, most_significant_on_conflict_field_index: None");
+            }
+        }
+
         let replace_into_processor = ReplaceIntoProcessor::create(
             ctx.as_ref(),
             on_conflicts.clone(),
             cluster_keys,
+            most_significant_on_conflict_field_index,
             schema.as_ref(),
             table_is_empty,
             table_level_range_index,

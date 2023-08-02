@@ -35,13 +35,17 @@ use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_sql::evaluator::BlockOperator;
 use log::info;
+use log::warn;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
+use storages_common_index::filters::Filter;
+use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 
+use crate::io::read::bloom::block_filter_reader::BloomBlockFilterReader;
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
@@ -89,6 +93,7 @@ struct AggregationContext {
     segment_reader: CompactSegmentInfoReader,
     block_builder: BlockBuilder,
     io_request_semaphore: Arc<Semaphore>,
+    enable_bloom_filter: bool,
 }
 
 // Apply MergeIntoOperations to segments
@@ -174,6 +179,7 @@ impl MergeIntoOperationAggregator {
                 segment_reader,
                 block_builder,
                 io_request_semaphore,
+                enable_bloom_filter: ctx.get_settings().get_enable_replace_into_bloom_pruning()?,
             }),
         })
     }
@@ -204,6 +210,7 @@ impl MergeIntoOperationAggregator {
                     for DeletionByColumn {
                         columns_min_max,
                         key_hashes,
+                        bloom_hashes,
                     } in &partitions
                     {
                         if aggregation_ctx
@@ -218,11 +225,60 @@ impl MergeIntoOperationAggregator {
                                 Some(v) => v,
                             };
 
-                            // block level
+                            // block level pruning, using range index
                             for (block_index, block_meta) in seg.blocks.iter().enumerate() {
                                 if aggregation_ctx
                                     .overlapped(&block_meta.col_stats, columns_min_max)
                                 {
+                                    if self.aggregation_ctx.enable_bloom_filter
+                                        && bloom_hashes.is_some()
+                                    {
+                                        if let Some(loc) = &block_meta.bloom_filter_index_location {
+                                            // bloom filter pruning
+                                            // get the bloom filter column name
+                                            let bloom_column_name =
+                                                BloomIndex::build_filter_column_name(
+                                                    loc.1,
+                                                    &self.aggregation_ctx.on_conflict_fields[0]
+                                                        .table_field,
+                                                )?;
+                                            let index_len = block_meta.bloom_filter_index_size;
+
+                                            match loc
+                                                .read_block_filter(
+                                                    self.aggregation_ctx.data_accessor.clone(),
+                                                    &[bloom_column_name],
+                                                    index_len,
+                                                )
+                                                .await
+                                            {
+                                                Ok(bloom_filter) => {
+                                                    let col_filter = &bloom_filter.filters[0];
+                                                    let bloom_hashes =
+                                                        bloom_hashes.as_ref().unwrap();
+                                                    let mut contains = false;
+                                                    for hash in bloom_hashes {
+                                                        if col_filter.contains_digest(*hash) {
+                                                            contains = true;
+                                                            break;
+                                                        }
+                                                    }
+
+                                                    if !contains {
+                                                        continue;
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    // broken index should not stop us
+                                                    warn!(
+                                                        "failed to read bloom filter index: {}",
+                                                        e
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     self.deletion_accumulator.add_block_deletion(
                                         *segment_index,
                                         block_index,

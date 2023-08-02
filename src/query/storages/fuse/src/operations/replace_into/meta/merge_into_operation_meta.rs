@@ -40,6 +40,8 @@ pub struct DeletionByColumn {
     pub columns_min_max: Vec<(Scalar, Scalar)>,
     // used in block level
     pub key_hashes: HashSet<UniqueKeyDigest>,
+    // bloom hash of the most significant column
+    pub bloom_hashes: Option<HashSet<u64>>,
 }
 
 #[typetag::serde(name = "merge_into_operation_meta")]
