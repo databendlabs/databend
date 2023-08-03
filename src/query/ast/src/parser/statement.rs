@@ -879,11 +879,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let show_roles = value(Statement::ShowRoles, rule! { SHOW ~ ROLES });
     let create_role = map(
         rule! {
-            CREATE ~ ROLE ~ ( IF ~ NOT ~ EXISTS )? ~ #literal_string
+            CREATE ~ ROLE ~ ( IF ~ NOT ~ EXISTS )? ~ #ident
         },
         |(_, _, opt_if_not_exists, role_name)| Statement::CreateRole {
             if_not_exists: opt_if_not_exists.is_some(),
-            role_name,
+            role_name: role_name.to_string(),
         },
     );
     let drop_role = map(
