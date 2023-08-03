@@ -1,13 +1,14 @@
 ---
 title: MEDIAN_TDIGEST
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-Aggregate function.
+<FunctionDescription description="Introduced or updated: v1.2.41"/>
 
-The MEDIAN_TDIGEST() function computes the median of a numeric data sequence using the [t-digest](https://github.com/tdunning/t-digest/blob/master/docs/t-digest-paper/histo.pdf) algorithm.
+Computes the median of a numeric data sequence using the [t-digest](https://github.com/tdunning/t-digest/blob/master/docs/t-digest-paper/histo.pdf) algorithm.
 
-:::caution
-NULL values are not counted.
+:::note
+NULL values are not included in the calculation.
 :::
 
 ## Syntax
@@ -24,12 +25,12 @@ MEDIAN_TDIGEST(<expr>)
 
 ## Return Type
 
-the type of the value.
+Returns a value of the same data type as the input values.
 
-## Example
+## Examples
 
-**Create a Table and Insert Sample Data**
 ```sql
+-- Create a table and insert sample data
 CREATE TABLE exam_scores (
   id INT,
   student_id INT,
@@ -42,16 +43,11 @@ VALUES (1, 1, 80),
        (3, 3, 75),
        (4, 4, 95),
        (5, 5, 85);
-```
 
-**Query Demo: Calculate Median Exam Score**
-```sql
+-- Calculate median exam score
 SELECT MEDIAN_TDIGEST(score) AS median_score
 FROM exam_scores;
-```
 
-**Result**
-```sql
 |  median_score  |
 |----------------|
 |      85.0      |

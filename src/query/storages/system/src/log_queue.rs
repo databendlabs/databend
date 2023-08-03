@@ -91,10 +91,10 @@ impl<Event: SystemLogElement + 'static> SystemLogQueue<Event> {
                 .get(&TypeId::of::<Self>())
             {
                 None => Err(ErrorCode::Internal("")),
-                Some(instance) => match instance.downcast_ref::<Arc<Self>>() {
-                    None => Err(ErrorCode::Internal("")),
-                    Some(instant) => Ok(instant.clone()),
-                },
+                Some(instance) => instance
+                    .downcast_ref::<Arc<Self>>()
+                    .cloned()
+                    .ok_or(ErrorCode::Internal("")),
             }
         }
     }

@@ -116,14 +116,12 @@ impl FuseTable {
         let mut on_conflicts = Vec::with_capacity(on_conflict_field_identifiers.len());
         for f in on_conflict_field_identifiers {
             let field_name = f.name();
-            let (field_index, _) = match schema.column_with_name(field_name) {
-                Some(idx) => idx,
-                None => {
-                    return Err(ErrorCode::Internal(
+            let (field_index, _) =
+                schema
+                    .column_with_name(field_name)
+                    .ok_or(ErrorCode::Internal(
                         "not expected, on conflict field not found (after binding)",
-                    ));
-                }
-            };
+                    ))?;
             on_conflicts.push(OnConflictField {
                 table_field: f.clone(),
                 field_index,

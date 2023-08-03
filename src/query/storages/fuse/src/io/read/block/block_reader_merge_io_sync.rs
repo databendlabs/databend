@@ -79,13 +79,10 @@ impl BlockReader {
             let column_range = raw_range.start..raw_range.end;
 
             // Find the range index and Range from merged ranges.
-            let (merged_range_idx, merged_range) = match range_merger.get(column_range.clone()) {
-                None => Err(ErrorCode::Internal(format!(
-                    "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
-                    column_range, path, merged_ranges
-                ))),
-                Some((index, range)) => Ok((index, range)),
-            }?;
+            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or(ErrorCode::Internal(format!(
+                "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
+                column_range, path, merged_ranges
+            )))?;
 
             // Fetch the raw data for the raw range.
             let start = (column_range.start - merged_range.start) as usize;
