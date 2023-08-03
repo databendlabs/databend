@@ -163,7 +163,6 @@ impl FuseTable {
             self.table_info.schema(),
             None,
             &block_metas,
-            None,
             block_count,
             PruningStatistics::default(),
         )?;

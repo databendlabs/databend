@@ -33,6 +33,7 @@ use super::native_data_source::DataSource;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::VirtualColumnReader;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 use crate::FusePartInfo;
 
@@ -47,6 +48,7 @@ pub struct ReadNativeDataSource<const BLOCKING_IO: bool> {
     partitions: StealablePartitions,
 
     index_reader: Arc<Option<AggIndexReader>>,
+    virtual_reader: Arc<Option<VirtualColumnReader>>,
 }
 
 impl ReadNativeDataSource<true> {
@@ -57,6 +59,7 @@ impl ReadNativeDataSource<true> {
         block_reader: Arc<BlockReader>,
         partitions: StealablePartitions,
         index_reader: Arc<Option<AggIndexReader>>,
+        virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         SyncSourcer::create(ctx.clone(), output.clone(), ReadNativeDataSource::<true> {
@@ -68,6 +71,7 @@ impl ReadNativeDataSource<true> {
             output_data: None,
             partitions,
             index_reader,
+            virtual_reader,
         })
     }
 }
@@ -80,6 +84,7 @@ impl ReadNativeDataSource<false> {
         block_reader: Arc<BlockReader>,
         partitions: StealablePartitions,
         index_reader: Arc<Option<AggIndexReader>>,
+        virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         Ok(ProcessorPtr::create(Box::new(ReadNativeDataSource::<
@@ -93,6 +98,7 @@ impl ReadNativeDataSource<false> {
             output_data: None,
             partitions,
             index_reader,
+            virtual_reader,
         })))
     }
 }
@@ -116,6 +122,27 @@ impl SyncSource for ReadNativeDataSource<true> {
                         return Ok(Some(DataBlock::empty_with_meta(
                             NativeDataSourceMeta::create(vec![part.clone()], vec![
                                 DataSource::AggIndex(data),
+                            ]),
+                        )));
+                    }
+                }
+
+                if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+                    let fuse_part = FusePartInfo::from_part(&part)?;
+                    let loc =
+                        TableMetaLocationGenerator::gen_virtual_block_location(&fuse_part.location);
+
+                    // If virtual column file exists, read the data from the virtual columns directly.
+                    if let Some(mut virtual_source_data) =
+                        virtual_reader.sync_read_native_data(&loc)
+                    {
+                        let mut source_data = self
+                            .block_reader
+                            .sync_read_native_columns_data(part.clone())?;
+                        source_data.append(&mut virtual_source_data);
+                        return Ok(Some(DataBlock::empty_with_meta(
+                            NativeDataSourceMeta::create(vec![part.clone()], vec![
+                                DataSource::Normal(source_data),
                             ]),
                         )));
                     }

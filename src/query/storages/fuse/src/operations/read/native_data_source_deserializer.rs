@@ -61,6 +61,7 @@ use super::native_data_source::DataSource;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
+use crate::io::VirtualColumnReader;
 use crate::metrics::metrics_inc_pruning_prewhere_nums;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 
@@ -102,9 +103,11 @@ pub struct NativeDeserializeDataTransform {
     array_skip_pages: BTreeMap<usize, usize>,
 
     index_reader: Arc<Option<AggIndexReader>>,
+    virtual_reader: Arc<Option<VirtualColumnReader>>,
 }
 
 impl NativeDeserializeDataTransform {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
         block_reader: Arc<BlockReader>,
@@ -113,6 +116,7 @@ impl NativeDeserializeDataTransform {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         index_reader: Arc<Option<AggIndexReader>>,
+        virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
 
@@ -230,6 +234,7 @@ impl NativeDeserializeDataTransform {
                 offset_in_part: 0,
 
                 index_reader,
+                virtual_reader,
             },
         )))
     }
@@ -576,18 +581,18 @@ impl Processor for NativeDeserializeDataTransform {
                         has_default_value = true;
                     }
                 }
-                if let Some(ref virtual_columns_meta) = fuse_part.virtual_columns_meta {
-                    // Add optional virtual column array_iter
-                    for (name, virtual_column_meta) in virtual_columns_meta.iter() {
-                        let virtual_index = virtual_column_meta.index
-                            + self.block_reader.project_column_nodes.len();
+                // Add optional virtual column array_iter
+                if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+                    for (index, virtual_column_info) in
+                        virtual_reader.virtual_column_infos.iter().enumerate()
+                    {
+                        let virtual_index = index + self.block_reader.project_column_nodes.len();
                         if let Some(readers) = chunks.remove(&virtual_index) {
                             let array_iter = BlockReader::build_virtual_array_iter(
-                                name.clone(),
-                                virtual_column_meta.desc.clone(),
+                                virtual_column_info.name.clone(),
                                 readers,
                             )?;
-                            let index = self.src_schema.index_of(name)?;
+                            let index = self.src_schema.index_of(&virtual_column_info.name)?;
                             self.array_iters.insert(index, array_iter);
                             self.array_skip_pages.insert(index, 0);
                         }
