@@ -685,10 +685,10 @@ impl ShareMeta {
             },
             ShareGrantObjectSeqAndId::Table(_db_id, _table_seq, table_id, _meta) => {
                 let key = ShareGrantObject::Table(*table_id).to_string();
-                match self.entries.get(&key) {
-                    Some(entry) => Ok(entry.has_granted_privileges(privileges)),
-                    None => Ok(false),
-                }
+                Ok(self
+                    .entries
+                    .get(&key)
+                    .map_or(false, |entry| entry.has_granted_privileges(privileges)))
             }
         }
     }

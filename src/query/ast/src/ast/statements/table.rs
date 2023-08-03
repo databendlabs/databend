@@ -722,6 +722,8 @@ impl Display for ColumnDefinition {
 pub enum ModifyColumnAction {
     // (column name id, masking policy name)
     SetMaskingPolicy(Identifier, String),
+    // column name id
+    UnsetMaskingPolicy(Identifier),
     // vec<(column name id, type name)>
     SetDataType(Vec<(Identifier, TypeName)>),
     // column name id
@@ -733,6 +735,9 @@ impl Display for ModifyColumnAction {
         match &self {
             ModifyColumnAction::SetMaskingPolicy(column, name) => {
                 write!(f, "{} SET MASKING POLICY {}", column, name)?
+            }
+            ModifyColumnAction::UnsetMaskingPolicy(column) => {
+                write!(f, "{} UNSET MASKING POLICY", column)?
             }
             ModifyColumnAction::SetDataType(column_type_name_vec) => {
                 let ret = column_type_name_vec

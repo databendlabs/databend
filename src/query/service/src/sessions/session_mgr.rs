@@ -264,13 +264,10 @@ impl SessionManager {
 
         // First try to kill the idle session
         active_sessions_read_guard.retain(|_id, weak_ptr| -> bool {
-            match weak_ptr.upgrade() {
-                None => false,
-                Some(session) => {
-                    session.kill();
-                    true
-                }
-            }
+            weak_ptr.upgrade().is_some_and(|session| {
+                session.kill();
+                true
+            })
         });
 
         // active_sessions_read_guard.values().for_each(Session::kill);
@@ -299,10 +296,7 @@ impl SessionManager {
         let active_sessions = self.active_sessions.read();
         active_sessions
             .iter()
-            .filter(|(_, y)| match y.upgrade() {
-                None => false,
-                Some(a) => a.get_type().is_user_session(),
-            })
+            .filter(|(_, y)| y.upgrade().is_some_and(|a| a.get_type().is_user_session()))
             .count()
     }
 

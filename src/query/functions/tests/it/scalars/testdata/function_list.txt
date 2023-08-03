@@ -1733,20 +1733,44 @@ Functions overloads:
 33 gte(Array(T0), Array(T0)) :: Boolean
 34 gte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 35 gte FACTORY
+0 h3_cell_area_m2(UInt64) :: Float64
+1 h3_cell_area_m2(UInt64 NULL) :: Float64 NULL
+0 h3_cell_area_rads2(UInt64) :: Float64
+1 h3_cell_area_rads2(UInt64 NULL) :: Float64 NULL
 0 h3_edge_length_km(UInt8) :: Float64
 1 h3_edge_length_km(UInt8 NULL) :: Float64 NULL
 0 h3_edge_length_m(UInt8) :: Float64
 1 h3_edge_length_m(UInt8 NULL) :: Float64 NULL
+0 h3_get_base_cell(UInt64) :: UInt8
+1 h3_get_base_cell(UInt64 NULL) :: UInt8 NULL
+0 h3_get_faces(UInt64) :: Array(UInt8)
+1 h3_get_faces(UInt64 NULL) :: Array(UInt8) NULL
 0 h3_get_resolution(UInt64) :: UInt8
 1 h3_get_resolution(UInt64 NULL) :: UInt8 NULL
+0 h3_hex_area_km2(UInt8) :: Float64
+1 h3_hex_area_km2(UInt8 NULL) :: Float64 NULL
+0 h3_hex_area_m2(UInt8) :: Float64
+1 h3_hex_area_m2(UInt8 NULL) :: Float64 NULL
+0 h3_indexes_are_neighbors(UInt64, UInt64) :: Boolean
+1 h3_indexes_are_neighbors(UInt64 NULL, UInt64 NULL) :: Boolean NULL
+0 h3_is_pentagon(UInt64) :: Boolean
+1 h3_is_pentagon(UInt64 NULL) :: Boolean NULL
+0 h3_is_res_class_iii(UInt64) :: Boolean
+1 h3_is_res_class_iii(UInt64 NULL) :: Boolean NULL
 0 h3_is_valid(UInt64) :: Boolean
 1 h3_is_valid(UInt64 NULL) :: Boolean NULL
 0 h3_k_ring(UInt64, UInt32) :: Array(UInt64)
 1 h3_k_ring(UInt64 NULL, UInt32 NULL) :: Array(UInt64) NULL
+0 h3_to_children(UInt64, UInt8) :: Array(UInt64)
+1 h3_to_children(UInt64 NULL, UInt8 NULL) :: Array(UInt64) NULL
 0 h3_to_geo(UInt64) :: Tuple(Float64, Float64)
 1 h3_to_geo(UInt64 NULL) :: Tuple(Float64, Float64) NULL
 0 h3_to_geo_boundary(UInt64) :: Array(Tuple(Float64, Float64))
 1 h3_to_geo_boundary(UInt64 NULL) :: Array(Tuple(Float64, Float64)) NULL
+0 h3_to_parent(UInt64, UInt8) :: UInt64
+1 h3_to_parent(UInt64 NULL, UInt8 NULL) :: UInt64 NULL
+0 h3_to_string(UInt64) :: String
+1 h3_to_string(UInt64 NULL) :: String NULL
 0 hex(String) :: String
 1 hex(String NULL) :: String NULL
 2 hex(Int64) :: String
@@ -3032,6 +3056,8 @@ Functions overloads:
 19 sqrt(Float64 NULL) :: Float64 NULL
 0 strcmp(String, String) :: Int8
 1 strcmp(String NULL, String NULL) :: Int8 NULL
+0 string_to_h3(String) :: UInt64
+1 string_to_h3(String NULL) :: UInt64 NULL
 0 sub_bitmap(Bitmap, UInt64, UInt64) :: Bitmap
 1 sub_bitmap(Bitmap NULL, UInt64 NULL, UInt64 NULL) :: Bitmap NULL
 0 substr(String, Int64) :: String

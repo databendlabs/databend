@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_ast::ast::Identifier;
@@ -30,6 +29,8 @@ use common_license::license::Feature::ComputedColumn;
 use common_license::license::Feature::DataMask;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::DatabaseType;
+use common_meta_app::schema::SetTableColumnMaskPolicyAction;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
@@ -39,12 +40,15 @@ use common_sql::executor::PhysicalPlanBuilder;
 use common_sql::plans::ModifyTableColumnPlan;
 use common_sql::plans::Plan;
 use common_sql::resolve_type_name;
+use common_sql::BloomIndexColumns;
 use common_sql::Planner;
 use common_storages_fuse::FuseTable;
 use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
 use common_users::UserApiProvider;
 use data_mask_feature::get_datamask_handler;
+use storages_common_index::BloomIndex;
+use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use table_lock::TableLockHandlerWrapper;
 
 use super::common::check_referenced_computed_columns;
@@ -69,7 +73,6 @@ impl ModifyTableColumnInterpreter {
         &self,
         catalog: Arc<dyn Catalog>,
         table: &Arc<dyn Table>,
-        table_meta: TableMeta,
         column: String,
         mask_name: String,
     ) -> Result<PipelineBuildResult> {
@@ -104,27 +107,24 @@ impl ModifyTableColumnInterpreter {
             )));
         }
 
-        let mut new_table_meta = table_meta;
-
-        let mut column_mask_policy = match &new_table_meta.column_mask_policy {
-            Some(column_mask_policy) => column_mask_policy.clone(),
-            None => BTreeMap::new(),
-        };
-        column_mask_policy.insert(column.clone(), mask_name);
-        new_table_meta.column_mask_policy = Some(column_mask_policy);
-
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
-        let req = UpdateTableMetaReq {
-            table_id,
+        let prev_column_mask_name =
+            if let Some(column_mask_policy) = &table_info.meta.column_mask_policy {
+                column_mask_policy.get(&column).cloned()
+            } else {
+                None
+            };
+        let req = SetTableColumnMaskPolicyReq {
+            tenant: self.ctx.get_tenant(),
             seq: MatchSeq::Exact(table_version),
-            new_table_meta,
-            copied_files: None,
-            deduplicated_label: None,
+            table_id,
+            column,
+            action: SetTableColumnMaskPolicyAction::Set(mask_name, prev_column_mask_name),
         };
 
-        let res = catalog.update_table_meta(table_info, req).await?;
+        let res = catalog.set_table_column_mask_policy(req).await?;
 
         if let Some(share_table_info) = res.share_table_info {
             save_share_table_info(
@@ -134,6 +134,55 @@ impl ModifyTableColumnInterpreter {
             )
             .await?;
         }
+        Ok(PipelineBuildResult::create())
+    }
+
+    // unset data mask policy to a column is a ee feature.
+    async fn do_unset_data_mask_policy(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        table: &Arc<dyn Table>,
+        column: String,
+    ) -> Result<PipelineBuildResult> {
+        let license_manager = get_license_manager();
+        license_manager.manager.check_enterprise_enabled(
+            &self.ctx.get_settings(),
+            self.ctx.get_tenant(),
+            DataMask,
+        )?;
+
+        let table_info = table.get_table_info();
+        let table_id = table_info.ident.table_id;
+        let table_version = table_info.ident.seq;
+
+        let prev_column_mask_name =
+            if let Some(column_mask_policy) = &table_info.meta.column_mask_policy {
+                column_mask_policy.get(&column).cloned()
+            } else {
+                None
+            };
+
+        if let Some(prev_column_mask_name) = prev_column_mask_name {
+            let req = SetTableColumnMaskPolicyReq {
+                tenant: self.ctx.get_tenant(),
+                seq: MatchSeq::Exact(table_version),
+                table_id,
+                column,
+                action: SetTableColumnMaskPolicyAction::Unset(prev_column_mask_name),
+            };
+
+            let res = catalog.set_table_column_mask_policy(req).await?;
+
+            if let Some(share_table_info) = res.share_table_info {
+                save_share_table_info(
+                    &self.ctx.get_tenant(),
+                    self.ctx.get_data_operator()?.operator(),
+                    share_table_info,
+                )
+                .await?;
+            }
+        }
+
         Ok(PipelineBuildResult::create())
     }
 
@@ -157,10 +206,17 @@ impl ModifyTableColumnInterpreter {
         let catalog_info = catalog.info();
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let prev_snapshot_id = match fuse_table.read_table_snapshot().await {
-            Ok(snapshot) => snapshot.map(|snapshot| snapshot.snapshot_id),
-            _ => None,
-        };
+        let prev_snapshot_id = fuse_table
+            .read_table_snapshot()
+            .await
+            .map_or(None, |v| v.map(|snapshot| snapshot.snapshot_id));
+
+        let mut bloom_index_cols = vec![];
+        if let Some(v) = table_info.options().get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
+            if let BloomIndexColumns::Specify(cols) = v.parse::<BloomIndexColumns>()? {
+                bloom_index_cols = cols;
+            }
+        }
 
         for (column, type_name) in column_name_types {
             let column = column.to_string();
@@ -176,6 +232,17 @@ impl ModifyTableColumnInterpreter {
                         Arc::new(data_schema),
                         &column,
                     )?;
+
+                    // If the column is defined in bloom index columns,
+                    // check whether the data type is supported for bloom index.
+                    if bloom_index_cols.iter().any(|v| v.as_str() == column)
+                        && !BloomIndex::supported_type(&new_type)
+                    {
+                        return Err(ErrorCode::TableOptionInvalid(format!(
+                            "Unsupported data type '{}' for bloom index",
+                            new_type
+                        )));
+                    }
                     new_schema.fields[i].data_type = new_type;
                 }
             } else {
@@ -198,10 +265,10 @@ impl ModifyTableColumnInterpreter {
             .enumerate()
             .for_each(|(index, field)| {
                 if index != schema.fields().len() - 1 {
-                    sql = format!("{} {},", sql, field.name.clone());
+                    sql = format!("{} `{}`,", sql, field.name.clone());
                 } else {
                     sql = format!(
-                        "{} {} from {}.{}",
+                        "{} `{}` from `{}`.`{}`",
                         sql,
                         field.name.clone(),
                         self.plan.database,
@@ -388,14 +455,12 @@ impl Interpreter for ModifyTableColumnInterpreter {
         // need to check whether this column is referenced by other computed columns.
         match &self.plan.action {
             ModifyColumnAction::SetMaskingPolicy(column, mask_name) => {
-                self.do_set_data_mask_policy(
-                    catalog,
-                    table,
-                    table_meta,
-                    column.to_string(),
-                    mask_name.clone(),
-                )
-                .await
+                self.do_set_data_mask_policy(catalog, table, column.to_string(), mask_name.clone())
+                    .await
+            }
+            ModifyColumnAction::UnsetMaskingPolicy(column) => {
+                self.do_unset_data_mask_policy(catalog, table, column.to_string())
+                    .await
             }
             ModifyColumnAction::SetDataType(column_name_types) => {
                 self.do_set_data_type(table, column_name_types).await

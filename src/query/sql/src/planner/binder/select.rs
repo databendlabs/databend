@@ -409,6 +409,7 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             aliases,
+            self.m_cte_bound_ctx.clone(),
         );
         scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
@@ -599,7 +600,7 @@ impl Binder {
         &mut self,
         left_span: Span,
         right_span: Span,
-        left_context: BindContext,
+        mut left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
@@ -641,6 +642,10 @@ impl Binder {
             non_equi_conditions: vec![],
             other_conditions: vec![],
         };
+        left_context.ctes_map.extend(*right_context.ctes_map);
+        left_context
+            .materialized_ctes
+            .extend(right_context.materialized_ctes);
         let s_expr = self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr)?;
         Ok((s_expr, left_context))
     }
@@ -660,6 +665,18 @@ impl Binder {
         let mut left_scalar_items = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_scalar_items = Vec::with_capacity(right_bind_context.columns.len());
         let mut new_bind_context = BindContext::new();
+        new_bind_context
+            .materialized_ctes
+            .extend(left_bind_context.materialized_ctes);
+        new_bind_context
+            .materialized_ctes
+            .extend(right_bind_context.materialized_ctes);
+        new_bind_context
+            .ctes_map
+            .extend(*left_bind_context.ctes_map);
+        new_bind_context
+            .ctes_map
+            .extend(*right_bind_context.ctes_map);
         let mut pairs = Vec::with_capacity(left_bind_context.columns.len());
         for (idx, (left_col, right_col)) in left_bind_context
             .columns

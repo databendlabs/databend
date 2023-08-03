@@ -31,10 +31,9 @@ impl PartInfo for MemoryPartInfo {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<MemoryPartInfo>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<MemoryPartInfo>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {
