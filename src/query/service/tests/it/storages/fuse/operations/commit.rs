@@ -462,6 +462,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        todo!()
+    }
+
     fn get_fuse_version(&self) -> String {
         todo!()
     }
