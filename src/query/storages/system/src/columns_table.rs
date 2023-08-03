@@ -36,6 +36,7 @@ use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType::Grant;
+use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_sql::Planner;
@@ -287,14 +288,14 @@ pub(crate) async fn generate_unique_object(
     Ok((unique_object, global_object_priv))
 }
 
-struct GrantObjectVisibilityChecker<'a> {
+pub struct GrantObjectVisibilityChecker {
     visible_global: bool,
     visible_databases: HashSet<(String, String)>,
     visible_tables: HashSet<(String, String, String)>,
 }
 
-impl<'a> GrantObjectVisibilityChecker<'a> {
-    pub fn new(user: &'a UserInfo, available_roles: &'a Vec<RoleInfo>) -> Self {
+impl GrantObjectVisibilityChecker {
+    pub fn new(user: &UserInfo, available_roles: &Vec<RoleInfo>) -> Self {
         let mut visible_global = false;
         let mut visible_databases = HashSet::new();
         let mut visible_tables = HashSet::new();

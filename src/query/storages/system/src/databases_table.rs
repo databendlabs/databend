@@ -35,6 +35,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
 use crate::columns_table::generate_unique_object;
+use crate::columns_table::GrantObjectVisibilityChecker;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 
@@ -70,36 +71,15 @@ impl AsyncSystemTable for DatabasesTable {
         let mut db_id = vec![];
 
         let user = ctx.get_current_user()?;
-        let grant_set = user.grants;
-
-        let (unique_object, global_object_priv) =
-            generate_unique_object(&tenant, grant_set).await?;
+        let roles = ctx.get_current_available_roles().await?;
+        let visibility_checker = GrantObjectVisibilityChecker::new(&user, &roles);
 
         for (ctl_name, catalog) in catalogs.into_iter() {
-            let mut access_dbs = HashSet::new();
-            let mut final_dbs = vec![];
-            if global_object_priv {
-                final_dbs = catalog.list_databases(tenant.as_str()).await?;
-            } else {
-                for object in &unique_object {
-                    match object {
-                        GrantObject::Database(priv_catalog, db) => {
-                            if priv_catalog == &ctl_name {
-                                access_dbs.insert(db);
-                            }
-                        }
-                        GrantObject::Table(catalog, db, _) => {
-                            if catalog == &ctl_name && !access_dbs.contains(db) {
-                                access_dbs.insert(db);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                for access_db in access_dbs {
-                    final_dbs.push(catalog.get_database(tenant.as_str(), access_db).await?);
-                }
-            }
+            let databases = catalog.list_databases(tenant.as_str()).await?;
+            let final_dbs = databases
+                .into_iter()
+                .filter(|db| visibility_checker.check_database_visibility(&ctl_name, &db.name()))
+                .collect::<Vec<_>>();
 
             for db in final_dbs {
                 catalog_names.push(ctl_name.clone().into_bytes());
