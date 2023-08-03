@@ -80,7 +80,7 @@ impl<'a> HeuristicOptimizer<'a> {
         }
     }
 
-    fn pre_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn pre_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
         let mut s_expr = s_expr;
         if s_expr.contain_subquery() {
             s_expr = decorrelate_subquery(self.metadata.clone(), s_expr)?;
@@ -93,7 +93,7 @@ impl<'a> HeuristicOptimizer<'a> {
         pruner.remove_unused_columns(&s_expr, require_columns)
     }
 
-    fn post_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn post_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
         // Consider lazy columns pruning in post optimize
         let mut pruner = UnusedColumnPruner::new(self.metadata.clone(), true);
         let require_columns: ColumnSet = self.bind_context.column_set();

@@ -163,7 +163,8 @@ pub fn optimize_query(
 
     let heuristic =
         HeuristicOptimizer::new(ctx.get_function_context()?, &bind_context, metadata.clone());
-    let mut result = heuristic.optimize(s_expr, &DEFAULT_REWRITE_RULES)?;
+    let mut result = heuristic.pre_optimize(s_expr)?;
+    result = heuristic.optimize_expression(&result, &DEFAULT_REWRITE_RULES)?;
     let mut dphyp_optimized = false;
     if ctx.get_settings().get_enable_dphyp()? {
         let (dp_res, optimized) =
@@ -189,7 +190,8 @@ pub fn optimize_query(
     if enable_distributed_query {
         result = optimize_distributed_query(ctx.clone(), &result)?;
     }
-    result = heuristic.optimize(result, &RESIDUAL_RULES)?;
+    result = heuristic.optimize_expression(&s_expr, &RESIDUAL_RULES)?;
+    result = heuristic.post_optimize(result)?;
     Ok(result)
 }
 
