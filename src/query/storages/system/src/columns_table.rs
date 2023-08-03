@@ -251,6 +251,9 @@ async fn generate_fields(
     Ok(fields)
 }
 
+/// GrantObjectVisibilityChecker is used to check whether a user has the privilege to access a
+/// database or table.
+/// It is used in `SHOW DATABASES` and `SHOW TABLES` statements.
 pub struct GrantObjectVisibilityChecker {
     visible_global: bool,
     visible_databases: HashSet<(String, String)>,
