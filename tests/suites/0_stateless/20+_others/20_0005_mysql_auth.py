@@ -42,21 +42,21 @@ with NativeClient(name="client1>") as client1:
 
 try:
     mydb = mysql.connector.connect(
-        host="127.0.0.1", user="u1", passwd="abc123", port="3307", connection_timeout=2
+        host="127.0.0.1", user="u1", passwd="abc123", port="3307", connection_timeout=3
     )
 except mysql.connector.errors.OperationalError:
     print("u1 is timeout")
 
 try:
     mydb = mysql.connector.connect(
-        host="127.0.0.1", user="u2", passwd="abc123", port="3307", connection_timeout=2
+        host="127.0.0.1", user="u2", passwd="abc123", port="3307", connection_timeout=3
     )
 except mysql.connector.errors.OperationalError:
     print("u2 is timeout")
 
 try:
     mydb = mysql.connector.connect(
-        host="127.0.0.1", user="u3", passwd="abc123", port="3307", connection_timeout=2
+        host="127.0.0.1", user="u3", passwd="abc123", port="3307", connection_timeout=3
     )
 except mysql.connector.errors.OperationalError:
     print("u3 is timeout")
