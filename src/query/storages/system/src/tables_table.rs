@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
@@ -40,7 +38,6 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use log::warn;
 
-use crate::columns_table::generate_unique_object;
 use crate::columns_table::GrantObjectVisibilityChecker;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;

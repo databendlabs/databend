@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
@@ -29,12 +28,10 @@ use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
-use common_meta_app::principal::GrantObject;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
-use crate::columns_table::generate_unique_object;
 use crate::columns_table::GrantObjectVisibilityChecker;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;

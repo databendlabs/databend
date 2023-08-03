@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -35,14 +34,12 @@ use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserPrivilegeType::Grant;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_sql::Planner;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
-use common_users::RoleCacheManager;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -252,44 +249,6 @@ async fn generate_fields(
         table.schema().fields().clone()
     };
     Ok(fields)
-}
-
-pub(crate) async fn generate_unique_object(
-    tenant: &str,
-    grant_set: UserGrantSet,
-) -> Result<(HashSet<GrantObject>, bool)> {
-    let mut unique_object: HashSet<GrantObject> = HashSet::new();
-    let mut global_object_priv = false;
-    let _objects = RoleCacheManager::instance()
-        .find_related_roles(tenant, &grant_set.roles())
-        .await?
-        .into_iter()
-        .map(|role| role.grants)
-        .fold(grant_set, |a, b| a | b)
-        .entries()
-        .iter()
-        .map(|e| {
-            let object = e.object();
-            match object {
-                GrantObject::Global => {
-                    global_object_priv = true;
-                }
-                GrantObject::Database(catalog, ldb) => {
-                    unique_object
-                        .insert(GrantObject::Database(catalog.to_string(), ldb.to_string()));
-                }
-                GrantObject::Table(catalog, ldb, ltab) => {
-                    unique_object.insert(GrantObject::Table(
-                        catalog.to_string(),
-                        ldb.to_string(),
-                        ltab.to_string(),
-                    ));
-                }
-            }
-        })
-        .collect::<Vec<_>>();
-
-    Ok((unique_object, global_object_priv))
 }
 
 pub struct GrantObjectVisibilityChecker {
