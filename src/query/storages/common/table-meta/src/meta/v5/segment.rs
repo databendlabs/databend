@@ -171,7 +171,7 @@ impl SegmentInfo {
     }
 
     pub fn from_slice(bytes: &[u8]) -> Result<Self> {
-        let mut segment;
+        let segment;
         let mut cursor = Cursor::new(bytes);
         let SegmentHeader {
             version,
