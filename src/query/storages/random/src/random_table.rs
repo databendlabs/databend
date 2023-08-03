@@ -113,10 +113,7 @@ impl Table for RandomTable {
                         }
                     };
                 }
-                let limit = match push_downs.limit {
-                    Some(limit) => limit,
-                    None => block_size,
-                };
+                let limit = push_downs.limit.unwrap_or(block_size);
                 (schema, limit)
             }
             None => (self.schema(), block_size),

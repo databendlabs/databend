@@ -150,13 +150,8 @@ impl FusePruner {
                 let field = table_schema.field_with_name(&name).ok()?;
                 let default_scalar = field_default_value(ctx.clone(), field).ok()?;
 
-                let stats = ColumnStatistics {
-                    min: default_scalar.clone(),
-                    max: default_scalar,
-                    null_count: 0,
-                    in_memory_size: 0,
-                    distinct_of_values: Some(1),
-                };
+                let stats =
+                    ColumnStatistics::new(default_scalar.clone(), default_scalar, 0, 0, Some(1));
                 Some((field.column_id(), stats))
             })
             .collect();

@@ -372,8 +372,14 @@ impl AggregationContext {
 
         let mut bitmap = MutableBitmap::new();
         for row in 0..num_rows {
-            let hash = row_hash_of_columns(&columns, row)?;
-            bitmap.push(!deleted_key_hashes.contains(&hash));
+            if let Some(hash) = row_hash_of_columns(&columns, row)? {
+                // some row hash means on-conflict columns of this row contains non-null values
+                // let's check it out
+                bitmap.push(!deleted_key_hashes.contains(&hash));
+            } else {
+                // otherwise, keep this row
+                bitmap.push(true);
+            }
         }
 
         let delete_nums = bitmap.unset_bits();
@@ -535,9 +541,11 @@ impl AggregationContext {
         key_max: &Scalar,
     ) -> bool {
         if let Some(stats) = column_stats {
-            std::cmp::min(key_max, &stats.max) >= std::cmp::max(key_min, &stats.min)
+            let max = stats.max();
+            let min = stats.min();
+            std::cmp::min(key_max, max) >= std::cmp::max(key_min, min)
                 || // coincide overlap
-                (&stats.max == key_max && &stats.min == key_min)
+                (max == key_max && min == key_min)
         } else {
             false
         }
@@ -617,17 +625,8 @@ mod tests {
             .collect::<Vec<_>>();
 
         // set up range index of columns
-
-        let range = |min: Scalar, max: Scalar| {
-            ColumnStatistics {
-                min,
-                max,
-                // the following values do not matter in this case
-                null_count: 0,
-                in_memory_size: 0,
-                distinct_of_values: None,
-            }
-        };
+        // the null_count/in_memory_size/distinct_of_values do not matter in this case
+        let range = |min: Scalar, max: Scalar| ColumnStatistics::new(min, max, 0, 0, None);
 
         let column_range_indexes = HashMap::from_iter([
             // range of xx_id [1, 10]

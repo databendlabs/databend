@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -21,7 +20,6 @@ use common_base::base::GlobalUniqName;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::arrow::serialize_column;
-use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_hashtable::HashtableLike;
@@ -34,6 +32,7 @@ use log::info;
 use opendal::Operator;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::serialize_group_by;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -50,9 +49,9 @@ pub struct TransformGroupBySpillWriter<Method: HashMethodBounds> {
 
     operator: Operator,
     location_prefix: String,
-    spilled_blocks: VecDeque<DataBlock>,
+    spilled_block: Option<DataBlock>,
     spilling_meta: Option<AggregateMeta<Method, ()>>,
-    spilling_future: Option<BoxFuture<'static, Result<()>>>,
+    spilling_future: Option<BoxFuture<'static, Result<DataBlock>>>,
 }
 
 impl<Method: HashMethodBounds> TransformGroupBySpillWriter<Method> {
@@ -69,7 +68,7 @@ impl<Method: HashMethodBounds> TransformGroupBySpillWriter<Method> {
             output,
             operator,
             location_prefix,
-            spilled_blocks: VecDeque::new(),
+            spilled_block: None,
             spilling_meta: None,
             spilling_future: None,
         })
@@ -102,9 +101,9 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
             return Ok(Event::Async);
         }
 
-        while let Some(spilled_meta) = self.spilled_blocks.pop_front() {
-            if !spilled_meta.is_empty() || spilled_meta.get_meta().is_some() {
-                self.output.push_data(Ok(spilled_meta));
+        if let Some(spilled_block) = self.spilled_block.take() {
+            if !spilled_block.is_empty() || spilled_block.get_meta().is_some() {
+                self.output.push_data(Ok(spilled_block));
                 return Ok(Event::NeedConsume);
             }
         }
@@ -145,15 +144,12 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
     fn process(&mut self) -> Result<()> {
         if let Some(spilling_meta) = self.spilling_meta.take() {
             if let AggregateMeta::Spilling(payload) = spilling_meta {
-                let (spilled_blocks, spilling_future) = spilling_group_by_payload(
+                self.spilling_future = Some(spilling_group_by_payload(
                     self.operator.clone(),
                     &self.method,
                     &self.location_prefix,
                     payload,
-                )?;
-
-                self.spilled_blocks = spilled_blocks;
-                self.spilling_future = Some(spilling_future);
+                )?);
 
                 return Ok(());
             }
@@ -169,15 +165,11 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let Some(spilling_future) = self.spilling_future.take() {
-            return spilling_future.await;
+            self.spilled_block = Some(spilling_future.await?);
         }
 
         Ok(())
     }
-}
-
-fn get_columns(data_block: DataBlock) -> Vec<BlockEntry> {
-    data_block.columns().to_vec()
 }
 
 pub fn spilling_group_by_payload<Method: HashMethodBounds>(
@@ -185,16 +177,15 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
     method: &Method,
     location_prefix: &str,
     mut payload: HashTablePayload<PartitionedHashMethod<Method>, ()>,
-) -> Result<(VecDeque<DataBlock>, BoxFuture<'static, Result<()>>)> {
+) -> Result<BoxFuture<'static, Result<DataBlock>>> {
     let unique_name = GlobalUniqName::unique();
     let location = format!("{}/{}", location_prefix, unique_name);
 
     let mut write_size = 0;
     let mut write_data = Vec::with_capacity(256);
-    let mut spilled_blocks = VecDeque::with_capacity(256);
+    let mut spilled_buckets_payloads = Vec::with_capacity(256);
     for (bucket, inner_table) in payload.cell.hashtable.iter_tables_mut().enumerate() {
         if inner_table.len() == 0 {
-            spilled_blocks.push_back(DataBlock::empty());
             continue;
         }
 
@@ -202,14 +193,14 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
         let data_block = serialize_group_by(method, inner_table)?;
 
         let begin = write_size;
-        let columns = get_columns(data_block);
+        let columns = data_block.columns().to_vec();
         let mut columns_data = Vec::with_capacity(columns.len());
         let mut columns_layout = Vec::with_capacity(columns.len());
         for column in columns.into_iter() {
             let column = column.value.as_column().unwrap();
             let column_data = serialize_column(column);
             write_size += column_data.len() as u64;
-            columns_layout.push(column_data.len());
+            columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);
         }
 
@@ -221,48 +212,45 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
         }
 
         write_data.push(columns_data);
-        spilled_blocks.push_back(DataBlock::empty_with_meta(
-            AggregateMeta::<Method, ()>::create_spilled(
-                bucket as isize,
-                location.clone(),
-                begin..write_size,
-                columns_layout,
-            ),
-        ));
+        spilled_buckets_payloads.push(BucketSpilledPayload {
+            bucket: bucket as isize,
+            location: location.clone(),
+            data_range: begin..write_size,
+            columns_layout,
+        });
     }
 
-    Ok((
-        spilled_blocks,
-        Box::pin(async move {
-            let instant = Instant::now();
+    Ok(Box::pin(async move {
+        let instant = Instant::now();
 
-            let mut write_bytes = 0;
-            if !write_data.is_empty() {
-                let mut writer = operator.writer(&location).await?;
-                for write_bucket_data in write_data.into_iter() {
-                    for data in write_bucket_data.into_iter() {
-                        write_bytes += data.len();
-                        writer.write(data).await?;
-                    }
+        let mut write_bytes = 0;
+        if !write_data.is_empty() {
+            let mut writer = operator.writer(&location).await?;
+            for write_bucket_data in write_data.into_iter() {
+                for data in write_bucket_data.into_iter() {
+                    write_bytes += data.len();
+                    writer.write(data).await?;
                 }
-
-                writer.close().await?;
             }
 
-            // perf
-            {
-                metrics_inc_group_by_spill_write_count();
-                metrics_inc_group_by_spill_write_bytes(write_bytes as u64);
-                metrics_inc_group_by_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
-            }
+            writer.close().await?;
+        }
 
-            info!(
-                "Write aggregate spill {} successfully, elapsed: {:?}",
-                location,
-                instant.elapsed()
-            );
+        // perf
+        {
+            metrics_inc_group_by_spill_write_count();
+            metrics_inc_group_by_spill_write_bytes(write_bytes as u64);
+            metrics_inc_group_by_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+        }
 
-            Ok(())
-        }),
-    ))
+        info!(
+            "Write aggregate spill {} successfully, elapsed: {:?}",
+            location,
+            instant.elapsed()
+        );
+
+        Ok(DataBlock::empty_with_meta(
+            AggregateMeta::<Method, ()>::create_spilled(spilled_buckets_payloads),
+        ))
+    }))
 }

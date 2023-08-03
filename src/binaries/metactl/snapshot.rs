@@ -274,14 +274,11 @@ async fn init_new_cluster(
 
     let mut log_id: LogId = match max_log_id {
         Some(max_log_id) => max_log_id,
-        None => match sm.get_last_applied()? {
-            Some(last_applied) => last_applied,
-            None => {
-                return Err(anyhow::Error::new(MetaStorageError::SledError(
-                    AnyError::error("cannot find last applied log id"),
-                )));
-            }
-        },
+        None => sm
+            .get_last_applied()?
+            .ok_or(anyhow::Error::new(MetaStorageError::SledError(
+                AnyError::error("cannot find last applied log id"),
+            )))?,
     };
 
     // construct Membership log entry

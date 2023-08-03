@@ -131,20 +131,11 @@ impl<Method: HashMethodBounds> TransformAggregateSerializer<Method> {
         if let Some(block_meta) = data_block.take_meta() {
             if let Some(block_meta) = AggregateMeta::<Method, usize>::downcast_from(block_meta) {
                 match block_meta {
+                    AggregateMeta::Spilled(_) => unreachable!(),
                     AggregateMeta::Spilling(_) => unreachable!(),
-                    AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Serialized(_) => unreachable!(),
-                    AggregateMeta::Spilled(payload) => {
-                        self.output.push_data(Ok(DataBlock::empty_with_meta(
-                            AggregateSerdeMeta::create_spilled(
-                                payload.bucket,
-                                payload.location,
-                                payload.data_range,
-                                payload.columns_layout,
-                            ),
-                        )));
-                        return Ok(Event::NeedConsume);
-                    }
+                    AggregateMeta::BucketSpilled(_) => unreachable!(),
+                    AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::HashTable(payload) => {
                         self.input_data = Some(SerializeAggregateStream::create(
                             &self.method,

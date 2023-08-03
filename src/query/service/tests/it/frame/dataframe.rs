@@ -18,11 +18,11 @@ use std::sync::Arc;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::ColumnID;
 use common_ast::ast::Expr;
+use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
 use common_ast::ast::Literal;
-use common_ast::ast::OrderByExpr;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_expression::block_debug::box_render;
@@ -42,6 +42,19 @@ async fn test_dataframe() -> Result<()> {
 
     let db = fixture.default_db_name();
     let table = fixture.default_table_name();
+
+    // Count
+    {
+        let sql = "select count(*) from system.engines";
+        let df = Dataframe::scan(query_ctx.clone(), Some("system"), "engines")
+            .await
+            .unwrap()
+            .count()
+            .await
+            .unwrap();
+
+        test_case(sql, df, fixture.ctx()).await?;
+    }
 
     // select single table
     // scan
@@ -92,6 +105,29 @@ async fn test_dataframe() -> Result<()> {
         let df = Dataframe::scan(query_ctx.clone(), Some("system"), "engines")
             .await
             .unwrap()
+            .sort_column(
+                &["Engine"],
+                vec![(
+                    Expr::ColumnRef {
+                        span: None,
+                        database: None,
+                        table: None,
+                        column: ColumnID::Name(Identifier::from_name_with_quoted(
+                            "Engine",
+                            Some('`'),
+                        )),
+                    },
+                    Some(true),
+                    Some(false),
+                )],
+                false,
+            )
+            .await
+            .unwrap();
+
+        let df2 = Dataframe::scan(query_ctx.clone(), Some("system"), "engines")
+            .await
+            .unwrap()
             .sort(
                 vec![Expr::ColumnRef {
                     span: None,
@@ -103,26 +139,25 @@ async fn test_dataframe() -> Result<()> {
                         span: None,
                     }),
                 }],
-                &vec![OrderByExpr {
-                    expr: Expr::ColumnRef {
+                vec![(
+                    Expr::ColumnRef {
                         span: None,
-                        database: Some(Identifier::from_name("system")),
-                        table: Some(Identifier::from_name("engines")),
-                        column: ColumnID::Name(Identifier {
-                            name: "Engine".to_string(),
-                            quote: Some('`'),
-                            span: None,
-                        }),
+                        database: None,
+                        table: None,
+                        column: ColumnID::Name(Identifier::from_name_with_quoted(
+                            "Engine",
+                            Some('`'),
+                        )),
                     },
-                    asc: Some(true),
-                    nulls_first: Some(false),
-                }],
+                    Some(true),
+                    Some(false),
+                )],
                 false,
             )
             .await
             .unwrap();
-
         test_case(sql, df, fixture.ctx()).await?;
+        test_case(sql, df2, fixture.ctx()).await?;
     }
 
     // filter
@@ -158,25 +193,17 @@ async fn test_dataframe() -> Result<()> {
             .await
             .unwrap()
             .aggregate(
+                GroupBy::Normal(vec![Expr::ColumnRef {
+                    span: None,
+                    database: Some(Identifier::from_name("system")),
+                    table: Some(Identifier::from_name("engines")),
+                    column: ColumnID::Name(Identifier::from_name_with_quoted("Engine", Some('`'))),
+                }]),
                 vec![Expr::ColumnRef {
                     span: None,
                     database: Some(Identifier::from_name("system")),
                     table: Some(Identifier::from_name("engines")),
-                    column: ColumnID::Name(Identifier {
-                        name: "Engine".to_string(),
-                        quote: Some('`'),
-                        span: None,
-                    }),
-                }],
-                vec![Expr::ColumnRef {
-                    span: None,
-                    database: Some(Identifier::from_name("system")),
-                    table: Some(Identifier::from_name("engines")),
-                    column: ColumnID::Name(Identifier {
-                        name: "Engine".to_string(),
-                        quote: Some('`'),
-                        span: None,
-                    }),
+                    column: ColumnID::Name(Identifier::from_name_with_quoted("Engine", Some('`'))),
                 }],
                 Some(Expr::BinaryOp {
                     span: None,
@@ -185,11 +212,10 @@ async fn test_dataframe() -> Result<()> {
                         span: None,
                         database: Some(Identifier::from_name("system")),
                         table: Some(Identifier::from_name("engines")),
-                        column: ColumnID::Name(Identifier {
-                            name: "Engine".to_string(),
-                            quote: Some('`'),
-                            span: None,
-                        }),
+                        column: ColumnID::Name(Identifier::from_name_with_quoted(
+                            "Engine",
+                            Some('`'),
+                        )),
                     }),
                     right: Box::new(Expr::Literal {
                         span: None,
@@ -209,6 +235,13 @@ async fn test_dataframe() -> Result<()> {
         let df = Dataframe::scan(query_ctx.clone(), Some("system"), "engines")
             .await
             .unwrap()
+            .distinct_col(&["Engine"])
+            .await
+            .unwrap();
+
+        let df2 = Dataframe::scan(query_ctx.clone(), Some("system"), "engines")
+            .await
+            .unwrap()
             .distinct(vec![Expr::ColumnRef {
                 span: None,
                 database: Some(Identifier::from_name("system")),
@@ -221,8 +254,8 @@ async fn test_dataframe() -> Result<()> {
             }])
             .await
             .unwrap();
-
         test_case(sql, df, fixture.ctx()).await?;
+        test_case(sql, df2, fixture.ctx()).await?;
     }
 
     // union

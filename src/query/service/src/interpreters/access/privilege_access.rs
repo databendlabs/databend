@@ -514,7 +514,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterShareTenants(_)
             | Plan::ShowObjectGrantPrivileges(_)
             | Plan::ShowGrantTenantsOfShare(_)
-            | Plan::SetRole(_)
             | Plan::ShowGrants(_)
             | Plan::ShowRoles(_)
             | Plan::GrantRole(_)
@@ -593,6 +592,8 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             // Note: No need to check privileges
+            // SET ROLE is a session-local statement (have same semantic with the SET ROLE in postgres), no need to check privileges
+            Plan::SetRole(_) => {}
             Plan::Presign(_) => {}
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}

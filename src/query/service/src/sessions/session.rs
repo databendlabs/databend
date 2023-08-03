@@ -291,9 +291,10 @@ impl Session {
         };
 
         let tenant = self.get_current_tenant();
-        let related_roles = RoleCacheManager::instance()
+        let mut related_roles = RoleCacheManager::instance()
             .find_related_roles(&tenant, &roles)
             .await?;
+        related_roles.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(related_roles)
     }
 
@@ -316,24 +317,27 @@ impl Session {
             return Ok(());
         }
 
-        // 2. check the current role's privilege set
+        // 2. check the user's roles' privilege set
         self.ensure_current_role().await?;
-        let current_role = self.get_current_role();
-        let role_verified = current_role
-            .as_ref()
-            .map(|r| r.grants.verify_privilege(object, privilege.clone()))
-            .unwrap_or(false);
-        let current_role_name = current_role.map(|r| r.name).unwrap_or("".to_string());
+        let available_roles = self.get_all_available_roles().await?;
+        let role_verified = available_roles
+            .iter()
+            .any(|r| r.grants.verify_privilege(object, privilege.clone()));
         if role_verified {
             return Ok(());
         }
+        let roles_name = available_roles
+            .iter()
+            .map(|r| r.name.clone())
+            .collect::<Vec<_>>()
+            .join(",");
 
         Err(ErrorCode::PermissionDenied(format!(
-            "Permission denied, privilege {:?} is required on {} for user {} with role {}",
+            "Permission denied, privilege {:?} is required on {} for user {} with roles [{}]",
             privilege.clone(),
             object,
             &current_user.identity(),
-            current_role_name,
+            roles_name,
         )))
     }
 
