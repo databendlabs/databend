@@ -3829,6 +3829,8 @@ dependencies = [
  "regex",
  "reqwest",
  "rmp-serde",
+ "rustls 0.21.0",
+ "rustls-pemfile",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -7220,6 +7222,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "mysql-common-derive"
+version = "0.30.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56b0d8a0db9bf6d2213e11f2c701cb91387b0614361625ab7b9743b41aa4938f"
+dependencies = [
+ "darling",
+ "heck 0.4.1",
+ "num-bigint",
+ "proc-macro-crate 1.3.1",
+ "proc-macro-error 1.0.4",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.27",
+ "termcolor",
+ "thiserror",
+]
+
+[[package]]
 name = "mysql_async"
 version = "0.31.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7234,7 +7254,7 @@ dependencies = [
  "lazy_static",
  "lru",
  "mio",
- "mysql_common",
+ "mysql_common 0.29.2",
  "once_cell",
  "pem",
  "percent-encoding",
@@ -7262,9 +7282,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9006c95034ccf7b903d955f210469119f6c3477fc9c9e7a7845ce38a3e665c2a"
 dependencies = [
  "base64 0.13.1",
- "bigdecimal",
  "bindgen 0.59.2",
  "bitflags 1.3.2",
+ "bitvec",
+ "byteorder",
+ "bytes",
+ "cc",
+ "cmake",
+ "crc32fast",
+ "flate2",
+ "lazy_static",
+ "lexical",
+ "num-bigint",
+ "num-traits",
+ "rand 0.8.5",
+ "regex",
+ "saturating",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "smallvec",
+ "subprocess",
+ "thiserror",
+]
+
+[[package]]
+name = "mysql_common"
+version = "0.30.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57349d5a326b437989b6ee4dc8f2f34b0cc131202748414712a8e7d98952fc8c"
+dependencies = [
+ "base64 0.21.0",
+ "bigdecimal",
+ "bindgen 0.59.2",
+ "bitflags 2.3.1",
  "bitvec",
  "byteorder",
  "bytes",
@@ -7276,6 +7328,7 @@ dependencies = [
  "frunk",
  "lazy_static",
  "lexical",
+ "mysql-common-derive",
  "num-bigint",
  "num-traits",
  "rand 0.8.5",
@@ -7628,17 +7681,17 @@ dependencies = [
 
 [[package]]
 name = "opensrv-mysql"
-version = "0.3.0"
-source = "git+https://github.com/datafuselabs/opensrv?rev=5e37788#5e37788525b76bb5932b4febc59f3fdc2d15f692"
+version = "0.4.0"
+source = "git+https://github.com/datafuselabs/opensrv?rev=bcfcf8e#bcfcf8e956a033f19c3a99fd7a88eebea385e550"
 dependencies = [
  "async-trait",
  "byteorder",
  "chrono",
- "mysql_common",
+ "mysql_common 0.30.6",
  "nom",
  "pin-project-lite",
  "tokio",
- "tokio-rustls 0.23.4",
+ "tokio-rustls 0.24.0",
 ]
 
 [[package]]
