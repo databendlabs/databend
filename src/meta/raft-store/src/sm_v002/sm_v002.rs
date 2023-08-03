@@ -24,6 +24,7 @@ use common_meta_kvapi::kvapi::ListKVReply;
 use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
+use common_meta_stoerr::MetaBytesError;
 use common_meta_types::AppliedState;
 use common_meta_types::Entry;
 use common_meta_types::LogId;
@@ -48,10 +49,12 @@ use tokio::sync::RwLock;
 use crate::applier::Applier;
 use crate::key_spaces::RaftStoreEntry;
 use crate::sm_v002::leveled_store::level::Level;
+use crate::sm_v002::leveled_store::level_data::LevelData;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002;
-pub use crate::sm_v002::snapshot_view_v002::SnapshotViewV002;
+use crate::sm_v002::Importer;
+use crate::sm_v002::SnapshotViewV002;
 use crate::state_machine::sm::BlockingConfig;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::StateMachineSubscriber;
@@ -146,7 +149,7 @@ impl SMV002 {
         let data_size = data.data_size().await?;
         info!("snapshot data len: {}", data_size);
 
-        let mut importer = sm_v002::SnapshotViewV002::new_importer();
+        let mut importer = sm_v002::SMV002::new_importer();
 
         let br = BufReader::new(data);
         let mut lines = AsyncBufReadExt::lines(br);
@@ -183,7 +186,7 @@ impl SMV002 {
                 return Ok(());
             }
 
-            sm.replace_data(Level::new(level_data, None));
+            sm.replace(Level::new(level_data, None));
         }
 
         info!(
@@ -192,6 +195,20 @@ impl SMV002 {
         );
 
         Ok(())
+    }
+
+    pub fn import(data: impl Iterator<Item = RaftStoreEntry>) -> Result<LevelData, MetaBytesError> {
+        let mut importer = Self::new_importer();
+
+        for ent in data {
+            importer.import(ent)?;
+        }
+
+        Ok(importer.commit())
+    }
+
+    pub fn new_importer() -> Importer {
+        Importer::default()
     }
 
     /// Return a Arc of the blocking config. It is only used for testing.
@@ -324,20 +341,23 @@ impl SMV002 {
         self.subscriber = Some(subscriber);
     }
 
-    /// Creates a snapshot that contains the latest state.
+    /// Creates a snapshot view that contains the latest state.
     ///
     /// Internally, the state machine creates a new empty writable level and makes all current states immutable.
-    pub fn full_snapshot(&mut self) -> crate::sm_v002::snapshot_view_v002::SnapshotViewV002 {
+    ///
+    /// This operation is fast because it does not copy any data.
+    pub fn full_snapshot_view(&mut self) -> SnapshotViewV002 {
         self.top.new_level();
 
         // Safe unwrap: just created new level and it must have a base level.
         let base = self.top.get_base().unwrap();
 
-        crate::sm_v002::snapshot_view_v002::SnapshotViewV002::new(base)
+        SnapshotViewV002::new(base)
     }
 
     /// Replace all of the state machine data with the given one.
-    pub fn replace_data(&mut self, level: Level) {
+    /// The input is a multi-level data.
+    pub fn replace(&mut self, level: Level) {
         let applied = self.top.data_ref().last_applied_ref();
         let new_applied = level.data_ref().last_applied_ref();
 
@@ -355,6 +375,7 @@ impl SMV002 {
         self.expire_cursor = ExpireKey::new(0, 0);
     }
 
+    /// Keep the top(writable) level, replace the base level and all levels below it.
     pub fn replace_base(&mut self, snapshot: &SnapshotViewV002) {
         assert!(
             Arc::ptr_eq(&self.top.get_base().unwrap(), &snapshot.original()),

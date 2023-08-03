@@ -23,10 +23,11 @@ use log::debug;
 use log::info;
 
 use crate::key_spaces::RaftStoreEntry;
-use crate::sm_v002::snapshot_store::SnapshotStoreV002;
+use crate::sm_v002::SnapshotStoreV002;
 use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
 
+/// Write snapshot data to [`SnapshotStoreV002`].
 pub struct WriterV002<'a> {
     /// The temp path to write to, which will be renamed to the final path.
     /// So that the readers could only see a complete snapshot.

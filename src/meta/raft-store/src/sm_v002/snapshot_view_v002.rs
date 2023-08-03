@@ -12,21 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_meta_stoerr::MetaBytesError;
-use common_meta_types::LogId;
 use common_meta_types::SeqNum;
 use common_meta_types::SeqV;
-use common_meta_types::StoredMembership;
-use openraft::AnyError;
 
 use crate::key_spaces::RaftStoreEntry;
 use crate::ondisk::Header;
 use crate::ondisk::OnDisk;
 use crate::sm_v002::leveled_store::level::Level;
-use crate::sm_v002::leveled_store::level_data::LevelData;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
@@ -34,8 +28,14 @@ use crate::state_machine::ExpireValue;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
 
+/// A snapshot view of a state machine, which is static and not affected by further writing to the state machine.
 pub struct SnapshotViewV002 {
+    /// The compacted snapshot data.
     top: Arc<Level>,
+
+    /// Original non compacted snapshot data.
+    ///
+    /// This is kept just for debug.
     original: Arc<Level>,
 }
 
@@ -57,16 +57,18 @@ impl SnapshotViewV002 {
         self.original.clone()
     }
 
-    /// Compact and return a Level with all tombstone removed.
+    /// Compact into one level and remove all tombstone record.
     pub fn compact(&mut self) {
         // TODO: use a explicit method to return a compaction base
         let mut data = self.top.data_ref().new_level();
 
+        // `range()` will compact tombstone internally
         let it = MapApi::<String>::range::<String, _>(self.top.as_ref(), ..)
             .filter(|(_k, v)| !v.is_tomb_stone());
 
         data.replace_kv(it.map(|(k, v)| (k.clone(), v.clone())).collect());
 
+        // `range()` will compact tombstone internally
         let it =
             MapApi::<ExpireKey>::range(self.top.as_ref(), ..).filter(|(_k, v)| !v.is_tomb_stone());
 
@@ -76,6 +78,7 @@ impl SnapshotViewV002 {
         self.top = Arc::new(l);
     }
 
+    /// Export all its data in RaftStoreEntry format.
     pub fn export(&self) -> impl Iterator<Item = RaftStoreEntry> + '_ {
         let d = self.top.data_ref();
 
@@ -166,120 +169,6 @@ impl SnapshotViewV002 {
         });
 
         sm_meta.into_iter().chain(kv_iter).chain(expire_iter)
-    }
-
-    pub fn new_importer() -> Importer {
-        Importer::default()
-    }
-
-    pub fn import(data: impl Iterator<Item = RaftStoreEntry>) -> Result<LevelData, MetaBytesError> {
-        let mut importer = Self::new_importer();
-
-        for ent in data {
-            importer.import(ent)?;
-        }
-
-        Ok(importer.commit())
-    }
-}
-
-/// A container of temp data that are imported to a LevelData.
-#[derive(Debug, Default)]
-pub struct Importer {
-    level_data: LevelData,
-
-    kv: BTreeMap<String, Marked>,
-    expire: BTreeMap<ExpireKey, Marked<String>>,
-
-    greatest_seq: u64,
-}
-
-impl Importer {
-    // TODO(1): consider returning IO error
-    pub fn import(&mut self, entry: RaftStoreEntry) -> Result<(), MetaBytesError> {
-        let d = &mut self.level_data;
-
-        match entry {
-            RaftStoreEntry::DataHeader { .. } => {
-                // Not part of state machine
-            }
-            RaftStoreEntry::Logs { .. } => {
-                // Not part of state machine
-            }
-            RaftStoreEntry::LogMeta { .. } => {
-                // Not part of state machine
-            }
-            RaftStoreEntry::RaftStateKV { .. } => {
-                // Not part of state machine
-            }
-            RaftStoreEntry::ClientLastResps { .. } => {
-                unreachable!("client last resp is not supported")
-            }
-            RaftStoreEntry::Nodes { key, value } => {
-                d.nodes_mut().insert(key, value);
-            }
-            RaftStoreEntry::StateMachineMeta { key, value } => {
-                match key {
-                    StateMachineMetaKey::LastApplied => {
-                        let lid = TryInto::<LogId>::try_into(value).map_err(|e| {
-                            MetaBytesError::new(&AnyError::error(format_args!(
-                                "{} when import StateMachineMetaKey::LastApplied",
-                                e
-                            )))
-                        })?;
-
-                        *d.last_applied_mut() = Some(lid);
-                    }
-                    StateMachineMetaKey::Initialized => {
-                        // This field is no longer used by in-memory state machine
-                    }
-                    StateMachineMetaKey::LastMembership => {
-                        let membership =
-                            TryInto::<StoredMembership>::try_into(value).map_err(|e| {
-                                MetaBytesError::new(&AnyError::error(format_args!(
-                                    "{} when import StateMachineMetaKey::LastMembership",
-                                    e
-                                )))
-                            })?;
-                        *d.last_membership_mut() = membership;
-                    }
-                }
-            }
-            RaftStoreEntry::Expire { key, mut value } => {
-                // Old version ExpireValue has seq to be 0. replace it with 1.
-                // `1` is a valid seq. `0` is used by tombstone.
-                // 2023-06-06: by drdr.xp@gmail.com
-                if value.seq == 0 {
-                    value.seq = 1;
-                }
-
-                self.greatest_seq = std::cmp::max(self.greatest_seq, value.seq);
-                self.expire.insert(key, Marked::from(value));
-            }
-            RaftStoreEntry::GenericKV { key, value } => {
-                self.greatest_seq = std::cmp::max(self.greatest_seq, value.seq);
-                self.kv.insert(key, Marked::from(value));
-            }
-            RaftStoreEntry::Sequences { key: _, value } => d.update_seq(value.0),
-        }
-
-        Ok(())
-    }
-
-    pub fn commit(mut self) -> LevelData {
-        let d = &mut self.level_data;
-
-        d.replace_kv(self.kv);
-        d.replace_expire(self.expire);
-
-        assert!(
-            self.greatest_seq <= d.curr_seq(),
-            "greatest_seq {} must be LE curr_seq {}, otherwise seq may be reused",
-            self.greatest_seq,
-            d.curr_seq()
-        );
-
-        self.level_data
     }
 }
 

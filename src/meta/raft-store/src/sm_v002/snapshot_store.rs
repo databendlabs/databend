@@ -33,7 +33,7 @@ use openraft::SnapshotId;
 
 use crate::config::RaftConfig;
 use crate::ondisk::DataVersion;
-use crate::sm_v002::writer_v002::WriterV002;
+use crate::sm_v002::WriterV002;
 use crate::state_machine::MetaSnapshotId;
 
 /// Errors that occur when accessing snapshot store
@@ -114,7 +114,7 @@ impl SnapshotStoreV002 {
         self.data_version
     }
 
-    fn snapshot_dir(&self) -> String {
+    pub fn snapshot_dir(&self) -> String {
         format!(
             "{}/df_meta/{}/snapshot",
             self.config.raft_dir, self.data_version
@@ -125,16 +125,8 @@ impl SnapshotStoreV002 {
         format!("{}/{}", self.snapshot_dir(), Self::snapshot_fn(snapshot_id))
     }
 
-    fn snapshot_fn(snapshot_id: &SnapshotId) -> String {
+    pub fn snapshot_fn(snapshot_id: &SnapshotId) -> String {
         format!("{}.snap", snapshot_id)
-    }
-
-    fn extract_snapshot_id_from_fn(fn_: &str) -> Option<&str> {
-        if let Some(snapshot_id) = fn_.strip_suffix(".snap") {
-            Some(snapshot_id)
-        } else {
-            None
-        }
     }
 
     pub fn snapshot_temp_path(&self) -> String {
@@ -144,16 +136,6 @@ impl SnapshotStoreV002 {
             .as_millis();
 
         format!("{}/0.snap-{}", self.snapshot_dir(), ts)
-    }
-
-    /// Make directory for snapshot if it does not exist and return the snapshot directory.
-    fn ensure_snapshot_dir(&self) -> Result<String, SnapshotStoreError> {
-        let dir = self.snapshot_dir();
-
-        fs::create_dir_all(&dir)
-            .map_err(|e| SnapshotStoreError::write(e).with_meta("creating snapshot dir", &dir))?;
-
-        Ok(dir)
     }
 
     /// Return a list of valid snapshot ids found in the snapshot directory.
@@ -173,7 +155,7 @@ impl SnapshotStoreV002 {
             return Ok(None);
         };
 
-        let data = self.new_reader(&id.to_string()).await?;
+        let data = self.load_snapshot(&id.to_string()).await?;
 
         Ok(Some((id, data)))
     }
@@ -277,7 +259,7 @@ impl SnapshotStoreV002 {
     }
 
     /// Return a snapshot for async reading
-    pub async fn new_reader(
+    pub async fn load_snapshot(
         &self,
         snapshot_id: &SnapshotId,
     ) -> Result<SnapshotData, SnapshotStoreError> {
@@ -316,9 +298,27 @@ impl SnapshotStoreV002 {
             SnapshotStoreError::read(e).with_context(format_args!("rename: {} to {}", &src, &dst))
         })?;
 
-        let d = self.new_reader(&meta.snapshot_id).await?;
+        let d = self.load_snapshot(&meta.snapshot_id).await?;
 
         Ok(d)
+    }
+
+    /// Make directory for snapshot if it does not exist and return the snapshot directory.
+    fn ensure_snapshot_dir(&self) -> Result<String, SnapshotStoreError> {
+        let dir = self.snapshot_dir();
+
+        fs::create_dir_all(&dir)
+            .map_err(|e| SnapshotStoreError::write(e).with_meta("creating snapshot dir", &dir))?;
+
+        Ok(dir)
+    }
+
+    fn extract_snapshot_id_from_fn(filename: &str) -> Option<&str> {
+        if let Some(snapshot_id) = filename.strip_suffix(".snap") {
+            Some(snapshot_id)
+        } else {
+            None
+        }
     }
 
     /// Build a [`SnapshotStoreError`] from io::Error with context.

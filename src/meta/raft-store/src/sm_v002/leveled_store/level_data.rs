@@ -30,7 +30,9 @@ use crate::state_machine::ExpireKey;
 static KV_EMPTY: Marked<Vec<u8>> = Marked::empty();
 static EXPIRE_EMPTY: Marked<String> = Marked::empty();
 
-/// The data of a level.
+/// A single level of state machine data.
+///
+/// State machine data is composed of multiple levels.
 #[derive(Debug, Default)]
 pub struct LevelData {
     /// The last applied log id.

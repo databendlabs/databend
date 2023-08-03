@@ -30,9 +30,9 @@ use common_meta_raft_store::log::RaftLog;
 use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_raft_store::ondisk::TREE_HEADER;
 use common_meta_raft_store::sm_v002::leveled_store::level_data::LevelData;
-use common_meta_raft_store::sm_v002::sm_v002::SMV002;
-use common_meta_raft_store::sm_v002::snapshot_store::SnapshotStoreError;
-use common_meta_raft_store::sm_v002::snapshot_store::SnapshotStoreV002;
+use common_meta_raft_store::sm_v002::SnapshotStoreError;
+use common_meta_raft_store::sm_v002::SnapshotStoreV002;
+use common_meta_raft_store::sm_v002::SMV002;
 use common_meta_raft_store::state::RaftState;
 use common_meta_raft_store::state::RaftStateKey;
 use common_meta_raft_store::state::RaftStateValue;
@@ -262,7 +262,7 @@ impl StoreInner {
         }
 
         let r = snapshot_store
-            .new_reader(&snapshot_meta.snapshot_id)
+            .load_snapshot(&snapshot_meta.snapshot_id)
             .await
             .map_err(|e| {
                 let e = StorageIOError::new(
@@ -310,17 +310,17 @@ impl StoreInner {
 
     /// Compact a snapshot and return the meta and data entries.
     async fn build_compacted_snapshot(&self) -> (SnapshotMeta, Vec<RaftStoreEntry>) {
-        let mut snapshot = {
+        let mut snapshot_view = {
             let mut s = self.state_machine.write().await;
-            s.full_snapshot()
+            s.full_snapshot_view()
         };
 
-        let snapshot_meta = Self::build_snapshot_meta(snapshot.top().data_ref());
+        let snapshot_meta = Self::build_snapshot_meta(snapshot_view.top().data_ref());
 
         // Compact multi levels into one to get rid of tombstones
         // Move heavy load task to a blocking thread pool.
         let data_entries = tokio::task::block_in_place({
-            let s = &mut snapshot;
+            let s = &mut snapshot_view;
             let sleep = self.get_delay_config("compact").await;
 
             move || {
@@ -333,7 +333,7 @@ impl StoreInner {
 
         {
             let mut s = self.state_machine.write().await;
-            s.replace_base(&snapshot);
+            s.replace_base(&snapshot_view);
         }
 
         (snapshot_meta, data_entries)
@@ -526,7 +526,7 @@ impl StoreInner {
                 let snapshot_store = SnapshotStoreV002::new(DATA_VERSION, self.config.clone());
 
                 let f = snapshot_store
-                    .new_reader(&meta.snapshot_id)
+                    .load_snapshot(&meta.snapshot_id)
                     .await
                     .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
                 let bf = BufReader::new(f);

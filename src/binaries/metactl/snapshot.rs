@@ -35,7 +35,7 @@ use common_meta_raft_store::ondisk::DataVersion;
 use common_meta_raft_store::ondisk::OnDisk;
 use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_raft_store::ondisk::TREE_HEADER;
-use common_meta_raft_store::sm_v002::snapshot_store::SnapshotStoreV002;
+use common_meta_raft_store::sm_v002::SnapshotStoreV002;
 use common_meta_raft_store::state::RaftState;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;

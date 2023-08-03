@@ -20,7 +20,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::ondisk::DATA_VERSION;
-use common_meta_raft_store::sm_v002::snapshot_store::SnapshotStoreV002;
+use common_meta_raft_store::sm_v002::SnapshotStoreV002;
 use common_meta_raft_store::state_machine::StoredSnapshot;
 use common_meta_sled_store::openraft::ErrorSubject;
 use common_meta_sled_store::openraft::ErrorVerb;
@@ -375,7 +375,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
                 let snapshot_store =
                     SnapshotStoreV002::new(DATA_VERSION, self.inner.config.clone());
                 let d = snapshot_store
-                    .new_reader(&meta.snapshot_id)
+                    .load_snapshot(&meta.snapshot_id)
                     .await
                     .map_err(|e| e.with_meta("get snapshot", meta))?;
 

@@ -52,7 +52,7 @@ use log::error;
 use log::info;
 use num::FromPrimitive;
 
-use crate::sm_v002::sm_v002::SMV002;
+use crate::sm_v002::SMV002;
 
 /// A helper that applies raft log `Entry` to the state machine.
 pub struct Applier<'a> {

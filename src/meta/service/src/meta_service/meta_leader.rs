@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 
 use common_base::base::tokio::sync::RwLockReadGuard;
 use common_meta_kvapi::kvapi::KVApi;
-use common_meta_raft_store::sm_v002::sm_v002::SMV002;
+use common_meta_raft_store::sm_v002::SMV002;
 use common_meta_sled_store::openraft::ChangeMembers;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::AppliedState;

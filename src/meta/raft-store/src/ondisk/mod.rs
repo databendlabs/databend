@@ -38,7 +38,7 @@ use crate::key_spaces::DataHeader;
 use crate::key_spaces::RaftStoreEntry;
 use crate::key_spaces::RaftStoreEntryCompat;
 use crate::log::TREE_RAFT_LOG;
-use crate::sm_v002::snapshot_store::SnapshotStoreV002;
+use crate::sm_v002::SnapshotStoreV002;
 use crate::state::TREE_RAFT_STATE;
 use crate::state_machine::StateMachineMetaKey;
 

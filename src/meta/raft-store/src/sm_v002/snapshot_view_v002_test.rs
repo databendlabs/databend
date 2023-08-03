@@ -29,7 +29,7 @@ use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002::SMV002;
-use crate::sm_v002::snapshot_view_v002::SnapshotViewV002;
+use crate::sm_v002::SnapshotViewV002;
 use crate::state_machine::ExpireKey;
 
 #[test]
@@ -73,7 +73,7 @@ fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
 fn test_compact_expire_index() -> anyhow::Result<()> {
     let mut sm = build_sm_with_expire();
 
-    let mut snapshot = sm.full_snapshot();
+    let mut snapshot = sm.full_snapshot_view();
 
     snapshot.compact();
 
@@ -160,7 +160,7 @@ fn test_export_3_level() -> anyhow::Result<()> {
 fn test_export_2_level_with_meta() -> anyhow::Result<()> {
     let mut sm = build_sm_with_expire();
 
-    let snapshot = sm.full_snapshot();
+    let snapshot = sm.full_snapshot_view();
 
     let got = snapshot
         .export()
@@ -201,7 +201,7 @@ fn test_import() -> anyhow::Result<()> {
         .iter()
         .map(|x| serde_json::from_str::<RaftStoreEntry>(x).unwrap());
 
-    let d = SnapshotViewV002::import(data)?;
+    let d = SMV002::import(data)?;
 
     let snapshot = SnapshotViewV002::new(Arc::new(Level::new(d, None)));
 
