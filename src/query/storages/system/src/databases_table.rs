@@ -71,6 +71,7 @@ impl AsyncSystemTable for DatabasesTable {
 
         let user = ctx.get_current_user()?;
         let grant_set = user.grants;
+
         let (unique_object, global_object_priv) =
             generate_unique_object(&tenant, grant_set).await?;
         for (ctl_name, catalog) in catalogs.into_iter() {
