@@ -75,7 +75,7 @@ impl AsyncSystemTable for DatabasesTable {
             let databases = catalog.list_databases(tenant.as_str()).await?;
             let final_dbs = databases
                 .into_iter()
-                .filter(|db| visibility_checker.check_database_visibility(&ctl_name, &db.name()))
+                .filter(|db| visibility_checker.check_database_visibility(&ctl_name, db.name()))
                 .collect::<Vec<_>>();
 
             for db in final_dbs {
