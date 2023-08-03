@@ -35,13 +35,13 @@ use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::principal::GrantObject;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use log::warn;
 
 use crate::columns_table::generate_unique_object;
+use crate::columns_table::GrantObjectVisibilityChecker;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
@@ -120,9 +120,8 @@ where TablesTable<T>: HistoryAware
         let mut database_tables = vec![];
 
         let user = ctx.get_current_user()?;
-        let grant_set = user.grants;
-        let (unique_object, global_object_priv) =
-            generate_unique_object(&tenant, grant_set).await?;
+        let roles = ctx.get_current_available_roles().await?;
+        let visibility_checker = GrantObjectVisibilityChecker::new(&user, &roles);
 
         for (ctl_name, ctl) in ctls.into_iter() {
             let mut dbs = Vec::new();
@@ -152,37 +151,10 @@ where TablesTable<T>: HistoryAware
             }
             let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
 
-            let mut access_dbs = HashMap::new();
-            let mut final_dbs = vec![];
-            let mut access_tables: HashSet<(String, String)> = HashSet::new();
-            if global_object_priv {
-                final_dbs = dbs;
-            } else {
-                for object in &unique_object {
-                    match object {
-                        GrantObject::Database(priv_catalog, db_name) => {
-                            if priv_catalog == ctl_name {
-                                access_dbs.insert(db_name, false);
-                            }
-                        }
-                        GrantObject::Table(catalog, db, table) => {
-                            if catalog == ctl_name {
-                                access_tables.insert((db.to_string(), table.to_string()));
-                                if !access_dbs.contains_key(db) {
-                                    access_dbs.insert(db, true);
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                for db in &dbs {
-                    if access_dbs.contains_key(&db.name().to_string()) {
-                        final_dbs.push(db.clone());
-                    }
-                }
-            }
-
+            let final_dbs = dbs
+                .into_iter()
+                .filter(|db| visibility_checker.check_database_visibility(&ctl_name, db.name()))
+                .collect::<Vec<_>>();
             for db in final_dbs {
                 let name = db.name().to_string().into_boxed_str();
                 let name: &str = Box::leak(name);
@@ -199,25 +171,13 @@ where TablesTable<T>: HistoryAware
                         return Err(err);
                     }
                 };
+
                 for table in tables {
-                    if global_object_priv {
+                    if visibility_checker.check_table_visibility(&ctl_name, db.name(), table.name())
+                    {
                         catalogs.push(ctl_name.as_bytes().to_vec());
                         databases.push(name.as_bytes().to_vec());
                         database_tables.push(table);
-                    } else if let Some(contain_table_priv) = access_dbs.get(&db.name().to_string())
-                    {
-                        if *contain_table_priv {
-                            if access_tables.contains(&(name.to_string(), table.name().to_string()))
-                            {
-                                catalogs.push(ctl_name.as_bytes().to_vec());
-                                databases.push(name.as_bytes().to_vec());
-                                database_tables.push(table);
-                            }
-                        } else {
-                            catalogs.push(ctl_name.as_bytes().to_vec());
-                            databases.push(name.as_bytes().to_vec());
-                            database_tables.push(table);
-                        }
                     }
                 }
             }

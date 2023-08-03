@@ -216,7 +216,11 @@ impl ColumnsTable {
             };
 
             for table in tables {
-                if visibility_checker.check_table_visibility(&database, table.name()) {
+                if visibility_checker.check_table_visibility(
+                    CATALOG_DEFAULT,
+                    &database,
+                    table.name(),
+                ) {
                     let fields = generate_fields(&ctx, &table).await?;
                     for field in fields {
                         rows.push((database.clone(), table.name().into(), field.clone()))
@@ -343,20 +347,20 @@ impl GrantObjectVisibilityChecker {
             .contains(&(catalog.to_string(), db.to_string()))
     }
 
-    pub fn check_table_visibility(&self, database: &str, table: &str) -> bool {
+    pub fn check_table_visibility(&self, catalog: &str, database: &str, table: &str) -> bool {
         if self.visible_global {
             return true;
         }
 
         if self
             .visible_databases
-            .contains(&(CATALOG_DEFAULT.to_string(), database.to_string()))
+            .contains(&(catalog.to_string(), database.to_string()))
         {
             return true;
         }
 
         if self.visible_tables.contains(&(
-            CATALOG_DEFAULT.to_string(),
+            catalog.to_string(),
             database.to_string(),
             table.to_string(),
         )) {
