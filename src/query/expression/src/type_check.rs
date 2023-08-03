@@ -422,11 +422,14 @@ pub fn try_check_function<Index: ColumnIndex>(
         .max()
         .map(|max_generic_idx| {
             (0..max_generic_idx + 1)
-                .map(|idx| match subst.0.get(&idx) {
-                    Some(ty) => Ok(ty.clone()),
-                    None => Err(ErrorCode::from_string_no_backtrace(format!(
-                        "unable to resolve generic T{idx}"
-                    ))),
+                .map(|idx| {
+                    subst
+                        .0
+                        .get(&idx)
+                        .cloned()
+                        .ok_or(ErrorCode::from_string_no_backtrace(format!(
+                            "unable to resolve generic T{idx}"
+                        )))
                 })
                 .collect::<Result<Vec<_>>>()
         })

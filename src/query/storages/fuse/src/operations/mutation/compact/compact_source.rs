@@ -80,10 +80,10 @@ impl Processor for CompactSource {
 
     fn event(&mut self) -> Result<Event> {
         if matches!(self.state, State::ReadData(None)) {
-            self.state = match self.ctx.get_partition() {
-                None => State::Finish,
-                Some(part) => State::ReadData(Some(part)),
-            }
+            self.state = self
+                .ctx
+                .get_partition()
+                .map_or(State::Finish, |part| State::ReadData(Some(part)));
         }
 
         if self.output.is_finished() {
@@ -101,10 +101,7 @@ impl Processor for CompactSource {
                 if let State::Output(part, data_block) =
                     std::mem::replace(&mut self.state, State::Finish)
                 {
-                    self.state = match part {
-                        None => State::Finish,
-                        Some(part) => State::ReadData(Some(part)),
-                    };
+                    self.state = part.map_or(State::Finish, |part| State::ReadData(Some(part)));
 
                     self.output.push_data(Ok(data_block));
                     Ok(Event::NeedConsume)

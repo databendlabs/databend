@@ -86,10 +86,9 @@ impl FuseTable {
                             block_count_sum += 1;
                             row_count_sum += row_count;
                             for (i, col_stat) in block.col_stats.iter() {
-                                let density = match col_stat.distinct_of_values {
-                                    Some(ndv) => ndv as f64 / row_count as f64,
-                                    None => 0.0,
-                                };
+                                let density = col_stat
+                                    .distinct_of_values
+                                    .map_or(0.0, |ndv| ndv as f64 / row_count as f64);
 
                                 match sum_map.get_mut(i) {
                                     Some(sum) => {
