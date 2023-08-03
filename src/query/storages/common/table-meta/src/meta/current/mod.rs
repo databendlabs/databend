@@ -24,7 +24,6 @@ pub use v4::SegmentInfo;
 pub use v4::TableSnapshot;
 pub use v4::TableSnapshotLite;
 
-// pub use v5::SegmentInfo;
 use super::v0;
 use super::v1;
 use super::v2;
