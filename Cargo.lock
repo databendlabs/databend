@@ -2633,6 +2633,8 @@ dependencies = [
  "enum-as-inner",
  "globiter",
  "itertools 0.10.5",
+ "indexmap 2.0.0",
+ "itertools",
  "log",
  "num-derive",
  "num-traits",

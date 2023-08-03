@@ -183,10 +183,10 @@ impl<'a> Binder {
                     if !cte_info.materialized {
                         continue;
                     }
-                    let (idx, cte_s_expr) = self.m_cte_bound_s_expr.iter().find(|m_cte| m_cte.0 == &cte_info.cte_idx).unwrap();
+                    let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
                     let left_output_columns = cte_info.columns.clone();
                     s_expr = SExpr::create_binary(
-                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: *idx})),
+                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: cte_info.cte_idx})),
                         Arc::new(cte_s_expr.clone()),
                         Arc::new(s_expr),
                     );

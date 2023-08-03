@@ -175,3 +175,17 @@ with t1 as materialized (select number as a from numbers(10)), t2 as materialize
 7
 8
 9
+
+query I
+with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select a as b from (select * from t1, t1 as t11), t1 as t111) select * from t2 order by t2.b limit 10;
+----
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0

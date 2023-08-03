@@ -166,7 +166,7 @@ impl PipelineBuilder {
             proc_profs: prof_span_set,
             exchange_injector: DefaultExchangeInjector::create(),
             index: None,
-            cte_state: Default::default(),
+            cte_state: HashMap::new(),
         }
     }
 
