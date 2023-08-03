@@ -23,7 +23,6 @@ use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;

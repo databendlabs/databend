@@ -29,7 +29,6 @@ use crate::plans::EvalScalar;
 use crate::plans::Exchange;
 use crate::plans::Lambda;
 use crate::plans::MaterializedCte;
-use crate::plans::ProjectSet;
 use crate::plans::RelOperator;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
