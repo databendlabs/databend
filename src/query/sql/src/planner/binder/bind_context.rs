@@ -14,7 +14,6 @@
 
 use std::collections::btree_map;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::sync::Arc;
@@ -125,8 +124,6 @@ pub struct BindContext {
 
     pub ctes_map: Box<Vec<(String, CteInfo)>>,
 
-    pub materialized_ctes: HashSet<(IndexType, SExpr)>,
-
     /// If current binding table is a view, record its database and name.
     ///
     /// It's used to check if the view has a loop dependency.
@@ -159,6 +156,12 @@ pub struct CteInfo {
     pub columns: Vec<ColumnBinding>,
 }
 
+impl PartialEq for CteInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.cte_idx == other.cte_idx
+    }
+}
+
 impl BindContext {
     pub fn new() -> Self {
         Self {
@@ -170,7 +173,6 @@ impl BindContext {
             lambda_info: LambdaInfo::default(),
             in_grouping: false,
             ctes_map: Box::default(),
-            materialized_ctes: HashSet::new(),
             view_info: None,
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
@@ -189,7 +191,6 @@ impl BindContext {
             lambda_info: LambdaInfo::default(),
             in_grouping: false,
             ctes_map: parent.ctes_map.clone(),
-            materialized_ctes: parent.materialized_ctes.clone(),
             view_info: None,
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
@@ -203,7 +204,6 @@ impl BindContext {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
         bind_context.ctes_map = self.ctes_map.clone();
-        bind_context.materialized_ctes = self.materialized_ctes.clone();
         bind_context
     }
 

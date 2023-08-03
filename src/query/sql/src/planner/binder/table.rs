@@ -186,9 +186,8 @@ impl Binder {
                 };
                 // Check and bind common table expression
                 let ctes_map = bind_context.ctes_map.clone();
-                for cte in ctes_map.iter() {
-                    if cte.0 == table_name {
-                        let cte_info = &cte.1;
+                for (name, cte_info) in ctes_map.iter() {
+                    if name == &table_name {
                         return if !cte_info.materialized {
                             self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
                                 .await
@@ -197,23 +196,17 @@ impl Binder {
                                 let (cte_s_expr, mut cte_bind_ctx) = self
                                     .bind_cte(*span, bind_context, &table_name, alias, cte_info)
                                     .await?;
-                                cte_bind_ctx
-                                    .materialized_ctes
-                                    .insert((cte_info.cte_idx, cte_s_expr.clone()));
                                 let stat_info =
                                     RelExpr::with_s_expr(&cte_s_expr).derive_cardinality()?;
-                                // Add `materialized_cte` to bind_context.
-                                bind_context
-                                    .materialized_ctes
-                                    .insert((cte_info.cte_idx, cte_s_expr));
-                                for cte in bind_context.ctes_map.iter_mut() {
-                                    if cte.0 == table_name {
-                                        cte.1.stat_info = Some(stat_info);
-                                        cte.1.columns = cte_bind_ctx.columns.clone();
+                                for (name, cte_info) in bind_context.ctes_map.iter_mut() {
+                                    if name == &table_name {
+                                        cte_info.stat_info = Some(stat_info);
+                                        cte_info.columns = cte_bind_ctx.columns.clone();
                                         break;
                                     }
                                 }
                                 self.set_m_cte_bound_ctx(cte_info.cte_idx, cte_bind_ctx.clone());
+                                self.set_m_cte_bound_s_expr(cte_info.cte_idx, cte_s_expr);
                                 cte_bind_ctx
                             } else {
                                 // If the cte has been bound, get the bound context from `Binder`'s `m_cte_bound_ctx`
@@ -237,9 +230,9 @@ impl Binder {
                             };
                             // `bind_context` is the main BindContext for the whole query
                             // Update the `used_count` which will be used in runtime phase
-                            for cte in bind_context.ctes_map.iter_mut() {
-                                if cte.0 == table_name {
-                                    cte.1.used_count += 1;
+                            for (name, cte_info) in bind_context.ctes_map.iter_mut() {
+                                if name == &table_name {
+                                    cte_info.used_count += 1;
                                     break;
                                 }
                             }
@@ -248,7 +241,7 @@ impl Binder {
                                 &bind_context
                                     .ctes_map
                                     .iter()
-                                    .find(|cte| cte.0 == table_name)
+                                    .find(|(name, _)| name == &table_name)
                                     .unwrap()
                                     .1,
                             )?;
@@ -830,24 +823,17 @@ impl Binder {
             windows: Default::default(),
             lambda_info: Default::default(),
             in_grouping: false,
-            ctes_map: if bind_context.materialized_ctes.is_empty() {
-                Default::default()
-            } else {
-                bind_context.ctes_map.clone()
-            },
-            materialized_ctes: bind_context.materialized_ctes.clone(),
+            ctes_map: bind_context.ctes_map.clone(),
             view_info: None,
             srfs: Default::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
         };
-        let (s_expr, mut new_bind_context) = self
+        let (s_expr, mut res_bind_context) = self
             .bind_query(&mut new_bind_context, &cte_info.query)
             .await?;
-        bind_context
-            .materialized_ctes
-            .extend(new_bind_context.materialized_ctes.clone());
+        bind_context.ctes_map = res_bind_context.ctes_map.clone();
         let mut cols_alias = cte_info.columns_alias.clone();
         if let Some(alias) = alias {
             for (idx, col_alias) in alias.columns.iter().enumerate() {
@@ -862,23 +848,23 @@ impl Binder {
             .as_ref()
             .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| table_name.to_string());
-        for column in new_bind_context.columns.iter_mut() {
+        for column in res_bind_context.columns.iter_mut() {
             column.database_name = None;
             column.table_name = Some(alias_table_name.clone());
         }
 
-        if cols_alias.len() > new_bind_context.columns.len() {
+        if cols_alias.len() > res_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(format!(
                 "table has {} columns available but {} columns specified",
-                new_bind_context.columns.len(),
+                res_bind_context.columns.len(),
                 cols_alias.len()
             ))
             .set_span(span));
         }
         for (index, column_name) in cols_alias.iter().enumerate() {
-            new_bind_context.columns[index].column_name = column_name.clone();
+            res_bind_context.columns[index].column_name = column_name.clone();
         }
-        Ok((s_expr, new_bind_context))
+        Ok((s_expr, res_bind_context))
     }
 
     #[async_backtrace::framed]
