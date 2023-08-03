@@ -140,7 +140,7 @@ static PREPARE_TPCDS: std::sync::Once = std::sync::Once::new();
 
 pub fn lazy_prepare_data(file_path: &Path) -> Result<()> {
     let file_path = file_path.to_str().unwrap_or_default();
-    if file_path.starts_with("tpch/") {
+    if file_path.contains("tpch/") {
         PREPARE_TPCH.call_once(|| {
             prepare_tpch_data().unwrap();
         });
