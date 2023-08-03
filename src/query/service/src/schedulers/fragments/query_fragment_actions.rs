@@ -130,12 +130,9 @@ impl QueryFragmentsActions {
     }
 
     pub fn get_root_actions(&self) -> Result<&QueryFragmentActions> {
-        match self.fragments_actions.last() {
-            None => Err(ErrorCode::Internal(
-                "Logical error, call get_root_actions in empty QueryFragmentsActions",
-            )),
-            Some(entity) => Ok(entity),
-        }
+        self.fragments_actions.last().ok_or(ErrorCode::Internal(
+            "Logical error, call get_root_actions in empty QueryFragmentsActions",
+        ))
     }
 
     pub fn pop_root_actions(&mut self) -> Option<QueryFragmentActions> {

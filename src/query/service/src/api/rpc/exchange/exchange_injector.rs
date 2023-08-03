@@ -101,7 +101,7 @@ impl ExchangeInjector for DefaultExchangeInjector {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            TransformExchangeSerializer::create(input, output, params, None)
+            TransformExchangeSerializer::create(input, output, params)
         })
     }
 
@@ -111,7 +111,7 @@ impl ExchangeInjector for DefaultExchangeInjector {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            TransformScatterExchangeSerializer::create(input, output, params, None)
+            TransformScatterExchangeSerializer::create(input, output, params)
         })
     }
 

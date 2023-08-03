@@ -148,18 +148,12 @@ impl StageFilesInfo {
     #[async_backtrace::framed]
     pub async fn first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
         let mut files = self.list(operator, true, None).await?;
-        match files.pop() {
-            None => Err(ErrorCode::BadArguments("no file found")),
-            Some(f) => Ok(f),
-        }
+        files.pop().ok_or(ErrorCode::BadArguments("no file found"))
     }
 
     pub fn blocking_first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
         let mut files = self.blocking_list(operator, true, None)?;
-        match files.pop() {
-            None => Err(ErrorCode::BadArguments("no file found")),
-            Some(f) => Ok(f),
-        }
+        files.pop().ok_or(ErrorCode::BadArguments("no file found"))
     }
 
     pub fn blocking_list(
@@ -249,10 +243,7 @@ impl StageFilesInfo {
 
 fn check_file(path: &str, mode: EntryMode, pattern: &Option<Regex>) -> bool {
     if mode.is_file() {
-        match pattern {
-            Some(p) => p.is_match(path),
-            None => true,
-        }
+        pattern.as_ref().map_or(true, |p| p.is_match(path))
     } else {
         false
     }

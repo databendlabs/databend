@@ -58,15 +58,13 @@ impl FileFormatOptionsAst {
     fn take_type(&mut self) -> Result<StageFileFormatType> {
         let typ = match self.options.remove("type") {
             Some(t) => t,
-            None => match self.options.remove("format") {
-                Some(f) => f,
-                None => {
-                    return Err(ErrorCode::IllegalFileFormat(format!(
-                        "Missing type in file format options: {:?}",
-                        self.options
-                    )));
-                }
-            },
+            None => self
+                .options
+                .remove("format")
+                .ok_or(ErrorCode::IllegalFileFormat(format!(
+                    "Missing type in file format options: {:?}",
+                    self.options
+                )))?,
         };
         StageFileFormatType::from_str(&typ).map_err(ErrorCode::IllegalFileFormat)
     }

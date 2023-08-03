@@ -372,10 +372,7 @@ impl StateMachine {
 
         debug!("sled tx done: {:?}", entry);
 
-        let applied_state = match opt_applied_state {
-            Some(r) => r,
-            None => AppliedState::None,
-        };
+        let applied_state = opt_applied_state.unwrap_or(AppliedState::None);
 
         // Send queued change events to subscriber
         if let Some(subscriber) = &self.subscriber {

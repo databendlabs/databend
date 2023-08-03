@@ -70,10 +70,9 @@ impl PartInfo for SplitInfo {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<SplitInfo>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<SplitInfo>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {
