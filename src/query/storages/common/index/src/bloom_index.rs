@@ -452,10 +452,9 @@ impl BloomIndex {
             let data_value = scalar_to_datavalue(target);
             filter.contains(&data_value)
         } else {
-            match scalar_map.get(target) {
-                Some(digest) => filter.contains_digest(*digest),
-                None => true,
-            }
+            scalar_map
+                .get(target)
+                .map_or(true, |digest| filter.contains_digest(*digest))
         };
 
         if contains {

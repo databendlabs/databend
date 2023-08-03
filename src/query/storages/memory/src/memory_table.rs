@@ -77,14 +77,11 @@ impl MemoryTable {
         let blocks = {
             let mut in_mem_data = IN_MEMORY_DATA.write();
             let x = in_mem_data.get(table_id);
-            match x {
-                None => {
-                    let blocks = Arc::new(RwLock::new(vec![]));
-                    in_mem_data.insert(*table_id, blocks.clone());
-                    blocks
-                }
-                Some(blocks) => blocks.clone(),
-            }
+            x.cloned().unwrap_or_else(|| {
+                let blocks = Arc::new(RwLock::new(vec![]));
+                in_mem_data.insert(*table_id, blocks.clone());
+                blocks
+            })
         };
 
         let table = Self {

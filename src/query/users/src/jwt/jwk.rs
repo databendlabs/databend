@@ -152,13 +152,13 @@ impl JwkKeyStore {
         self.maybe_reload_keys().await?;
         let keys = self.keys.read();
         match key_id {
-            Some(kid) => match keys.get(&kid) {
-                None => Err(ErrorCode::AuthenticateFailure(format!(
+            Some(kid) => keys
+                .get(&kid)
+                .cloned()
+                .ok_or(ErrorCode::AuthenticateFailure(format!(
                     "key id {} not found",
                     &kid
                 ))),
-                Some(k) => Ok((*k).clone()),
-            },
             None => {
                 if keys.len() != 1 {
                     Err(ErrorCode::AuthenticateFailure(

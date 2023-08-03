@@ -264,13 +264,11 @@ where F: SnapshotGenerator + Send + 'static
                 // if table_id not match, update table meta will fail
                 let table_info = fuse_table.table_info.clone();
                 // check if snapshot has been changed
-                let snapshot_has_changed = match self.prev_snapshot_id {
-                    Some(prev_snapshot_id) => match &previous {
-                        Some(previous) => previous.snapshot_id != prev_snapshot_id,
-                        None => true,
-                    },
-                    None => false,
-                };
+                let snapshot_has_changed = self.prev_snapshot_id.is_some_and(|prev_snapshot_id| {
+                    previous
+                        .as_ref()
+                        .map_or(true, |previous| previous.snapshot_id != prev_snapshot_id)
+                });
                 if snapshot_has_changed {
                     error!("commit mutation failed cause snapshot has changed when commit");
                     // if snapshot has changed abort operation

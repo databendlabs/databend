@@ -32,10 +32,9 @@ impl PartInfo for RandomPartInfo {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<RandomPartInfo>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<RandomPartInfo>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {
@@ -49,11 +48,10 @@ impl RandomPartInfo {
     }
 
     pub fn from_part(info: &PartInfoPtr) -> Result<&RandomPartInfo> {
-        match info.as_any().downcast_ref::<RandomPartInfo>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
+        info.as_any()
+            .downcast_ref::<RandomPartInfo>()
+            .ok_or(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to RandomPartInfo.",
-            )),
-        }
+            ))
     }
 }

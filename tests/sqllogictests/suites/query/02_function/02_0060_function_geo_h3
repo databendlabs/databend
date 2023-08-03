@@ -173,7 +173,7 @@ statement ok
 CREATE TABLE t3 (h3 UInt64, a_h3 UInt64, res UInt8) ENGINE=Memory
 
 statement ok
-insert into t3 values(644325524701193974, 644325524701193897, 10), (644325524701193974, 635318325446452991, 14), (644325524701193974, 635318325446452991, 15)
+INSERT INTO  t3 VALUES(644325524701193974, 644325524701193897, 10), (644325524701193974, 635318325446452991, 14), (644325524701193974, 635318325446452991, 15)
 
 query B
 select h3_indexes_are_neighbors(h3, a_h3) from t3
@@ -196,6 +196,92 @@ select h3_to_parent(a_h3, res) from t3
 0
 0
 
+query T
+select h3_to_string(635318325446452991)
+----
+8d11aa6a38826ff
+
+query I
+select string_to_h3('8d11aa6a38826ff')
+----
+635318325446452991
+
+query B
+select h3_is_res_class_iii(635318325446452991)
+----
+1
+
+query B
+select h3_is_pentagon(599119489002373119)
+----
+1
+
+query T
+select h3_get_faces(599119489002373119)
+----
+[0,1,2,3,4]
+
+query F
+select h3_cell_area_m2(599119489002373119)
+----
+127785582.60810876
+
+query F
+select h3_cell_area_rads2(599119489002373119)
+----
+3.1482243104279148e-6
+
+statement ok
+DROP TABLE IF EXISTS t4
+
+statement ok
+CREATE TABLE t4 (h3 UInt64, h3_str String) ENGINE=Memory
+
+statement ok
+INSERT INTO  t4 VALUES(599119489002373119, '85080003fffffff'), (599686042433355775, '85283473fffffff')
+
+query T
+select h3_to_string(h3) from t4
+----
+85080003fffffff
+85283473fffffff
+
+query I
+select string_to_h3(h3_str) from t4
+----
+599119489002373119
+599686042433355775
+
+query B
+select h3_is_res_class_iii(h3) from t4
+----
+1
+1
+
+query B
+select h3_is_pentagon(h3) from t4
+----
+1
+0
+
+query T
+select h3_get_faces(h3) from t4
+----
+[0,1,2,3,4]
+[7]
+
+query F
+select h3_cell_area_m2(h3) from t4
+----
+127785582.60810876
+265092558.12825438
+
+query F
+select h3_cell_area_rads2(h3) from t4
+----
+3.1482243104279148e-6
+6.5310250106410435e-6
+
 statement ok
 DROP TABLE t1
 
@@ -204,3 +290,6 @@ DROP TABLE t2
 
 statement ok
 DROP TABLE t3
+
+statement ok
+DROP TABLE t4

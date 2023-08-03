@@ -36,10 +36,9 @@ impl PartInfo for CompactPartInfo {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<CompactPartInfo>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<CompactPartInfo>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {
@@ -53,11 +52,10 @@ impl CompactPartInfo {
     }
 
     pub fn from_part(info: &PartInfoPtr) -> Result<&CompactPartInfo> {
-        match info.as_any().downcast_ref::<CompactPartInfo>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
+        info.as_any()
+            .downcast_ref::<CompactPartInfo>()
+            .ok_or(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to CompactPartInfo.",
-            )),
-        }
+            ))
     }
 }

@@ -100,10 +100,7 @@ impl BlockMetaInfo for InternalColumnMeta {
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match InternalColumnMeta::downcast_ref_from(info) {
-            None => false,
-            Some(other) => self == other,
-        }
+        InternalColumnMeta::downcast_ref_from(info).is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
@@ -113,12 +110,9 @@ impl BlockMetaInfo for InternalColumnMeta {
 
 impl InternalColumnMeta {
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&InternalColumnMeta> {
-        match InternalColumnMeta::downcast_ref_from(info) {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to InternalColumnMeta.",
-            )),
-        }
+        InternalColumnMeta::downcast_ref_from(info).ok_or(ErrorCode::Internal(
+            "Cannot downcast from BlockMetaInfo to InternalColumnMeta.",
+        ))
     }
 }
 
