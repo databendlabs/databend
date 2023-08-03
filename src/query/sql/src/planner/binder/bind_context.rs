@@ -14,7 +14,6 @@
 
 use std::collections::btree_map;
 use std::collections::BTreeMap;
-use std::collections::HashSet;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -31,6 +30,7 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use dashmap::DashMap;
 use enum_as_inner::EnumAsInner;
+use indexmap::IndexMap;
 
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
@@ -122,7 +122,7 @@ pub struct BindContext {
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
 
-    pub ctes_map: Box<Vec<(String, CteInfo)>>,
+    pub ctes_map: Box<IndexMap<String, CteInfo>>,
 
     /// If current binding table is a view, record its database and name.
     ///
@@ -154,12 +154,6 @@ pub struct CteInfo {
     pub stat_info: Option<Arc<StatInfo>>,
     // If cte is materialized, save it's columns
     pub columns: Vec<ColumnBinding>,
-}
-
-impl PartialEq for CteInfo {
-    fn eq(&self, other: &Self) -> bool {
-        self.cte_idx == other.cte_idx
-    }
 }
 
 impl BindContext {

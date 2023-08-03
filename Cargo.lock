@@ -2632,6 +2632,7 @@ dependencies = [
  "educe",
  "enum-as-inner",
  "globiter",
+ "indexmap 2.0.0",
  "itertools",
  "log",
  "num-derive",
