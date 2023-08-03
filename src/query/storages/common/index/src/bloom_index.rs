@@ -363,7 +363,10 @@ impl BloomIndex {
         Ok(column)
     }
 
-    /// calculate digest for column
+    /// calculate digest for column that may have null values
+    ///
+    /// returns (column, validity) where column is the digest of the column
+    /// and validity is the optional bitmap of the null values
     pub fn calculate_nullable_column_digest(
         func_ctx: &FunctionContext,
         column: &Column,
@@ -371,18 +374,18 @@ impl BloomIndex {
     ) -> Result<(Buffer<u64>, Option<Bitmap>)> {
         Ok(if data_type.is_nullable() {
             let col = Self::calculate_column_digest(
-                &func_ctx,
-                &column,
-                &data_type,
+                func_ctx,
+                column,
+                data_type,
                 &DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
             )?;
             let nullable_column = NullableType::<UInt64Type>::try_downcast_column(&col).unwrap();
             (nullable_column.column, Some(nullable_column.validity))
         } else {
             let col = Self::calculate_column_digest(
-                &func_ctx,
-                &column,
-                &data_type,
+                func_ctx,
+                column,
+                data_type,
                 &DataType::Number(NumberDataType::UInt64),
             )?;
             let column = UInt64Type::try_downcast_column(&col).unwrap();

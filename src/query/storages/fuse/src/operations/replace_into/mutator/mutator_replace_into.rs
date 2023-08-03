@@ -175,15 +175,7 @@ impl ReplaceIntoMutator {
 
     fn build_merge_into_operation(&mut self, data_block: &DataBlock) -> Result<MergeIntoOperation> {
         let num_rows = data_block.num_rows();
-        let column_values = self
-            .on_conflict_fields
-            .iter()
-            .map(|field| {
-                let filed_index = field.field_index;
-                let entry = &data_block.columns()[filed_index];
-                &entry.value
-            })
-            .collect::<Vec<_>>();
+        let column_values = on_conflict_key_column_values(&self.on_conflict_fields, data_block);
 
         match Self::build_column_hash(&column_values, &mut self.key_saw, num_rows)? {
             ColumnHash::NoConflict(key_hashes) => {
@@ -389,7 +381,8 @@ impl Partitioner {
         let cluster_key_values = evaluator.run(&self.left_most_cluster_key)?;
 
         // extract the on-conflict column values
-        let on_conflict_column_values = self.on_conflict_key_column_values(data_block);
+        let on_conflict_column_values =
+            on_conflict_key_column_values(&self.on_conflict_fields, data_block);
 
         // partitions by the left-most cluster key expression
         let mut partitions: HashMap<Scalar, Partition> = HashMap::new();
@@ -398,7 +391,7 @@ impl Partitioner {
         let maybe_bloom_hashes = self
             .bloom_filter_column_info
             .as_ref()
-            .map(|(idx, typ)| {
+            .and_then(|(idx, typ)| {
                 if BloomIndex::supported_data_type(typ) {
                     let maybe_col = on_conflict_column_values[*idx].as_column();
                     maybe_col.map(|col| {
@@ -408,20 +401,18 @@ impl Partitioner {
                     None
                 }
             })
-            .flatten()
             .transpose()?;
 
         for row_idx in 0..data_block.num_rows() {
             if let Some(row_digest) = row_hash_of_columns(&on_conflict_column_values, row_idx)? {
                 let bloom_hash = maybe_bloom_hashes
                     .as_ref()
-                    .map(|(hashes, validity)| match validity {
+                    .and_then(|(hashes, validity)| match validity {
                         Some(v) if v.unset_bits() != 0 => v
                             .get(row_idx)
-                            .map(|v| if v { hashes.get(row_idx).clone() } else { None }),
-                        _ => Some(hashes.get(row_idx).clone()),
+                            .map(|v| if v { hashes.get(row_idx) } else { None }),
+                        _ => Some(hashes.get(row_idx)),
                     })
-                    .flatten()
                     .flatten();
                 let cluster_key_value = cluster_key_values.row_scalar(row_idx)?.to_owned();
 
@@ -445,20 +436,20 @@ impl Partitioner {
         }
         Ok(partitions.into_values().collect::<Vec<_>>())
     }
+}
 
-    fn on_conflict_key_column_values<'a>(
-        &self,
-        data_block: &'a DataBlock,
-    ) -> Vec<&'a Value<AnyType>> {
-        self.on_conflict_fields
-            .iter()
-            .map(|field| {
-                let filed_index = field.field_index;
-                let entry = &data_block.columns()[filed_index];
-                &entry.value
-            })
-            .collect::<Vec<_>>()
-    }
+fn on_conflict_key_column_values<'a>(
+    on_conflict_fields: &[OnConflictField],
+    data_block: &'a DataBlock,
+) -> Vec<&'a Value<AnyType>> {
+    on_conflict_fields
+        .iter()
+        .map(|field| {
+            let filed_index = field.field_index;
+            let entry = &data_block.columns()[filed_index];
+            &entry.value
+        })
+        .collect::<Vec<_>>()
 }
 
 #[cfg(test)]
