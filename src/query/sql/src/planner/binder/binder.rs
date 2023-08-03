@@ -87,6 +87,7 @@ pub struct Binder {
     // Eg: SELECT * FROM (twocolumn AS a JOIN twocolumn AS b USING(x) JOIN twocolumn AS c on a.x = c.x) ORDER BY x LIMIT 1
     // The eq_scalars is [(a.x, b.x), (a.x, c.x)]
     pub eq_scalars: Vec<(ScalarExpr, ScalarExpr)>,
+    pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
 }
 
 impl<'a> Binder {
@@ -103,12 +104,17 @@ impl<'a> Binder {
             metadata,
             m_cte_bound_ctx: Default::default(),
             eq_scalars: vec![],
+            m_cte_bound_s_expr: Default::default(),
         }
     }
 
     // After the materialized cte was bound, add it to `m_cte_bound_ctx`
     pub fn set_m_cte_bound_ctx(&mut self, cte_idx: IndexType, bound_ctx: BindContext) {
         self.m_cte_bound_ctx.insert(cte_idx, bound_ctx);
+    }
+
+    pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
+        self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
     }
 
     #[async_backtrace::framed]
@@ -173,10 +179,12 @@ impl<'a> Binder {
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
                 // Wrap `LogicalMaterializedCte` to `s_expr`
-                for cte_info in bind_context.ctes_map.iter().rev() {
-                    // Find cte from `materialized_ctes` which has idx of cte_info
-                    let (idx, cte_s_expr) = bind_context.materialized_ctes.iter().find(|m_cte| m_cte.0 == cte_info.1.cte_idx).unwrap();
-                    let mut left_output_columns = cte_info.1.columns.clone();
+                for (_, cte_info) in bind_context.ctes_map.iter().rev() {
+                    if !cte_info.materialized {
+                        continue;
+                    }
+                    let (idx, cte_s_expr) = self.m_cte_bound_s_expr.iter().find(|m_cte| m_cte.0 == &cte_info.cte_idx).unwrap();
+                    let left_output_columns = cte_info.columns.clone();
                     s_expr = SExpr::create_binary(
                         Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: *idx})),
                         Arc::new(cte_s_expr.clone()),

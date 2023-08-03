@@ -176,7 +176,7 @@ minitrace = "0.5"
 debug = 1
 lto = "thin"
 overflow-checks = false
-incremental = false
+incremental = true
 opt-level = "s"
 # codegen-units = 1       # Reduce number of codegen units to increase optimizations.
 
