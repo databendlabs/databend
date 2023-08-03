@@ -179,6 +179,11 @@ impl StoreInner {
         })
     }
 
+    /// Return a snapshot store of this instance.
+    pub fn snapshot_store(&self) -> SnapshotStoreV002 {
+        SnapshotStoreV002::new(DATA_VERSION, self.config.clone())
+    }
+
     async fn rebuild_state_machine(
         id: &MetaSnapshotId,
         snapshot: SnapshotData,
@@ -221,7 +226,7 @@ impl StoreInner {
 
         info!("do_build_snapshot writing snapshot start");
 
-        let mut snapshot_store = SnapshotStoreV002::new(DATA_VERSION, self.config.clone());
+        let mut snapshot_store = self.snapshot_store();
 
         // Move heavy load to a blocking thread pool.
         let (snapshot_id, snapshot_size) = tokio::task::block_in_place({
@@ -234,6 +239,8 @@ impl StoreInner {
                 Self::write_snapshot(sto, meta, data_entries)
             }
         })?;
+
+        snapshot_store.clean_old_snapshots().await?;
 
         assert_eq!(
             snapshot_id.last_applied, snapshot_meta.last_log_id,

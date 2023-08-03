@@ -146,14 +146,14 @@ impl SnapshotStoreV002 {
         format!("{}/0.snap-{}", self.snapshot_dir(), ts)
     }
 
-    /// Make directory for snapshot if it does not exist.
-    fn ensure_snapshot_dir(&self) -> Result<(), SnapshotStoreError> {
+    /// Make directory for snapshot if it does not exist and return the snapshot directory.
+    fn ensure_snapshot_dir(&self) -> Result<String, SnapshotStoreError> {
         let dir = self.snapshot_dir();
 
         fs::create_dir_all(&dir)
             .map_err(|e| SnapshotStoreError::write(e).with_meta("creating snapshot dir", &dir))?;
 
-        Ok(())
+        Ok(dir)
     }
 
     /// Return a list of valid snapshot ids found in the snapshot directory.
@@ -162,26 +162,81 @@ impl SnapshotStoreV002 {
     ) -> Result<Option<(MetaSnapshotId, SnapshotData)>, SnapshotStoreError> {
         // TODO: cleanup old snapshot and temp file
 
-        self.ensure_snapshot_dir()?;
+        let (snapshot_ids, _invalid_files) = self.load_snapshot_ids().await?;
+        // dbg!(&snapshot_ids);
 
-        let dir = self.snapshot_dir();
+        info!("choose the latest from found snapshots: {:?}", snapshot_ids);
 
-        fn make_err(e: io::Error, context: impl Display) -> SnapshotStoreError {
-            let s = context.to_string();
-            error!("{} while context: {}", e, s);
-            SnapshotStoreError::read(e).with_context(context)
+        let id = if let Some(id) = snapshot_ids.last().cloned() {
+            id
+        } else {
+            return Ok(None);
+        };
+
+        let data = self.new_reader(&id.to_string()).await?;
+
+        Ok(Some((id, data)))
+    }
+
+    /// Keep several latest snapshots and cleanup the rest.
+    pub async fn clean_old_snapshots(&self) -> Result<(), SnapshotStoreError> {
+        let dir = self.ensure_snapshot_dir()?;
+
+        let (snapshot_ids, invalid_files) = self.load_snapshot_ids().await?;
+        for invalid_file in invalid_files {
+            let path = format!("{}/{}", dir, invalid_file);
+
+            warn!("removing invalid snapshot file: {}", path);
+
+            tokio::fs::remove_file(&path).await.map_err(|e| {
+                SnapshotStoreError::write(e).with_context(format_args!("removing {}", &path))
+            })?;
         }
+
+        // Keep the last several snapshots, remove others
+        let n = 3;
+        if snapshot_ids.len() <= n {
+            info!(
+                "no need to clean snapshots(keeps {} snapshots): {:?}",
+                n, snapshot_ids
+            );
+            return Ok(());
+        }
+
+        info!("cleaning snapshots, keep last {}: {:?}", n, snapshot_ids);
+
+        for snapshot_id in snapshot_ids.iter().take(snapshot_ids.len() - n) {
+            let path = self.snapshot_path(&snapshot_id.to_string());
+
+            info!("removing old snapshot file: {}", path);
+
+            tokio::fs::remove_file(&path).await.map_err(|e| {
+                SnapshotStoreError::write(e).with_context(format_args!("removing {}", &path))
+            })?;
+        }
+
+        Ok(())
+    }
+
+    /// Return a list of valid snapshot ids and invalid file names found in the snapshot directory.
+    ///
+    /// The valid snapshot ids are sorted, older first.
+    pub async fn load_snapshot_ids(
+        &self,
+    ) -> Result<(Vec<MetaSnapshotId>, Vec<String>), SnapshotStoreError> {
+        let mut snapshot_ids = vec![];
+        let mut invalid_files = vec![];
+
+        let dir = self.ensure_snapshot_dir()?;
 
         let mut read_dir = tokio::fs::read_dir(&dir)
             .await
-            .map_err(|e| make_err(e, format_args!("reading snapshot dir: {}", &dir)))?;
-
-        let mut snapshot_ids = vec![];
+            .map_err(|e| Self::make_err(e, format_args!("reading snapshot dir: {}", &dir)))?;
 
         while let Some(dent) = read_dir
             .next_entry()
             .await
-            .map_err(|e| make_err(e, format_args!("reading snapshot dir entry: {}", &dir)))?
+            .map_err(|e| Self::make_err(e, format_args!("reading snapshot dir entry: {}", &dir)))?
         {
             let file_name = if let Some(x) = dent.file_name().to_str() {
                 x.to_string()
@@ -194,6 +249,7 @@ impl SnapshotStoreV002 {
                     x
                 } else {
                     warn!("found invalid snapshot id: {}", file_name);
+                    invalid_files.push(file_name);
                     continue;
                 };
 
@@ -202,22 +258,9 @@ impl SnapshotStoreV002 {
         }
 
         snapshot_ids.sort();
-        // dbg!(&snapshot_ids);
+        info!("dir: {}; loaded snapshots: {:?}", dir, snapshot_ids);
 
-        info!(
-            "dir: {}; choose the latest from found snapshots: {:?}",
-            dir, snapshot_ids
-        );
-
-        let id = if let Some(id) = snapshot_ids.last().cloned() {
-            id
-        } else {
-            return Ok(None);
-        };
-
-        let data = self.new_reader(&id.to_string()).await?;
-
-        Ok(Some((id, data)))
+        Ok((snapshot_ids, invalid_files))
     }
 
     pub fn new_writer(&mut self) -> Result<WriterV002, SnapshotStoreError> {
@@ -276,5 +319,12 @@ impl SnapshotStoreV002 {
         let d = self.new_reader(&meta.snapshot_id).await?;
 
         Ok(d)
+    }
+
+    /// Build a [`SnapshotStoreError`] from io::Error with context.
+    fn make_err(e: io::Error, context: impl Display) -> SnapshotStoreError {
+        let s = context.to_string();
+        error!("{} while context: {}", e, s);
+        SnapshotStoreError::read(e).with_context(context)
     }
 }

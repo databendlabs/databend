@@ -150,6 +150,18 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
         assert_eq!(want, res);
     }
 
+    info!("--- rebuild other 4 times, keeps only last 3");
+    {
+        sto.build_snapshot().await?;
+        sto.build_snapshot().await?;
+        sto.build_snapshot().await?;
+        sto.build_snapshot().await?;
+
+        let snapshot_store = sto.snapshot_store();
+        let (snapshot_ids, _) = snapshot_store.load_snapshot_ids().await?;
+        assert_eq!(3, snapshot_ids.len());
+    }
+
     Ok(())
 }
 
