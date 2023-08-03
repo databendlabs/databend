@@ -30,6 +30,7 @@ use common_pipeline_transforms::processors::transforms::create_dummy_item;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use log::info;
 use rand::prelude::SliceRandom;
+use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 
@@ -158,33 +159,29 @@ impl FuseTable {
         let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let cluster_keys = self.cluster_keys(ctx.clone());
 
+        // currently, we only try apply bloom filter pruning when the table is clustered
         let most_significant_on_conflict_field_index: Option<FieldIndex> = if !cluster_keys
             .is_empty()
             && ctx.get_settings().get_enable_replace_into_bloom_pruning()?
         {
-            // pick the most significant cluster key as the bloom filter key, by NDV
-            let col_stats_provider = self.column_statistics_provider().await?;
-            let iter = on_conflicts.iter().enumerate().filter_map(|(idx, key)| {
-                let maybe_col_stats =
-                    col_stats_provider.column_statistics(key.table_field.column_id);
-                maybe_col_stats.map(|col_stats| (idx, col_stats.number_of_distinct_values))
-            });
-            // pick the one with the smallest NDV
-            iter.min_by(|l, r| l.1.cmp(&r.1)).map(|v| v.0)
+            self.choose_most_significant_bloom_filter_column(&on_conflicts)
+                .await?
         } else {
+            info!("replace-into, bloom filter pruning not enabled.");
             None
         };
 
-        match most_significant_on_conflict_field_index {
-            Some(idx) => {
-                info!(
-                    "replace-into, most_significant_on_conflict_field_index: {:?}, name {}",
-                    idx,
-                    on_conflicts[idx].table_field.name()
-                );
-            }
-            None => {
-                info!("replace-into, most_significant_on_conflict_field_index: None");
+        if log::log_enabled!(log::Level::Info) {
+            match most_significant_on_conflict_field_index {
+                Some(idx) => {
+                    info!(
+                        "replace-into, most_significant_on_conflict_field chosen, name : {}, idx {}",
+                        on_conflicts[idx].table_field.name, idx,
+                    );
+                }
+                None => {
+                    info!("replace-into, most_significant_on_conflict_field_index: None");
+                }
             }
         }
 
@@ -291,6 +288,7 @@ impl FuseTable {
                     segment_partition_num,
                     block_builder,
                     on_conflicts.clone(),
+                    most_significant_on_conflict_field_index,
                     &base_snapshot,
                     io_request_semaphore,
                 )
@@ -318,12 +316,14 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
+    #[allow(clippy::too_many_arguments)]
     async fn merge_into_mutators(
         &self,
         ctx: Arc<dyn TableContext>,
         num_partition: usize,
         block_builder: BlockBuilder,
         on_conflicts: Vec<OnConflictField>,
+        most_significant_on_conflict_field_index: Option<usize>,
         table_snapshot: &TableSnapshot,
         io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PipeItem>> {
@@ -334,6 +334,7 @@ impl FuseTable {
             let item = MergeIntoOperationAggregator::try_create(
                 ctx.clone(),
                 on_conflicts.clone(),
+                most_significant_on_conflict_field_index,
                 chunk_of_segment_locations,
                 self.operator.clone(),
                 self.table_info.schema(),
@@ -415,5 +416,27 @@ impl FuseTable {
             )
         })?;
         Ok(())
+    }
+
+    // choose the most significant bloom filter column.
+    //
+    // the one with the greatest number of number-of-distinct-values, will be kept.
+    // if all the columns do not support bloom index, return None
+    async fn choose_most_significant_bloom_filter_column(
+        &self,
+        on_conflicts: &[OnConflictField],
+    ) -> Result<Option<FieldIndex>> {
+        let col_stats_provider = self.column_statistics_provider().await?;
+        let iter = on_conflicts.iter().enumerate().filter_map(|(idx, key)| {
+            if !BloomIndex::supported_type(&key.table_field.data_type) {
+                None
+            } else {
+                let maybe_col_stats =
+                    col_stats_provider.column_statistics(key.table_field.column_id);
+                maybe_col_stats.map(|col_stats| (idx, col_stats.number_of_distinct_values))
+            }
+        });
+        // pick the one with the greatest NDV
+        Ok(iter.max_by(|l, r| l.1.cmp(&r.1)).map(|v| v.0))
     }
 }

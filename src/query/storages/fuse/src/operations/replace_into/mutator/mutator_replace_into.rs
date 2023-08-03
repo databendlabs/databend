@@ -346,6 +346,7 @@ struct Partitioner {
     on_conflict_fields: Vec<OnConflictField>,
     func_ctx: FunctionContext,
     left_most_cluster_key: Expr,
+    // the most significant on-conflict field index chosen, if any
     bloom_filter_column_info: Option<(FieldIndex, DataType)>,
 }
 
@@ -392,14 +393,10 @@ impl Partitioner {
             .bloom_filter_column_info
             .as_ref()
             .and_then(|(idx, typ)| {
-                if BloomIndex::supported_data_type(typ) {
-                    let maybe_col = on_conflict_column_values[*idx].as_column();
-                    maybe_col.map(|col| {
-                        BloomIndex::calculate_nullable_column_digest(&self.func_ctx, col, typ)
-                    })
-                } else {
-                    None
-                }
+                let maybe_col = on_conflict_column_values[*idx].as_column();
+                maybe_col.map(|col| {
+                    BloomIndex::calculate_nullable_column_digest(&self.func_ctx, col, typ)
+                })
             })
             .transpose()?;
 
