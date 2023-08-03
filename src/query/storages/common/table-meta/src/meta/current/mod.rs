@@ -23,11 +23,9 @@ pub use v4::CompactSegmentInfo;
 pub use v4::SegmentInfo;
 pub use v4::TableSnapshot;
 pub use v4::TableSnapshotLite;
-pub use v5::InternalSegmentInfo;
 
 // pub use v5::SegmentInfo;
 use super::v0;
 use super::v1;
 use super::v2;
 use super::v4;
-use super::v5;

@@ -97,29 +97,15 @@ impl SegmentInfo {
     }
 
     // Total block bytes of this segment.
+    #[allow(unused)]
     pub fn total_bytes(&self) -> u64 {
         match self {
             Self::LeafSegment(leaf_segment_info) => {
-                leaf_segment_info.blocks.iter().map(|v| v.block_size).sum()
+                leaf_segment_info.summary.uncompressed_byte_size
             }
             Self::InternalSegment(internal_segment_info) => {
                 internal_segment_info.summary.uncompressed_byte_size
             }
         }
-    }
-
-    // Encode self.blocks as RawBlockMeta.
-    fn block_raw_bytes(&self) -> Result<RawBlockMeta> {
-        let encoding = MetaEncoding::MessagePack;
-        let bytes = encode(&encoding, &self.blocks)?;
-
-        let compression = MetaCompression::default();
-        let compressed = compress(&compression, bytes)?;
-
-        Ok(RawBlockMeta {
-            bytes: compressed,
-            encoding,
-            compression,
-        })
     }
 }
