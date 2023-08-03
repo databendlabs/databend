@@ -77,6 +77,7 @@ where Method: HashMethodBounds
             for bucket_data in data {
                 match bucket_data {
                     AggregateMeta::Spilled(_) => unreachable!(),
+                    AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Serialized(payload) => {

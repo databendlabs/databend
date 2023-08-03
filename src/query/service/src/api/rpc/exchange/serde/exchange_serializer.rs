@@ -25,15 +25,17 @@ use common_arrow::arrow::io::ipc::IpcField;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_io::prelude::BinaryWrite;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
+use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
+use common_pipeline_transforms::processors::transforms::UnknownMode;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -41,7 +43,6 @@ use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_transform_shuffle::ExchangeShuffleMeta;
 use crate::api::DataPacket;
-use crate::api::ExchangeSorting;
 use crate::api::FragmentData;
 
 pub struct ExchangeSerializeMeta {
@@ -96,7 +97,6 @@ impl BlockMetaInfo for ExchangeSerializeMeta {
 pub struct TransformExchangeSerializer {
     options: WriteOptions,
     ipc_fields: Vec<IpcField>,
-    sorting: Option<Arc<dyn ExchangeSorting>>,
 }
 
 impl TransformExchangeSerializer {
@@ -104,7 +104,6 @@ impl TransformExchangeSerializer {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: &MergeExchangeParams,
-        sorting: Option<Arc<dyn ExchangeSorting>>,
     ) -> Result<ProcessorPtr> {
         let arrow_schema = params.schema.to_arrow();
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
@@ -112,7 +111,6 @@ impl TransformExchangeSerializer {
             input,
             output,
             TransformExchangeSerializer {
-                sorting,
                 ipc_fields,
                 options: WriteOptions { compression: None },
             },
@@ -124,13 +122,7 @@ impl Transform for TransformExchangeSerializer {
     const NAME: &'static str = "ExchangeSerializerTransform";
 
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-        let mut block_num = 0;
-
-        if let Some(sorting) = &self.sorting {
-            block_num = sorting.block_number(&data_block)?;
-        }
-
-        serialize_block(block_num, data_block, &self.ipc_fields, &self.options)
+        serialize_block(0, data_block, &self.ipc_fields, &self.options)
     }
 }
 
@@ -138,7 +130,6 @@ pub struct TransformScatterExchangeSerializer {
     local_pos: usize,
     options: WriteOptions,
     ipc_fields: Vec<IpcField>,
-    sorting: Option<Arc<dyn ExchangeSorting>>,
 }
 
 impl TransformScatterExchangeSerializer {
@@ -146,16 +137,14 @@ impl TransformScatterExchangeSerializer {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: &ShuffleExchangeParams,
-        sorting: Option<Arc<dyn ExchangeSorting>>,
     ) -> Result<ProcessorPtr> {
         let local_id = &params.executor_id;
         let arrow_schema = params.schema.to_arrow();
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-        Ok(ProcessorPtr::create(Transformer::create(
+        Ok(ProcessorPtr::create(BlockMetaTransformer::create(
             input,
             output,
             TransformScatterExchangeSerializer {
-                sorting,
                 ipc_fields,
                 options: WriteOptions { compression: None },
                 local_pos: params
@@ -168,42 +157,27 @@ impl TransformScatterExchangeSerializer {
     }
 }
 
-impl Transform for TransformScatterExchangeSerializer {
+impl BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterExchangeSerializer {
+    const UNKNOWN_MODE: UnknownMode = UnknownMode::Error;
     const NAME: &'static str = "TransformScatterExchangeSerializer";
 
-    fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
-        if let Some(block_meta) = data_block.take_meta() {
-            if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
-                let mut new_blocks = Vec::with_capacity(shuffle_meta.blocks.len());
-                for (index, block) in shuffle_meta.blocks.into_iter().enumerate() {
-                    if block.is_empty() {
-                        new_blocks.push(block);
-                        continue;
-                    }
-
-                    new_blocks.push(match self.local_pos == index {
-                        true => block,
-                        false => match &self.sorting {
-                            None => serialize_block(0, block, &self.ipc_fields, &self.options)?,
-                            Some(sorting) => serialize_block(
-                                sorting.block_number(&data_block)?,
-                                block,
-                                &self.ipc_fields,
-                                &self.options,
-                            )?,
-                        },
-                    });
-                }
-
-                return Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
-                    new_blocks,
-                )));
+    fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<DataBlock> {
+        let mut new_blocks = Vec::with_capacity(meta.blocks.len());
+        for (index, block) in meta.blocks.into_iter().enumerate() {
+            if block.is_empty() {
+                new_blocks.push(block);
+                continue;
             }
+
+            new_blocks.push(match self.local_pos == index {
+                true => block,
+                false => serialize_block(0, block, &self.ipc_fields, &self.options)?,
+            });
         }
 
-        Err(ErrorCode::Internal(
-            "Internal, TransformScatterExchangeSerializer only recv ExchangeShuffleMeta.",
-        ))
+        Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
+            new_blocks,
+        )))
     }
 }
 

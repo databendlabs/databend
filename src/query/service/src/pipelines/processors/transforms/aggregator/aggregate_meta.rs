@@ -45,18 +45,19 @@ impl SerializedPayload {
     }
 }
 
-pub struct SpilledPayload {
+pub struct BucketSpilledPayload {
     pub bucket: isize,
     pub location: String,
     pub data_range: Range<u64>,
-    pub columns_layout: Vec<usize>,
+    pub columns_layout: Vec<u64>,
 }
 
 pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
     Serialized(SerializedPayload),
     HashTable(HashTablePayload<Method, V>),
+    BucketSpilled(BucketSpilledPayload),
+    Spilled(Vec<BucketSpilledPayload>),
     Spilling(HashTablePayload<PartitionedHashMethod<Method>, V>),
-    Spilled(SpilledPayload),
 
     Partitioned { bucket: isize, data: Vec<Self> },
 }
@@ -87,18 +88,12 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
         }))
     }
 
-    pub fn create_spilled(
-        bucket: isize,
-        location: String,
-        data_range: Range<u64>,
-        columns_layout: Vec<usize>,
-    ) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::<Method, V>::Spilled(SpilledPayload {
-            bucket,
-            location,
-            data_range,
-            columns_layout,
-        }))
+    pub fn create_spilled(buckets_payload: Vec<BucketSpilledPayload>) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::<Method, V>::Spilled(buckets_payload))
+    }
+
+    pub fn create_bucket_spilled(payload: BucketSpilledPayload) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::<Method, V>::BucketSpilled(payload))
     }
 
     pub fn create_partitioned(bucket: isize, data: Vec<Self>) -> BlockMetaInfoPtr {
@@ -135,7 +130,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
                 f.debug_struct("AggregateMeta::Serialized").finish()
             }
             AggregateMeta::Spilling(_) => f.debug_struct("Aggregate::Spilling").finish(),
-            AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilled").finish(),
+            AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilling").finish(),
+            AggregateMeta::BucketSpilled(_) => f.debug_struct("Aggregate::BucketSpilled").finish(),
         }
     }
 }
