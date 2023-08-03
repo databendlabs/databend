@@ -217,17 +217,13 @@ impl ScalarExpr {
             },
             ScalarExpr::LambdaFunction(func) => RawExpr::ColumnRef {
                 span: None,
-                id: ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    table_index: None,
-                    column_position: None,
-                    column_name: func.display_name.clone(),
-                    index: usize::MAX,
-                    data_type: Box::new((*func.return_type).clone()),
-                    visibility: Visibility::Visible,
-                    virtual_computed_expr: None,
-                },
+                id: ColumnBindingBuilder::new(
+                    func.display_name.clone(),
+                    usize::MAX,
+                    Box::new((*func.return_type).clone()),
+                    Visibility::Visible,
+                )
+                .build(),
                 data_type: (*func.return_type).clone(),
                 display_name: func.display_name.clone(),
             },

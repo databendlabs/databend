@@ -80,14 +80,7 @@ impl AsyncSystemTable for StagesTable {
                     number_of_files.push(None);
                 }
             };
-            match stage.creator {
-                Some(c) => {
-                    creator.push(Some(c.to_string().into_bytes().to_vec()));
-                }
-                None => {
-                    creator.push(None);
-                }
-            }
+            creator.push(stage.creator.map(|c| c.to_string().into_bytes().to_vec()));
             comment.push(stage.comment.clone().into_bytes());
         }
 

@@ -33,12 +33,11 @@ pub struct IcebergPartInfo {
 
 impl IcebergPartInfo {
     pub fn from_part(info: &PartInfoPtr) -> Result<&IcebergPartInfo> {
-        match info.as_any().downcast_ref::<IcebergPartInfo>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
+        info.as_any()
+            .downcast_ref::<IcebergPartInfo>()
+            .ok_or(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to IcebergPartInfo.",
-            )),
-        }
+            ))
     }
 }
 
@@ -49,10 +48,9 @@ impl PartInfo for IcebergPartInfo {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<IcebergPartInfo>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<IcebergPartInfo>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {

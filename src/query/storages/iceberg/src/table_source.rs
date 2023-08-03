@@ -92,12 +92,10 @@ impl Processor for IcebergTableSource {
 
     fn event(&mut self) -> Result<Event> {
         if matches!(self.state, State::ReadMeta(None)) {
-            match self.ctx.get_partition() {
-                None => self.state = State::Finish,
-                Some(part_info) => {
-                    self.state = State::ReadMeta(Some(part_info));
-                }
-            }
+            self.state = self
+                .ctx
+                .get_partition()
+                .map_or(State::Finish, |part_info| State::ReadMeta(Some(part_info)));
         }
 
         if self.output.is_finished() {

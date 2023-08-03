@@ -423,7 +423,7 @@ bucket = "databend"
 # https://<bucket-name>.<region-id>[-internal].aliyuncs.com
 // highlight-next-line
 endpoint_url = "https://oss-cn-beijing-internal.aliyuncs.com"
-enable_virtual_host_style = true
+# enable_virtual_host_style = true
 
 # How to get access_key_id and secret_access_key:
 # https://help.aliyun.com/document_detail/53045.htm

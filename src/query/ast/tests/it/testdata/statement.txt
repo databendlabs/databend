@@ -7490,6 +7490,47 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY;
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyColumn {
+            action: UnsetMaskingPolicy(
+                Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Some(
+                        28..29,
+                    ),
+                },
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t MODIFY COLUMN a int, COLUMN b float;
 ---------- Output ---------
 ALTER TABLE t MODIFY COLUMN a Int32, COLUMN b Float32

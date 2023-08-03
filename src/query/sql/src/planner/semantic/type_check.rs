@@ -1382,10 +1382,10 @@ impl<'a> TypeChecker<'a> {
                 span: args[1].span(),
                 is_try: false,
                 argument: Box::new(args[1].clone()),
-                target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                target_type: Box::new(DataType::Number(NumberDataType::Int64)),
             })
             .as_expr()?;
-            Some(check_number::<_, u64>(
+            Some(check_number::<_, i64>(
                 off.span(),
                 &self.func_ctx,
                 &off,
@@ -1395,16 +1395,23 @@ impl<'a> TypeChecker<'a> {
             None
         };
 
+        let offset = offset.unwrap_or(1);
+
+        let is_lag = match func_name {
+            "lag" if offset < 0 => false,
+            "lead" if offset < 0 => true,
+            "lag" => true,
+            "lead" => false,
+            _ => unreachable!(),
+        };
+
         let default = if args.len() == 3 {
             Some(args[2].clone())
         } else {
             None
         };
 
-        let return_type = match default {
-            Some(_) => arg_types[0].clone(),
-            None => arg_types[0].wrap_nullable(),
-        };
+        let return_type = arg_types[0].wrap_nullable();
 
         let cast_default = default.map(|d| {
             Box::new(ScalarExpr::CastExpr(CastExpr {
@@ -1416,9 +1423,9 @@ impl<'a> TypeChecker<'a> {
         });
 
         Ok(WindowFuncType::LagLead(LagLeadFunction {
-            is_lag: func_name == "lag",
+            is_lag,
             arg: Box::new(args[0].clone()),
-            offset: offset.unwrap_or(1),
+            offset: offset.unsigned_abs(),
             default: cast_default,
             return_type: Box::new(return_type),
         }))
@@ -2040,6 +2047,7 @@ impl<'a> TypeChecker<'a> {
             "last_query_id",
             "array_sort",
             "array_aggregate",
+            "array_reduce",
         ]
     }
 
@@ -2348,7 +2356,7 @@ impl<'a> TypeChecker<'a> {
                         .await,
                 )
             }
-            ("array_aggregate", args) => {
+            ("array_aggregate" | "array_reduce", args) => {
                 if args.len() != 2 {
                     return None;
                 }
@@ -2365,7 +2373,7 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
                 Some(Err(ErrorCode::SemanticError(
-                    "Aggregate function name be a constant string",
+                    "Array aggregate function name be must a constant string",
                 )))
             }
             _ => None,

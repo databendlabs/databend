@@ -288,14 +288,11 @@ impl FuseTable {
         } else {
             self.snapshot_loc().await?
         };
-        match location_opt {
-            Some(loc) => Ok(TableMetaLocationGenerator::snapshot_version(loc.as_str())),
-            None => {
-                // No snapshot location here, indicates that there are no data of this table yet
-                // in this case, we just returns the current snapshot version
-                Ok(TableSnapshot::VERSION)
-            }
-        }
+        // If no snapshot location here, indicates that there are no data of this table yet
+        // in this case, we just returns the current snapshot version
+        Ok(location_opt.map_or(TableSnapshot::VERSION, |loc| {
+            TableMetaLocationGenerator::snapshot_version(loc.as_str())
+        }))
     }
 
     #[async_backtrace::framed]

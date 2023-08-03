@@ -38,6 +38,13 @@ fn test_geo_h3() {
     test_h3_indexes_are_neighbors(file);
     test_h3_to_children(file);
     test_h3_to_parent(file);
+    test_h3_to_string(file);
+    test_string_to_h3(file);
+    test_h3_is_res_class_iii(file);
+    test_h3_is_pentagon(file);
+    test_h3_get_faces(file);
+    test_h3_cell_area_m2(file);
+    test_h3_cell_area_rads2(file);
 }
 
 fn test_h3_to_geo(file: &mut impl Write) {
@@ -263,4 +270,103 @@ fn test_h3_to_parent(file: &mut impl Write) {
         ),
         ("res", UInt8Type::from_data(vec![10, 12, 15])),
     ]);
+}
+
+fn test_h3_to_string(file: &mut impl Write) {
+    run_ast(file, "h3_to_string(0)", &[]);
+    run_ast(file, "h3_to_string(635318325446452991)", &[]);
+
+    run_ast(file, "h3_to_string(h3)", &[(
+        "h3",
+        UInt64Type::from_data(vec![
+            635318325446452991,
+            644325524701193897,
+            599686042433355775,
+        ]),
+    )]);
+}
+
+fn test_string_to_h3(file: &mut impl Write) {
+    run_ast(file, "string_to_h3('')", &[]);
+    run_ast(file, "string_to_h3('xxxx')", &[]);
+    run_ast(file, "h3_to_string('8d11aa6a38826ff')", &[]);
+
+    run_ast(file, "string_to_h3(h3_str)", &[(
+        "h3_str",
+        StringType::from_data(vec![
+            "8d11aa6a38826ff",
+            "8f11aa6a38826a9",
+            "85283473fffffff",
+        ]),
+    )]);
+}
+
+fn test_h3_is_res_class_iii(file: &mut impl Write) {
+    run_ast(file, "h3_is_res_class_iii(0)", &[]);
+    run_ast(file, "h3_is_res_class_iii(635318325446452991)", &[]);
+
+    run_ast(file, "h3_is_res_class_iii(h3)", &[(
+        "h3",
+        UInt64Type::from_data(vec![
+            635318325446452991,
+            644325524701193897,
+            599686042433355775,
+        ]),
+    )]);
+}
+
+fn test_h3_is_pentagon(file: &mut impl Write) {
+    run_ast(file, "h3_is_pentagon(0)", &[]);
+    run_ast(file, "h3_is_pentagon(599119489002373119)", &[]);
+
+    run_ast(file, "h3_is_pentagon(h3)", &[(
+        "h3",
+        UInt64Type::from_data(vec![
+            599119489002373119,
+            644325524701193897,
+            599686042433355775,
+        ]),
+    )]);
+}
+
+fn test_h3_get_faces(file: &mut impl Write) {
+    run_ast(file, "h3_get_faces(0)", &[]);
+    run_ast(file, "h3_get_faces(599119489002373119)", &[]);
+
+    run_ast(file, "h3_get_faces(h3)", &[(
+        "h3",
+        UInt64Type::from_data(vec![
+            599119489002373119,
+            599686042433355775,
+            599686042433355775,
+        ]),
+    )]);
+}
+
+fn test_h3_cell_area_m2(file: &mut impl Write) {
+    run_ast(file, "h3_cell_area_m2(0)", &[]);
+    run_ast(file, "h3_cell_area_m2(599119489002373119)", &[]);
+
+    run_ast(file, "h3_cell_area_m2(h3)", &[(
+        "h3",
+        UInt64Type::from_data(vec![
+            599119489002373119,
+            599686042433355775,
+            599686042433355775,
+        ]),
+    )]);
+}
+
+fn test_h3_cell_area_rads2(file: &mut impl Write) {
+    run_ast(file, "h3_cell_area_rads2(0)", &[]);
+    run_ast(file, "h3_cell_area_rads2(599119489002373119)", &[]);
+
+    run_ast(file, "h3_cell_area_rads2(h3)", &[(
+        "h3",
+        UInt64Type::from_data(vec![
+            599119489002373119,
+            599686042433355775,
+            599686042433355775,
+        ]),
+    )]);
 }

@@ -173,6 +173,21 @@ SELECT salary, lag(salary, 2) OVER (ORDER BY enroll_date) FROM empsalary
 4200 5200
 4500 3500
 
+# lag with negative offset and ignore default value
+query II
+SELECT salary, lag(salary, -2) OVER (ORDER BY enroll_date) FROM empsalary
+----
+5000 3900
+6000 5200
+3900 4800
+5200 4800
+4800 5200
+4800 3500
+5200 4200
+3500 4500
+4200 NULL
+4500 NULL
+
 # lag with constant default value
 query II
 SELECT salary, lag(salary, 2, 888) OVER (ORDER BY enroll_date) FROM empsalary
@@ -217,6 +232,21 @@ SELECT salary, lead(salary, 2) OVER (ORDER BY enroll_date) FROM empsalary
 3500 4500
 4200 NULL
 4500 NULL
+
+# lag with negative offset and ignore default value
+query II
+SELECT salary, lead(salary, -2) OVER (ORDER BY enroll_date) FROM empsalary
+----
+5000 NULL
+6000 NULL
+3900 5000
+5200 6000
+4800 3900
+4800 5200
+5200 4800
+3500 4800
+4200 5200
+4500 3500
 
 # lead with constant default value
 query II

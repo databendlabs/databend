@@ -61,6 +61,8 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -435,6 +437,16 @@ impl Catalog for HiveCatalog {
     ) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot update table meta in HIVE catalog",
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn set_table_column_mask_policy(
+        &self,
+        _req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot set_table_column_mask_policy in HIVE catalog",
         ))
     }
 

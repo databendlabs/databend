@@ -26,6 +26,8 @@ use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -152,6 +154,17 @@ pub trait Database: DynClone + Sync + Send {
     async fn update_table_meta(&self, _req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement update_table_meta in {} Database",
+            self.name()
+        )))
+    }
+
+    #[async_backtrace::framed]
+    async fn set_table_column_mask_policy(
+        &self,
+        _req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "UnImplement set_table_column_mask_policy in {} Database",
             self.name()
         )))
     }

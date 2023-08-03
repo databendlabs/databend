@@ -35,6 +35,7 @@ pub(super) fn convert_compression_from_arrow2(c: CompressionArrow2) -> Compressi
     }
 }
 
+/// level is not used in decompress
 pub(super) fn convert_compression_to_arrow2(c: Compression) -> CompressionArrow2 {
     match c {
         Compression::UNCOMPRESSED => CompressionArrow2::Uncompressed,
@@ -48,10 +49,14 @@ pub(super) fn convert_compression_to_arrow2(c: Compression) -> CompressionArrow2
     }
 }
 
+/// only a few fields are used in RecordBatchReader.
+/// set offset to 0, since we read each chunk in its own buffer.
 pub(super) fn convert_column_meta(meta: &ColumnMeta, desc: ColumnDescPtr) -> ColumnChunkMetaData {
     ColumnChunkMetaData::builder(desc)
         .set_compression(convert_compression_from_arrow2(meta.compression))
         .set_total_compressed_size(meta.length as i64)
+        .set_total_uncompressed_size(meta.uncompressed_size as i64)
+        .set_num_values(meta.num_values)
         .set_data_page_offset(0)
         .build()
         .unwrap()

@@ -22,6 +22,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -184,29 +185,37 @@ impl crate::parquet_reader::ParquetReader for ParquetReader {
             metadata,
             column_chunks,
         };
+        // TODO: use the BlockThresholds of dest table
+        let batch_size = row_group.choose_batch_size(BlockThresholds::default());
         let rows_to_read = match &selection {
             None => part.num_rows,
             Some(s) => s.row_count(),
         };
         let reader = row_group
-            .get_record_batch_reader(rows_to_read, selection)
+            .get_record_batch_reader(batch_size, selection)
             .unwrap();
         Ok(Box::new(RowGroupDeserializer::new(
             reader,
             part.location.clone(),
-            part.num_rows,
+            rows_to_read,
             part.num_rows,
         )))
     }
 }
 
+/// A wrapper of [`RecordBatchReader`] that implements [`BlockIterator`].
 struct RowGroupDeserializer {
-    batch_size: usize,
+    reader: ParquetRecordBatchReader,
+
+    /// These fields are used to implement has_next().
+    /// num_rows_to_read is rows of row group after selection.
     num_rows_to_read: usize,
     num_rows_readn: usize,
+
+    /// These fields are only for logging.
+    batch_size: usize,
     seq: usize,
     location: String,
-    reader: ParquetRecordBatchReader,
 }
 
 impl RowGroupDeserializer {

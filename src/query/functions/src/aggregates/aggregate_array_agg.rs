@@ -100,7 +100,25 @@ where
 
         let mut inner_builder = ColumnBuilder::with_capacity(inner_type, self.values.len());
         for value in &self.values {
-            inner_builder.push(T::upcast_scalar(value.clone()).as_ref());
+            let val = T::upcast_scalar(value.clone());
+            match inner_type.remove_nullable() {
+                DataType::Decimal(decimal_type) => {
+                    let size = decimal_type.size();
+                    let decimal_val = val.as_decimal().unwrap();
+                    let new_val = match decimal_val {
+                        DecimalScalar::Decimal128(v, _) => {
+                            ScalarRef::Decimal(DecimalScalar::Decimal128(*v, size))
+                        }
+                        DecimalScalar::Decimal256(v, _) => {
+                            ScalarRef::Decimal(DecimalScalar::Decimal256(*v, size))
+                        }
+                    };
+                    inner_builder.push(new_val);
+                }
+                _ => {
+                    inner_builder.push(val.as_ref());
+                }
+            }
         }
         let array_value = ScalarRef::Array(inner_builder.build());
         builder.push(array_value);
@@ -187,7 +205,25 @@ where
         for value in &self.values {
             match value {
                 Some(value) => {
-                    inner_builder.push(T::upcast_scalar(value.clone()).as_ref());
+                    let val = T::upcast_scalar(value.clone());
+                    match inner_type.remove_nullable() {
+                        DataType::Decimal(decimal_type) => {
+                            let size = decimal_type.size();
+                            let decimal_val = val.as_decimal().unwrap();
+                            let new_val = match decimal_val {
+                                DecimalScalar::Decimal128(v, _) => {
+                                    ScalarRef::Decimal(DecimalScalar::Decimal128(*v, size))
+                                }
+                                DecimalScalar::Decimal256(v, _) => {
+                                    ScalarRef::Decimal(DecimalScalar::Decimal256(*v, size))
+                                }
+                            };
+                            inner_builder.push(new_val);
+                        }
+                        _ => {
+                            inner_builder.push(val.as_ref());
+                        }
+                    }
                 }
                 None => {
                     inner_builder.push(ScalarRef::Null);

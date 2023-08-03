@@ -113,10 +113,9 @@ impl<'a> FuseSnapshot<'a> {
                     .snapshot_location_from_uuid(&s.snapshot_id, current_snapshot_version)?
                     .into_bytes(),
             );
-            let (id, ver) = match s.prev_snapshot_id {
-                Some((id, v)) => (Some(id.simple().to_string().into_bytes()), v),
-                None => (None, 0),
-            };
+            let (id, ver) = s.prev_snapshot_id.map_or((None, 0), |(id, v)| {
+                (Some(id.simple().to_string().into_bytes()), v)
+            });
             prev_snapshot_ids.push(id);
             format_versions.push(s.format_version);
             segment_count.push(s.segment_count);

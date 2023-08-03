@@ -172,7 +172,11 @@ impl AggregateFunctionFactory {
         let mut features = AggregateFunctionFeatures::default();
         // The NULL value in the array_agg function needs to be added to the returned array column,
         // so handled separately.
-        if name == "array_agg" || name == "list" {
+        if name == "array_agg"
+            || name == "list"
+            || name == "group_array_moving_avg"
+            || name == "group_array_moving_sum"
+        {
             let agg = self.get_impl(name, params, arguments, &mut features)?;
             return Ok(agg);
         }
@@ -273,10 +277,9 @@ impl AggregateFunctionFactory {
         let origin = func_name.as_ref();
         let lowercase_name = origin.to_lowercase();
 
-        match self.case_insensitive_desc.get(&lowercase_name) {
-            Some(desc) => desc.features.is_decomposable,
-            None => false,
-        }
+        self.case_insensitive_desc
+            .get(&lowercase_name)
+            .is_some_and(|desc| desc.features.is_decomposable)
     }
 
     pub fn registered_names(&self) -> Vec<String> {
