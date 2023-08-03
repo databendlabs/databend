@@ -554,7 +554,7 @@ pub fn display_decimal_256(num: i256, scale: u8) -> String {
 pub fn parse_decimal(text: &str, size: DecimalSize) -> Result<NumberValue> {
     let mut start = 0;
     let bytes = text.as_bytes();
-    while bytes[start] == b'0' {
+    while start < text.len() && bytes[start] == b'0' {
         start += 1
     }
     let text = &text[start..];
@@ -564,9 +564,7 @@ pub fn parse_decimal(text: &str, size: DecimalSize) -> Result<NumberValue> {
         (Some(p1), Some(p2)) => (&text[..p1], &text[(p1 + 1)..p2], Some(&text[(p2 + 1)..])),
         (Some(p), None) => (&text[..p], &text[(p + 1)..], None),
         (None, Some(p)) => (&text[..p], "", Some(&text[(p + 1)..])),
-        _ => {
-            unreachable!()
-        }
+        (None, None) => (text, "", None),
     };
     let exp = match e_part {
         Some(s) => s.parse::<i32>()?,

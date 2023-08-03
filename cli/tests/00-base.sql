@@ -22,5 +22,12 @@ select 1.00 + 2.00, 3.00;
 
 select/*+ SET_VAR(timezone='Asia/Shanghai') */ timezone();
 
+drop table if exists test_decimal;
+create table test_decimal(a decimal(40, 0), b decimal(20 , 2));
+insert into test_decimal select number, number from numbers(3);
+
+select * from test_decimal;
+
 select 'bye';
 drop table test;
+drop table test_decimal;
