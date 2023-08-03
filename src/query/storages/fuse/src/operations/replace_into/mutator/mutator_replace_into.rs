@@ -307,7 +307,7 @@ struct Partition {
 impl Partition {
     fn try_new_with_row(
         row_digest: u128,
-        bloom_hash: Option<u64>,
+        bloom_hash: &Option<&u64>,
         column_values: &[&Value<AnyType>],
         row_idx: usize,
     ) -> Result<Self> {
@@ -325,7 +325,7 @@ impl Partition {
             bloom_hashes: {
                 match bloom_hash {
                     None => HashSet::new(),
-                    Some(bloom_hash) => once(bloom_hash).collect(),
+                    Some(v) => once(**v).collect(),
                 }
             },
         })
@@ -334,13 +334,13 @@ impl Partition {
     fn push_row(
         &mut self,
         row_digest: u128,
-        bloom_hash: Option<u64>,
+        bloom_hash: &Option<&u64>,
         column_values: &[&Value<AnyType>],
         row_idx: usize,
     ) -> Result<()> {
         self.digests.insert(row_digest);
-        if let Some(bloom_hash) = bloom_hash {
-            self.bloom_hashes.insert(bloom_hash);
+        if let Some(v) = bloom_hash {
+            self.bloom_hashes.insert(**v);
         }
         for (column_idx, min_max) in self.columns_min_max.iter_mut().enumerate() {
             let value: Scalar = column_values[column_idx].row_scalar(row_idx)?.to_owned();
@@ -388,53 +388,76 @@ impl Partitioner {
         let evaluator = Evaluator::new(data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let cluster_key_values = evaluator.run(&self.left_most_cluster_key)?;
 
-        let column_values = self
-            .on_conflict_fields
-            .iter()
-            .map(|field| {
-                let filed_index = field.field_index;
-                let entry = &data_block.columns()[filed_index];
-                &entry.value
-            })
-            .collect::<Vec<_>>();
+        // extract the on-conflict column values
+        let on_conflict_column_values = self.on_conflict_key_column_values(data_block);
 
-        let mut values_map: HashMap<Scalar, Partition> = HashMap::new();
-        for row_idx in 0..data_block.num_rows() {
-            if let Some(row_digest) = row_hash_of_columns(&column_values, row_idx)? {
-                let cluster_key_value = cluster_key_values.row_scalar(row_idx)?.to_owned();
+        // partitions by the left-most cluster key expression
+        let mut partitions: HashMap<Scalar, Partition> = HashMap::new();
 
-                let bloom_hash = if let Some((idx, typ)) = &self.bloom_filter_column_info {
-                    let most_significant_field =
-                        column_values[*idx].row_scalar(row_idx)?.to_owned();
-                    // TODO too heavy? siphash64 directly?
-                    let hash = BloomIndex::calculate_scalar_digest(
-                        &self.func_ctx,
-                        &most_significant_field,
-                        typ,
-                    )?;
-                    Some(hash)
+        // bloom hashes of the most significant on-conflict field
+        let maybe_bloom_hashes = self
+            .bloom_filter_column_info
+            .as_ref()
+            .map(|(idx, typ)| {
+                if BloomIndex::supported_data_type(typ) {
+                    let maybe_col = on_conflict_column_values[*idx].as_column();
+                    maybe_col.map(|col| {
+                        BloomIndex::calculate_nullable_column_digest(&self.func_ctx, col, typ)
+                    })
                 } else {
                     None
-                };
+                }
+            })
+            .flatten()
+            .transpose()?;
 
-                match values_map.entry(cluster_key_value) {
-                    Entry::Occupied(ref mut entry) => {
-                        entry
-                            .get_mut()
-                            .push_row(row_digest, bloom_hash, &column_values, row_idx)?
-                    }
+        for row_idx in 0..data_block.num_rows() {
+            if let Some(row_digest) = row_hash_of_columns(&on_conflict_column_values, row_idx)? {
+                let bloom_hash = maybe_bloom_hashes
+                    .as_ref()
+                    .map(|(hashes, validity)| match validity {
+                        Some(v) if v.unset_bits() != 0 => v
+                            .get(row_idx)
+                            .map(|v| if v { hashes.get(row_idx).clone() } else { None }),
+                        _ => Some(hashes.get(row_idx).clone()),
+                    })
+                    .flatten()
+                    .flatten();
+                let cluster_key_value = cluster_key_values.row_scalar(row_idx)?.to_owned();
+
+                match partitions.entry(cluster_key_value) {
+                    Entry::Occupied(ref mut entry) => entry.get_mut().push_row(
+                        row_digest,
+                        &bloom_hash,
+                        &on_conflict_column_values,
+                        row_idx,
+                    )?,
                     Entry::Vacant(entry) => {
                         entry.insert(Partition::try_new_with_row(
                             row_digest,
-                            bloom_hash,
-                            &column_values,
+                            &bloom_hash,
+                            &on_conflict_column_values,
                             row_idx,
                         )?);
                     }
                 }
             }
         }
-        Ok(values_map.into_values().collect::<Vec<_>>())
+        Ok(partitions.into_values().collect::<Vec<_>>())
+    }
+
+    fn on_conflict_key_column_values<'a>(
+        &self,
+        data_block: &'a DataBlock,
+    ) -> Vec<&'a Value<AnyType>> {
+        self.on_conflict_fields
+            .iter()
+            .map(|field| {
+                let filed_index = field.field_index;
+                let entry = &data_block.columns()[filed_index];
+                &entry.value
+            })
+            .collect::<Vec<_>>()
     }
 }
 
