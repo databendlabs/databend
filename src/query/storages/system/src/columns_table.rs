@@ -255,16 +255,18 @@ async fn generate_fields(
 /// database or table.
 /// It is used in `SHOW DATABASES` and `SHOW TABLES` statements.
 pub struct GrantObjectVisibilityChecker {
-    visible_global: bool,
-    visible_databases: HashSet<(String, String)>,
-    visible_tables: HashSet<(String, String, String)>,
+    granted_global: bool,
+    granted_databases: HashSet<(String, String)>,
+    granted_tables: HashSet<(String, String, String)>,
+    extra_databases: HashSet<(String, String)>,
 }
 
 impl GrantObjectVisibilityChecker {
     pub fn new(user: &UserInfo, available_roles: &Vec<RoleInfo>) -> Self {
-        let mut visible_global = false;
-        let mut visible_databases = HashSet::new();
-        let mut visible_tables = HashSet::new();
+        let mut granted_global = false;
+        let mut granted_databases = HashSet::new();
+        let mut granted_tables = HashSet::new();
+        let mut extra_databases = HashSet::new();
 
         let mut grant_sets: Vec<&UserGrantSet> = vec![&user.grants];
         for role in available_roles {
@@ -275,53 +277,69 @@ impl GrantObjectVisibilityChecker {
             for ent in grant_set.entries() {
                 match ent.object() {
                     GrantObject::Global => {
-                        visible_global = true;
+                        granted_global = true;
                     }
                     GrantObject::Database(catalog, db) => {
-                        visible_databases.insert((catalog.to_string(), db.to_string()));
+                        granted_databases.insert((catalog.to_string(), db.to_string()));
                     }
                     GrantObject::Table(catalog, db, table) => {
-                        visible_tables.insert((
+                        granted_tables.insert((
                             catalog.to_string(),
                             db.to_string(),
                             table.to_string(),
                         ));
                         // if table is visible, the table's database is also treated as visible
-                        visible_databases.insert((catalog.to_string(), db.to_string()));
+                        extra_databases.insert((catalog.to_string(), db.to_string()));
                     }
                 }
             }
         }
 
         Self {
-            visible_global,
-            visible_databases,
-            visible_tables,
+            granted_global,
+            granted_databases,
+            granted_tables,
+            extra_databases,
         }
     }
 
     pub fn check_database_visibility(&self, catalog: &str, db: &str) -> bool {
-        if self.visible_global {
-            return true;
-        }
-
-        self.visible_databases
-            .contains(&(catalog.to_string(), db.to_string()))
-    }
-
-    pub fn check_table_visibility(&self, catalog: &str, database: &str, table: &str) -> bool {
-        if self.visible_global {
+        if self.granted_global {
             return true;
         }
 
         if self
-            .visible_databases
+            .granted_databases
+            .contains(&(catalog.to_string(), db.to_string()))
+        {
+            return true;
+        }
+
+        // if one of the tables in the database is granted, the database is also visible
+        if self
+            .extra_databases
+            .contains(&(catalog.to_string(), db.to_string()))
+        {
+            return true;
+        }
+
+        false
+    }
+
+    pub fn check_table_visibility(&self, catalog: &str, database: &str, table: &str) -> bool {
+        if self.granted_global {
+            return true;
+        }
+
+        // if database is granted, all the tables in it are visible
+        if self
+            .granted_databases
             .contains(&(catalog.to_string(), database.to_string()))
         {
             return true;
         }
 
-        if self.visible_tables.contains(&(
+        if self.granted_tables.contains(&(
             catalog.to_string(),
             database.to_string(),
             table.to_string(),
