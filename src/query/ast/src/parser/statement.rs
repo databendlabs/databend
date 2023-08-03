@@ -147,6 +147,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let merge = map(
+        rule! {
+            MERGE ~ INTO ~ #period_separated_idents_1_to_3 ~ USING
+            ~ #insert_source
+        },
+        |(_, _, _, _, _)| {},
+    );
+
     let delete = map(
         rule! {
             DELETE ~ #hint? ~ FROM ~ #table_reference_only
