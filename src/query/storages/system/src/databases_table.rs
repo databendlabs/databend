@@ -74,6 +74,7 @@ impl AsyncSystemTable for DatabasesTable {
 
         let (unique_object, global_object_priv) =
             generate_unique_object(&tenant, grant_set).await?;
+
         for (ctl_name, catalog) in catalogs.into_iter() {
             let mut access_dbs = HashSet::new();
             let mut final_dbs = vec![];
