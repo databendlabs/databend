@@ -36,3 +36,6 @@ parquet = "43.0.0"
 serde = { workspace = true }
 tokio = { workspace = true }
 typetag = "0.2"
+
+[package.metadata.cargo-machete]
+ignored = ["match-template"]

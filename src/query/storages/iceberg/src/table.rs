@@ -213,6 +213,10 @@ impl IcebergTable {
         let pruner =
             RangePrunerCreator::try_create(ctx.get_function_context()?, &schema, filter.as_ref())?;
 
+        let partitions_total = data_files.len();
+        let mut read_rows = 0;
+        let mut read_bytes = 0;
+
         let partitions = data_files
             .into_iter()
             .filter(|df| {
@@ -223,21 +227,26 @@ impl IcebergTable {
                 }
             })
             .map(|v: icelake::types::DataFile| match v.file_format {
-                icelake::types::DataFileFormat::Parquet => Ok(Arc::new(Box::new(IcebergPartInfo {
-                    path: table
-                        .rel_path(&v.file_path)
-                        .expect("file path must be rel to table"),
-                    size: v.file_size_in_bytes as u64,
-                })
-                    as Box<dyn PartInfo>)),
+                icelake::types::DataFileFormat::Parquet => {
+                    read_rows += v.record_count as usize;
+                    read_bytes += v.file_size_in_bytes as usize;
+                    Ok(Arc::new(Box::new(IcebergPartInfo {
+                        path: table
+                            .rel_path(&v.file_path)
+                            .expect("file path must be rel to table"),
+                        size: v.file_size_in_bytes as u64,
+                    }) as Box<dyn PartInfo>))
+                }
                 _ => Err(ErrorCode::Unimplemented(
                     "Only parquet format is supported for iceberg table",
                 )),
             })
             .collect::<Result<Vec<_>>>()?;
 
+        let partitions_scanned = partitions.len();
+
         Ok((
-            PartStatistics::default(),
+            PartStatistics::new_exact(read_rows, read_bytes, partitions_scanned, partitions_total),
             Partitions::create_nolazy(PartitionsShuffleKind::Seq, partitions),
         ))
     }

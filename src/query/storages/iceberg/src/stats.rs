@@ -54,17 +54,19 @@ fn get_column_stats(
     null_counts: &HashMap<i32, i64>,
     distinct_counts: &Option<HashMap<i32, i64>>,
 ) -> Option<ColumnStatistics> {
+    // The column id in iceberg is 1-based while the column id in Databend is 0-based.
+    let iceberg_col_id = field.column_id as i32 + 1;
     match (
-        lower.get(&(field.column_id as i32)),
-        upper.get(&(field.column_id as i32)),
-        null_counts.get(&(field.column_id as i32)),
+        lower.get(&iceberg_col_id),
+        upper.get(&iceberg_col_id),
+        null_counts.get(&iceberg_col_id),
     ) {
         (Some(lo), Some(up), Some(nc)) => {
             let min = parse_binary_value(&field.data_type, lo)?;
             let max = parse_binary_value(&field.data_type, up)?;
             let distinct_of_values = distinct_counts
                 .as_ref()
-                .and_then(|dc| dc.get(&(field.column_id as i32)))
+                .and_then(|dc| dc.get(&iceberg_col_id))
                 .map(|dc| *dc as u64);
             Some(ColumnStatistics {
                 min,
