@@ -48,7 +48,7 @@ impl Versioned<1> for v1::SegmentInfo {}
 impl Versioned<2> for v2::SegmentInfo {}
 impl Versioned<3> for v3::SegmentInfo {}
 impl Versioned<4> for v4::SegmentInfo {}
-impl Versioned<5> for v5::InternalSegmentInfo {}
+impl Versioned<5> for v5::SegmentInfo {}
 
 pub enum SegmentInfoVersion {
     V0(PhantomData<v0::SegmentInfo>),
@@ -56,7 +56,7 @@ pub enum SegmentInfoVersion {
     V2(PhantomData<v2::SegmentInfo>),
     V3(PhantomData<v3::SegmentInfo>),
     V4(PhantomData<v4::SegmentInfo>),
-    V5(PhantomData<v5::InternalSegmentInfo>),
+    V5(PhantomData<v5::SegmentInfo>),
 }
 
 impl SegmentInfoVersion {

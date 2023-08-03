@@ -59,7 +59,7 @@ impl VersionedReader<CompactSegmentInfo> for (SegmentInfoVersion, TableSchemaRef
                 let current: SegmentInfo = (v0, &fields[..]).into();
                 current.to_bytes()
             }
-            SegmentInfoVersion::V5(v) => unimplemented!(),
+            SegmentInfoVersion::V5(_) => unimplemented!(),
         }?;
 
         CompactSegmentInfo::from_slice(&bytes_of_current_format)
