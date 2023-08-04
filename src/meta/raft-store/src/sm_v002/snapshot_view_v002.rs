@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_meta_types::SeqNum;
 use common_meta_types::SeqV;
+use common_meta_types::SnapshotMeta;
 
 use crate::key_spaces::RaftStoreEntry;
 use crate::ondisk::Header;
@@ -25,6 +26,7 @@ use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::ExpireValue;
+use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
 
@@ -55,6 +57,27 @@ impl SnapshotViewV002 {
     /// The original, non compacted snapshot data.
     pub fn original(&self) -> Arc<Level> {
         self.original.clone()
+    }
+
+    /// Extract metadata of the snapshot.
+    ///
+    /// Includes: last_applied, last_membership, snapshot_id.
+    // TODO: let the caller specify snapshot id?
+    pub fn build_snapshot_meta(&self) -> SnapshotMeta {
+        // The top level contains all information we need to build snapshot meta.
+        let top = self.top();
+        let level_data = top.data_ref();
+
+        let last_applied = *level_data.last_applied_ref();
+        let last_membership = level_data.last_membership_ref().clone();
+
+        let snapshot_id = MetaSnapshotId::new_with_epoch(last_applied);
+
+        SnapshotMeta {
+            snapshot_id: snapshot_id.to_string(),
+            last_log_id: last_applied,
+            last_membership,
+        }
     }
 
     /// Compact into one level and remove all tombstone record.

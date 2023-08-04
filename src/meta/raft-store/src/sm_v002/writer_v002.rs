@@ -14,6 +14,7 @@
 
 use std::fs;
 use std::io;
+use std::io::BufWriter;
 use std::io::Seek;
 use std::io::Write;
 
@@ -33,7 +34,7 @@ pub struct WriterV002<'a> {
     /// So that the readers could only see a complete snapshot.
     temp_path: String,
 
-    inner: fs::File,
+    inner: BufWriter<fs::File>,
 
     /// The last_applied entry that has written to the snapshot.
     ///
@@ -65,9 +66,11 @@ impl<'a> WriterV002<'a> {
             .read(true)
             .open(&temp_path)?;
 
+        let buffered_file = BufWriter::with_capacity(16 * 1024 * 1024, f);
+
         let writer = WriterV002 {
             temp_path,
-            inner: f,
+            inner: buffered_file,
             last_applied: None,
             snapshot_store,
         };
@@ -137,13 +140,16 @@ impl<'a> WriterV002<'a> {
     ///
     /// Returns the snapshot id and file size written.
     ///
+    /// This method consumes the writer, thus the writer will not be used after commit.
+    ///
     /// `uniq` is the unique number used to build snapshot id.
     /// If it is `None`, an epoch in milliseconds will be used.
-    pub fn commit(&mut self, uniq: Option<u64>) -> Result<(MetaSnapshotId, u64), io::Error> {
+    pub fn commit(mut self, uniq: Option<u64>) -> Result<(MetaSnapshotId, u64), io::Error> {
         self.inner.flush()?;
-        self.inner.sync_all()?;
+        let mut f = self.inner.into_inner()?;
+        f.sync_all()?;
 
-        let file_size = self.inner.seek(io::SeekFrom::End(0))?;
+        let file_size = f.seek(io::SeekFrom::End(0))?;
 
         let snapshot_id = if let Some(u) = uniq {
             MetaSnapshotId::new(self.last_applied, u)
