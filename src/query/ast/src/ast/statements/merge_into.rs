@@ -29,12 +29,13 @@ pub enum MatchOperation {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchedClause {
     pub selection: Option<Expr>,
-    pub operation: MatchOperation,
+    pub operations: Vec<MatchOperation>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnmatchedClause {
-    pub columns: Vec<Identifier>,
+    pub selection: Option<Expr>,
+    pub columns: Option<Vec<Identifier>>,
     pub values: String,
 }
 

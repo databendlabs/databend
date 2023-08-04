@@ -2131,14 +2131,61 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     )(i)
 }
 
-pub fn match_clause(_: Input) -> IResult<MergeOption> {
-    // map(rule! {}, || {});
-    todo!()
+pub fn match_clause(i: Input) -> IResult<MergeOption> {
+    map(
+        rule! {
+            WHEN ~ MATCHED ~ (AND ~ #expr)? ~ THEN ~ #match_operation+
+        },
+        |(_, _, expr_op, _, match_operations)| match expr_op {
+            Some(expr) => MergeOption::Match(MatchedClause {
+                selection: Some(expr.1),
+                operations: match_operations,
+            }),
+            None => MergeOption::Match(MatchedClause {
+                selection: None,
+                operations: match_operations,
+            }),
+        },
+    )(i)
 }
 
-pub fn unmatch_clause(_: Input) -> IResult<MergeOption> {
-    // map(rule! {}, || {});
-    todo!()
+fn match_operation(i: Input) -> IResult<MatchOperation> {
+    alt((
+        value(MatchOperation::Delete, rule! {DELETE}),
+        map(
+            rule! {
+                UPDATE ~ SET ~ ^#comma_separated_list1(update_expr)
+            },
+            |(_, _, update_list)| MatchOperation::Update { update_list },
+        ),
+    ))(i)
+}
+
+pub fn unmatch_clause(i: Input) -> IResult<MergeOption> {
+    map(
+        rule! {
+            WHEN ~ NOT ~ MATCHED ~ (AND ~ #expr)?  ~ THEN ~ INSERT ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ VALUES ~ #rest_str
+        },
+        |(_, _, _, expr_op, _, _, columns_op, _, values)| {
+            let selection = match expr_op {
+                Some(e) => Some(e.1),
+                None => None,
+            };
+            match columns_op {
+                Some(columns) => MergeOption::Unmatch(UnmatchedClause {
+                    columns: Some(columns.1),
+                    values: values.0,
+                    selection,
+                }),
+                None => MergeOption::Unmatch(UnmatchedClause {
+                    columns: None,
+                    values: values.0,
+                    selection,
+                }),
+            }
+        },
+    )(i)
 }
 
 pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {

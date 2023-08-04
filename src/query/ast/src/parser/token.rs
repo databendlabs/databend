@@ -741,6 +741,10 @@ pub enum TokenKind {
     REPLACE,
     #[token("MERGE", ignore(ascii_case))]
     MERGE,
+    #[token("MATCHED", ignore(ascii_case))]
+    MATCHED,
+    #[token("UNMATCHED", ignore(ascii_case))]
+    UNMATCHED,
     #[token("ROW", ignore(ascii_case))]
     ROW,
     #[token("ROWS", ignore(ascii_case))]
