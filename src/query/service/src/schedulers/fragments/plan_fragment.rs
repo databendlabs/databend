@@ -215,7 +215,7 @@ impl PlanFragment {
     ) -> Result<HashMap<String, Vec<Location>>> {
         let num_parts = partitions.len();
         let num_executors = executors.len();
-        let mut executors_sorted = executors.clone();
+        let mut executors_sorted = executors;
         executors_sorted.sort();
         let mut executor_part = HashMap::default();
         // the first num_parts % num_executors get parts_per_node parts
@@ -250,21 +250,15 @@ impl PlanFragment {
         let partitions = &plan.segments;
         let executors = Fragmenter::get_executors(ctx);
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
-        // 把partitions等分到executors上
-        let executor_num = executors.len();
-        let mut partition_reshuffle = vec![];
-        for (i, part) in partitions.iter().enumerate() {
-            let executor = executors[i % executor_num].clone();
-            partition_reshuffle.push((executor, vec![part.clone()]));
-        }
+        let partition_reshuffle = Self::reshuffle_segments(executors, partitions.clone())?;
 
         for (executor, parts) in partition_reshuffle.iter() {
             let mut plan = self.plan.clone();
 
-            let mut replace_replace_partial = ReplaceReplaceInto {
+            let mut replace_replace_into = ReplaceReplaceInto {
                 partitions: parts.clone(),
             };
-            plan = replace_replace_partial.replace(&plan)?;
+            plan = replace_replace_into.replace(&plan)?;
 
             fragment_actions
                 .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
@@ -366,10 +360,11 @@ struct ReplaceReplaceInto {
 
 impl PhysicalPlanReplacer for ReplaceReplaceInto {
     fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
-        self.replace(&plan.input);
-        Ok(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
+            input: Box::new(input),
             segments: self.partitions.clone(),
             ..plan.clone()
-        })))
+        }))
     }
 }

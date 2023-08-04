@@ -463,7 +463,7 @@ impl PipelineBuilder {
                 *segment_partition_num,
                 block_builder,
                 on_conflicts.clone(),
-                &segments,
+                segments,
                 io_request_semaphore,
             )?;
             assert_eq!(
