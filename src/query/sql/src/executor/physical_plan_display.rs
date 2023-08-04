@@ -19,12 +19,14 @@ use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateExpand;
-use super::CopyIntoTableFromQuery;
-use super::DeleteFinal;
+use super::AsyncSourcerPlan;
+use super::CopyIntoTable;
+use super::Deduplicate;
 use super::DeletePartial;
-use super::DistributedCopyIntoTableFromStage;
 use super::DistributedInsertSelect;
+use super::MutationAggregate;
 use super::ProjectSet;
+use super::ReplaceInto;
 use super::RowFetch;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
@@ -82,17 +84,15 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
             PhysicalPlan::DeletePartial(delete) => write!(f, "{}", delete)?,
-            PhysicalPlan::DeleteFinal(delete) => write!(f, "{}", delete)?,
+            PhysicalPlan::MutationAggregate(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::Lambda(lambda) => write!(f, "{}", lambda)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
-            PhysicalPlan::DistributedCopyIntoTableFromStage(copy_into_table_from_stage) => {
-                write!(f, "{}", copy_into_table_from_stage)?
-            }
-            PhysicalPlan::CopyIntoTableFromQuery(copy_into_table_from_query) => {
-                write!(f, "{}", copy_into_table_from_query)?
-            }
+            PhysicalPlan::CopyIntoTable(copy_into_table) => write!(f, "{}", copy_into_table)?,
+            PhysicalPlan::AsyncSourcer(async_sourcer) => write!(f, "{}", async_sourcer)?,
+            PhysicalPlan::Deduplicate(deduplicate) => write!(f, "{}", deduplicate)?,
+            PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
         }
@@ -382,20 +382,14 @@ impl Display for DeletePartial {
     }
 }
 
-impl Display for DeleteFinal {
+impl Display for MutationAggregate {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DeleteFinal")
     }
 }
-impl Display for DistributedCopyIntoTableFromStage {
+impl Display for CopyIntoTable {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DistributedCopyIntoTableFromStage")
-    }
-}
-
-impl Display for CopyIntoTableFromQuery {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CopyIntoTableFromQuery")
+        write!(f, "CopyIntoTable")
     }
 }
 
@@ -418,6 +412,24 @@ impl Display for ProjectSet {
             "ProjectSet: set-returning functions : {}",
             scalars.join(", ")
         )
+    }
+}
+
+impl Display for AsyncSourcerPlan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AsyncSourcer")
+    }
+}
+
+impl Display for Deduplicate {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Deduplicate")
+    }
+}
+
+impl Display for ReplaceInto {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Replace")
     }
 }
 

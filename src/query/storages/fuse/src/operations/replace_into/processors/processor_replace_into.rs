@@ -31,11 +31,11 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_sql::executor::OnConflictField;
 use storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::metrics::metrics_inc_replace_process_input_block_time_ms;
 use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
-use crate::operations::replace_into::OnConflictField;
 
 pub struct ReplaceIntoProcessor {
     replace_into_mutator: ReplaceIntoMutator,

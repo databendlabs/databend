@@ -16,8 +16,11 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_sql::executor::DistributedCopyIntoTableFromStage;
+use common_sql::executor::CopyIntoTable;
+use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::FragmentKind;
+use common_sql::executor::QueryCtx;
+use common_sql::executor::ReplaceInto;
 
 use crate::api::BroadcastExchange;
 use crate::api::DataExchange;
@@ -48,9 +51,12 @@ pub struct Fragmenter {
 /// SelectLeaf: visiting a source fragment of select statement.
 ///
 /// DeleteLeaf: visiting a source fragment of delete statement.
+///
+/// Replace: visiting a fragment that contains a replace into plan.
 enum State {
     SelectLeaf,
     DeleteLeaf,
+    ReplaceInto,
     Other,
 }
 
@@ -139,14 +145,37 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::TableScan(plan.clone()))
     }
 
-    fn replace_copy_into_table(
+    fn replace_replace_into(
         &mut self,
-        plan: &DistributedCopyIntoTableFromStage,
+        plan: &common_sql::executor::ReplaceInto,
     ) -> Result<PhysicalPlan> {
-        self.state = State::SelectLeaf;
-        Ok(PhysicalPlan::DistributedCopyIntoTableFromStage(Box::new(
-            plan.clone(),
-        )))
+        let input = self.replace(&plan.input)?;
+        self.state = State::ReplaceInto;
+
+        Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
+            input: Box::new(input),
+            ..plan.clone()
+        }))
+    }
+
+    //  TODO(Sky): remove rebudant code
+    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
+        match &plan.source {
+            CopyIntoTableSource::Stage(_) => {
+                self.state = State::SelectLeaf;
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
+            }
+            CopyIntoTableSource::Query(query_ctx) => {
+                let input = self.replace(&query_ctx.plan)?;
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+                    source: CopyIntoTableSource::Query(Box::new(QueryCtx {
+                        plan: input,
+                        ..*query_ctx.clone()
+                    })),
+                    ..plan.clone()
+                })))
+            }
+        }
     }
 
     fn replace_delete_partial(
@@ -212,6 +241,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::SelectLeaf => FragmentType::Source,
             State::DeleteLeaf => FragmentType::DeleteLeaf,
             State::Other => FragmentType::Intermediate,
+            State::ReplaceInto => FragmentType::ReplaceInto,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(

@@ -15,7 +15,6 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::Instant;
 
 use common_catalog::plan::StageTableInfo;
@@ -98,7 +97,7 @@ pub struct CopyIntoTablePlan {
 }
 
 impl CopyIntoTablePlan {
-    pub async fn collect_files(&self, ctx: &Arc<dyn TableContext>) -> Result<Vec<StageFileInfo>> {
+    pub async fn collect_files(&self, ctx: &dyn TableContext) -> Result<Vec<StageFileInfo>> {
         ctx.set_status_info("begin to list files");
         let start = Instant::now();
 
