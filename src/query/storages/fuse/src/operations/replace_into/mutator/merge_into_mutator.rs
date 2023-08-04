@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ahash::AHashMap;
-use ahash::HashSet;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_base::base::tokio::sync::Semaphore;
@@ -87,7 +86,7 @@ struct AggregationContext {
     on_conflict_fields: Vec<OnConflictField>,
     // the most significant field index in `on_conflict_fields`
     // which we should apply bloom filtering, if any
-    most_significant_on_conflict_field_index: Option<usize>,
+    most_significant_on_conflict_field_index: Vec<FieldIndex>,
     // table fields excludes `on_conflict_fields`
     remain_column_field_ids: Vec<FieldIndex>,
     // reader that reads the ON CONFLICT key fields
@@ -113,7 +112,7 @@ impl MergeIntoOperationAggregator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         on_conflict_fields: Vec<OnConflictField>,
-        most_significant_on_conflict_field_index: Option<usize>,
+        most_significant_on_conflict_field_index: Vec<FieldIndex>,
         segment_locations: Vec<(SegmentIndex, Location)>,
         data_accessor: Operator,
         table_schema: Arc<TableSchema>,
@@ -237,32 +236,6 @@ impl MergeIntoOperationAggregator {
                                 if aggregation_ctx
                                     .overlapped(&block_meta.col_stats, columns_min_max)
                                 {
-                                    //// block level range pruning failed, try applying bloom filter pruning if possible
-                                    //// note, performance may heavily depend on the bloom filter cache
-
-                                    // if let (
-                                    //    Some(bloom_hashes),
-                                    //    Some(bloom_on_conflict_field_index),
-                                    //) = (
-                                    //    bloom_hashes,
-                                    //    self.most_significant_on_conflict_field_index,
-                                    //) {
-                                    //    // let make it clear, that the bool returned here indicates whether the block is pruned
-                                    //    let pruned = self
-                                    //        .apply_bloom_pruning(
-                                    //            block_meta,
-                                    //            bloom_hashes,
-                                    //            bloom_on_conflict_field_index,
-                                    //        )
-                                    //        .await;
-
-                                    //    if pruned {
-                                    //        // skip this block
-                                    //        metrics_inc_replace_block_number_bloom_pruned(1);
-                                    //        continue;
-                                    //    }
-                                    //}
-
                                     self.deletion_accumulator.add_block_deletion(
                                         *segment_index,
                                         block_index,
@@ -388,7 +361,7 @@ impl AggregationContext {
         segment_index: SegmentIndex,
         block_index: BlockIndex,
         block_meta: &BlockMeta,
-        deleted_key_hashes: &(ahash::HashSet<UniqueKeyDigest>, HashSet<u64>),
+        deleted_key_hashes: &(ahash::HashSet<UniqueKeyDigest>, Vec<Vec<u64>>),
     ) -> Result<Option<MutationLogEntry>> {
         let (deleted_key_hashes, bloom_hashes) = deleted_key_hashes;
         info!(
@@ -402,19 +375,19 @@ impl AggregationContext {
             return Ok(None);
         }
 
-        // try applying bloom filter pruning if possible
-        if let Some(bloom_on_conflict_field_index) = self.most_significant_on_conflict_field_index {
-            // TODO check if bloom_hashes is empty
-            // let make it clear, that the bool returned here indicates whether the block is pruned
-            let pruned = self
-                .apply_bloom_pruning(block_meta, bloom_hashes, bloom_on_conflict_field_index)
-                .await;
+        // apply bloom filter pruning if possible
+        let pruned = self
+            .apply_bloom_pruning(
+                block_meta,
+                bloom_hashes,
+                &self.most_significant_on_conflict_field_index,
+            )
+            .await;
 
-            if pruned {
-                // skip this block
-                metrics_inc_replace_block_number_bloom_pruned(1);
-                return Ok(None);
-            }
+        if pruned {
+            // skip this block
+            metrics_inc_replace_block_number_bloom_pruned(1);
+            return Ok(None);
         }
 
         let key_columns_data = self.read_block(&self.key_column_reader, block_meta).await?;
@@ -651,9 +624,12 @@ impl AggregationContext {
     async fn apply_bloom_pruning(
         &self,
         block_meta: &BlockMeta,
-        input_hashes: &HashSet<u64>,
-        bloom_on_conflict_field_index: FieldIndex,
+        input_hashes: &[Vec<u64>],
+        bloom_on_conflict_field_index: &[FieldIndex],
     ) -> bool {
+        if bloom_on_conflict_field_index.is_empty() {
+            return false;
+        }
         if let Some(loc) = &block_meta.bloom_filter_index_location {
             match self
                 .load_bloom_filter(
@@ -663,11 +639,20 @@ impl AggregationContext {
                 )
                 .await
             {
-                Ok(filter) => {
+                Ok(filters) => {
+                    // the caller ensures that the input_hashes is not empty
+                    let row_count = input_hashes[0].len();
                     let mut pruned = true;
-                    for hash in input_hashes {
-                        if filter.contains_digest(*hash) {
-                            // if any of the input hashes is contained in the bloom filter, do not prune
+                    for row in 0..row_count {
+                        let mut contains_row = true;
+                        for (col_idx, col_hash) in input_hashes.iter().enumerate() {
+                            let col_filer = &filters[col_idx];
+                            if !col_filer.contains_digest(col_hash[row]) {
+                                contains_row = false;
+                                break;
+                            }
+                        }
+                        if contains_row {
                             pruned = false;
                             break;
                         }
@@ -691,21 +676,32 @@ impl AggregationContext {
         &self,
         location: &Location,
         index_len: u64,
-        bloom_on_conflict_field_index: FieldIndex,
-    ) -> Result<Arc<Xor8Filter>> {
+        bloom_on_conflict_field_index: &[FieldIndex],
+    ) -> Result<Vec<Arc<Xor8Filter>>> {
         // different block may have different version of bloom filter index
-        let bloom_column_name = BloomIndex::build_filter_column_name(
-            location.1,
-            &self.on_conflict_fields[bloom_on_conflict_field_index].table_field,
-        )?;
+
+        let mut col_names = Vec::with_capacity(bloom_on_conflict_field_index.len());
+
+        for idx in bloom_on_conflict_field_index {
+            let bloom_column_name = BloomIndex::build_filter_column_name(
+                location.1,
+                &self.on_conflict_fields[*idx].table_field,
+            )?;
+            col_names.push(bloom_column_name);
+        }
+
+        // let bloom_column_name = BloomIndex::build_filter_column_name(
+        //     location.1,
+        //     &self.on_conflict_fields[bloom_on_conflict_field_index[0]].table_field,
+        // )?;
 
         // using load_bloom_filter_by_columns is attractive,
         // but it do not care about the version of the bloom filter index
         let block_filter = location
-            .read_block_filter(self.data_accessor.clone(), &[bloom_column_name], index_len)
+            .read_block_filter(self.data_accessor.clone(), &col_names, index_len)
             .await?;
         // we know that there is exactly one filter
-        Ok(block_filter.filters.into_iter().next().unwrap())
+        Ok(block_filter.filters)
     }
 }
 

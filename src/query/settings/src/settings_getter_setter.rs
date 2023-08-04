@@ -417,7 +417,15 @@ impl Settings {
     pub fn get_enable_replace_into_bloom_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_replace_into_bloom_pruning")? != 0)
     }
+
     pub fn set_enable_replace_into_bloom_pruning(&self, val: bool) -> Result<()> {
         self.try_set_u64("enable_replace_into_bloom_pruning", u64::from(val))
+    }
+
+    pub fn get_replace_into_bloom_pruning_max_column_number(&self) -> Result<u64> {
+        self.try_get_u64("replace_into_bloom_pruning_max_column_number")
+    }
+    pub fn set_replace_into_bloom_pruning_max_column_number(&self, val: u64) -> Result<()> {
+        self.try_set_u64("replace_into_bloom_pruning_max_column_number", val)
     }
 }

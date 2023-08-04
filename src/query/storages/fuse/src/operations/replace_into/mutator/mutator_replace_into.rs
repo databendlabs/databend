@@ -68,7 +68,7 @@ impl ReplaceIntoMutator {
         ctx: &dyn TableContext,
         on_conflict_fields: Vec<OnConflictField>,
         cluster_keys: Vec<RemoteExpr<String>>,
-        most_significant_on_conflict_field_index: Option<FieldIndex>,
+        most_significant_on_conflict_field_index: Vec<FieldIndex>,
         table_schema: &TableSchema,
         table_range_idx: HashMap<ColumnId, ColumnStatistics>,
     ) -> Result<Self> {
@@ -135,7 +135,7 @@ impl ReplaceIntoMutator {
                     DeletionByColumn {
                         columns_min_max,
                         key_hashes,
-                        bloom_hashes: Some(partition.bloom_hashes),
+                        bloom_hashes: partition.bloom_hashes,
                     }
                 })
                 .collect();
@@ -183,7 +183,7 @@ impl ReplaceIntoMutator {
                 let delete_action = DeletionByColumn {
                     columns_min_max,
                     key_hashes,
-                    bloom_hashes: None,
+                    bloom_hashes: vec![],
                 };
                 Ok(MergeIntoOperation::Delete(vec![delete_action]))
             }
@@ -293,13 +293,14 @@ struct Partition {
     // min max of all the on-conflict fields in this partition
     columns_min_max: Vec<MinMax<Scalar>>,
     // bloom hashes of the most significant on-conflict field
-    bloom_hashes: HashSet<u64>,
+    bloom_hashes: Vec<Vec<u64>>,
 }
 
 impl Partition {
     fn try_new_with_row(
         row_digest: u128,
-        bloom_hash: &Option<&u64>,
+        // TODO refine
+        bloom_hash: &[Option<&u64>],
         column_values: &[&Value<AnyType>],
         row_idx: usize,
     ) -> Result<Self> {
@@ -314,25 +315,28 @@ impl Partition {
         Ok(Self {
             digests: once(row_digest).collect(),
             columns_min_max,
-            bloom_hashes: {
-                match bloom_hash {
-                    None => HashSet::new(),
-                    Some(v) => once(**v).collect(),
-                }
-            },
+            bloom_hashes: bloom_hash
+                .iter()
+                .map(|r| r.map_or_else(Vec::new, |v| once(*v).collect()))
+                .collect(),
         })
     }
 
     fn push_row(
         &mut self,
         row_digest: u128,
-        bloom_hash: &Option<&u64>,
+        bloom_hash: &[Option<&u64>],
         column_values: &[&Value<AnyType>],
         row_idx: usize,
     ) -> Result<()> {
         self.digests.insert(row_digest);
-        if let Some(v) = bloom_hash {
-            self.bloom_hashes.insert(**v);
+
+        // TODO buggy
+        assert_eq!(bloom_hash.len(), self.bloom_hashes.len());
+        for (idx, v) in bloom_hash.iter().enumerate() {
+            if let Some(v) = v {
+                self.bloom_hashes[idx].push(**v);
+            }
         }
         for (column_idx, min_max) in self.columns_min_max.iter_mut().enumerate() {
             let value: Scalar = column_values[column_idx].row_scalar(row_idx)?.to_owned();
@@ -347,7 +351,7 @@ struct Partitioner {
     func_ctx: FunctionContext,
     left_most_cluster_key: Expr,
     // the most significant on-conflict field index chosen, if any
-    bloom_filter_column_info: Option<(FieldIndex, DataType)>,
+    bloom_filter_column_info: Vec<(FieldIndex, DataType)>,
 }
 
 impl Partitioner {
@@ -355,7 +359,7 @@ impl Partitioner {
         ctx: &dyn TableContext,
         on_conflict_fields: Vec<OnConflictField>,
         cluster_keys: &[RemoteExpr<String>],
-        most_significant_on_conflict_field_index: Option<FieldIndex>,
+        most_significant_on_conflict_field_index: Vec<FieldIndex>,
         table_schema: &TableSchema,
     ) -> Result<Self> {
         let left_most_cluster_key = &cluster_keys[0];
@@ -364,10 +368,13 @@ impl Partitioner {
             .project_column_ref(|name| table_schema.index_of(name).unwrap());
         let func_ctx = ctx.get_function_context()?;
 
-        let bloom_filter_column_info = most_significant_on_conflict_field_index.map(|idx| {
-            let data_type = (&on_conflict_fields[idx].table_field.data_type).into();
-            (idx, data_type)
-        });
+        let bloom_filter_column_info = most_significant_on_conflict_field_index
+            .into_iter()
+            .map(|idx| {
+                let data_type = (&on_conflict_fields[idx].table_field.data_type).into();
+                (idx, data_type)
+            })
+            .collect();
 
         Ok(Self {
             on_conflict_fields,
@@ -391,26 +398,26 @@ impl Partitioner {
         // bloom hashes of the most significant on-conflict field
         let maybe_bloom_hashes = self
             .bloom_filter_column_info
-            .as_ref()
-            .and_then(|(idx, typ)| {
+            .iter()
+            .filter_map(|(idx, typ)| {
                 let maybe_col = on_conflict_column_values[*idx].as_column();
                 maybe_col.map(|col| {
                     BloomIndex::calculate_nullable_column_digest(&self.func_ctx, col, typ)
                 })
             })
-            .transpose()?;
+            .collect::<Result<Vec<_>>>()?;
 
         for row_idx in 0..data_block.num_rows() {
             if let Some(row_digest) = row_hash_of_columns(&on_conflict_column_values, row_idx)? {
-                let bloom_hash = maybe_bloom_hashes
-                    .as_ref()
-                    .and_then(|(hashes, validity)| match validity {
+                let bloom_hash: Vec<Option<&u64>> = maybe_bloom_hashes
+                    .iter()
+                    .filter_map(|(hashes, validity)| match validity {
                         Some(v) if v.unset_bits() != 0 => v
                             .get(row_idx)
                             .map(|v| if v { hashes.get(row_idx) } else { None }),
                         _ => Some(hashes.get(row_idx)),
                     })
-                    .flatten();
+                    .collect();
                 let cluster_key_value = cluster_key_values.row_scalar(row_idx)?.to_owned();
 
                 match partitions.entry(cluster_key_value) {
