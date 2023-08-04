@@ -90,7 +90,7 @@ impl LeafSegmentInfo {
         buf.extend_from_slice(&blocks_compress.len().to_le_bytes());
         buf.extend_from_slice(&summary_compress.len().to_le_bytes());
         // add tag to distinct leaf and internal
-        buf.push(0 as u8);
+        buf.push(0_u8);
         buf.extend(blocks_compress);
         buf.extend(summary_compress);
 
@@ -153,7 +153,7 @@ impl InternalSegmentInfo {
         buf.extend_from_slice(&child_segments_compress.len().to_le_bytes());
         buf.extend_from_slice(&summary_compress.len().to_le_bytes());
         // add tag to distinct leaf and internal
-        buf.push(1 as u8);
+        buf.push(1_u8);
         buf.extend(child_segments_compress);
         buf.extend(summary_compress);
 
