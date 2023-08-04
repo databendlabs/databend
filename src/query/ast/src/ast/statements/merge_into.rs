@@ -66,9 +66,7 @@ impl Display for MergeIntoStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-        write!(f, " USING ")?;
-        write!(f, " {}", self.source)?;
-        write!(f, " ON {}", self.join_expr)?;
+        write!(f, " USING {} ON {}", self.source, self.join_expr)?;
         for clause in &self.merge_options {
             match clause {
                 MergeOption::Match(match_clause) => {
