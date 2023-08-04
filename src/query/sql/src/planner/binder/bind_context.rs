@@ -262,8 +262,8 @@ impl BindContext {
         available_aliases: &[(String, ScalarExpr)],
     ) -> Result<NameResolutionResult> {
         let mut result = vec![];
-
         // Lookup parent context to resolve outer reference.
+        let mut alias_match_count = 0;
         if self.expr_context.prefer_resolve_alias() {
             for (alias, scalar) in available_aliases {
                 if database.is_none() && table.is_none() && column == alias {
@@ -271,21 +271,34 @@ impl BindContext {
                         alias: alias.clone(),
                         scalar: scalar.clone(),
                     });
+
+                    alias_match_count += 1;
                 }
             }
 
-            self.search_bound_columns_recursively(database, table, column, &mut result);
+            if alias_match_count == 0 {
+                self.search_bound_columns_recursively(database, table, column, &mut result);
+            }
         } else {
             self.search_bound_columns_recursively(database, table, column, &mut result);
 
-            for (alias, scalar) in available_aliases {
-                if database.is_none() && table.is_none() && column == alias {
-                    result.push(NameResolutionResult::Alias {
-                        alias: alias.clone(),
-                        scalar: scalar.clone(),
-                    });
+            if result.is_empty() {
+                for (alias, scalar) in available_aliases {
+                    if database.is_none() && table.is_none() && column == alias {
+                        result.push(NameResolutionResult::Alias {
+                            alias: alias.clone(),
+                            scalar: scalar.clone(),
+                        });
+                        alias_match_count += 1;
+                    }
                 }
             }
+        }
+
+        if alias_match_count >= 2 {
+            return Err(ErrorCode::SemanticError(format!(
+                "column {column} reference alias is ambiguous, please use another alias name",
+            )));
         }
 
         if result.is_empty() {
@@ -339,6 +352,7 @@ impl BindContext {
                     result.push(NameResolutionResult::Column(column_binding.clone()));
                 }
             }
+
             if !result.is_empty() {
                 return;
             }
@@ -352,6 +366,7 @@ impl BindContext {
                 };
                 result.push(NameResolutionResult::InternalColumn(column_binding));
             }
+
             if !result.is_empty() {
                 return;
             }

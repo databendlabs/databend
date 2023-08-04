@@ -12037,6 +12037,53 @@ Query(
 
 
 ---------- Input ----------
+-- 96477300355	31379974136	3.074486292973661
+select 34343
+---------- Output ---------
+SELECT 34343
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            45..57,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    45..57,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                52..57,
+                            ),
+                            lit: UInt64(
+                                34343,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 -- xxxxx
   select 34343;
 ---------- Output ---------
