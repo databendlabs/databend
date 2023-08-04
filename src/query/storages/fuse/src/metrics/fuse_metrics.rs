@@ -226,15 +226,18 @@ pub fn metrics_inc_replace_row_number_totally_loaded(c: u64) {
 }
 
 pub fn metrics_inc_replace_whole_block_deletion(c: u64) {
-    increment_gauge!(key!("replace_into_whole_block_deletion"), c as f64);
+    increment_gauge!(
+        key!("replace_into_block_number_whole_block_deletion"),
+        c as f64
+    );
 }
 
 pub fn metrics_inc_replace_block_of_zero_row_deleted(c: u64) {
-    increment_gauge!(key!("replace_into_block_of_zero_row_deleted"), c as f64);
+    increment_gauge!(key!("replace_into_block_number_zero_row_deleted"), c as f64);
 }
 
 pub fn metrics_inc_replace_original_row_number(c: u64) {
-    increment_gauge!(key!("replace_into_original_row_number"), c as f64);
+    increment_gauge!(key!("replace_into_row_number_source_block"), c as f64);
 }
 
 pub fn metrics_inc_replace_row_number_after_table_level_pruning(c: u64) {
@@ -255,7 +258,7 @@ pub fn metrics_inc_replace_process_input_block_time_ms(c: u64) {
 
 // the number of accumulate_merge_action operation invoked
 pub fn metrics_inc_replace_number_accumulated_merge_action() {
-    increment_gauge!(key!("replace_into_number_accumulated_merge_action"), 1_f64);
+    increment_gauge!(key!("replace_into_number_accumulate_merge_action"), 1_f64);
 }
 
 // the number of apply_deletion operation applied
