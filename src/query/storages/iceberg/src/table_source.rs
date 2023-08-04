@@ -28,11 +28,14 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use futures::StreamExt;
-use icelake::io::parquet::ParquetStream;
-use icelake::io::parquet::ParquetStreamBuilder;
 use opendal::Operator;
+use parquet::arrow::arrow_reader::ArrowReaderBuilder;
+use parquet::arrow::async_reader::ParquetRecordBatchStream;
+use parquet::arrow::ProjectionMask;
 
 use crate::partition::IcebergPartInfo;
+
+type ParquetStream = ParquetRecordBatchStream<opendal::Reader>;
 
 pub struct IcebergTableSource {
     state: State,
@@ -41,10 +44,12 @@ pub struct IcebergTableSource {
     _scan_progress: Arc<Progress>,
     output: Arc<OutputPort>,
 
-    /// The schema before output. Some fields might be removed when outputting.
+    /// The projection to be applied on the full schema.
+    /// It's used to construct a projected [`ParquetStream`].
+    projection: ProjectionMask,
+    /// The schema of the data blocks produced by the source [`ParquetStream`].
+    /// It is projected by `projection` from the full schema.
     source_schema: DataSchemaRef,
-    /// The final output schema
-    _output_schema: DataSchemaRef,
 }
 
 enum State {
@@ -65,7 +70,7 @@ impl IcebergTableSource {
         dal: Operator,
         output: Arc<OutputPort>,
         source_schema: DataSchemaRef,
-        output_schema: DataSchemaRef,
+        projection: ProjectionMask,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(IcebergTableSource {
@@ -75,7 +80,7 @@ impl IcebergTableSource {
             _scan_progress: scan_progress,
             state: State::ReadMeta(None),
             source_schema,
-            _output_schema: output_schema,
+            projection,
         })))
     }
 }
@@ -188,10 +193,14 @@ impl Processor for IcebergTableSource {
             State::ReadMeta(Some(part)) => {
                 let part = IcebergPartInfo::from_part(&part)?;
                 let r = self.dal.reader(&part.path).await?;
-                let s = ParquetStreamBuilder::new(r)
-                    .build()
+                // icelake-io/icelake doesn't support customized parquert reader (projection, batch size, etc.) now,
+                // so we use apache/arrow-rs API directly.
+                let s = ArrowReaderBuilder::new(r)
                     .await
-                    .map_err(parse_icelake_error)?;
+                    .map_err(parse_parquet_error)?
+                    .with_projection(self.projection.clone())
+                    .build()
+                    .map_err(parse_parquet_error)?;
                 self.state = State::ReadData(s, None);
                 Ok(())
             }
@@ -201,7 +210,7 @@ impl Processor for IcebergTableSource {
                     Ok(())
                 }
                 Some(data) => {
-                    let data = data.map_err(parse_icelake_error)?;
+                    let data = data.map_err(parse_parquet_error)?;
                     self.state = State::ReadData(stream, Some(data));
                     Ok(())
                 }
@@ -213,6 +222,6 @@ impl Processor for IcebergTableSource {
     }
 }
 
-fn parse_icelake_error(err: icelake::Error) -> ErrorCode {
-    ErrorCode::ReadTableDataError(format!("icelake operation failed: {:?}", err))
+fn parse_parquet_error(err: parquet::errors::ParquetError) -> ErrorCode {
+    ErrorCode::ReadTableDataError(format!("parquet operation failed: {:?}", err))
 }

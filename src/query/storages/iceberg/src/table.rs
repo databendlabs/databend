@@ -25,6 +25,7 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
+use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
@@ -32,7 +33,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchema;
-use common_expression::DataSchemaRefExt;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -43,6 +43,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_storage::DataOperator;
+use parquet::arrow::ProjectionMask;
 use storages_common_pruner::RangePrunerCreator;
 use tokio::sync::OnceCell;
 
@@ -158,19 +159,34 @@ impl IcebergTable {
         let source_projection =
             PushDownInfo::projection_of_push_downs(&table_schema, &plan.push_downs);
 
-        // The front of the src_fields are prewhere columns (if exist).
-        // The back of the src_fields are remain columns.
-        let mut src_fields = Vec::with_capacity(source_projection.len());
+        let arrow_schema = table_schema.to_arrow();
+        let arrow_fields = arrow_schema
+            .fields
+            .into_iter()
+            .map(|f| f.into())
+            .collect::<Vec<arrow_schema::Field>>();
+        let arrow_schema = arrow_schema::Schema::new(arrow_fields);
+        let parquet_schema =
+            parquet::arrow::arrow_to_parquet_schema(&arrow_schema).map_err(|e| {
+                ErrorCode::TableInfoError(format!(
+                    "Convert table schema to parquet schema failed: {}",
+                    e
+                ))
+            })?;
+
+        let arrow_projetion = match source_projection {
+            Projection::Columns(cols) => ProjectionMask::leaves(&parquet_schema, cols),
+            Projection::InnerColumns(cols) => {
+                let leaves = cols.values().flatten().cloned().collect::<Vec<_>>();
+                ProjectionMask::leaves(&parquet_schema, leaves)
+            }
+        };
 
         // The schema of the data block `read_data` output.
         let output_schema: Arc<DataSchema> = Arc::new(plan.schema().into());
 
         // TODO: we need to support top_k.
         // TODO: we need to support prewhere.
-
-        // Since we don't support prewhere, we can use the source_reader directly.
-        src_fields.extend_from_slice(output_schema.fields());
-        let src_schema = DataSchemaRefExt::create(src_fields);
 
         let mut source_builder = SourcePipeBuilder::create();
         for _ in 0..std::cmp::max(1, max_threads) {
@@ -181,8 +197,8 @@ impl IcebergTable {
                     ctx.clone(),
                     self.op.clone(),
                     output,
-                    src_schema.clone(),
                     output_schema.clone(),
+                    arrow_projetion.clone(),
                 )?,
             );
         }
@@ -292,5 +308,9 @@ impl Table for IcebergTable {
 
     fn table_args(&self) -> Option<TableArgs> {
         None
+    }
+
+    fn support_column_projection(&self) -> bool {
+        true
     }
 }
