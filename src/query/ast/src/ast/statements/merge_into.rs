@@ -17,6 +17,8 @@ use std::fmt::Formatter;
 
 use super::InsertSource;
 use super::UpdateExpr;
+use crate::ast::write_comma_separated_list;
+use crate::ast::write_period_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 
@@ -55,7 +57,55 @@ pub struct MergeIntoStmt {
 }
 
 impl Display for MergeIntoStmt {
-    fn fmt(&self, _: &mut Formatter) -> std::fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "MERGE INTO  ")?;
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        write!(f, " USING ")?;
+        write!(f, " {}", self.source)?;
+        write!(f, " ON {}", self.join_expr)?;
+        for clause in &self.merge_options {
+            match clause {
+                MergeOption::Match(match_clause) => {
+                    write!(f, " WHEN MATCHED ")?;
+                    if let Some(e) = &match_clause.selection {
+                        write!(f, " AND {} ", e)?;
+                    }
+                    write!(f, " THEN ")?;
+                    for operation in &match_clause.operations {
+                        match operation {
+                            MatchOperation::Update { update_list } => {
+                                write!(f, " UPDATE SET ")?;
+                                write_comma_separated_list(f, update_list)?;
+                            }
+                            MatchOperation::Delete => {
+                                write!(f, " DELETE ")?;
+                            }
+                        }
+                    }
+                }
+                MergeOption::Unmatch(unmatch_clause) => {
+                    write!(f, " WHEN NOT MATCHED ")?;
+                    if let Some(e) = &unmatch_clause.selection {
+                        write!(f, " AND {} ", e)?;
+                    }
+                    write!(f, " THEN INSERT ")?;
+                    if let Some(columns) = &unmatch_clause.columns {
+                        if !columns.is_empty() {
+                            write!(f, " (")?;
+                            write_comma_separated_list(f, columns)?;
+                            write!(f, ")")?;
+                        }
+                    }
+                    write!(f, " VALUES {} ", unmatch_clause.values)?;
+                }
+            }
+        }
+        Ok(())
     }
 }
