@@ -186,6 +186,11 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn columns_mut(&mut self) -> &mut [BlockEntry] {
+        &mut self.columns
+    }
+
+    #[inline]
     pub fn get_by_offset(&self, offset: usize) -> &BlockEntry {
         &self.columns[offset]
     }

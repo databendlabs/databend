@@ -71,7 +71,7 @@ impl SegmentInfo {
 
     // Total block bytes of this segment.
     pub fn total_bytes(&self) -> u64 {
-        self.blocks.iter().map(|v| v.block_size).sum()
+        self.summary.uncompressed_byte_size
     }
 
     // Encode self.blocks as RawBlockMeta.
