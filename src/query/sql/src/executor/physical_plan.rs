@@ -917,6 +917,7 @@ pub struct AsyncSourcerPlan {
 pub struct Deduplicate {
     pub input: Box<PhysicalPlan>,
     pub on_conflicts: Vec<OnConflictField>,
+    pub bloom_filter_column_index: Option<FieldIndex>,
     pub table_is_empty: bool,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
@@ -943,6 +944,7 @@ pub struct ReplaceInto {
     pub block_thresholds: BlockThresholds,
     pub table_info: TableInfo,
     pub on_conflicts: Vec<OnConflictField>,
+    pub bloom_filter_column_index: Option<FieldIndex>,
     pub catalog_info: CatalogInfo,
     pub segments: Vec<Location>,
 }

@@ -277,6 +277,7 @@ impl PipelineBuilder {
         let Deduplicate {
             input,
             on_conflicts,
+            bloom_filter_column_index,
             table_is_empty,
             table_info,
             catalog_info,
@@ -352,6 +353,7 @@ impl PipelineBuilder {
             self.ctx.as_ref(),
             on_conflicts.clone(),
             cluster_keys,
+            *bloom_filter_column_index,
             table_schema.as_ref(),
             *table_is_empty,
             table_level_range_index.clone(),
@@ -367,6 +369,7 @@ impl PipelineBuilder {
             block_thresholds,
             table_info,
             on_conflicts,
+            bloom_filter_column_index,
             catalog_info,
             segments,
         } = replace;
@@ -464,6 +467,7 @@ impl PipelineBuilder {
                 segment_partition_num,
                 block_builder,
                 on_conflicts.clone(),
+                *bloom_filter_column_index,
                 segments,
                 io_request_semaphore,
             )?;

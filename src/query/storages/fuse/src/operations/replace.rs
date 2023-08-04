@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::FieldIndex;
@@ -92,6 +93,7 @@ impl FuseTable {
     //                      └─────►│ResizeProcessor(1) ├──────►│TableMutationAggregator├────────►│     CommitSink    │
     //                             └───────────────────┘       └───────────────────────┘         └───────────────────┘
 
+    #[allow(clippy::too_many_arguments)]
     pub fn merge_into_mutators(
         &self,
         ctx: Arc<dyn TableContext>,

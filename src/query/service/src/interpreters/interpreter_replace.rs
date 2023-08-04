@@ -242,9 +242,15 @@ impl ReplaceInterpreter {
                 keys: vec![],
             }));
         }
+
+        let bloom_filter_column_index = fuse_table
+            .choose_most_significant_bloom_filter_column(&on_conflicts)
+            .await?;
+
         root = Box::new(PhysicalPlan::Deduplicate(Deduplicate {
             input: root,
             on_conflicts: on_conflicts.clone(),
+            bloom_filter_column_index,
             table_is_empty,
             table_info: table_info.clone(),
             catalog_info: catalog.info(),
@@ -258,6 +264,7 @@ impl ReplaceInterpreter {
             table_info: table_info.clone(),
             catalog_info: catalog.info(),
             on_conflicts,
+            bloom_filter_column_index,
             segments: base_snapshot.segments.clone(),
         }));
         if is_distributed {
@@ -279,6 +286,7 @@ impl ReplaceInterpreter {
         )));
         Ok((root, purge_info))
     }
+
     fn check_on_conflicts(&self) -> Result<()> {
         if self.plan.on_conflict_fields.is_empty() {
             Err(ErrorCode::BadArguments(

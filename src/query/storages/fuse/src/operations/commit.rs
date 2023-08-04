@@ -62,7 +62,6 @@ use crate::operations::common::AbortOperation;
 use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
-use crate::operations::common::MutationKind;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeSegment;
 use crate::statistics::merge_statistics;
