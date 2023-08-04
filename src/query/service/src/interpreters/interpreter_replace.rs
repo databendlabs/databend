@@ -235,6 +235,10 @@ impl ReplaceInterpreter {
                 &mut purge_info,
             )
             .await?;
+        // remove top exchange
+        if let PhysicalPlan::Exchange(Exchange { input, .. }) = root.as_ref() {
+            root = input.clone();
+        }
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
