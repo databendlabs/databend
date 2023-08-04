@@ -1612,7 +1612,7 @@ WITH v1 AS materialized
             cc_name,
             d_year,
             d_moy),
-     v2 AS
+     v2 AS materialized
   (SELECT v1.i_category,
           v1.i_brand,
           v1.cc_name,
