@@ -150,9 +150,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let merge = map(
         rule! {
             MERGE ~ INTO ~ #period_separated_idents_1_to_3 ~ USING
-            ~ #insert_source
+            ~ #insert_source ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
-        |(_, _, _, _, _)| {},
+        |(_, _, (catalog, database, table), _, source, _, join_expr, merge_options)| {
+            Statement::MergeInto(MergeIntoStmt {
+                catalog,
+                database,
+                table,
+                source,
+                join_expr,
+                merge_options,
+            })
+        },
     );
 
     let delete = map(
@@ -1463,6 +1472,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #replace : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
         ),
         rule!(
             #set_variable : "`SET <variable> = <value>`"
@@ -2119,6 +2129,16 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #revert_table
         | #set_table_options
     )(i)
+}
+
+pub fn match_clause(_: Input) -> IResult<MergeOption> {
+    // map(rule! {}, || {});
+    todo!()
+}
+
+pub fn unmatch_clause(_: Input) -> IResult<MergeOption> {
+    // map(rule! {}, || {});
+    todo!()
 }
 
 pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {

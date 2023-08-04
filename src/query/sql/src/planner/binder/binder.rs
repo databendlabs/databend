@@ -364,6 +364,7 @@ impl<'a> Binder {
                 }
                 self.bind_replace(bind_context, stmt).await?
             }
+            Statement::MergeInto(_) => unimplemented!(),
             Statement::Delete {
                 hints,
                 table_reference,

@@ -329,6 +329,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::Query(query) => visitor.visit_query(query),
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Replace(replace) => visitor.visit_replace(replace),
+        Statement::MergeInto(_) => unimplemented!(),
         Statement::Delete {
             table_reference,
             selection,

@@ -304,6 +304,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::Query(query) => visitor.visit_query(&mut *query),
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Replace(replace) => visitor.visit_replace(replace),
+        Statement::MergeInto(_) => unimplemented!(),
         Statement::Delete {
             table_reference,
             selection,
