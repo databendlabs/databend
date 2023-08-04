@@ -5,9 +5,9 @@ description:
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced: v1.2.8"/>
+<FunctionDescription description="Introduced or updated: v1.2.39"/>
 
-Modifies a table by adding, converting, renaming, or removing a column.
+Modifies a table by adding, converting, renaming, removing, or changing the type of a column.
 
 ## Syntax
 
@@ -28,6 +28,10 @@ MODIFY COLUMN <column_name> DROP STORED;
 ALTER TABLE [IF EXISTS] [database.]<table_name>
 RENAME COLUMN <column_name> TO <new_column_name>;
 
+-- Change the data type of one or multiple columns
+ALTER TABLE [IF EXISTS] [database.]<table_name> 
+MODIFY COLUMN <column_name> <new_data_type>[, COLUMN <column_name> <new_data_type>, ...]
+
 -- Remove a column
 ALTER TABLE [IF EXISTS] [database.]<table_name> 
 DROP COLUMN <column_name>;
@@ -36,6 +40,7 @@ DROP COLUMN <column_name>;
 :::note
 - Only a constant value can be accepted as a default value when adding a new column. If a non-constant expression is used, an error will occur.
 - Adding a stored computed column with ALTER TABLE is not supported yet.
+- When you change the data type of a table's columns, there's a risk of conversion errors. For example, if you try to convert a column with text (String) to numbers (Float), it might cause problems.
 :::
 
 ## Examples
@@ -131,4 +136,31 @@ CREATE TABLE IF NOT EXISTS products (
 
 ALTER TABLE products
 MODIFY COLUMN total_price DROP STORED;
+```
+
+### Example 4: Changing Data Type of a Column
+
+This example creates a table named "students_info" with columns for "id," "name," and "age," inserts some sample data, and then modifies the data type of the "age" column from INT to VARCHAR(10).
+
+```sql
+CREATE TABLE students_info (
+  id INT,
+  name VARCHAR(50),
+  age INT
+);
+
+INSERT INTO students_info VALUES
+  (1, 'John Doe', 25),
+  (2, 'Jane Smith', 28),
+  (3, 'Michael Johnson', 22);
+
+ALTER TABLE students_info MODIFY COLUMN age VARCHAR(10);
+
+SELECT * FROM students_info;
+
+id|name           |age|
+--+---------------+---+
+ 1|John Doe       |25 |
+ 2|Jane Smith     |28 |
+ 3|Michael Johnson|22 |
 ```
