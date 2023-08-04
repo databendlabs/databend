@@ -101,6 +101,7 @@ impl InternalSegmentInfo {
 /// to reduce changes.
 pub type LeafSegmentInfo = v4::SegmentInfo;
 
+#[derive(Serialize, Deserialize)]
 pub enum SegmentInfo {
     #[allow(unused)]
     InternalSegment(InternalSegmentInfo),
