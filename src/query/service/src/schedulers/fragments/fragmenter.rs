@@ -20,6 +20,7 @@ use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::FragmentKind;
 use common_sql::executor::QueryCtx;
+use common_sql::executor::ReplaceInto;
 
 use crate::api::BroadcastExchange;
 use crate::api::DataExchange;
@@ -50,9 +51,12 @@ pub struct Fragmenter {
 /// SelectLeaf: visiting a source fragment of select statement.
 ///
 /// DeleteLeaf: visiting a source fragment of delete statement.
+///
+/// Replace: visiting a fragment that contains a replace into plan.
 enum State {
     SelectLeaf,
     DeleteLeaf,
+    ReplaceInto,
     Other,
 }
 
@@ -141,6 +145,19 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::TableScan(plan.clone()))
     }
 
+    fn replace_replace_into(
+        &mut self,
+        plan: &common_sql::executor::ReplaceInto,
+    ) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        self.state = State::ReplaceInto;
+
+        Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
+            input: Box::new(input),
+            ..plan.clone()
+        }))
+    }
+
     //  TODO(Sky): remove rebudant code
     fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
         match &plan.source {
@@ -224,6 +241,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::SelectLeaf => FragmentType::Source,
             State::DeleteLeaf => FragmentType::DeleteLeaf,
             State::Other => FragmentType::Intermediate,
+            State::ReplaceInto => FragmentType::ReplaceInto,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
@@ -22,6 +23,8 @@ use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::QueryCtx;
+use common_sql::executor::ReplaceInto;
+use storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchange;
 use crate::schedulers::Fragmenter;
@@ -49,6 +52,8 @@ pub enum FragmentType {
     /// Leaf fragment of a delete plan, which contains
     /// a `DeletePartial` operator.
     DeleteLeaf,
+    /// Intermediate fragment of a replace into plan, which contains a `ReplaceInto` operator.
+    ReplaceInto,
 }
 
 #[derive(Clone)]
@@ -127,6 +132,14 @@ impl PlanFragment {
                 }
                 actions.add_fragment_actions(fragment_actions)?;
             }
+            FragmentType::ReplaceInto => {
+                // Redistribute partitions
+                let mut fragment_actions = self.redistribute_replace_into(ctx)?;
+                if let Some(ref exchange) = self.exchange {
+                    fragment_actions.set_exchange(exchange.clone());
+                }
+                actions.add_fragment_actions(fragment_actions)?;
+            }
         }
 
         Ok(())
@@ -188,6 +201,70 @@ impl PlanFragment {
                 partitions: parts.clone(),
             };
             plan = replace_delete_partial.replace(&plan)?;
+
+            fragment_actions
+                .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+        }
+
+        Ok(fragment_actions)
+    }
+
+    fn reshuffle_segments(
+        executors: Vec<String>,
+        partitions: Vec<Location>,
+    ) -> Result<HashMap<String, Vec<Location>>> {
+        let num_parts = partitions.len();
+        let num_executors = executors.len();
+        let mut executors_sorted = executors.clone();
+        executors_sorted.sort();
+        let mut executor_part = HashMap::default();
+        // the first num_parts % num_executors get parts_per_node parts
+        // the remaining get parts_per_node - 1 parts
+        let parts_per_node = (num_parts + num_executors - 1) / num_executors;
+        for (idx, executor) in executors_sorted.iter().enumerate() {
+            let begin = parts_per_node * idx;
+            let end = num_parts.min(parts_per_node * (idx + 1));
+            let parts = partitions[begin..end].to_vec();
+            executor_part.insert(executor.clone(), parts);
+            if end == num_parts && idx < num_executors - 1 {
+                // reach here only when num_executors > num_parts
+                executors_sorted[(idx + 1)..].iter().for_each(|executor| {
+                    executor_part.insert(executor.clone(), vec![]);
+                });
+                break;
+            }
+        }
+
+        Ok(executor_part)
+    }
+
+    fn redistribute_replace_into(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
+        let plan = match &self.plan {
+            PhysicalPlan::ExchangeSink(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+        let plan = match plan.input.as_ref() {
+            PhysicalPlan::ReplaceInto(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+        let partitions = &plan.segments;
+        let executors = Fragmenter::get_executors(ctx);
+        let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
+        // 把partitions等分到executors上
+        let executor_num = executors.len();
+        let mut partition_reshuffle = vec![];
+        for (i, part) in partitions.iter().enumerate() {
+            let executor = executors[i % executor_num].clone();
+            partition_reshuffle.push((executor, vec![part.clone()]));
+        }
+
+        for (executor, parts) in partitions.iter() {
+            let mut plan = self.plan.clone();
+
+            let mut replace_replace_partial = ReplaceReplaceInto {
+                partitions: parts.clone(),
+            };
+            plan = replace_replace_partial.replace(&plan)?;
 
             fragment_actions
                 .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
@@ -278,6 +355,20 @@ impl PhysicalPlanReplacer for ReplaceDeletePartial {
     fn replace_delete_partial(&mut self, plan: &DeletePartial) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::DeletePartial(Box::new(DeletePartial {
             parts: self.partitions.clone(),
+            ..plan.clone()
+        })))
+    }
+}
+
+struct ReplaceReplaceInto {
+    pub partitions: Vec<Location>,
+}
+
+impl PhysicalPlanReplacer for ReplaceReplaceInto {
+    fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
+        self.replace(&plan.input);
+        Ok(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
+            segments: self.partitions.clone(),
             ..plan.clone()
         })))
     }
