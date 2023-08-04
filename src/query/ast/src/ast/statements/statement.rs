@@ -299,7 +299,7 @@ impl Display for Statement {
             Statement::Query(query) => write!(f, "{query}")?,
             Statement::Insert(insert) => write!(f, "{insert}")?,
             Statement::Replace(replace) => write!(f, "{replace}")?,
-            Statement::MergeInto(_) => unimplemented!(),
+            Statement::MergeInto(merge_into) => write!(f, "{merge_into}")?,
             Statement::Delete {
                 table_reference,
                 selection,

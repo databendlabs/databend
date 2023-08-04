@@ -404,7 +404,7 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_insert(&mut self, _insert: &'ast InsertStmt) {}
     fn visit_replace(&mut self, _replace: &'ast ReplaceStmt) {}
-
+    fn visit_merge_into(&mut self, _merge_into: &'ast MergeIntoStmt) {}
     fn visit_insert_source(&mut self, _insert_source: &'ast InsertSource) {}
 
     fn visit_delete(
