@@ -413,4 +413,11 @@ impl Settings {
     pub fn set_enable_replace_into_partitioning(&self, val: bool) -> Result<()> {
         self.try_set_u64("enable_replace_into_partitioning", u64::from(val))
     }
+
+    pub fn get_enable_replace_into_bloom_pruning(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_replace_into_bloom_pruning")? != 0)
+    }
+    pub fn set_enable_replace_into_bloom_pruning(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_replace_into_bloom_pruning", u64::from(val))
+    }
 }

@@ -2797,16 +2797,20 @@ dependencies = [
  "common-catalog",
  "common-exception",
  "common-expression",
+ "common-functions",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-storage",
  "futures",
  "icelake",
+ "match-template",
  "minitrace",
  "opendal",
  "parquet",
  "serde",
+ "storages-common-pruner",
+ "storages-common-table-meta",
  "tokio",
  "typetag",
 ]
@@ -7548,8 +7552,7 @@ dependencies = [
 [[package]]
 name = "opendal"
 version = "0.39.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ad95e460e5976ab1b74f398ab856c59f8417b3dd32202329e3491dcbe3a6b84"
+source = "git+https://github.com/apache/incubator-opendal?rev=f02d627#f02d627a582d1f68af048e4f0db84eb1102f271d"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -8638,7 +8641,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset 0.9.0",
- "parking_lot 0.12.1",
+ "parking_lot 0.11.2",
  "pyo3-build-config 0.19.1",
  "pyo3-ffi",
  "pyo3-macros",
@@ -8994,9 +8997,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f88838c22f5c35c2e8d5552842427a425b34d0693189091a3607d24949894414"
+checksum = "3228e570df74d69d3d3236a71371f1edd748a3e4eb728ea1f29d403bc10fc727"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -11193,7 +11196,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
