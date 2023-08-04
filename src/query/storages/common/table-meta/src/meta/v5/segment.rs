@@ -57,7 +57,7 @@ pub struct InternalSegmentInfo {
     /// there will be normal segments and internal segment
     /// the suffix name of different segments is different,
     /// so we can use this tag to distinct them.
-    pub son_segments: Vec<Arc<Location>>,
+    pub child_segments: Vec<Location>,
     /// summary statistics
     pub summary: Statistics,
 }
@@ -70,7 +70,7 @@ impl InternalSegmentInfo {
     fn to_bytes_with_encoding(&self, encoding: MetaEncoding) -> Result<Vec<u8>> {
         let compression = MetaCompression::default();
 
-        let son_segments = encode(&encoding, &self.son_segments)?;
+        let son_segments = encode(&encoding, &self.child_segments)?;
         let segments_compress = compress(&compression, son_segments)?;
 
         let summary = encode(&encoding, &self.summary)?;
@@ -88,7 +88,7 @@ impl InternalSegmentInfo {
         buf.push(encoding as u8);
         buf.push(compression as u8);
         buf.extend_from_slice(&segments_compress.len().to_le_bytes());
-        buf.extend_from_slice(&segments_compress.len().to_le_bytes());
+        buf.extend_from_slice(&summary_compress.len().to_le_bytes());
 
         buf.extend(segments_compress);
         buf.extend(summary_compress);
@@ -132,10 +132,10 @@ impl SegmentInfo {
     }
 
     #[allow(unused)]
-    pub fn new_internal(segments: Vec<Arc<Location>>, summary: Statistics) -> Self {
+    pub fn new_internal(segments: Vec<Location>, summary: Statistics) -> Self {
         Self::InternalSegment(InternalSegmentInfo {
             format_version: SegmentInfo::VERSION,
-            son_segments: segments,
+            child_segments: segments,
             summary,
         })
     }
@@ -190,12 +190,12 @@ impl SegmentInfo {
 
             segment = Self::new_leaf(blocks, summary);
         } else if version == Self::VERSION {
-            let son_segments: Vec<Arc<Location>> =
+            let child_segments: Vec<Location> =
                 read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
             let summary: Statistics =
                 read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
 
-            segment = Self::new_internal(son_segments, summary);
+            segment = Self::new_internal(child_segments, summary);
         } else {
             panic!("read bad version for v5")
         }
