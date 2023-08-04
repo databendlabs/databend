@@ -318,7 +318,10 @@ impl Partition {
             columns_min_max,
             bloom_hashes: bloom_hash
                 .iter()
-                .map(|r| r.map_or_else(Vec::new, |v| once(*v).collect()))
+                .map(|r| {
+                    let v = r.cloned().unwrap_or(0);
+                    once(v).collect()
+                })
                 .collect(),
         })
     }
@@ -333,10 +336,7 @@ impl Partition {
         self.digests.insert(row_digest);
         assert_eq!(bloom_hash.len(), self.bloom_hashes.len());
         for (idx, v) in bloom_hash.iter().enumerate() {
-            if let Some(v) = v {
-                // TODO fix this, it seems to be safer to just set it to zero (and later, during pruning, ignore zeros)
-                self.bloom_hashes[idx].push(**v);
-            }
+            self.bloom_hashes[idx].push(v.cloned().unwrap_or(0));
         }
         for (column_idx, min_max) in self.columns_min_max.iter_mut().enumerate() {
             let value: Scalar = column_values[column_idx].row_scalar(row_idx)?.to_owned();
@@ -396,7 +396,7 @@ impl Partitioner {
         let mut partitions: HashMap<Scalar, Partition> = HashMap::new();
 
         // bloom hashes of the columns being pruned with
-        let maybe_bloom_hashes = self
+        let column_bloom_hashes = self
             .bloom_filter_column_info
             .iter()
             .filter_map(|(idx, typ)| {
@@ -407,9 +407,11 @@ impl Partitioner {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        // partition the input block by the left-most cluster key expression
         for row_idx in 0..data_block.num_rows() {
             if let Some(row_digest) = row_hash_of_columns(&on_conflict_column_values, row_idx)? {
-                let bloom_hash: Vec<Option<&u64>> = maybe_bloom_hashes
+                // collect the bloom hashes of the columns being pruned with
+                let row_bloom_hashes: Vec<Option<&u64>> = column_bloom_hashes
                     .iter()
                     .filter_map(|(hashes, validity)| match validity {
                         Some(v) if v.unset_bits() != 0 => v
@@ -423,14 +425,14 @@ impl Partitioner {
                 match partitions.entry(cluster_key_value) {
                     Entry::Occupied(ref mut entry) => entry.get_mut().push_row(
                         row_digest,
-                        &bloom_hash,
+                        &row_bloom_hashes,
                         &on_conflict_column_values,
                         row_idx,
                     )?,
                     Entry::Vacant(entry) => {
                         entry.insert(Partition::try_new_with_row(
                             row_digest,
-                            &bloom_hash,
+                            &row_bloom_hashes,
                             &on_conflict_column_values,
                             row_idx,
                         )?);

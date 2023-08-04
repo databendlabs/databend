@@ -638,22 +638,25 @@ impl AggregationContext {
                 Ok(filters) => {
                     // the caller ensures that the input_hashes is not empty
                     let row_count = input_hashes[0].len();
-                    let mut pruned = true;
+                    let mut block_pruned = true;
                     for row in 0..row_count {
                         let mut contains_row = true;
                         for (col_idx, col_hash) in input_hashes.iter().enumerate() {
                             let col_filer = &filters[col_idx];
-                            if !col_filer.contains_digest(col_hash[row]) {
+                            let hash = col_hash[row];
+                            if hash == 0 || !col_filer.contains_digest(hash) {
+                                // hash == 0 indicates that the column value is null, which equals nothing.
+                                // one column does not match, indicates that the row does not match
                                 contains_row = false;
                                 break;
                             }
                         }
                         if contains_row {
-                            pruned = false;
+                            block_pruned = false;
                             break;
                         }
                     }
-                    pruned
+                    block_pruned
                 }
                 Err(e) => {
                     // broken index should not stop us:
