@@ -112,7 +112,6 @@ use crate::pipelines::processors::transforms::RangeJoinState;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
-use crate::pipelines::processors::transforms::TransformMaterializedCte;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
@@ -1593,7 +1592,7 @@ impl PipelineBuilder {
             materialized_cte.cte_idx,
             &materialized_cte.left_output_columns,
         )?;
-        self.build_right_side_pipeline(&materialized_cte.right)
+        self.build_pipeline(&materialized_cte.right)
     }
 
     fn expand_left_side_pipeline(
@@ -1632,15 +1631,6 @@ impl PipelineBuilder {
         self.pipelines.push(left_side_pipeline.main_pipeline);
         self.pipelines
             .extend(left_side_pipeline.sources_pipelines.into_iter());
-        Ok(())
-    }
-
-    fn build_right_side_pipeline(&mut self, right_side: &PhysicalPlan) -> Result<()> {
-        self.build_pipeline(right_side)?;
-        self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformMaterializedCte::create(input, output);
-            Ok(ProcessorPtr::create(transform))
-        })?;
         Ok(())
     }
 }

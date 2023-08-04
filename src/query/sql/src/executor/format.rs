@@ -114,7 +114,10 @@ impl PhysicalPlan {
                 ))
             }
             PhysicalPlan::CteScan(cte_scan) => Ok(FormatTreeNode::with_children(
-                format!("CteScan: {}", cte_scan.cte_idx.0),
+                format!(
+                    "CteScan: {}, sub index: {}",
+                    cte_scan.cte_idx.0, cte_scan.cte_idx.1
+                ),
                 vec![],
             )),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
