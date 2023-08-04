@@ -218,7 +218,9 @@ impl ReplaceInterpreter {
             Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))
         });
 
-        let is_distributed = !self.ctx.get_cluster().is_empty();
+        let is_multi_node = !self.ctx.get_cluster().is_empty();
+        let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
+        let is_distributed = is_multi_node && !is_value_source;
         let table_is_empty = base_snapshot.segments.is_empty();
         let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let max_threads = self.ctx.get_settings().get_max_threads()?;
