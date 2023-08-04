@@ -434,10 +434,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry.register_passthrough_nullable_2_arg::<ArrayType<NumberType<NUM_TYPE>>, NumberType<NUM_TYPE>, BooleanType, _, _>(
                     "contains",
                     |_, lhs, rhs| {
-                        let has_true = match lhs {
-                            Some(lhs) => !(lhs.min > rhs.max || lhs.max < rhs.min),
-                            None => false,
-                        };
+                        let has_true = lhs.is_some_and(|lhs| !(lhs.min > rhs.max || lhs.max < rhs.min));
                         FunctionDomain::Domain(BooleanDomain {
                             has_false: true,
                             has_true,
@@ -496,10 +493,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         .register_passthrough_nullable_2_arg::<ArrayType<DateType>, DateType, BooleanType, _, _>(
             "contains",
             |_, lhs, rhs| {
-                let has_true = match lhs {
-                    Some(lhs) => !(lhs.min > rhs.max || lhs.max < rhs.min),
-                    None => false,
-                };
+                let has_true = lhs.is_some_and(|lhs| !(lhs.min > rhs.max || lhs.max < rhs.min));
                 FunctionDomain::Domain(BooleanDomain {
                     has_false: true,
                     has_true,
@@ -511,10 +505,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<ArrayType<TimestampType>, TimestampType, BooleanType, _, _>(
             "contains",
             |_, lhs, rhs| {
-                let has_true = match lhs {
-                    Some(lhs) => !(lhs.min > rhs.max || lhs.max < rhs.min),
-                    None => false,
-                };
+                let has_true = lhs.is_some_and(|lhs| !(lhs.min > rhs.max || lhs.max < rhs.min));
                 FunctionDomain::Domain(BooleanDomain {
                     has_false: true,
                     has_true,

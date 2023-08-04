@@ -17,12 +17,14 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::Semaphore;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::FieldIndex;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
 use rand::prelude::SliceRandom;
+use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 
@@ -96,6 +98,7 @@ impl FuseTable {
         num_partition: usize,
         block_builder: BlockBuilder,
         on_conflicts: Vec<OnConflictField>,
+        most_significant_on_conflict_field_index: Option<usize>,
         segments: &[Location],
         io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PipeItem>> {
@@ -106,6 +109,7 @@ impl FuseTable {
             let item = MergeIntoOperationAggregator::try_create(
                 ctx.clone(),
                 on_conflicts.clone(),
+                most_significant_on_conflict_field_index,
                 chunk_of_segment_locations,
                 self.operator.clone(),
                 self.table_info.schema(),
@@ -187,5 +191,27 @@ impl FuseTable {
             )
         })?;
         Ok(())
+    }
+
+    // choose the most significant bloom filter column.
+    //
+    // the one with the greatest number of number-of-distinct-values, will be kept.
+    // if all the columns do not support bloom index, return None
+    pub async fn choose_most_significant_bloom_filter_column(
+        &self,
+        on_conflicts: &[OnConflictField],
+    ) -> Result<Option<FieldIndex>> {
+        let col_stats_provider = self.column_statistics_provider().await?;
+        let iter = on_conflicts.iter().enumerate().filter_map(|(idx, key)| {
+            if !BloomIndex::supported_type(&key.table_field.data_type) {
+                None
+            } else {
+                let maybe_col_stats =
+                    col_stats_provider.column_statistics(key.table_field.column_id);
+                maybe_col_stats.map(|col_stats| (idx, col_stats.number_of_distinct_values))
+            }
+        });
+        // pick the one with the greatest NDV
+        Ok(iter.max_by(|l, r| l.1.cmp(&r.1)).map(|v| v.0))
     }
 }

@@ -85,10 +85,7 @@ impl StageTable {
 
     fn get_block_compact_thresholds_with_default(&self) -> BlockThresholds {
         let guard = self.block_compact_threshold.lock();
-        match guard.deref() {
-            None => BlockThresholds::default(),
-            Some(t) => *t,
-        }
+        guard.deref().unwrap_or_default()
     }
 }
 
@@ -187,14 +184,11 @@ impl Table for StageTable {
         let stage_info = stage_table_info.stage_info.clone();
         let operator = StageTable::get_op(&stage_table_info.stage_info)?;
         let compact_threshold = self.get_block_compact_thresholds_with_default();
-        let on_error_map = match ctx.get_on_error_map() {
-            Some(m) => m,
-            None => {
-                let m = Arc::new(DashMap::new());
-                ctx.set_on_error_map(m.clone());
-                m
-            }
-        };
+        let on_error_map = ctx.get_on_error_map().unwrap_or_else(|| {
+            let m = Arc::new(DashMap::new());
+            ctx.set_on_error_map(m.clone());
+            m
+        });
         let input_ctx = Arc::new(InputContext::try_create_from_copy(
             operator,
             settings,

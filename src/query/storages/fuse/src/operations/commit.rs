@@ -62,7 +62,9 @@ use crate::operations::common::AbortOperation;
 use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
+use crate::operations::common::MutationKind;
 use crate::operations::common::TableMutationAggregator;
+use crate::operations::common::TransformSerializeSegment;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
 
@@ -80,7 +82,14 @@ impl FuseTable {
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
+        let block_thresholds = self.get_block_thresholds();
+
         pipeline.try_resize(1)?;
+
+        pipeline.add_transform(|input, output| {
+            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
+            proc.into_processor()
+        })?;
 
         pipeline.add_transform(|input, output| {
             let aggregator = TableMutationAggregator::create(

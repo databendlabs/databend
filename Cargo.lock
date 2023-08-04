@@ -90,6 +90,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
 
 [[package]]
+name = "android-tzdata"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e999941b234f3131b00bc13c22d06e8c5ff726d1b6318ac7eb276997bbb4fef0"
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -866,13 +872,13 @@ dependencies = [
 
 [[package]]
 name = "backon"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f34fac4d7cdaefa2deded0eda2d5d59dbfd43370ff3f856209e72340ae84c294"
+checksum = "0c1a6197b2120bb2185a267f6515038558b019e92b832bb0320e96d66268dcf9"
 dependencies = [
- "futures",
+ "fastrand",
+ "futures-core",
  "pin-project",
- "rand 0.8.5",
  "tokio",
 ]
 
@@ -1443,13 +1449,13 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chrono"
-version = "0.4.24"
+version = "0.4.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e3c5919066adf22df73762e50cffcde3a758f2a848b113b586d1f86728b673b"
+checksum = "ec837a71355b28f6556dbd569b37b3f363091c0bd4b2e735674521b4c5fd9bc5"
 dependencies = [
+ "android-tzdata",
  "iana-time-zone",
  "js-sys",
- "num-integer",
  "num-traits",
  "serde",
  "time 0.1.43",
@@ -2791,17 +2797,21 @@ dependencies = [
  "common-catalog",
  "common-exception",
  "common-expression",
+ "common-functions",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-storage",
- "dashmap",
  "futures",
  "icelake",
+ "match-template",
  "minitrace",
  "opendal",
  "parquet",
  "serde",
+ "storages-common-pruner",
+ "storages-common-table-meta",
+ "tokio",
  "typetag",
 ]
 
@@ -5877,13 +5887,12 @@ dependencies = [
 
 [[package]]
 name = "hdrs"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70a8d6dab41a27fd3825810f6413f16f15733c84114504e41955516e4156676c"
+checksum = "dd139e8f6c58950322dc73060b8c23b80be07d235dd2eaf5c7c821c1d91eb469"
 dependencies = [
- "async-lock",
  "blocking",
- "errno 0.2.8",
+ "errno 0.3.1",
  "futures",
  "hdfs-sys",
  "libc",
@@ -6186,9 +6195,9 @@ dependencies = [
 
 [[package]]
 name = "icelake"
-version = "0.0.8"
+version = "0.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a6b3769f70fb50aa3d4e34d9359b538bc47d4a8f8a1eb546b8e508584b2c287"
+checksum = "67f4bbdb1a0f79b4cb3b797c824159b1002d35f381e6dbf2fbd8e14e07884390"
 dependencies = [
  "anyhow",
  "apache-avro",
@@ -6199,8 +6208,9 @@ dependencies = [
  "chrono",
  "faster-hex",
  "futures",
- "lazy_static",
+ "once_cell",
  "opendal",
+ "ordered-float 3.7.0",
  "parquet",
  "rust_decimal",
  "serde",
@@ -7532,9 +7542,8 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a37de9fe637d53550bf3f76d5c731f69cb6f9685ada6afd390ada98994a3f91"
+version = "0.39.0"
+source = "git+https://github.com/apache/incubator-opendal?rev=f02d627#f02d627a582d1f68af048e4f0db84eb1102f271d"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -7557,7 +7566,7 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost",
- "quick-xml 0.27.1",
+ "quick-xml 0.29.0",
  "redis",
  "reqsign",
  "reqwest",
@@ -8623,7 +8632,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset 0.9.0",
- "parking_lot 0.12.1",
+ "parking_lot 0.11.2",
  "pyo3-build-config 0.19.1",
  "pyo3-ffi",
  "pyo3-macros",
@@ -8728,19 +8737,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.27.1"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffc053f057dd768a56f62cd7e434c42c831d296968997e9ac1f76ea7c2d14c41"
-dependencies = [
- "memchr",
- "serde",
-]
-
-[[package]]
-name = "quick-xml"
-version = "0.28.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ce5e73202a820a31f8a0ee32ada5e21029c81fd9e3ebf668a40832e4219d9d1"
+checksum = "81b9228215d82c7b61490fec1de287136b5de6f5700f6e58ea9ad61a7964ca51"
 dependencies = [
  "memchr",
  "serde",
@@ -8892,9 +8891,9 @@ dependencies = [
 
 [[package]]
 name = "redis"
-version = "0.22.3"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa8455fa3621f6b41c514946de66ea0531f57ca017b2e6c7cc368035ea5b46df"
+checksum = "ff5d95dd18a4d76650f0c2607ed8ebdbf63baf9cb934e1c233cd220c694db1d7"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -8907,7 +8906,9 @@ dependencies = [
  "pin-project-lite",
  "ryu",
  "sha1_smol",
+ "socket2",
  "tokio",
+ "tokio-retry",
  "tokio-util",
  "url",
 ]
@@ -8987,9 +8988,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.13.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6cb65eb3405f9c2de5c18bfc37338d6bbdb2c35eb8eb0e946208cbb564e4833"
+checksum = "3228e570df74d69d3d3236a71371f1edd748a3e4eb728ea1f29d403bc10fc727"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9004,7 +9005,7 @@ dependencies = [
  "log",
  "once_cell",
  "percent-encoding",
- "quick-xml 0.28.2",
+ "quick-xml 0.29.0",
  "rand 0.8.5",
  "reqwest",
  "rsa 0.9.2",
@@ -10794,6 +10795,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-retry"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f57eb36ecbe0fc510036adff84824dd3c24bb781e21bfa67b69d556aa85214f"
+dependencies = [
+ "pin-project",
+ "rand 0.8.5",
+ "tokio",
+]
+
+[[package]]
 name = "tokio-rustls"
 version = "0.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11175,7 +11187,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

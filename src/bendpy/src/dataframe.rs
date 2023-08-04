@@ -72,6 +72,18 @@ impl PyDataFrame {
         Ok(blocks.box_render(bs.bs_max_display_rows, bs.bs_max_width, bs.bs_max_width))
     }
 
+    #[pyo3(signature = (num=20))]
+    fn show(&self, py: Python, num: usize) -> PyResult<()> {
+        let blocks = self.collect(py)?;
+        let bs = self.get_box();
+        let result = blocks.box_render(num, bs.bs_max_width, bs.bs_max_width);
+
+        // Note that println! does not print to the Python debug console and is not visible in notebooks for instance
+        let print = py.import("builtins")?.getattr("print")?;
+        print.call1((result,))?;
+        Ok(())
+    }
+
     pub fn collect(&self, py: Python) -> PyResult<PyDataBlocks> {
         let blocks = wait_for_future(py, self.df_collect());
         let display_width = self.get_box();

@@ -1,38 +1,37 @@
 ---
 title: QUANTILE_TDIGEST
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-Aggregate function.
+<FunctionDescription description="Introduced or updated: v1.2.41"/>
 
-The QUANTILE_TDIGEST() function computes an approximate quantile of a numeric data sequence using the [t-digest](https://github.com/tdunning/t-digest/blob/master/docs/t-digest-paper/histo.pdf) algorithm.
+Computes an approximate quantile of a numeric data sequence using the [t-digest](https://github.com/tdunning/t-digest/blob/master/docs/t-digest-paper/histo.pdf) algorithm.
 
-:::caution
-NULL values are not counted.
+:::note
+NULL values are not included in the calculation.
 :::
 
 ## Syntax
 
 ```sql
-QUANTILE_TDIGEST(<levels>)(<expr>)
-    
-QUANTILE_TDIGEST(level1, level2, ...)(<expr>)
+QUANTILE_TDIGEST(<level1>[, <level2>, ...])(<expr>)
 ```
 
 ## Arguments
 
 | Arguments   | Description                                                                                                                                     |
 |-------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| `<level(s)` | level(s) of quantile. Each level is constant floating-point number from 0 to 1. We recommend using a level value in the range of [0.01, 0.99]   |
+| `<level n>` | A level of quantile represents a constant floating-point number ranging from 0 to 1. It is recommended to use a level value in the range of [0.01, 0.99].   |
 | `<expr>`    | Any numerical expression                                                                                                                        |
 
 ## Return Type
 
-Float64 or float64 array based on level number.
+Returns either a Float64 value or an array of Float64 values, depending on the number of quantile levels specified.
 
 ## Example
 
-**Create a Table and Insert Sample Data**
 ```sql
+-- Create a table and insert sample data
 CREATE TABLE sales_data (
   id INT,
   sales_person_id INT,
@@ -45,18 +44,18 @@ VALUES (1, 1, 5000),
        (3, 3, 6000),
        (4, 4, 6500),
        (5, 5, 7000);
-```
 
-**Query Demo: Calculate 50th Percentile (Median) of Sales Amount using Interpolation**
-```sql
 SELECT QUANTILE_TDIGEST(0.5)(sales_amount) AS median_sales_amount
 FROM sales_data;
-```
 
-**Result**
-```sql
-|  median_sales_amount  |
-|-----------------------|
-|        6000.0         |
-```
+median_sales_amount|
+-------------------+
+             6000.0|
 
+SELECT QUANTILE_TDIGEST(0.5, 0.8)(sales_amount)
+FROM sales_data;
+
+quantile_tdigest(0.5, 0.8)(sales_amount)|
+----------------------------------------+
+[6000.0,7000.0]                         |
+```

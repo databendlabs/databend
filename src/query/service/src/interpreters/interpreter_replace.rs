@@ -166,8 +166,6 @@ impl Interpreter for ReplaceInterpreter {
                             }
                             Err(e) => { info!("execute replace into finished successfully. table optimization job failed. {:?}", e)}
                         }
-
-                        return Ok(());
                     }
                     metrics_inc_replace_execution_time_ms(start.elapsed().as_millis() as u64);
                     Ok(())

@@ -72,6 +72,8 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -460,6 +462,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        todo!()
+    }
+
     fn get_fuse_version(&self) -> String {
         todo!()
     }
@@ -693,6 +699,13 @@ impl Catalog for FakedCatalog {
         } else {
             self.cat.update_table_meta(table_info, req).await
         }
+    }
+
+    async fn set_table_column_mask_policy(
+        &self,
+        _req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply> {
+        todo!()
     }
 
     async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {

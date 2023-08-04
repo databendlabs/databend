@@ -94,13 +94,13 @@ fn test_column_statistic() -> Result<()> {
             .map(|i| column.index(i).unwrap().to_owned())
             .collect();
         assert_eq!(
-            &stats.min,
+            stats.min(),
             values.iter().min().unwrap(),
             "checking min of col {}",
             i
         );
         assert_eq!(
-            &stats.max,
+            stats.max(),
             values.iter().max().unwrap(),
             "checking max of col {}",
             i

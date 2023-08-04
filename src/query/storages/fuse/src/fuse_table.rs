@@ -289,14 +289,11 @@ impl FuseTable {
         } else {
             self.snapshot_loc().await?
         };
-        match location_opt {
-            Some(loc) => Ok(TableMetaLocationGenerator::snapshot_version(loc.as_str())),
-            None => {
-                // No snapshot location here, indicates that there are no data of this table yet
-                // in this case, we just returns the current snapshot version
-                Ok(TableSnapshot::VERSION)
-            }
-        }
+        // If no snapshot location here, indicates that there are no data of this table yet
+        // in this case, we just returns the current snapshot version
+        Ok(location_opt.map_or(TableSnapshot::VERSION, |loc| {
+            TableMetaLocationGenerator::snapshot_version(loc.as_str())
+        }))
     }
 
     #[async_backtrace::framed]
@@ -783,10 +780,10 @@ impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
                 .column_distinct_values
                 .as_ref()
                 .map_or(self.row_count, |map| map.get(&column_id).map_or(0, |v| *v));
-            ndv = self.adjust_ndv_by_min_max(ndv, s.min.clone(), s.max.clone());
+            ndv = self.adjust_ndv_by_min_max(ndv, s.min().clone(), s.max().clone());
             ColumnStatistics {
-                min: s.min.clone(),
-                max: s.max.clone(),
+                min: s.min().clone(),
+                max: s.max().clone(),
                 null_count: s.null_count,
                 number_of_distinct_values: ndv,
             }

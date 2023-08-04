@@ -36,10 +36,9 @@ impl PartInfo for NumbersPartInfo {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<NumbersPartInfo>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<NumbersPartInfo>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {
@@ -57,12 +56,11 @@ impl NumbersPartInfo {
     }
 
     pub fn from_part(info: &PartInfoPtr) -> Result<&NumbersPartInfo> {
-        match info.as_any().downcast_ref::<NumbersPartInfo>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
+        info.as_any()
+            .downcast_ref::<NumbersPartInfo>()
+            .ok_or(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to NumbersPartInfo.",
-            )),
-        }
+            ))
     }
 }
 

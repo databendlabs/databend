@@ -58,6 +58,8 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -81,8 +83,8 @@ use common_storage::DataOperator;
 use futures::TryStreamExt;
 use opendal::Metakey;
 
-use crate::context::ICEBERG_CONTEXT;
 use crate::database::IcebergDatabase;
+use crate::table::IcebergTable;
 
 pub const ICEBERG_CATALOG: &str = "iceberg";
 
@@ -227,9 +229,18 @@ impl Catalog for IcebergCatalog {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        ICEBERG_CONTEXT.get(&table_info.desc).ok_or_else(|| {
-            ErrorCode::UnknownTable(format!("Table {} does not exist", table_info.desc))
-        })
+        let table_sp = table_info
+            .meta
+            .storage_params
+            .clone()
+            .ok_or(ErrorCode::BadArguments(
+                "table storage params not set, this is not a valid table info for iceberg table",
+            ))?;
+
+        let op = DataOperator::try_new(&table_sp)?;
+        let table = IcebergTable::try_new(op, table_info.clone())?;
+
+        Ok(Arc::new(table))
     }
 
     #[async_backtrace::framed]
@@ -315,6 +326,14 @@ impl Catalog for IcebergCatalog {
         _table_info: &TableInfo,
         _req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn set_table_column_mask_policy(
+        &self,
+        _req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply> {
         unimplemented!()
     }
 

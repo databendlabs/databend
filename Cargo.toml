@@ -105,7 +105,7 @@ members = [
 [workspace.dependencies]
 # databend maintains:
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.37", features = [
+opendal = { version = "0.39", features = [
     "layers-tracing",
     "layers-metrics",
     "services-ipfs",
@@ -221,3 +221,4 @@ arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e113
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "693c265" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 croaring = { git = "https://github.com/RoaringBitmap/croaring-rs", rev = "13a71b4" }
+opendal = { git = "https://github.com/apache/incubator-opendal", rev = "f02d627" }

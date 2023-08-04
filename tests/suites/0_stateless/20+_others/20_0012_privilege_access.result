@@ -1,34 +1,34 @@
 information_schema
 system
 test -- insert
-ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Insert] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with role public.
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Insert] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public].
 1
 2
 test -- update
-ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Update] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with role public.
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Update] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2].
 2
 3
 test -- delete
-ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Delete] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with role public.
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Delete] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2].
 1
 test -- optimize table
-ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Super] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with role public.
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Super] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2].
 1
 test -- select
-ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'default'.'t20_0012_a' for user 'test-user'@'%' with role public.
 1
-ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'default'.'t20_0012_b' for user 'test-user'@'%' with role public.
 1
-ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'default2'.'v_t20_0012' for user 'test-user'@'%' with role public.
+1
+1
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'default2'.'v_t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2].
 1
 test -- clustering_information
-ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'system'.'clustering_information' for user 'test-user'@'%' with role public.
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'system'.'clustering_information' for user 'test-user'@'%' with roles [public,test-role1,test-role2].
 1
-ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'system'.'fuse_snapshot' for user 'test-user'@'%' with role public.
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'system'.'fuse_snapshot' for user 'test-user'@'%' with roles [public,test-role1,test-role2].
 1
-ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'system'.'fuse_segment' for user 'test-user'@'%' with role public.
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'system'.'fuse_segment' for user 'test-user'@'%' with roles [public,test-role1,test-role2].
 1
-ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'system'.'fuse_block' for user 'test-user'@'%' with role public.
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'system'.'fuse_block' for user 'test-user'@'%' with roles [public,test-role1,test-role2].
 1
 GRANT SELECT ON 'default'.'default'.* TO 'a'@'%'
 GRANT SELECT ON 'default'.'grant_db'.'t' TO 'a'@'%'

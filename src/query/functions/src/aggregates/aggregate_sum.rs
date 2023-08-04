@@ -56,13 +56,18 @@ pub trait SumState: Send + Sync + Default + 'static {
     fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()>;
     fn accumulate_keys(places: &[StateAddr], offset: usize, columns: &Column) -> Result<()>;
 
-    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
+    fn merge_result(
+        &mut self,
+        builder: &mut ColumnBuilder,
+        window_size: &Option<usize>,
+    ) -> Result<()>;
 
     fn merge_avg_result(
         &mut self,
         builder: &mut ColumnBuilder,
         count: u64,
         scale_add: u8,
+        window_size: &Option<usize>,
     ) -> Result<()>;
 }
 
@@ -114,7 +119,11 @@ where
         Ok(())
     }
 
-    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &mut self,
+        builder: &mut ColumnBuilder,
+        _window_size: &Option<usize>,
+    ) -> Result<()> {
         let builder = NumberType::<TSum>::try_downcast_builder(builder).unwrap();
         builder.push(self.value);
         Ok(())
@@ -125,6 +134,7 @@ where
         builder: &mut ColumnBuilder,
         count: u64,
         _scale_add: u8,
+        _window_size: &Option<usize>,
     ) -> Result<()> {
         let builder = NumberType::<F64>::try_downcast_builder(builder).unwrap();
 
@@ -222,7 +232,11 @@ where T: Decimal
         self.check_over_flow()
     }
 
-    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &mut self,
+        builder: &mut ColumnBuilder,
+        _window_size: &Option<usize>,
+    ) -> Result<()> {
         let builder = T::try_downcast_builder(builder).unwrap();
         builder.push(self.value);
         Ok(())
@@ -233,6 +247,7 @@ where T: Decimal
         builder: &mut ColumnBuilder,
         count: u64,
         scale_add: u8,
+        _window_size: &Option<usize>,
     ) -> Result<()> {
         let builder = T::try_downcast_builder(builder).unwrap();
 
@@ -327,7 +342,7 @@ where State: SumState
     #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
-        state.merge_result(builder)
+        state.merge_result(builder, &None)
     }
 }
 

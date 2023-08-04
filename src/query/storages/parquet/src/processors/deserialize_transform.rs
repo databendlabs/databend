@@ -49,6 +49,7 @@ use opendal::Operator;
 use crate::parquet_part::ParquetPart;
 use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_part::ParquetSmallFilesPart;
+use crate::parquet_reader::BlockIterator;
 use crate::parquet_reader::IndexedReaders;
 use crate::parquet_reader::ParquetPartData;
 use crate::parquet_reader::ParquetReader;
@@ -77,10 +78,11 @@ pub struct ParquetDeserializeTransform {
     scan_progress: Arc<Progress>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    output_data: Option<DataBlock>,
+    output_data: Vec<DataBlock>,
 
     // data from input
     parts: VecDeque<(PartInfoPtr, ParquetPartData)>,
+    current_row_group: Option<Box<dyn BlockIterator>>,
 
     src_schema: DataSchemaRef,
     output_schema: DataSchemaRef,
@@ -116,10 +118,11 @@ impl ParquetDeserializeTransform {
                 scan_progress,
                 input,
                 output,
-                output_data: None,
+                output_data: vec![],
 
                 parts: VecDeque::new(),
 
+                current_row_group: None,
                 src_schema,
                 output_schema,
 
@@ -141,7 +144,7 @@ impl ParquetDeserializeTransform {
             bytes: data_block.memory_size(),
         };
         self.scan_progress.incr(&progress_values);
-        self.output_data = Some(data_block);
+        self.output_data.push(data_block);
         Ok(())
     }
 
@@ -189,7 +192,6 @@ impl ParquetDeserializeTransform {
             .row_selection
             .as_ref()
             .map(|sel| intervals_to_bitmap(sel, part.num_rows));
-
         // this means it's empty projection
         if readers.is_empty() {
             let data_block = DataBlock::new(vec![], part.num_rows);
@@ -302,8 +304,19 @@ impl ParquetDeserializeTransform {
                 }
             }
             None => {
+                // for now only use current_row_group when prewhere_info is None
                 let chunks = self.remain_reader.read_from_readers(readers)?;
-                self.remain_reader.deserialize(part, chunks, row_selection)
+                let mut current_row_group =
+                    self.remain_reader
+                        .get_deserializer(part, chunks, row_selection)?;
+                let block = match current_row_group.next() {
+                    None => return Ok(None),
+                    Some(block) => block?,
+                };
+                if current_row_group.has_next() {
+                    self.current_row_group = Some(current_row_group)
+                }
+                Ok(block)
             }
         }?;
 
@@ -331,12 +344,12 @@ impl Processor for ParquetDeserializeTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data_block) = self.output_data.take() {
+        if let Some(data_block) = self.output_data.pop() {
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
 
-        if !self.parts.is_empty() {
+        if self.current_row_group.is_some() || !self.parts.is_empty() {
             if !self.input.has_data() {
                 self.input.set_need_data();
             }
@@ -362,6 +375,15 @@ impl Processor for ParquetDeserializeTransform {
     }
 
     fn process(&mut self) -> Result<()> {
+        if let Some(deserializer) = &mut self.current_row_group {
+            let data_block = deserializer.next().unwrap()?;
+            self.output_data.push(data_block);
+            if !deserializer.has_next() {
+                self.current_row_group = None
+            }
+            return Ok(());
+        }
+
         if let Some((part, data)) = self.parts.pop_front() {
             let part = ParquetPart::from_part(&part)?;
             match (&part, data) {
@@ -372,14 +394,7 @@ impl Processor for ParquetDeserializeTransform {
                 }
                 (ParquetPart::SmallFiles(p), ParquetPartData::SmallFiles(buffers)) => {
                     let blocks = self.process_small_files(p, buffers)?;
-                    if !blocks.is_empty() {
-                        let block = if blocks.len() > 1 {
-                            DataBlock::concat(&blocks)?
-                        } else {
-                            blocks[0].clone()
-                        };
-                        self.add_block(block)?;
-                    }
+                    self.add_block(DataBlock::concat(&blocks)?)?;
                 }
                 _ => {
                     unreachable!("wrong type ParquetPartData for ParquetPart")

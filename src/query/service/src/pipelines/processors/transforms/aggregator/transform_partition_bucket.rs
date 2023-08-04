@@ -144,15 +144,47 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         Ok(self.initialized_all_inputs)
     }
 
-    fn add_bucket(&mut self, data_block: DataBlock) -> isize {
+    fn add_bucket(&mut self, mut data_block: DataBlock) -> isize {
         if let Some(block_meta) = data_block.get_meta() {
             if let Some(block_meta) = AggregateMeta::<Method, V>::downcast_ref_from(block_meta) {
                 let (bucket, res) = match block_meta {
                     AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
-                    AggregateMeta::Spilled(payload) => (payload.bucket, SINGLE_LEVEL_BUCKET_NUM),
+                    AggregateMeta::BucketSpilled(payload) => {
+                        (payload.bucket, SINGLE_LEVEL_BUCKET_NUM)
+                    }
                     AggregateMeta::Serialized(payload) => (payload.bucket, payload.bucket),
                     AggregateMeta::HashTable(payload) => (payload.bucket, payload.bucket),
+                    AggregateMeta::Spilled(_) => {
+                        let meta = data_block.take_meta().unwrap();
+
+                        if let Some(AggregateMeta::Spilled(buckets_payload)) =
+                            AggregateMeta::<Method, V>::downcast_from(meta)
+                        {
+                            for bucket_payload in buckets_payload {
+                                match self.buckets_blocks.entry(bucket_payload.bucket) {
+                                    Entry::Vacant(v) => {
+                                        v.insert(vec![DataBlock::empty_with_meta(
+                                            AggregateMeta::<Method, V>::create_bucket_spilled(
+                                                bucket_payload,
+                                            ),
+                                        )]);
+                                    }
+                                    Entry::Occupied(mut v) => {
+                                        v.get_mut().push(DataBlock::empty_with_meta(
+                                            AggregateMeta::<Method, V>::create_bucket_spilled(
+                                                bucket_payload,
+                                            ),
+                                        ));
+                                    }
+                                };
+                            }
+
+                            return SINGLE_LEVEL_BUCKET_NUM;
+                        }
+
+                        unreachable!()
+                    }
                 };
 
                 if bucket > SINGLE_LEVEL_BUCKET_NUM {
@@ -381,6 +413,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             Some(agg_block_meta) => {
                 let data_blocks = match agg_block_meta {
                     AggregateMeta::Spilled(_) => unreachable!(),
+                    AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Serialized(payload) => self.partition_block(payload)?,

@@ -62,6 +62,7 @@ use crate::plans::ShowRolesPlan;
 use crate::plans::UseDatabasePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::TypeChecker;
@@ -79,6 +80,8 @@ pub struct Binder {
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
+    // Save the bound context for materialized cte, the key is cte_idx
+    pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
 }
 
 impl<'a> Binder {
@@ -93,7 +96,13 @@ impl<'a> Binder {
             catalogs,
             name_resolution_ctx,
             metadata,
+            m_cte_bound_ctx: Default::default(),
         }
+    }
+
+    // After the materialized cte was bound, add it to `m_cte_bound_ctx`
+    pub fn set_m_cte_bound_ctx(&mut self, cte_idx: IndexType, bound_ctx: BindContext) {
+        self.m_cte_bound_ctx.insert(cte_idx, bound_ctx);
     }
 
     #[async_backtrace::framed]

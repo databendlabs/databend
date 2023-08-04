@@ -111,13 +111,13 @@ pub fn gen_columns_statistics(
         };
 
         let in_memory_size = col.memory_size() as u64;
-        let col_stats = ColumnStatistics {
+        let col_stats = ColumnStatistics::new(
             min,
             max,
-            null_count: unset_bits as u64,
+            unset_bits as u64,
             in_memory_size,
-            distinct_of_values: Some(distinct_of_values),
-        };
+            Some(distinct_of_values),
+        );
 
         statistics.insert(column_id, col_stats);
     }

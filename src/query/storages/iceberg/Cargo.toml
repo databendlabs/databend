@@ -14,21 +14,28 @@ common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
+common-functions = { path = "../../functions" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-storage = { path = "../../../common/storage" }
+storages-common-pruner = { path = "../common/pruner" }
+storages-common-table-meta = { path = "../common/table-meta" }
 
 arrow-array = "43.0.0"
 arrow-schema = "43.0.0"
 async-backtrace = { workspace = true }
 async-trait = "0.1"
 chrono = { workspace = true }
-dashmap = "5"
 futures = "0.3"
-icelake = { version = "0.0.8", features = ["arrow_schema", "io_parquet"] }
+icelake = { version = "0.0.9" }
+match-template = "0.0.1"
 minitrace = { workspace = true }
 opendal = { workspace = true }
 parquet = "43.0.0"
 serde = { workspace = true }
+tokio = { workspace = true }
 typetag = "0.2"
+
+[package.metadata.cargo-machete]
+ignored = ["match-template"]
