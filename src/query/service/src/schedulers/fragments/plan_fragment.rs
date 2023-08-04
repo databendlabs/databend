@@ -258,7 +258,7 @@ impl PlanFragment {
             partition_reshuffle.push((executor, vec![part.clone()]));
         }
 
-        for (executor, parts) in partitions.iter() {
+        for (executor, parts) in partition_reshuffle.iter() {
             let mut plan = self.plan.clone();
 
             let mut replace_replace_partial = ReplaceReplaceInto {
