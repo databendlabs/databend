@@ -29,9 +29,9 @@ use common_meta_raft_store::key_spaces::RaftStoreEntry;
 use common_meta_raft_store::log::RaftLog;
 use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_raft_store::ondisk::TREE_HEADER;
-use common_meta_raft_store::sm_v002::leveled_store::level_data::LevelData;
 use common_meta_raft_store::sm_v002::SnapshotStoreError;
 use common_meta_raft_store::sm_v002::SnapshotStoreV002;
+use common_meta_raft_store::sm_v002::SnapshotViewV002;
 use common_meta_raft_store::sm_v002::SMV002;
 use common_meta_raft_store::state::RaftState;
 use common_meta_raft_store::state::RaftStateKey;
@@ -222,7 +222,9 @@ impl StoreInner {
 
         info!(id = self.id; "do_build_snapshot start");
 
-        let (mut snapshot_meta, data_entries) = self.build_compacted_snapshot().await;
+        let snapshot_view = self.build_compacted_snapshot().await;
+
+        let mut snapshot_meta = snapshot_view.build_snapshot_meta();
 
         info!("do_build_snapshot writing snapshot start");
 
@@ -236,7 +238,7 @@ impl StoreInner {
 
             move || {
                 Self::testing_sleep("write", sleep);
-                Self::write_snapshot(sto, meta, data_entries)
+                Self::write_snapshot(sto, meta, snapshot_view.export())
             }
         })?;
 
@@ -252,7 +254,6 @@ impl StoreInner {
         info!(snapshot_size = as_display!(snapshot_size); "do_build_snapshot complete");
 
         {
-            // TODO: replace StoredSnapshot with SnapshotMeta?
             let snapshot = StoredSnapshot {
                 meta: snapshot_meta.clone(),
             };
@@ -308,48 +309,35 @@ impl StoreInner {
         }
     }
 
-    /// Compact a snapshot and return the meta and data entries.
-    async fn build_compacted_snapshot(&self) -> (SnapshotMeta, Vec<RaftStoreEntry>) {
+    /// Build and compact a snapshot view.
+    ///
+    /// - Take a snapshot view of the current state machine;
+    /// - Compact multi levels in the snapshot view into one to get rid of tombstones;
+    async fn build_compacted_snapshot(&self) -> SnapshotViewV002 {
         let mut snapshot_view = {
             let mut s = self.state_machine.write().await;
             s.full_snapshot_view()
         };
 
-        let snapshot_meta = Self::build_snapshot_meta(snapshot_view.top().data_ref());
-
         // Compact multi levels into one to get rid of tombstones
         // Move heavy load task to a blocking thread pool.
-        let data_entries = tokio::task::block_in_place({
+        tokio::task::block_in_place({
             let s = &mut snapshot_view;
             let sleep = self.get_delay_config("compact").await;
 
             move || {
                 Self::testing_sleep("compact", sleep);
-
                 s.compact();
-                s.export().collect::<Vec<_>>()
             }
         });
 
+        // State machine ensures no modification to `base` during snapshotting.
         {
             let mut s = self.state_machine.write().await;
             s.replace_base(&snapshot_view);
         }
 
-        (snapshot_meta, data_entries)
-    }
-
-    fn build_snapshot_meta(level_data: &LevelData) -> SnapshotMeta {
-        let last_applied = *level_data.last_applied_ref();
-        let last_membership = level_data.last_membership_ref().clone();
-
-        let snapshot_id = MetaSnapshotId::new_with_epoch(last_applied);
-
-        SnapshotMeta {
-            snapshot_id: snapshot_id.to_string(),
-            last_log_id: last_applied,
-            last_membership,
-        }
+        snapshot_view
     }
 
     fn write_snapshot(
