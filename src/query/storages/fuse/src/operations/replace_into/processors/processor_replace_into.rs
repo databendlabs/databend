@@ -58,7 +58,7 @@ impl ReplaceIntoProcessor {
         ctx: &dyn TableContext,
         on_conflict_fields: Vec<OnConflictField>,
         cluster_keys: Vec<RemoteExpr<String>>,
-        most_significant_on_conflict_field_index: Vec<FieldIndex>,
+        bloom_filter_column_indexes: Vec<FieldIndex>,
         table_schema: &TableSchema,
         target_table_empty: bool,
         table_range_idx: HashMap<ColumnId, ColumnStatistics>,
@@ -67,7 +67,7 @@ impl ReplaceIntoProcessor {
             ctx,
             on_conflict_fields,
             cluster_keys,
-            most_significant_on_conflict_field_index,
+            bloom_filter_column_indexes,
             table_schema,
             table_range_idx,
         )?;

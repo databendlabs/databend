@@ -68,7 +68,7 @@ impl ReplaceIntoMutator {
         ctx: &dyn TableContext,
         on_conflict_fields: Vec<OnConflictField>,
         cluster_keys: Vec<RemoteExpr<String>>,
-        most_significant_on_conflict_field_index: Vec<FieldIndex>,
+        bloom_filter_column_indexes: Vec<FieldIndex>,
         table_schema: &TableSchema,
         table_range_idx: HashMap<ColumnId, ColumnStatistics>,
     ) -> Result<Self> {
@@ -79,7 +79,7 @@ impl ReplaceIntoMutator {
                 ctx,
                 on_conflict_fields.clone(),
                 &cluster_keys,
-                most_significant_on_conflict_field_index,
+                bloom_filter_column_indexes,
                 table_schema,
             )?)
         } else {
@@ -286,20 +286,21 @@ impl ReplaceIntoMutator {
     }
 }
 
+type RowBloomHashes = Vec<u64>;
 #[derive(Debug)]
 struct Partition {
     // digests of on-conflict fields, of all the rows in this partition
     digests: HashSet<UniqueKeyDigest>,
     // min max of all the on-conflict fields in this partition
     columns_min_max: Vec<MinMax<Scalar>>,
-    // bloom hashes of the most significant on-conflict field
-    bloom_hashes: Vec<Vec<u64>>,
+    // bloom hash of the on-conflict columns that will apply bloom pruning
+    bloom_hashes: Vec<RowBloomHashes>,
 }
 
 impl Partition {
     fn try_new_with_row(
         row_digest: u128,
-        // TODO refine
+        // TODO refine this?
         bloom_hash: &[Option<&u64>],
         column_values: &[&Value<AnyType>],
         row_idx: usize,
@@ -330,11 +331,10 @@ impl Partition {
         row_idx: usize,
     ) -> Result<()> {
         self.digests.insert(row_digest);
-
-        // TODO buggy
         assert_eq!(bloom_hash.len(), self.bloom_hashes.len());
         for (idx, v) in bloom_hash.iter().enumerate() {
             if let Some(v) = v {
+                // TODO fix this, it seems to be safer to just set it to zero (and later, during pruning, ignore zeros)
                 self.bloom_hashes[idx].push(**v);
             }
         }
@@ -350,7 +350,7 @@ struct Partitioner {
     on_conflict_fields: Vec<OnConflictField>,
     func_ctx: FunctionContext,
     left_most_cluster_key: Expr,
-    // the most significant on-conflict field index chosen, if any
+    // information about the columns that will apply bloom pruning
     bloom_filter_column_info: Vec<(FieldIndex, DataType)>,
 }
 
@@ -359,7 +359,7 @@ impl Partitioner {
         ctx: &dyn TableContext,
         on_conflict_fields: Vec<OnConflictField>,
         cluster_keys: &[RemoteExpr<String>],
-        most_significant_on_conflict_field_index: Vec<FieldIndex>,
+        bloom_filter_column_indexes: Vec<FieldIndex>,
         table_schema: &TableSchema,
     ) -> Result<Self> {
         let left_most_cluster_key = &cluster_keys[0];
@@ -368,7 +368,7 @@ impl Partitioner {
             .project_column_ref(|name| table_schema.index_of(name).unwrap());
         let func_ctx = ctx.get_function_context()?;
 
-        let bloom_filter_column_info = most_significant_on_conflict_field_index
+        let bloom_filter_column_info = bloom_filter_column_indexes
             .into_iter()
             .map(|idx| {
                 let data_type = (&on_conflict_fields[idx].table_field.data_type).into();
@@ -395,7 +395,7 @@ impl Partitioner {
         // partitions by the left-most cluster key expression
         let mut partitions: HashMap<Scalar, Partition> = HashMap::new();
 
-        // bloom hashes of the most significant on-conflict field
+        // bloom hashes of the columns being pruned with
         let maybe_bloom_hashes = self
             .bloom_filter_column_info
             .iter()

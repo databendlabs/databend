@@ -84,9 +84,9 @@ struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
     // the fields specified in ON CONFLICT clause
     on_conflict_fields: Vec<OnConflictField>,
-    // the most significant field index in `on_conflict_fields`
+    // the field indexes of `on_conflict_fields`
     // which we should apply bloom filtering, if any
-    most_significant_on_conflict_field_index: Vec<FieldIndex>,
+    bloom_filter_column_indexes: Vec<FieldIndex>,
     // table fields excludes `on_conflict_fields`
     remain_column_field_ids: Vec<FieldIndex>,
     // reader that reads the ON CONFLICT key fields
@@ -112,7 +112,7 @@ impl MergeIntoOperationAggregator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         on_conflict_fields: Vec<OnConflictField>,
-        most_significant_on_conflict_field_index: Vec<FieldIndex>,
+        bloom_filter_column_indexes: Vec<FieldIndex>,
         segment_locations: Vec<(SegmentIndex, Location)>,
         data_accessor: Operator,
         table_schema: Arc<TableSchema>,
@@ -176,7 +176,7 @@ impl MergeIntoOperationAggregator {
             aggregation_ctx: Arc::new(AggregationContext {
                 segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
                 on_conflict_fields,
-                most_significant_on_conflict_field_index,
+                bloom_filter_column_indexes,
                 remain_column_field_ids,
                 key_column_reader,
                 remain_column_reader,
@@ -377,11 +377,7 @@ impl AggregationContext {
 
         // apply bloom filter pruning if possible
         let pruned = self
-            .apply_bloom_pruning(
-                block_meta,
-                bloom_hashes,
-                &self.most_significant_on_conflict_field_index,
-            )
+            .apply_bloom_pruning(block_meta, bloom_hashes, &self.bloom_filter_column_indexes)
             .await;
 
         if pruned {

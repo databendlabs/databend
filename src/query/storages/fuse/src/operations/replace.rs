@@ -158,13 +158,13 @@ impl FuseTable {
         let cluster_keys = self.cluster_keys(ctx.clone());
 
         // currently, we only try apply bloom filter pruning when the table is clustered
-        let most_significant_on_conflict_field_index: Vec<FieldIndex> = if !cluster_keys.is_empty()
+        let bloom_filter_column_indexes: Vec<FieldIndex> = if !cluster_keys.is_empty()
             && ctx.get_settings().get_enable_replace_into_bloom_pruning()?
         {
             let max_num_pruning_columns = ctx
                 .get_settings()
                 .get_replace_into_bloom_pruning_max_column_number()?;
-            self.choose_most_significant_bloom_filter_column(&on_conflicts, max_num_pruning_columns)
+            self.choose_bloom_filter_columns(&on_conflicts, max_num_pruning_columns)
                 .await?
         } else {
             info!("replace-into, bloom filter pruning not enabled.");
@@ -172,19 +172,18 @@ impl FuseTable {
         };
 
         info!(
-            "replace-into, most_significant_on_conflict_field chosen, name : {:?}, idx {:?}",
-            most_significant_on_conflict_field_index
+            "replace-into, bloom filter field chosen, {:?}",
+            bloom_filter_column_indexes
                 .iter()
-                .map(|idx| on_conflicts[*idx].table_field.name.clone())
+                .map(|idx| (idx, on_conflicts[*idx].table_field.name.clone()))
                 .collect::<Vec<_>>(),
-            most_significant_on_conflict_field_index,
         );
 
         let replace_into_processor = ReplaceIntoProcessor::create(
             ctx.as_ref(),
             on_conflicts.clone(),
             cluster_keys,
-            most_significant_on_conflict_field_index.clone(),
+            bloom_filter_column_indexes.clone(),
             schema.as_ref(),
             table_is_empty,
             table_level_range_index,
@@ -283,7 +282,7 @@ impl FuseTable {
                     segment_partition_num,
                     block_builder,
                     on_conflicts.clone(),
-                    most_significant_on_conflict_field_index,
+                    bloom_filter_column_indexes,
                     &base_snapshot,
                     io_request_semaphore,
                 )
@@ -318,7 +317,7 @@ impl FuseTable {
         num_partition: usize,
         block_builder: BlockBuilder,
         on_conflicts: Vec<OnConflictField>,
-        most_significant_on_conflict_field_index: Vec<FieldIndex>,
+        bloom_filter_column_indexes: Vec<FieldIndex>,
         table_snapshot: &TableSnapshot,
         io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PipeItem>> {
@@ -329,7 +328,7 @@ impl FuseTable {
             let item = MergeIntoOperationAggregator::try_create(
                 ctx.clone(),
                 on_conflicts.clone(),
-                most_significant_on_conflict_field_index.clone(),
+                bloom_filter_column_indexes.clone(),
                 chunk_of_segment_locations,
                 self.operator.clone(),
                 self.table_info.schema(),
@@ -413,11 +412,10 @@ impl FuseTable {
         Ok(())
     }
 
-    // choose the most significant bloom filter column.
-    //
-    // the one with the greatest number of number-of-distinct-values, will be kept.
-    // if all the columns do not support bloom index, return None
-    async fn choose_most_significant_bloom_filter_column(
+    // choose the bloom filter columns (from on-conflict fields).
+    // columns with larger number of number-of-distinct-values, will be kept, is their types
+    // are supported by bloom index.
+    async fn choose_bloom_filter_columns(
         &self,
         on_conflicts: &[OnConflictField],
         max_num_columns: u64,
