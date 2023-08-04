@@ -234,6 +234,10 @@ impl Binder {
                         }
                         _ => return Err(ErrorCode::SemanticError("Unsupported indirection type")),
                     };
+
+                    if let Some(last) = output.items.last() {
+                        prev_aliases.push((last.alias.clone(), last.scalar.clone()));
+                    }
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
                     let mut scalar_binder = ScalarBinder::new(
@@ -253,9 +257,8 @@ impl Binder {
                         None => format!("{:#}", expr).to_lowercase(),
                     };
 
-                    if alias.is_some() {
-                        prev_aliases.push((expr_name.clone(), bound_expr.clone()));
-                    }
+                    prev_aliases.push((expr_name.clone(), bound_expr.clone()));
+
                     output.items.push(SelectItem {
                         select_target,
                         scalar: bound_expr,

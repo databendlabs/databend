@@ -85,10 +85,10 @@ explain pipeline copy into products from (select $1,$2,$4 from @s1 as t2) force 
 ----
 CommitSink × 1 processor
   MutationAggregator × 1 processor
-    TransformExchangeDeserializer × 1 processor
-      Merge (DummyTransform × 3 processors) to (TransformExchangeDeserializer × 1)
-        Merge (TransformSerializeSegment × 1 processor) to (Resize × 3)
-          TransformSerializeSegment × 1 processor
+    TransformSerializeSegment × 1 processor
+      TransformExchangeDeserializer × 1 processor
+        Merge (DummyTransform × 3 processors) to (TransformExchangeDeserializer × 1)
+          Merge (TransformSerializeBlock × 1 processor) to (Resize × 3)
             TransformSerializeBlock × 1 processor
               BlockCompactTransform × 1 processor
                 CastSchemaTransform × 1 processor

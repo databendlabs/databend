@@ -117,6 +117,7 @@ pub trait TableContext: Send + Sync {
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
+    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>>;
     fn get_fuse_version(&self) -> String;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> String;

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ahash::AHashMap;
+use ahash::HashSet;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_base::base::tokio::sync::Semaphore;
@@ -35,13 +36,18 @@ use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_sql::evaluator::BlockOperator;
 use log::info;
+use log::warn;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
+use storages_common_index::filters::Filter;
+use storages_common_index::filters::Xor8Filter;
+use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 
+use crate::io::read::bloom::block_filter_reader::BloomBlockFilterReader;
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
@@ -52,6 +58,7 @@ use crate::io::WriteSettings;
 use crate::metrics::metrics_inc_replace_accumulated_merge_action_time_ms;
 use crate::metrics::metrics_inc_replace_apply_deletion_time_ms;
 use crate::metrics::metrics_inc_replace_block_number_after_pruning;
+use crate::metrics::metrics_inc_replace_block_number_bloom_pruned;
 use crate::metrics::metrics_inc_replace_block_number_totally_loaded;
 use crate::metrics::metrics_inc_replace_block_number_write;
 use crate::metrics::metrics_inc_replace_block_of_zero_row_deleted;
@@ -77,6 +84,7 @@ struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
     // the fields specified in ON CONFLICT clause
     on_conflict_fields: Vec<OnConflictField>,
+
     // table fields excludes `on_conflict_fields`
     remain_column_field_ids: Vec<FieldIndex>,
     // reader that reads the ON CONFLICT key fields
@@ -95,6 +103,9 @@ struct AggregationContext {
 pub struct MergeIntoOperationAggregator {
     deletion_accumulator: DeletionAccumulator,
     aggregation_ctx: Arc<AggregationContext>,
+    // the most significant field index in `on_conflict_fields`
+    // which we should apply bloom filtering, if any
+    most_significant_on_conflict_field_index: Option<usize>,
 }
 
 impl MergeIntoOperationAggregator {
@@ -102,6 +113,7 @@ impl MergeIntoOperationAggregator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         on_conflict_fields: Vec<OnConflictField>,
+        most_significant_on_conflict_field_index: Option<usize>,
         segment_locations: Vec<(SegmentIndex, Location)>,
         data_accessor: Operator,
         table_schema: Arc<TableSchema>,
@@ -175,6 +187,7 @@ impl MergeIntoOperationAggregator {
                 block_builder,
                 io_request_semaphore,
             }),
+            most_significant_on_conflict_field_index,
         })
     }
 }
@@ -204,6 +217,7 @@ impl MergeIntoOperationAggregator {
                     for DeletionByColumn {
                         columns_min_max,
                         key_hashes,
+                        bloom_hashes,
                     } in &partitions
                     {
                         if aggregation_ctx
@@ -218,11 +232,37 @@ impl MergeIntoOperationAggregator {
                                 Some(v) => v,
                             };
 
-                            // block level
+                            // block level pruning, using range index
                             for (block_index, block_meta) in seg.blocks.iter().enumerate() {
                                 if aggregation_ctx
                                     .overlapped(&block_meta.col_stats, columns_min_max)
                                 {
+                                    // block level range pruning failed, try applying bloom filter pruning if possible
+                                    // note, performance may heavily depend on the bloom filter cache
+
+                                    if let (
+                                        Some(bloom_hashes),
+                                        Some(bloom_on_conflict_field_index),
+                                    ) = (
+                                        bloom_hashes,
+                                        self.most_significant_on_conflict_field_index,
+                                    ) {
+                                        // let make it clear, that the bool returned here indicates whether the block is pruned
+                                        let pruned = self
+                                            .apply_bloom_pruning(
+                                                block_meta,
+                                                bloom_hashes,
+                                                bloom_on_conflict_field_index,
+                                            )
+                                            .await;
+
+                                        if pruned {
+                                            // skip this block
+                                            metrics_inc_replace_block_number_bloom_pruned(1);
+                                            continue;
+                                        }
+                                    }
+
                                     self.deletion_accumulator.add_block_deletion(
                                         *segment_index,
                                         block_index,
@@ -247,6 +287,71 @@ impl MergeIntoOperationAggregator {
         }
         metrics_inc_replace_accumulated_merge_action_time_ms(start.elapsed().as_millis() as u64);
         Ok(())
+    }
+
+    // return true if the block is pruned, otherwise false
+    async fn apply_bloom_pruning(
+        &self,
+        block_meta: &BlockMeta,
+        input_hashes: &HashSet<u64>,
+        bloom_on_conflict_field_index: FieldIndex,
+    ) -> bool {
+        if let Some(loc) = &block_meta.bloom_filter_index_location {
+            match self
+                .load_bloom_filter(
+                    loc,
+                    block_meta.bloom_filter_index_size,
+                    bloom_on_conflict_field_index,
+                )
+                .await
+            {
+                Ok(filter) => {
+                    let mut pruned = true;
+                    for hash in input_hashes {
+                        if filter.contains_digest(*hash) {
+                            // if any of the input hashes is contained in the bloom filter, do not prune
+                            pruned = false;
+                            break;
+                        }
+                    }
+                    pruned
+                }
+                Err(e) => {
+                    // broken index should not stop us:
+                    warn!("failed to build bloom index column name: {}", e);
+                    // failed to load bloom filter, do not prune
+                    false
+                }
+            }
+        } else {
+            // no bloom filter, no pruning
+            false
+        }
+    }
+
+    async fn load_bloom_filter(
+        &self,
+        location: &Location,
+        index_len: u64,
+        bloom_on_conflict_field_index: FieldIndex,
+    ) -> Result<Arc<Xor8Filter>> {
+        // different block may have different version of bloom filter index
+        let bloom_column_name = BloomIndex::build_filter_column_name(
+            location.1,
+            &self.aggregation_ctx.on_conflict_fields[bloom_on_conflict_field_index].table_field,
+        )?;
+
+        // using load_bloom_filter_by_columns is attractive,
+        // but it do not care about the version of the bloom filter index
+        let block_filter = location
+            .read_block_filter(
+                self.aggregation_ctx.data_accessor.clone(),
+                &[bloom_column_name],
+                index_len,
+            )
+            .await?;
+        // we know that there is exactly one filter
+        Ok(block_filter.filters.into_iter().next().unwrap())
     }
 }
 

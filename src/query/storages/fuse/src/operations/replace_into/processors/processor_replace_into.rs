@@ -21,6 +21,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_pipeline_core::pipe::Pipe;
@@ -56,6 +57,7 @@ impl ReplaceIntoProcessor {
         ctx: &dyn TableContext,
         on_conflict_fields: Vec<OnConflictField>,
         cluster_keys: Vec<RemoteExpr<String>>,
+        most_significant_on_conflict_field_index: Option<FieldIndex>,
         table_schema: &TableSchema,
         target_table_empty: bool,
         table_range_idx: HashMap<ColumnId, ColumnStatistics>,
@@ -64,6 +66,7 @@ impl ReplaceIntoProcessor {
             ctx,
             on_conflict_fields,
             cluster_keys,
+            most_significant_on_conflict_field_index,
             table_schema,
             table_range_idx,
         )?;
