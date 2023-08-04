@@ -940,7 +940,6 @@ pub struct OnConflictField {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceInto {
     pub input: Box<PhysicalPlan>,
-    pub segment_partition_num: usize,
     pub block_thresholds: BlockThresholds,
     pub table_info: TableInfo,
     pub on_conflicts: Vec<OnConflictField>,

@@ -223,9 +223,6 @@ impl ReplaceInterpreter {
         let is_distributed = is_multi_node && !is_value_source;
         let table_is_empty = base_snapshot.segments.is_empty();
         let table_level_range_index = base_snapshot.summary.col_stats.clone();
-        let max_threads = self.ctx.get_settings().get_max_threads()?;
-        let segment_partition_num =
-            std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
         let mut purge_info = None;
         let (mut root, select_ctx) = self
             .connect_input_source(
@@ -259,7 +256,6 @@ impl ReplaceInterpreter {
         }));
         root = Box::new(PhysicalPlan::ReplaceInto(ReplaceInto {
             input: root,
-            segment_partition_num,
             block_thresholds: fuse_table.get_block_thresholds(),
             table_info: table_info.clone(),
             catalog_info: catalog.info(),
