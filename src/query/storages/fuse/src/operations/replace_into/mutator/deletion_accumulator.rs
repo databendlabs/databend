@@ -21,7 +21,7 @@ use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
 
-pub type BlockDeletionKeys = HashMap<BlockIndex, HashSet<UniqueKeyDigest>>;
+pub type BlockDeletionKeys = HashMap<BlockIndex, (HashSet<UniqueKeyDigest>, HashSet<u64>)>;
 #[derive(Default)]
 pub struct DeletionAccumulator {
     pub deletions: HashMap<SegmentIndex, BlockDeletionKeys>,
@@ -33,17 +33,24 @@ impl DeletionAccumulator {
         segment_index: SegmentIndex,
         block_index: BlockIndex,
         key_set: &HashSet<UniqueKeyDigest>,
+        bloom_hashes: &Option<HashSet<u64>>,
     ) {
         match self.deletions.entry(segment_index) {
             Entry::Occupied(ref mut v) => {
                 let block_deletions = v.get_mut();
                 block_deletions
                     .entry(block_index)
-                    .and_modify(|es| es.extend(key_set))
-                    .or_insert(key_set.clone());
+                    .and_modify(|(es, bh)| {
+                        es.extend(key_set);
+                        bh.extend(bloom_hashes.clone().unwrap_or_default());
+                    })
+                    .or_insert((key_set.clone(), bloom_hashes.clone().unwrap_or_default()));
             }
             Entry::Vacant(e) => {
-                e.insert(HashMap::from_iter([(block_index, key_set.clone())]));
+                e.insert(HashMap::from_iter([(
+                    block_index,
+                    (key_set.clone(), bloom_hashes.clone().unwrap_or_default()),
+                )]));
             }
         }
     }

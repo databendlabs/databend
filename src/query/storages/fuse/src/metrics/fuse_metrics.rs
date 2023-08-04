@@ -202,6 +202,10 @@ pub fn metrics_inc_replace_block_number_after_pruning(c: u64) {
     increment_gauge!(key!("replace_into_block_number_after_pruning"), c as f64);
 }
 
+pub fn metrics_inc_replace_segment_number_after_pruning(c: u64) {
+    increment_gauge!(key!("replace_into_segment_number_after_pruning"), c as f64);
+}
+
 pub fn metrics_inc_replace_row_number_after_pruning(c: u64) {
     increment_gauge!(key!("replace_into_row_number_after_pruning"), c as f64);
 }
@@ -275,4 +279,8 @@ pub fn metrics_inc_replace_apply_deletion_time_ms(c: u64) {
 // number of blocks that pruned by bloom filter
 pub fn metrics_inc_replace_block_number_bloom_pruned(c: u64) {
     increment_gauge!(key!("replace_into_block_number_bloom_pruned"), c as f64);
+}
+// number of blocks from upstream  source
+pub fn metrics_inc_replace_block_number_input(c: u64) {
+    increment_gauge!(key!("replace_into_block_number_source"), c as f64);
 }

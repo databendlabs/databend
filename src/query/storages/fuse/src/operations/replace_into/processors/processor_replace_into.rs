@@ -33,6 +33,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use storages_common_table_meta::meta::ColumnStatistics;
 
+use crate::metrics::metrics_inc_replace_block_number_input;
 use crate::metrics::metrics_inc_replace_process_input_block_time_ms;
 use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
 use crate::operations::replace_into::OnConflictField;
@@ -167,6 +168,7 @@ impl Processor for ReplaceIntoProcessor {
             let start = Instant::now();
             let merge_into_action = self.replace_into_mutator.process_input_block(&data_block)?;
             metrics_inc_replace_process_input_block_time_ms(start.elapsed().as_millis() as u64);
+            metrics_inc_replace_block_number_input(1);
             if !self.target_table_empty {
                 self.output_data_merge_into_action =
                     Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));
