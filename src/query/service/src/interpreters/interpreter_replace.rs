@@ -235,6 +235,14 @@ impl ReplaceInterpreter {
                 &mut purge_info,
             )
             .await?;
+        if is_distributed {
+            root = Box::new(PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: root,
+                kind: common_sql::executor::FragmentKind::Expansive,
+                keys: vec![],
+            }));
+        }
         root = Box::new(PhysicalPlan::Deduplicate(Deduplicate {
             input: root,
             on_conflicts: on_conflicts.clone(),
@@ -245,14 +253,6 @@ impl ReplaceInterpreter {
             table_schema: plan.schema.clone(),
             table_level_range_index,
         }));
-        if is_distributed {
-            root = Box::new(PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
-                input: root,
-                kind: common_sql::executor::FragmentKind::Expansive,
-                keys: vec![],
-            }));
-        }
         root = Box::new(PhysicalPlan::ReplaceInto(ReplaceInto {
             input: root,
             segment_partition_num,
