@@ -123,6 +123,7 @@ impl Plan {
             // Insert
             Plan::Insert(insert) => Ok(format!("{:?}", insert)),
             Plan::Replace(replace) => Ok(format!("{:?}", replace)),
+            Plan::MergeInto(merge_into) => Ok(format!("{:?}", merge_into)),
             Plan::Delete(delete) => format_delete(delete),
             Plan::Update(update) => Ok(format!("{:?}", update)),
 

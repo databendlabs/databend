@@ -24,6 +24,7 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
 use super::data_mask::CreateDatamaskPolicyPlan;
+use super::merge_into::MergeIntoPlan;
 use super::CopyIntoTableMode;
 use super::CreateIndexPlan;
 use super::CreateShareEndpointPlan;
@@ -193,7 +194,7 @@ pub enum Plan {
     Replace(Box<Replace>),
     Delete(Box<DeletePlan>),
     Update(Box<UpdatePlan>),
-
+    MergeInto(Box<MergeIntoPlan>),
     // Views
     CreateView(Box<CreateViewPlan>),
     AlterView(Box<AlterViewPlan>),
@@ -413,6 +414,7 @@ impl Display for Plan {
             Plan::DropNetworkPolicy(_) => write!(f, "DropNetworkPolicy"),
             Plan::DescNetworkPolicy(_) => write!(f, "DescNetworkPolicy"),
             Plan::ShowNetworkPolicies(_) => write!(f, "ShowNetworkPolicies"),
+            Plan::MergeInto(_) => write!(f, "MergeInto"),
         }
     }
 }

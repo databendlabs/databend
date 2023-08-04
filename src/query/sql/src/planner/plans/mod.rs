@@ -29,6 +29,7 @@ mod kill;
 mod lambda;
 mod limit;
 mod materialized_cte;
+mod merge_into;
 mod operator;
 mod pattern;
 mod plan;
