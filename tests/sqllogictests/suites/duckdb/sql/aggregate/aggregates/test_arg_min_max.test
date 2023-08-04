@@ -29,8 +29,10 @@ select arg_min(*)
 statement error 1028
 select arg_max()
 
-statement error 1065
+query T
 select arg_max(NULL,NULL)
+----
+NULL
 
 query I
 select arg_max(1,1)
