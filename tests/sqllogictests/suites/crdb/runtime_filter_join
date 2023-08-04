@@ -462,7 +462,7 @@ drop table if exists othertype
 statement ok
 CREATE TABLE othertype (x TEXT)
 
-statement error 1001
+statement ok
 SELECT * FROM (onecolumn AS a JOIN othertype AS b USING(x))
 
 statement error 1065
@@ -480,7 +480,7 @@ SELECT * FROM (onecolumn JOIN twocolumn USING(x) JOIN onecolumn USING(x))
 statement error 1065
 SELECT x FROM (SELECT * FROM onecolumn), (SELECT * FROM onecolumn)
 
-statement error 1065
+statement ok
 SELECT * FROM (onecolumn AS a JOIN onecolumn AS b ON x > 32)
 
 statement error 1065

@@ -264,6 +264,17 @@ impl Binder {
                 }
             }
         }
+
+        for (i, (name, _)) in prev_aliases.iter().enumerate() {
+            if let Some(j) = prev_aliases.iter().position(|x| &x.0 == name) {
+                if j < i {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "column {name} reference alias is ambiguous, please use another alias name"
+                    )));
+                }
+            }
+        }
+
         Ok(output)
     }
 
