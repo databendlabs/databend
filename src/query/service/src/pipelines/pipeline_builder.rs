@@ -369,7 +369,7 @@ impl PipelineBuilder {
             table_info,
             on_conflicts,
             catalog_info,
-            snapshot,
+            segments,
         } = replace;
         let table = self
             .ctx
@@ -463,7 +463,7 @@ impl PipelineBuilder {
                 *segment_partition_num,
                 block_builder,
                 on_conflicts.clone(),
-                snapshot,
+                &segments,
                 io_request_semaphore,
             )?;
             assert_eq!(

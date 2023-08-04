@@ -43,6 +43,7 @@ use common_meta_app::schema::TableInfo;
 use common_storage::StageFileInfo;
 use enum_as_inner::EnumAsInner;
 use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::explain::PlanStatsInfo;
@@ -944,7 +945,7 @@ pub struct ReplaceInto {
     pub table_info: TableInfo,
     pub on_conflicts: Vec<OnConflictField>,
     pub catalog_info: CatalogInfo,
-    pub snapshot: TableSnapshot,
+    pub segments: Vec<Location>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

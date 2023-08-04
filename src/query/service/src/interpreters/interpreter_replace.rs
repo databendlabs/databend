@@ -264,7 +264,7 @@ impl ReplaceInterpreter {
             table_info: table_info.clone(),
             catalog_info: catalog.info(),
             on_conflicts,
-            snapshot: (*base_snapshot).clone(),
+            segments: base_snapshot.segments.clone(),
         }));
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {

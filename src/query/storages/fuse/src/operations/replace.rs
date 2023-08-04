@@ -96,10 +96,10 @@ impl FuseTable {
         num_partition: usize,
         block_builder: BlockBuilder,
         on_conflicts: Vec<OnConflictField>,
-        table_snapshot: &TableSnapshot,
+        segments: &[Location],
         io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PipeItem>> {
-        let chunks = Self::partition_segments(&table_snapshot.segments, num_partition);
+        let chunks = Self::partition_segments(segments, num_partition);
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let mut items = Vec::with_capacity(num_partition);
         for chunk_of_segment_locations in chunks {
