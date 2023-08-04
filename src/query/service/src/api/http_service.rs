@@ -61,6 +61,10 @@ impl HttpService {
                 get(super::http::v1::instance_status::instance_status_handler),
             )
             .at(
+                "/v1/processlist",
+                get(super::http::v1::processes::processlist_handler),
+            )
+            .at(
                 "/v1/tables",
                 get(super::http::v1::tenant_tables::list_tables_handler),
             )

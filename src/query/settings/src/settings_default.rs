@@ -358,6 +358,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("replace_into_bloom_pruning_max_column_number", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(2),
+                    desc: "Max number of columns used by bloom pruning for replace-into statement.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
