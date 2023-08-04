@@ -90,8 +90,7 @@ impl BindContext {
             map_exprs.push(expr);
         }
 
-        let mut operators = Vec::with_capacity(schema_fields_len);
-        operators.push(BlockOperator::Map { exprs: map_exprs });
+        let operators = vec![BlockOperator::Map { exprs: map_exprs }];
 
         let one_row_chunk = DataBlock::new(
             vec![BlockEntry::new(

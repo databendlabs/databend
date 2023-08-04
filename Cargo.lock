@@ -2311,7 +2311,7 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "hostname",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "log",
  "maplit",

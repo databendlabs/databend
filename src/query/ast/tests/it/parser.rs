@@ -526,6 +526,7 @@ fn test_query() {
         r#"with t2 as (select a from t) select t2.a from t2  where t2.a > 1"#,
         r#"with t2(tt) as materialized (select a from t), t3 as materialized (select * from t), t4 as (select a from t where a > 1) select t2.tt, t3.a, t4.a from t2, t3, t4 where t2.tt > 1"#,
         r#"with recursive t2(tt) as (select a from t1 union select tt from t2) select t2.tt from t2"#,
+        r#"with t(a,b) as (values(1,1),(2,null),(null,5)) select t.a, t.b from t"#,
         r#"select c_count cc, count(*) as custdist, sum(c_acctbal) as totacctbal
             from customer, orders ODS,
                 (
@@ -558,6 +559,7 @@ fn test_query() {
         r#"select sum(a) over w from customer window w as (partition by a order by b)"#,
         r#"select a, sum(a) over w, sum(a) over w1, sum(a) over w2 from t1 window w as (partition by a), w2 as (w1 rows current row), w1 as (w order by a) order by a"#,
         r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
+        r#"SELECT * FROM (VALUES(1,1),(2,null),(null,5)) AS t(a,b)"#,
     ];
 
     for case in cases {

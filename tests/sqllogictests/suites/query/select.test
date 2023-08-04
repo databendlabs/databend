@@ -46,3 +46,26 @@ query I
 select catalog,database,name,number_of_blocks,number_of_segments from system.tables where name = 't';
 ----
 default default t 1 1
+
+statement error 1065
+select * from (values(1, 'one'), (2, 'two', 3))
+
+statement error 1065
+select * from (values(1, 'one'), (2, ['two','three']))
+
+statement error 1065
+select * from (values(1, 'one'), (2, 'two')) t(a,b,c)
+
+query IT
+select * from (values(1, 'one'), (2, 'two'), (3, 'three')) as t(a, b)
+----
+1 one
+2 two
+3 three
+
+query IT
+select col0, col1 from (values(1, 'one'), (null, 'two'), (3, null))
+----
+1 one
+NULL two
+3 NULL

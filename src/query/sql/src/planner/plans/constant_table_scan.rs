@@ -16,6 +16,9 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::Column;
+use common_expression::DataSchemaRef;
+use itertools::Itertools;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -24,30 +27,71 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
-use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::DUMMY_COLUMN_INDEX;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct DummyTableScan;
+// Constant table is a table with constant values.
+#[derive(Clone, Debug)]
+pub struct ConstantTableScan {
+    pub values: Vec<Column>,
+    pub num_rows: usize,
+    pub schema: DataSchemaRef,
+    pub columns: ColumnSet,
+}
 
-impl DummyTableScan {
+impl ConstantTableScan {
+    pub fn prune_columns(&self, columns: ColumnSet) -> Self {
+        let mut projection = columns
+            .iter()
+            .map(|index| self.schema.index_of(&index.to_string()).unwrap())
+            .collect::<Vec<_>>();
+        projection.sort();
+
+        let schema = self.schema.project(&projection);
+        let values = projection
+            .iter()
+            .map(|idx| self.values[*idx].clone())
+            .collect();
+
+        ConstantTableScan {
+            values,
+            schema: Arc::new(schema),
+            columns,
+            num_rows: self.num_rows,
+        }
+    }
+
     pub fn used_columns(&self) -> Result<ColumnSet> {
-        Ok(ColumnSet::new())
+        Ok(self.columns.clone())
     }
 }
 
-impl Operator for DummyTableScan {
+impl PartialEq for ConstantTableScan {
+    fn eq(&self, other: &Self) -> bool {
+        self.columns == other.columns
+    }
+}
+
+impl Eq for ConstantTableScan {}
+
+impl std::hash::Hash for ConstantTableScan {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for column in self.columns.iter().sorted() {
+            column.hash(state);
+        }
+    }
+}
+
+impl Operator for ConstantTableScan {
     fn rel_op(&self) -> RelOp {
-        RelOp::DummyTableScan
+        RelOp::ConstantTableScan
     }
 
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         Ok(Arc::new(RelationalProperty {
-            output_columns: ColumnSet::from([DUMMY_COLUMN_INDEX]),
-            outer_columns: ColumnSet::new(),
-            used_columns: ColumnSet::new(),
+            output_columns: self.columns.clone(),
+            outer_columns: Default::default(),
+            used_columns: self.columns.clone(),
         }))
     }
 
@@ -59,11 +103,9 @@ impl Operator for DummyTableScan {
 
     fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo {
-            cardinality: 1.0,
-            statistics: Statistics {
-                precise_cardinality: Some(1),
-                column_stats: Default::default(),
-            },
+            cardinality: self.num_rows as f64,
+            // TODO
+            statistics: Default::default(),
         }))
     }
 

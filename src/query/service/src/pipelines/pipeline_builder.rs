@@ -44,6 +44,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
+use common_pipeline_sources::OneBlockSource;
 use common_pipeline_transforms::processors::profile_wrapper::ProcessorProfileWrapper;
 use common_pipeline_transforms::processors::profile_wrapper::ProfileStub;
 use common_pipeline_transforms::processors::profile_wrapper::TransformProfileWrapper;
@@ -56,6 +57,7 @@ use common_sql::executor::AggregateExpand;
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
+use common_sql::executor::ConstantTableScan;
 use common_sql::executor::CopyIntoTableFromQuery;
 use common_sql::executor::CteScan;
 use common_sql::executor::DeleteFinal;
@@ -191,6 +193,7 @@ impl PipelineBuilder {
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
             PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),
+            PhysicalPlan::ConstantTableScan(scan) => self.build_constant_table_scan(scan),
             PhysicalPlan::Filter(filter) => self.build_filter(filter),
             PhysicalPlan::Project(project) => self.build_project(project),
             PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
@@ -608,6 +611,20 @@ impl PipelineBuilder {
                 )
             },
             max_threads as usize,
+        )
+    }
+
+    fn build_constant_table_scan(&mut self, scan: &ConstantTableScan) -> Result<()> {
+        self.main_pipeline.add_source(
+            |output| {
+                let block = if !scan.values.is_empty() {
+                    DataBlock::new_from_columns(scan.values.clone())
+                } else {
+                    DataBlock::new(vec![], scan.num_rows)
+                };
+                OneBlockSource::create(output, block)
+            },
+            1,
         )
     }
 

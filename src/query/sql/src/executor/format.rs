@@ -42,6 +42,7 @@ use super::TableScan;
 use super::UnionAll;
 use super::WindowFunction;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::ConstantTableScan;
 use crate::executor::CteScan;
 use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
@@ -197,6 +198,7 @@ fn to_format_tree(
         PhysicalPlan::MaterializedCte(plan) => {
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
+        PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan),
     }
 }
 
@@ -370,6 +372,18 @@ fn cte_scan_to_format_tree(plan: &CteScan) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::with_children("CTEScan".to_string(), vec![
         cte_idx,
     ]))
+}
+
+fn constant_table_scan_to_format_tree(plan: &ConstantTableScan) -> Result<FormatTreeNode<String>> {
+    let mut children = Vec::with_capacity(plan.values.len());
+    for (i, value) in plan.values.iter().enumerate() {
+        let column = value.iter().map(|val| format!("{val}")).join(", ");
+        children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
+    }
+    Ok(FormatTreeNode::with_children(
+        "ConstantTableScan".to_string(),
+        children,
+    ))
 }
 
 fn filter_to_format_tree(
