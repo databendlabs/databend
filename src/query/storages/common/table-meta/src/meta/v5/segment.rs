@@ -122,6 +122,12 @@ where T: Into<v2::SegmentInfo>
     }
 }
 
+impl From<LeafSegmentInfo> for SegmentInfo {
+    fn from(value: LeafSegmentInfo) -> Self {
+        Self::LeafSegment(value)
+    }
+}
+
 impl SegmentInfo {
     #[allow(unused)]
     pub fn new_leaf(blocks: Vec<Arc<BlockMeta>>, summary: Statistics) -> Self {
