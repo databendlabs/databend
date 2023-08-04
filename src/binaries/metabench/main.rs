@@ -20,14 +20,19 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use chrono::Utc;
 use clap::Parser;
 use common_base::base::tokio;
+use common_meta_api::serialize_struct;
+use common_meta_api::txn_op_put;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::TableCopiedFileInfo;
+use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_client::ClientHandle;
@@ -36,6 +41,7 @@ use common_meta_kvapi::kvapi::KVApi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
+use common_meta_types::TxnRequest;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
@@ -48,10 +54,10 @@ struct Config {
     pub prefix: u64,
 
     #[clap(long, default_value = "10")]
-    pub client: u32,
+    pub client: u64,
 
     #[clap(long, default_value = "10000")]
-    pub number: u32,
+    pub number: u64,
 
     #[clap(long, default_value = "INFO")]
     pub log_level: String,
@@ -59,7 +65,12 @@ struct Config {
     #[clap(long, env = "METASRV_GRPC_API_ADDRESS", default_value = "")]
     pub grpc_api_address: String,
 
-    /// The RPC to benchmark: "upsert_kv": send kv-api upsert_kv, "table": create db, table and upsert_table_option;
+    /// The RPC to benchmark:
+    /// "upsert_kv": send kv-api upsert_kv,
+    /// "table": create db, table and upsert_table_option;
+    /// "get_table": single get_table() rpc;
+    /// "table_copy_file": upsert table with copy file.
+    /// "table_copy_file:{"file_cnt":100}": upsert table with 100 copy files. After ":" is a json config string
     #[clap(long, default_value = "upsert_kv")]
     pub rpc: String,
 }
@@ -80,8 +91,12 @@ async fn main() {
     while client_num < config.client {
         client_num += 1;
         let addr = config.grpc_api_address.clone();
-        let typ = config.rpc.clone();
+        let rpc = config.rpc.clone();
         let prefix = config.prefix;
+
+        let cmd_and_param = rpc.splitn(2, ':').collect::<Vec<_>>();
+        let cmd = cmd_and_param[0].to_string();
+        let param = cmd_and_param.get(1).unwrap_or(&"").to_string();
 
         let handle = tokio::spawn(async move {
             let client = MetaGrpcClient::try_create(
@@ -103,14 +118,16 @@ async fn main() {
             };
 
             for i in 0..config.number {
-                if typ == "upsert_kv" {
+                if cmd == "upsert_kv" {
                     benchmark_upsert(&client, prefix, client_num, i).await;
-                } else if typ == "table" {
+                } else if cmd == "table" {
                     benchmark_table(&client, prefix, client_num, i).await;
-                } else if typ == "get_table" {
+                } else if cmd == "get_table" {
                     benchmark_get_table(&client, prefix, client_num, i).await;
+                } else if cmd == "table_copy_file" {
+                    benchmark_table_copy_file(&client, prefix, client_num, i, &param).await;
                 } else {
-                    unreachable!("Invalid config.rpc: {}", typ);
+                    unreachable!("Invalid config.rpc: {}", rpc);
                 }
             }
         });
@@ -129,7 +146,7 @@ async fn main() {
     );
 }
 
-async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u32, i: u32) {
+async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u64, i: u64) {
     let node_key = || format!("{}-{}-{}", prefix, client_num, i);
 
     let seq = MatchSeq::Any;
@@ -142,7 +159,7 @@ async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u
     print_res(i, "upsert_kv", &res);
 }
 
-async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u32, i: u32) {
+async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u64, i: u64) {
     let tenant = || format!("tenant-{}-{}", prefix, client_num);
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
@@ -214,7 +231,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u3
     print_res(i, "create_table again", &res);
 }
 
-async fn benchmark_get_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u32, i: u32) {
+async fn benchmark_get_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u64, i: u64) {
     let tenant = || format!("tenant-{}-{}", prefix, client_num);
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
@@ -226,7 +243,62 @@ async fn benchmark_get_table(client: &Arc<ClientHandle>, prefix: u64, client_num
     print_res(i, "get_table", &res);
 }
 
-fn print_res<D: Debug>(i: u32, typ: impl Display, res: &D) {
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct TableCopyFileConfig {
+    file_cnt: u64,
+}
+
+impl Default for TableCopyFileConfig {
+    fn default() -> Self {
+        Self { file_cnt: 100 }
+    }
+}
+
+/// Benchmark upsert table with copy file.
+async fn benchmark_table_copy_file(
+    client: &Arc<ClientHandle>,
+    prefix: u64,
+    client_num: u64,
+    i: u64,
+    param: &str,
+) {
+    let param = if param.is_empty() {
+        TableCopyFileConfig::default()
+    } else {
+        serde_json::from_str(param).unwrap()
+    };
+
+    let mut txn = TxnRequest {
+        condition: vec![],
+        if_then: vec![],
+        else_then: vec![],
+    };
+
+    for file_index in 0..param.file_cnt {
+        let copied_file_ident = TableCopiedFileNameIdent {
+            table_id: prefix * 1_000_000 + client_num * 1_000 + i,
+            file: format!("{}-{}-{}-{}", prefix, client_num, i, file_index),
+        };
+        let copied_file_value = TableCopiedFileInfo {
+            etag: Some(format!("{}-{}-{}-{}", prefix, client_num, i, file_index)),
+            content_length: 5,
+            last_modified: Some(Utc::now()),
+        };
+
+        let put_op = txn_op_put(
+            &copied_file_ident,
+            serialize_struct(&copied_file_value).unwrap(),
+        );
+        txn.if_then.push(put_op);
+    }
+
+    let res = client.transaction(txn).await;
+
+    print_res(i, "table_copy_file", &res);
+    res.unwrap();
+}
+
+fn print_res<D: Debug>(i: u64, typ: impl Display, res: &D) {
     if i % 100 == 0 {
         println!("{:>10}-th {} result: {:?}", i, typ, res);
     }
