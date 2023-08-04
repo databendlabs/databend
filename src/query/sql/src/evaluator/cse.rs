@@ -82,17 +82,6 @@ pub fn apply_cse(
                                 .copied()
                                 .collect::<ColumnSet>()
                         });
-                    // if let Some(projections) = &projections {
-                    //     Some(
-                    //         projections
-                    //             .iter()
-                    //             .filter(|idx| **idx < input_num_columns)
-                    //             .copied()
-                    //             .collect::<ColumnSet>(),
-                    //     )
-                    // } else {
-                    //     None
-                    // };
 
                     let has_projections = new_projections.is_some();
                     for mut expr in exprs {
