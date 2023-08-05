@@ -113,6 +113,7 @@ use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
 use common_storages_fuse::operations::replace_into::BroadcastProcessor;
 use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
+use common_storages_fuse::operations::replace_into::UnbranchedReplaceIntoProcessor;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
@@ -350,17 +351,31 @@ impl PipelineBuilder {
         //    the "downstream" is supposed to be connected with a processor which can process MergeIntoOperations
         //    in our case, it is the broadcast processor
         let cluster_keys = table.cluster_keys(self.ctx.clone());
-        let replace_into_processor = ReplaceIntoProcessor::create(
-            self.ctx.as_ref(),
-            on_conflicts.clone(),
-            cluster_keys,
-            *bloom_filter_column_index,
-            table_schema.as_ref(),
-            *table_is_empty,
-            table_level_range_index.clone(),
-        )?;
-        self.main_pipeline
-            .add_pipe(replace_into_processor.into_pipe());
+        if *need_insert {
+            let replace_into_processor = ReplaceIntoProcessor::create(
+                self.ctx.as_ref(),
+                on_conflicts.clone(),
+                cluster_keys,
+                *bloom_filter_column_index,
+                table_schema.as_ref(),
+                *table_is_empty,
+                table_level_range_index.clone(),
+            )?;
+            self.main_pipeline
+                .add_pipe(replace_into_processor.into_pipe());
+        } else {
+            let replace_into_processor = UnbranchedReplaceIntoProcessor::create(
+                self.ctx.as_ref(),
+                on_conflicts.clone(),
+                cluster_keys,
+                *bloom_filter_column_index,
+                table_schema.as_ref(),
+                *table_is_empty,
+                table_level_range_index.clone(),
+            )?;
+            self.main_pipeline
+                .add_pipe(replace_into_processor.into_pipe());
+        }
         Ok(())
     }
 
