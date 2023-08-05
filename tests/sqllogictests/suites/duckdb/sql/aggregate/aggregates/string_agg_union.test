@@ -1,4 +1,4 @@
-statement error 1008
+query TTT
 WITH my_data as (
         SELECT 'text1'::varchar(1000) as my_column union all
         SELECT 'text1'::varchar(1000) as my_column union all
@@ -6,8 +6,10 @@ WITH my_data as (
     )
         SELECT string_agg(my_column,', ') as my_string_agg
         FROM my_data
+----
+text1, text1, text1
 
-statement error 1008
+query TTT
 WITH my_data as (
         SELECT 1 as dummy,  'text1'::varchar(1000) as my_column union all
         SELECT 1 as dummy,  'text1'::varchar(1000) as my_column union all
@@ -17,3 +19,5 @@ WITH my_data as (
         FROM my_data
         GROUP BY
             dummy
+----
+text1, text1, text1
