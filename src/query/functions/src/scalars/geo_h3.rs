@@ -28,6 +28,7 @@ use common_expression::vectorize_with_builder_2_arg;
 use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
 use h3o::CellIndex;
+use h3o::DirectedEdgeIndex;
 use h3o::LatLng;
 use h3o::Resolution;
 
@@ -373,4 +374,114 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         }),
     );
+
+    registry.register_passthrough_nullable_2_arg::<UInt64Type, UInt8Type, UInt64Type, _, _>(
+        "h3_to_center_child",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<UInt64Type, UInt8Type, UInt64Type>(|h3, r, builder, ctx| {
+            match CellIndex::try_from(h3)
+                .map_err(|e| e.to_string())
+                .and_then(|index| {
+                    Resolution::try_from(r)
+                        .map_err(|e| e.to_string())
+                        .map(|rr| index.center_child(rr))
+                }) {
+                Ok(child) => {
+                    if let Some(p) = child {
+                        builder.push(p.into());
+                    } else {
+                        builder.push(0);
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(builder.len(), err);
+                    builder.push(0);
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, Float64Type, _, _>(
+        "h3_exact_edge_length_m",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt64Type, Float64Type>(|h3, builder, ctx| {
+            match DirectedEdgeIndex::try_from(h3) {
+                Ok(index) => builder.push(index.length_m().into()),
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.push(0.0.into());
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, Float64Type, _, _>(
+        "h3_exact_edge_length_km",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt64Type, Float64Type>(|h3, builder, ctx| {
+            match DirectedEdgeIndex::try_from(h3) {
+                Ok(index) => builder.push(index.length_km().into()),
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.push(0.0.into());
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, Float64Type, _, _>(
+        "h3_exact_edge_length_rads",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt64Type, Float64Type>(|h3, builder, ctx| {
+            match DirectedEdgeIndex::try_from(h3) {
+                Ok(index) => builder.push(index.length_rads().into()),
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.push(0.0.into());
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt8Type, UInt64Type, _, _>(
+        "h3_num_hexagons",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt8Type, UInt64Type>(|r, builder, ctx| {
+            match Resolution::try_from(r) {
+                Ok(rr) => builder.push(rr.cell_count()),
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.push(0);
+                }
+            }
+        }),
+    );
+
+    registry
+        .register_passthrough_nullable_2_arg::<UInt64Type, UInt64Type, ArrayType<UInt64Type>, _, _>(
+            "h3_line",
+            |_, _, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<UInt64Type, UInt64Type, ArrayType<UInt64Type>>(
+                |h3, a_h3, builder, ctx| {
+                    match CellIndex::try_from(h3)
+                        .map_err(|e| e.to_string())
+                        .and_then(|index| {
+                            CellIndex::try_from(a_h3)
+                                .map_err(|e| e.to_string())
+                                .map(|a_index| index.grid_path_cells(a_index))
+                        }) {
+                        Ok(index_iter) => {
+                            for child in index_iter {
+                                builder.put_item(child.into());
+                            }
+                        }
+                        Err(err) => {
+                            ctx.set_error(builder.len(), err);
+                            builder.put_item(0);
+                        }
+                    }
+                    builder.commit_row();
+                },
+            ),
+        );
 }
