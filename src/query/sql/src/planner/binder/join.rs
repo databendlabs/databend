@@ -114,6 +114,7 @@ impl Binder {
             non_equi_conditions,
             other_conditions,
         };
+
         let s_expr = match &join.op {
             JoinOperator::Inner => {
                 self.bind_join_with_type(JoinType::Inner, join_conditions, left_child, right_child)
@@ -194,6 +195,11 @@ impl Binder {
             other_conditions,
             &mut non_equi_conditions,
         )?;
+
+        for (left, right) in left_conditions.iter().zip(right_conditions.iter()) {
+            self.eq_scalars.push((left.clone(), right.clone()));
+        }
+
         let logical_join = Join {
             left_conditions,
             right_conditions,

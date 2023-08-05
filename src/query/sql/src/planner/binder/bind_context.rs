@@ -32,6 +32,7 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use dashmap::DashMap;
 use enum_as_inner::EnumAsInner;
+use itertools::Itertools;
 
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
@@ -85,7 +86,7 @@ pub enum Visibility {
     UnqualifiedWildcardInVisible,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InternalColumnBinding {
     /// Database name of this `InternalColumnBinding` in current context
     pub database_name: Option<String>,
@@ -95,7 +96,7 @@ pub struct InternalColumnBinding {
     pub internal_column: InternalColumn,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NameResolutionResult {
     Column(ColumnBinding),
     InternalColumn(InternalColumnBinding),
@@ -296,9 +297,11 @@ impl BindContext {
         }
 
         if alias_match_count >= 2 {
-            return Err(ErrorCode::SemanticError(format!(
-                "column {column} reference alias is ambiguous, please use another alias name",
-            )));
+            if !result.iter().all_equal() {
+                return Err(ErrorCode::SemanticError(format!(
+                    "column {column} reference alias is ambiguous, please use another alias name",
+                )));
+            }
         }
 
         if result.is_empty() {

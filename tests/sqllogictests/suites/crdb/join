@@ -68,18 +68,8 @@ SELECT * FROM onecolumn AS a LEFT OUTER JOIN onecolumn AS b USING(x) ORDER BY x
 44
 NULL
 
-query II
+statement error 1065
 SELECT * FROM onecolumn AS a, onecolumn AS b ORDER BY x
-----
-42 42
-42 44
-42 NULL
-44 42
-44 44
-44 NULL
-NULL 42
-NULL 44
-NULL NULL
 
 query I
 SELECT * FROM onecolumn AS a NATURAL LEFT OUTER JOIN onecolumn AS b order by a.x
@@ -447,7 +437,7 @@ statement error 1065
 SELECT * FROM (onecolumn AS a JOIN onecolumn AS b USING(y))
 
 
-# TODO column name "x" appears more than once in USING clause ,should be error?
+# TODO column name "x" appears more than once in USING clause ,should be error
 query I
 SELECT * FROM (onecolumn AS a JOIN onecolumn AS b USING(x, x))
 ----

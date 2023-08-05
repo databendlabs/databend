@@ -65,6 +65,7 @@ use crate::ColumnBinding;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::ScalarExpr;
 use crate::TypeChecker;
 use crate::Visibility;
 
@@ -82,6 +83,10 @@ pub struct Binder {
     pub metadata: MetadataRef,
     // Save the bound context for materialized cte, the key is cte_idx
     pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
+    // Save the equal scalar exprs for joins
+    // Eg: SELECT * FROM (twocolumn AS a JOIN twocolumn AS b USING(x) JOIN twocolumn AS c USING(x)) ORDER BY x LIMIT 1
+    // The eq_scalars is [(a.x, b.x), (a.x, c.x)]
+    pub eq_scalars: Vec<(ScalarExpr, ScalarExpr)>,
 }
 
 impl<'a> Binder {
@@ -97,6 +102,7 @@ impl<'a> Binder {
             name_resolution_ctx,
             metadata,
             m_cte_bound_ctx: Default::default(),
+            eq_scalars: vec![],
         }
     }
 
@@ -624,5 +630,11 @@ impl<'a> Binder {
     /// Normalize <identifier>
     pub fn normalize_object_identifier(&self, ident: &Identifier) -> String {
         normalize_identifier(ident, &self.name_resolution_ctx).name
+    }
+
+    pub fn judge_equal_scalars(&self, left: &ScalarExpr, right: &ScalarExpr) -> bool {
+        self.eq_scalars
+            .iter()
+            .any(|(l, r)| (l == left && r == right) || (l == right && r == left))
     }
 }

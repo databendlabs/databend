@@ -70,18 +70,8 @@ SELECT * FROM onecolumn AS a LEFT OUTER JOIN onecolumn AS b USING(x) ORDER BY x
 44
 NULL
 
-query II
+statement error 1065
 SELECT * FROM onecolumn AS a, onecolumn AS b ORDER BY x
-----
-42 42
-42 44
-42 NULL
-44 42
-44 44
-44 NULL
-NULL 42
-NULL 44
-NULL NULL
 
 query I
 SELECT * FROM onecolumn AS a NATURAL LEFT OUTER JOIN onecolumn AS b order by a.x
@@ -904,63 +894,63 @@ CREATE TABLE bar (  a INT,  b FLOAT,  c FLOAT,  d INT)
 statement ok
 INSERT INTO bar VALUES  (1, 1, 1, 1),  (2, 2, 2, 2),  (3, 3, 3, 3)
 
-query IIFF
+query II??
 SELECT * FROM foo NATURAL JOIN bar
 ----
 1 1 1.0 1.0
 2 2 2.0 2.0
 3 3 3.0 3.0
 
-query IIFFIFI
+query II??I?I
 SELECT * FROM foo JOIN bar USING (b)
 ----
 1 1 1.0 1.0 1 1.0 1
 2 2 2.0 2.0 2 2.0 2
 3 3 3.0 3.0 3 3.0 3
 
-query IIFFFI
+query II???I
 SELECT * FROM foo JOIN bar USING (a, b)
 ----
 1 1 1.0 1.0 1.0 1
 2 2 2.0 2.0 2.0 2
 3 3 3.0 3.0 3.0 3
 
-query IIFFI
+query II??I
 SELECT * FROM foo JOIN bar USING (a, b, c)
 ----
 1 1 1.0 1.0 1
 2 2 2.0 2.0 2
 3 3 3.0 3.0 3
 
-query IIFFIFFI
+query II??I??I
 SELECT * FROM foo JOIN bar ON foo.b = bar.b
 ----
 1 1 1.0 1.0 1 1.0 1.0 1
 2 2 2.0 2.0 2 2.0 2.0 2
 3 3 3.0 3.0 3 3.0 3.0 3
 
-query IIFFIFFI
+query II??I??I
 SELECT * FROM foo JOIN bar ON foo.a = bar.a AND foo.b = bar.b
 ----
 1 1 1.0 1.0 1 1.0 1.0 1
 2 2 2.0 2.0 2 2.0 2.0 2
 3 3 3.0 3.0 3 3.0 3.0 3
 
-query IIFFIFFI
+query II??I??I
 SELECT * FROM foo, bar WHERE foo.b = bar.b
 ----
 1 1 1.0 1.0 1 1.0 1.0 1
 2 2 2.0 2.0 2 2.0 2.0 2
 3 3 3.0 3.0 3 3.0 3.0 3
 
-query IIFFIFFI
+query II??I??I
 SELECT * FROM foo, bar WHERE foo.a = bar.a AND foo.b = bar.b
 ----
 1 1 1.0 1.0 1 1.0 1.0 1
 2 2 2.0 2.0 2 2.0 2.0 2
 3 3 3.0 3.0 3 3.0 3.0 3
 
-query IIFFFI
+query II???I
 SELECT * FROM foo JOIN bar USING (a, b) WHERE foo.c = bar.c AND foo.d = bar.d
 ----
 1 1 1.0 1.0 1.0 1
