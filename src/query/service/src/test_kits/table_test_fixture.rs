@@ -186,7 +186,7 @@ impl TestFixture {
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
-            field_comments: vec![],
+            field_comments: vec!["number".to_string(), "tuple".to_string()],
             as_select: None,
             cluster_key: Some("(id)".to_string()),
         }
@@ -209,7 +209,7 @@ impl TestFixture {
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
-            field_comments: vec![],
+            field_comments: vec!["number".to_string(), "tuple".to_string()],
             as_select: None,
             cluster_key: None,
         }
