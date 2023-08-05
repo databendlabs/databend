@@ -84,7 +84,7 @@ pub struct Binder {
     // Save the bound context for materialized cte, the key is cte_idx
     pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
     // Save the equal scalar exprs for joins
-    // Eg: SELECT * FROM (twocolumn AS a JOIN twocolumn AS b USING(x) JOIN twocolumn AS c USING(x)) ORDER BY x LIMIT 1
+    // Eg: SELECT * FROM (twocolumn AS a JOIN twocolumn AS b USING(x) JOIN twocolumn AS c on a.x = c.x) ORDER BY x LIMIT 1
     // The eq_scalars is [(a.x, b.x), (a.x, c.x)]
     pub eq_scalars: Vec<(ScalarExpr, ScalarExpr)>,
 }
