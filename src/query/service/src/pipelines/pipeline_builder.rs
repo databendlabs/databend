@@ -284,6 +284,7 @@ impl PipelineBuilder {
             select_ctx,
             table_level_range_index,
             table_schema,
+            need_insert,
         } = deduplicate;
         let tbl = self
             .ctx
@@ -372,6 +373,7 @@ impl PipelineBuilder {
             bloom_filter_column_index,
             catalog_info,
             segments,
+            need_insert,
         } = replace;
         let max_threads = self.ctx.get_settings().get_max_threads()?;
         let segment_partition_num = std::cmp::min(segments.len(), max_threads as usize);

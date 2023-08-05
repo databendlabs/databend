@@ -21,9 +21,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
+use common_sql::executor::Deduplicate;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::QueryCtx;
 use common_sql::executor::ReplaceInto;
+use common_storages_fuse::TableContext;
 use storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchange;
@@ -248,15 +250,19 @@ impl PlanFragment {
             _ => unreachable!("logic error"),
         };
         let partitions = &plan.segments;
-        let executors = Fragmenter::get_executors(ctx);
+        let executors = Fragmenter::get_executors(ctx.clone());
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
         let partition_reshuffle = Self::reshuffle_segments(executors, partitions.clone())?;
 
+        let local_id = &ctx.get_cluster().local_id;
+
         for (executor, parts) in partition_reshuffle.iter() {
             let mut plan = self.plan.clone();
+            let need_insert = executor == local_id;
 
             let mut replace_replace_into = ReplaceReplaceInto {
                 partitions: parts.clone(),
+                need_insert,
             };
             plan = replace_replace_into.replace(&plan)?;
 
@@ -356,6 +362,7 @@ impl PhysicalPlanReplacer for ReplaceDeletePartial {
 
 struct ReplaceReplaceInto {
     pub partitions: Vec<Location>,
+    pub need_insert: bool,
 }
 
 impl PhysicalPlanReplacer for ReplaceReplaceInto {
@@ -363,7 +370,17 @@ impl PhysicalPlanReplacer for ReplaceReplaceInto {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
             input: Box::new(input),
+            need_insert: self.need_insert,
             segments: self.partitions.clone(),
+            ..plan.clone()
+        }))
+    }
+
+    fn replace_deduplicate(&mut self, plan: &Deduplicate) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::Deduplicate(Deduplicate {
+            input: Box::new(input),
+            need_insert: self.need_insert,
             ..plan.clone()
         }))
     }

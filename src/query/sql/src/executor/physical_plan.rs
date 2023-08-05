@@ -924,6 +924,7 @@ pub struct Deduplicate {
     pub table_schema: TableSchemaRef,
     pub select_ctx: Option<SelectCtx>,
     pub table_level_range_index: HashMap<ColumnId, ColumnStatistics>,
+    pub need_insert: bool,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -947,6 +948,7 @@ pub struct ReplaceInto {
     pub bloom_filter_column_index: Option<FieldIndex>,
     pub catalog_info: CatalogInfo,
     pub segments: Vec<Location>,
+    pub need_insert: bool,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

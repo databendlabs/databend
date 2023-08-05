@@ -257,6 +257,7 @@ impl ReplaceInterpreter {
             select_ctx,
             table_schema: plan.schema.clone(),
             table_level_range_index,
+            need_insert: true,
         }));
         root = Box::new(PhysicalPlan::ReplaceInto(ReplaceInto {
             input: root,
@@ -266,6 +267,7 @@ impl ReplaceInterpreter {
             on_conflicts,
             bloom_filter_column_index,
             segments: base_snapshot.segments.clone(),
+            need_insert: true,
         }));
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
