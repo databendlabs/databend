@@ -70,18 +70,9 @@ SELECT * FROM onecolumn AS a LEFT OUTER JOIN onecolumn AS b USING(x) ORDER BY x
 44
 NULL
 
-query II
+statement error 1065
 SELECT * FROM onecolumn AS a, onecolumn AS b ORDER BY x
-----
-42 42
-42 44
-42 NULL
-44 42
-44 44
-44 NULL
-NULL 42
-NULL 44
-NULL NULL
+
 
 query I
 SELECT * FROM onecolumn AS a NATURAL LEFT OUTER JOIN onecolumn AS b order by a.x
@@ -436,7 +427,7 @@ SELECT * FROM onecolumn JOIN (SELECT x + 2 AS x FROM onecolumn) USING(x)
 query IIIII
 SELECT * FROM (twocolumn AS a JOIN twocolumn AS b USING(x) JOIN twocolumn AS c USING(x)) ORDER BY x LIMIT 1
 ----
-42 53 53 42 53
+42 53 53 53
 
 query IIIIII
 SELECT a.x AS s, b.x, c.x, a.y, b.y, c.y FROM (twocolumn AS a JOIN twocolumn AS b USING(x) JOIN twocolumn AS c USING(x)) ORDER BY s

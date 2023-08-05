@@ -601,10 +601,12 @@ impl<'a> JoinConditionResolver<'a> {
                 .join_context
                 .columns
                 .iter_mut()
-                .filter(|col_binding| col_binding.column_name == join_key_name)
+                .filter(|col_binding| {
+                    col_binding.column_name == join_key_name
+                        && col_binding.visibility != Visibility::UnqualifiedWildcardInVisible
+                })
                 .nth(idx)
             {
-                // Always make the second using column in the join_context invisible in unqualified wildcard.
                 col_binding.visibility = Visibility::UnqualifiedWildcardInVisible;
             }
 

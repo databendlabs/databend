@@ -264,27 +264,18 @@ impl BindContext {
         let mut result = vec![];
 
         // Lookup parent context to resolve outer reference.
-        if self.expr_context.prefer_resolve_alias() {
-            for (alias, scalar) in available_aliases {
-                if database.is_none() && table.is_none() && column == alias {
-                    result.push(NameResolutionResult::Alias {
-                        alias: alias.clone(),
-                        scalar: scalar.clone(),
-                    });
-                }
-            }
-
-            self.search_bound_columns_recursively(database, table, column, &mut result);
-        } else {
-            self.search_bound_columns_recursively(database, table, column, &mut result);
-
-            for (alias, scalar) in available_aliases {
-                if database.is_none() && table.is_none() && column == alias {
-                    result.push(NameResolutionResult::Alias {
-                        alias: alias.clone(),
-                        scalar: scalar.clone(),
-                    });
-                }
+        self.search_bound_columns_recursively(database, table, column, &mut result);
+        if result.len() > 1 {
+            return Err(ErrorCode::SemanticError(format!(
+                "column {column} is ambiguous"
+            )));
+        }
+        for (alias, scalar) in available_aliases {
+            if database.is_none() && table.is_none() && column == alias {
+                result.push(NameResolutionResult::Alias {
+                    alias: alias.clone(),
+                    scalar: scalar.clone(),
+                });
             }
         }
 
