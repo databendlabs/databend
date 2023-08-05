@@ -19,6 +19,7 @@ common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-storage = { path = "../../../common/storage" }
+common-storages-parquet = { path = "../parquet" }
 storages-common-pruner = { path = "../common/pruner" }
 storages-common-table-meta = { path = "../common/table-meta" }
 

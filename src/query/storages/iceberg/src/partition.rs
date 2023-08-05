@@ -21,6 +21,7 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_parquet::ParquetPart;
 
 /// # TODO
 ///
@@ -28,7 +29,12 @@ use common_exception::Result;
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct IcebergPartInfo {
     pub path: String,
-    pub size: u64,
+    pub part: IcebergDataPart,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
+pub enum IcebergDataPart {
+    Parquet(ParquetPart),
 }
 
 impl IcebergPartInfo {

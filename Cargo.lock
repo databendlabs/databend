@@ -2802,6 +2802,7 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-storage",
+ "common-storages-parquet",
  "futures",
  "icelake",
  "match-template",

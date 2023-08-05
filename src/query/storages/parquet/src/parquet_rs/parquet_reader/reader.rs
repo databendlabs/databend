@@ -32,6 +32,7 @@ use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::schema::types::ColumnDescPtr;
 use parquet::schema::types::SchemaDescPtr;
+use parquet::schema::types::SchemaDescriptor;
 
 use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_reader::BlockIterator;
@@ -87,7 +88,7 @@ impl ParquetReader {
     pub fn create(
         operator: Operator,
         schema: &ArrowSchema,
-        schema_descr: &SchemaDescPtr,
+        schema_descr: &SchemaDescriptor,
         projection: Projection,
     ) -> Result<Arc<ParquetReader>> {
         let (

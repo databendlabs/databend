@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
@@ -25,14 +26,12 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchema;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -43,10 +42,14 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_storage::DataOperator;
-use parquet::arrow::ProjectionMask;
+use common_storages_parquet::ParquetPart;
+use common_storages_parquet::ParquetRSReader;
+use common_storages_parquet::ParquetRowGroupPart;
 use storages_common_pruner::RangePrunerCreator;
 use tokio::sync::OnceCell;
 
+use crate::partition::IcebergDataPart;
+// use common_storages_parquet
 use crate::partition::IcebergPartInfo;
 use crate::stats::get_stats_of_data_file;
 use crate::table_source::IcebergTableSource;
@@ -156,8 +159,7 @@ impl IcebergTable {
         let max_threads = std::cmp::min(parts_len, max_threads);
 
         let table_schema: TableSchemaRef = self.info.schema();
-        let source_projection =
-            PushDownInfo::projection_of_push_downs(&table_schema, &plan.push_downs);
+        let projection = PushDownInfo::projection_of_push_downs(&table_schema, &plan.push_downs);
 
         let arrow_schema = table_schema.to_arrow();
         let arrow_fields = arrow_schema
@@ -174,16 +176,8 @@ impl IcebergTable {
                 ))
             })?;
 
-        let arrow_projetion = match source_projection {
-            Projection::Columns(cols) => ProjectionMask::leaves(&parquet_schema, cols),
-            Projection::InnerColumns(cols) => {
-                let leaves = cols.values().flatten().cloned().collect::<Vec<_>>();
-                ProjectionMask::leaves(&parquet_schema, leaves)
-            }
-        };
-
-        // The schema of the data block `read_data` output.
-        let output_schema: Arc<DataSchema> = Arc::new(plan.schema().into());
+        let praquet_reader =
+            ParquetRSReader::create(self.op.clone(), &arrow_schema, &parquet_schema, projection)?;
 
         // TODO: we need to support top_k.
         // TODO: we need to support prewhere.
@@ -193,13 +187,7 @@ impl IcebergTable {
             let output = OutputPort::create();
             source_builder.add_source(
                 output.clone(),
-                IcebergTableSource::create(
-                    ctx.clone(),
-                    self.op.clone(),
-                    output,
-                    output_schema.clone(),
-                    arrow_projetion.clone(),
-                )?,
+                IcebergTableSource::create(ctx.clone(), output, praquet_reader.clone())?,
             );
         }
 
@@ -246,11 +234,20 @@ impl IcebergTable {
                 icelake::types::DataFileFormat::Parquet => {
                     read_rows += v.record_count as usize;
                     read_bytes += v.file_size_in_bytes as usize;
+                    let path = table
+                        .rel_path(&v.file_path)
+                        .expect("file path must be rel to table");
                     Ok(Arc::new(Box::new(IcebergPartInfo {
-                        path: table
-                            .rel_path(&v.file_path)
-                            .expect("file path must be rel to table"),
-                        size: v.file_size_in_bytes as u64,
+                        path: path.clone(),
+                        part: IcebergDataPart::Parquet(ParquetPart::RowGroup(
+                            ParquetRowGroupPart {
+                                location: path,
+                                num_rows: v.record_count as usize,
+                                column_metas: HashMap::new(), // TODO: get full column metas.
+                                row_selection: None,
+                                sort_min_max: None,
+                            },
+                        )),
                     }) as Box<dyn PartInfo>))
                 }
                 _ => Err(ErrorCode::Unimplemented(
