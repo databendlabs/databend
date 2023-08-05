@@ -10,7 +10,7 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 For information about the system requirements, download, and deployment steps for Addax, refer to Addax's [Getting Started Guide](https://github.com/wgzhao/Addax#getting-started). The guide provides detailed instructions and guidelines for setting up and using Addax.
 
-See also: [DataX](https://databend.rs/doc/load-data/load-db/datax)
+See also: [DataX](datax.md)
 
 ## DatabendReader & DatabendWriter
 
@@ -18,7 +18,7 @@ DatabendReader and DatabendWriter are integrated plugins of Addax, allowing seam
 
 The DatabendReader plugin enables reading data from Databend. Databend provides compatibility with the MySQL client protocol, so you can also use the [MySQLReader](https://wgzhao.github.io/Addax/develop/reader/mysqlreader/) plugin to retrieve data from Databend. For more information about DatabendReader, see https://wgzhao.github.io/Addax/develop/reader/databendreader/
 
-The DatabendWriter plugin facilitates streaming data into Databend. It leverages the Databend HTTP connection (port 8000) and utilizes the [Streaming Load API](https://databend.rs/doc/develop/api/streaming-load) to efficiently load data into the database. This method offers higher efficiency compared to the [INSERT INTO](https://databend.rs/doc/sql-commands/dml/dml-insert) command and is the recommended data loading method for production environments. For more information about DatabendWriter, see https://wgzhao.github.io/Addax/develop/writer/databendwriter/
+The DatabendWriter plugin facilitates streaming data into Databend. It leverages the Databend HTTP connection (port 8000) and utilizes the [Streaming Load API](/03-develop/00-api/03-streaming-load.md) to efficiently load data into the database. This method offers higher efficiency compared to the [INSERT INTO](/14-sql-commands/10-dml/dml-insert.md) command and is the recommended data loading method for production environments. For more information about DatabendWriter, see https://wgzhao.github.io/Addax/develop/writer/databendwriter/
 
 ## Tutorial: Data Loading from MySQL
 

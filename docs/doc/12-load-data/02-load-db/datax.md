@@ -14,7 +14,7 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 For information about the system requirements, download, and deployment steps for DataX, refer to DataX's [Quick Start Guide](https://github.com/alibaba/DataX/blob/master/userGuid.md). The guide provides detailed instructions and guidelines for setting up and using DataX.
 
-See also: [Addax](https://databend.rs/doc/load-data/load-db/addax)
+See also: [Addax](addax.md)
 
 ## DatabendWriter
 

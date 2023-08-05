@@ -37,8 +37,8 @@ SELECT [<alias>.]<column> [, <column> ...] | [<alias>.]$<col_position> [, $<col_
 
 The file format must be one of the following:
 
-- Built-in file format, see [Input & Output File Formats](https://databend.rs/doc/sql-reference/file-format-options).
-- Named file format created by [CREATE FILE FORMAT](https://databend.rs/doc/sql-commands/ddl/file-format/ddl-create-file-format).
+- Built-in file format, see [Input & Output File Formats](/13-sql-reference/50-file-format-options.md).
+- Named file format created by [CREATE FILE FORMAT](/14-sql-commands/00-ddl/100-file-format/01-ddl-create-file-format.md).
 
 Please note that when you need to query or perform a COPY INTO operation from a staged file, it is necessary to explicitly specify the file format during the creation of the stage. Otherwise, the default format, Parquet, will be applied. See an example below:
 
@@ -108,7 +108,7 @@ To query data files in a bucket or container, provide necessary connection infor
 - REGION
 - ENABLE_VIRTUAL_HOST_STYLE
 
-They are explained in [Create Stage](https://databend.rs/doc/sql-commands/ddl/stage/ddl-create-stage).
+They are explained in [Create Stage](/14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md).
 
 :::tip
 If you're using S3 storage and your bucket has public read access, you can access and query an external stage associated with the bucket anonymously without providing credentials. To enable this feature, add the **allow_anonymous** parameter to the [storage.s3] section in the *databend-query.toml* configuration file and set it to **true**.
@@ -133,7 +133,7 @@ This example shows how to query data in a Parquet file stored in different locat
 <Tabs groupId="query2stage">
 <TabItem value="Stages" label="Stages">
 
-Let's assume you have a sample file named [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet) and you have uploaded it to your user stage, an internal stage named *my_internal_stage*, and an external stage named *my_external_stage*. To upload files to a stage, use the [PRESIGN](https://databend.rs/doc/sql-commands/ddl/presign/presign) method.
+Let's assume you have a sample file named [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet) and you have uploaded it to your user stage, an internal stage named *my_internal_stage*, and an external stage named *my_external_stage*. To upload files to a stage, use the [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md) method.
 
 ```sql
 -- Query file in user stage

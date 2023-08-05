@@ -6,7 +6,7 @@ import TabItem from '@theme/TabItem';
 
 Databend recommends using the Presigned URL method to upload files to the stage. This method provides a secure and efficient way to transfer data by generating a time-limited URL with a signature. By generating a Presigned URL, the client can directly upload the file to the designated stage without the need to route the traffic through Databend servers. This helps in offloading network traffic from the Databend infrastructure and can lead to improved performance and scalability. It also reduces the latency for file uploads, as the data can be transferred directly between the client and the storage destination without intermediaries.
 
-See also: [PRESIGN](https://databend.rs/doc/sql-commands/ddl/presign/presign)
+See also: [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md)
 
 ## Examples
 

@@ -6,7 +6,7 @@ Unloading data refers to the process of extracting or transferring data stored i
 
 Databend recommends using the `COPY INTO <location>` command to export your data to a stage or an external location as a file in one of the supported formats. This command is a convenient and efficient way to transfer data out of the database and into a file for further processing or analysis. 
 
-For more information about the command, see [`COPY INTO <location>`](https://databend.rs/doc/sql-commands/dml/dml-copy-into-location). To view the list of supported file formats that can be used to save the exported data, see [Input & Output File Formats](https://databend.rs/doc/sql-reference/file-format-options).
+For more information about the command, see [`COPY INTO <location>`](/14-sql-commands/10-dml/dml-copy-into-location.md). To view the list of supported file formats that can be used to save the exported data, see [Input & Output File Formats](/13-sql-reference/50-file-format-options.md).
 
 ## Tutorial - Unload to an External Stage
 
@@ -14,7 +14,7 @@ In this tutorial, you will first create an external stage and then use the COPY 
 
 ### Step 1. Create External Stage
 
-Create an external stage named `unload` with the [CREATE STAGE](https://databend.rs/doc/sql-commands/ddl/stage/ddl-create-stage) command:
+Create an external stage named `unload` with the [CREATE STAGE](/14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) command:
 
 ```sql
 CREATE STAGE unload url='s3://unload/files/' connection=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z');
@@ -30,7 +30,7 @@ COPY INTO @unload FROM (SELECT * FROM numbers(10000000)) FILE_FORMAT = (TYPE = P
 
 ### Step 3. Verify Export File
 
-Show the exported file with the [LIST STAGE](https://databend.rs/doc/sql-commands/ddl/stage/ddl-list-stage) command:
+Show the exported file with the [LIST STAGE](/14-sql-commands/00-ddl/40-stage/04-ddl-list-stage.md) command:
 
 ```sql
 LIST @unload;
