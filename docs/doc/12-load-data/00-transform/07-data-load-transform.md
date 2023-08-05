@@ -2,7 +2,7 @@
 title: Transforming Data on Load
 ---
 
-Databend offers a powerful feature that enables data transformation during the loading process using the [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command. This functionality simplifies your ETL pipeline by incorporating basic transformations, eliminating the need for temporary tables. By transforming data during loading, you can streamline your ETL process effectively. Here are practical ways to enhance data loading with this feature:
+Databend offers a powerful feature that enables data transformation during the loading process using the [COPY INTO](https://databend.rs/doc/sql-commands/dml/dml-copy-into-table) command. This functionality simplifies your ETL pipeline by incorporating basic transformations, eliminating the need for temporary tables. By transforming data during loading, you can streamline your ETL process effectively. Here are practical ways to enhance data loading with this feature:
 
 - **Loading a subset of data columns**: Allows you to selectively import specific columns from a dataset, focusing on the data that is relevant to your analysis or application.
 
@@ -24,7 +24,7 @@ This section provides several brief tutorials that offer practical guidance on h
 
 ### Before You Begin
 
-Download the sample file [employees.parquet](https://datasets.databend.rs/employees.parquet) and then upload it to your user stage with [PRESIGN](../../14-sql-commands/00-ddl/80-presign/presign.md). If you query the file, you will find that it contains these records:
+Download the sample file [employees.parquet](https://datasets.databend.rs/employees.parquet) and then upload it to your user stage with [PRESIGN](https://databend.rs/doc/sql-commands/ddl/presign/presign). If you query the file, you will find that it contains these records:
 
 ```sql
 -- Query remote sample file directly

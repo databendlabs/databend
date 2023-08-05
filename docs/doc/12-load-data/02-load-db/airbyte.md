@@ -27,7 +27,7 @@ PRESIGN UPLOAD @airbyte_stage/test.csv;
 ```
 
 If you got an error like `Code: 501, Text = Presign is not supported`, then you could not use the integration.
-Please read [this](/doc/deploy/deploying-databend) for how to use S3 as a storage backend.
+Please read [this](https://databend.rs/doc/deploy/deploying-databend) for how to use S3 as a storage backend.
 
 ## Create a Databend User
 
@@ -50,8 +50,6 @@ Grant privileges for the user:
 ```sql
 GRANT ALL PRIVILEGES ON airbyte.* TO user1;
 ```
-
-See also [How To Create User](../../14-sql-commands/00-ddl/30-user/01-user-create-user.md).
 
 ## Configure Airbyte
 

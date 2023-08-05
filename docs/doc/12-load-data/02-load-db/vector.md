@@ -16,7 +16,7 @@ To integrate Databend with Vector, start by creating an SQL account in Databend 
 
 ### Step 1: Creating a SQL User in Databend
 
-For instructions on how to create a SQL user in Databend and grant appropriate privileges, see [Create User](../../14-sql-commands/00-ddl/30-user/01-user-create-user.md). Here's an example of creating a user named *user1* with the password *abc123*:
+For instructions on how to create a SQL user in Databend and grant appropriate privileges, see [Create User](https://databend.rs/doc/sql-commands/ddl/user/user-create-user). Here's an example of creating a user named *user1* with the password *abc123*:
 
 ```sql
 CREATE USER user1 IDENTIFIED BY 'abc123';
@@ -55,4 +55,4 @@ password = "abc123" #Databend password
 
 **Related topics**:
 
-- [Analyzing Nginx Access Logs with Databend](../../21-use-cases/02-analyze-nginx-logs-with-databend-and-vector.md): This guide provides step-by-step instructions on gathering and analyzing Nginx access logs in real time using Databend and Vector.
+- [Analyzing Nginx Access Logs with Databend](https://databend.rs/doc/use-cases/analyze-nginx-logs-with-databend-and-vector): This guide provides step-by-step instructions on gathering and analyzing Nginx access logs in real time using Databend and Vector.
