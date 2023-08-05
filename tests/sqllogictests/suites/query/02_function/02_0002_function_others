@@ -42,9 +42,10 @@ SELECT TRY_INET_NTOA(167773449)
 ----
 10.0.5.9
 
-
-statement error 1065
+query T
 SELECT TRY_INET_NTOA('167773449')
+----
+10.0.5.9
 
 query T
 SELECT TRY_INET_NTOA(NULL)

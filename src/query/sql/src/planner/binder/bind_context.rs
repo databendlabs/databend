@@ -296,12 +296,10 @@ impl BindContext {
             }
         }
 
-        if alias_match_count >= 2 {
-            if !result.iter().all_equal() {
-                return Err(ErrorCode::SemanticError(format!(
-                    "column {column} reference alias is ambiguous, please use another alias name",
-                )));
-            }
+        if alias_match_count >= 2 && !result.iter().all_equal() {
+            return Err(ErrorCode::SemanticError(format!(
+                "column {column} reference alias is ambiguous, please use another alias name",
+            )));
         }
 
         if result.is_empty() {
