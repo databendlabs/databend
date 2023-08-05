@@ -415,6 +415,35 @@ impl PipelineBuilder {
             table,
             *block_thresholds,
         );
+        if !*need_insert {
+            if segment_partition_num == 0 {
+                return Ok(());
+            }
+            let broadcast_processor = BroadcastProcessor::new(segment_partition_num);
+            self.main_pipeline
+                .add_pipe(Pipe::create(1, segment_partition_num, vec![
+                    broadcast_processor.into_pipe_item(),
+                ]));
+            let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
+            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+
+            let merge_into_operation_aggregators = table.merge_into_mutators(
+                self.ctx.clone(),
+                segment_partition_num,
+                block_builder,
+                on_conflicts.clone(),
+                *bloom_filter_column_index,
+                segments,
+                io_request_semaphore,
+            )?;
+            self.main_pipeline.add_pipe(Pipe::create(
+                segment_partition_num,
+                segment_partition_num,
+                merge_into_operation_aggregators,
+            ));
+            return Ok(());
+        }
+
         if segment_partition_num == 0 {
             let dummy_item = create_dummy_item();
             //                      ┌──────────────────────┐            ┌──────────────────┐
