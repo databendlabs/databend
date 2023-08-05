@@ -4,7 +4,7 @@ title: Retrieving Metadata
 
 ### Why and What is Metadata?
 
-Databend allows you to retrieve metadata from your data files using the [INFER_SCHEMA](../../15-sql-functions/112-table-functions/infer_schema.md) function. This means you can extract column definitions from data files stored in internal or external stages. Retrieving metadata through the INFER_SCHEMA function provides a better understanding of the data structure, ensures data consistency, and enables automated data integration and analysis. The metadata for each column includes the following information:
+Databend allows you to retrieve metadata from your data files using the [INFER_SCHEMA](/15-sql-functions/112-table-functions/infer_schema.md) function. This means you can extract column definitions from data files stored in internal or external stages. Retrieving metadata through the INFER_SCHEMA function provides a better understanding of the data structure, ensures data consistency, and enables automated data integration and analysis. The metadata for each column includes the following information:
 
 - **column_name**: Indicates the name of the column.
 - **type**: Indicates the data type of the column.
@@ -15,7 +15,7 @@ Databend allows you to retrieve metadata from your data files using the [INFER_S
 This feature is currently only available for the Parquet file format.
 :::
 
-The syntax for INFER_SCHEMA is as follows. For more detailed information about this function, see [INFER_SCHEMA](../../15-sql-functions/112-table-functions/infer_schema.md).
+The syntax for INFER_SCHEMA is as follows. For more detailed information about this function, see [INFER_SCHEMA](/15-sql-functions/112-table-functions/infer_schema.md).
 
 ```sql
 INFER_SCHEMA(
