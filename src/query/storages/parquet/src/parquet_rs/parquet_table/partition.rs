@@ -16,108 +16,14 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
-use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_functions::BUILTIN_FUNCTIONS;
-use storages_common_index::Index;
-use storages_common_index::RangeIndex;
-use storages_common_pruner::RangePrunerCreator;
 
-use super::table::arrow_to_table_schema;
 use super::ParquetTable;
-use crate::parquet_rs::projection::project_schema_all;
-use crate::parquet_rs::pruning::PartitionPruner;
+use crate::parquet_rs::pruning::ParquetPartitionPruner;
 
 impl ParquetTable {
-    pub(crate) fn create_pruner(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        push_down: Option<PushDownInfo>,
-        is_small_file: bool,
-    ) -> Result<PartitionPruner> {
-        let settings = ctx.get_settings();
-        let parquet_fast_read_bytes = if is_small_file {
-            0_usize
-        } else {
-            settings.get_parquet_fast_read_bytes()? as usize
-        };
-        // `plan.source_info.schema()` is the same as `TableSchema::from(&self.arrow_schema)`
-        let projection = if let Some(PushDownInfo {
-            projection: Some(prj),
-            ..
-        }) = &push_down
-        {
-            prj.clone()
-        } else {
-            let indices = (0..self.arrow_schema.fields.len()).collect::<Vec<usize>>();
-            Projection::Columns(indices)
-        };
-
-        let top_k = push_down
-            .as_ref()
-            .map(|p| p.top_k(&self.table_info.schema(), None, RangeIndex::supported_type))
-            .unwrap_or_default();
-
-        // Currently, arrow2 doesn't support reading stats of a inner column of a nested type.
-        // Therefore, if there is inner fields in projection, we skip the row group pruning.
-        let skip_pruning = matches!(projection, Projection::InnerColumns(_));
-
-        // Use `projected_column_nodes` to collect stats from row groups for pruning.
-        // `projected_column_nodes` contains the smallest column set that is needed for the query.
-        // Use `projected_arrow_schema` to create `row_group_pruner` (`RangePruner`).
-        //
-        // During pruning evaluation,
-        // `RangePruner` will use field name to find the offset in the schema,
-        // and use the offset to find the column stat from `StatisticsOfColumns` (HashMap<offset, stat>).
-        //
-        // How the stats are collected can be found in `ParquetReader::collect_row_group_stats`.
-        let (projected_arrow_schema, projected_column_nodes, _, columns_to_read, _) =
-            project_schema_all(&self.arrow_schema, &self.schema_descr, &projection)?;
-        let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema)?);
-
-        let filter = push_down
-            .as_ref()
-            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
-
-        let top_k = top_k.map(|top_k| {
-            let offset = projected_column_nodes
-                .column_nodes
-                .iter()
-                .position(|node| node.leaf_indices[0] == top_k.column_id as usize)
-                .unwrap();
-            (top_k, offset)
-        });
-
-        let func_ctx = ctx.get_function_context()?;
-
-        let row_group_pruner = if self.read_options.prune_row_groups() {
-            Some(RangePrunerCreator::try_create(
-                func_ctx,
-                &schema,
-                filter.as_ref(),
-            )?)
-        } else {
-            None
-        };
-
-        Ok(PartitionPruner {
-            schema,
-            schema_descr: self.schema_descr.clone(),
-            schema_from: self.schema_from.clone(),
-            row_group_pruner,
-            page_pruners: None,
-            columns_to_read,
-            column_nodes: projected_column_nodes,
-            skip_pruning,
-            top_k,
-            parquet_fast_read_bytes,
-            compression_ratio: self.compression_ratio,
-            max_memory_usage: settings.get_max_memory_usage()?,
-        })
-    }
-
     #[inline]
     #[async_backtrace::framed]
     pub(super) async fn do_read_partitions(
@@ -125,7 +31,16 @@ impl ParquetTable {
         ctx: Arc<dyn TableContext>,
         push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let pruner = self.create_pruner(ctx.clone(), push_down.clone(), false)?;
+        let pruner = ParquetPartitionPruner::try_create(
+            ctx.clone(),
+            &self.arrow_schema,
+            self.schema_descr.clone(),
+            &self.schema_from,
+            &push_down,
+            self.read_options,
+            self.compression_ratio,
+            false,
+        )?;
 
         let file_locations = match &self.files_to_read {
             Some(files) => files

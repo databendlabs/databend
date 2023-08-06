@@ -30,5 +30,6 @@ pub use parquet_part::ParquetSmallFilesPart;
 pub use parquet_reader::BlockIterator;
 pub use parquet_reader::ParquetPartData;
 pub use parquet_reader::ParquetReader;
+pub use parquet_rs::ParquetPartitionPruner;
 pub use parquet_rs::ParquetReader as ParquetRSReader;
 pub use parquet_rs::ParquetTable;

@@ -99,7 +99,7 @@ impl ParquetReader {
             projected_column_descriptors,
         ) = project_schema_all(schema, schema_descr, &projection)?;
 
-        let t_schema = arrow_to_table_schema(projected_arrow_schema.clone())?;
+        let t_schema = arrow_to_table_schema(&projected_arrow_schema)?;
         let output_schema = DataSchema::from(&t_schema);
 
         Ok(Arc::new(ParquetReader {

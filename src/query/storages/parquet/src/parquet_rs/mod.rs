@@ -22,3 +22,4 @@ mod statistics;
 
 pub use parquet_reader::ParquetReader;
 pub use parquet_table::ParquetTable;
+pub use pruning::ParquetPartitionPruner;

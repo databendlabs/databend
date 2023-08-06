@@ -47,8 +47,7 @@ impl ParquetTable {
         let (arrow_schema, schema_descr, compression_ratio) =
             Self::blocking_prepare_metas(&first_file, operator.clone())?;
 
-        let table_info = create_parquet_table_info(arrow_schema.clone())?;
-
+        let table_info = create_parquet_table_info(&arrow_schema)?;
         Ok(Arc::new(ParquetTable {
             table_info,
             arrow_schema,

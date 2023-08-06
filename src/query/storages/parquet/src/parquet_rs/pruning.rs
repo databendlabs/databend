@@ -16,22 +16,33 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use arrow_schema::Schema as ArrowSchema;
+use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
+use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::TopK;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::FieldIndex;
 use common_expression::TableSchemaRef;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_storage::parquet_rs::read_metadata;
 use common_storage::parquet_rs::read_parquet_metas_in_parallel;
 use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 use parquet::schema::types::SchemaDescriptor;
+use storages_common_index::Index;
+use storages_common_index::RangeIndex;
 use storages_common_pruner::RangePruner;
+use storages_common_pruner::RangePrunerCreator;
 
+use super::parquet_table::arrow_to_table_schema;
+use super::projection::project_schema_all;
 use crate::parquet_part::collect_small_file_parts;
 use crate::parquet_part::ColumnMeta;
 use crate::parquet_part::ParquetPart;
@@ -42,7 +53,7 @@ use crate::parquet_rs::statistics::collect_row_group_stats;
 use crate::processors::SmallFilePrunner;
 
 /// Prune parquet row groups and pages.
-pub struct PartitionPruner {
+pub struct ParquetPartitionPruner {
     /// Table schema.
     pub schema: TableSchemaRef,
     pub schema_descr: SchemaDescPtr,
@@ -82,7 +93,7 @@ fn check_parquet_schema(
     Ok(())
 }
 
-impl SmallFilePrunner for PartitionPruner {
+impl SmallFilePrunner for ParquetPartitionPruner {
     fn prune_one_file(
         &self,
         path: &str,
@@ -98,7 +109,99 @@ impl SmallFilePrunner for PartitionPruner {
     }
 }
 
-impl PartitionPruner {
+impl ParquetPartitionPruner {
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        arrow_schema: &ArrowSchema,
+        schema_descr: SchemaDescPtr,
+        schema_from: &str,
+        push_down: &Option<PushDownInfo>,
+        read_options: ParquetReadOptions,
+        compression_ratio: f64,
+        is_small_file: bool,
+    ) -> Result<Self> {
+        let settings = ctx.get_settings();
+        let parquet_fast_read_bytes = if is_small_file {
+            0_usize
+        } else {
+            settings.get_parquet_fast_read_bytes()? as usize
+        };
+        let projection = if let Some(PushDownInfo {
+            projection: Some(prj),
+            ..
+        }) = push_down
+        {
+            prj.clone()
+        } else {
+            let indices = (0..arrow_schema.fields.len()).collect::<Vec<usize>>();
+            Projection::Columns(indices)
+        };
+
+        let table_schema = arrow_to_table_schema(arrow_schema)?;
+        let top_k = push_down
+            .as_ref()
+            .map(|p| p.top_k(&table_schema, None, RangeIndex::supported_type))
+            .unwrap_or_default();
+
+        // Currently, arrow2 doesn't support reading stats of a inner column of a nested type.
+        // Therefore, if there is inner fields in projection, we skip the row group pruning.
+        let skip_pruning = matches!(projection, Projection::InnerColumns(_));
+
+        // Use `projected_column_nodes` to collect stats from row groups for pruning.
+        // `projected_column_nodes` contains the smallest column set that is needed for the query.
+        // Use `projected_arrow_schema` to create `row_group_pruner` (`RangePruner`).
+        //
+        // During pruning evaluation,
+        // `RangePruner` will use field name to find the offset in the schema,
+        // and use the offset to find the column stat from `StatisticsOfColumns` (HashMap<offset, stat>).
+        //
+        // How the stats are collected can be found in `ParquetReader::collect_row_group_stats`.
+        let (projected_arrow_schema, projected_column_nodes, _, columns_to_read, _) =
+            project_schema_all(arrow_schema, &schema_descr, &projection)?;
+        let schema = Arc::new(arrow_to_table_schema(&projected_arrow_schema)?);
+
+        let filter = push_down
+            .as_ref()
+            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+
+        let top_k = top_k.map(|top_k| {
+            let offset = projected_column_nodes
+                .column_nodes
+                .iter()
+                .position(|node| node.leaf_indices[0] == top_k.column_id as usize)
+                .unwrap();
+            (top_k, offset)
+        });
+
+        let func_ctx = ctx.get_function_context()?;
+
+        let row_group_pruner = if read_options.prune_row_groups() {
+            Some(RangePrunerCreator::try_create(
+                func_ctx,
+                &schema,
+                filter.as_ref(),
+            )?)
+        } else {
+            None
+        };
+
+        Ok(ParquetPartitionPruner {
+            schema,
+            schema_descr,
+            schema_from: schema_from.to_string(),
+            row_group_pruner,
+            page_pruners: None,
+            columns_to_read,
+            column_nodes: projected_column_nodes,
+            skip_pruning,
+            top_k,
+            parquet_fast_read_bytes,
+            compression_ratio,
+            max_memory_usage: settings.get_max_memory_usage()?,
+        })
+    }
+
     #[async_backtrace::framed]
     pub fn read_and_prune_file_meta(
         &self,
