@@ -243,14 +243,22 @@ impl ReplaceInterpreter {
             }));
         }
 
-        let bloom_filter_column_index = fuse_table
-            .choose_most_significant_bloom_filter_column(&on_conflicts)
-            .await?;
+        let max_num_pruning_columns = self
+            .ctx
+            .get_settings()
+            .get_replace_into_bloom_pruning_max_column_number()?;
+        let bloom_filter_column_indexes = if !table.cluster_keys(self.ctx.clone()).is_empty() {
+            fuse_table
+                .choose_bloom_filter_columns(&on_conflicts, max_num_pruning_columns)
+                .await?
+        } else {
+            vec![]
+        };
 
         root = Box::new(PhysicalPlan::Deduplicate(Deduplicate {
             input: root,
             on_conflicts: on_conflicts.clone(),
-            bloom_filter_column_index,
+            bloom_filter_column_indexes: bloom_filter_column_indexes.clone(),
             table_is_empty,
             table_info: table_info.clone(),
             catalog_info: catalog.info(),
@@ -265,7 +273,7 @@ impl ReplaceInterpreter {
             table_info: table_info.clone(),
             catalog_info: catalog.info(),
             on_conflicts,
-            bloom_filter_column_index,
+            bloom_filter_column_indexes,
             segments: base_snapshot
                 .segments
                 .clone()

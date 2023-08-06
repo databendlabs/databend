@@ -101,7 +101,7 @@ impl FuseTable {
         num_partition: usize,
         block_builder: BlockBuilder,
         on_conflicts: Vec<OnConflictField>,
-        most_significant_on_conflict_field_index: Option<usize>,
+        bloom_filter_column_indexes: Vec<FieldIndex>,
         segments: &[(usize, Location)],
         io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PipeItem>> {
@@ -114,7 +114,7 @@ impl FuseTable {
             let item = MergeIntoOperationAggregator::try_create(
                 ctx.clone(),
                 on_conflicts.clone(),
-                most_significant_on_conflict_field_index,
+                bloom_filter_column_indexes.clone(),
                 chunk_of_segment_locations,
                 self.operator.clone(),
                 self.table_info.schema(),
@@ -198,25 +198,34 @@ impl FuseTable {
         Ok(())
     }
 
-    // choose the most significant bloom filter column.
-    //
-    // the one with the greatest number of number-of-distinct-values, will be kept.
-    // if all the columns do not support bloom index, return None
-    pub async fn choose_most_significant_bloom_filter_column(
+    // choose the bloom filter columns (from on-conflict fields).
+    // columns with larger number of number-of-distinct-values, will be kept, is their types
+    // are supported by bloom index.
+    pub async fn choose_bloom_filter_columns(
         &self,
         on_conflicts: &[OnConflictField],
-    ) -> Result<Option<FieldIndex>> {
+        max_num_columns: u64,
+    ) -> Result<Vec<FieldIndex>> {
         let col_stats_provider = self.column_statistics_provider().await?;
-        let iter = on_conflicts.iter().enumerate().filter_map(|(idx, key)| {
-            if !BloomIndex::supported_type(&key.table_field.data_type) {
-                None
-            } else {
-                let maybe_col_stats =
-                    col_stats_provider.column_statistics(key.table_field.column_id);
-                maybe_col_stats.map(|col_stats| (idx, col_stats.number_of_distinct_values))
-            }
-        });
-        // pick the one with the greatest NDV
-        Ok(iter.max_by(|l, r| l.1.cmp(&r.1)).map(|v| v.0))
+        let mut cols = on_conflicts
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, key)| {
+                if !BloomIndex::supported_type(&key.table_field.data_type) {
+                    None
+                } else {
+                    let maybe_col_stats =
+                        col_stats_provider.column_statistics(key.table_field.column_id);
+                    maybe_col_stats.map(|col_stats| (idx, col_stats.number_of_distinct_values))
+                }
+            })
+            .collect::<Vec<_>>();
+
+        cols.sort_by(|l, r| l.1.cmp(&r.1).reverse());
+        Ok(cols
+            .into_iter()
+            .map(|v| v.0)
+            .take(max_num_columns as usize)
+            .collect())
     }
 }
