@@ -20,6 +20,7 @@ use super::query::pretty_table;
 use crate::ast::format::syntax::interweave_comma;
 use crate::ast::format::syntax::parenthesized;
 use crate::ast::format::syntax::NEST_FACTOR;
+use crate::ast::AddColumnOption;
 use crate::ast::AlterTableAction;
 use crate::ast::AlterTableStmt;
 use crate::ast::AlterViewStmt;
@@ -162,9 +163,16 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
             .append(RcDoc::text(old_column.to_string()))
             .append(RcDoc::text(" TO "))
             .append(RcDoc::text(new_column.to_string())),
-        AlterTableAction::AddColumn { column } => RcDoc::line()
+        AlterTableAction::AddColumn { column, option } => RcDoc::line()
             .append(RcDoc::text("ADD COLUMN "))
-            .append(RcDoc::text(column.to_string())),
+            .append(RcDoc::text(column.to_string()))
+            .append(match option {
+                AddColumnOption::First => RcDoc::space().append(RcDoc::text("FIRST")),
+                AddColumnOption::After(ident) => {
+                    RcDoc::space().append(RcDoc::text(format!("AFTER {ident}")))
+                }
+                AddColumnOption::End => RcDoc::nil(),
+            }),
         AlterTableAction::ModifyColumn { action } => RcDoc::line()
             .append(RcDoc::text("MODIFY COLUMN "))
             .append(RcDoc::text(action.to_string()))
