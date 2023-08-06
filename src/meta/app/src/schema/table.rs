@@ -24,6 +24,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use common_exception::Result;
+use common_expression::FieldIndex;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_types::MatchSeq;
@@ -250,9 +251,23 @@ impl TableMeta {
         Ok(())
     }
 
+    pub fn add_column(
+        &mut self,
+        field: &TableField,
+        comment: &str,
+        index: FieldIndex,
+    ) -> Result<()> {
+        let mut new_schema = self.schema.as_ref().to_owned();
+        new_schema.add_column(field, index)?;
+        self.schema = Arc::new(new_schema);
+        self.field_comments.insert(index, comment.to_owned());
+        Ok(())
+    }
+
     pub fn drop_column(&mut self, column: &str) -> Result<()> {
         let mut new_schema = self.schema.as_ref().to_owned();
-        new_schema.drop_column(column)?;
+        let index = new_schema.drop_column(column)?;
+        self.field_comments.remove(index);
         self.schema = Arc::new(new_schema);
         Ok(())
     }

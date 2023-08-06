@@ -3626,6 +3626,7 @@ dependencies = [
  "anyhow",
  "async-backtrace",
  "background-service",
+ "chrono",
  "clap 3.2.23",
  "comfy-table 6.1.4",
  "common-base",

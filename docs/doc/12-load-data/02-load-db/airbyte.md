@@ -51,8 +51,6 @@ Grant privileges for the user:
 GRANT ALL PRIVILEGES ON airbyte.* TO user1;
 ```
 
-See also [How To Create User](../../14-sql-commands/00-ddl/30-user/01-user-create-user.md).
-
 ## Configure Airbyte
 
 To use Databend with Airbyte, you should add our customized connector to your Airbyte Instance.

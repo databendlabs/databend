@@ -22,6 +22,7 @@ use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
 use common_sql::field_default_value;
+use common_sql::plans::AddColumnOption;
 use common_sql::plans::AddTableColumnPlan;
 use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
@@ -94,9 +95,12 @@ impl Interpreter for AddTableColumnInterpreter {
                 let _ = field_default_value(self.ctx.clone(), &field)?;
             }
             is_valid_column(field.name())?;
-            let fields = vec![field];
-            let comments = vec![self.plan.comment.clone()];
-            new_table_meta.add_columns(&fields, &comments)?;
+            let index = match &self.plan.option {
+                AddColumnOption::First => 0,
+                AddColumnOption::After(name) => new_table_meta.schema.index_of(name)? + 1,
+                AddColumnOption::End => new_table_meta.schema.num_fields(),
+            };
+            new_table_meta.add_column(&field, &self.plan.comment, index)?;
 
             let table_id = table_info.ident.table_id;
             let table_version = table_info.ident.seq;
