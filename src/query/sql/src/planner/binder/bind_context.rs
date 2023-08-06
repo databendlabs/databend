@@ -296,9 +296,9 @@ impl BindContext {
             }
         }
 
-        if alias_match_count >= 2 && !result.iter().all_equal() {
+        if result.len() > 1 && !result.iter().all_equal() {
             return Err(ErrorCode::SemanticError(format!(
-                "column {column} reference alias is ambiguous, please use another alias name",
+                "column {column} reference or alias is ambiguous, please use another alias name",
             )));
         }
 
@@ -338,6 +338,8 @@ impl BindContext {
         }
     }
 
+    // Search bound column recursively from the parent context.
+    // If current context found results, it'll stop searching.
     pub fn search_bound_columns_recursively(
         &self,
         database: Option<&str>,
