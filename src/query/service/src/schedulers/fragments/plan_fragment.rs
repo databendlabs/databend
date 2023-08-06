@@ -381,6 +381,7 @@ impl PhysicalPlanReplacer for ReplaceReplaceInto {
         Ok(PhysicalPlan::Deduplicate(Deduplicate {
             input: Box::new(input),
             need_insert: self.need_insert,
+            table_is_empty: self.partitions.is_empty(),
             ..plan.clone()
         }))
     }
