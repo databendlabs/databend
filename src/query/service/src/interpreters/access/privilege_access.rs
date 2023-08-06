@@ -441,6 +441,7 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
+            Plan::MergeInto(_) => unimplemented!(),
             Plan::Delete(plan) => {
                 session
                     .validate_privilege(

@@ -77,7 +77,11 @@ impl MetaAPIError {
                 // Network is always unstable, retry.
                 true
             }
-            MetaAPIError::DataError(_) => false,
+            MetaAPIError::DataError(data_err) => match data_err {
+                MetaDataError::WriteError(_) => false,
+                MetaDataError::ChangeMembershipError(_) => true,
+                MetaDataError::ReadError(_) => false,
+            },
         }
     }
 }

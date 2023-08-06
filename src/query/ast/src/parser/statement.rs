@@ -2060,9 +2060,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let add_column = map(
         rule! {
-            ADD ~ COLUMN ~ #column_def
+            ADD ~ COLUMN ~ #column_def ~ ( #add_column_option )?
         },
-        |(_, _, column)| AlterTableAction::AddColumn { column },
+        |(_, _, column, option)| AlterTableAction::AddColumn {
+            column,
+            option: option.unwrap_or(AddColumnOption::End),
+        },
     );
 
     let modify_column = map(
@@ -2186,6 +2189,15 @@ pub fn unmatch_clause(i: Input) -> IResult<MergeOption> {
             }
         },
     )(i)
+}
+
+pub fn add_column_option(i: Input) -> IResult<AddColumnOption> {
+    alt((
+        value(AddColumnOption::First, rule! { FIRST }),
+        map(rule! { AFTER ~ #ident }, |(_, ident)| {
+            AddColumnOption::After(ident)
+        }),
+    ))(i)
 }
 
 pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
