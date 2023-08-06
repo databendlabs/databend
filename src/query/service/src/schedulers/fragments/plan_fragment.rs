@@ -211,10 +211,10 @@ impl PlanFragment {
         Ok(fragment_actions)
     }
 
-    fn reshuffle_segments(
+    fn reshuffle<T: Clone>(
         executors: Vec<String>,
-        partitions: Vec<Location>,
-    ) -> Result<HashMap<String, Vec<Location>>> {
+        partitions: Vec<T>,
+    ) -> Result<HashMap<String, Vec<T>>> {
         let num_parts = partitions.len();
         let num_executors = executors.len();
         let mut executors_sorted = executors;
@@ -252,7 +252,7 @@ impl PlanFragment {
         let partitions = &plan.segments;
         let executors = Fragmenter::get_executors(ctx.clone());
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
-        let partition_reshuffle = Self::reshuffle_segments(executors, partitions.clone())?;
+        let partition_reshuffle = Self::reshuffle(executors, partitions.clone())?;
 
         let local_id = &ctx.get_cluster().local_id;
 
@@ -361,7 +361,7 @@ impl PhysicalPlanReplacer for ReplaceDeletePartial {
 }
 
 struct ReplaceReplaceInto {
-    pub partitions: Vec<Location>,
+    pub partitions: Vec<(usize, Location)>,
     pub need_insert: bool,
 }
 

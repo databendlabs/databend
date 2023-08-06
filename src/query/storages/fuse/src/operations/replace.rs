@@ -24,6 +24,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
+use log::error;
 use rand::prelude::SliceRandom;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::Location;
@@ -101,9 +102,11 @@ impl FuseTable {
         block_builder: BlockBuilder,
         on_conflicts: Vec<OnConflictField>,
         most_significant_on_conflict_field_index: Option<usize>,
-        segments: &[Location],
+        segments: &[(usize, Location)],
         io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PipeItem>> {
+        error!("segments: {:?}", segments);
+        error!("num_partition: {:?}", num_partition);
         let chunks = Self::partition_segments(segments, num_partition);
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let mut items = Vec::with_capacity(num_partition);
@@ -126,17 +129,17 @@ impl FuseTable {
     }
 
     pub fn partition_segments(
-        segments: &[Location],
+        segments: &[(usize, Location)],
         num_partition: usize,
     ) -> Vec<Vec<(SegmentIndex, Location)>> {
         let chunk_size = segments.len() / num_partition;
         assert!(chunk_size >= 1);
+        let mut segments = segments.to_vec();
 
-        let mut indexed_segment = segments.iter().enumerate().collect::<Vec<_>>();
-        indexed_segment.shuffle(&mut rand::thread_rng());
+        segments.shuffle(&mut rand::thread_rng());
 
         let mut chunks = Vec::with_capacity(num_partition);
-        for chunk in indexed_segment.chunks(chunk_size) {
+        for chunk in segments.chunks(chunk_size) {
             let mut segment_chunk = chunk
                 .iter()
                 .map(|(segment_idx, location)| (*segment_idx, (*location).clone()))

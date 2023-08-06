@@ -947,7 +947,7 @@ pub struct ReplaceInto {
     pub on_conflicts: Vec<OnConflictField>,
     pub bloom_filter_column_index: Option<FieldIndex>,
     pub catalog_info: CatalogInfo,
-    pub segments: Vec<Location>,
+    pub segments: Vec<(usize, Location)>,
     pub need_insert: bool,
 }
 

@@ -266,7 +266,12 @@ impl ReplaceInterpreter {
             catalog_info: catalog.info(),
             on_conflicts,
             bloom_filter_column_index,
-            segments: base_snapshot.segments.clone(),
+            segments: base_snapshot
+                .segments
+                .clone()
+                .into_iter()
+                .enumerate()
+                .collect(),
             need_insert: true,
         }));
         if is_distributed {
