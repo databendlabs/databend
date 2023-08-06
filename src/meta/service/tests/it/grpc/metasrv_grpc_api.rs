@@ -113,7 +113,7 @@ async fn test_retry_join() -> anyhow::Result<()> {
         tc1.config.raft_config.join = vec![bad_addr.clone()];
         let ret = start_metasrv_with_context(&mut tc1).await;
         let expect = format!(
-            "fail to join {} cluster via {:?}",
+            "fail to join node-{} to cluster via {:?}",
             1, tc1.config.raft_config.join
         );
 

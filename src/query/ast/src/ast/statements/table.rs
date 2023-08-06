@@ -325,6 +325,7 @@ pub enum AlterTableAction {
     },
     AddColumn {
         column: ColumnDefinition,
+        option: AddColumnOption,
     },
     RenameColumn {
         old_column: Identifier,
@@ -369,8 +370,9 @@ impl Display for AlterTableAction {
             } => {
                 write!(f, "RENAME COLUMN {old_column} TO {new_column}")
             }
-            AlterTableAction::AddColumn { column } => {
-                write!(f, "ADD COLUMN {column}")
+            AlterTableAction::AddColumn { column, option } => {
+                write!(f, "ADD COLUMN {column}{option}")?;
+                Ok(())
             }
             AlterTableAction::ModifyColumn { action } => {
                 write!(f, "MODIFY COLUMN {action}")
@@ -406,6 +408,23 @@ impl Display for AlterTableAction {
                 write!(f, "REVERT TO {}", point)?;
                 Ok(())
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AddColumnOption {
+    End,
+    First,
+    After(Identifier),
+}
+
+impl Display for AddColumnOption {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            AddColumnOption::First => write!(f, " FIRST"),
+            AddColumnOption::After(ident) => write!(f, " AFTER {ident}"),
+            AddColumnOption::End => Ok(()),
         }
     }
 }
