@@ -334,5 +334,7 @@ statement error 1065
 SELECT abs(TRUE)
 
 
-statement error 1049
+query I
 select abs(-9223372036854775808)
+----
+9223372036854775808

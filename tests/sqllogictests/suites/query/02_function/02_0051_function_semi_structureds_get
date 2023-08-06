@@ -111,8 +111,10 @@ select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras"
 NULL
 
 
-statement error 1005
+query T
 select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', '')
+----
+{"customer":{"extras":["ext","test"],"id":1,"name":"databend"}}
 
 query T
 select [][0]
