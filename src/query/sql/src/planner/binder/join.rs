@@ -609,7 +609,6 @@ impl<'a> JoinConditionResolver<'a> {
                 .iter_mut()
                 .filter(|col_binding| {
                     col_binding.column_name == join_key_name
-                        && col_binding.column_name == join_key_name
                         && col_binding.visibility != Visibility::UnqualifiedWildcardInVisible
                 })
                 .nth(idx)

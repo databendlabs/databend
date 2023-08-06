@@ -318,7 +318,7 @@ async fn test_dataframe() -> Result<()> {
 
     // join
     {
-        let sql = "select tables.database, tables.name from system.tables left join system.databases on tables.database=databases.name where name='tables'";
+        let sql = "select tables.database, tables.name from system.tables left join system.databases on tables.database=databases.name where tables.name='tables'";
         let df = Dataframe::scan(query_ctx.clone(), Some("system"), "tables")
             .await
             .unwrap()
