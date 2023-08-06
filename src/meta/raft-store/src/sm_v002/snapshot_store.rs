@@ -162,6 +162,8 @@ impl SnapshotStoreV002 {
     pub async fn clean_old_snapshots(&self) -> Result<(), SnapshotStoreError> {
         let dir = self.ensure_snapshot_dir()?;
 
+        info!("cleaning old snapshots in {}", dir);
+
         let (snapshot_ids, invalid_files) = self.load_snapshot_ids().await?;
         for invalid_file in invalid_files {
             let path = format!("{}/{}", dir, invalid_file);

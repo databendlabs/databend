@@ -131,6 +131,10 @@ impl<'a> WriterV002<'a> {
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
             cnt += 1;
+
+            if cnt % 1000 == 0 {
+                info!("Snapshot Writer has written {} entries", cnt)
+            }
         }
 
         Ok(cnt)

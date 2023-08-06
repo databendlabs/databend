@@ -242,6 +242,8 @@ impl StoreInner {
             }
         })?;
 
+        info!(snapshot_size = as_display!(snapshot_size); "do_build_snapshot complete");
+
         snapshot_store.clean_old_snapshots().await?;
 
         assert_eq!(
@@ -250,8 +252,6 @@ impl StoreInner {
             snapshot_id.last_applied, snapshot_meta.last_log_id
         );
         snapshot_meta.snapshot_id = snapshot_id.to_string();
-
-        info!(snapshot_size = as_display!(snapshot_size); "do_build_snapshot complete");
 
         {
             let snapshot = StoredSnapshot {
