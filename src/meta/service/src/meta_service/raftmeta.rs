@@ -687,7 +687,7 @@ impl MetaNode {
         }
 
         Err(MetaManagementError::Join(AnyError::error(format!(
-            "fail to join {} cluster via {:?}, caused by errors: {}",
+            "fail to join node-{} to cluster via {:?}, errors: {}",
             self.sto.id,
             addrs,
             errors.into_iter().map(|e| e.to_string()).join(", ")
