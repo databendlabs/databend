@@ -24,7 +24,6 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
-use log::error;
 use rand::prelude::SliceRandom;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::Location;
@@ -105,8 +104,6 @@ impl FuseTable {
         segments: &[(usize, Location)],
         io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PipeItem>> {
-        error!("segments: {:?}", segments);
-        error!("num_partition: {:?}", num_partition);
         let chunks = Self::partition_segments(segments, num_partition);
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let mut items = Vec::with_capacity(num_partition);
