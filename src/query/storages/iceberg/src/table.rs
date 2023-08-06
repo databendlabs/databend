@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
@@ -22,6 +21,7 @@ use chrono::Utc;
 use common_arrow::arrow::datatypes::Field as Arrow2Field;
 use common_arrow::arrow::datatypes::Schema as Arrow2Schema;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -34,7 +34,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
-use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -43,15 +42,12 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_storage::DataOperator;
 use common_storages_parquet::ParquetPart;
+use common_storages_parquet::ParquetPartitionPruner;
 use common_storages_parquet::ParquetRSReader;
-use common_storages_parquet::ParquetRowGroupPart;
-use storages_common_pruner::RangePrunerCreator;
+use common_storages_parquet::ParquetTable;
 use tokio::sync::OnceCell;
 
-use crate::partition::IcebergDataPart;
-// use common_storages_parquet
 use crate::partition::IcebergPartInfo;
-use crate::stats::get_stats_of_data_file;
 use crate::table_source::IcebergTableSource;
 
 /// accessor wrapper as a table
@@ -208,47 +204,15 @@ impl IcebergTable {
             ErrorCode::ReadTableDataError(format!("Cannot get current data files: {e:?}"))
         })?;
 
-        let filter = push_downs
-            .as_ref()
-            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
-
-        let schema = self.schema();
-
-        let pruner =
-            RangePrunerCreator::try_create(ctx.get_function_context()?, &schema, filter.as_ref())?;
-
-        let partitions_total = data_files.len();
-        let mut read_rows = 0;
-        let mut read_bytes = 0;
-
-        let partitions = data_files
+        // TODO: support other file formats. We only support parquet files now.
+        let parquet_files = data_files
             .into_iter()
-            .filter(|df| {
-                if let Some(stats) = get_stats_of_data_file(&schema, df) {
-                    pruner.should_keep(&stats, None)
-                } else {
-                    true
-                }
-            })
             .map(|v: icelake::types::DataFile| match v.file_format {
                 icelake::types::DataFileFormat::Parquet => {
-                    read_rows += v.record_count as usize;
-                    read_bytes += v.file_size_in_bytes as usize;
                     let path = table
                         .rel_path(&v.file_path)
                         .expect("file path must be rel to table");
-                    Ok(Arc::new(Box::new(IcebergPartInfo {
-                        path: path.clone(),
-                        part: IcebergDataPart::Parquet(ParquetPart::RowGroup(
-                            ParquetRowGroupPart {
-                                location: path,
-                                num_rows: v.record_count as usize,
-                                column_metas: HashMap::new(), // TODO: get full column metas.
-                                row_selection: None,
-                                sort_min_max: None,
-                            },
-                        )),
-                    }) as Box<dyn PartInfo>))
+                    Ok((path, v.file_size_in_bytes as u64))
                 }
                 _ => Err(ErrorCode::Unimplemented(
                     "Only parquet format is supported for iceberg table",
@@ -256,12 +220,51 @@ impl IcebergTable {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let partitions_scanned = partitions.len();
+        let (stats, parts) = self
+            .prune_parquet_partitions(ctx.clone(), &parquet_files, &push_downs)
+            .await?;
+
+        let parts = parts
+            .into_iter()
+            .map(|p| Arc::new(Box::new(IcebergPartInfo::Parquet(p)) as Box<dyn PartInfo>))
+            .collect::<Vec<_>>();
 
         Ok((
-            PartStatistics::new_exact(read_rows, read_bytes, partitions_scanned, partitions_total),
-            Partitions::create_nolazy(PartitionsShuffleKind::Seq, partitions),
+            stats,
+            Partitions::create_nolazy(PartitionsShuffleKind::Mod, parts),
         ))
+    }
+
+    async fn prune_parquet_partitions(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        files: &[(String, u64)],
+        push_downs: &Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Vec<ParquetPart>)> {
+        if files.is_empty() {
+            return Ok((PartStatistics::default_exact(), vec![]));
+        }
+        let (first_file, _) = files[0].clone();
+        let (arrow_schema, schema_descr, compression_ratio) =
+            ParquetTable::prepare_metas(&first_file, self.op.clone()).await?;
+        let pruner = ParquetPartitionPruner::try_create(
+            ctx,
+            &arrow_schema,
+            schema_descr,
+            &first_file,
+            push_downs,
+            ParquetReadOptions::new()
+                .with_prune_row_groups(true)
+                .with_do_prewhere(false)
+                .with_prune_pages(false)
+                .with_push_down_bitmap(false),
+            compression_ratio,
+            true, // Currently, don't generate small file parts.
+        )?;
+
+        pruner
+            .read_and_prune_partitions(self.op.clone(), files)
+            .await
     }
 }
 

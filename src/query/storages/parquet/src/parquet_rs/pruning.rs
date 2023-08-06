@@ -19,8 +19,6 @@ use std::sync::Arc;
 use arrow_schema::Schema as ArrowSchema;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::TopK;
@@ -302,8 +300,8 @@ impl ParquetPartitionPruner {
     pub async fn read_and_prune_partitions(
         &self,
         operator: Operator,
-        locations: &Vec<(String, u64)>,
-    ) -> Result<(PartStatistics, Partitions)> {
+        locations: &[(String, u64)],
+    ) -> Result<(PartStatistics, Vec<ParquetPart>)> {
         // part stats
         let mut stats = PartStatistics::default();
 
@@ -379,13 +377,7 @@ impl ParquetPartitionPruner {
             partitions.len() - num_large_partitions
         );
 
-        let partition_kind = PartitionsShuffleKind::Mod;
-        let partitions = partitions
-            .into_iter()
-            .map(|p| p.convert_to_part_info())
-            .collect();
-
-        Ok((stats, Partitions::create_nolazy(partition_kind, partitions)))
+        Ok((stats, partitions))
     }
 }
 

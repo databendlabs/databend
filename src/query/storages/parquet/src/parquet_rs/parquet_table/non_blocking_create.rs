@@ -75,7 +75,7 @@ impl ParquetTable {
     }
 
     #[async_backtrace::framed]
-    async fn prepare_metas(
+    pub async fn prepare_metas(
         path: &str,
         operator: Operator,
     ) -> Result<(ArrowSchema, SchemaDescPtr, f64)> {

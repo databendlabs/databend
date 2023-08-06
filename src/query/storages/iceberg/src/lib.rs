@@ -92,7 +92,6 @@
 mod catalog;
 mod database;
 mod partition;
-mod stats;
 mod table;
 mod table_source;
 

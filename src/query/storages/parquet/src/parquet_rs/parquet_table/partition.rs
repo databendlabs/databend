@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -57,8 +58,15 @@ impl ParquetTable {
             .collect::<Vec<_>>(),
         };
 
-        pruner
+        let (stats, partitions) = pruner
             .read_and_prune_partitions(self.operator.clone(), &file_locations)
-            .await
+            .await?;
+
+        let partition_kind = PartitionsShuffleKind::Mod;
+        let partitions = partitions
+            .into_iter()
+            .map(|p| p.convert_to_part_info())
+            .collect();
+        Ok((stats, Partitions::create_nolazy(partition_kind, partitions)))
     }
 }

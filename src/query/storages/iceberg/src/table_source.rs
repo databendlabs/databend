@@ -32,7 +32,6 @@ use common_storages_parquet::ParquetPartData;
 use common_storages_parquet::ParquetRSReader;
 use common_storages_parquet::ParquetReader;
 
-use crate::partition::IcebergDataPart;
 use crate::partition::IcebergPartInfo;
 
 pub struct IcebergTableSource {
@@ -132,13 +131,18 @@ impl Processor for IcebergTableSource {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::InitReader(Some(part)) => {
-                // Currently, we only support parquet file format.
-                let data = self
-                    .parquet_reader
-                    .readers_from_non_blocking_io(part.clone())
-                    .await?;
+                let iceberg_part = IcebergPartInfo::from_part(&part)?;
+                match iceberg_part {
+                    IcebergPartInfo::Parquet(parquet_part) => {
+                        // Currently, we only support parquet file format.
+                        let data = self
+                            .parquet_reader
+                            .readers_from_non_blocking_io(parquet_part)
+                            .await?;
 
-                self.state = State::ReadParquetData(data, part.clone());
+                        self.state = State::ReadParquetData(data, part.clone());
+                    }
+                }
 
                 Ok(())
             }
@@ -153,8 +157,8 @@ impl Processor for IcebergTableSource {
             State::ReadParquetData(parquet_data, part) => match parquet_data {
                 ParquetPartData::RowGroup(mut rg) => {
                     let iceberg_part = IcebergPartInfo::from_part(&part)?;
-                    if let IcebergDataPart::Parquet(ParquetPart::RowGroup(parquet_part)) =
-                        &iceberg_part.part
+                    if let IcebergPartInfo::Parquet(ParquetPart::RowGroup(parquet_part)) =
+                        &iceberg_part
                     {
                         let chunks = self.parquet_reader.read_from_readers(&mut rg)?;
                         let block_iter =

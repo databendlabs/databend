@@ -62,7 +62,7 @@ impl ParquetTable {
         }))
     }
 
-    fn blocking_prepare_metas(
+    pub fn blocking_prepare_metas(
         path: &str,
         operator: Operator,
     ) -> Result<(ArrowSchema, SchemaDescPtr, f64)> {
