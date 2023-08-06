@@ -34,6 +34,7 @@ use databend_query::servers::FlightSQLServer;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
+use databend_query::servers::MySQLTlsConfig;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
@@ -141,7 +142,12 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         let hostname = conf.query.mysql_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.mysql_handler_port);
         let tcp_keepalive_timeout_secs = conf.query.mysql_handler_tcp_keepalive_timeout_secs;
-        let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs)?;
+        let tls_config = MySQLTlsConfig::new(
+            conf.query.mysql_tls_server_cert.clone(),
+            conf.query.mysql_tls_server_key.clone(),
+        );
+
+        let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, tls_config)?;
         let listening = handler.start(listening.parse()?).await?;
         shutdown_handle.add_service(handler);
 
