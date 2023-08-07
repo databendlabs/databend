@@ -71,7 +71,7 @@ impl Interpreter for ShowCreateCatalogInterpreter {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(name.into_bytes())),
                 ),
                 BlockEntry::new(
                     DataType::String,
