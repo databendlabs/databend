@@ -820,7 +820,7 @@ pub struct QueryCtx {
 
 impl CopyIntoTable {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(DataSchemaRef::default())
+        Ok(self.required_source_schema.clone())
     }
 }
 
