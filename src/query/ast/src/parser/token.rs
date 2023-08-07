@@ -134,7 +134,7 @@ pub enum TokenKind {
     #[regex(r"[ \t\r\n\f]+", logos::skip)]
     Whitespace,
 
-    #[regex(r"--[^\t\n\f]*", logos::skip)]
+    #[regex(r"--[^\n\f]*", logos::skip)]
     Comment,
 
     #[regex(r"/\*[^\+]([^\*]|(\*[^/]))*\*/", logos::skip)]
@@ -293,6 +293,8 @@ pub enum TokenKind {
     ALLOWED_IP_LIST,
     #[token("ADD", ignore(ascii_case))]
     ADD,
+    #[token("AFTER", ignore(ascii_case))]
+    AFTER,
     #[token("AGGREGATING", ignore(ascii_case))]
     AGGREGATING,
     #[token("ANY", ignore(ascii_case))]

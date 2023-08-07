@@ -95,16 +95,29 @@ impl Settings {
                         warn!("Ignore deprecated global setting {} = {}", name, val);
                         continue;
                     }
-                    Some(default_setting_value) => match &default_setting_value.value {
-                        UserSettingValue::UInt64(_) => ChangeValue {
-                            level: ScopeLevel::Global,
-                            value: UserSettingValue::UInt64(val.parse::<u64>()?),
-                        },
-                        UserSettingValue::String(_) => ChangeValue {
-                            level: ScopeLevel::Global,
-                            value: UserSettingValue::String(val.clone()),
-                        },
-                    },
+                    Some(default_setting_value) => {
+                        if !default_setting_value
+                            .possible_values
+                            .as_ref()
+                            .map(|values| values.iter().any(|v| v.eq_ignore_ascii_case(&val)))
+                            .unwrap_or(true)
+                        {
+                            // the settings may be deprecated
+                            warn!("Ignore invalid global setting {} = {}", name, val);
+                            continue;
+                        }
+
+                        match &default_setting_value.value {
+                            UserSettingValue::UInt64(_) => ChangeValue {
+                                level: ScopeLevel::Global,
+                                value: UserSettingValue::UInt64(val.parse::<u64>()?),
+                            },
+                            UserSettingValue::String(_) => ChangeValue {
+                                level: ScopeLevel::Global,
+                                value: UserSettingValue::String(val.clone()),
+                            },
+                        }
+                    }
                 });
         }
 

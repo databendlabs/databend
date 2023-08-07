@@ -34,7 +34,6 @@ use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 
 use crate::operations::common::TransformSerializeBlock;
-use crate::operations::common::TransformSerializeSegment;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
@@ -80,11 +79,6 @@ impl FuseTable {
                 self,
                 cluster_stats_gen.clone(),
             )?;
-            proc.into_processor()
-        })?;
-
-        pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
             proc.into_processor()
         })?;
 

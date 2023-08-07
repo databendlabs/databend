@@ -114,6 +114,7 @@ impl Binder {
             non_equi_conditions,
             other_conditions,
         };
+
         let s_expr = match &join.op {
             JoinOperator::Inner => {
                 self.bind_join_with_type(JoinType::Inner, join_conditions, left_child, right_child)
@@ -194,6 +195,11 @@ impl Binder {
             other_conditions,
             &mut non_equi_conditions,
         )?;
+
+        for (left, right) in left_conditions.iter().zip(right_conditions.iter()) {
+            self.eq_scalars.push((left.clone(), right.clone()));
+        }
+
         let logical_join = Join {
             pre_projections: vec![],
             projections: vec![],
@@ -605,7 +611,10 @@ impl<'a> JoinConditionResolver<'a> {
                 .join_context
                 .columns
                 .iter_mut()
-                .filter(|col_binding| col_binding.column_name == join_key_name)
+                .filter(|col_binding| {
+                    col_binding.column_name == join_key_name
+                        && col_binding.visibility != Visibility::UnqualifiedWildcardInVisible
+                })
                 .nth(idx)
             {
                 // Always make the second using column in the join_context invisible in unqualified wildcard.

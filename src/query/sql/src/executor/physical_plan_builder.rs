@@ -1639,7 +1639,7 @@ impl PhysicalPlanBuilder {
                     .reduce(|lhs, rhs| {
                         ScalarExpr::FunctionCall(FunctionCall {
                             span: None,
-                            func_name: "and".to_string(),
+                            func_name: "and_filters".to_string(),
                             params: vec![],
                             arguments: vec![lhs, rhs],
                         })

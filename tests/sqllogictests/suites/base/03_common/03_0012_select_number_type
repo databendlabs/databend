@@ -48,5 +48,7 @@ select typeof(a) from (select 18446744073709551615 as a)
 ----
 BIGINT UNSIGNED
 
-statement error Unsupported literal value
+query T
 select typeof(a) from (select 1844674407370955161522 as a)
+----
+DECIMAL(22, 0)

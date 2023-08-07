@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -134,8 +135,25 @@ pub fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
     Ok(files)
 }
 
+static PREPARE_TPCH: std::sync::Once = std::sync::Once::new();
+static PREPARE_TPCDS: std::sync::Once = std::sync::Once::new();
+
+pub fn lazy_prepare_data(file_path: &Path) -> Result<()> {
+    let file_path = file_path.to_str().unwrap_or_default();
+    if file_path.contains("tpch/") {
+        PREPARE_TPCH.call_once(|| {
+            prepare_tpch_data().unwrap();
+        });
+    } else if file_path.contains("tpcds/") {
+        PREPARE_TPCDS.call_once(|| {
+            prepare_tpcds_data().unwrap();
+        });
+    }
+    Ok(())
+}
+
 // Execute `scripts/prepare_tpch_data.sh` to prepare tpch data
-pub fn prepare_tpch_data() -> Result<()> {
+fn prepare_tpch_data() -> Result<()> {
     let output = std::process::Command::new("bash")
         .arg("tests/sqllogictests/scripts/prepare_tpch_data.sh")
         .output()
@@ -149,7 +167,7 @@ pub fn prepare_tpch_data() -> Result<()> {
 }
 
 // Execute `scripts/prepare_tpcds_data.sh` to prepare tpcds data
-pub fn prepare_tpcds_data() -> Result<()> {
+fn prepare_tpcds_data() -> Result<()> {
     let output = std::process::Command::new("bash")
         .arg("tests/sqllogictests/scripts/prepare_tpcds_data.sh")
         .output()

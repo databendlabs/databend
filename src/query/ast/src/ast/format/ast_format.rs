@@ -1354,8 +1354,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
-            AlterTableAction::AddColumn { column } => {
-                let action_name = format!("Action Add column {}", column);
+            AlterTableAction::AddColumn { column, option } => {
+                let action_name = match option {
+                    AddColumnOption::First => format!("Action Add column {} first", column),
+                    AddColumnOption::After(ident) => {
+                        format!("Action Add column {} after {}", column, ident)
+                    }
+                    AddColumnOption::End => format!("Action Add column {}", column),
+                };
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }

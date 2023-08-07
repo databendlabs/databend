@@ -25,8 +25,11 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use log::error;
 use log::warn;
+use opensrv_mysql::plain_run_with_options;
+use opensrv_mysql::secure_run_with_options;
 use opensrv_mysql::AsyncMysqlIntermediary;
 use opensrv_mysql::IntermediaryOptions;
+use rustls::ServerConfig;
 
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::sessions::Session;
@@ -37,7 +40,11 @@ const DEFAULT_RESULT_SET_WRITE_BUFFER_SIZE: usize = 100 * 1024;
 pub struct MySQLConnection;
 
 impl MySQLConnection {
-    pub fn run_on_stream(session: Arc<Session>, stream: TcpStream) -> Result<()> {
+    pub fn run_on_stream(
+        session: Arc<Session>,
+        stream: TcpStream,
+        tls: Option<Arc<ServerConfig>>,
+    ) -> Result<()> {
         let blocking_stream = Self::convert_stream(stream)?;
         MySQLConnection::attach_session(&session, &blocking_stream)?;
 
@@ -57,13 +64,29 @@ impl MySQLConnection {
                     }
                 };
 
-                let interactive_worker = InteractiveWorker::create(session, client_addr);
+                let mut interactive_worker = InteractiveWorker::create(session, client_addr);
                 let opts = IntermediaryOptions {
                     process_use_statement_on_query: true,
+                    reject_connection_on_dbname_absence: false,
                 };
                 let (r, w) = non_blocking_stream.into_split();
-                let w = BufWriter::with_capacity(DEFAULT_RESULT_SET_WRITE_BUFFER_SIZE, w);
-                AsyncMysqlIntermediary::run_with_options(interactive_worker, r, w, &opts).await
+                let mut w = BufWriter::with_capacity(DEFAULT_RESULT_SET_WRITE_BUFFER_SIZE, w);
+
+                let (use_ssl, init_params) = AsyncMysqlIntermediary::init_before_ssl(
+                    &mut interactive_worker,
+                    r,
+                    &mut w,
+                    &tls,
+                )
+                .await?;
+
+                match tls {
+                    Some(config) if use_ssl => {
+                        secure_run_with_options(interactive_worker, w, opts, config, init_params)
+                            .await
+                    }
+                    _ => plain_run_with_options(interactive_worker, w, opts, init_params).await,
+                }
             });
             let _ = futures::executor::block_on(join_handle);
         });
