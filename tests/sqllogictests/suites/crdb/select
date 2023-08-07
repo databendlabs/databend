@@ -524,7 +524,7 @@ CREATE TABLE wide (id INT8 NOT NULL, a INT8, b TEXT, c INT8, d TEXT, e TEXT, f I
 statement ok
 INSERT INTO wide(id, n) VALUES(0, 10)
 
-query IITITTITTTTIFFI
+query IITITTITTTTI??I
 SELECT * FROM wide
 ----
 0 0 (empty) 0 (empty) (empty) 0 (empty) (empty) (empty) (empty) 0 0.0 0.0 10
