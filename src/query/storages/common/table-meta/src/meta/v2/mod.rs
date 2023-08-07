@@ -20,6 +20,7 @@ pub use segment::BlockMeta;
 pub use segment::ColumnMeta;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;
+pub use statistics::BasicColumnStatistics;
 pub use statistics::ClusterStatistics;
 pub use statistics::ColumnStatistics;
 pub use statistics::Statistics;

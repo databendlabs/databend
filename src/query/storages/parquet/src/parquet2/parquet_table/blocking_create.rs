@@ -30,6 +30,8 @@ use opendal::Operator;
 
 use super::table::create_parquet_table_info;
 use super::Parquet2Table;
+use crate::parquet2::parquet_table::table::blocking_get_parquet2_file_meta;
+use crate::parquet2::parquet_table::table::create_parquet2_statistics_provider;
 
 impl Parquet2Table {
     pub fn blocking_create(
@@ -47,8 +49,13 @@ impl Parquet2Table {
         let (arrow_schema, schema_descr, compression_ratio) =
             Self::blocking_prepare_metas(&first_file, operator.clone())?;
 
-        let table_info = create_parquet_table_info(arrow_schema.clone());
+        // TODO(Dousir9): collect more information for read partitions.
+        let file_metas = blocking_get_parquet2_file_meta(&files_to_read, &files_info, &operator)?;
+        let column_statistics_provider =
+            create_parquet2_statistics_provider(file_metas, &arrow_schema)?;
 
+        let mut table_info = create_parquet_table_info(arrow_schema.clone(), &stage_info);
+        table_info.meta.statistics.number_of_rows = column_statistics_provider.num_rows as u64;
         Ok(Arc::new(Parquet2Table {
             table_info,
             arrow_schema,
@@ -60,6 +67,7 @@ impl Parquet2Table {
             files_to_read,
             compression_ratio,
             schema_from: first_file,
+            column_statistics_provider,
         }))
     }
 

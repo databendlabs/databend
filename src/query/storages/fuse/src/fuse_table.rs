@@ -25,7 +25,6 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::AppendMode;
-use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::CompactTarget;
 use common_catalog::table::NavigationDescriptor;
@@ -47,6 +46,7 @@ use common_sql::parse_exprs;
 use common_sql::BloomIndexColumns;
 use common_storage::init_operator;
 use common_storage::DataOperator;
+use common_storage::Datum;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
@@ -54,6 +54,7 @@ use log::error;
 use log::warn;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::BasicColumnStatistics;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use storages_common_table_meta::meta::SnapshotId;
@@ -773,19 +774,18 @@ struct FuseTableColumnStatisticsProvider {
 }
 
 impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
-    fn column_statistics(&self, column_id: ColumnId) -> Option<ColumnStatistics> {
+    fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics> {
         let col_stats = &self.column_stats.get(&column_id);
         col_stats.map(|s| {
-            let mut ndv = self
+            let ndv = self
                 .column_distinct_values
                 .as_ref()
                 .map_or(self.row_count, |map| map.get(&column_id).map_or(0, |v| *v));
-            ndv = self.adjust_ndv_by_min_max(ndv, s.min().clone(), s.max().clone());
-            ColumnStatistics {
-                min: s.min().clone(),
-                max: s.max().clone(),
+            BasicColumnStatistics {
+                min: Datum::from_scalar(s.min().clone()),
+                max: Datum::from_scalar(s.max().clone()),
+                ndv: Some(ndv),
                 null_count: s.null_count,
-                number_of_distinct_values: ndv,
             }
         })
     }

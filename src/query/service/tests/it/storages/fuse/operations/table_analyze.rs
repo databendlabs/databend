@@ -175,7 +175,7 @@ async fn check_column_ndv_statistics(
         let stat = provider.column_statistics(*i);
         assert!(stat.is_some());
 
-        assert_eq!(stat.unwrap().number_of_distinct_values, *num);
+        assert_eq!(stat.unwrap().ndv.unwrap(), *num);
     }
 
     Ok(())
