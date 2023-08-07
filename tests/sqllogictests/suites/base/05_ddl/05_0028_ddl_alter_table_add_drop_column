@@ -42,7 +42,7 @@ statement ok
 create table `05_0028_at_t0_2`(b Tuple(Bool, Int64, Float64, String, Date, Timestamp),c Array(UInt8),d double) AS SELECT * FROM `05_0028_at_t0`;
 
 query FIII
-SELECT d,b.1,c,b.2 FROM `05_0028_at_t0_2` 
+SELECT d,b.1,c,b.2 FROM `05_0028_at_t0_2`
 ----
 4.0 1 [101,2] 100
 
@@ -88,7 +88,7 @@ statement ok
 INSERT INTO TABLE `05_0028_at_t0` values([4,5],5.0)
 
 query IF
-SELECT * FROM `05_0028_at_t0` order by a 
+SELECT * FROM `05_0028_at_t0` order by a
 ----
 [4,5] 5.0
 [101,2] 101.0
@@ -229,7 +229,7 @@ SELECT a,c FROM `05_0028_at_t0_3` order by a
 0.3 3
 0.4 4
 
-statement error 1006
+statement ok
 ALTER TABLE `05_0028_at_t0_3` ADD COLUMN d int AFTER c
 
 statement ok
