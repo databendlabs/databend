@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -60,24 +59,23 @@ use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::stream::DataBlockStream;
 
-struct InteractiveWorkerBase<W: AsyncWrite + Send + Unpin> {
+struct InteractiveWorkerBase {
     session: Arc<Session>,
-    generic_hold: PhantomData<W>,
 }
 
-pub struct InteractiveWorker<W: AsyncWrite + Send + Unpin> {
-    base: InteractiveWorkerBase<W>,
+pub struct InteractiveWorker {
+    base: InteractiveWorkerBase,
     version: String,
     salt: [u8; 20],
     client_addr: String,
 }
 
 #[async_trait::async_trait]
-impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorker<W> {
+impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorker {
     type Error = ErrorCode;
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> String {
+        self.version.clone()
     }
 
     fn connect_id(&self) -> u32 {
@@ -253,7 +251,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
     }
 }
 
-impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
+impl InteractiveWorkerBase {
     #[async_backtrace::framed]
     async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
         let ctx = self.session.create_query_context().await?;
@@ -271,7 +269,11 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     }
 
     #[async_backtrace::framed]
-    async fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
+    async fn do_prepare<W: AsyncWrite + Unpin>(
+        &mut self,
+        _: &str,
+        writer: StatementMetaWriter<'_, W>,
+    ) -> Result<()> {
         writer
             .error(
                 ErrorKind::ER_UNKNOWN_ERROR,
@@ -282,7 +284,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     }
 
     #[async_backtrace::framed]
-    async fn do_execute(
+    async fn do_execute<W: AsyncWrite + Unpin>(
         &mut self,
         _: u32,
         _: ParamParser<'_>,
@@ -439,8 +441,8 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     }
 }
 
-impl<W: AsyncWrite + Send + Unpin> InteractiveWorker<W> {
-    pub fn create(session: Arc<Session>, client_addr: String) -> InteractiveWorker<W> {
+impl InteractiveWorker {
+    pub fn create(session: Arc<Session>, client_addr: String) -> InteractiveWorker {
         let mut bs = vec![0u8; 20];
         let mut rng = rand::thread_rng();
         rng.fill_bytes(bs.as_mut());
@@ -453,11 +455,8 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorker<W> {
             }
         }
 
-        InteractiveWorker::<W> {
-            base: InteractiveWorkerBase::<W> {
-                session,
-                generic_hold: PhantomData,
-            },
+        InteractiveWorker {
+            base: InteractiveWorkerBase { session },
             salt: scramble,
             version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
             client_addr,
