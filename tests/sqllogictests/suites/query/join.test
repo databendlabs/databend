@@ -665,7 +665,7 @@ statement ok
 insert into t2 values(1, 2), (1, 4), (1, 6), (1, 8), (1, 10);
 
 query I
-select * from t1 left join t2 on t1.a = t2.a order by t1.a, t2.a
+select * from t1 left join t2 on t1.a = t2.a order by t1.a, t2.a, t2.b desc;
 ----
 1 2 1 10
 1 2 1 8
