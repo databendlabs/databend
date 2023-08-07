@@ -420,10 +420,9 @@ impl FuseTable {
     }
 
     fn is_exact(push_downs: &Option<PushDownInfo>) -> bool {
-        match push_downs {
-            None => true,
-            Some(extra) => extra.filter.is_none(),
-        }
+        push_downs
+            .as_ref()
+            .map_or(true, |extra| extra.filter.is_none())
     }
 
     fn all_columns_partitions(

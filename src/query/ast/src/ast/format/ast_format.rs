@@ -1354,8 +1354,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
-            AlterTableAction::AddColumn { column } => {
-                let action_name = format!("Action Add column {}", column);
+            AlterTableAction::AddColumn { column, option } => {
+                let action_name = match option {
+                    AddColumnOption::First => format!("Action Add column {} first", column),
+                    AddColumnOption::After(ident) => {
+                        format!("Action Add column {} after {}", column, ident)
+                    }
+                    AddColumnOption::End => format!("Action Add column {}", column),
+                };
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
@@ -1372,6 +1378,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     ModifyColumnAction::SetMaskingPolicy(column, mask_name) => (
                         format!("Action ModifyColumn column {}", column),
                         format!("Action SetMaskingPolicy {}", mask_name),
+                    ),
+                    ModifyColumnAction::UnsetMaskingPolicy(column) => (
+                        format!("Action ModifyColumn column {}", column),
+                        "Action UnsetMaskingPolicy".to_string(),
                     ),
                     ModifyColumnAction::SetDataType(column_type_name_vec) => {
                         let action_name = "Action ModifyColumn".to_string();

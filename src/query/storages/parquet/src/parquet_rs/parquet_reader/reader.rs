@@ -22,16 +22,20 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use opendal::Operator;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::schema::types::ColumnDescPtr;
 use parquet::schema::types::SchemaDescPtr;
 
 use crate::parquet_part::ParquetRowGroupPart;
+use crate::parquet_reader::BlockIterator;
+use crate::parquet_reader::OneBlock;
 use crate::parquet_rs::column_nodes::ColumnNodesRS;
 use crate::parquet_rs::convert::convert_column_meta;
 use crate::parquet_rs::parquet_reader::row_group_reader::bitmap_to_selection;
@@ -129,8 +133,24 @@ impl crate::parquet_reader::ParquetReader for ParquetReader {
         chunks: Vec<(FieldIndex, Vec<u8>)>,
         filter: Option<Bitmap>,
     ) -> Result<DataBlock> {
+        let blocks = self
+            .get_deserializer(part, chunks, filter)?
+            .collect::<Vec<_>>();
+        let blocks: Result<Vec<DataBlock>> = blocks.into_iter().collect();
+        DataBlock::concat(&blocks?)
+    }
+
+    fn get_deserializer(
+        &self,
+        part: &ParquetRowGroupPart,
+        chunks: Vec<(FieldIndex, Vec<u8>)>,
+        filter: Option<Bitmap>,
+    ) -> Result<Box<dyn BlockIterator>> {
         if chunks.is_empty() {
-            return Ok(DataBlock::new(vec![], part.num_rows));
+            return Ok(Box::new(OneBlock(Some(DataBlock::new(
+                vec![],
+                part.num_rows,
+            )))));
         }
 
         let selection = filter.map(bitmap_to_selection);
@@ -165,22 +185,103 @@ impl crate::parquet_reader::ParquetReader for ParquetReader {
             metadata,
             column_chunks,
         };
-        let mut reader = row_group
-            .get_record_batch_reader(part.num_rows, selection)
+        // TODO: use the BlockThresholds of dest table
+        let batch_size = row_group.choose_batch_size(BlockThresholds::default());
+        let rows_to_read = match &selection {
+            None => part.num_rows,
+            Some(s) => s.row_count(),
+        };
+        let reader = row_group
+            .get_record_batch_reader(batch_size, selection)
             .unwrap();
-        let batch = reader.next().unwrap().map_err(|e| {
-            ErrorCode::BadBytes(format!(
-                "Cannot read parquet file, error: {:?}",
-                e.to_string()
-            ))
-        })?;
-        DataBlock::from_record_batch(&batch)
-            .map_err(|e| {
-                ErrorCode::BadBytes(format!(
-                    "Cannot convert record batch to data block, error: {:?}",
-                    e
-                ))
-            })
-            .map(|v| v.0)
+        Ok(Box::new(RowGroupDeserializer::new(
+            reader,
+            part.location.clone(),
+            rows_to_read,
+            part.num_rows,
+        )))
+    }
+}
+
+/// A wrapper of [`RecordBatchReader`] that implements [`BlockIterator`].
+struct RowGroupDeserializer {
+    reader: ParquetRecordBatchReader,
+
+    /// These fields are used to implement has_next().
+    /// num_rows_to_read is rows of row group after selection.
+    num_rows_to_read: usize,
+    num_rows_readn: usize,
+
+    /// These fields are only for logging.
+    batch_size: usize,
+    seq: usize,
+    location: String,
+}
+
+impl RowGroupDeserializer {
+    fn new(
+        reader: ParquetRecordBatchReader,
+        location: String,
+        num_rows_to_read: usize,
+        batch_size: usize,
+    ) -> Self {
+        Self {
+            batch_size,
+            num_rows_to_read,
+            num_rows_readn: 0,
+            seq: 0,
+            location,
+            reader,
+        }
+    }
+
+    fn error(&self, op: &str, err: &str) -> ErrorCode {
+        ErrorCode::BadBytes(format!(
+            "deserialize parquet fail to {}, path = {}, num_rows_to_read = {}, batch_size = {}, failed for the {} batch, num_rows_readn = {}, error: {}",
+            op,
+            self.location,
+            self.num_rows_to_read,
+            self.batch_size,
+            self.seq,
+            self.num_rows_readn,
+            err
+        ))
+    }
+}
+
+impl Iterator for RowGroupDeserializer {
+    type Item = Result<DataBlock>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.reader.next() {
+            None => {
+                if self.num_rows_readn < self.num_rows_to_read {
+                    let err = format!(
+                        "expect num of rows: {}, actual num of rows: {}",
+                        self.num_rows_to_read, self.num_rows_readn
+                    );
+                    Some(Err(self.error("read expect num of rows", &err)))
+                } else {
+                    None
+                }
+            }
+            Some(Err(e)) => Some(Err(self.error("read arrow batch", &e.to_string()))),
+            Some(Ok(batch)) => match DataBlock::from_record_batch(&batch) {
+                Ok(v) => {
+                    self.num_rows_readn += v.0.num_rows();
+                    self.seq += 1;
+                    Some(Ok(v.0))
+                }
+                Err(e) => Some(Err(
+                    self.error("convert arrow batch to data block", &e.to_string())
+                )),
+            },
+        }
+    }
+}
+
+impl BlockIterator for RowGroupDeserializer {
+    fn has_next(&self) -> bool {
+        self.num_rows_readn < self.num_rows_to_read
     }
 }

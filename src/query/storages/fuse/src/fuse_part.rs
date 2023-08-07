@@ -54,10 +54,9 @@ impl PartInfo for FusePartInfo {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<FusePartInfo>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<FusePartInfo>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {
@@ -92,12 +91,11 @@ impl FusePartInfo {
     }
 
     pub fn from_part(info: &PartInfoPtr) -> Result<&FusePartInfo> {
-        match info.as_any().downcast_ref::<FusePartInfo>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
+        info.as_any()
+            .downcast_ref::<FusePartInfo>()
+            .ok_or(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to FusePartInfo.",
-            )),
-        }
+            ))
     }
 
     pub fn range(&self) -> Option<&Range<usize>> {

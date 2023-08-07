@@ -35,13 +35,11 @@ use crate::api::ExchangeSorting;
 use crate::api::FlightScatter;
 use crate::api::MergeExchangeParams;
 use crate::api::ShuffleExchangeParams;
-use crate::api::TransformExchangeDeserializer;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
-use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterAggregateSerializer;
-use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterAggregateSpillWriter;
-use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterGroupBySerializer;
-use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterGroupBySpillWriter;
+use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
+use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
+use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeGroupBySerializer;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -76,7 +74,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
                         AggregateMeta::Partitioned { .. } => unreachable!(),
                         AggregateMeta::Serialized(v) => Ok(v.bucket),
                         AggregateMeta::HashTable(v) => Ok(v.bucket),
-                        AggregateMeta::Spilling(_) | AggregateMeta::Spilled(_) => Ok(-1),
+                        AggregateMeta::Spilled(_)
+                        | AggregateMeta::Spilling(_)
+                        | AggregateMeta::BucketSpilled(_) => Ok(-1),
                     },
                 }
             }
@@ -144,6 +144,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                 let mut blocks = Vec::with_capacity(self.buckets);
                 match block_meta {
                     AggregateMeta::Spilled(_) => unreachable!(),
+                    AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Spilling(payload) => {
@@ -288,28 +289,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
         let operator = DataOperator::instance().operator();
         let location_prefix = format!("_aggregate_spill/{}", self.tenant);
 
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                match params.aggregate_functions.is_empty() {
-                    true => TransformScatterGroupBySpillWriter::create(
-                        input,
-                        output,
-                        method.clone(),
-                        operator.clone(),
-                        location_prefix.clone(),
-                    ),
-                    false => TransformScatterAggregateSpillWriter::create(
-                        input,
-                        output,
-                        method.clone(),
-                        operator.clone(),
-                        location_prefix.clone(),
-                        params.clone(),
-                    ),
-                },
-            ))
-        })?;
-
         let schema = shuffle_params.schema.clone();
         let local_id = &shuffle_params.executor_id;
         let local_pos = shuffle_params
@@ -318,25 +297,33 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
             .position(|x| x == local_id)
             .unwrap();
 
-        pipeline.add_transform(
-            |input, output| match params.aggregate_functions.is_empty() {
-                true => TransformScatterGroupBySerializer::try_create(
-                    input,
-                    output,
-                    method.clone(),
-                    schema.clone(),
-                    local_pos,
-                ),
-                false => TransformScatterAggregateSerializer::try_create(
-                    input,
-                    output,
-                    method.clone(),
-                    schema.clone(),
-                    local_pos,
-                    params.clone(),
-                ),
-            },
-        )
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(
+                match params.aggregate_functions.is_empty() {
+                    true => TransformExchangeGroupBySerializer::create(
+                        input,
+                        output,
+                        method.clone(),
+                        operator.clone(),
+                        location_prefix.clone(),
+                        schema.clone(),
+                        local_pos,
+                    ),
+                    false => TransformExchangeAggregateSerializer::create(
+                        input,
+                        output,
+                        method.clone(),
+                        operator.clone(),
+                        location_prefix.clone(),
+                        params.clone(),
+                        schema.clone(),
+                        local_pos,
+                    ),
+                },
+            ))
+        })?;
+
+        pipeline.add_transform(TransformExchangeAsyncBarrier::try_create)
     }
 
     fn apply_merge_deserializer(
@@ -345,17 +332,17 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            Ok(TransformExchangeDeserializer::create(
-                input,
-                output,
-                &params.schema,
-            ))
-        })?;
-
-        pipeline.add_transform(|input, output| {
             match self.aggregator_params.aggregate_functions.is_empty() {
-                true => TransformGroupByDeserializer::<Method>::try_create(input, output),
-                false => TransformAggregateDeserializer::<Method>::try_create(input, output),
+                true => TransformGroupByDeserializer::<Method>::try_create(
+                    input,
+                    output,
+                    &params.schema,
+                ),
+                false => TransformAggregateDeserializer::<Method>::try_create(
+                    input,
+                    output,
+                    &params.schema,
+                ),
             }
         })
     }
@@ -366,17 +353,17 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            Ok(TransformExchangeDeserializer::create(
-                input,
-                output,
-                &params.schema,
-            ))
-        })?;
-
-        pipeline.add_transform(|input, output| {
             match self.aggregator_params.aggregate_functions.is_empty() {
-                true => TransformGroupByDeserializer::<Method>::try_create(input, output),
-                false => TransformAggregateDeserializer::<Method>::try_create(input, output),
+                true => TransformGroupByDeserializer::<Method>::try_create(
+                    input,
+                    output,
+                    &params.schema,
+                ),
+                false => TransformAggregateDeserializer::<Method>::try_create(
+                    input,
+                    output,
+                    &params.schema,
+                ),
             }
         })
     }

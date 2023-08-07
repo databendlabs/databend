@@ -169,10 +169,8 @@ where T: AsRef<[u8]>
 
     fn until(&mut self, delim: u8, buf: &mut Vec<u8>) -> usize {
         let remaining_slice = self.remaining_slice();
-        let to_read = match core::slice::memchr::memchr(delim, remaining_slice) {
-            None => buf.len(),
-            Some(n) => n + 1,
-        };
+        let to_read =
+            core::slice::memchr::memchr(delim, remaining_slice).map_or(buf.len(), |n| n + 1);
         buf.extend_from_slice(&remaining_slice[..to_read]);
         self.consume(to_read);
         to_read

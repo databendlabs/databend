@@ -42,7 +42,7 @@ pub struct IcebergTableSource {
     output: Arc<OutputPort>,
 
     /// The schema before output. Some fields might be removed when outputting.
-    _source_schema: DataSchemaRef,
+    source_schema: DataSchemaRef,
     /// The final output schema
     _output_schema: DataSchemaRef,
 }
@@ -74,7 +74,7 @@ impl IcebergTableSource {
             output,
             _scan_progress: scan_progress,
             state: State::ReadMeta(None),
-            _source_schema: source_schema,
+            source_schema,
             _output_schema: output_schema,
         })))
     }
@@ -92,12 +92,10 @@ impl Processor for IcebergTableSource {
 
     fn event(&mut self) -> Result<Event> {
         if matches!(self.state, State::ReadMeta(None)) {
-            match self.ctx.get_partition() {
-                None => self.state = State::Finish,
-                Some(part_info) => {
-                    self.state = State::ReadMeta(Some(part_info));
-                }
-            }
+            self.state = self
+                .ctx
+                .get_partition()
+                .map_or(State::Finish, |part_info| State::ReadMeta(Some(part_info)));
         }
 
         if self.output.is_finished() {
@@ -112,12 +110,52 @@ impl Processor for IcebergTableSource {
             if let State::ReadData(ps, mut data) = std::mem::replace(&mut self.state, State::Finish)
             {
                 if let Some(arrow_block) = data.take() {
-                    let (data_block, _) =
+                    let (mut data_block, _) =
                         DataBlock::from_record_batch(&arrow_block).map_err(|err| {
                             ErrorCode::ReadTableDataError(format!(
                                 "Cannot convert arrow record batch to data block: {err:?}"
                             ))
                         })?;
+                    // Check if the schema of the data block is matched with the schema of the table.
+                    if data_block.num_columns() != self.source_schema.num_fields() {
+                        return Err(ErrorCode::TableSchemaMismatch(format!(
+                            "Data schema mismatched. Data columns length: {}, schema fields length: {}",
+                            data_block.num_columns(),
+                            self.source_schema.num_fields()
+                        )));
+                    }
+
+                    for (col, field) in data_block
+                        .columns_mut()
+                        .iter_mut()
+                        .zip(self.source_schema.fields().iter())
+                    {
+                        // If the actual data is nullable, the field must be nullbale.
+                        if col.data_type.is_nullable_or_null() && !field.is_nullable() {
+                            return Err(ErrorCode::TableSchemaMismatch(format!(
+                                "Data schema mismatched (col name: {}). Data column is nullable, but schema field is not nullable",
+                                field.name()
+                            )));
+                        }
+                        // The inner type of the data and field should be the same.
+                        let data_type = col.data_type.remove_nullable();
+                        let schema_type = field.data_type().remove_nullable();
+                        if data_type != schema_type {
+                            return Err(ErrorCode::TableSchemaMismatch(format!(
+                                "Data schema mismatched (col name: {}). Data column type is {:?}, but schema field type is {:?}",
+                                field.name(),
+                                col.data_type,
+                                field.data_type()
+                            )));
+                        }
+                        // If the field is nullable but the actual data is not nullable,
+                        // we should wrap nullable for the data.
+                        if field.is_nullable() && !col.data_type.is_nullable_or_null() {
+                            col.data_type = col.data_type.wrap_nullable();
+                            col.value = col.value.clone().wrap_nullable(None);
+                        }
+                    }
+
                     self.output.push_data(Ok(data_block));
                 }
 

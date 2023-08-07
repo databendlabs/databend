@@ -9,6 +9,9 @@ echo -e "[mysql]\nhost=${QUERY_MYSQL_HANDLER_HOST}\nuser=test-user\npassword=${T
 
 ## create user
 echo "create user 'test-user' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $MYSQL_CLIENT_CONNECT
+## create role
+echo "create role 'test-role1'" | $MYSQL_CLIENT_CONNECT
+echo "create role 'test-role2'" | $MYSQL_CLIENT_CONNECT
 ## create table
 echo "create table t20_0012(c int)" | $MYSQL_CLIENT_CONNECT
 
@@ -18,8 +21,11 @@ echo "show databases" | $TEST_USER_CONNECT
 ## insert data
 echo "select 'test -- insert'" | $TEST_USER_CONNECT
 echo "insert into t20_0012 values(1),(2)" | $TEST_USER_CONNECT
-## grant user privilege
-echo "GRANT SELECT, INSERT ON * TO 'test-user'" | $MYSQL_CLIENT_CONNECT
+## grant user privileges via role
+echo "GRANT INSERT ON * TO ROLE 'test-role1'" | $MYSQL_CLIENT_CONNECT
+echo "GRANT SELECT ON * TO ROLE 'test-role2'" | $MYSQL_CLIENT_CONNECT
+echo "GRANT ROLE 'test-role1' TO 'test-user'" | $MYSQL_CLIENT_CONNECT
+echo "GRANT ROLE 'test-role2' TO 'test-user'" | $MYSQL_CLIENT_CONNECT
 ## insert data
 echo "insert into t20_0012 values(1),(2)" | $TEST_USER_CONNECT
 ## verify

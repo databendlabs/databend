@@ -34,12 +34,15 @@ pub enum MergeIntoOperation {
 }
 
 pub type UniqueKeyDigest = u128;
+pub type RowBloomHashes = Vec<u64>;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DeletionByColumn {
     // used in table meta level pruning
     pub columns_min_max: Vec<(Scalar, Scalar)>,
     // used in block level
     pub key_hashes: HashSet<UniqueKeyDigest>,
+    // bloom hash of the on-conflict columns that will apply bloom pruning
+    pub bloom_hashes: Vec<RowBloomHashes>,
 }
 
 #[typetag::serde(name = "merge_into_operation_meta")]
@@ -49,10 +52,9 @@ impl BlockMetaInfo for MergeIntoOperation {
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match info.as_any().downcast_ref::<MergeIntoOperation>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<MergeIntoOperation>()
+            .is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {

@@ -84,10 +84,7 @@ where K: Eq + Hash
             self.cleanup()
         }
 
-        match self.map.get(k) {
-            Some(v) => Some(&(v.value)),
-            None => None,
-        }
+        self.map.get(k).map(|v| &(v.value))
     }
 
     pub fn get_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
@@ -99,10 +96,7 @@ where K: Eq + Hash
             self.cleanup()
         }
 
-        match self.map.get_mut(k) {
-            Some(v) => Some(&mut (v.value)),
-            None => None,
-        }
+        self.map.get_mut(k).map(|v| &mut (v.value))
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
@@ -114,10 +108,7 @@ where K: Eq + Hash
         let timeout = Instant::now() + self.ttl;
         let ret = self.map.insert(key, TtlValue { timeout, value });
 
-        match ret {
-            Some(v) => Some(v.value),
-            None => None,
-        }
+        ret.map(|v| v.value)
     }
 
     pub fn remove<Q: ?Sized>(&mut self, k: &Q) -> Option<V>
@@ -129,10 +120,7 @@ where K: Eq + Hash
             CleanPolicy::ReadModify | CleanPolicy::Modify => self.cleanup(),
             _ => {}
         }
-        match self.map.remove(k) {
-            Some(v) => Some(v.value),
-            None => None,
-        }
+        self.map.remove(k).map(|v| v.value)
     }
 
     pub fn len(&self) -> usize {

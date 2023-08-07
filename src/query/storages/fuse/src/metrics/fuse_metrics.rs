@@ -202,6 +202,10 @@ pub fn metrics_inc_replace_block_number_after_pruning(c: u64) {
     increment_gauge!(key!("replace_into_block_number_after_pruning"), c as f64);
 }
 
+pub fn metrics_inc_replace_segment_number_after_pruning(c: u64) {
+    increment_gauge!(key!("replace_into_segment_number_after_pruning"), c as f64);
+}
+
 pub fn metrics_inc_replace_row_number_after_pruning(c: u64) {
     increment_gauge!(key!("replace_into_row_number_after_pruning"), c as f64);
 }
@@ -222,15 +226,18 @@ pub fn metrics_inc_replace_row_number_totally_loaded(c: u64) {
 }
 
 pub fn metrics_inc_replace_whole_block_deletion(c: u64) {
-    increment_gauge!(key!("replace_into_whole_block_deletion"), c as f64);
+    increment_gauge!(
+        key!("replace_into_block_number_whole_block_deletion"),
+        c as f64
+    );
 }
 
 pub fn metrics_inc_replace_block_of_zero_row_deleted(c: u64) {
-    increment_gauge!(key!("replace_into_block_of_zero_row_deleted"), c as f64);
+    increment_gauge!(key!("replace_into_block_number_zero_row_deleted"), c as f64);
 }
 
 pub fn metrics_inc_replace_original_row_number(c: u64) {
-    increment_gauge!(key!("replace_into_original_row_number"), c as f64);
+    increment_gauge!(key!("replace_into_row_number_source_block"), c as f64);
 }
 
 pub fn metrics_inc_replace_row_number_after_table_level_pruning(c: u64) {
@@ -251,12 +258,12 @@ pub fn metrics_inc_replace_process_input_block_time_ms(c: u64) {
 
 // the number of accumulate_merge_action operation invoked
 pub fn metrics_inc_replace_number_accumulated_merge_action() {
-    counter!(key!("replace_into_number_accumulated_merge_action"), 1);
+    increment_gauge!(key!("replace_into_number_accumulate_merge_action"), 1_f64);
 }
 
 // the number of apply_deletion operation applied
 pub fn metrics_inc_replace_number_apply_deletion() {
-    counter!(key!("replace_into_number_apply_deletion"), 1);
+    increment_gauge!(key!("replace_into_number_apply_deletion"), 1_f64);
 }
 
 // time used in executing the accumulated_merge_action operation
@@ -270,4 +277,13 @@ pub fn metrics_inc_replace_accumulated_merge_action_time_ms(c: u64) {
 // time used in executing the apply_deletion operation
 pub fn metrics_inc_replace_apply_deletion_time_ms(c: u64) {
     increment_gauge!(key!("replace_into_time_apply_deletion_ms"), c as f64);
+}
+
+// number of blocks that pruned by bloom filter
+pub fn metrics_inc_replace_block_number_bloom_pruned(c: u64) {
+    increment_gauge!(key!("replace_into_block_number_bloom_pruned"), c as f64);
+}
+// number of blocks from upstream  source
+pub fn metrics_inc_replace_block_number_input(c: u64) {
+    increment_gauge!(key!("replace_into_block_number_source"), c as f64);
 }
