@@ -302,6 +302,15 @@ async fn execute(
                         block_sender.send(block.clone(), block.num_rows()).await;
                     }
                     Err(err) => {
+                        // duplicate codes, but there is an async call
+                        let data = BlockEntry::new(
+                            DataType::String,
+                            common_expression::Value::Scalar(Scalar::String(
+                                err.to_string().into_bytes(),
+                            )),
+                        );
+                        let size = data.memory_size();
+                        block_sender.send(DataBlock::new(vec![data], 1), size).await;
                         block_sender.close();
                         return Err(err);
                     }
