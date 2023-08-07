@@ -12,17 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
 use std::io::Error as IOError;
 
 use common_exception::ErrorCode;
 use mysql_async::Error as MysqlClientError;
 use reqwest::Error as HttpClientError;
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Error as SerdeJsonError;
 use sqllogictest::TestError;
 use thiserror::Error;
 use walkdir::Error as WalkDirError;
 
 pub type Result<T> = std::result::Result<T, DSqlLogicTestError>;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Inner {
+    code: String,
+    message: String,
+}
+#[derive(Debug, Serialize, Deserialize, Error)]
+pub struct TextError {
+    error: Inner,
+}
+
+impl Display for TextError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            ". Code: {}, Text = {}.",
+            self.error.code, self.error.message,
+        )
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum DSqlLogicTestError {
@@ -32,6 +55,9 @@ pub enum DSqlLogicTestError {
     // Error from databend
     #[error("Databend error: {0}")]
     Databend(#[from] ErrorCode),
+    // ClickHouseClient Text Error
+    #[error("ClickHouse client error: {0}")]
+    ClickHouseClient(#[from] TextError),
     // Error from mysql client
     #[error("mysql client error: {0}")]
     MysqlClient(#[from] MysqlClientError),
