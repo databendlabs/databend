@@ -118,14 +118,13 @@ pub struct BindContext {
 
     pub lambda_info: LambdaInfo,
 
+    /// If the `BindContext` is created from a CTE, record the cte name
+    pub cte_name: Option<String>,
+
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
-
-    /// Use `IndexMap` because need to keep the insertion order
-    /// Then wrap materialized ctes to main plan.
-    pub ctes_map: Box<IndexMap<String, CteInfo>>,
 
     /// If current binding table is a view, record its database and name.
     ///
@@ -168,8 +167,8 @@ impl BindContext {
             aggregate_info: AggregateInfo::default(),
             windows: WindowInfo::default(),
             lambda_info: LambdaInfo::default(),
+            cte_name: None,
             in_grouping: false,
-            ctes_map: Box::default(),
             view_info: None,
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
@@ -186,8 +185,8 @@ impl BindContext {
             aggregate_info: Default::default(),
             windows: Default::default(),
             lambda_info: LambdaInfo::default(),
+            cte_name: parent.cte_name,
             in_grouping: false,
-            ctes_map: parent.ctes_map.clone(),
             view_info: None,
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
@@ -200,7 +199,7 @@ impl BindContext {
     pub fn replace(&self) -> Self {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
-        bind_context.ctes_map = self.ctes_map.clone();
+        bind_context.cte_name = self.cte_name.clone();
         bind_context
     }
 

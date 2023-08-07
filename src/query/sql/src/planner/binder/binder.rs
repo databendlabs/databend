@@ -35,10 +35,12 @@ use common_expression::Expr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserDefinedFunction;
+use indexmap::IndexMap;
 use log::warn;
 
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::CteInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::udf_validator::UDFValidator;
@@ -81,13 +83,16 @@ pub struct Binder {
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
-    // Save the bound context for materialized cte, the key is cte_idx
-    pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
     // Save the equal scalar exprs for joins
     // Eg: SELECT * FROM (twocolumn AS a JOIN twocolumn AS b USING(x) JOIN twocolumn AS c on a.x = c.x) ORDER BY x LIMIT 1
     // The eq_scalars is [(a.x, b.x), (a.x, c.x)]
     pub eq_scalars: Vec<(ScalarExpr, ScalarExpr)>,
+    // Save the bound context for materialized cte, the key is cte_idx
+    pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
     pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
+    /// Use `IndexMap` because need to keep the insertion order
+    /// Then wrap materialized ctes to main plan.
+    pub ctes_map: Box<IndexMap<String, CteInfo>>,
 }
 
 impl<'a> Binder {
@@ -105,6 +110,7 @@ impl<'a> Binder {
             m_cte_bound_ctx: Default::default(),
             eq_scalars: vec![],
             m_cte_bound_s_expr: Default::default(),
+            ctes_map: Box::new(Default::default()),
         }
     }
 
@@ -179,7 +185,7 @@ impl<'a> Binder {
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
                 // Wrap `LogicalMaterializedCte` to `s_expr`
-                for (_, cte_info) in bind_context.ctes_map.iter().rev() {
+                for (_, cte_info) in self.ctes_map.iter().rev() {
                     if !cte_info.materialized {
                         continue;
                     }

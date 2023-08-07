@@ -292,7 +292,6 @@ impl Binder {
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
-        output_context.ctes_map = from_context.ctes_map;
 
         Ok((s_expr, output_context))
     }
@@ -335,7 +334,7 @@ impl Binder {
         if let Some(with) = &query.with {
             for (idx, cte) in with.ctes.iter().enumerate() {
                 let table_name = cte.alias.name.name.clone();
-                if bind_context.ctes_map.contains_key(&table_name) {
+                if self.ctes_map.contains_key(&table_name) {
                     return Err(ErrorCode::SemanticError(format!(
                         "duplicate cte {table_name}"
                     )));
@@ -349,7 +348,7 @@ impl Binder {
                     stat_info: None,
                     columns: vec![],
                 };
-                bind_context.ctes_map.insert(table_name, cte_info);
+                self.ctes_map.insert(table_name, cte_info);
             }
         }
 
@@ -413,6 +412,7 @@ impl Binder {
             self.metadata.clone(),
             aliases,
             self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
         scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
@@ -543,8 +543,6 @@ impl Binder {
             coercion_types,
         )?;
 
-        new_bind_context.ctes_map = bind_context.ctes_map.clone();
-
         let union_plan = UnionAll { pairs };
         let mut new_expr = SExpr::create_binary(
             Arc::new(union_plan.into()),
@@ -657,7 +655,6 @@ impl Binder {
             non_equi_conditions: vec![],
             other_conditions: vec![],
         };
-        left_context.ctes_map = bind_context.ctes_map.clone();
         let s_expr = self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr)?;
         Ok((s_expr, left_context))
     }
@@ -788,7 +785,6 @@ impl Binder {
         if stmt.group_by.is_some()
             || stmt.having.is_some()
             || stmt.distinct
-            || !bind_context.ctes_map.is_empty()
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
         {

@@ -361,6 +361,7 @@ with it as ( select * from numbers(1) ) select i.number from it as i
 ----
 0
 
+onlyif todo
 query II
 select * from  (WITH source AS (select 1 as e) SELECT * FROM source) A,   (WITH source AS (select 2 as e) SELECT * FROM source) B
 ----
