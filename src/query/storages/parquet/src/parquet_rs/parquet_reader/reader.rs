@@ -137,8 +137,11 @@ impl crate::parquet_reader::ParquetReader for ParquetReader {
         let blocks = self
             .get_deserializer(part, chunks, filter)?
             .collect::<Vec<_>>();
-        let blocks: Result<Vec<DataBlock>> = blocks.into_iter().collect();
-        DataBlock::concat(&blocks?)
+        let blocks = blocks.into_iter().collect::<Result<Vec<DataBlock>>>()?;
+        if blocks.is_empty() {
+            return Ok(DataBlock::empty_with_schema(self.output_schema.clone()));
+        }
+        DataBlock::concat(&blocks)
     }
 
     fn get_deserializer(
