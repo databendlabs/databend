@@ -180,11 +180,15 @@ impl Binder {
         // because `analyze_window` will rewrite the aggregate functions in the window function's arguments.
         self.analyze_window(&mut from_context, &mut select_list)?;
 
-        let aliases = select_list
-            .items
-            .iter()
-            .map(|item| (item.alias.clone(), item.scalar.clone()))
-            .collect::<Vec<_>>();
+        // Collect duduplicate aliases
+        let mut aliases = vec![];
+        for item in &select_list.items {
+            if !aliases.iter().any(|(name, pre_scalar)| {
+                name == &item.alias && self.judge_equal_scalars(pre_scalar, &item.scalar)
+            }) {
+                aliases.push((item.alias.clone(), item.scalar.clone()));
+            }
+        }
 
         // To support using aliased column in `WHERE` clause,
         // we should bind where after `select_list` is rewritten.

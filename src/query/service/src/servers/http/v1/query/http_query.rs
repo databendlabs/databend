@@ -275,10 +275,14 @@ impl HttpQuery {
         };
 
         let deduplicate_label = &ctx.deduplicate_label;
+        let user_agent = &ctx.user_agent;
         let ctx = session.create_query_context().await?;
 
         if let Some(label) = deduplicate_label {
             ctx.get_settings().set_deduplicate_label(label.clone())?;
+        }
+        if let Some(ua) = user_agent {
+            ctx.set_ua(ua.clone());
         }
 
         let session_id = session.get_id().clone();
