@@ -21,24 +21,23 @@ use common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::super::v2;
-use super::super::v3;
 use crate::meta::format::compress;
 use crate::meta::format::decode_segment_header;
 use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
 use crate::meta::format::SegmentHeader;
+use crate::meta::v2;
 use crate::meta::v2::BlockMeta;
+use crate::meta::v3;
 use crate::meta::v4;
+use crate::meta::v5::Statistics;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::MetaCompression;
 use crate::meta::MetaEncoding;
-use crate::meta::Statistics;
 use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
-/// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct LeafSegmentInfo {
     /// format version of SegmentInfo table meta data
@@ -63,6 +62,10 @@ pub struct LeafSegmentInfo {
 }
 
 impl LeafSegmentInfo {
+    pub fn tag() -> u8 {
+        0
+    }
+
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         self.to_bytes_with_encoding(MetaEncoding::MessagePack)
     }
@@ -90,7 +93,7 @@ impl LeafSegmentInfo {
         buf.extend_from_slice(&blocks_compress.len().to_le_bytes());
         buf.extend_from_slice(&summary_compress.len().to_le_bytes());
         // add tag to distinct leaf and internal
-        buf.push(0_u8);
+        buf.push(Self::tag());
         buf.extend(blocks_compress);
         buf.extend(summary_compress);
 
@@ -126,6 +129,10 @@ pub struct InternalSegmentInfo {
 }
 
 impl InternalSegmentInfo {
+    pub fn tag() -> u8 {
+        1
+    }
+
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         self.to_bytes_with_encoding(MetaEncoding::MessagePack)
     }
@@ -153,7 +160,7 @@ impl InternalSegmentInfo {
         buf.extend_from_slice(&child_segments_compress.len().to_le_bytes());
         buf.extend_from_slice(&summary_compress.len().to_le_bytes());
         // add tag to distinct leaf and internal
-        buf.push(1_u8);
+        buf.push(Self::tag());
         buf.extend(child_segments_compress);
         buf.extend(summary_compress);
 
@@ -163,7 +170,6 @@ impl InternalSegmentInfo {
 
 #[derive(Serialize, Deserialize)]
 pub enum SegmentInfo {
-    #[allow(unused)]
     InternalSegment(InternalSegmentInfo),
     LeafSegment(LeafSegmentInfo),
 }
@@ -187,13 +193,12 @@ impl From<v4::SegmentInfo> for SegmentInfo {
         SegmentInfo::LeafSegment(LeafSegmentInfo {
             format_version: value.format_version,
             blocks: value.blocks,
-            summary: value.summary,
+            summary: Statistics::from_v2(value.summary),
         })
     }
 }
 
 impl SegmentInfo {
-    #[allow(unused)]
     pub fn new_leaf(blocks: Vec<Arc<BlockMeta>>, summary: Statistics) -> Self {
         Self::LeafSegment(LeafSegmentInfo {
             format_version: SegmentInfo::VERSION,
@@ -202,7 +207,6 @@ impl SegmentInfo {
         })
     }
 
-    #[allow(unused)]
     pub fn new_leaf_with_version(
         blocks: Vec<Arc<BlockMeta>>,
         summary: Statistics,
@@ -215,7 +219,6 @@ impl SegmentInfo {
         })
     }
 
-    #[allow(unused)]
     pub fn new_internal(segments: Vec<Location>, summary: Statistics) -> Self {
         Self::InternalSegment(InternalSegmentInfo {
             format_version: SegmentInfo::VERSION,
@@ -224,7 +227,6 @@ impl SegmentInfo {
         })
     }
 
-    #[allow(unused)]
     pub fn new_internal_with_version(
         segments: Vec<Location>,
         summary: Statistics,
@@ -238,7 +240,6 @@ impl SegmentInfo {
     }
 
     // Total block bytes of this segment.
-    #[allow(unused)]
     pub fn total_bytes(&self) -> u64 {
         match self {
             Self::LeafSegment(leaf_segment_info) => {
@@ -273,7 +274,6 @@ impl SegmentInfo {
     }
 
     pub fn from_slice(bytes: &[u8]) -> Result<Self> {
-        let segment;
         let mut cursor = Cursor::new(bytes);
         let SegmentHeader {
             version,
@@ -285,24 +285,25 @@ impl SegmentInfo {
         } = decode_segment_header(&mut cursor)?;
 
         let tag = Self::read_tag(&mut cursor)?;
-
-        if tag == 0 {
-            let blocks: Vec<Arc<BlockMeta>> =
-                read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
-            let summary: Statistics =
-                read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
-
-            segment = Self::new_leaf_with_version(blocks, summary, version);
-        } else if tag == 1 {
-            let child_segments: Vec<Location> =
-                read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
-            let summary: Statistics =
-                read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
-
-            segment = Self::new_internal_with_version(child_segments, summary, version);
-        } else {
-            panic!("read bad tag for v5")
-        }
+        let segment = match tag {
+            0 => {
+                // leaf segment
+                let blocks: Vec<Arc<BlockMeta>> =
+                    read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
+                let summary: Statistics =
+                    read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+                Self::new_leaf_with_version(blocks, summary, version)
+            }
+            1 => {
+                // internal segment
+                let child_segments: Vec<Location> =
+                    read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
+                let summary: Statistics =
+                    read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+                Self::new_internal_with_version(child_segments, summary, version)
+            }
+            _ => panic!("read bad tag for v5"),
+        };
 
         Ok(segment)
     }

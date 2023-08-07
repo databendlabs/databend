@@ -81,6 +81,7 @@ impl Versioned<1> for v1::TableSnapshot {}
 impl Versioned<2> for v2::TableSnapshot {}
 impl Versioned<3> for v3::TableSnapshot {}
 impl Versioned<4> for v4::TableSnapshot {}
+impl Versioned<5> for v5::TableSnapshot {}
 
 pub enum SnapshotVersion {
     V0(PhantomData<v0::TableSnapshot>),
@@ -88,6 +89,7 @@ pub enum SnapshotVersion {
     V2(PhantomData<v2::TableSnapshot>),
     V3(PhantomData<v3::TableSnapshot>),
     V4(PhantomData<v4::TableSnapshot>),
+    V5(PhantomData<v5::TableSnapshot>),
 }
 
 impl SnapshotVersion {
@@ -98,6 +100,7 @@ impl SnapshotVersion {
             SnapshotVersion::V2(a) => Self::ver(a),
             SnapshotVersion::V3(a) => Self::ver(a),
             SnapshotVersion::V4(a) => Self::ver(a),
+            SnapshotVersion::V5(a) => Self::ver(a),
         }
     }
 
