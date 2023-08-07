@@ -2161,6 +2161,21 @@ fn match_operation(i: Input) -> IResult<MatchOperation> {
             },
             |(_, _, update_list)| MatchOperation::Update { update_list },
         ),
+        map(
+            rule! {
+             INSERT ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )? ~ VALUES ~ #rest_str
+            },
+            |(_, columns_op, _, values)| {
+                let columns = match columns_op {
+                    Some(columns) => Some(columns.1),
+                    None => None,
+                };
+                MatchOperation::Insert(InsertOperation {
+                    columns,
+                    values: values.0,
+                })
+            },
+        ),
     ))(i)
 }
 
@@ -2177,13 +2192,17 @@ pub fn unmatch_clause(i: Input) -> IResult<MergeOption> {
             };
             match columns_op {
                 Some(columns) => MergeOption::Unmatch(UnmatchedClause {
-                    columns: Some(columns.1),
-                    values: values.0,
+                    insert_operation: InsertOperation {
+                        columns: Some(columns.1),
+                        values: values.0,
+                    },
                     selection,
                 }),
                 None => MergeOption::Unmatch(UnmatchedClause {
-                    columns: None,
-                    values: values.0,
+                    insert_operation: InsertOperation {
+                        columns: None,
+                        values: values.0,
+                    },
                     selection,
                 }),
             }

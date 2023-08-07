@@ -26,6 +26,7 @@ use crate::ast::Identifier;
 pub enum MatchOperation {
     Update { update_list: Vec<UpdateExpr> },
     Delete,
+    Insert(InsertOperation),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -35,10 +36,15 @@ pub struct MatchedClause {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct UnmatchedClause {
-    pub selection: Option<Expr>,
+pub struct InsertOperation {
     pub columns: Option<Vec<Identifier>>,
     pub values: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnmatchedClause {
+    pub selection: Option<Expr>,
+    pub insert_operation: InsertOperation,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,6 +52,7 @@ pub enum MergeOption {
     Match(MatchedClause),
     Unmatch(UnmatchedClause),
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MergeIntoStmt {
     pub catalog: Option<Identifier>,
@@ -67,6 +74,7 @@ impl Display for MergeIntoStmt {
                 .chain(Some(&self.table)),
         )?;
         write!(f, " USING {} ON {}", self.source, self.join_expr)?;
+
         for clause in &self.merge_options {
             match clause {
                 MergeOption::Match(match_clause) => {
@@ -84,6 +92,13 @@ impl Display for MergeIntoStmt {
                             MatchOperation::Delete => {
                                 write!(f, " DELETE ")?;
                             }
+                            MatchOperation::Insert(insert_operation) => {
+                                write!(
+                                    f,
+                                    " INSERT {:?} {:?} ",
+                                    insert_operation.columns, insert_operation.values
+                                )?;
+                            }
                         }
                     }
                 }
@@ -93,14 +108,14 @@ impl Display for MergeIntoStmt {
                         write!(f, " AND {} ", e)?;
                     }
                     write!(f, " THEN INSERT ")?;
-                    if let Some(columns) = &unmatch_clause.columns {
+                    if let Some(columns) = &unmatch_clause.insert_operation.columns {
                         if !columns.is_empty() {
                             write!(f, " (")?;
                             write_comma_separated_list(f, columns)?;
                             write!(f, ")")?;
                         }
                     }
-                    write!(f, " VALUES {} ", unmatch_clause.values)?;
+                    write!(f, " VALUES {} ", unmatch_clause.insert_operation.values)?;
                 }
             }
         }
