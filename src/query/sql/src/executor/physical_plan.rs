@@ -820,7 +820,10 @@ pub struct QueryCtx {
 
 impl CopyIntoTable {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.required_source_schema.clone())
+        match &self.source {
+            CopyIntoTableSource::Query(query_ctx) => Ok(query_ctx.query_source_schema.clone()),
+            CopyIntoTableSource::Stage(_) => Ok(self.required_values_schema.clone()),
+        }
     }
 }
 
