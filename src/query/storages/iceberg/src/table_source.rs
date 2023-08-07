@@ -26,7 +26,6 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_storages_parquet::BlockIterator;
 use common_storages_parquet::ParquetPart;
 use common_storages_parquet::ParquetPartData;
 use common_storages_parquet::ParquetRSReader;
@@ -51,8 +50,8 @@ enum State {
     /// Read data from parquet file.
     ReadParquetData(ParquetPartData, PartInfoPtr),
 
-    /// Deserialize [`DataBlock`] from parquet data.
-    DeserializeParquetData(Box<dyn BlockIterator>),
+    /// Generate [`DataBlock`], which is the output of this processor.
+    GenerateBlock(DataBlock),
 
     Finish,
 }
@@ -99,21 +98,17 @@ impl Processor for IcebergTableSource {
             return Ok(Event::NeedConsume);
         }
 
-        if let State::DeserializeParquetData(mut block_iter) =
-            std::mem::replace(&mut self.state, State::Finish)
-        {
-            if let Some(block) = block_iter.next() {
-                let block = block?;
+        if matches!(self.state, State::GenerateBlock(_)) {
+            if let State::GenerateBlock(block) = std::mem::replace(&mut self.state, State::Finish) {
                 // Check if the schema of the data block is matched with the schema of the table.
                 let block = check_block_schema(&self.parquet_reader.output_schema, block)?;
                 self.output.push_data(Ok(block));
-                self.state = State::DeserializeParquetData(block_iter);
-                return Ok(Event::NeedConsume);
-            } else {
                 self.state = self.ctx.get_partition().map_or(State::Finish, |part_info| {
                     State::InitReader(Some(part_info))
                 });
+                return Ok(Event::NeedConsume);
             }
+            unreachable!()
         }
 
         match self.state {
@@ -123,7 +118,7 @@ impl Processor for IcebergTableSource {
             }
             State::InitReader(_) => Ok(Event::Async),
             State::ReadParquetData(_, _) => Ok(Event::Sync),
-            State::DeserializeParquetData(_) => unreachable!(),
+            State::GenerateBlock(_) => unreachable!(),
         }
     }
 
@@ -161,10 +156,13 @@ impl Processor for IcebergTableSource {
                         &iceberg_part
                     {
                         let chunks = self.parquet_reader.read_from_readers(&mut rg)?;
-                        let block_iter =
-                            self.parquet_reader
-                                .get_deserializer(parquet_part, chunks, None)?;
-                        self.state = State::DeserializeParquetData(block_iter);
+                        // TODO: use `get_deseriliazer` to get `BlockIterator` to generate size-fixed blocks.
+                        // Notice that `BlockIterator` will not hold the ownership of raw data,
+                        // so if we use `BlockIterator`, we should hold the raw data until the iterator is drained.
+                        let block = self
+                            .parquet_reader
+                            .deserialize(parquet_part, chunks, None)?;
+                        self.state = State::GenerateBlock(block);
                     } else {
                         unreachable!()
                     }
