@@ -279,6 +279,19 @@ impl TryFrom<&SegmentInfo> for CompactSegmentInfo {
     }
 }
 
+impl TryFrom<SegmentInfo> for CompactSegmentInfo {
+    type Error = ErrorCode;
+
+    fn try_from(value: SegmentInfo) -> Result<Self, Self::Error> {
+        let bytes = value.block_raw_bytes()?;
+        Ok(Self {
+            format_version: value.format_version,
+            summary: value.summary,
+            raw_block_metas: bytes,
+        })
+    }
+}
+
 #[cfg(feature = "dev")]
 impl SegmentInfo {
     pub fn bench_to_bytes_with_encoding(&self, encoding: MetaEncoding) -> Result<Vec<u8>> {

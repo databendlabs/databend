@@ -13,5 +13,13 @@
 // limitations under the License.
 
 mod segment;
+mod snapshot;
+mod statistics;
+
 pub use segment::InternalSegmentInfo;
+pub use segment::LeafSegmentInfo;
 pub use segment::SegmentInfo;
+pub use snapshot::TableSnapshot;
+pub use statistics::ClusterStatistics;
+pub use statistics::ColumnStatistics;
+pub use statistics::Statistics;
