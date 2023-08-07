@@ -232,20 +232,9 @@ pub(super) fn blocking_get_parquet2_file_meta(
             .collect::<Vec<_>>(),
     };
 
-    let mut large_files = vec![];
-    let mut small_files = vec![];
-    for (location, size) in locations.iter() {
-        // TODO(Dousir9): parquet_fast_read_bytes
-        if *size > 0 {
-            large_files.push((location.clone(), *size));
-        } else {
-            small_files.push((location.clone(), *size));
-        }
-    }
-
     // Read parquet meta data, sync reading.
     let mut file_metas = Vec::with_capacity(locations.len());
-    for (location, _size) in &large_files {
+    for (location, _) in locations.iter() {
         let mut reader = operator.blocking().reader(location)?;
         let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
             ErrorCode::Internal(format!(
@@ -276,19 +265,8 @@ pub(super) async fn non_blocking_get_parquet2_file_meta(
             .collect::<Vec<_>>(),
     };
 
-    let mut large_files = vec![];
-    let mut small_files = vec![];
-    for (location, size) in locations.iter() {
-        // TODO(Dousir9): parquet_fast_read_bytes
-        if *size > 0 {
-            large_files.push((location.clone(), *size));
-        } else {
-            small_files.push((location.clone(), *size));
-        }
-    }
-
-    // Read parquet meta data, async reading
-    read_parquet_metas_in_parallel(operator.clone(), large_files.clone(), 16, 64, 79819535155).await
+    // Read parquet meta data, async reading.
+    read_parquet_metas_in_parallel(operator.clone(), locations.clone(), 16, 64, 79819535155).await
 }
 
 pub(super) fn create_parquet2_statistics_provider(
