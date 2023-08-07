@@ -30,6 +30,7 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use dashmap::DashMap;
 use enum_as_inner::EnumAsInner;
+use indexmap::IndexMap;
 use itertools::Itertools;
 
 use super::AggregateInfo;
