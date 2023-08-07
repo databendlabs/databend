@@ -12,19 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod mysql_federated;
-mod mysql_handler;
-mod mysql_interactive_worker;
-mod mysql_metrics;
-mod mysql_session;
-#[allow(clippy::unused_io_amount)]
-mod reject_connection;
-mod tls;
-mod writers;
-
-pub use self::mysql_federated::MySQLFederated;
-pub use self::mysql_handler::MySQLHandler;
-pub use self::mysql_session::MySQLConnection;
-pub use self::tls::MySQLTlsConfig;
-
-const MYSQL_VERSION: &str = "8.0.26";
+mod segment;
+pub use segment::InternalSegmentInfo;
+pub use segment::SegmentInfo;
