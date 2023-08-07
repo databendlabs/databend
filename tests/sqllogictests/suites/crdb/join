@@ -427,7 +427,6 @@ statement error 1065
 SELECT * FROM (onecolumn AS a JOIN onecolumn AS b USING(y))
 
 
-# TODO column name "x" appears more than once in USING clause ,should be error
 query I
 SELECT * FROM (onecolumn AS a JOIN onecolumn AS b USING(x, x))
 ----
