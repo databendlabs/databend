@@ -618,18 +618,17 @@ impl Table for FuseTable {
             let stats = &snapshot.summary.col_stats;
             let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
             if let Some(table_statistics) = table_statistics {
-                FuseTableColumnStatisticsProvider {
-                    column_stats: stats.clone(),
-                    row_count: snapshot.summary.row_count,
-                    // save row count first
-                    column_distinct_values: Some(table_statistics.column_distinct_values.clone()),
-                }
+                FuseTableColumnStatisticsProvider::new(
+                    stats.clone(),
+                    Some(table_statistics.column_distinct_values.clone()),
+                    snapshot.summary.row_count,
+                )
             } else {
-                FuseTableColumnStatisticsProvider {
-                    column_stats: stats.clone(),
-                    row_count: snapshot.summary.row_count,
-                    column_distinct_values: None,
-                }
+                FuseTableColumnStatisticsProvider::new(
+                    stats.clone(),
+                    None,
+                    snapshot.summary.row_count,
+                )
             }
         } else {
             FuseTableColumnStatisticsProvider::default()
@@ -768,25 +767,39 @@ impl FromStr for FuseStorageFormat {
 
 #[derive(Default)]
 struct FuseTableColumnStatisticsProvider {
-    column_stats: HashMap<ColumnId, FuseColumnStatistics>,
-    pub column_distinct_values: Option<HashMap<ColumnId, u64>>,
-    pub row_count: u64,
+    column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
+}
+
+impl FuseTableColumnStatisticsProvider {
+    fn new(
+        column_stats: HashMap<ColumnId, FuseColumnStatistics>,
+        column_distinct_values: Option<HashMap<ColumnId, u64>>,
+        row_count: u64,
+    ) -> Self {
+        let column_stats = column_stats
+            .into_iter()
+            .map(|(column_id, stat)| {
+                let ndv = column_distinct_values
+                    .as_ref()
+                    .map_or(row_count, |map| map.get(&column_id).map_or(0, |v| *v));
+                let stat = BasicColumnStatistics {
+                    min: Datum::from_scalar(stat.min().clone()),
+                    max: Datum::from_scalar(stat.max().clone()),
+                    ndv: Some(ndv),
+                    null_count: stat.null_count,
+                };
+                (column_id, stat.get_useful_stat(row_count))
+            })
+            .collect();
+        Self { column_stats }
+    }
 }
 
 impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
     fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics> {
-        let col_stats = &self.column_stats.get(&column_id);
-        col_stats.map(|s| {
-            let ndv = self
-                .column_distinct_values
-                .as_ref()
-                .map_or(self.row_count, |map| map.get(&column_id).map_or(0, |v| *v));
-            BasicColumnStatistics {
-                min: Datum::from_scalar(s.min().clone()),
-                max: Datum::from_scalar(s.max().clone()),
-                ndv: Some(ndv),
-                null_count: s.null_count,
-            }
-        })
+        match &self.column_stats.get(&column_id) {
+            Some(col_stats) => (*col_stats).clone(),
+            None => None,
+        }
     }
 }

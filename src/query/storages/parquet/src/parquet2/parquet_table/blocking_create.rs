@@ -55,7 +55,7 @@ impl Parquet2Table {
             create_parquet2_statistics_provider(file_metas, &arrow_schema)?;
 
         let mut table_info = create_parquet_table_info(arrow_schema.clone(), &stage_info);
-        table_info.meta.statistics.number_of_rows = column_statistics_provider.num_rows as u64;
+        table_info.meta.statistics.number_of_rows = column_statistics_provider.num_rows();
         Ok(Arc::new(Parquet2Table {
             table_info,
             arrow_schema,

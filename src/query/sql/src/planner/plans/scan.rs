@@ -193,28 +193,26 @@ impl Operator for Scan {
             if !used_columns.contains(k) {
                 continue;
             }
-            if let Some(col_stat) = v {
-                if let Some(col_stat) = col_stat.get_useful_stat(num_rows) {
-                    // Safe to unwrap: min, max and ndv are all `Some(_)`.
-                    let min = col_stat.min.unwrap();
-                    let max = col_stat.max.unwrap();
-                    let ndv = col_stat.ndv.unwrap();
-                    let histogram = histogram_from_ndv(
-                        ndv,
-                        num_rows,
-                        Some((min.clone(), max.clone())),
-                        DEFAULT_HISTOGRAM_BUCKETS,
-                    )
-                    .ok();
-                    let column_stat = ColumnStat {
-                        min,
-                        max,
-                        ndv: ndv as f64,
-                        null_count: col_stat.null_count,
-                        histogram,
-                    };
-                    column_stats.insert(*k as IndexType, column_stat);
-                }
+            if let Some(col_stat) = v.clone() {
+                // Safe to unwrap: min, max and ndv are all `Some(_)`.
+                let min = col_stat.min.unwrap();
+                let max = col_stat.max.unwrap();
+                let ndv = col_stat.ndv.unwrap();
+                let histogram = histogram_from_ndv(
+                    ndv,
+                    num_rows,
+                    Some((min.clone(), max.clone())),
+                    DEFAULT_HISTOGRAM_BUCKETS,
+                )
+                .ok();
+                let column_stat = ColumnStat {
+                    min,
+                    max,
+                    ndv: ndv as f64,
+                    null_count: col_stat.null_count,
+                    histogram,
+                };
+                column_stats.insert(*k as IndexType, column_stat);
             }
         }
 

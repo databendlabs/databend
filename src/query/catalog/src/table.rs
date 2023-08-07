@@ -471,12 +471,32 @@ use std::collections::HashMap;
 // #[derive(Default)]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct Parquet2TableColumnStatisticsProvider {
-    pub column_stats: HashMap<ColumnId, BasicColumnStatistics>,
-    pub num_rows: usize,
+    column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
+    num_rows: u64,
+}
+
+impl Parquet2TableColumnStatisticsProvider {
+    pub fn new(column_stats: HashMap<ColumnId, BasicColumnStatistics>, num_rows: u64) -> Self {
+        let column_stats = column_stats
+            .into_iter()
+            .map(|(column_id, stat)| (column_id, stat.get_useful_stat(num_rows)))
+            .collect();
+        Self {
+            column_stats,
+            num_rows,
+        }
+    }
+
+    pub fn num_rows(&self) -> u64 {
+        self.num_rows
+    }
 }
 
 impl ColumnStatisticsProvider for Parquet2TableColumnStatisticsProvider {
     fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics> {
-        self.column_stats.get(&column_id).cloned()
+        match &self.column_stats.get(&column_id) {
+            Some(col_stats) => (*col_stats).clone(),
+            None => None,
+        }
     }
 }
