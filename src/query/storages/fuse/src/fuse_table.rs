@@ -541,6 +541,14 @@ impl Table for FuseTable {
         self.do_append_data(ctx, pipeline, append_mode)
     }
 
+    fn refresh_aggregating_indexes(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        self.do_refresh_aggregating_indexes(ctx, pipeline)
+    }
+
     #[async_backtrace::framed]
     async fn replace_into(
         &self,

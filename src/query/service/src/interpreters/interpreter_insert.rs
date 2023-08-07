@@ -280,7 +280,8 @@ impl Interpreter for InsertInterpreter {
             None,
             self.plan.overwrite,
             append_mode,
-        )?;
+        )
+        .await?;
 
         Ok(build_res)
     }

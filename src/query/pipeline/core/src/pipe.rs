@@ -39,6 +39,10 @@ impl PipeItem {
             outputs_port: outputs,
         }
     }
+
+    pub fn name(&self) -> String {
+        unsafe { self.processor.name() }
+    }
 }
 
 impl Debug for PipeItem {

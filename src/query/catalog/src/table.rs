@@ -201,6 +201,20 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    fn refresh_aggregating_indexes(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let (_, _) = (ctx, pipeline);
+
+        Err(ErrorCode::Unimplemented(format!(
+            "refresh_aggregating_indexes operation for table {} is not implemented. table engine : {}",
+            self.name(),
+            self.get_table_info().meta.engine
+        )))
+    }
+
     #[async_backtrace::framed]
     async fn replace_into(
         &self,

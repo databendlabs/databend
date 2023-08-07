@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod agg_index;
 mod agg_index_sink;
 mod analyze;
 mod append;
@@ -20,6 +21,7 @@ pub mod common;
 mod compact;
 mod delete;
 mod gc;
+mod index;
 mod mutation;
 mod navigate;
 mod read;

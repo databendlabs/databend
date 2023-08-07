@@ -137,7 +137,8 @@ impl CopyInterpreter {
             None,
             false,
             AppendMode::Normal,
-        )?;
+        )
+        .await?;
         Ok(build_res)
     }
 

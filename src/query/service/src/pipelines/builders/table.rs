@@ -16,13 +16,23 @@ use std::sync::Arc;
 
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataField;
 use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::Pipeline;
+use common_sql::executor::PhysicalPlanBuilder;
+use common_sql::plans::Plan;
+use common_sql::plans::RelOperator;
+use common_sql::Planner;
 
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::TransformResortAddOn;
+use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 
 pub fn build_fill_missing_columns_pipeline(
@@ -66,7 +76,7 @@ pub fn build_fill_missing_columns_pipeline(
     Ok(())
 }
 
-pub fn build_append2table_with_commit_pipeline(
+pub async fn build_append2table_with_commit_pipeline(
     ctx: Arc<QueryContext>,
     main_pipeline: &mut Pipeline,
     table: Arc<dyn Table>,
@@ -79,9 +89,75 @@ pub fn build_append2table_with_commit_pipeline(
 
     table.append_data(ctx.clone(), main_pipeline, append_mode)?;
 
+    let select_pipeline = get_agg_index_pipeline(ctx.clone()).await?;
+
+    table.refresh_aggregating_indexes(ctx.clone(), main_pipeline)?;
+
     table.commit_insertion(ctx, main_pipeline, copied_files, overwrite, None)?;
 
+    dbg!(&select_pipeline.main_pipeline);
+
+    for pipe in select_pipeline.main_pipeline.pipes.clone() {
+        if pipe.items[0]
+            .name()
+            .eq_ignore_ascii_case("SyncReadParquetDataSource")
+        {
+            continue;
+        }
+        main_pipeline.add_pipe(Pipe::create(1, 1, vec![pipe.items[0].clone()]));
+    }
+
+    dbg!(main_pipeline);
+
     Ok(())
+}
+
+async fn get_agg_index_pipeline(ctx: Arc<QueryContext>) -> Result<PipelineBuildResult> {
+    let sql = "select sum_state(a) from t2";
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _) = planner.plan_sql(sql).await?;
+
+    let (mut query_plan, output_schema, select_columns) = match plan {
+        Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            ..
+        } => {
+            let schema = if let RelOperator::EvalScalar(eval) = s_expr.plan() {
+                let fields = eval
+                    .items
+                    .iter()
+                    .map(|item| {
+                        let ty = item.scalar.data_type()?;
+                        Ok(DataField::new(&item.index.to_string(), ty))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                DataSchemaRefExt::create(fields)
+            } else {
+                return Err(ErrorCode::SemanticError(
+                    "The last operator of the plan of aggregate index query should be EvalScalar",
+                ));
+            };
+
+            let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
+            (
+                builder.build(s_expr.as_ref()).await?,
+                schema,
+                bind_context.columns.clone(),
+            )
+        }
+        _ => {
+            return Err(ErrorCode::SemanticError(
+                "Refresh aggregating index encounter Non-Query Plan",
+            ));
+        }
+    };
+
+    let build_res =
+        build_query_pipeline_without_render_result_set(&ctx, &query_plan, false).await?;
+
+    Ok(build_res)
 }
 
 pub fn build_append2table_without_commit_pipeline(
