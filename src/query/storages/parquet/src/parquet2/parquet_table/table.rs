@@ -278,6 +278,7 @@ pub(super) fn create_parquet2_statistics_provider(
     let mut basic_column_stats = vec![BasicColumnStatistics::new_null(); arrow_schema.fields.len()];
     let column_nodes = ColumnNodes::new_from_schema(arrow_schema, None);
     for file_meta in file_metas.into_iter() {
+        num_rows += file_meta.num_rows;
         let no_stats = file_meta.row_groups.is_empty()
             || file_meta.row_groups.iter().any(|r| {
                 r.columns()
@@ -285,9 +286,6 @@ pub(super) fn create_parquet2_statistics_provider(
                     .any(|c| c.metadata().statistics.is_none())
             });
         if !no_stats {
-            for rg in file_meta.row_groups.iter() {
-                num_rows += rg.num_rows();
-            }
             if let Ok(row_group_column_stats) =
                 collect_basic_column_stats(&column_nodes, &file_meta.row_groups)
             {
@@ -302,9 +300,7 @@ pub(super) fn create_parquet2_statistics_provider(
     for (column_id, col_stat) in basic_column_stats.into_iter().enumerate() {
         column_stats.insert(column_id as u32, col_stat);
     }
-    let column_statistics_provider = Parquet2TableColumnStatisticsProvider {
-        column_stats,
-        num_rows,
-    };
+    let column_statistics_provider =
+        Parquet2TableColumnStatisticsProvider::new(column_stats, num_rows as u64);
     Ok(column_statistics_provider)
 }
