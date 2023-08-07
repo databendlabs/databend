@@ -293,6 +293,8 @@ pub enum TokenKind {
     ALLOWED_IP_LIST,
     #[token("ADD", ignore(ascii_case))]
     ADD,
+    #[token("AFTER", ignore(ascii_case))]
+    AFTER,
     #[token("AGGREGATING", ignore(ascii_case))]
     AGGREGATING,
     #[token("ANY", ignore(ascii_case))]

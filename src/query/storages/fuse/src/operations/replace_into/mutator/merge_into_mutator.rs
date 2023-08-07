@@ -35,13 +35,18 @@ use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_sql::evaluator::BlockOperator;
 use log::info;
+use log::warn;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
+use storages_common_index::filters::Filter;
+use storages_common_index::filters::Xor8Filter;
+use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 
+use crate::io::read::bloom::block_filter_reader::BloomBlockFilterReader;
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
@@ -52,6 +57,7 @@ use crate::io::WriteSettings;
 use crate::metrics::metrics_inc_replace_accumulated_merge_action_time_ms;
 use crate::metrics::metrics_inc_replace_apply_deletion_time_ms;
 use crate::metrics::metrics_inc_replace_block_number_after_pruning;
+use crate::metrics::metrics_inc_replace_block_number_bloom_pruned;
 use crate::metrics::metrics_inc_replace_block_number_totally_loaded;
 use crate::metrics::metrics_inc_replace_block_number_write;
 use crate::metrics::metrics_inc_replace_block_of_zero_row_deleted;
@@ -60,6 +66,7 @@ use crate::metrics::metrics_inc_replace_number_apply_deletion;
 use crate::metrics::metrics_inc_replace_row_number_after_pruning;
 use crate::metrics::metrics_inc_replace_row_number_totally_loaded;
 use crate::metrics::metrics_inc_replace_row_number_write;
+use crate::metrics::metrics_inc_replace_segment_number_after_pruning;
 use crate::metrics::metrics_inc_replace_whole_block_deletion;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
@@ -77,6 +84,9 @@ struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
     // the fields specified in ON CONFLICT clause
     on_conflict_fields: Vec<OnConflictField>,
+    // the field indexes of `on_conflict_fields`
+    // which we should apply bloom filtering, if any
+    bloom_filter_column_indexes: Vec<FieldIndex>,
     // table fields excludes `on_conflict_fields`
     remain_column_field_ids: Vec<FieldIndex>,
     // reader that reads the ON CONFLICT key fields
@@ -102,6 +112,7 @@ impl MergeIntoOperationAggregator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         on_conflict_fields: Vec<OnConflictField>,
+        bloom_filter_column_indexes: Vec<FieldIndex>,
         segment_locations: Vec<(SegmentIndex, Location)>,
         data_accessor: Operator,
         table_schema: Arc<TableSchema>,
@@ -165,6 +176,7 @@ impl MergeIntoOperationAggregator {
             aggregation_ctx: Arc::new(AggregationContext {
                 segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
                 on_conflict_fields,
+                bloom_filter_column_indexes,
                 remain_column_field_ids,
                 key_column_reader,
                 remain_column_reader,
@@ -204,6 +216,7 @@ impl MergeIntoOperationAggregator {
                     for DeletionByColumn {
                         columns_min_max,
                         key_hashes,
+                        bloom_hashes,
                     } in &partitions
                     {
                         if aggregation_ctx
@@ -218,7 +231,7 @@ impl MergeIntoOperationAggregator {
                                 Some(v) => v,
                             };
 
-                            // block level
+                            // block level pruning, using range index
                             for (block_index, block_meta) in seg.blocks.iter().enumerate() {
                                 if aggregation_ctx
                                     .overlapped(&block_meta.col_stats, columns_min_max)
@@ -227,24 +240,17 @@ impl MergeIntoOperationAggregator {
                                         *segment_index,
                                         block_index,
                                         key_hashes,
+                                        bloom_hashes,
                                     )
                                 }
                             }
                         }
                     }
-
-                    let num_blocks_mutated = self.deletion_accumulator.deletions.values().fold(
-                        0,
-                        |acc, blocks_may_have_row_deletion| {
-                            acc + blocks_may_have_row_deletion.len()
-                        },
-                    );
-
-                    metrics_inc_replace_block_number_after_pruning(num_blocks_mutated as u64);
                 }
             }
             MergeIntoOperation::None => {}
         }
+
         metrics_inc_replace_accumulated_merge_action_time_ms(start.elapsed().as_millis() as u64);
         Ok(())
     }
@@ -255,6 +261,24 @@ impl MergeIntoOperationAggregator {
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
         metrics_inc_replace_number_apply_deletion();
+
+        // track number of segments and blocks after pruning (per merge action application)
+        {
+            metrics_inc_replace_segment_number_after_pruning(
+                self.deletion_accumulator.deletions.len() as u64,
+            );
+
+            let num_blocks_mutated = self
+                .deletion_accumulator
+                .deletions
+                .values()
+                .fold(0, |acc, blocks_may_have_row_deletion| {
+                    acc + blocks_may_have_row_deletion.len()
+                });
+
+            metrics_inc_replace_block_number_after_pruning(num_blocks_mutated as u64);
+        }
+
         let start = Instant::now();
         let mut mutation_logs = Vec::new();
         let aggregation_ctx = &self.aggregation_ctx;
@@ -337,8 +361,9 @@ impl AggregationContext {
         segment_index: SegmentIndex,
         block_index: BlockIndex,
         block_meta: &BlockMeta,
-        deleted_key_hashes: &ahash::HashSet<UniqueKeyDigest>,
+        deleted_key_hashes: &(ahash::HashSet<UniqueKeyDigest>, Vec<Vec<u64>>),
     ) -> Result<Option<MutationLogEntry>> {
+        let (deleted_key_hashes, bloom_hashes) = deleted_key_hashes;
         info!(
             "apply delete to segment idx {}, block idx {}, num of deletion key hashes: {}",
             segment_index,
@@ -347,6 +372,17 @@ impl AggregationContext {
         );
 
         if block_meta.row_count == 0 {
+            return Ok(None);
+        }
+
+        // apply bloom filter pruning if possible
+        let pruned = self
+            .apply_bloom_pruning(block_meta, bloom_hashes, &self.bloom_filter_column_indexes)
+            .await;
+
+        if pruned {
+            // skip this block
+            metrics_inc_replace_block_number_bloom_pruned(1);
             return Ok(None);
         }
 
@@ -578,6 +614,93 @@ impl AggregationContext {
                 )
             })
             .await
+    }
+
+    // return true if the block is pruned, otherwise false
+    async fn apply_bloom_pruning(
+        &self,
+        block_meta: &BlockMeta,
+        input_hashes: &[Vec<u64>],
+        bloom_on_conflict_field_index: &[FieldIndex],
+    ) -> bool {
+        if bloom_on_conflict_field_index.is_empty() {
+            return false;
+        }
+        if let Some(loc) = &block_meta.bloom_filter_index_location {
+            match self
+                .load_bloom_filter(
+                    loc,
+                    block_meta.bloom_filter_index_size,
+                    bloom_on_conflict_field_index,
+                )
+                .await
+            {
+                Ok(filters) => {
+                    // the caller ensures that the input_hashes is not empty
+                    let row_count = input_hashes[0].len();
+                    let mut block_pruned = true;
+                    for row in 0..row_count {
+                        let mut contains_row = true;
+                        for (col_idx, col_hash) in input_hashes.iter().enumerate() {
+                            let col_filer = &filters[col_idx];
+                            let hash = col_hash[row];
+                            if hash == 0 || !col_filer.contains_digest(hash) {
+                                // hash == 0 indicates that the column value is null, which equals nothing.
+                                // one column does not match, indicates that the row does not match
+                                contains_row = false;
+                                break;
+                            }
+                        }
+                        if contains_row {
+                            block_pruned = false;
+                            break;
+                        }
+                    }
+                    block_pruned
+                }
+                Err(e) => {
+                    // broken index should not stop us:
+                    warn!("failed to build bloom index column name: {}", e);
+                    // failed to load bloom filter, do not prune
+                    false
+                }
+            }
+        } else {
+            // no bloom filter, no pruning
+            false
+        }
+    }
+
+    async fn load_bloom_filter(
+        &self,
+        location: &Location,
+        index_len: u64,
+        bloom_on_conflict_field_index: &[FieldIndex],
+    ) -> Result<Vec<Arc<Xor8Filter>>> {
+        // different block may have different version of bloom filter index
+
+        let mut col_names = Vec::with_capacity(bloom_on_conflict_field_index.len());
+
+        for idx in bloom_on_conflict_field_index {
+            let bloom_column_name = BloomIndex::build_filter_column_name(
+                location.1,
+                &self.on_conflict_fields[*idx].table_field,
+            )?;
+            col_names.push(bloom_column_name);
+        }
+
+        // let bloom_column_name = BloomIndex::build_filter_column_name(
+        //     location.1,
+        //     &self.on_conflict_fields[bloom_on_conflict_field_index[0]].table_field,
+        // )?;
+
+        // using load_bloom_filter_by_columns is attractive,
+        // but it do not care about the version of the bloom filter index
+        let block_filter = location
+            .read_block_filter(self.data_accessor.clone(), &col_names, index_len)
+            .await?;
+        // we know that there is exactly one filter
+        Ok(block_filter.filters)
     }
 }
 

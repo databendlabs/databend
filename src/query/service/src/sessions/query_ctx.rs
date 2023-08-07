@@ -436,6 +436,10 @@ impl TableContext for QueryContext {
         self.shared.get_current_role()
     }
 
+    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        self.shared.session.get_all_available_roles().await
+    }
+
     fn get_fuse_version(&self) -> String {
         let session = self.get_current_session();
         match session.get_type() {
