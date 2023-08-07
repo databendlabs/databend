@@ -53,6 +53,7 @@ use opendal::Operator;
 use storages_common_table_meta::meta::BasicColumnStatistics;
 
 use crate::parquet2::parquet_table::table::pread::FileMetaData;
+use crate::parquet2::pruning::check_parquet_schema;
 use crate::parquet2::statistics::collect_basic_column_stats;
 
 pub struct Parquet2Table {
@@ -219,6 +220,8 @@ pub(super) fn blocking_get_parquet2_file_meta(
     files_to_read: &Option<Vec<StageFileInfo>>,
     files_info: &StageFilesInfo,
     operator: &Operator,
+    expect_schema: &SchemaDescriptor,
+    schema_from: &str,
 ) -> Result<Vec<FileMetaData>> {
     let locations = match files_to_read {
         Some(files) => files
@@ -242,6 +245,7 @@ pub(super) fn blocking_get_parquet2_file_meta(
                 location, e
             ))
         })?;
+        check_parquet_schema(expect_schema, file_meta.schema(), location, schema_from)?;
         file_metas.push(file_meta);
     }
     Ok(file_metas)
@@ -251,6 +255,8 @@ pub(super) async fn non_blocking_get_parquet2_file_meta(
     files_to_read: &Option<Vec<StageFileInfo>>,
     files_info: &StageFilesInfo,
     operator: &Operator,
+    expect_schema: &SchemaDescriptor,
+    schema_from: &str,
 ) -> Result<Vec<FileMetaData>> {
     let locations = match files_to_read {
         Some(files) => files
@@ -266,7 +272,18 @@ pub(super) async fn non_blocking_get_parquet2_file_meta(
     };
 
     // Read parquet meta data, async reading.
-    read_parquet_metas_in_parallel(operator.clone(), locations.clone(), 16, 64, 79819535155).await
+    let file_metas =
+        read_parquet_metas_in_parallel(operator.clone(), locations.clone(), 16, 64, 79819535155)
+            .await?;
+    for (idx, file_meta) in file_metas.iter().enumerate() {
+        check_parquet_schema(
+            expect_schema,
+            file_meta.schema(),
+            &locations[idx].0,
+            schema_from,
+        )?;
+    }
+    Ok(file_metas)
 }
 
 pub(super) fn create_parquet2_statistics_provider(

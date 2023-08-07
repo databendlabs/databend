@@ -50,7 +50,13 @@ impl Parquet2Table {
             Self::blocking_prepare_metas(&first_file, operator.clone())?;
 
         // TODO(Dousir9): collect more information for read partitions.
-        let file_metas = blocking_get_parquet2_file_meta(&files_to_read, &files_info, &operator)?;
+        let file_metas = blocking_get_parquet2_file_meta(
+            &files_to_read,
+            &files_info,
+            &operator,
+            &schema_descr,
+            &first_file,
+        )?;
         let column_statistics_provider =
             create_parquet2_statistics_provider(file_metas, &arrow_schema)?;
 
