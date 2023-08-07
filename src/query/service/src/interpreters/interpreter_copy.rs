@@ -41,6 +41,9 @@ use log::debug;
 use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::hook_compact;
+use crate::interpreters::common::CompactHookTraceCtx;
+use crate::interpreters::common::CompactTargetTableDescription;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::builders::build_append2table_with_commit_pipeline;
@@ -470,13 +473,15 @@ impl Interpreter for CopyInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_interpreter_execute_v2");
 
+        let start = Instant::now();
+
         if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }
 
         match &self.plan {
             CopyPlan::IntoTable(plan) => {
-                if plan.enable_distributed {
+                let mut pipeline = if plan.enable_distributed {
                     let distributed_plan_op = self
                         .try_transform_copy_plan_from_local_to_distributed(plan)
                         .await?;
@@ -491,7 +496,28 @@ impl Interpreter for CopyInterpreter {
                     }
                 } else {
                     self.build_local_copy_into_table_pipeline(plan).await
-                }
+                }?;
+
+                let compact_target = CompactTargetTableDescription {
+                    catalog: plan.catalog_info.name_ident.catalog_name.clone(),
+                    database: plan.database_name.clone(),
+                    table: plan.table_name.clone(),
+                };
+
+                let trace_ctx = CompactHookTraceCtx {
+                    start,
+                    operation_name: "copy_into".to_owned(),
+                };
+
+                hook_compact(
+                    self.ctx.clone(),
+                    &mut pipeline.main_pipeline,
+                    compact_target,
+                    trace_ctx,
+                )
+                .await;
+
+                Ok(pipeline)
             }
             CopyPlan::IntoStage {
                 stage, from, path, ..
@@ -501,5 +527,44 @@ impl Interpreter for CopyInterpreter {
             }
             CopyPlan::NoFileToCopy => Ok(PipelineBuildResult::create()),
         }
+
+        // let table = self
+        //    .ctx
+        //    .get_table(&plan.catalog, &plan.database, &plan.table)
+        //    .await?;
+
+        // let has_cluster_key = !table.cluster_keys(self.ctx.clone()).is_empty();
+
+        // if !pipeline.main_pipeline.is_empty()
+        //    && has_cluster_key
+        //    && self.ctx.get_settings().get_enable_auto_reclustering()?
+        //{
+        //    let ctx = self.ctx.clone();
+        //    let catalog = self.plan.catalog.clone();
+        //    let database = self.plan.database.to_string();
+        //    let table = self.plan.table.to_string();
+        //    pipeline.main_pipeline.set_on_finished(move |err| {
+        //        //metrics_inc_replace_mutation_time_ms(start.elapsed().as_millis() as u64);
+        //        if err.is_none() {
+        //            info!("execute replace into finished successfully. running table optimization job.");
+        //            let compact_target = CompactTargetTableDescription {
+        //                catalog,
+        //                database,
+        //                table,
+        //            };
+        //            match  GlobalIORuntime::instance().block_on({
+        //                compact_table(ctx, compact_target)
+        //            }) {
+        //                Ok(_) => {
+        //                    info!("execute replace into finished successfully. table optimization job finished.");
+        //                }
+        //                Err(e) => { info!("execute replace into finished successfully. table optimization job failed. {:?}", e)}
+        //            }
+        //        }
+        //        //metrics_inc_replace_execution_time_ms(start.elapsed().as_millis() as u64);
+        //        Ok(())
+        //    });
+        //}
+        // Ok(pipeline)
     }
 }

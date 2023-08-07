@@ -14,12 +14,18 @@
 
 use metrics::increment_gauge;
 
-// the time used in executing the whole replace-into statement
-pub fn metrics_inc_replace_execution_time_ms(c: u64) {
-    increment_gauge!("replace_into_time_execution_ms", c as f64);
+// the time used in executing the main operation  (replace-into, copy-into, etc)
+pub fn metrics_inc_compact_hook_main_operation_time_ms(operation_name: &str, c: u64) {
+    increment_gauge!(
+        format!("compact_hook_{}_time_execution_ms", operation_name),
+        c as f64
+    );
 }
 
-// the time used in executing the mutation (upsert) part of the replace-into statement
-pub fn metrics_inc_replace_mutation_time_ms(c: u64) {
-    increment_gauge!("replace_into_time_mutation_ms", c as f64);
+// the time used in executing the compaction
+pub fn metrics_inc_compact_hook_compact_time_ms(operation_name: &str, c: u64) {
+    increment_gauge!(
+        format!("compact_hook_{}_time_compaction_ms", operation_name),
+        c as f64
+    );
 }

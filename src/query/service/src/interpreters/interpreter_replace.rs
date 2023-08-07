@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::runtime::GlobalIORuntime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -23,25 +22,20 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_pipeline_sources::AsyncSourcer;
 use common_sql::plans::InsertInputSource;
-use common_sql::plans::OptimizeTableAction;
-use common_sql::plans::OptimizeTablePlan;
 use common_sql::plans::Plan;
 use common_sql::plans::Replace;
 use common_sql::NameResolutionContext;
-use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::metrics_inc_replace_execution_time_ms;
-use crate::interpreters::common::metrics_inc_replace_mutation_time_ms;
+use crate::interpreters::common::hook_compact;
+use crate::interpreters::common::CompactHookTraceCtx;
+use crate::interpreters::common::CompactTargetTableDescription;
 use crate::interpreters::interpreter_copy::CopyInterpreter;
 use crate::interpreters::interpreter_insert::ValueSource;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::interpreters::OptimizeTableInterpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::builders::build_fill_missing_columns_pipeline;
-use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -78,8 +72,6 @@ impl Interpreter for ReplaceInterpreter {
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
 
-        let has_cluster_key = !table.cluster_keys(self.ctx.clone()).is_empty();
-
         let mut pipeline = self
             .connect_input_source(self.ctx.clone(), &self.plan.source, self.plan.schema())
             .await?;
@@ -107,64 +99,25 @@ impl Interpreter for ReplaceInterpreter {
             )
             .await?;
 
-        if !pipeline.main_pipeline.is_empty()
-            && has_cluster_key
-            && self.ctx.get_settings().get_enable_auto_reclustering()?
-        {
-            let ctx = self.ctx.clone();
-            let catalog = self.plan.catalog.clone();
-            let database = self.plan.database.to_string();
-            let table = self.plan.table.to_string();
-            pipeline.main_pipeline.set_on_finished(move |err| {
-                metrics_inc_replace_mutation_time_ms(start.elapsed().as_millis() as u64);
-                if err.is_none() {
-                    info!("execute replace into finished successfully. running table optimization job.");
-                     match  GlobalIORuntime::instance().block_on({
-                         async move {
-                             ctx.evict_table_from_cache(&catalog, &database, &table)?;
-                             let optimize_interpreter = OptimizeTableInterpreter::try_create(ctx.clone(),
-                             OptimizeTablePlan {
-                                 catalog,
-                                 database,
-                                 table,
-                                 action: OptimizeTableAction::CompactBlocks,
-                                 limit: None,
-                             }
-                             )?;
+        let compact_target = CompactTargetTableDescription {
+            catalog: plan.catalog.clone(),
+            database: plan.database.clone(),
+            table: plan.table.clone(),
+        };
 
-                             let mut build_res = optimize_interpreter.execute2().await?;
+        let compact_hook_trace_ctx = CompactHookTraceCtx {
+            start,
+            operation_name: "replace_into".to_owned(),
+        };
 
-                             if build_res.main_pipeline.is_empty() {
-                                 return Ok(());
-                             }
+        hook_compact(
+            self.ctx.clone(),
+            &mut pipeline.main_pipeline,
+            compact_target,
+            compact_hook_trace_ctx,
+        )
+        .await;
 
-                             let settings = ctx.get_settings();
-                             let query_id = ctx.get_id();
-                             build_res.set_max_threads(settings.get_max_threads()? as usize);
-                             let settings = ExecutorSettings::try_create(&settings, query_id)?;
-
-                             if build_res.main_pipeline.is_complete_pipeline()? {
-                                 let mut pipelines = build_res.sources_pipelines;
-                                 pipelines.push(build_res.main_pipeline);
-
-                                 let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
-
-                                 ctx.set_executor(complete_executor.get_inner())?;
-                                 complete_executor.execute()?;
-                             }
-                             Ok(())
-                         }
-                     }) {
-                        Ok(_) => {
-                            info!("execute replace into finished successfully. table optimization job finished.");
-                        }
-                        Err(e) => { info!("execute replace into finished successfully. table optimization job failed. {:?}", e)}
-                    }
-                }
-                metrics_inc_replace_execution_time_ms(start.elapsed().as_millis() as u64);
-                Ok(())
-            });
-        }
         Ok(pipeline)
     }
 }
