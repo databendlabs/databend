@@ -147,7 +147,7 @@ pub fn optimize(
                 }
             })))
         }
-        // Passthrough statements
+        // Passthrough statements.
         _ => Ok(plan),
     }
 }
