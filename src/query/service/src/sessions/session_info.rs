@@ -17,6 +17,7 @@ use std::time::SystemTime;
 
 use common_base::base::ProgressValues;
 pub use common_catalog::table_context::ProcessInfo;
+use common_catalog::table_context::ProcessInfoState;
 use common_storage::StorageMetrics;
 
 use crate::sessions::Session;
@@ -60,11 +61,11 @@ impl Session {
         }
     }
 
-    fn process_state(self: &Arc<Self>, status: &SessionContext) -> String {
+    fn process_state(self: &Arc<Self>, status: &SessionContext) -> ProcessInfoState {
         match status.get_query_context_shared() {
-            _ if status.get_abort() => String::from("Aborting"),
-            None => String::from("Idle"),
-            Some(_) => String::from("Query"),
+            _ if status.get_abort() => ProcessInfoState::Aborting,
+            None => ProcessInfoState::Idle,
+            Some(_) => ProcessInfoState::Query,
         }
     }
 

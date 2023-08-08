@@ -24,6 +24,7 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::GlobalInstance;
 use common_base::base::SignalStream;
+use common_catalog::table_context::ProcessInfoState;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
@@ -305,7 +306,7 @@ impl SessionManager {
                     continue;
                 }
                 active_sessions_count += 1;
-                if session_ref.process_info().state == "Query" {
+                if session_ref.process_info().state == ProcessInfoState::Query {
                     running_queries_count += 1;
                 }
             }
