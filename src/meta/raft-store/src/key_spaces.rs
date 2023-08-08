@@ -219,6 +219,7 @@ impl RaftStoreEntry {
     }
 }
 
+// TODO: Compatible layer for is only used by upgrade process. Move these types to a separate mod
 /// Compatible layer for RaftStoreEntry
 #[rustfmt::skip]
 #[derive(Serialize, Deserialize)]

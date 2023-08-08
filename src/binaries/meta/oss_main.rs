@@ -21,7 +21,7 @@ use databend_meta::configs::Config;
 #[global_allocator]
 pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
     let conf = Config::load()?;
     conf.validate()?;

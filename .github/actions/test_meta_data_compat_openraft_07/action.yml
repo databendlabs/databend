@@ -19,3 +19,4 @@ runs:
       shell: bash
       run: |
         bash ./tests/meta-data-compat-openraft-07/test-meta-data-compat-openraft-08.sh
+        bash ./tests/meta-data-compat-openraft-07/test-sm-compat-v0-v002.sh
