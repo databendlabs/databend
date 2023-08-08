@@ -57,20 +57,14 @@ use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 
-#[allow(dead_code)]
 pub struct ReplaceInterpreter {
     ctx: Arc<QueryContext>,
     plan: Replace,
-    files: Option<Vec<StageFileInfo>>,
 }
 
 impl ReplaceInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Replace) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ReplaceInterpreter {
-            ctx,
-            plan,
-            files: None,
-        }))
+        Ok(Arc::new(ReplaceInterpreter { ctx, plan }))
     }
 }
 
