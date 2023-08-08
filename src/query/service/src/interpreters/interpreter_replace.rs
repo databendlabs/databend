@@ -337,7 +337,7 @@ impl ReplaceInterpreter {
                         ));
                         Ok((Box::new(physical_plan), None))
                     }
-                    _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
+                    _ => unreachable!("plan in InsertInputSource::Stage must be CopyIntoTable"),
                 },
                 _ => unreachable!("plan in InsertInputSource::Stag must be Copy"),
             },
