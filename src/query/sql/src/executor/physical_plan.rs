@@ -806,12 +806,12 @@ pub struct CopyIntoTable {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum CopyIntoTableSource {
-    Query(Box<QueryCtx>),
+    Query(Box<QuerySource>),
     Stage(Box<DataSourcePlan>),
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct QueryCtx {
+pub struct QuerySource {
     pub plan: PhysicalPlan,
     pub query_source_schema: DataSchemaRef,
     pub ignore_result: bool,

@@ -35,7 +35,7 @@ use super::MutationAggregate;
 use super::PhysicalPlan;
 use super::Project;
 use super::ProjectSet;
-use super::QueryCtx;
+use super::QuerySource;
 use super::ReplaceInto;
 use super::RowFetch;
 use super::Sort;
@@ -318,7 +318,7 @@ pub trait PhysicalPlanReplacer {
             CopyIntoTableSource::Query(query_ctx) => {
                 let input = self.replace(&query_ctx.plan)?;
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(QueryCtx {
+                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
                         plan: input,
                         ..*query_ctx.clone()
                     })),

@@ -19,7 +19,7 @@ use common_exception::Result;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::FragmentKind;
-use common_sql::executor::QueryCtx;
+use common_sql::executor::QuerySource;
 use common_sql::executor::ReplaceInto;
 
 use crate::api::BroadcastExchange;
@@ -168,7 +168,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             CopyIntoTableSource::Query(query_ctx) => {
                 let input = self.replace(&query_ctx.plan)?;
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(QueryCtx {
+                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
                         plan: input,
                         ..*query_ctx.clone()
                     })),

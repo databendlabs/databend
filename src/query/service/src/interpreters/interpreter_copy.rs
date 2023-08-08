@@ -158,7 +158,7 @@ impl CopyInterpreter {
             let (select_interpreter, query_source_schema) = self.build_query(query).await?;
             let plan_query = select_interpreter.build_physical_plan().await?;
             let result_columns = select_interpreter.get_result_columns();
-            CopyIntoTableSource::Query(Box::new(common_sql::executor::QueryCtx {
+            CopyIntoTableSource::Query(Box::new(common_sql::executor::QuerySource {
                 plan: plan_query,
                 ignore_result: select_interpreter.get_ignore_result(),
                 result_columns,

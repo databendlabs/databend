@@ -23,7 +23,7 @@ use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::Deduplicate;
 use common_sql::executor::DeletePartial;
-use common_sql::executor::QueryCtx;
+use common_sql::executor::QuerySource;
 use common_sql::executor::ReplaceInto;
 use common_storages_fuse::TableContext;
 use storages_common_table_meta::meta::Location;
@@ -330,7 +330,7 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
             CopyIntoTableSource::Query(query_ctx) => {
                 let input = self.replace(&query_ctx.plan)?;
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(QueryCtx {
+                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
                         plan: input,
                         ..*query_ctx.clone()
                     })),
