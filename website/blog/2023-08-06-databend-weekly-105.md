@@ -81,7 +81,7 @@ If you are interested in learning more, please check out the resources listed be
 We have also made these improvements to Databend that we hope you will find helpful:
 
 - Added Transport Layer Security (TLS) support for MySQL handler.
-- Added Geo functions: `h3_to_string`, `string_to_h3`, `h3_is_res_class_iii`, `h3_is_pentagon`, `h3_get_faces`, `h3_cell_area_m2`, `h3_cell_area_rads2`.
+- Added Geo functions: `h3_to_string`, `string_to_h3`, `h3_is_res_class_iii`, `h3_is_pentagon`, `h3_get_faces`, `h3_cell_area_m2`, and `h3_cell_area_rads2`.
 - Read document [Docs | Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/) to learn how to manage network policies in Databend.
 
 ## What's Up Next
@@ -90,7 +90,7 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 ### Native `async fn` in Trait
 
-Since the MVP of native [async-fn-in-trait](https://github.com/rust-lang/rust/issues/91611) in Rust was launched in November 2022, it has been available for testing on Rust nightly channel. It may be time to evaluate the status of this feature and try using it instead of `async_trait`.
+Since the MVP of native [async-fn-in-trait](https://github.com/rust-lang/rust/issues/91611) in Rust was launched in November 2022, it has been available for testing on Rust nightly channel. It may be time to evaluate the status of this feature and consider using it instead of `async_trait`.
 
 ```rust
 #![feature(async_fn_in_trait)]
