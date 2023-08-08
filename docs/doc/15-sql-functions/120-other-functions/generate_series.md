@@ -25,6 +25,11 @@ GENERATE_SERIES(<start>, <stop>[, <step_interval>])
 | stop          	| The ending value, representing the last number, date, or timestamp in the sequence.                                                                                                                               	|
 | step_interval 	| The step interval, determining the difference between adjacent values in the sequence. For integer sequences, the default value is 1. For date sequences, the default step interval is 1 day. For timestamp sequences, the default step interval is 1 microsecond. 	|
 
+
+:::note
+When dealing with functions like GENERATE_SERIES and RANGE, a key distinction lies in their boundary traits. GENERATE_SERIES is bound by both the left and right sides, while RANGE is bound on the left side only. For example, utilizing RANGE(1, 11) is equivalent to GENERATE_SERIES(1, 10).
+:::
+
 ## Return Type
 
 Returns a list containing a continuous sequence of numeric values, dates, or timestamps from *start* to *stop*.
