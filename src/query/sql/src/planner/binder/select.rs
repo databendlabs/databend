@@ -334,7 +334,7 @@ impl Binder {
         if let Some(with) = &query.with {
             for (idx, cte) in with.ctes.iter().enumerate() {
                 let table_name = cte.alias.name.name.clone();
-                if self.ctes_map.contains_key(&table_name) {
+                if bind_context.cte_map_ref.contains_key(&table_name) {
                     return Err(ErrorCode::SemanticError(format!(
                         "duplicate cte {table_name}"
                     )));
@@ -348,7 +348,8 @@ impl Binder {
                     stat_info: None,
                     columns: vec![],
                 };
-                self.ctes_map.insert(table_name, cte_info);
+                self.ctes_map.insert(table_name.clone(), cte_info.clone());
+                bind_context.cte_map_ref.insert(table_name, cte_info);
             }
         }
 
@@ -452,7 +453,6 @@ impl Binder {
                     right.span(),
                     left_bind_context,
                     right_bind_context,
-                    bind_context,
                     left_expr,
                     right_expr,
                 )
@@ -464,7 +464,6 @@ impl Binder {
                     right.span(),
                     left_bind_context,
                     right_bind_context,
-                    bind_context,
                     left_expr,
                     right_expr,
                 )
@@ -474,7 +473,6 @@ impl Binder {
                 right.span(),
                 left_bind_context,
                 right_bind_context,
-                bind_context,
                 left_expr,
                 right_expr,
                 false,
@@ -484,7 +482,6 @@ impl Binder {
                 right.span(),
                 left_bind_context,
                 right_bind_context,
-                bind_context,
                 left_expr,
                 right_expr,
                 true,
@@ -502,7 +499,6 @@ impl Binder {
         right_span: Span,
         left_context: BindContext,
         right_context: BindContext,
-        bind_context: &BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
         distinct: bool,
@@ -533,7 +529,7 @@ impl Binder {
                 coercion_types.push(*left_col.data_type.clone());
             }
         }
-        let (mut new_bind_context, pairs, left_expr, right_expr) = self.coercion_union_type(
+        let (new_bind_context, pairs, left_expr, right_expr) = self.coercion_union_type(
             left_span,
             right_span,
             left_context,
@@ -569,7 +565,6 @@ impl Binder {
         right_span: Span,
         left_context: BindContext,
         right_context: BindContext,
-        bind_context: &BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
     ) -> Result<(SExpr, BindContext)> {
@@ -578,7 +573,6 @@ impl Binder {
             right_span,
             left_context,
             right_context,
-            bind_context,
             left_expr,
             right_expr,
             JoinType::LeftSemi,
@@ -591,7 +585,6 @@ impl Binder {
         right_span: Span,
         left_context: BindContext,
         right_context: BindContext,
-        bind_context: &BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
     ) -> Result<(SExpr, BindContext)> {
@@ -600,7 +593,6 @@ impl Binder {
             right_span,
             left_context,
             right_context,
-            bind_context,
             left_expr,
             right_expr,
             JoinType::LeftAnti,
@@ -612,9 +604,8 @@ impl Binder {
         &mut self,
         left_span: Span,
         right_span: Span,
-        mut left_context: BindContext,
+        left_context: BindContext,
         right_context: BindContext,
-        bind_context: &BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
         join_type: JoinType,

@@ -322,7 +322,7 @@ impl UnusedColumnPruner {
             }
 
             RelOperator::MaterializedCte(cte) => {
-                if true {
+                if !self.apply_lazy {
                     return Ok(expr.clone());
                 }
                 let left_output_column = RelExpr::with_s_expr(expr)

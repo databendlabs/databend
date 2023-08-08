@@ -426,7 +426,6 @@ impl Dataframe {
             None,
             self.bind_context,
             dataframe.bind_context,
-            &BindContext::new(),
             self.s_expr,
             dataframe.s_expr,
         )?;
@@ -441,7 +440,6 @@ impl Dataframe {
             None,
             self.bind_context,
             dataframe.bind_context,
-            &BindContext::new(),
             self.s_expr,
             dataframe.s_expr,
         )?;
@@ -499,7 +497,6 @@ impl Dataframe {
             None,
             self.bind_context,
             dataframe.bind_context,
-            &BindContext::new(),
             self.s_expr,
             dataframe.s_expr,
             false,
@@ -515,7 +512,6 @@ impl Dataframe {
             None,
             self.bind_context,
             dataframe.bind_context,
-            &BindContext::new(),
             self.s_expr,
             dataframe.s_expr,
             true,

@@ -786,6 +786,7 @@ impl Binder {
             windows: Default::default(),
             lambda_info: Default::default(),
             cte_name: Some(table_name.to_string()),
+            cte_map_ref: Box::default(),
             in_grouping: false,
             view_info: None,
             srfs: Default::default(),
@@ -840,9 +841,9 @@ impl Binder {
         alias: &Option<TableAlias>,
         span: &Span,
     ) -> Result<(SExpr, BindContext)> {
-        let mut new_bind_context = if cte_info.used_count == 0 {
+        let new_bind_context = if cte_info.used_count == 0 {
             let (cte_s_expr, cte_bind_ctx) = self
-                .bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                .bind_cte(*span, bind_context, table_name, alias, cte_info)
                 .await?;
             let stat_info = RelExpr::with_s_expr(&cte_s_expr).derive_cardinality()?;
             self.ctes_map

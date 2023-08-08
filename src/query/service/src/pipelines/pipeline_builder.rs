@@ -158,7 +158,7 @@ impl PipelineBuilder {
     ) -> PipelineBuilder {
         PipelineBuilder {
             enable_profiling,
-            ctx: ctx.clone(),
+            ctx,
             pipelines: vec![],
             join_state: None,
             main_pipeline: Pipeline::create(),

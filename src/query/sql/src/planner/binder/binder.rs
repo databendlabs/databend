@@ -110,7 +110,7 @@ impl<'a> Binder {
             m_cte_bound_ctx: Default::default(),
             eq_scalars: vec![],
             m_cte_bound_s_expr: Default::default(),
-            ctes_map: Box::new(Default::default()),
+            ctes_map: Box::default(),
         }
     }
 

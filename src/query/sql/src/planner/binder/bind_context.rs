@@ -121,6 +121,8 @@ pub struct BindContext {
     /// If the `BindContext` is created from a CTE, record the cte name
     pub cte_name: Option<String>,
 
+    pub cte_map_ref: Box<IndexMap<String, CteInfo>>,
+
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
     /// functions, otherwise a grouping error will be raised.
@@ -168,6 +170,7 @@ impl BindContext {
             windows: WindowInfo::default(),
             lambda_info: LambdaInfo::default(),
             cte_name: None,
+            cte_map_ref: Box::default(),
             in_grouping: false,
             view_info: None,
             srfs: DashMap::new(),
@@ -186,6 +189,7 @@ impl BindContext {
             windows: Default::default(),
             lambda_info: LambdaInfo::default(),
             cte_name: parent.cte_name,
+            cte_map_ref: parent.cte_map_ref.clone(),
             in_grouping: false,
             view_info: None,
             srfs: DashMap::new(),
@@ -200,6 +204,7 @@ impl BindContext {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
         bind_context.cte_name = self.cte_name.clone();
+        bind_context.cte_map_ref = self.cte_map_ref.clone();
         bind_context
     }
 

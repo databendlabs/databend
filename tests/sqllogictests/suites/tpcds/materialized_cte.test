@@ -1288,7 +1288,7 @@ WITH my_customers AS materialized
      AND c_customer_sk = cs_or_ws_sales.customer_sk
      AND d_moy = 12
      AND d_year = 1998 ),
-     my_revenue AS materialized
+     my_revenue AS
   (SELECT c_customer_sk,
           sum(ss_ext_sales_price) AS revenue
    FROM my_customers,
@@ -1311,7 +1311,7 @@ WITH my_customers AS materialized
         WHERE d_year = 1998
           AND d_moy = 12)
    GROUP BY c_customer_sk),
-     segments AS materialized
+     segments AS
   (SELECT cast(round(revenue/50) AS int) AS SEGMENT
    FROM my_revenue)
 SELECT SEGMENT,

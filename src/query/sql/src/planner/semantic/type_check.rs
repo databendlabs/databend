@@ -155,7 +155,7 @@ impl<'a> TypeChecker<'a> {
             func_ctx,
             name_resolution_ctx,
             metadata,
-            ctes_map: Box::new(Default::default()),
+            ctes_map: Box::default(),
             m_cte_bound_ctx: Default::default(),
             aliases,
             in_aggregate_function: false,
