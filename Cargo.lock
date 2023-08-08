@@ -2787,7 +2787,6 @@ dependencies = [
 name = "common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
- "arrow-array",
  "arrow-schema",
  "async-backtrace",
  "async-trait",

@@ -34,6 +34,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -45,9 +46,11 @@ use common_storages_parquet::ParquetPart;
 use common_storages_parquet::ParquetPartitionPruner;
 use common_storages_parquet::ParquetRSReader;
 use common_storages_parquet::ParquetTable;
+use storages_common_pruner::RangePrunerCreator;
 use tokio::sync::OnceCell;
 
 use crate::partition::IcebergPartInfo;
+use crate::stats::get_stats_of_data_file;
 use crate::table_source::IcebergTableSource;
 
 /// accessor wrapper as a table
@@ -204,9 +207,25 @@ impl IcebergTable {
             ErrorCode::ReadTableDataError(format!("Cannot get current data files: {e:?}"))
         })?;
 
+        let filter = push_downs
+            .as_ref()
+            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+
+        let schema = self.schema();
+
+        let pruner =
+            RangePrunerCreator::try_create(ctx.get_function_context()?, &schema, filter.as_ref())?;
+
         // TODO: support other file formats. We only support parquet files now.
         let parquet_files = data_files
             .into_iter()
+            .filter(|df| {
+                if let Some(stats) = get_stats_of_data_file(&schema, df) {
+                    pruner.should_keep(&stats, None)
+                } else {
+                    true
+                }
+            })
             .map(|v: icelake::types::DataFile| match v.file_format {
                 icelake::types::DataFileFormat::Parquet => {
                     let path = table
