@@ -15,7 +15,6 @@
 mod decorrelate;
 #[allow(clippy::module_inception)]
 mod heuristic;
-mod rule_list;
 mod subquery_rewriter;
 
 pub use heuristic::HeuristicOptimizer;
