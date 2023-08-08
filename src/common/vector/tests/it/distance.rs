@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_vector::cosine_distance;
+use common_vector::l2_distance;
 
 #[test]
 fn test_cosine() {
