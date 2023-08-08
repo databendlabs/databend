@@ -329,7 +329,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("enable_distributed_replace_into", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed execution of replace into.",
                     possible_values: None,
                     display_in_show_settings: true,
