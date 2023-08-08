@@ -84,7 +84,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
             PhysicalPlan::DeletePartial(delete) => write!(f, "{}", delete)?,
-            PhysicalPlan::MutationAggregate(delete) => write!(f, "{}", delete)?,
+            PhysicalPlan::MutationAggregate(mutation) => write!(f, "{}", mutation)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::Lambda(lambda) => write!(f, "{}", lambda)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
