@@ -5,16 +5,20 @@ description:
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced or updated: v1.2.39"/>
+<FunctionDescription description="Introduced or updated: v1.2.50"/>
 
 Modifies a table by adding, converting, renaming, removing, or changing the type of a column.
 
 ## Syntax
 
 ```sql
--- Add a column
+-- Add a column to the end of the table
 ALTER TABLE [IF EXISTS] [database.]<table_name> 
 ADD COLUMN <column_name> <data_type> [NOT NULL | NULL] [DEFAULT <constant_value>];
+
+-- Add a column to a specified position
+ALTER TABLE [IF EXISTS] [database.]<table_name> 
+ADD COLUMN <column_name> <data_type> [NOT NULL | NULL] [DEFAULT <constant_value>] [FIRST | AFTER <column_name>]
 
 -- Add a virtual computed column
 ALTER TABLE [IF EXISTS] [database.]<table_name> 
@@ -47,32 +51,72 @@ DROP COLUMN <column_name>;
 
 ### Example 1: Adding, Renaming, and Removing a Column
 
-This example illustrates the creation of a table called "default.users" with columns for id, username, email, and age. It showcases the addition of columns for business_email, middle_name, and phone_number with various constraints. The example also demonstrates the renaming and subsequent removal of the "age" column.
+This example illustrates the creation of a table called "default.users" with columns 'username', 'email', and 'age'. It showcases the addition of columns 'id' and 'middle_name' with various constraints. The example also demonstrates the renaming and subsequent removal of the "age" column.
 
 ```sql
 -- Create a table
 CREATE TABLE default.users (
-  id INT,
   username VARCHAR(50) NOT NULL,
   email VARCHAR(255),
   age INT
 );
 
--- Add a column with a default value
+-- Add a column to the end of the table
 ALTER TABLE default.users
 ADD COLUMN business_email VARCHAR(255) NOT NULL DEFAULT 'example@example.com';
 
--- Add a column allowing NULL values
-ALTER TABLE default.users
-ADD COLUMN middle_name VARCHAR(50) NULL;
+DESC default.users;
 
--- Add a column with NOT NULL constraint
+Field         |Type   |Null|Default              |Extra|
+--------------+-------+----+---------------------+-----+
+username      |VARCHAR|NO  |''                   |     |
+email         |VARCHAR|NO  |''                   |     |
+age           |INT    |NO  |0                    |     |
+business_email|VARCHAR|NO  |'example@example.com'|     |
+
+-- Add a column to the beginning of the table
 ALTER TABLE default.users
-ADD COLUMN phone_number VARCHAR(20) NOT NULL;
+ADD COLUMN id int NOT NULL FIRST;
+
+DESC default.users;
+
+Field         |Type   |Null|Default              |Extra|
+--------------+-------+----+---------------------+-----+
+id            |INT    |NO  |0                    |     |
+username      |VARCHAR|NO  |''                   |     |
+email         |VARCHAR|NO  |''                   |     |
+age           |INT    |NO  |0                    |     |
+business_email|VARCHAR|NO  |'example@example.com'|     |
+
+-- Add a column after the column 'username'
+ALTER TABLE default.users
+ADD COLUMN middle_name VARCHAR(50) NULL AFTER username;
+
+DESC default.users;
+
+Field         |Type   |Null|Default              |Extra|
+--------------+-------+----+---------------------+-----+
+id            |INT    |NO  |0                    |     |
+username      |VARCHAR|NO  |''                   |     |
+middle_name   |VARCHAR|YES |NULL                 |     |
+email         |VARCHAR|NO  |''                   |     |
+age           |INT    |NO  |0                    |     |
+business_email|VARCHAR|NO  |'example@example.com'|     |
 
 -- Rename a column
 ALTER TABLE default.users
 RENAME COLUMN age TO new_age;
+
+DESC default.users;
+
+Field         |Type   |Null|Default              |Extra|
+--------------+-------+----+---------------------+-----+
+id            |INT    |NO  |0                    |     |
+username      |VARCHAR|NO  |''                   |     |
+middle_name   |VARCHAR|YES |NULL                 |     |
+email         |VARCHAR|NO  |''                   |     |
+new_age       |INT    |NO  |0                    |     |
+business_email|VARCHAR|NO  |'example@example.com'|     |
 
 -- Remove a column
 ALTER TABLE default.users
@@ -84,10 +128,9 @@ Field         |Type   |Null|Default              |Extra|
 --------------+-------+----+---------------------+-----+
 id            |INT    |NO  |0                    |     |
 username      |VARCHAR|NO  |''                   |     |
+middle_name   |VARCHAR|YES |NULL                 |     |
 email         |VARCHAR|NO  |''                   |     |
 business_email|VARCHAR|NO  |'example@example.com'|     |
-middle_name   |VARCHAR|YES |NULL                 |     |
-phone_number  |VARCHAR|NO  |''                   |     |
 ```
 
 ### Example 2: Adding a Computed Column

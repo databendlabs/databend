@@ -116,7 +116,7 @@ impl InternalColumnMeta {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum InternalColumnType {
     RowId,
     BlockName,
@@ -124,7 +124,7 @@ pub enum InternalColumnType {
     SnapshotName,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct InternalColumn {
     pub column_name: String,
     pub column_type: InternalColumnType,

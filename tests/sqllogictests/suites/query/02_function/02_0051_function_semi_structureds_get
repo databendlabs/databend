@@ -74,8 +74,11 @@ select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["
 NULL
 
 
-statement error 1005
+query T
 select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), '')
+----
+{"customer":{"extras":["ext","test"],"id":1,"name":"databend"}}
+
 
 query T
 select json_extract_path_text('{"attr":[{"name": 1}, {"name": 2}]}', 'attr[0].name')
@@ -108,8 +111,10 @@ select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras"
 NULL
 
 
-statement error 1005
+query T
 select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', '')
+----
+{"customer":{"extras":["ext","test"],"id":1,"name":"databend"}}
 
 query T
 select [][0]

@@ -20,6 +20,32 @@ use std::time::UNIX_EPOCH;
 use serde::Deserialize;
 use serde::Serialize;
 
+pub trait SeqValue<V = Vec<u8>> {
+    fn seq(&self) -> u64;
+    fn value(&self) -> Option<&V>;
+    fn meta(&self) -> Option<&KVMeta>;
+
+    /// Return the expire time in millisecond since 1970.
+    fn expire_at_ms(&self) -> Option<u64> {
+        if let Some(meta) = self.meta() {
+            meta.expire_at.map(|t| t * 1000)
+        } else {
+            None
+        }
+    }
+
+    /// Return true if the record is expired.
+    fn is_expired(&self, now_ms: u64) -> bool {
+        if let Some(expire_at) = self.expire_at_ms() {
+            if expire_at < now_ms {
+                return true;
+            }
+        }
+
+        false
+    }
+}
+
 /// The meta data of a record in kv
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct KVMeta {
@@ -33,6 +59,34 @@ pub struct SeqV<T = Vec<u8>> {
     pub seq: u64,
     pub meta: Option<KVMeta>,
     pub data: T,
+}
+
+impl<V> SeqValue<V> for SeqV<V> {
+    fn seq(&self) -> u64 {
+        self.seq
+    }
+
+    fn value(&self) -> Option<&V> {
+        Some(&self.data)
+    }
+
+    fn meta(&self) -> Option<&KVMeta> {
+        self.meta.as_ref()
+    }
+}
+
+impl<V> SeqValue<V> for Option<SeqV<V>> {
+    fn seq(&self) -> u64 {
+        self.as_ref().map(|v| v.seq()).unwrap_or(0)
+    }
+
+    fn value(&self) -> Option<&V> {
+        self.as_ref().and_then(|v| v.value())
+    }
+
+    fn meta(&self) -> Option<&KVMeta> {
+        self.as_ref().and_then(|v| v.meta())
+    }
 }
 
 impl<T: std::fmt::Debug> std::fmt::Debug for SeqV<T> {
@@ -62,6 +116,16 @@ where V: TryInto<T>
             meta: self.meta,
             data: self.data.try_into()?,
         })
+    }
+}
+
+impl<T> SeqV<Option<T>> {
+    pub const fn empty() -> Self {
+        Self {
+            seq: 0,
+            meta: None,
+            data: None,
+        }
     }
 }
 
@@ -118,3 +182,5 @@ impl<T> SeqV<T> {
         self
     }
 }
+
+// TODO(1): test SeqValue for SeqV and Option<SeqV>

@@ -28,9 +28,11 @@ select try_cast(3 as int);
 ----
 3
 
-
-statement error
+query I
 select int_nullable::int from cast_test
+----
+NULL
+
 
 statement ok
 drop table if exists t0
