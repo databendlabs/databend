@@ -104,7 +104,6 @@ pub fn print_table_meta(config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
 fn pretty<T>(v: &T) -> Result<String, serde_json::Error>
 where T: Serialize {
     serde_json::to_string_pretty(v)
