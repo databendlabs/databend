@@ -334,9 +334,10 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("enable_auto_reclustering", DefaultSettingValue {
+
+                ("enable_recluster_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enables auto re-clustering.",
+                    desc: "Enables re-clustering after write(copy/replace-into).",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),

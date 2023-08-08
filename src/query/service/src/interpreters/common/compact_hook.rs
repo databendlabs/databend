@@ -82,7 +82,7 @@ async fn do_hook_compact(
     // we will hook the compact action with a on-finished callback
     if !pipeline.is_empty()
         && has_cluster_key
-        && ctx.get_settings().get_enable_auto_reclustering()?
+        && ctx.get_settings().get_enable_recluster_after_write()?
     {
         pipeline.set_on_finished(move |err| {
 

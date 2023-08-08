@@ -391,12 +391,12 @@ impl Settings {
         self.try_set_u64("enable_aggregating_index_scan", u64::from(val))
     }
 
-    pub fn get_enable_auto_reclustering(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_auto_reclustering")? != 0)
+    pub fn get_enable_recluster_after_write(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_recluster_after_write")? != 0)
     }
 
-    pub fn set_enable_auto_reclustering(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_auto_reclustering", u64::from(val))
+    pub fn set_enable_recluster_after_write(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_recluster_after_write", u64::from(val))
     }
 
     pub fn get_use_parquet2(&self) -> Result<bool> {
