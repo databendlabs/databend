@@ -1,8 +1,8 @@
 {
   "format-version" : 1,
-  "table-uuid" : "75a96d30-9573-4685-9a0f-83f1aa7d1862",
-  "location" : "s3://testbucket/iceberg_ctl/iceberg_db/iceberg_tbl",
-  "last-updated-ms" : 1688050882357,
+  "table-uuid" : "3495d4a7-d5ee-4911-bca1-71ef29c8a23b",
+  "location" : "s3://warehouse/iceberg_ctl/iceberg_db/iceberg_tbl",
+  "last-updated-ms" : 1691458492875,
   "last-column-id" : 2,
   "schema" : {
     "type" : "struct",
@@ -10,12 +10,12 @@
     "fields" : [ {
       "id" : 1,
       "name" : "id",
-      "required" : false,
+      "required" : true,
       "type" : "int"
     }, {
       "id" : 2,
       "name" : "data",
-      "required" : false,
+      "required" : true,
       "type" : "string"
     } ]
   },
@@ -26,12 +26,12 @@
     "fields" : [ {
       "id" : 1,
       "name" : "id",
-      "required" : false,
+      "required" : true,
       "type" : "int"
     }, {
       "id" : 2,
       "name" : "data",
-      "required" : false,
+      "required" : true,
       "type" : "string"
     } ]
   } ],
