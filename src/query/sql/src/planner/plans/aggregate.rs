@@ -177,7 +177,7 @@ impl Operator for Aggregate {
     }
 
     fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        if self.mode == AggregateMode::Partial {
+        if self.mode == AggregateMode::Final {
             return rel_expr.derive_cardinality_child(0);
         }
         let stat_info = rel_expr.derive_cardinality_child(0)?;
