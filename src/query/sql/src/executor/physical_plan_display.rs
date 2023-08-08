@@ -384,7 +384,7 @@ impl Display for DeletePartial {
 
 impl Display for MutationAggregate {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DeleteFinal")
+        write!(f, "MutationAggregate")
     }
 }
 impl Display for CopyIntoTable {
