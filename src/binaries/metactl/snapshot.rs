@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::fs::remove_dir_all;
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
@@ -22,6 +23,7 @@ use std::io::Lines;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
+use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::anyhow;
@@ -29,20 +31,19 @@ use common_base::base::tokio;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::RaftStoreEntry;
 use common_meta_raft_store::key_spaces::RaftStoreEntryCompat;
-use common_meta_raft_store::log::RaftLog;
-use common_meta_raft_store::log::TREE_RAFT_LOG;
 use common_meta_raft_store::ondisk::DataVersion;
+use common_meta_raft_store::ondisk::OnDisk;
 use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_raft_store::ondisk::TREE_HEADER;
+use common_meta_raft_store::sm_v002::SnapshotStoreV002;
 use common_meta_raft_store::state::RaftState;
-use common_meta_raft_store::state::TREE_RAFT_STATE;
-use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
 use common_meta_sled_store::openraft::compat::Upgrade;
-use common_meta_stoerr::MetaStorageError;
-use common_meta_types::anyerror::AnyError;
+use common_meta_sled_store::openraft::RaftSnapshotBuilder;
+use common_meta_sled_store::openraft::RaftStorage;
 use common_meta_types::Cmd;
+use common_meta_types::CommittedLeaderId;
 use common_meta_types::Endpoint;
 use common_meta_types::Entry;
 use common_meta_types::EntryPayload;
@@ -51,6 +52,9 @@ use common_meta_types::LogId;
 use common_meta_types::Membership;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
+use common_meta_types::StoredMembership;
+use databend_meta::store::RaftStore;
+use databend_meta::store::StoreInner;
 use tokio::net::TcpSocket;
 use url::Url;
 
@@ -63,7 +67,7 @@ pub async fn export_data(config: &Config) -> anyhow::Result<()> {
     // export from grpc api if metasrv is running
     if config.grpc_api_address.is_empty() {
         init_sled_db(raft_config.raft_dir.clone());
-        export_from_dir(config)?;
+        export_from_dir(config).await?;
     } else {
         export_from_running_node(config).await?;
     }
@@ -79,73 +83,93 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
 
     init_sled_db(raft_config.raft_dir.clone());
 
-    clear()?;
-    let max_log_id = import_from(config.db.clone())?;
+    clear(config)?;
+    let max_log_id = import_from_stdin_or_file(config).await?;
 
     if config.initial_cluster.is_empty() {
         return Ok(());
     }
 
-    init_new_cluster(nodes, max_log_id, config.raft_config.id).await?;
+    init_new_cluster(config, nodes, max_log_id, config.raft_config.id).await?;
     Ok(())
 }
 
-// return the max log id
-fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
-    let db = get_sled_db();
-    let mut trees = BTreeMap::new();
-    let mut n = 0;
-    let mut max_log_id: Option<LogId> = None;
-
+/// Import from lines of exported data and Return the max log id that is found.
+fn import_lines<B: BufRead + 'static>(
+    config: &Config,
+    lines: Lines<B>,
+) -> anyhow::Result<Option<LogId>> {
     #[allow(clippy::useless_conversion)]
-    let mut it = lines.into_iter();
+    let mut it = lines.into_iter().peekable();
+    let first = it
+        .peek()
+        .ok_or_else(|| anyhow::anyhow!("no data to import"))?;
+
+    let first_line = match first {
+        Ok(l) => l,
+        Err(e) => {
+            return Err(anyhow::anyhow!("{}", e));
+        }
+    };
 
     // First line is the data header that containing version.
-    {
-        let first_line = it
-            .next()
-            .ok_or_else(|| anyhow::anyhow!("no data to import"))??;
+    let version = read_version(first_line)?;
 
-        let (tree_name, kv_entry): (String, RaftStoreEntryCompat) =
-            serde_json::from_str(&first_line)?;
-
-        let kv_entry = kv_entry.upgrade();
-
-        let version = if tree_name == TREE_HEADER {
-            // There is a explicit header.
-            if let RaftStoreEntry::DataHeader { key, value } = &kv_entry {
-                assert_eq!(key, "header", "The key can only be 'header'");
-                value.version
-            } else {
-                unreachable!("The header tree can only contain DataHeader");
-            }
-        } else {
-            // Without header, the data version is V0 by default.
-            DataVersion::V0
-        };
-
-        if !DATA_VERSION.is_compatible(version) {
-            return Err(anyhow!(
-                "invalid data version: {:?}, This program version is {:?}; The latest compatible program version is: {:?}",
-                version,
-                DATA_VERSION,
-                version.max_compatible_working_version(),
-            ));
-        }
-
-        let (k, v) = RaftStoreEntry::serialize(&kv_entry)?;
-
-        let tree = db.open_tree(&tree_name)?;
-        tree.insert(k, v)?;
-        tree.flush()?;
+    if !DATA_VERSION.is_compatible(version) {
+        return Err(anyhow!(
+            "invalid data version: {:?}, This program version is {:?}; The latest compatible program version is: {:?}",
+            version,
+            DATA_VERSION,
+            version.max_compatible_working_version(),
+        ));
     }
 
-    for line in it {
+    let max_log_id = match version {
+        DataVersion::V0 => import_v0_or_v001(config, it)?,
+        DataVersion::V001 => import_v0_or_v001(config, it)?,
+        DataVersion::V002 => import_v002(config, it)?,
+    };
+
+    Ok(max_log_id)
+}
+
+fn read_version(first_line: &str) -> anyhow::Result<DataVersion> {
+    let (tree_name, kv_entry): (String, RaftStoreEntryCompat) = serde_json::from_str(first_line)?;
+
+    let kv_entry = kv_entry.upgrade();
+
+    let version = if tree_name == TREE_HEADER {
+        // There is a explicit header.
+        if let RaftStoreEntry::DataHeader { key, value } = &kv_entry {
+            assert_eq!(key, "header", "The key can only be 'header'");
+            value.version
+        } else {
+            unreachable!("The header tree can only contain DataHeader");
+        }
+    } else {
+        // Without header, the data version is V0 by default.
+        DataVersion::V0
+    };
+
+    Ok(version)
+}
+
+/// Import serialized lines for `DataVersion::V0` and `DataVersion::V001`
+///
+/// While importing, the max log id is also returned.
+fn import_v0_or_v001(
+    _config: &Config,
+    lines: impl IntoIterator<Item = Result<String, io::Error>>,
+) -> anyhow::Result<Option<LogId>> {
+    let db = get_sled_db();
+    let mut n = 0;
+    let mut max_log_id: Option<LogId> = None;
+    let mut trees = BTreeMap::new();
+
+    for line in lines {
         let l = line?;
         let (tree_name, kv_entry): (String, RaftStoreEntryCompat) = serde_json::from_str(&l)?;
         let kv_entry = kv_entry.upgrade();
-
-        // eprintln!("line: {}", l);
 
         if !trees.contains_key(&tree_name) {
             let tree = db.open_tree(&tree_name)?;
@@ -160,16 +184,10 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
         n += 1;
 
         if let RaftStoreEntry::Logs { key: _, value } = kv_entry {
-            match max_log_id {
-                Some(log_id) => {
-                    if value.log_id > log_id {
-                        max_log_id = Some(value.log_id);
-                    }
-                }
-                None => max_log_id = Some(value.log_id),
-            };
+            max_log_id = std::cmp::max(max_log_id, Some(value.log_id));
         };
     }
+
     for tree in trees.values() {
         tree.flush()?;
     }
@@ -178,22 +196,104 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
     Ok(max_log_id)
 }
 
+/// Import serialized lines for `DataVersion::V002`
+///
+/// While importing, the max log id is also returned.
+///
+/// It write logs and related entries to sled trees, and state_machine entries to a snapshot.
+fn import_v002(
+    config: &Config,
+    lines: impl IntoIterator<Item = Result<String, io::Error>>,
+) -> anyhow::Result<Option<LogId>> {
+    let raft_config: RaftConfig = config.raft_config.clone().into();
+
+    let db = get_sled_db();
+
+    let mut n = 0;
+    let mut max_log_id: Option<LogId> = None;
+    let mut trees = BTreeMap::new();
+
+    let mut snapshot_store = SnapshotStoreV002::new(DataVersion::V002, raft_config);
+    let mut writer = snapshot_store.new_writer()?;
+
+    for line in lines {
+        let l = line?;
+        let (tree_name, kv_entry): (String, RaftStoreEntryCompat) = serde_json::from_str(&l)?;
+        let kv_entry = kv_entry.upgrade();
+
+        if tree_name.starts_with("state_machine/") {
+            // Write to snapshot
+            writer.write_entries::<io::Error>([kv_entry])?;
+        } else {
+            // Write to sled tree
+            if !trees.contains_key(&tree_name) {
+                let tree = db.open_tree(&tree_name)?;
+                trees.insert(tree_name.clone(), tree);
+            }
+
+            let tree = trees.get(&tree_name).unwrap();
+
+            let (k, v) = RaftStoreEntry::serialize(&kv_entry)?;
+
+            tree.insert(k, v)?;
+
+            if let RaftStoreEntry::Logs { key: _, value } = kv_entry {
+                max_log_id = std::cmp::max(max_log_id, Some(value.log_id));
+            };
+        }
+
+        n += 1;
+    }
+
+    for tree in trees.values() {
+        tree.flush()?;
+    }
+    let (snapshot_id, snapshot_size) = writer.commit(None)?;
+
+    eprintln!(
+        "Imported {} records, snapshot id: {}; snapshot size: {}",
+        n,
+        snapshot_id.to_string(),
+        snapshot_size
+    );
+    Ok(max_log_id)
+}
+
 /// Read every line from stdin or restore file, deserialize it into tree_name, key and value.
 /// Insert them into sled db and flush.
-fn import_from(restore: String) -> anyhow::Result<Option<LogId>> {
-    if restore.is_empty() {
+///
+/// Finally upgrade the data in raft_dir to the latest version.
+async fn import_from_stdin_or_file(config: &Config) -> anyhow::Result<Option<LogId>> {
+    let restore = config.db.clone();
+
+    let max_log_id = if restore.is_empty() {
         let lines = io::stdin().lines();
-        import_lines(lines)
+
+        import_lines(config, lines)?
     } else {
-        match File::open(restore) {
-            Ok(file) => {
-                let reader = BufReader::new(file);
-                let lines = reader.lines();
-                import_lines(lines)
-            }
-            Err(e) => Err(anyhow::Error::new(e)),
-        }
-    }
+        let file = File::open(restore)?;
+        let reader = BufReader::new(file);
+        let lines = reader.lines();
+
+        import_lines(config, lines)?
+    };
+
+    upgrade(config).await?;
+
+    Ok(max_log_id)
+}
+
+/// Upgrade the data in raft_dir to the latest version.
+async fn upgrade(config: &Config) -> anyhow::Result<()> {
+    let raft_config: RaftConfig = config.raft_config.clone().into();
+
+    let db = get_sled_db();
+
+    let mut on_disk = OnDisk::open(&db, &raft_config).await?;
+    on_disk.log_stderr(true);
+    on_disk.upgrade().await?;
+
+    Ok(())
 }
 
 /// Build `Node` for cluster with new addresses configured.
@@ -254,57 +354,63 @@ fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap
 
 // initial_cluster format: node_id=endpoint,grpc_api_addr;
 async fn init_new_cluster(
+    config: &Config,
     nodes: BTreeMap<NodeId, Node>,
     max_log_id: Option<LogId>,
     id: u64,
 ) -> anyhow::Result<()> {
     eprintln!("Initialize Cluster with: {:?}", nodes);
 
-    let node_ids = nodes.keys().copied().collect::<BTreeSet<_>>();
-
     let db = get_sled_db();
-    let config = RaftConfig {
-        ..Default::default()
-    };
-    let log = RaftLog::open(&db, &config).await?;
-    let raft_state = RaftState::open_create(&db, &config, Some(()), None).await?;
-    let (sm_id, _prev_sm_id) = raft_state.read_state_machine_id()?;
+    let raft_config: RaftConfig = config.raft_config.clone().into();
 
-    let sm = StateMachine::open(&config, sm_id).await?;
+    let mut sto = RaftStore::open_create(&raft_config, Some(()), None).await?;
 
-    let mut log_id: LogId = match max_log_id {
-        Some(max_log_id) => max_log_id,
-        None => sm
-            .get_last_applied()?
-            .ok_or(anyhow::Error::new(MetaStorageError::SledError(
-                AnyError::error("cannot find last applied log id"),
-            )))?,
+    let last_applied = {
+        let sm2 = sto.get_state_machine().await;
+        *sm2.last_applied_ref()
     };
 
-    // construct Membership log entry
+    let last_log_id = std::cmp::max(last_applied, max_log_id);
+    let mut log_id = last_log_id.unwrap_or(LogId::new(CommittedLeaderId::new(0, 0), 0));
+
+    let node_ids = nodes.keys().copied().collect::<BTreeSet<_>>();
+    let membership = Membership::new(vec![node_ids], ());
+
+    // Update snapshot: Replace nodes set and membership config.
     {
-        // insert last membership log
+        let mut sm2 = sto.get_state_machine().await;
+
+        *sm2.nodes_mut() = nodes.clone();
+
+        // It must set membership to state machine because
+        // the snapshot may contain more logs than the last_log_id.
+        // In which case, logs will be purged upon startup.
+        *sm2.last_membership_mut() = StoredMembership::new(last_applied, membership.clone());
+    }
+
+    // Build snapshot to persist state machine.
+    sto.build_snapshot().await?;
+
+    // Update logs: add nodes and override membership
+    {
+        // insert membership log
         log_id.index += 1;
-        let membership = Membership::new(vec![node_ids], ());
+
         let entry: Entry = Entry {
             log_id,
             payload: EntryPayload::Membership(membership),
         };
 
-        log.append([entry]).await?;
-    }
+        sto.append_to_log([entry]).await?;
 
-    // construct AddNode log entries
-    {
-        // first clear all the nodes info
-        sm.nodes().range_remove(.., true).await?;
-
-        for node in nodes {
-            sm.add_node(node.0, &node.1).await?;
+        // insert AddNodes logs
+        for (node_id, node) in nodes {
             log_id.index += 1;
+
             let cmd: Cmd = Cmd::AddNode {
-                node_id: node.0,
-                node: node.1,
+                node_id,
+                node,
                 overriding: true,
             };
 
@@ -317,16 +423,18 @@ async fn init_new_cluster(
                 }),
             };
 
-            log.append([entry]).await?;
+            sto.append_to_log([entry]).await?;
         }
     }
 
+    // Reset node id
+    let raft_state = RaftState::open_create(&db, &raft_config, Some(()), None).await?;
     raft_state.set_node_id(id).await?;
 
     Ok(())
 }
 
-fn clear() -> anyhow::Result<()> {
+fn clear(config: &Config) -> anyhow::Result<()> {
     let db = get_sled_db();
 
     let tree_names = db.tree_names();
@@ -337,6 +445,11 @@ fn clear() -> anyhow::Result<()> {
         eprintln!("Clear sled tree {} Done", name);
     }
 
+    let df_meta_path = format!("{}/df_meta", &config.raft_config.raft_dir);
+    if Path::new(&df_meta_path).exists() {
+        remove_dir_all(&df_meta_path)?;
+    }
+
     Ok(())
 }
 
@@ -345,11 +458,16 @@ fn clear() -> anyhow::Result<()> {
 /// The output encodes every key-value into one line:
 /// `[sled_tree_name, {key_space: {key, value}}]`
 /// E.g.:
-/// `["test-29000-state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}`
-fn export_from_dir(config: &Config) -> anyhow::Result<()> {
-    let db = get_sled_db();
+/// `["state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}`
+async fn export_from_dir(config: &Config) -> anyhow::Result<()> {
+    upgrade(config).await?;
 
-    eprintln!("    From: {}", config.raft_config.raft_dir);
+    let raft_config: RaftConfig = config.raft_config.clone().into();
+
+    let sto_inn = StoreInner::open_create(&raft_config, Some(()), None).await?;
+    let lines = sto_inn.export().await?;
+
+    eprintln!("    From: {}", raft_config.raft_dir);
 
     let file: Option<File> = if !config.db.is_empty() {
         eprintln!("    To:   File: {}", config.db);
@@ -359,54 +477,19 @@ fn export_from_dir(config: &Config) -> anyhow::Result<()> {
         None
     };
 
-    let mut cnt = 0;
-    let mut present_tree_names = {
-        let mut tree_names = BTreeSet::new();
-        for n in db.tree_names() {
-            let name = String::from_utf8(n.to_vec())?;
-            tree_names.insert(name);
-        }
-        tree_names
-    };
+    let cnt = lines.len();
 
-    // Export in header, raft_state, log and other order.
-    let mut tree_names = vec![];
-
-    for name in [TREE_HEADER, TREE_RAFT_STATE, TREE_RAFT_LOG] {
-        if present_tree_names.remove(name) {
-            tree_names.push(name.to_string());
+    for line in lines {
+        if file.as_ref().is_none() {
+            println!("{}", line);
         } else {
-            eprintln!("tree {} not found", name);
-        }
-    }
-    tree_names.extend(present_tree_names.into_iter().collect::<Vec<_>>());
-
-    for tree_name in tree_names.iter() {
-        eprintln!("Exporting: sled tree: '{}'...", tree_name);
-
-        let tree = db.open_tree(tree_name)?;
-        for ivec_pair_res in tree.iter() {
-            let kv = ivec_pair_res?;
-            let k = kv.0.to_vec();
-            let v = kv.1.to_vec();
-
-            let kv_entry = RaftStoreEntry::deserialize(&k, &v)?;
-            let tree_kv = (tree_name.clone(), kv_entry);
-
-            let line = serde_json::to_string(&tree_kv)?;
-            cnt += 1;
-
-            if file.as_ref().is_none() {
-                println!("{}", line);
-            } else {
-                file.as_ref()
-                    .unwrap()
-                    .write_all(format!("{}\n", line).as_bytes())?;
-            }
+            file.as_ref()
+                .unwrap()
+                .write_all(format!("{}\n", line).as_bytes())?;
         }
     }
 
-    if file.as_ref().is_some() {
+    if file.is_some() {
         file.as_ref().unwrap().sync_all()?
     }
 
