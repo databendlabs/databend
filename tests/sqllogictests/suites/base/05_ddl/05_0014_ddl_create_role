@@ -13,5 +13,8 @@ statement ok
 DROP ROLE 'test-a'
 
 statement ok
+CREATE ROLE IF NOT EXISTS test-a
+
+statement ok
 DROP ROLE test-a
 
