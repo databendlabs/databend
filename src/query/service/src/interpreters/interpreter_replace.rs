@@ -218,7 +218,9 @@ impl ReplaceInterpreter {
 
         let is_multi_node = !self.ctx.get_cluster().is_empty();
         let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
-        let is_distributed = is_multi_node && !is_value_source;
+        let is_distributed = is_multi_node
+            && !is_value_source
+            && self.ctx.get_settings().get_enable_distributed_replace()?;
         let table_is_empty = base_snapshot.segments.is_empty();
         let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let mut purge_info = None;

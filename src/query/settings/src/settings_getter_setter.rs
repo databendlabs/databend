@@ -383,6 +383,14 @@ impl Settings {
         self.try_set_u64("enable_distributed_copy_into", u64::from(val))
     }
 
+    pub fn get_enable_distributed_replace(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_distributed_replace_into")? != 0)
+    }
+
+    pub fn set_enable_distributed_replace(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_distributed_repalce_into", u64::from(val))
+    }
+
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
     }
