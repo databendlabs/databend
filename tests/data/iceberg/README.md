@@ -17,7 +17,7 @@ Initiate a `spark-sql` shell, and run following SQLs:
 1. create table
 
 ```sql
-CREATE TABLE iceberg_ctl.iceberg_db.iceberg_tbl (id INT, data STRING) USING ICEBERG;
+CREATE TABLE iceberg_ctl.iceberg_db.iceberg_tbl (id INT NOT NULL, data STRING NOT NULL) USING ICEBERG;
 ```
 
 2. insert data
@@ -28,6 +28,8 @@ INSERT INTO iceberg_ctl.iceberg_db.iceberg_tbl VALUES (1, 'a'), (2, 'b'), (3, 'c
 -- Second transaction
 INSERT INTO iceberg_ctl.iceberg_db.iceberg_tbl VALUES (4, 'd'), (5, 'e'), (6, 'd');
 ```
+
+**----- The following steps are not applied to the test data now. -----**
 
 3. make a schema evolution
 
