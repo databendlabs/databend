@@ -16,6 +16,7 @@ mod segment;
 mod snapshot;
 mod statistics;
 
+pub use segment::CompactSegmentInfo;
 pub use segment::InternalSegmentInfo;
 pub use segment::LeafSegmentInfo;
 pub use segment::SegmentInfo;

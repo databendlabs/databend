@@ -38,6 +38,7 @@ use crate::meta::MetaCompression;
 use crate::meta::MetaEncoding;
 use crate::meta::Versioned;
 
+#[derive(Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum SegmentType {
     Leaf = 0,
@@ -257,6 +258,27 @@ impl SegmentInfo {
         })
     }
 
+    pub fn summary(&self) -> Statistics {
+        match self {
+            Self::LeafSegment(v) => v.summary.clone(),
+            Self::InternalSegment(v) => v.summary.clone(),
+        }
+    }
+
+    pub fn format_version(&self) -> FormatVersion {
+        match self {
+            Self::LeafSegment(v) => v.format_version,
+            Self::InternalSegment(v) => v.format_version,
+        }
+    }
+
+    pub fn typ(&self) -> SegmentType {
+        match self {
+            Self::LeafSegment(_) => SegmentType::Leaf,
+            Self::InternalSegment(_) => SegmentType::Internal,
+        }
+    }
+
     // Total block bytes of this segment.
     pub fn total_bytes(&self) -> u64 {
         match self {
@@ -286,7 +308,7 @@ impl SegmentInfo {
         }
     }
 
-    fn read_tag<R>(reader: &mut R) -> Result<SegmentType>
+    fn read_typ<R>(reader: &mut R) -> Result<SegmentType>
     where R: Read + Unpin + Send {
         let tag = reader.read_scalar::<u8>()?;
         SegmentType::try_from(tag)
@@ -303,8 +325,8 @@ impl SegmentInfo {
             summary_size,
         } = decode_segment_header(&mut cursor)?;
 
-        let tag = Self::read_tag(&mut cursor)?;
-        let segment = match tag {
+        let typ = Self::read_typ(&mut cursor)?;
+        let segment = match typ {
             SegmentType::Leaf => {
                 // leaf segment
                 let blocks: Vec<Arc<BlockMeta>> =
@@ -324,5 +346,162 @@ impl SegmentInfo {
         };
 
         Ok(segment)
+    }
+}
+
+#[derive(Clone)]
+pub struct CompactSegmentInfo {
+    pub format_version: FormatVersion,
+    pub summary: Statistics,
+    pub raw_bytes: Vec<u8>,
+
+    pub encoding: MetaEncoding,
+    pub compression: MetaCompression,
+    pub typ: SegmentType,
+}
+
+impl CompactSegmentInfo {
+    pub fn from_slice(bytes: &[u8]) -> Result<Self> {
+        let mut cursor = Cursor::new(bytes);
+        let SegmentHeader {
+            version,
+            encoding,
+            compression,
+            blocks_size,
+            summary_size,
+        } = decode_segment_header(&mut cursor)?;
+
+        let typ = SegmentInfo::read_typ(&mut cursor)?;
+
+        let mut raw_bytes = vec![0; blocks_size as usize];
+        cursor.read_exact(&mut raw_bytes)?;
+
+        let summary: Statistics =
+            read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+
+        let segment = CompactSegmentInfo {
+            format_version: version,
+            summary,
+            raw_bytes,
+            encoding,
+            compression,
+            typ,
+        };
+        Ok(segment)
+    }
+
+    pub fn block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
+        assert_eq!(self.typ, SegmentType::Leaf);
+        let mut reader = Cursor::new(&self.raw_bytes);
+        read_and_deserialize(
+            &mut reader,
+            self.raw_bytes.len() as u64,
+            &self.encoding,
+            &self.compression,
+        )
+    }
+
+    pub fn child_segments(&self) -> Result<Vec<Location>> {
+        assert_eq!(self.typ, SegmentType::Internal);
+        let mut reader = Cursor::new(&self.raw_bytes);
+        read_and_deserialize(
+            &mut reader,
+            self.raw_bytes.len() as u64,
+            &self.encoding,
+            &self.compression,
+        )
+    }
+}
+
+impl TryFrom<&CompactSegmentInfo> for SegmentInfo {
+    type Error = ErrorCode;
+    fn try_from(value: &CompactSegmentInfo) -> Result<Self, Self::Error> {
+        let segment = match value.typ {
+            SegmentType::Leaf => {
+                let blocks = value.block_metas()?;
+                SegmentInfo::new_leaf_with_version(
+                    blocks,
+                    value.summary.clone(),
+                    value.format_version,
+                )
+            }
+            SegmentType::Internal => {
+                let child_segments = value.child_segments()?;
+                SegmentInfo::new_internal_with_version(
+                    child_segments,
+                    value.summary.clone(),
+                    value.format_version,
+                )
+            }
+        };
+
+        Ok(segment)
+    }
+}
+
+impl TryFrom<&SegmentInfo> for CompactSegmentInfo {
+    type Error = ErrorCode;
+
+    fn try_from(value: &SegmentInfo) -> Result<Self, Self::Error> {
+        let encoding = MetaEncoding::MessagePack;
+        let compression = MetaCompression::default();
+        let raw_bytes = match value {
+            SegmentInfo::LeafSegment(v) => {
+                let bytes = encode(&encoding, &v.blocks)?;
+                compress(&compression, bytes)?
+            }
+            SegmentInfo::InternalSegment(v) => {
+                let bytes = encode(&encoding, &v.child_segments)?;
+                compress(&compression, bytes)?
+            }
+        };
+        Ok(Self {
+            format_version: value.format_version(),
+            summary: value.summary(),
+            raw_bytes,
+            encoding,
+            compression,
+            typ: value.typ(),
+        })
+    }
+}
+
+impl TryFrom<SegmentInfo> for CompactSegmentInfo {
+    type Error = ErrorCode;
+
+    fn try_from(value: SegmentInfo) -> Result<Self, Self::Error> {
+        let encoding = MetaEncoding::MessagePack;
+        let compression = MetaCompression::default();
+        let raw_bytes = match &value {
+            SegmentInfo::LeafSegment(v) => {
+                let bytes = encode(&encoding, &v.blocks)?;
+                compress(&compression, bytes)?
+            }
+            SegmentInfo::InternalSegment(v) => {
+                let bytes = encode(&encoding, &v.child_segments)?;
+                compress(&compression, bytes)?
+            }
+        };
+        Ok(Self {
+            format_version: value.format_version(),
+            summary: value.summary(),
+            raw_bytes,
+            encoding,
+            compression,
+            typ: value.typ(),
+        })
+    }
+}
+
+impl From<v4::CompactSegmentInfo> for CompactSegmentInfo {
+    fn from(value: v4::CompactSegmentInfo) -> Self {
+        Self {
+            format_version: value.format_version,
+            summary: Statistics::from_v2(value.summary),
+            raw_bytes: value.raw_block_metas.bytes,
+            encoding: value.raw_block_metas.encoding,
+            compression: value.raw_block_metas.compression,
+            typ: SegmentType::Leaf,
+        }
     }
 }

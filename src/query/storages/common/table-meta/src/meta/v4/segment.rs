@@ -250,14 +250,7 @@ impl CompactSegmentInfo {
 impl TryFrom<&CompactSegmentInfo> for SegmentInfo {
     type Error = ErrorCode;
     fn try_from(value: &CompactSegmentInfo) -> Result<Self, Self::Error> {
-        let mut reader = Cursor::new(&value.raw_block_metas.bytes);
-        let blocks: Vec<Arc<BlockMeta>> = read_and_deserialize(
-            &mut reader,
-            value.raw_block_metas.bytes.len() as u64,
-            &value.raw_block_metas.encoding,
-            &value.raw_block_metas.compression,
-        )?;
-
+        let blocks = value.block_metas()?;
         Ok(SegmentInfo {
             format_version: value.format_version,
             blocks,
