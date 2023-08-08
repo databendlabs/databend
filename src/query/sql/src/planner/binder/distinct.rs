@@ -59,7 +59,6 @@ impl Binder {
         let mut new_expr = child;
         if !scalar_items.is_empty() {
             let eval_scalar = EvalScalar {
-                projections: vec![],
                 items: scalar_items,
             };
             new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(new_expr));

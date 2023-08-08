@@ -143,10 +143,7 @@ impl Binder {
             .collect::<Result<Vec<_>>>()?;
 
         scalars.sort_by_key(|s| s.index);
-        let eval_scalar = EvalScalar {
-            projections: vec![],
-            items: scalars,
-        };
+        let eval_scalar = EvalScalar { items: scalars };
 
         let new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child));
 

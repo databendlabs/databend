@@ -31,7 +31,6 @@ use crate::IndexType;
 /// Evaluate scalar expression
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct EvalScalar {
-    pub projections: Vec<IndexType>,
     pub items: Vec<ScalarItem>,
 }
 

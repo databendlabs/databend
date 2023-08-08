@@ -141,8 +141,6 @@ impl Display for JoinType {
 /// the probe side.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Join {
-    pub pre_projections: Vec<IndexType>,
-    pub projections: Vec<IndexType>,
     pub left_conditions: Vec<ScalarExpr>,
     pub right_conditions: Vec<ScalarExpr>,
     pub non_equi_conditions: Vec<ScalarExpr>,
@@ -157,8 +155,6 @@ pub struct Join {
 impl Default for Join {
     fn default() -> Self {
         Self {
-            pre_projections: vec![],
-            projections: vec![],
             left_conditions: Default::default(),
             right_conditions: Default::default(),
             non_equi_conditions: Default::default(),
@@ -182,17 +178,6 @@ impl Join {
             used_columns = used_columns.union(&cond.used_columns()).cloned().collect();
         }
         Ok(used_columns)
-    }
-
-    #[inline]
-    pub fn replace_projections(
-        mut self,
-        pre_projections: Vec<IndexType>,
-        projections: Vec<IndexType>,
-    ) -> Self {
-        self.pre_projections = pre_projections;
-        self.projections = projections;
-        self
     }
 
     fn inner_join_cardinality(

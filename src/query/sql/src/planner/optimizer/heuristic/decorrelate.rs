@@ -176,8 +176,6 @@ impl SubqueryRewriter {
         }
 
         let join = Join {
-            pre_projections: vec![],
-            projections: vec![],
             left_conditions,
             right_conditions,
             non_equi_conditions,
@@ -199,7 +197,6 @@ impl SubqueryRewriter {
             left_child = SExpr::create_unary(
                 Arc::new(
                     Filter {
-                        projections: vec![],
                         predicates: left_filters,
                         is_having: false,
                     }
@@ -223,7 +220,6 @@ impl SubqueryRewriter {
             right_child = SExpr::create_unary(
                 Arc::new(
                     Filter {
-                        projections: vec![],
                         predicates: right_filters,
                         is_having: false,
                     }
@@ -264,8 +260,6 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                 )?;
                 let join_plan = Join {
-                    pre_projections: vec![],
-                    projections: vec![],
                     left_conditions,
                     right_conditions,
                     non_equi_conditions: vec![],
@@ -309,8 +303,6 @@ impl SubqueryRewriter {
                     )
                 };
                 let join_plan = Join {
-                    pre_projections: vec![],
-                    projections: vec![],
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
                     non_equi_conditions: vec![],
@@ -369,8 +361,6 @@ impl SubqueryRewriter {
                     )
                 };
                 let mark_join = Join {
-                    pre_projections: vec![],
-                    projections: vec![],
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
                     non_equi_conditions,
@@ -467,8 +457,6 @@ impl SubqueryRewriter {
                 Arc::new(logical_get),
             );
             let cross_join = Join {
-                pre_projections: vec![],
-                projections: vec![],
                 left_conditions: vec![],
                 right_conditions: vec![],
                 non_equi_conditions: vec![],
@@ -527,13 +515,7 @@ impl SubqueryRewriter {
                     });
                 }
                 Ok(SExpr::create_unary(
-                    Arc::new(
-                        EvalScalar {
-                            projections: vec![],
-                            items,
-                        }
-                        .into(),
-                    ),
+                    Arc::new(EvalScalar { items }.into()),
                     Arc::new(flatten_plan),
                 ))
             }
@@ -556,7 +538,6 @@ impl SubqueryRewriter {
                 }
 
                 let filter_plan = Filter {
-                    projections: vec![],
                     predicates,
                     is_having: filter.is_having,
                 }
@@ -590,8 +571,6 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_binary(
                     Arc::new(
                         Join {
-                            pre_projections: vec![],
-                            projections: vec![],
                             left_conditions: join.left_conditions.clone(),
                             right_conditions: join.right_conditions.clone(),
                             non_equi_conditions: join.non_equi_conditions.clone(),

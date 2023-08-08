@@ -210,7 +210,6 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
         .build();
         SExpr::create_unary(
             Arc::new(RelOperator::EvalScalar(EvalScalar {
-                projections: vec![],
                 items: vec![ScalarItem {
                     scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
@@ -238,7 +237,6 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
             predicates.push(selection.clone());
         }
         let filter = RelOperator::Filter(Filter {
-            projections: vec![],
             predicates,
             is_having: false,
         });

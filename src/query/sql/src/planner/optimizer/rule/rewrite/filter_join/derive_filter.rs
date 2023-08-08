@@ -83,7 +83,6 @@ pub fn try_derive_predicates(
         left_child = SExpr::create_unary(
             Arc::new(
                 Filter {
-                    projections: vec![],
                     predicates: left_push_down,
                     is_having: false,
                 }
@@ -97,7 +96,6 @@ pub fn try_derive_predicates(
         right_child = SExpr::create_unary(
             Arc::new(
                 Filter {
-                    projections: vec![],
                     predicates: right_push_down,
                     is_having: false,
                 }

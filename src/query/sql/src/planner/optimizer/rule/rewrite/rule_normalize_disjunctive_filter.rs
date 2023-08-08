@@ -146,7 +146,6 @@ impl Rule for RuleNormalizeDisjunctiveFilter {
             state.add_result(SExpr::create_unary(
                 Arc::new(
                     Filter {
-                        projections: vec![],
                         predicates: split_predicates,
                         is_having: filter.is_having,
                     }

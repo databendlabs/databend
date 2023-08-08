@@ -318,7 +318,6 @@ pub async fn subquery_filter(
 
     let expr = SExpr::create_unary(
         Arc::new(RelOperator::EvalScalar(EvalScalar {
-            projections: vec![0],
             items: vec![ScalarItem {
                 scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: None,
@@ -333,8 +332,7 @@ pub async fn subquery_filter(
     let mut bind_context = Box::new(BindContext::new());
     bind_context.add_column_binding(row_id_column_binding.clone());
 
-    let heuristic =
-        HeuristicOptimizer::new(ctx.get_function_context()?, &bind_context, metadata.clone());
+    let heuristic = HeuristicOptimizer::new(ctx.get_function_context()?, metadata.clone());
     let mut expr = heuristic.optimize(expr, &DEFAULT_REWRITE_RULES)?;
     let mut dphyp_optimized = false;
     if ctx.get_settings().get_enable_dphyp()? {
@@ -352,7 +350,7 @@ pub async fn subquery_filter(
     // Create `input_expr` pipeline and execute it to get `_row_id` data block.
     let select_interpreter = SelectInterpreter::try_create(
         ctx.clone(),
-        BindContext::new(),
+        *bind_context,
         expr,
         metadata.clone(),
         None,

@@ -201,8 +201,6 @@ impl Binder {
         }
 
         let logical_join = Join {
-            pre_projections: vec![],
-            projections: vec![],
             left_conditions,
             right_conditions,
             non_equi_conditions,
@@ -260,7 +258,6 @@ impl Binder {
             *left_child = SExpr::create_unary(
                 Arc::new(
                     Filter {
-                        projections: vec![],
                         predicates: left_push_down,
                         is_having: false,
                     }
@@ -274,7 +271,6 @@ impl Binder {
             *right_child = SExpr::create_unary(
                 Arc::new(
                     Filter {
-                        projections: vec![],
                         predicates: right_push_down,
                         is_having: false,
                     }

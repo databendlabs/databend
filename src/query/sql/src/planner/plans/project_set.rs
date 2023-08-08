@@ -40,16 +40,7 @@ pub struct SrfItem {
 /// and return the joined result with input relation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ProjectSet {
-    pub projections: Vec<IndexType>,
     pub srfs: Vec<SrfItem>,
-}
-
-impl ProjectSet {
-    #[inline]
-    pub fn replace_projections(mut self, projections: Vec<IndexType>) -> Self {
-        self.projections = projections;
-        self
-    }
 }
 
 impl Operator for ProjectSet {

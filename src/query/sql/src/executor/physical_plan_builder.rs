@@ -85,8 +85,11 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner;
+use crate::plans;
+use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
+use crate::plans::DummyTableScan;
 use crate::plans::Exchange;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
@@ -97,6 +100,7 @@ use crate::plans::Window as LogicalWindow;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;
 use crate::BaseTableColumn;
+use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
@@ -116,6 +120,9 @@ pub struct PhysicalPlanBuilder {
 
     next_plan_id: u32,
     dry_run: bool,
+
+    /// Record cte_idx and the cte's output columns
+    cte_output_columns: HashMap<IndexType, Vec<ColumnBinding>>,
 }
 
 impl PhysicalPlanBuilder {
@@ -127,391 +134,18 @@ impl PhysicalPlanBuilder {
             next_plan_id: 0,
             func_ctx,
             dry_run,
+            cte_output_columns: Default::default(),
         }
-    }
-
-    pub(crate) fn next_plan_id(&mut self) -> u32 {
-        let id = self.next_plan_id;
-        self.next_plan_id += 1;
-        id
-    }
-
-    fn build_projection<'a>(
-        metadata: &Metadata,
-        schema: &TableSchema,
-        columns: impl Iterator<Item = &'a IndexType>,
-        has_inner_column: bool,
-        ignore_internal_column: bool,
-        add_virtual_source_column: bool,
-        ignore_lazy_column: bool,
-    ) -> Projection {
-        if !has_inner_column {
-            let mut col_indices = Vec::new();
-            let mut virtual_col_indices = HashSet::new();
-            for index in columns {
-                if ignore_lazy_column && metadata.is_lazy_column(*index) {
-                    continue;
-                }
-                let name = match metadata.column(*index) {
-                    ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
-                        column_name
-                    }
-                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                    ColumnEntry::InternalColumn(TableInternalColumn {
-                        internal_column, ..
-                    }) => {
-                        if ignore_internal_column {
-                            continue;
-                        }
-                        internal_column.column_name()
-                    }
-                    ColumnEntry::VirtualColumn(VirtualColumn {
-                        source_column_name, ..
-                    }) => {
-                        if add_virtual_source_column {
-                            virtual_col_indices
-                                .insert(schema.index_of(source_column_name).unwrap());
-                        }
-                        continue;
-                    }
-                };
-                col_indices.push(schema.index_of(name).unwrap());
-            }
-            if !virtual_col_indices.is_empty() {
-                for index in virtual_col_indices {
-                    if !col_indices.contains(&index) {
-                        col_indices.push(index);
-                    }
-                }
-            }
-            col_indices.sort();
-            Projection::Columns(col_indices)
-        } else {
-            let mut col_indices = BTreeMap::new();
-            for index in columns {
-                if ignore_lazy_column && metadata.is_lazy_column(*index) {
-                    continue;
-                }
-                let column = metadata.column(*index);
-                match column {
-                    ColumnEntry::BaseTableColumn(BaseTableColumn {
-                        column_name,
-                        path_indices,
-                        ..
-                    }) => match path_indices {
-                        Some(path_indices) => {
-                            col_indices.insert(column.index(), path_indices.to_vec());
-                        }
-                        None => {
-                            let idx = schema.index_of(column_name).unwrap();
-                            col_indices.insert(column.index(), vec![idx]);
-                        }
-                    },
-                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => {
-                        let idx = schema.index_of(alias).unwrap();
-                        col_indices.insert(column.index(), vec![idx]);
-                    }
-                    ColumnEntry::InternalColumn(TableInternalColumn { column_index, .. }) => {
-                        if !ignore_internal_column {
-                            col_indices.insert(*column_index, vec![*column_index]);
-                        }
-                    }
-                    ColumnEntry::VirtualColumn(VirtualColumn {
-                        source_column_name, ..
-                    }) => {
-                        if add_virtual_source_column {
-                            let idx = schema.index_of(source_column_name).unwrap();
-                            col_indices.insert(idx, vec![idx]);
-                        }
-                    }
-                }
-            }
-            Projection::InnerColumns(col_indices)
-        }
-    }
-
-    fn build_limit(
-        &mut self,
-        input_plan: PhysicalPlan,
-        limit: &planner::plans::Limit,
-        stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
-        let next_plan_id = self.next_plan_id();
-        let metadata = self.metadata.read().clone();
-        if metadata.lazy_columns().is_empty() {
-            return Ok(PhysicalPlan::Limit(Limit {
-                plan_id: next_plan_id,
-                input: Box::new(input_plan),
-                limit: limit.limit,
-                offset: limit.offset,
-                stat_info: Some(stat_info),
-            }));
-        }
-
-        // If `lazy_columns` is not empty, build a `RowFetch` plan on top of the `Limit` plan.
-
-        let input_schema = input_plan.output_schema()?;
-
-        // Lazy materialization is enabled.
-        let row_id_col_index = metadata
-            .columns()
-            .iter()
-            .position(|col| col.name() == ROW_ID_COL_NAME)
-            .ok_or_else(|| ErrorCode::Internal("Internal column _row_id is not found"))?;
-        let row_id_col_offset = input_schema.index_of(&row_id_col_index.to_string())?;
-
-        // There may be more than one `LIMIT` plan, we don't need to fetch the same columns multiple times.
-        // See the case in tests/sqllogictests/suites/crdb/limit:
-        // SELECT * FROM (SELECT * FROM t_47283 ORDER BY k LIMIT 4) WHERE a > 5 LIMIT 1
-        let lazy_columns = metadata
-            .lazy_columns()
-            .iter()
-            .sorted() // Needs sort because we need to make the order deterministic.
-            .filter(|index| !input_schema.has_field(&index.to_string())) // If the column is already in the input schema, we don't need to fetch it.
-            .cloned()
-            .collect::<Vec<_>>();
-
-        if lazy_columns.is_empty() {
-            // If there is no lazy column, we don't need to build a `RowFetch` plan.
-            return Ok(PhysicalPlan::Limit(Limit {
-                plan_id: next_plan_id,
-                input: Box::new(input_plan),
-                limit: limit.limit,
-                offset: limit.offset,
-                stat_info: Some(stat_info),
-            }));
-        }
-
-        let mut has_inner_column = false;
-        let fetched_fields = lazy_columns
-            .iter()
-            .map(|index| {
-                let col = metadata.column(*index);
-                if let ColumnEntry::BaseTableColumn(c) = col {
-                    if c.path_indices.is_some() {
-                        has_inner_column = true;
-                    }
-                }
-                DataField::new(&index.to_string(), col.data_type())
-            })
-            .collect();
-
-        let source = input_plan.try_find_single_data_source();
-        debug_assert!(source.is_some());
-        let source_info = source.cloned().unwrap();
-        let table_schema = source_info.source_info.schema();
-        let cols_to_fetch = Self::build_projection(
-            &metadata,
-            &table_schema,
-            lazy_columns.iter(),
-            has_inner_column,
-            true,
-            true,
-            false,
-        );
-
-        Ok(PhysicalPlan::RowFetch(RowFetch {
-            plan_id: self.next_plan_id(),
-            input: Box::new(PhysicalPlan::Limit(Limit {
-                plan_id: next_plan_id,
-                input: Box::new(input_plan),
-                limit: limit.limit,
-                offset: limit.offset,
-                stat_info: Some(stat_info.clone()),
-            })),
-            source: Box::new(source_info),
-            row_id_col_offset,
-            cols_to_fetch,
-            fetched_fields,
-            stat_info: Some(stat_info),
-        }))
-    }
-
-    #[async_backtrace::framed]
-    async fn build_scan(&mut self, scan: &Scan, stat_info: PlanStatsInfo) -> Result<PhysicalPlan> {
-        let mut has_inner_column = false;
-        let mut has_virtual_column = false;
-        let mut name_mapping = BTreeMap::new();
-        let mut project_internal_columns = BTreeMap::new();
-        let metadata = self.metadata.read().clone();
-
-        for index in scan.columns.iter() {
-            if metadata.is_lazy_column(*index) {
-                continue;
-            }
-            let column = metadata.column(*index);
-            if let ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) = column {
-                if path_indices.is_some() {
-                    has_inner_column = true;
-                }
-            } else if let ColumnEntry::InternalColumn(TableInternalColumn {
-                internal_column, ..
-            }) = column
-            {
-                project_internal_columns.insert(*index, internal_column.to_owned());
-            } else if let ColumnEntry::VirtualColumn(_) = column {
-                has_virtual_column = true;
-            }
-
-            if let Some(prewhere) = &scan.prewhere {
-                // if there is a prewhere optimization,
-                // we can prune `PhysicalScan`'s output schema.
-                if prewhere.output_columns.contains(index) {
-                    name_mapping.insert(column.name().to_string(), *index);
-                }
-            } else {
-                name_mapping.insert(column.name().to_string(), *index);
-            }
-        }
-
-        if !metadata.lazy_columns().is_empty() {
-            // Lazy materialization is enabled.
-            if let Entry::Vacant(entry) = name_mapping.entry(ROW_ID_COL_NAME.to_string()) {
-                let internal_column = INTERNAL_COLUMN_FACTORY
-                    .get_internal_column(ROW_ID_COL_NAME)
-                    .unwrap();
-                let index = self
-                    .metadata
-                    .read()
-                    .row_id_index_by_table_index(scan.table_index);
-                debug_assert!(index.is_some());
-                // Safe to unwrap: if lazy_columns is not empty, the `analyze_lazy_materialization` have been called
-                // and the row_id index of the table_index has been generated.
-                let index = index.unwrap();
-                entry.insert(index);
-                project_internal_columns.insert(index, internal_column);
-            }
-        }
-
-        let table_entry = metadata.table(scan.table_index);
-        let table = table_entry.table();
-
-        if !table.result_can_be_cached() {
-            self.ctx.set_cacheable(false);
-        }
-
-        let mut table_schema = table.schema();
-        if !project_internal_columns.is_empty() {
-            let mut schema = table_schema.as_ref().clone();
-            for internal_column in project_internal_columns.values() {
-                schema.add_internal_field(
-                    internal_column.column_name(),
-                    internal_column.table_data_type(),
-                    internal_column.column_id(),
-                );
-            }
-            table_schema = Arc::new(schema);
-        }
-
-        let push_downs =
-            self.push_downs(scan, &table_schema, has_inner_column, has_virtual_column)?;
-
-        let mut source = table
-            .read_plan_with_catalog(
-                self.ctx.clone(),
-                table_entry.catalog().to_string(),
-                Some(push_downs),
-                if project_internal_columns.is_empty() {
-                    None
-                } else {
-                    Some(project_internal_columns.clone())
-                },
-                self.dry_run,
-            )
-            .await?;
-
-        if let Some(agg_index) = &scan.agg_index {
-            let source_schema = source.schema();
-            let push_down = source.push_downs.as_mut().unwrap();
-            let output_fields = TableScan::output_fields(source_schema, &name_mapping)?;
-            let agg_index = Self::build_agg_index(agg_index, &output_fields)?;
-            push_down.agg_index = Some(agg_index);
-        }
-        let internal_column = if project_internal_columns.is_empty() {
-            None
-        } else {
-            Some(project_internal_columns)
-        };
-        Ok(PhysicalPlan::TableScan(TableScan {
-            plan_id: self.next_plan_id(),
-            name_mapping,
-            source: Box::new(source),
-            table_index: scan.table_index,
-            stat_info: Some(stat_info),
-            internal_column,
-        }))
-    }
-
-    fn build_agg_index(
-        agg: &planner::plans::AggIndexInfo,
-        source_fields: &[DataField],
-    ) -> Result<AggIndexInfo> {
-        // Build projection
-        let used_columns = agg.used_columns();
-        let mut col_indices = Vec::with_capacity(used_columns.len());
-        for index in used_columns.iter().sorted() {
-            col_indices.push(agg.schema.index_of(&index.to_string())?);
-        }
-        let projection = Projection::Columns(col_indices);
-        let output_schema = projection.project_schema(&agg.schema);
-
-        let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "and".to_string(),
-                params: vec![],
-                arguments: vec![lhs, rhs],
-            })
-        });
-        let filter = predicate
-            .map(|pred| -> Result<_> {
-                Ok(
-                    cast_expr_to_non_null_boolean(pred.as_expr()?.project_column_ref(|col| {
-                        output_schema.index_of(&col.index.to_string()).unwrap()
-                    }))?
-                    .as_remote_expr(),
-                )
-            })
-            .transpose()?;
-        let selection = agg
-            .selection
-            .iter()
-            .map(|sel| {
-                let offset = source_fields
-                    .iter()
-                    .position(|f| sel.index.to_string() == f.name().as_str());
-                Ok((
-                    sel.scalar
-                        .as_expr()?
-                        .project_column_ref(|col| {
-                            output_schema.index_of(&col.index.to_string()).unwrap()
-                        })
-                        .as_remote_expr(),
-                    offset,
-                ))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(AggIndexInfo {
-            index_id: agg.index_id,
-            filter,
-            selection,
-            schema: agg.schema.clone(),
-            actual_table_field_len: source_fields.len(),
-            is_agg: agg.is_agg,
-            projection,
-            agg_functions_len: agg.agg_functions_len,
-        })
     }
 
     #[async_recursion::async_recursion]
     #[async_backtrace::framed]
-    pub async fn build(&mut self, s_expr: &SExpr) -> Result<PhysicalPlan> {
+    pub async fn build(&mut self, s_expr: &SExpr, mut required: ColumnSet) -> Result<PhysicalPlan> {
         // Build stat info
         let stat_info = self.build_plan_stat_info(s_expr)?;
 
         match s_expr.plan() {
-            RelOperator::Scan(scan) => self.build_scan(scan, stat_info).await,
+            RelOperator::Scan(scan) => self.build_scan(scan, required, stat_info).await,
             RelOperator::DummyTableScan(_) => {
                 let catalogs = CatalogManager::instance();
                 let table = catalogs
@@ -544,30 +178,93 @@ impl PhysicalPlanBuilder {
                 }))
             }
             RelOperator::Join(join) => {
+                let column_projections = required.clone().into_iter().collect::<Vec<_>>();
+                let others_required = join
+                    .non_equi_conditions
+                    .iter()
+                    .fold(required.clone(), |acc, v| {
+                        acc.union(&v.used_columns()).cloned().collect()
+                    });
+                let pre_column_projections =
+                    others_required.clone().into_iter().collect::<Vec<_>>();
+                // Include columns referenced in left conditions and right conditions.
+                let left_required = join
+                    .left_conditions
+                    .iter()
+                    .fold(required.clone(), |acc, v| {
+                        acc.union(&v.used_columns()).cloned().collect()
+                    })
+                    .union(&others_required)
+                    .cloned()
+                    .collect();
+                let right_required = join
+                    .right_conditions
+                    .iter()
+                    .fold(required, |acc, v| {
+                        acc.union(&v.used_columns()).cloned().collect()
+                    })
+                    .union(&others_required)
+                    .cloned()
+                    .collect();
+
                 // Choose physical join type by join conditions
                 let physical_join = physical_join(join, s_expr)?;
                 match physical_join {
-                    PhysicalJoinType::Hash => self.build_hash_join(join, s_expr, stat_info).await,
+                    PhysicalJoinType::Hash => {
+                        self.build_hash_join(
+                            join,
+                            s_expr,
+                            (left_required, right_required),
+                            pre_column_projections,
+                            column_projections,
+                            stat_info,
+                        )
+                        .await
+                    }
                     PhysicalJoinType::RangeJoin(range, other) => {
-                        self.build_range_join(range, other, s_expr).await
+                        self.build_range_join(s_expr, left_required, right_required, range, other)
+                            .await
                     }
                 }
             }
 
             RelOperator::EvalScalar(eval_scalar) => {
-                let input = self.build(s_expr.child(0)?).await?;
-                self.build_eval_scalar(input, eval_scalar, stat_info)
+                let column_projections = required.clone().into_iter().collect::<Vec<_>>();
+                let mut used = vec![];
+                // Only keep columns needed by parent plan.
+                for s in eval_scalar.items.iter() {
+                    if !required.contains(&s.index) {
+                        continue;
+                    }
+                    used.push(s.clone());
+                    s.scalar.used_columns().iter().for_each(|c| {
+                        required.insert(*c);
+                    })
+                }
+                if used.is_empty() {
+                    self.build(s_expr.child(0)?, required).await
+                } else {
+                    let input = self.build(s_expr.child(0)?, required).await?;
+                    let eval_scalar = crate::plans::EvalScalar { items: used };
+                    self.build_eval_scalar(&eval_scalar, column_projections, input, stat_info)
+                }
             }
 
             RelOperator::Filter(filter) => {
-                let input = Box::new(self.build(s_expr.child(0)?).await?);
+                let column_projections = required.clone().into_iter().collect::<Vec<_>>();
+                let used = filter.predicates.iter().fold(required, |acc, v| {
+                    acc.union(&v.used_columns()).cloned().collect()
+                });
+
+                let input = Box::new(self.build(s_expr.child(0)?, used).await?);
                 let input_schema = input.output_schema()?;
                 let mut projections = ColumnSet::new();
-                for column in filter.projections.iter() {
+                for column in column_projections.iter() {
                     if let Ok(index) = input_schema.index_of(&column.to_string()) {
                         projections.insert(index);
                     }
                 }
+
                 Ok(PhysicalPlan::Filter(Filter {
                     plan_id: self.next_plan_id(),
                     projections,
@@ -593,7 +290,37 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::Aggregate(agg) => {
-                let input = self.build(s_expr.child(0)?).await?;
+                let mut used = vec![];
+                for item in &agg.aggregate_functions {
+                    if required.contains(&item.index) {
+                        required.extend(item.scalar.used_columns());
+                        used.push(item.clone());
+                    }
+                }
+
+                agg.group_items.iter().for_each(|i| {
+                    // If the group item comes from a complex expression, we only include the final
+                    // column index here. The used columns will be included in its EvalScalar child.
+                    required.insert(i.index);
+                });
+
+                if agg.group_items.is_empty() && used.is_empty() {
+                    let expr =
+                        SExpr::create_leaf(Arc::new(RelOperator::DummyTableScan(DummyTableScan)));
+                    return self.build(&expr, required).await;
+                }
+
+                let agg = Aggregate {
+                    group_items: agg.group_items.clone(),
+                    aggregate_functions: used,
+                    from_distinct: agg.from_distinct,
+                    mode: agg.mode,
+                    limit: agg.limit,
+                    grouping_id_index: agg.grouping_id_index,
+                    grouping_sets: agg.grouping_sets.clone(),
+                };
+
+                let input = self.build(s_expr.child(0)?, required).await?;
                 let input_schema = input.output_schema()?;
                 let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
 
@@ -842,32 +569,80 @@ impl PhysicalPlanBuilder {
 
                 Ok(result)
             }
-            RelOperator::Window(w) => self.build_physical_window(s_expr, &stat_info, w).await,
-            RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {
-                plan_id: self.next_plan_id(),
-                input: Box::new(self.build(s_expr.child(0)?).await?),
-                order_by: sort
-                    .items
-                    .iter()
-                    .map(|v| SortDesc {
-                        asc: v.asc,
-                        nulls_first: v.nulls_first,
-                        order_by: v.index,
-                    })
-                    .collect(),
-                limit: sort.limit,
-                after_exchange: sort.after_exchange,
-                pre_projection: sort.pre_projection.clone(),
-                stat_info: Some(stat_info),
-            })),
+            RelOperator::Window(window) => {
+                if required.contains(&window.index) {
+                    // The scalar items in window function is not replaced yet.
+                    // The will be replaced in physical plan builder.
+                    window.arguments.iter().for_each(|item| {
+                        required.extend(item.scalar.used_columns());
+                        required.insert(item.index);
+                    });
+                    window.partition_by.iter().for_each(|item| {
+                        required.extend(item.scalar.used_columns());
+                        required.insert(item.index);
+                    });
+                    window.order_by.iter().for_each(|item| {
+                        required.extend(item.order_by_item.scalar.used_columns());
+                        required.insert(item.order_by_item.index);
+                    });
+                }
+                let column_projections = required.clone().into_iter().collect::<Vec<_>>();
+                self.build_physical_window(window, s_expr, required, column_projections, &stat_info)
+                    .await
+            }
+            RelOperator::Sort(sort) => {
+                sort.items.iter().for_each(|s| {
+                    required.insert(s.index);
+                });
+
+                // If the query will be optimized by lazy reading, we don't need to do pre-projection.
+                let pre_projection = if self.metadata.read().lazy_columns().is_empty() {
+                    Some(required.iter().sorted().copied().collect())
+                } else {
+                    None
+                };
+
+                Ok(PhysicalPlan::Sort(Sort {
+                    plan_id: self.next_plan_id(),
+                    input: Box::new(self.build(s_expr.child(0)?, required).await?),
+                    order_by: sort
+                        .items
+                        .iter()
+                        .map(|v| SortDesc {
+                            asc: v.asc,
+                            nulls_first: v.nulls_first,
+                            order_by: v.index,
+                        })
+                        .collect(),
+                    limit: sort.limit,
+                    after_exchange: sort.after_exchange,
+                    pre_projection,
+                    stat_info: Some(stat_info),
+                }))
+            }
 
             RelOperator::Limit(limit) => {
-                let input_plan = self.build(s_expr.child(0)?).await?;
+                // Apply lazy.
+                let metadata = self.metadata.read().clone();
+                let lazy_columns = metadata.lazy_columns();
+                required = required
+                    .difference(lazy_columns)
+                    .cloned()
+                    .collect::<ColumnSet>();
+                required.extend(metadata.row_id_indexes());
+
+                let input_plan = self.build(s_expr.child(0)?, required).await?;
                 self.build_limit(input_plan, limit, stat_info)
             }
 
             RelOperator::Exchange(exchange) => {
-                let input = Box::new(self.build(s_expr.child(0)?).await?);
+                if let Exchange::Hash(exprs) = exchange {
+                    for expr in exprs {
+                        required.extend(expr.used_columns());
+                    }
+                }
+
+                let input = Box::new(self.build(s_expr.child(0)?, required).await?);
                 let input_schema = input.output_schema()?;
                 let mut keys = vec![];
                 let kind = match exchange {
@@ -896,13 +671,22 @@ impl PhysicalPlanBuilder {
                 }))
             }
 
-            RelOperator::UnionAll(op) => {
-                let left_plan = self.build(s_expr.child(0)?).await?;
-                let right_plan = self.build(s_expr.child(1)?).await?;
+            RelOperator::UnionAll(union_all) => {
+                let left_required = union_all.pairs.iter().fold(required.clone(), |mut acc, v| {
+                    acc.insert(v.0);
+                    acc
+                });
+                let right_required = union_all.pairs.iter().fold(required, |mut acc, v| {
+                    acc.insert(v.1);
+                    acc
+                });
+
+                let left_plan = self.build(s_expr.child(0)?, left_required).await?;
+                let right_plan = self.build(s_expr.child(1)?, right_required).await?;
                 let left_schema = left_plan.output_schema()?;
                 let right_schema = right_plan.output_schema()?;
 
-                let common_types = op.pairs.iter().map(|(l, r)| {
+                let common_types = union_all.pairs.iter().map(|(l, r)| {
                     let left_field = left_schema.field_with_name(&l.to_string()).unwrap();
                     let right_field = right_schema.field_with_name(&r.to_string()).unwrap();
 
@@ -959,11 +743,11 @@ impl PhysicalPlanBuilder {
                         plan
                     } else {
                         plan_builder.build_eval_scalar(
-                            plan,
                             &crate::plans::EvalScalar {
-                                projections: vec![],
                                 items: scalar_items,
                             },
+                            indexes.to_vec(),
+                            plan,
                             stat_info,
                         )?
                     };
@@ -971,8 +755,8 @@ impl PhysicalPlanBuilder {
                     Ok(new_plan)
                 }
 
-                let left_indexes = op.pairs.iter().map(|(l, _)| *l).collect::<Vec<_>>();
-                let right_indexes = op.pairs.iter().map(|(_, r)| *r).collect::<Vec<_>>();
+                let left_indexes = union_all.pairs.iter().map(|(l, _)| *l).collect::<Vec<_>>();
+                let right_indexes = union_all.pairs.iter().map(|(_, r)| *r).collect::<Vec<_>>();
                 let left_plan = cast_plan(
                     self,
                     left_plan,
@@ -992,7 +776,7 @@ impl PhysicalPlanBuilder {
                 )
                 .await?;
 
-                let pairs = op
+                let pairs = union_all
                     .pairs
                     .iter()
                     .map(|(l, r)| (l.to_string(), r.to_string()))
@@ -1014,17 +798,30 @@ impl PhysicalPlanBuilder {
                 }))
             }
 
-            RelOperator::RuntimeFilterSource(op) => {
-                let left_side = Box::new(self.build(s_expr.child(0)?).await?);
+            RelOperator::RuntimeFilterSource(runtime_filter) => {
+                let left_required = runtime_filter
+                    .left_runtime_filters
+                    .iter()
+                    .fold(required.clone(), |acc, v| {
+                        acc.union(&v.1.used_columns()).cloned().collect()
+                    });
+                let right_required = runtime_filter
+                    .right_runtime_filters
+                    .iter()
+                    .fold(required, |acc, v| {
+                        acc.union(&v.1.used_columns()).cloned().collect()
+                    });
+
+                let left_side = Box::new(self.build(s_expr.child(0)?, left_required).await?);
                 let left_schema = left_side.output_schema()?;
-                let right_side = Box::new(self.build(s_expr.child(1)?).await?);
+                let right_side = Box::new(self.build(s_expr.child(1)?, right_required).await?);
                 let right_schema = right_side.output_schema()?;
                 let mut left_runtime_filters = BTreeMap::new();
                 let mut right_runtime_filters = BTreeMap::new();
-                for (left, right) in op
+                for (left, right) in runtime_filter
                     .left_runtime_filters
                     .iter()
-                    .zip(op.right_runtime_filters.iter())
+                    .zip(runtime_filter.right_runtime_filters.iter())
                 {
                     let left_expr = left
                         .1
@@ -1075,7 +872,12 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::ProjectSet(project_set) => {
-                let input = self.build(s_expr.child(0)?).await?;
+                let column_projections = required.clone().into_iter().collect::<Vec<_>>();
+                for s in project_set.srfs.iter() {
+                    required.extend(s.scalar.used_columns().iter().copied());
+                }
+
+                let input = self.build(s_expr.child(0)?, required).await?;
                 let input_schema = input.output_schema()?;
                 let srf_exprs = project_set
                     .srfs
@@ -1094,7 +896,7 @@ impl PhysicalPlanBuilder {
                     .collect::<Result<Vec<_>>>()?;
 
                 let mut projections = ColumnSet::new();
-                for column in project_set.projections.iter() {
+                for column in column_projections.iter() {
                     if let Ok(index) = input_schema.index_of(&column.to_string()) {
                         projections.insert(index);
                     }
@@ -1109,25 +911,83 @@ impl PhysicalPlanBuilder {
                 }))
             }
 
-            RelOperator::CteScan(cte_scan) => Ok(PhysicalPlan::CteScan(CteScan {
-                plan_id: self.next_plan_id(),
-                cte_idx: cte_scan.cte_idx,
-                output_schema: DataSchemaRefExt::create(cte_scan.fields.clone()),
-                offsets: cte_scan.offsets.clone(),
-            })),
+            RelOperator::CteScan(cte_scan) => {
+                let mut used_columns = cte_scan.used_columns()?;
+                used_columns = required.intersection(&used_columns).cloned().collect();
+                let mut pruned_fields = vec![];
+                let mut pruned_offsets = vec![];
+                let cte_output_columns = self.cte_output_columns.get(&cte_scan.cte_idx.0).unwrap();
+                for field in cte_scan.fields.iter() {
+                    if used_columns.contains(&field.name().parse()?) {
+                        pruned_fields.push(field.clone());
+                    }
+                }
+                for field in pruned_fields.iter() {
+                    for (offset, col) in cte_output_columns.iter().enumerate() {
+                        if col.index.eq(&field.name().parse::<IndexType>()?) {
+                            pruned_offsets.push(offset);
+                            break;
+                        }
+                    }
+                }
 
-            RelOperator::MaterializedCte(op) => {
+                Ok(PhysicalPlan::CteScan(CteScan {
+                    plan_id: self.next_plan_id(),
+                    cte_idx: cte_scan.cte_idx,
+                    output_schema: DataSchemaRefExt::create(pruned_fields),
+                    offsets: pruned_offsets,
+                }))
+            }
+
+            RelOperator::MaterializedCte(cte) => {
+                let left_output_column = RelExpr::with_s_expr(s_expr)
+                    .derive_relational_prop_child(0)?
+                    .output_columns
+                    .clone();
+                let right_used_column = RelExpr::with_s_expr(s_expr)
+                    .derive_relational_prop_child(1)?
+                    .used_columns
+                    .clone();
+                // Get the intersection of `left_used_column` and `right_used_column`
+                let left_required = left_output_column
+                    .intersection(&right_used_column)
+                    .cloned()
+                    .collect::<ColumnSet>();
+
+                let mut required_output_columns = vec![];
+                for column in cte.left_output_columns.iter() {
+                    if left_required.contains(&column.index) {
+                        required_output_columns.push(column.clone());
+                    }
+                }
+                self.cte_output_columns
+                    .insert(cte.cte_idx, required_output_columns.clone());
+
                 Ok(PhysicalPlan::MaterializedCte(MaterializedCte {
                     plan_id: self.next_plan_id(),
-                    left: Box::new(self.build(s_expr.child(0)?).await?),
-                    right: Box::new(self.build(s_expr.child(1)?).await?),
-                    cte_idx: op.cte_idx,
-                    left_output_columns: op.left_output_columns.clone(),
+                    left: Box::new(self.build(s_expr.child(0)?, left_required).await?),
+                    right: Box::new(self.build(s_expr.child(1)?, required).await?),
+                    cte_idx: cte.cte_idx,
+                    left_output_columns: required_output_columns,
                 }))
             }
 
             RelOperator::Lambda(lambda) => {
-                let input = self.build(s_expr.child(0)?).await?;
+                let mut used = vec![];
+                // Keep all columns, as some lambda functions may be arguments to other lambda functions.
+                for s in lambda.items.iter() {
+                    used.push(s.clone());
+                    s.scalar.used_columns().iter().for_each(|c| {
+                        required.insert(*c);
+                    })
+                }
+
+                if used.is_empty() {
+                    return self.build(s_expr.child(0)?, required).await;
+                }
+
+                let lambda = plans::Lambda { items: used };
+                let input = self.build(s_expr.child(0)?, required).await?;
                 let input_schema = input.output_schema()?;
                 let mut index = input_schema.num_fields();
                 let mut lambda_index_map = HashMap::new();
@@ -1242,13 +1102,15 @@ impl PhysicalPlanBuilder {
     #[async_backtrace::framed]
     async fn build_physical_window(
         &mut self,
+        window: &LogicalWindow,
         s_expr: &SExpr,
+        required: ColumnSet,
+        column_projections: Vec<IndexType>,
         stat_info: &PlanStatsInfo,
-        w: &LogicalWindow,
     ) -> Result<PhysicalPlan> {
-        let input = self.build(s_expr.child(0)?).await?;
+        let input = self.build(s_expr.child(0)?, required).await?;
 
-        let mut w = w.clone();
+        let mut w = window.clone();
         // Generate a `EvalScalar` as the input of `Window`.
         let mut scalar_items: Vec<ScalarItem> = Vec::new();
         for arg in &w.arguments {
@@ -1260,14 +1122,13 @@ impl PhysicalPlanBuilder {
         for order in &w.order_by {
             scalar_items.push(order.order_by_item.clone())
         }
-        let projections = w.projections.clone();
         let input = if !scalar_items.is_empty() {
             self.build_eval_scalar(
-                input,
                 &crate::planner::plans::EvalScalar {
-                    projections,
                     items: scalar_items,
                 },
+                column_projections,
+                input,
                 stat_info.clone(),
             )?
         } else {
@@ -1450,8 +1311,9 @@ impl PhysicalPlanBuilder {
 
     fn build_eval_scalar(
         &mut self,
-        input: PhysicalPlan,
         eval_scalar: &planner::plans::EvalScalar,
+        column_projections: Vec<IndexType>,
+        input: PhysicalPlan,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         let input_schema = input.output_schema()?;
@@ -1480,14 +1342,14 @@ impl PhysicalPlanBuilder {
             .collect::<Vec<_>>();
 
         let mut projections = ColumnSet::new();
-        for column in eval_scalar.projections.iter() {
+        for column in column_projections.iter() {
             if let Ok(index) = input_schema.index_of(&column.to_string()) {
                 projections.insert(index);
             }
         }
         let input_column_nums = input_schema.num_fields();
         for (index, (_, idx)) in exprs.iter().enumerate() {
-            if eval_scalar.projections.contains(idx) {
+            if column_projections.contains(idx) {
                 projections.insert(index + input_column_nums);
             }
         }
@@ -1519,6 +1381,422 @@ impl PhysicalPlanBuilder {
         } else {
             Some(virtual_column_infos)
         }
+    }
+
+    pub(crate) fn next_plan_id(&mut self) -> u32 {
+        let id = self.next_plan_id;
+        self.next_plan_id += 1;
+        id
+    }
+
+    fn build_projection<'a>(
+        metadata: &Metadata,
+        schema: &TableSchema,
+        columns: impl Iterator<Item = &'a IndexType>,
+        has_inner_column: bool,
+        ignore_internal_column: bool,
+        add_virtual_source_column: bool,
+        ignore_lazy_column: bool,
+    ) -> Projection {
+        if !has_inner_column {
+            let mut col_indices = Vec::new();
+            let mut virtual_col_indices = HashSet::new();
+            for index in columns {
+                if ignore_lazy_column && metadata.is_lazy_column(*index) {
+                    continue;
+                }
+                let name = match metadata.column(*index) {
+                    ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                        column_name
+                    }
+                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                    ColumnEntry::InternalColumn(TableInternalColumn {
+                        internal_column, ..
+                    }) => {
+                        if ignore_internal_column {
+                            continue;
+                        }
+                        internal_column.column_name()
+                    }
+                    ColumnEntry::VirtualColumn(VirtualColumn {
+                        source_column_name, ..
+                    }) => {
+                        if add_virtual_source_column {
+                            virtual_col_indices
+                                .insert(schema.index_of(source_column_name).unwrap());
+                        }
+                        continue;
+                    }
+                };
+                col_indices.push(schema.index_of(name).unwrap());
+            }
+            if !virtual_col_indices.is_empty() {
+                for index in virtual_col_indices {
+                    if !col_indices.contains(&index) {
+                        col_indices.push(index);
+                    }
+                }
+            }
+            col_indices.sort();
+            Projection::Columns(col_indices)
+        } else {
+            let mut col_indices = BTreeMap::new();
+            for index in columns {
+                if ignore_lazy_column && metadata.is_lazy_column(*index) {
+                    continue;
+                }
+                let column = metadata.column(*index);
+                match column {
+                    ColumnEntry::BaseTableColumn(BaseTableColumn {
+                        column_name,
+                        path_indices,
+                        ..
+                    }) => match path_indices {
+                        Some(path_indices) => {
+                            col_indices.insert(column.index(), path_indices.to_vec());
+                        }
+                        None => {
+                            let idx = schema.index_of(column_name).unwrap();
+                            col_indices.insert(column.index(), vec![idx]);
+                        }
+                    },
+                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => {
+                        let idx = schema.index_of(alias).unwrap();
+                        col_indices.insert(column.index(), vec![idx]);
+                    }
+                    ColumnEntry::InternalColumn(TableInternalColumn { column_index, .. }) => {
+                        if !ignore_internal_column {
+                            col_indices.insert(*column_index, vec![*column_index]);
+                        }
+                    }
+                    ColumnEntry::VirtualColumn(VirtualColumn {
+                        source_column_name, ..
+                    }) => {
+                        if add_virtual_source_column {
+                            let idx = schema.index_of(source_column_name).unwrap();
+                            col_indices.insert(idx, vec![idx]);
+                        }
+                    }
+                }
+            }
+            Projection::InnerColumns(col_indices)
+        }
+    }
+
+    fn build_limit(
+        &mut self,
+        input_plan: PhysicalPlan,
+        limit: &planner::plans::Limit,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let next_plan_id = self.next_plan_id();
+        let metadata = self.metadata.read().clone();
+        if metadata.lazy_columns().is_empty() {
+            return Ok(PhysicalPlan::Limit(Limit {
+                plan_id: next_plan_id,
+                input: Box::new(input_plan),
+                limit: limit.limit,
+                offset: limit.offset,
+                stat_info: Some(stat_info),
+            }));
+        }
+
+        // If `lazy_columns` is not empty, build a `RowFetch` plan on top of the `Limit` plan.
+
+        let input_schema = input_plan.output_schema()?;
+
+        // Lazy materialization is enabled.
+        let row_id_col_index = metadata
+            .columns()
+            .iter()
+            .position(|col| col.name() == ROW_ID_COL_NAME)
+            .ok_or_else(|| ErrorCode::Internal("Internal column _row_id is not found"))?;
+        let row_id_col_offset = input_schema.index_of(&row_id_col_index.to_string())?;
+
+        // There may be more than one `LIMIT` plan, we don't need to fetch the same columns multiple times.
+        // See the case in tests/sqllogictests/suites/crdb/limit:
+        // SELECT * FROM (SELECT * FROM t_47283 ORDER BY k LIMIT 4) WHERE a > 5 LIMIT 1
+        let lazy_columns = metadata
+            .lazy_columns()
+            .iter()
+            .sorted() // Needs sort because we need to make the order deterministic.
+            .filter(|index| !input_schema.has_field(&index.to_string())) // If the column is already in the input schema, we don't need to fetch it.
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if lazy_columns.is_empty() {
+            // If there is no lazy column, we don't need to build a `RowFetch` plan.
+            return Ok(PhysicalPlan::Limit(Limit {
+                plan_id: next_plan_id,
+                input: Box::new(input_plan),
+                limit: limit.limit,
+                offset: limit.offset,
+                stat_info: Some(stat_info),
+            }));
+        }
+
+        let mut has_inner_column = false;
+        let fetched_fields = lazy_columns
+            .iter()
+            .map(|index| {
+                let col = metadata.column(*index);
+                if let ColumnEntry::BaseTableColumn(c) = col {
+                    if c.path_indices.is_some() {
+                        has_inner_column = true;
+                    }
+                }
+                DataField::new(&index.to_string(), col.data_type())
+            })
+            .collect();
+
+        let source = input_plan.try_find_single_data_source();
+        debug_assert!(source.is_some());
+        let source_info = source.cloned().unwrap();
+        let table_schema = source_info.source_info.schema();
+        let cols_to_fetch = Self::build_projection(
+            &metadata,
+            &table_schema,
+            lazy_columns.iter(),
+            has_inner_column,
+            true,
+            true,
+            false,
+        );
+
+        Ok(PhysicalPlan::RowFetch(RowFetch {
+            plan_id: self.next_plan_id(),
+            input: Box::new(PhysicalPlan::Limit(Limit {
+                plan_id: next_plan_id,
+                input: Box::new(input_plan),
+                limit: limit.limit,
+                offset: limit.offset,
+                stat_info: Some(stat_info.clone()),
+            })),
+            source: Box::new(source_info),
+            row_id_col_offset,
+            cols_to_fetch,
+            fetched_fields,
+            stat_info: Some(stat_info),
+        }))
+    }
+
+    #[async_backtrace::framed]
+    async fn build_scan(
+        &mut self,
+        scan: &Scan,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        // add virtual columns to scan
+        let mut virtual_columns = ColumnSet::new();
+        for column in self
+            .metadata
+            .read()
+            .virtual_columns_by_table_index(scan.table_index)
+            .iter()
+        {
+            match column {
+                ColumnEntry::VirtualColumn(virtual_column) => {
+                    virtual_columns.insert(virtual_column.column_index);
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        // Some table may not have any column,
+        // e.g. `system.sync_crash_me`
+        let scan = if scan.columns.is_empty() && virtual_columns.is_empty() {
+            scan.clone()
+        } else {
+            let columns = scan.columns.union(&virtual_columns).cloned().collect();
+            let mut prewhere = scan.prewhere.clone();
+            let mut used: ColumnSet = required.intersection(&columns).cloned().collect();
+            if let Some(ref mut pw) = prewhere {
+                debug_assert!(
+                    pw.prewhere_columns.is_subset(&columns),
+                    "prewhere columns should be a subset of scan columns"
+                );
+                pw.output_columns = used.clone();
+                // `prune_columns` is after `prewhere_optimize`,
+                // so we need to add prewhere columns to scan columns.
+                used = used.union(&pw.prewhere_columns).cloned().collect();
+            }
+            scan.prune_columns(used, prewhere)
+        };
+
+        let mut has_inner_column = false;
+        let mut has_virtual_column = false;
+        let mut name_mapping = BTreeMap::new();
+        let mut project_internal_columns = BTreeMap::new();
+        let metadata = self.metadata.read().clone();
+
+        for index in scan.columns.iter() {
+            if metadata.is_lazy_column(*index) {
+                continue;
+            }
+            let column = metadata.column(*index);
+            if let ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) = column {
+                if path_indices.is_some() {
+                    has_inner_column = true;
+                }
+            } else if let ColumnEntry::InternalColumn(TableInternalColumn {
+                internal_column, ..
+            }) = column
+            {
+                project_internal_columns.insert(*index, internal_column.to_owned());
+            } else if let ColumnEntry::VirtualColumn(_) = column {
+                has_virtual_column = true;
+            }
+
+            if let Some(prewhere) = &scan.prewhere {
+                // if there is a prewhere optimization,
+                // we can prune `PhysicalScan`'s output schema.
+                if prewhere.output_columns.contains(index) {
+                    name_mapping.insert(column.name().to_string(), *index);
+                }
+            } else {
+                name_mapping.insert(column.name().to_string(), *index);
+            }
+        }
+
+        if !metadata.lazy_columns().is_empty() {
+            // Lazy materialization is enabled.
+            if let Entry::Vacant(entry) = name_mapping.entry(ROW_ID_COL_NAME.to_string()) {
+                let internal_column = INTERNAL_COLUMN_FACTORY
+                    .get_internal_column(ROW_ID_COL_NAME)
+                    .unwrap();
+                let index = self
+                    .metadata
+                    .read()
+                    .row_id_index_by_table_index(scan.table_index);
+                debug_assert!(index.is_some());
+                // Safe to unwrap: if lazy_columns is not empty, the `analyze_lazy_materialization` have been called
+                // and the row_id index of the table_index has been generated.
+                let index = index.unwrap();
+                entry.insert(index);
+                project_internal_columns.insert(index, internal_column);
+            }
+        }
+
+        let table_entry = metadata.table(scan.table_index);
+        let table = table_entry.table();
+
+        if !table.result_can_be_cached() {
+            self.ctx.set_cacheable(false);
+        }
+
+        let mut table_schema = table.schema();
+        if !project_internal_columns.is_empty() {
+            let mut schema = table_schema.as_ref().clone();
+            for internal_column in project_internal_columns.values() {
+                schema.add_internal_field(
+                    internal_column.column_name(),
+                    internal_column.table_data_type(),
+                    internal_column.column_id(),
+                );
+            }
+            table_schema = Arc::new(schema);
+        }
+
+        let push_downs =
+            self.push_downs(&scan, &table_schema, has_inner_column, has_virtual_column)?;
+
+        let mut source = table
+            .read_plan_with_catalog(
+                self.ctx.clone(),
+                table_entry.catalog().to_string(),
+                Some(push_downs),
+                if project_internal_columns.is_empty() {
+                    None
+                } else {
+                    Some(project_internal_columns.clone())
+                },
+                self.dry_run,
+            )
+            .await?;
+
+        if let Some(agg_index) = &scan.agg_index {
+            let source_schema = source.schema();
+            let push_down = source.push_downs.as_mut().unwrap();
+            let output_fields = TableScan::output_fields(source_schema, &name_mapping)?;
+            let agg_index = Self::build_agg_index(agg_index, &output_fields)?;
+            push_down.agg_index = Some(agg_index);
+        }
+        let internal_column = if project_internal_columns.is_empty() {
+            None
+        } else {
+            Some(project_internal_columns)
+        };
+        Ok(PhysicalPlan::TableScan(TableScan {
+            plan_id: self.next_plan_id(),
+            name_mapping,
+            source: Box::new(source),
+            table_index: scan.table_index,
+            stat_info: Some(stat_info),
+            internal_column,
+        }))
+    }
+
+    fn build_agg_index(
+        agg: &planner::plans::AggIndexInfo,
+        source_fields: &[DataField],
+    ) -> Result<AggIndexInfo> {
+        // Build projection
+        let used_columns = agg.used_columns();
+        let mut col_indices = Vec::with_capacity(used_columns.len());
+        for index in used_columns.iter().sorted() {
+            col_indices.push(agg.schema.index_of(&index.to_string())?);
+        }
+        let projection = Projection::Columns(col_indices);
+        let output_schema = projection.project_schema(&agg.schema);
+
+        let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "and".to_string(),
+                params: vec![],
+                arguments: vec![lhs, rhs],
+            })
+        });
+        let filter = predicate
+            .map(|pred| -> Result<_> {
+                Ok(
+                    cast_expr_to_non_null_boolean(pred.as_expr()?.project_column_ref(|col| {
+                        output_schema.index_of(&col.index.to_string()).unwrap()
+                    }))?
+                    .as_remote_expr(),
+                )
+            })
+            .transpose()?;
+        let selection = agg
+            .selection
+            .iter()
+            .map(|sel| {
+                let offset = source_fields
+                    .iter()
+                    .position(|f| sel.index.to_string() == f.name().as_str());
+                Ok((
+                    sel.scalar
+                        .as_expr()?
+                        .project_column_ref(|col| {
+                            output_schema.index_of(&col.index.to_string()).unwrap()
+                        })
+                        .as_remote_expr(),
+                    offset,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(AggIndexInfo {
+            index_id: agg.index_id,
+            filter,
+            selection,
+            schema: agg.schema.clone(),
+            actual_table_field_len: source_fields.len(),
+            is_agg: agg.is_agg,
+            projection,
+            agg_functions_len: agg.agg_functions_len,
+        })
     }
 
     fn push_downs(

@@ -31,11 +31,9 @@ use crate::optimizer::MAX_SELECTIVITY;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
-use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Filter {
-    pub projections: Vec<IndexType>,
     pub predicates: Vec<ScalarExpr>,
     // True if the plan represents having, else the plan represents where
     pub is_having: bool,
@@ -48,12 +46,6 @@ impl Filter {
             .iter()
             .map(|scalar| scalar.used_columns())
             .fold(ColumnSet::new(), |acc, x| acc.union(&x).cloned().collect()))
-    }
-
-    #[inline]
-    pub fn replace_projections(mut self, projections: Vec<IndexType>) -> Self {
-        self.projections = projections;
-        self
     }
 }
 

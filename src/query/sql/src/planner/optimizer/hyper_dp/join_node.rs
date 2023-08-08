@@ -80,8 +80,6 @@ impl JoinNode {
             .map(|(_, r)| r.clone())
             .collect();
         let rel_op = RelOperator::Join(Join {
-            pre_projections: vec![],
-            projections: vec![],
             left_conditions,
             right_conditions,
             non_equi_conditions: vec![],

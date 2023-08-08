@@ -213,7 +213,9 @@ impl Interpreter for RefreshIndexInterpreter {
                 let mut builder =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 (
-                    builder.build(s_expr.as_ref()).await?,
+                    builder
+                        .build(s_expr.as_ref(), bind_context.column_set())
+                        .await?,
                     schema,
                     bind_context.columns.clone(),
                 )

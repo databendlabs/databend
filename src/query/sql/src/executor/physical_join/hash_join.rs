@@ -31,6 +31,7 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::IndexType;
 use crate::TypeCheck;
 
 impl PhysicalPlanBuilder {
@@ -38,10 +39,13 @@ impl PhysicalPlanBuilder {
         &mut self,
         join: &Join,
         s_expr: &SExpr,
+        required: (ColumnSet, ColumnSet),
+        pre_column_projections: Vec<IndexType>,
+        column_projections: Vec<IndexType>,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        let mut probe_side = Box::new(self.build(s_expr.child(0)?).await?);
-        let mut build_side = Box::new(self.build(s_expr.child(1)?).await?);
+        let mut probe_side = Box::new(self.build(s_expr.child(0)?, required.0).await?);
+        let mut build_side = Box::new(self.build(s_expr.child(1)?, required.1).await?);
 
         // Unify the data types of the left and right exchange keys.
         if let (
@@ -177,7 +181,7 @@ impl PhysicalPlanBuilder {
 
         let mut probe_projections = ColumnSet::new();
         let mut build_projections = ColumnSet::new();
-        for column in join.pre_projections.iter() {
+        for column in pre_column_projections {
             if let Ok(index) = probe_schema.index_of(&column.to_string()) {
                 probe_projections.insert(index);
             }
@@ -253,7 +257,7 @@ impl PhysicalPlanBuilder {
         };
         let mut projections = ColumnSet::new();
         let projected_schema = DataSchemaRefExt::create(merged_fields);
-        for column in join.projections.iter() {
+        for column in column_projections {
             if let Ok(index) = projected_schema.index_of(&column.to_string()) {
                 projections.insert(index);
             }

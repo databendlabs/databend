@@ -418,7 +418,6 @@ impl Binder {
         scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = Filter {
-            projections: vec![],
             predicates: split_conjunctions(&scalar),
             is_having: false,
         };
@@ -754,7 +753,6 @@ impl Binder {
             left_expr = SExpr::create_unary(
                 Arc::new(
                     EvalScalar {
-                        projections: vec![],
                         items: left_scalar_items,
                     }
                     .into(),
@@ -766,7 +764,6 @@ impl Binder {
             right_expr = SExpr::create_unary(
                 Arc::new(
                     EvalScalar {
-                        projections: vec![],
                         items: right_scalar_items,
                     }
                     .into(),

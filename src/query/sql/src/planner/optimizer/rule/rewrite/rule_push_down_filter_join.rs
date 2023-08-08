@@ -187,7 +187,6 @@ pub fn try_push_down_filter_join(
         result = SExpr::create_unary(
             Arc::new(
                 Filter {
-                    projections: vec![],
                     predicates: original_predicates,
                     is_having: false,
                 }

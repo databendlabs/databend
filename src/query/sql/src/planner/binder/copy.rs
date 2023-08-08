@@ -56,7 +56,6 @@ use parking_lot::RwLock;
 use crate::binder::location::parse_uri_location;
 use crate::binder::select::MaxColumnPosition;
 use crate::binder::Binder;
-use crate::optimizer::UnusedColumnPruner;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::CopyPlan;
@@ -700,8 +699,6 @@ impl<'a> Binder {
             self.analyze_projection(&from_context.aggregate_info, &select_list)?;
         let s_expr =
             self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
-        let mut pruner = UnusedColumnPruner::new(self.metadata.clone(), false);
-        let s_expr = pruner.remove_unused_columns(&s_expr, from_context.column_set())?;
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;

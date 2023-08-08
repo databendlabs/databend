@@ -126,7 +126,6 @@ impl Binder {
         outer_columns.extend(subquery_expr.outer_columns.iter());
 
         let filter = Filter {
-            projections: vec![],
             predicates: vec![scalar.clone()],
             is_having: false,
         };

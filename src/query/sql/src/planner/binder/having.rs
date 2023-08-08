@@ -76,7 +76,6 @@ impl Binder {
         let predicates = split_conjunctions(&scalar);
 
         let filter = Filter {
-            projections: vec![],
             predicates,
             is_having: true,
         };

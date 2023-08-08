@@ -177,6 +177,9 @@ impl Operator for Aggregate {
     }
 
     fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        if self.mode == AggregateMode::Partial {
+            return rel_expr.derive_cardinality_child(0);
+        }
         let stat_info = rel_expr.derive_cardinality_child(0)?;
         let (cardinality, mut statistics) = (stat_info.cardinality, stat_info.statistics.clone());
         let cardinality = if self.group_items.is_empty() {
