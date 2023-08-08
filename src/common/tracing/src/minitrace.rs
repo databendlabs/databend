@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::fmt;
+use std::io;
 use std::io::Write;
 use std::time::SystemTime;
 
@@ -108,13 +109,13 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
 
     // File logger
     if cfg.file.on {
-        let (normal_log_file, flush_guard) =
-            tracing_appender::non_blocking(RollingFileAppender::new(
-                Rotation::HOURLY,
-                &cfg.file.dir,
-                format!("databend-query-{name}"),
-            ));
-        guards.push(Box::new(flush_guard));
+        let rolling = RollingFileAppender::new(
+            Rotation::HOURLY,
+            &cfg.file.dir,
+            format!("databend-query-{name}"),
+        );
+
+        let normal_log_file = io::BufWriter::with_capacity(64 * 1024 * 1024, rolling);
 
         normal_logger = normal_logger.chain(
             fern::Dispatch::new()
@@ -141,10 +142,8 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
 
     // Query logger
     if cfg.query.on {
-        let (query_log_file, flush_guard) = tracing_appender::non_blocking(
-            RollingFileAppender::new(Rotation::HOURLY, &cfg.query.dir, name),
-        );
-        guards.push(Box::new(flush_guard));
+        let rolling = RollingFileAppender::new(Rotation::HOURLY, &cfg.file.dir, name);
+        let query_log_file = io::BufWriter::with_capacity(64 * 1024 * 1024, rolling);
 
         query_logger = query_logger.chain(Box::new(query_log_file) as Box<dyn Write + Send>);
     }
