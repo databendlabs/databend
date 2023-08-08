@@ -549,7 +549,7 @@ dependencies = [
  "hash_hasher",
  "hashbrown 0.13.2",
  "indexmap 1.9.2",
- "itertools",
+ "itertools 0.10.5",
  "json-deserializer",
  "lexical-core",
  "lz4",
@@ -586,7 +586,7 @@ dependencies = [
  "async-backtrace-attributes",
  "dashmap",
  "futures",
- "itertools",
+ "itertools 0.10.5",
  "loom",
  "once_cell",
  "pin-project-lite",
@@ -1643,7 +1643,7 @@ name = "codegen"
 version = "0.1.0"
 dependencies = [
  "common-expression",
- "itertools",
+ "itertools 0.10.5",
 ]
 
 [[package]]
@@ -1732,7 +1732,7 @@ dependencies = [
  "ethnum",
  "fast-float",
  "goldenfile",
- "itertools",
+ "itertools 0.10.5",
  "logos",
  "nom",
  "nom-rule",
@@ -1951,7 +1951,7 @@ dependencies = [
  "futures",
  "goldenfile",
  "hex",
- "itertools",
+ "itertools 0.10.5",
  "jsonb",
  "lexical-core",
  "log",
@@ -2026,7 +2026,7 @@ dependencies = [
  "goldenfile",
  "h3o",
  "hex",
- "itertools",
+ "itertools 0.10.5",
  "jsonb",
  "lexical-core",
  "libm",
@@ -2311,6 +2311,7 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "hostname",
+ "itertools",
  "lazy_static",
  "log",
  "maplit",
@@ -2324,6 +2325,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "test-harness",
+ "thiserror",
  "tokio",
 ]
 
@@ -2397,6 +2399,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "tokio",
  "tonic 0.9.2",
  "tonic-build",
 ]
@@ -2559,7 +2562,7 @@ dependencies = [
  "common-meta-types",
  "common-users",
  "dashmap",
- "itertools",
+ "itertools 0.10.5",
  "log",
  "num_cpus",
  "once_cell",
@@ -2632,7 +2635,7 @@ dependencies = [
  "educe",
  "enum-as-inner",
  "globiter",
- "itertools",
+ "itertools 0.10.5",
  "log",
  "num-derive",
  "num-traits",
@@ -2723,7 +2726,7 @@ dependencies = [
  "common-storage",
  "futures",
  "futures-util",
- "itertools",
+ "itertools 0.10.5",
  "jsonb",
  "log",
  "metrics",
@@ -3010,7 +3013,7 @@ dependencies = [
  "common-storages-result-cache",
  "common-storages-view",
  "common-users",
- "itertools",
+ "itertools 0.10.5",
  "jsonb",
  "log",
  "once_cell",
@@ -3272,7 +3275,7 @@ dependencies = [
  "ciborium",
  "clap 3.2.23",
  "criterion-plot",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "num-traits",
  "oorandom",
@@ -3293,7 +3296,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
 dependencies = [
  "cast",
- "itertools",
+ "itertools 0.10.5",
 ]
 
 [[package]]
@@ -3626,6 +3629,7 @@ dependencies = [
  "anyhow",
  "async-backtrace",
  "background-service",
+ "chrono",
  "clap 3.2.23",
  "comfy-table 6.1.4",
  "common-base",
@@ -3640,7 +3644,6 @@ dependencies = [
  "common-meta-kvapi",
  "common-meta-raft-store",
  "common-meta-sled-store",
- "common-meta-stoerr",
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
@@ -3692,7 +3695,7 @@ dependencies = [
  "derive_more",
  "env_logger",
  "futures",
- "itertools",
+ "itertools 0.10.5",
  "log",
  "logcall",
  "maplit",
@@ -3801,7 +3804,7 @@ dependencies = [
  "hex",
  "http",
  "humantime",
- "itertools",
+ "itertools 0.10.5",
  "jsonb",
  "jwt-simple",
  "log",
@@ -3829,6 +3832,8 @@ dependencies = [
  "regex",
  "reqwest",
  "rmp-serde",
+ "rustls 0.21.0",
+ "rustls-pemfile",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -4081,9 +4086,9 @@ dependencies = [
 
 [[package]]
 name = "educe"
-version = "0.4.20"
+version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb0188e3c3ba8df5753894d54461f0e39bc91741dc5b22e1c46999ec2c71f4e4"
+checksum = "079044df30bb07de7d846d41a184c4b00e66ebdac93ee459253474f3a47e50ae"
 dependencies = [
  "enum-ordinalize",
  "proc-macro2",
@@ -5728,7 +5733,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0757cd38a6dc71ff622f52309d213d1b3a39297f49db6aaf6a820f9487c7cb34"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
 ]
 
 [[package]]
@@ -6407,6 +6412,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6879,6 +6893,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "macros"
+version = "0.8.4"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.8#3fc8ede609beb787aee8199b06a40ac9742aa116"
+
+[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7220,6 +7239,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "mysql-common-derive"
+version = "0.30.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56b0d8a0db9bf6d2213e11f2c701cb91387b0614361625ab7b9743b41aa4938f"
+dependencies = [
+ "darling",
+ "heck 0.4.1",
+ "num-bigint",
+ "proc-macro-crate 1.3.1",
+ "proc-macro-error 1.0.4",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.27",
+ "termcolor",
+ "thiserror",
+]
+
+[[package]]
 name = "mysql_async"
 version = "0.31.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7234,7 +7271,7 @@ dependencies = [
  "lazy_static",
  "lru",
  "mio",
- "mysql_common",
+ "mysql_common 0.29.2",
  "once_cell",
  "pem",
  "percent-encoding",
@@ -7262,9 +7299,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9006c95034ccf7b903d955f210469119f6c3477fc9c9e7a7845ce38a3e665c2a"
 dependencies = [
  "base64 0.13.1",
- "bigdecimal",
  "bindgen 0.59.2",
  "bitflags 1.3.2",
+ "bitvec",
+ "byteorder",
+ "bytes",
+ "cc",
+ "cmake",
+ "crc32fast",
+ "flate2",
+ "lazy_static",
+ "lexical",
+ "num-bigint",
+ "num-traits",
+ "rand 0.8.5",
+ "regex",
+ "saturating",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "smallvec",
+ "subprocess",
+ "thiserror",
+]
+
+[[package]]
+name = "mysql_common"
+version = "0.30.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57349d5a326b437989b6ee4dc8f2f34b0cc131202748414712a8e7d98952fc8c"
+dependencies = [
+ "base64 0.21.0",
+ "bigdecimal",
+ "bindgen 0.59.2",
+ "bitflags 2.3.1",
  "bitvec",
  "byteorder",
  "bytes",
@@ -7276,6 +7345,7 @@ dependencies = [
  "frunk",
  "lazy_static",
  "lexical",
+ "mysql-common-derive",
  "num-bigint",
  "num-traits",
  "rand 0.8.5",
@@ -7604,7 +7674,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.8.4"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.3#5da9594d3658e5d1637d8e0a896f6724fdc918f9"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.8#3fc8ede609beb787aee8199b06a40ac9742aa116"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -7613,6 +7683,7 @@ dependencies = [
  "clap 4.2.7",
  "derive_more",
  "futures",
+ "macros",
  "maplit",
  "openraft 0.7.5",
  "pin-utils",
@@ -7628,17 +7699,17 @@ dependencies = [
 
 [[package]]
 name = "opensrv-mysql"
-version = "0.3.0"
-source = "git+https://github.com/datafuselabs/opensrv?rev=5e37788#5e37788525b76bb5932b4febc59f3fdc2d15f692"
+version = "0.4.0"
+source = "git+https://github.com/datafuselabs/opensrv?rev=bcfcf8e#bcfcf8e956a033f19c3a99fd7a88eebea385e550"
 dependencies = [
  "async-trait",
  "byteorder",
  "chrono",
- "mysql_common",
+ "mysql_common 0.30.6",
  "nom",
  "pin-project-lite",
  "tokio",
- "tokio-rustls 0.23.4",
+ "tokio-rustls 0.24.0",
 ]
 
 [[package]]
@@ -8306,7 +8377,7 @@ checksum = "59230a63c37f3e18569bdb90e4a89cbf5bf8b06fea0b84e65ea10cc4df47addd"
 dependencies = [
  "difflib",
  "float-cmp",
- "itertools",
+ "itertools 0.10.5",
  "normalize-line-endings",
  "predicates-core",
  "regex",
@@ -8507,7 +8578,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef7a8ed15bcffc55fe0328931ef20d393bb89ad704756a37bd20cffb4804f306"
 dependencies = [
  "chrono",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "regex",
 ]
@@ -8530,7 +8601,7 @@ checksum = "119533552c9a7ffacc21e099c24a0ac8bb19c2a2a3f363de84cd9b844feab270"
 dependencies = [
  "bytes",
  "heck 0.4.1",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "log",
  "multimap",
@@ -8551,7 +8622,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5d2d8d10f3c6ded6da8b05b5fb3b8a5082514344d56c9f871412d29b4e075b4"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -8632,7 +8703,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset 0.9.0",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "pyo3-build-config 0.19.1",
  "pyo3-ffi",
  "pyo3-macros",
@@ -10073,9 +10144,9 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.13.0"
+version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fae9a103dcc09a7c21f11ef5971fc85b536900793f2a86d94183af2b0c26d23e"
+checksum = "2883a176844bd22f2ded429ec6a1e16f3522f770475bf47e3494dcf22a50abd6"
 dependencies = [
  "async-trait",
  "educe",
@@ -10083,7 +10154,7 @@ dependencies = [
  "futures",
  "glob",
  "humantime",
- "itertools",
+ "itertools 0.11.0",
  "libtest-mimic",
  "md-5",
  "owo-colors",
@@ -11187,7 +11258,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

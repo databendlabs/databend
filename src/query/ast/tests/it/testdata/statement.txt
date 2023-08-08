@@ -7306,9 +7306,56 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t ADD COLUMN a float default 101 COMMENT 'hello';
+ALTER TABLE t ADD COLUMN c int null;
 ---------- Output ---------
-ALTER TABLE t ADD COLUMN a Float32 NOT NULL DEFAULT 101 COMMENT 'hello'
+ALTER TABLE t ADD COLUMN c Int32 NULL
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: AddColumn {
+            column: ColumnDefinition {
+                name: Identifier {
+                    name: "c",
+                    quote: None,
+                    span: Some(
+                        25..26,
+                    ),
+                },
+                data_type: Nullable(
+                    Int32,
+                ),
+                expr: None,
+                comment: None,
+            },
+            option: End,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t ADD COLUMN a float default 1.1 COMMENT 'hello' FIRST;
+---------- Output ---------
+ALTER TABLE t ADD COLUMN a Float32 NOT NULL DEFAULT 1.1 COMMENT 'hello' FIRST
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -7347,9 +7394,11 @@ AlterTable(
                             span: Some(
                                 41..44,
                             ),
-                            lit: UInt64(
-                                101,
-                            ),
+                            lit: Decimal256 {
+                                value: 11,
+                                precision: 76,
+                                scale: 1,
+                            },
                         },
                     ),
                 ),
@@ -7357,6 +7406,71 @@ AlterTable(
                     "hello",
                 ),
             },
+            option: First,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t ADD COLUMN b string default 'b' AFTER a;
+---------- Output ---------
+ALTER TABLE t ADD COLUMN b STRING NOT NULL DEFAULT 'b' AFTER a
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: AddColumn {
+            column: ColumnDefinition {
+                name: Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Some(
+                        25..26,
+                    ),
+                },
+                data_type: String,
+                expr: Some(
+                    Default(
+                        Literal {
+                            span: Some(
+                                42..45,
+                            ),
+                            lit: String(
+                                "b",
+                            ),
+                        },
+                    ),
+                ),
+                comment: None,
+            },
+            option: After(
+                Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Some(
+                        52..53,
+                    ),
+                },
+            ),
         },
     },
 )
@@ -12013,6 +12127,53 @@ Query(
                         expr: Literal {
                             span: Some(
                                 63..68,
+                            ),
+                            lit: UInt64(
+                                34343,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+-- 96477300355	31379974136	3.074486292973661
+select 34343
+---------- Output ---------
+SELECT 34343
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            45..57,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    45..57,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                52..57,
                             ),
                             lit: UInt64(
                                 34343,

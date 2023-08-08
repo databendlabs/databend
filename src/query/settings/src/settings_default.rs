@@ -358,6 +358,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("replace_into_bloom_pruning_max_column_number", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(2),
+                    desc: "Max number of columns used by bloom pruning for replace-into statement.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -428,24 +434,34 @@ impl DefaultSettings {
 
         match default_settings.settings.get(&k) {
             None => Ok((k, None)),
-            Some(setting_value) => match setting_value.value {
-                UserSettingValue::UInt64(_) => {
-                    // decimal 10 * 1.5 to string may result in string like "15.0"
-                    let val = if let Some(p) = v.find('.') {
-                        if v[(p + 1)..].chars().all(|x| x == '0') {
-                            &v[..p]
-                        } else {
-                            return Err(ErrorCode::BadArguments("not a integer"));
-                        }
-                    } else {
-                        &v[..]
-                    };
-
-                    let u64_val = val.parse::<u64>()?;
-                    Ok((k, Some(UserSettingValue::UInt64(u64_val))))
+            Some(setting_value) => {
+                if let Some(possible_values) = &setting_value.possible_values {
+                    if !possible_values.iter().any(|x| x.eq_ignore_ascii_case(&v)) {
+                        return Err(ErrorCode::WrongValueForVariable(format!(
+                            "Invalid setting value: {:?} for variable {:?}, possible values: {:?}",
+                            v, k, possible_values
+                        )));
+                    }
                 }
-                UserSettingValue::String(_) => Ok((k, Some(UserSettingValue::String(v)))),
-            },
+                match setting_value.value {
+                    UserSettingValue::UInt64(_) => {
+                        // decimal 10 * 1.5 to string may result in string like "15.0"
+                        let val = if let Some(p) = v.find('.') {
+                            if v[(p + 1)..].chars().all(|x| x == '0') {
+                                &v[..p]
+                            } else {
+                                return Err(ErrorCode::BadArguments("not a integer"));
+                            }
+                        } else {
+                            &v[..]
+                        };
+
+                        let u64_val = val.parse::<u64>()?;
+                        Ok((k, Some(UserSettingValue::UInt64(u64_val))))
+                    }
+                    UserSettingValue::String(_) => Ok((k, Some(UserSettingValue::String(v)))),
+                }
+            }
         }
     }
 

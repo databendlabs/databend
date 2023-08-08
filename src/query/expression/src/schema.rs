@@ -306,7 +306,7 @@ impl TableSchema {
         if next_column_id > 0 {
             // make sure that field column id has been inited.
             if fields.len() > 1 {
-                assert!(fields[1].column_id() > 0);
+                assert!(fields[1].column_id() > 0 || fields[0].column_id() > 0);
             }
             return (next_column_id, fields);
         }
@@ -396,6 +396,18 @@ impl TableSchema {
         Ok(())
     }
 
+    pub fn add_column(&mut self, field: &TableField, index: usize) -> Result<()> {
+        if self.index_of(field.name()).is_ok() {
+            return Err(ErrorCode::AddColumnExistError(format!(
+                "add column {} already exist",
+                field.name(),
+            )));
+        }
+        let field = field.build_column_id(&mut self.next_column_id);
+        self.fields.insert(index, field);
+        Ok(())
+    }
+
     // Every internal column has constant column id, no need to generate column id of internal columns.
     pub fn add_internal_field(
         &mut self,
@@ -411,7 +423,7 @@ impl TableSchema {
         self.fields.retain(|f| !is_internal_column_id(f.column_id));
     }
 
-    pub fn drop_column(&mut self, column: &str) -> Result<()> {
+    pub fn drop_column(&mut self, column: &str) -> Result<FieldIndex> {
         if self.fields.len() == 1 {
             return Err(ErrorCode::DropColumnEmptyError(
                 "cannot drop table column to empty",
@@ -420,7 +432,7 @@ impl TableSchema {
         let i = self.index_of(column)?;
         self.fields.remove(i);
 
-        Ok(())
+        Ok(i)
     }
 
     pub fn to_leaf_column_id_set(&self) -> HashSet<ColumnId> {
