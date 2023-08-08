@@ -23,8 +23,10 @@ use crate::sessions::SessionManager;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct InstanceStatus {
-    // the active sessions count
+    // the running sessions count
     pub running_queries_count: u64,
+    // the active sessions count
+    pub active_sessions_count: u64,
     // the timestamp on last query started
     pub last_query_started_at: Option<u64>,
     // the timestamp on last query finished
@@ -44,6 +46,7 @@ pub async fn instance_status_handler() -> poem::Result<impl IntoResponse> {
     let status = session_manager.get_current_session_status();
     let status = InstanceStatus {
         running_queries_count: status.running_queries_count,
+        active_sessions_count: status.active_sessions_count,
         last_query_started_at: status.last_query_started_at.map(unix_timestamp_secs),
         last_query_finished_at: status.last_query_finished_at.map(unix_timestamp_secs),
         instance_started_at: unix_timestamp_secs(status.instance_started_at),
