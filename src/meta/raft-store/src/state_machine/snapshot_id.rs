@@ -13,12 +13,14 @@
 // limitations under the License.
 
 use std::str::FromStr;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
-use common_meta_stoerr::MetaStorageError;
+use common_meta_types::new_log_id;
 use common_meta_types::LogId;
 
 /// Structured snapshot id used by meta service
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MetaSnapshotId {
     /// The last log id upto which a snapshot includes(inclusive).
     pub last_applied: Option<LogId>,
@@ -30,46 +32,63 @@ pub struct MetaSnapshotId {
 }
 
 impl MetaSnapshotId {
-    pub(crate) fn new(last_applied: Option<LogId>, uniq: u64) -> Self {
+    pub fn new(last_applied: Option<LogId>, uniq: u64) -> Self {
         Self { last_applied, uniq }
+    }
+
+    /// Create a new snapshot id with current time as `uniq` index.
+    pub fn new_with_epoch(last_applied: Option<LogId>) -> Self {
+        let uniq = Self::epoch_millis();
+        Self { last_applied, uniq }
+    }
+
+    fn epoch_millis() -> u64 {
+        let milli = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+
+        let milli: u64 = milli.try_into().unwrap();
+        milli
     }
 }
 
 impl FromStr for MetaSnapshotId {
-    type Err = MetaStorageError;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // TODO:
-        let _ = s;
-        unimplemented!("do not need to parse snapshot id");
+        let invalid = || format!("invalid snapshot_id: {}", s);
 
-        // let invalid = || {
-        //     MetaStorageError::SnapshotError(AnyError::error(format!("invalid snapshot_id: {}", s)))
-        // };
-        // let mut segs = s.split('-');
-        //
-        // let term = segs.next().ok_or_else(invalid)?;
-        // let log_index = segs.next().ok_or_else(invalid)?;
-        // let snapshot_index = segs.next().ok_or_else(invalid)?;
-        //
-        // let log_id = if term.is_empty() {
-        //     if log_index.is_empty() {
-        //         None
-        //     } else {
-        //         return Err(invalid());
-        //     }
-        // } else {
-        //     let t = term.parse::<u64>().map_err(|_e| invalid())?;
-        //     let i = log_index.parse::<LogIndex>().map_err(|_e| invalid())?;
-        //     Some(LogId::new(t, i))
-        // };
-        //
-        // let snapshot_index = snapshot_index.parse::<u64>().map_err(|_e| invalid())?;
-        //
-        // Ok(Self {
-        //     last_applied: log_id,
-        //     uniq: snapshot_index,
-        // })
+        let mut segs = s.split('-');
+
+        let term = segs.next().ok_or_else(invalid)?;
+        let node_id = segs.next().ok_or_else(invalid)?;
+        let log_index = segs.next().ok_or_else(invalid)?;
+        let snapshot_index = segs.next().ok_or_else(invalid)?;
+
+        if segs.next().is_some() {
+            return Err(invalid());
+        }
+
+        let log_id = if term.is_empty() {
+            if node_id.is_empty() && log_index.is_empty() {
+                None
+            } else {
+                return Err(invalid());
+            }
+        } else {
+            let t = term.parse::<u64>().map_err(|_e| invalid())?;
+            let n = node_id.parse::<u64>().map_err(|_e| invalid())?;
+            let i = log_index.parse::<u64>().map_err(|_e| invalid())?;
+            Some(new_log_id(t, n, i))
+        };
+
+        let snapshot_index = snapshot_index.parse::<u64>().map_err(|_e| invalid())?;
+
+        Ok(Self {
+            last_applied: log_id,
+            uniq: snapshot_index,
+        })
     }
 }
 
@@ -93,7 +112,7 @@ mod tests {
 
     #[test]
     fn test_meta_snapshot_id() -> anyhow::Result<()> {
-        assert_eq!("--5", MetaSnapshotId::new(None, 5).to_string());
+        assert_eq!("---5", MetaSnapshotId::new(None, 5).to_string());
         assert_eq!(
             "1-8-2-5",
             MetaSnapshotId::new(Some(new_log_id(1, 8, 2)), 5).to_string()
@@ -101,21 +120,24 @@ mod tests {
 
         assert_eq!(
             Ok(MetaSnapshotId::new(None, 5)),
-            MetaSnapshotId::from_str("--5")
+            MetaSnapshotId::from_str("---5")
         );
         assert_eq!(
             Ok(MetaSnapshotId::new(Some(new_log_id(1, 8, 2)), 5)),
-            MetaSnapshotId::from_str("1-2-5")
+            MetaSnapshotId::from_str("1-8-2-5")
         );
 
         assert!(MetaSnapshotId::from_str("").is_err());
         assert!(MetaSnapshotId::from_str("-").is_err());
         assert!(MetaSnapshotId::from_str("--").is_err());
-        assert!(MetaSnapshotId::from_str("1--0").is_err());
-        assert!(MetaSnapshotId::from_str("-1-0").is_err());
-        assert!(MetaSnapshotId::from_str("x-1-0").is_err());
-        assert!(MetaSnapshotId::from_str("1-x-0").is_err());
-        assert!(MetaSnapshotId::from_str("1-1-x").is_err());
+        assert!(MetaSnapshotId::from_str("---").is_err());
+        assert!(MetaSnapshotId::from_str("1---0").is_err());
+        assert!(MetaSnapshotId::from_str("-1--0").is_err());
+        assert!(MetaSnapshotId::from_str("--1-0").is_err());
+        assert!(MetaSnapshotId::from_str("x-1-1-0").is_err());
+        assert!(MetaSnapshotId::from_str("1-x-1-0").is_err());
+        assert!(MetaSnapshotId::from_str("1-1-x-0").is_err());
+        assert!(MetaSnapshotId::from_str("1-1-1-x").is_err());
 
         Ok(())
     }

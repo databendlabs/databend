@@ -38,7 +38,6 @@ use crate::sessions::TableContext;
 
 const DRY_RUN_LIMIT: usize = 1000;
 
-#[allow(dead_code)]
 pub struct VacuumDropTablesInterpreter {
     ctx: Arc<QueryContext>,
     plan: VacuumDropTablePlan,
