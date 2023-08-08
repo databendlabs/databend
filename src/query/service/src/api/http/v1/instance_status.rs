@@ -23,9 +23,9 @@ use crate::sessions::SessionManager;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct InstanceStatus {
-    // the running sessions count
+    // the active sessions count with running queries
     pub running_queries_count: u64,
-    // the active sessions count
+    // the active sessions count, have active connections, but may not have any query running
     pub active_sessions_count: u64,
     // the timestamp on last query started
     pub last_query_started_at: Option<u64>,
