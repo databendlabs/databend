@@ -35,9 +35,9 @@ cluster_id = "default"
 
 table_engine_memory_enabled = true
 
-# [[query.users]]
-# name = "root"
-# auth_type = "no_password"
+[[query.users]]
+name = "root"
+auth_type = "no_password"
 
 # [[query.users]]
 # name = "databend"
