@@ -120,32 +120,3 @@ async fn test_raft_state_write_read_vote() -> anyhow::Result<()> {
     assert_eq!(Some(hs), got);
     Ok(())
 }
-
-#[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
-async fn test_raft_state_write_read_state_machine_id() -> anyhow::Result<()> {
-    // - create a raft state
-    // - write state machine id and the read it.
-
-    let mut tc = new_raft_test_context();
-    let db = &tc.db;
-    tc.raft_config.id = 3;
-    let rs = RaftState::open_create(db, &tc.raft_config, None, Some(())).await?;
-
-    // read got a None
-
-    let got = rs.read_state_machine_id()?;
-    assert_eq!((0, 0), got);
-
-    // write hard state
-
-    let smid = (1, 2);
-
-    rs.write_state_machine_id(&smid).await?;
-
-    // read the written
-
-    let got = rs.read_state_machine_id()?;
-    assert_eq!((1, 2), got);
-    Ok(())
-}

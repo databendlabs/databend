@@ -19,6 +19,7 @@ use common_meta_sled_store::SledBytesError;
 use common_meta_sled_store::SledSerde;
 
 use crate::ondisk::DataVersion;
+use crate::ondisk::DATA_VERSION;
 
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
@@ -58,5 +59,14 @@ impl SledSerde for Header {
     where Self: Sized {
         let x = serde_json::from_slice(v.as_ref())?;
         Ok(x)
+    }
+}
+
+impl Header {
+    pub fn this_version() -> Self {
+        Self {
+            version: DATA_VERSION,
+            upgrading: None,
+        }
     }
 }
