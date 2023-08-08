@@ -104,8 +104,6 @@ impl Binder {
                     });
                 }
                 _ => {
-                    debug_assert!(aliases.len() == projections.len());
-
                     let mut scalar_binder = ScalarBinder::new(
                         bind_context,
                         self.ctx.clone(),
