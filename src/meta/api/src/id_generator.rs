@@ -179,7 +179,7 @@ mod t {
         {
             let g1 = IdGenerator::data_mask_id();
             let k = g1.to_string_key();
-            assert_eq!("__fd_id_gen/data_mask_id", k);
+            assert_eq!("__fd_id_gen/data_mask", k);
 
             let g2 = IdGenerator::from_str_key(&k)?;
             assert_eq!(g1, g2);

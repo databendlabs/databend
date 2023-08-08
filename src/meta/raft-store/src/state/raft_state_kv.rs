@@ -18,6 +18,7 @@ use common_meta_sled_store::sled;
 use common_meta_sled_store::SledBytesError;
 use common_meta_sled_store::SledOrderedSerde;
 use common_meta_types::anyerror::AnyError;
+use common_meta_types::LogId;
 use common_meta_types::NodeId;
 use common_meta_types::Vote;
 use serde::Deserialize;
@@ -32,12 +33,16 @@ pub enum RaftStateKey {
     /// Hard state of the raft log, including `current_term` and `voted_vor`.
     HardState,
 
+    // TODO: remove this field. It is not used any more. It is kept only for compatibility.
     /// The id of the only active state machine.
     /// When installing a state machine snapshot:
     /// 1. A temp state machine is written into a new sled::Tree.
     /// 2. Update this field to point to the new state machine.
     /// 3. Cleanup old state machine.
     StateMachineId,
+
+    /// The last committed log id
+    Committed,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,21 +53,13 @@ pub enum RaftStateValue {
 
     /// active state machine, previous state machine
     StateMachineId((u64, u64)),
+
+    Committed(Option<LogId>),
 }
 
 impl fmt::Display for RaftStateKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            RaftStateKey::Id => {
-                write!(f, "Id")
-            }
-            RaftStateKey::HardState => {
-                write!(f, "HardState")
-            }
-            RaftStateKey::StateMachineId => {
-                write!(f, "StateMachineId")
-            }
-        }
+        write!(f, "{:?}", self)
     }
 }
 
@@ -72,6 +69,7 @@ impl SledOrderedSerde for RaftStateKey {
             RaftStateKey::Id => 1,
             RaftStateKey::HardState => 2,
             RaftStateKey::StateMachineId => 3,
+            RaftStateKey::Committed => 4,
         };
 
         Ok(IVec::from(&[i]))
@@ -86,6 +84,8 @@ impl SledOrderedSerde for RaftStateKey {
             return Ok(RaftStateKey::HardState);
         } else if slice[0] == 3 {
             return Ok(RaftStateKey::StateMachineId);
+        } else if slice[0] == 4 {
+            return Ok(RaftStateKey::Committed);
         }
 
         Err(SledBytesError::new(&AnyError::error("invalid key IVec")))
@@ -119,10 +119,20 @@ impl From<RaftStateValue> for (u64, u64) {
     }
 }
 
+impl From<RaftStateValue> for Option<LogId> {
+    fn from(v: RaftStateValue) -> Self {
+        match v {
+            RaftStateValue::Committed(x) => x,
+            _ => panic!("expect Committed"),
+        }
+    }
+}
+
 pub(crate) mod compat_with_07 {
     use common_meta_sled_store::SledBytesError;
     use common_meta_sled_store::SledSerde;
     use common_meta_types::compat07;
+    use common_meta_types::compat07::LogId;
     use common_meta_types::NodeId;
     use openraft::compat::Upgrade;
 
@@ -133,6 +143,7 @@ pub(crate) mod compat_with_07 {
         NodeId(NodeId),
         HardState(compat07::Vote),
         StateMachineId((u64, u64)),
+        Committed(Option<LogId>),
     }
 
     impl Upgrade<RaftStateValue> for RaftStateValueCompat {
@@ -142,6 +153,7 @@ pub(crate) mod compat_with_07 {
                 Self::NodeId(nid)       => RaftStateValue::NodeId(nid),
                 Self::HardState(v)      => RaftStateValue::HardState(v.upgrade()),
                 Self::StateMachineId(x) => RaftStateValue::StateMachineId(x),
+                Self::Committed(x)      => RaftStateValue::Committed(x.map(|x| x.upgrade())),
             }
         }
     }
