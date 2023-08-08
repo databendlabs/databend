@@ -99,7 +99,7 @@ impl UnbranchedReplaceIntoProcessor {
 #[async_trait::async_trait]
 impl Processor for UnbranchedReplaceIntoProcessor {
     fn name(&self) -> String {
-        "ReplaceIntoTransform".to_owned()
+        "UnbranchedReplaceIntoProcessor".to_owned()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
