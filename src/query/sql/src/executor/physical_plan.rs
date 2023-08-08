@@ -83,6 +83,7 @@ impl TableScan {
                 Ok((name, id, index))
             })
             .collect::<Result<Vec<_>>>()?;
+        // Make the order of output fields the same as their indexes in te table schema.
         name_and_ids.sort_by_key(|(_, _, index)| *index);
 
         for (name, id, _) in name_and_ids {

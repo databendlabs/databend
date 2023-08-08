@@ -32,6 +32,7 @@ use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::schema::types::ColumnDescPtr;
 use parquet::schema::types::SchemaDescPtr;
+use parquet::schema::types::SchemaDescriptor;
 
 use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_reader::BlockIterator;
@@ -87,7 +88,7 @@ impl ParquetReader {
     pub fn create(
         operator: Operator,
         schema: &ArrowSchema,
-        schema_descr: &SchemaDescPtr,
+        schema_descr: &SchemaDescriptor,
         projection: Projection,
     ) -> Result<Arc<ParquetReader>> {
         let (
@@ -98,7 +99,7 @@ impl ParquetReader {
             projected_column_descriptors,
         ) = project_schema_all(schema, schema_descr, &projection)?;
 
-        let t_schema = arrow_to_table_schema(projected_arrow_schema.clone())?;
+        let t_schema = arrow_to_table_schema(&projected_arrow_schema)?;
         let output_schema = DataSchema::from(&t_schema);
 
         Ok(Arc::new(ParquetReader {
@@ -136,8 +137,11 @@ impl crate::parquet_reader::ParquetReader for ParquetReader {
         let blocks = self
             .get_deserializer(part, chunks, filter)?
             .collect::<Vec<_>>();
-        let blocks: Result<Vec<DataBlock>> = blocks.into_iter().collect();
-        DataBlock::concat(&blocks?)
+        let blocks = blocks.into_iter().collect::<Result<Vec<DataBlock>>>()?;
+        if blocks.is_empty() {
+            return Ok(DataBlock::empty_with_schema(self.output_schema.clone()));
+        }
+        DataBlock::concat(&blocks)
     }
 
     fn get_deserializer(

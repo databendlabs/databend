@@ -2790,7 +2790,6 @@ dependencies = [
 name = "common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
- "arrow-array",
  "arrow-schema",
  "async-backtrace",
  "async-trait",
@@ -2805,6 +2804,7 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-storage",
+ "common-storages-parquet",
  "futures",
  "icelake",
  "match-template",
