@@ -57,9 +57,7 @@ struct Node {
     processor: ProcessorPtr,
 
     updated_list: Arc<UpdateList>,
-    #[allow(dead_code)]
     inputs_port: Vec<Arc<InputPort>>,
-    #[allow(dead_code)]
     outputs_port: Vec<Arc<OutputPort>>,
 }
 
