@@ -1121,7 +1121,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
             PhysicalPlan::DeletePartial(_) => "DeletePartial".to_string(),
-            PhysicalPlan::MutationAggregate(_) => "DeleteFinal".to_string(),
+            PhysicalPlan::MutationAggregate(_) => "MutationAggregate".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
             PhysicalPlan::CopyIntoTable(_) => "CopyIntoTable".to_string(),
             PhysicalPlan::AsyncSourcer(_) => "AsyncSourcer".to_string(),
