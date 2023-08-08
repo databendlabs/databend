@@ -102,13 +102,11 @@ pub async fn create_query_context_with_config(
     Ok((guard, dummy_query_context))
 }
 
-#[allow(dead_code)]
 pub struct ClusterDescriptor {
     local_node_id: String,
     cluster_nodes_list: Vec<Arc<NodeInfo>>,
 }
 
-#[allow(dead_code)]
 impl ClusterDescriptor {
     pub fn new() -> ClusterDescriptor {
         ClusterDescriptor {

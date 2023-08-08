@@ -14,25 +14,29 @@
 
 //! This mod wraps openraft types that have generics parameter with concrete types.
 
-use std::io::Cursor;
+use openraft::RaftTypeConfig;
+use openraft::TokioRuntime;
 
 use crate::AppliedState;
 use crate::LogEntry;
+use crate::SnapshotData;
 
 pub type NodeId = u64;
 pub type MembershipNode = openraft::EmptyNode;
 pub type LogIndex = u64;
 pub type Term = u64;
 
-openraft::declare_raft_types!(
-    pub TypeConfig:
-        D = LogEntry,
-        R = AppliedState,
-        NodeId = NodeId,
-        Node = MembershipNode,
-        Entry = openraft::entry::Entry<TypeConfig>,
-        SnapshotData = Cursor<Vec<u8>>
-);
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd)]
+pub struct TypeConfig {}
+impl RaftTypeConfig for TypeConfig {
+    type D = LogEntry;
+    type R = AppliedState;
+    type NodeId = NodeId;
+    type Node = MembershipNode;
+    type Entry = openraft::entry::Entry<TypeConfig>;
+    type SnapshotData = SnapshotData;
+    type AsyncRuntime = TokioRuntime;
+}
 
 pub type CommittedLeaderId = openraft::CommittedLeaderId<NodeId>;
 pub type LogId = openraft::LogId<NodeId>;
@@ -45,7 +49,6 @@ pub type EntryPayload = openraft::EntryPayload<TypeConfig>;
 pub type Entry = openraft::Entry<TypeConfig>;
 
 pub type SnapshotMeta = openraft::SnapshotMeta<NodeId, MembershipNode>;
-pub type SnapshotData = Cursor<Vec<u8>>;
 pub type Snapshot = openraft::Snapshot<TypeConfig>;
 
 pub type RaftMetrics = openraft::RaftMetrics<NodeId, MembershipNode>;

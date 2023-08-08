@@ -141,19 +141,19 @@ impl Table for ParquetTable {
     }
 }
 
-fn lower_field_name(field: ArrowField) -> ArrowField {
+fn lower_field_name(field: &ArrowField) -> ArrowField {
     let name = field.name().to_lowercase();
-    let field = field.with_name(name);
+    let field = field.clone().with_name(name);
     match &field.data_type() {
         ArrowDataType::List(f) => {
-            let inner = lower_field_name(f.as_ref().clone());
+            let inner = lower_field_name(f);
             field.with_data_type(ArrowDataType::List(Arc::new(inner)))
         }
         ArrowDataType::Struct(fields) => {
             let typ = ArrowDataType::Struct(
                 fields
                     .iter()
-                    .map(|f| lower_field_name(f.as_ref().clone()))
+                    .map(|f| lower_field_name(f))
                     .collect::<Vec<_>>()
                     .into(),
             );
@@ -163,17 +163,17 @@ fn lower_field_name(field: ArrowField) -> ArrowField {
     }
 }
 
-pub(crate) fn arrow_to_table_schema(schema: ArrowSchema) -> Result<TableSchema> {
+pub(crate) fn arrow_to_table_schema(schema: &ArrowSchema) -> Result<TableSchema> {
     let fields = schema
         .fields
         .iter()
-        .map(|f| Arc::new(lower_field_name(f.as_ref().clone())))
+        .map(|f| Arc::new(lower_field_name(f)))
         .collect::<Vec<_>>();
     let schema = ArrowSchema::new_with_metadata(fields, schema.metadata().clone());
     TableSchema::try_from(&schema).map_err(ErrorCode::from_std_error)
 }
 
-pub(super) fn create_parquet_table_info(schema: ArrowSchema) -> Result<TableInfo> {
+pub(super) fn create_parquet_table_info(schema: &ArrowSchema) -> Result<TableInfo> {
     Ok(naive_parquet_table_info(
         arrow_to_table_schema(schema)?.into(),
     ))
