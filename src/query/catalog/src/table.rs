@@ -493,9 +493,6 @@ impl Parquet2TableColumnStatisticsProvider {
 
 impl ColumnStatisticsProvider for Parquet2TableColumnStatisticsProvider {
     fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics> {
-        match &self.column_stats.get(&column_id) {
-            Some(col_stats) => (*col_stats).clone(),
-            None => None,
-        }
+        self.column_stats.get(&column_id).cloned().flatten()
     }
 }
