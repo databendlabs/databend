@@ -630,7 +630,6 @@ impl Binder {
             names.push(format!("col{}", i));
         }
 
-        let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
         let mut scalar_binder = ScalarBinder::new(
             &mut bind_context,
             self.ctx.clone(),

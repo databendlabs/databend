@@ -69,3 +69,17 @@ select col0, col1 from (values(1, 'one'), (null, 'two'), (3, null))
 1 one
 NULL two
 3 NULL
+
+query IT
+select 1 from (values('a'),('b'),('c'))
+----
+1
+1
+1
+
+query IT
+select col0, col1 from (values(1, 'one'), (null, 'two'), (3 + 2, null))
+----
+1 one
+NULL two
+5 NULL
