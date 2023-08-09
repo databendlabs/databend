@@ -200,59 +200,40 @@ error:
 create role 'test'@'%';
 ---------- Output ---------
 error: 
-  --> SQL:1:13
+  --> SQL:1:19
   |
 1 | create role 'test'@'%';
-  | ------      ^^^^^^ expected <Ident> or `IF`
-  | |            
-  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>]`
+  |                   ^ expected `FORMAT` or `;`
 
 
 ---------- Input ----------
 drop role 'test'@'%';
 ---------- Output ---------
 error: 
-  --> SQL:1:11
+  --> SQL:1:17
   |
 1 | drop role 'test'@'%';
-  | ----      ^^^^^^ expected <Ident> or `IF`
-  | |          
-  | while parsing `DROP ROLE [IF EXISTS] <role_name>`
+  |                 ^ expected `FORMAT` or `;`
 
 
 ---------- Input ----------
-drop role 'role1';
+SHOW GRANT FOR ROLE 'role1';
 ---------- Output ---------
 error: 
-  --> SQL:1:11
+  --> SQL:1:6
   |
-1 | drop role 'role1';
-  | ----      ^^^^^^^ expected <Ident> or `IF`
-  | |          
-  | while parsing `DROP ROLE [IF EXISTS] <role_name>`
-
-
----------- Input ----------
-GRANT ROLE test TO ROLE 'test-user';
----------- Output ---------
-error: 
-  --> SQL:1:25
-  |
-1 | GRANT ROLE test TO ROLE 'test-user';
-  |                         ^^^^^^^^^^^ expected <Ident>, `@`, `FORMAT`, or `;`
+1 | SHOW GRANT FOR ROLE 'role1';
+  |      ^^^^^ expected `SETTINGS`, `STAGES`, `ENGINES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, or 19 more ...
 
 
 ---------- Input ----------
 GRANT ROLE 'test' TO ROLE test-user;
 ---------- Output ---------
 error: 
-  --> SQL:1:12
+  --> SQL:1:31
   |
 1 | GRANT ROLE 'test' TO ROLE test-user;
-  | ----- ---- ^^^^^^ expected <Ident>
-  | |     |     
-  | |     while parsing ROLE <role_name>
-  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+  |                               ^ expected `FORMAT` or `;`
 
 
 ---------- Input ----------
@@ -278,16 +259,6 @@ error:
   | -----                     ^ expected `TO` or `*`
   | |                          
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
-
-
----------- Input ----------
-SHOW GRANT FOR ROLE 'role1';
----------- Output ---------
-error: 
-  --> SQL:1:6
-  |
-1 | SHOW GRANT FOR ROLE 'role1';
-  |      ^^^^^ expected `SETTINGS`, `STAGES`, `ENGINES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, or 19 more ...
 
 
 ---------- Input ----------

@@ -2825,7 +2825,7 @@ AlterUser(
 
 
 ---------- Input ----------
-CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE=role123, TENANTSETTING
+CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING
 ---------- Output ---------
 CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANTSETTING
 ---------- AST ------------
@@ -7020,7 +7020,29 @@ CreateRole {
 
 
 ---------- Input ----------
+create role 'test'
+---------- Output ---------
+CREATE ROLE 'test'
+---------- AST ------------
+CreateRole {
+    if_not_exists: false,
+    role_name: "test",
+}
+
+
+---------- Input ----------
 drop role if exists test
+---------- Output ---------
+DROP ROLE IF EXISTS 'test'
+---------- AST ------------
+DropRole {
+    if_exists: true,
+    role_name: "test",
+}
+
+
+---------- Input ----------
+drop role if exists 'test'
 ---------- Output ---------
 DROP ROLE IF EXISTS 'test'
 ---------- AST ------------
@@ -8679,6 +8701,20 @@ ShowGrants {
 
 
 ---------- Input ----------
+SHOW GRANTS FOR ROLE 'role1';
+---------- Output ---------
+SHOW GRANTS FOR ROLE role1
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        Role(
+            "role1",
+        ),
+    ),
+}
+
+
+---------- Input ----------
 REVOKE SELECT, CREATE ON * FROM 'test-grant';
 ---------- Output ---------
 REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'%'
@@ -8725,6 +8761,107 @@ Revoke(
         ),
     },
 )
+
+
+---------- Input ----------
+REVOKE SELECT ON tb1 FROM ROLE 'role1';
+---------- Output ---------
+REVOKE SELECT ON tb1 FROM ROLE role1
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+drop role 'role1';
+---------- Output ---------
+DROP ROLE 'role1'
+---------- AST ------------
+DropRole {
+    if_exists: false,
+    role_name: "role1",
+}
+
+
+---------- Input ----------
+GRANT ROLE test TO ROLE 'test-user';
+---------- Output ---------
+GRANT ROLE test TO ROLE test-user
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Role {
+            role: "test",
+        },
+        principal: Role(
+            "test-user",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE test TO ROLE `test-user`;
+---------- Output ---------
+GRANT ROLE test TO ROLE test-user
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Role {
+            role: "test",
+        },
+        principal: Role(
+            "test-user",
+        ),
+    },
+)
+
+
+---------- Input ----------
+SET ROLE `test-user`;
+---------- Output ---------
+SET ROLE test-user
+---------- AST ------------
+SetRole {
+    is_default: false,
+    role_name: "test-user",
+}
+
+
+---------- Input ----------
+SET ROLE 'test-user';
+---------- Output ---------
+SET ROLE test-user
+---------- AST ------------
+SetRole {
+    is_default: false,
+    role_name: "test-user",
+}
+
+
+---------- Input ----------
+SET ROLE ROLE1;
+---------- Output ---------
+SET ROLE ROLE1
+---------- AST ------------
+SetRole {
+    is_default: false,
+    role_name: "ROLE1",
+}
 
 
 ---------- Input ----------
