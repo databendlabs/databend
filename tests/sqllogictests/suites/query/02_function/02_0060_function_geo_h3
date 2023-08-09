@@ -343,32 +343,31 @@ statement ok
 INSERT INTO  t5 VALUES(599119489002373119, 599119492223598591, 1391753023419580415, 644325524701193897, 644325524701193897, 644325524701193901, 15, 3)
 
 query I
-select h3_to_center_child(h3, res) from t5
+select h3_to_center_child(h3, res) as child from t5 order by child
 ----
 639651884574965767
 644155484202336256
 
 query F
-select h3_exact_edge_length_m(h3_edge) from t5
+select h3_exact_edge_length_m(h3_edge) as length from t5 order by length
 ----
-8267.32683264678
 8267.32683264537
+8267.32683264678
 
 query F
-select h3_exact_edge_length_km(h3_edge) from t5
+select h3_exact_edge_length_km(h3_edge) as length from t5 order by length
 ----
-8.26732683264678
 8.26732683264537
-
+8.26732683264678
 
 query F
-select h3_exact_edge_length_rads(h3_edge) from t5
+select h3_exact_edge_length_rads(h3_edge) as rads from t5 order by rads
 ----
-0.0012976483306137042
 0.0012976483306134828
+0.0012976483306137042
 
 query I
-select h3_num_hexagons(res) from t5
+select h3_num_hexagons(res) as num from t5 order by num
 ----
 81386768741882
 569707381193162
@@ -392,10 +391,10 @@ select h3_hex_ring(h3_hex_ring, k) from t5
 [644325524701193744,644325524701193746,644325524701193889,644325524701193891,644325524701193861,644325524701193857,644325524701193870,644325524701193864,644325524701193865,644325524701193940,644325524701193971,644325524701193969,644325524701193954,644325524701193958,644325524701193753,644325524701193757,644325524701193756,644325524701193745]
 
 query I
-select h3_get_unidirectional_edge(h3_unid_edge1, h3_unid_edge2) from t5
+select h3_get_unidirectional_edge(h3_unid_edge1, h3_unid_edge2) as edge from t5 order by edge
 ----
-1581074247194257065
 1509016653156329129
+1581074247194257065
 
 statement ok
 DROP TABLE t1
