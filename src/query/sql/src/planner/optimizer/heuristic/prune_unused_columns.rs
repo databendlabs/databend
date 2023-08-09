@@ -376,6 +376,17 @@ impl UnusedColumnPruner {
                 }
             }
 
+            RelOperator::ConstantTableScan(p) => {
+                let used: ColumnSet = required.intersection(&p.columns).cloned().collect();
+                if used == p.columns {
+                    Ok(expr.clone())
+                } else {
+                    Ok(SExpr::create_leaf(Arc::new(
+                        RelOperator::ConstantTableScan(p.prune_columns(used)),
+                    )))
+                }
+            }
+
             RelOperator::DummyTableScan(_) => Ok(expr.clone()),
 
             _ => Err(ErrorCode::Internal(

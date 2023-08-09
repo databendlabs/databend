@@ -18,12 +18,14 @@ use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use common_ast::ast::BinaryOperator;
+use common_ast::ast::CTESource;
 use common_ast::ast::ColumnID;
 use common_ast::ast::ColumnPosition;
 use common_ast::ast::Expr;
 use common_ast::ast::Expr::Array;
 use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
+use common_ast::ast::Indirection;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
@@ -339,10 +341,48 @@ impl Binder {
                         "duplicate cte {table_name}"
                     )));
                 }
+                let (materialized, cte_query) = match &cte.source {
+                    CTESource::Query {
+                        materialized,
+                        box query,
+                    } => (*materialized, query.clone()),
+                    CTESource::Values(values) => {
+                        // rewrite value clause as a query
+                        let values_query = Query {
+                            span: None,
+                            with: None,
+                            body: SetExpr::Select(Box::new(SelectStmt {
+                                span: None,
+                                hints: None,
+                                distinct: false,
+                                select_list: vec![SelectTarget::QualifiedName {
+                                    qualified: vec![Indirection::Star(None)],
+                                    exclude: None,
+                                }],
+                                from: vec![TableReference::Values {
+                                    span: None,
+                                    values: values.clone(),
+                                    alias: Some(cte.alias.clone()),
+                                }],
+                                selection: None,
+                                group_by: None,
+                                having: None,
+                                window_list: None,
+                            })),
+                            order_by: vec![],
+                            limit: vec![],
+                            offset: None,
+                            ignore_result: false,
+                        };
+
+                        (false, values_query)
+                    }
+                };
+
                 let cte_info = CteInfo {
                     columns_alias: cte.alias.columns.iter().map(|c| c.name.clone()).collect(),
-                    query: cte.query.clone(),
-                    materialized: cte.materialized,
+                    query: cte_query,
+                    materialized,
                     cte_idx: idx,
                     used_count: 0,
                     stat_info: None,

@@ -304,16 +304,42 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
     }
 }
 
+pub fn row_values(i: Input) -> IResult<Vec<Expr>> {
+    map(
+        rule! {"(" ~ #comma_separated_list1(expr) ~ ")"},
+        |(_, row_values, _)| row_values,
+    )(i)
+}
+
+pub fn cte_source(i: Input) -> IResult<CTESource> {
+    alt((
+        map(
+            rule! {
+                MATERIALIZED? ~ "(" ~ #query ~ ")"
+            },
+            |(materialized, _, query, _)| CTESource::Query {
+                materialized: materialized.is_some(),
+                query: Box::new(query),
+            },
+        ),
+        map(
+            rule! {
+                "(" ~ VALUES ~ ^#comma_separated_list1(row_values) ~ ")"
+            },
+            |(_, _, values, _)| CTESource::Values(values),
+        ),
+    ))(i)
+}
+
 pub fn with(i: Input) -> IResult<With> {
     let cte = map(
         consumed(rule! {
-            #table_alias ~ AS ~ MATERIALIZED? ~ "(" ~ #query ~ ")"
+            #table_alias ~ AS ~ #cte_source
         }),
-        |(span, (table_alias, _, materialized, _, query, _))| CTE {
+        |(span, (table_alias, _, source))| CTE {
             span: transform_span(span.0),
             alias: table_alias,
-            materialized: materialized.is_some(),
-            query,
+            source,
         },
     );
 
@@ -526,6 +552,10 @@ pub enum TableReferenceElement {
         options: Vec<SelectStageOption>,
         alias: Option<TableAlias>,
     },
+    Values {
+        values: Vec<Vec<Expr>>,
+        alias: Option<TableAlias>,
+    },
 }
 
 pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
@@ -633,11 +663,19 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         },
     );
 
+    let values = map(
+        rule! {
+            "(" ~ VALUES ~ ^#comma_separated_list1(row_values) ~ ")" ~ #table_alias?
+        },
+        |(_, _, values, _, alias)| TableReferenceElement::Values { values, alias },
+    );
+
     let (rest, (span, elem)) = consumed(rule! {
         #aliased_stage
         | #table_function
         | #aliased_table
         | #subquery
+        | #values
         | #group
         | #join
         | #join_condition_on
@@ -730,6 +768,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                     alias,
                 }
             }
+            TableReferenceElement::Values { values, alias } => TableReference::Values {
+                span: transform_span(input.span.0),
+                values,
+                alias,
+            },
             _ => unreachable!(),
         };
         Ok(table_ref)
