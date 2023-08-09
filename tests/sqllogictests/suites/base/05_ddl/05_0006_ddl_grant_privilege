@@ -5,7 +5,7 @@ statement ok
 DROP DATABASE IF EXISTS `db01`
 
 statement ok
-DROP ROLE IF EXISTS 'test-grant-role'
+DROP ROLE IF EXISTS `test-grant-role`
 
 statement ok
 CREATE DATABASE IF NOT EXISTS `db01`
@@ -54,7 +54,7 @@ select current_user()
 
 onlyif mysql
 statement ok
-set role 'public';
+set role public;
 
 onlyif mysql
 query T
@@ -70,17 +70,17 @@ account_admin 0 0 1
 public 0 1 0
 
 query T
-show grants for role 'public'
+show grants for role public
 ----
-GRANT SELECT ON 'default'.'system'.'one' TO 'public'
-GRANT SELECT ON 'default'.'information_schema'.* TO 'public'
+GRANT SELECT ON 'default'.'system'.'one' TO ROLE `public`
+GRANT SELECT ON 'default'.'information_schema'.* TO ROLE `public`
 
 query T
-show grants for role 'account_admin'
+show grants for role account_admin
 ----
-GRANT ALL ON *.* TO 'account_admin'
-GRANT SELECT ON 'default'.'system'.'one' TO 'account_admin'
-GRANT SELECT ON 'default'.'information_schema'.* TO 'account_admin'
+GRANT ALL ON *.* TO ROLE `account_admin`
+GRANT SELECT ON 'default'.'system'.'one' TO ROLE `account_admin`
+GRANT SELECT ON 'default'.'information_schema'.* TO ROLE `account_admin`
 
 query T
 SHOW GRANTS FOR 'test-grant'
@@ -113,23 +113,23 @@ GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'%'
 GRANT SELECT ON 'default'.'information_schema'.* TO 'test-grant'@'%'
 
 statement ok
-CREATE ROLE 'test-grant-role'
+CREATE ROLE `test-grant-role`
 
 statement ok
-GRANT SELECT ON * TO ROLE 'test-grant-role'
+GRANT SELECT ON * TO ROLE `test-grant-role`
 
 statement error 2204
-GRANT SELECT ON * TO ROLE 'test-grant-role1'
+GRANT SELECT ON * TO ROLE `test-grant-role1`
 
 query T
-SHOW GRANTS FOR ROLE 'test-grant-role'
+SHOW GRANTS FOR ROLE `test-grant-role`
 ----
-GRANT SELECT ON 'default'.'default'.* TO 'test-grant-role'
-GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant-role'
-GRANT SELECT ON 'default'.'information_schema'.* TO 'test-grant-role'
+GRANT SELECT ON 'default'.'default'.* TO ROLE `test-grant-role`
+GRANT SELECT ON 'default'.'system'.'one' TO ROLE `test-grant-role`
+GRANT SELECT ON 'default'.'information_schema'.* TO ROLE `test-grant-role`
 
 statement ok
-DROP ROLE 'test-grant-role'
+DROP ROLE `test-grant-role`
 
 statement ok
 DROP USER 'test-grant'
