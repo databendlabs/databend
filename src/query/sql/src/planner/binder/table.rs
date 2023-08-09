@@ -631,16 +631,6 @@ impl Binder {
             .set_span(span));
         }
 
-        let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-        let mut scalar_binder = ScalarBinder::new(
-            &mut bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-            HashMap::new(),
-        );
-
         let num_rows = values.len();
         let num_cols = values[0].len();
 
@@ -667,6 +657,16 @@ impl Binder {
         for i in names.len()..num_cols {
             names.push(format!("col{}", i));
         }
+
+        let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+        let mut scalar_binder = ScalarBinder::new(
+            &mut bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            HashMap::new(),
+        );
 
         let mut col_scalars = vec![Vec::with_capacity(values.len()); num_cols];
         let mut common_types: Vec<Option<DataType>> = vec![None; num_cols];
