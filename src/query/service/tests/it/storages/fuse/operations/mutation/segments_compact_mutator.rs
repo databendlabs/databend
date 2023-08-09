@@ -740,7 +740,7 @@ impl CompactSegmentTestFixture {
             };
 
             let compact_segment = compact_segment_reader.read(&load_params).await?;
-            let segment = SegmentInfo::try_from(compact_segment.as_ref())?;
+            let segment = SegmentInfo::try_from(compact_segment)?;
             assert_eq!(
                 segment.blocks.len(),
                 expected_num_blocks[idx],
@@ -821,7 +821,7 @@ impl CompactCase {
             };
 
             let compact_segment = compact_segment_reader.read(&load_params).await?;
-            let segment = SegmentInfo::try_from(compact_segment.as_ref())?;
+            let segment = SegmentInfo::try_from(compact_segment)?;
             merge_statistics_mut(&mut statistics_of_input_segments, &segment.summary, None);
             block_num_of_output_segments.push(segment.blocks.len());
 
