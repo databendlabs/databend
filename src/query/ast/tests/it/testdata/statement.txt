@@ -2732,7 +2732,7 @@ AlterUser(
 
 
 ---------- Input ----------
-ALTER USER u1 WITH DEFAULT_ROLE = 'role1';
+ALTER USER u1 WITH DEFAULT_ROLE = role1;
 ---------- Output ---------
 ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1'
 ---------- AST ------------
@@ -2755,7 +2755,7 @@ AlterUser(
 
 
 ---------- Input ----------
-ALTER USER u1 WITH DEFAULT_ROLE = 'role1', TENANTSETTING;
+ALTER USER u1 WITH DEFAULT_ROLE = role1, TENANTSETTING;
 ---------- Output ---------
 ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1' TENANTSETTING
 ---------- AST ------------
@@ -2825,7 +2825,7 @@ AlterUser(
 
 
 ---------- Input ----------
-CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING
+CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE=role123, TENANTSETTING
 ---------- Output ---------
 CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANTSETTING
 ---------- AST ------------
@@ -7009,7 +7009,7 @@ AlterUser(
 
 
 ---------- Input ----------
-create role 'test'
+create role test
 ---------- Output ---------
 CREATE ROLE 'test'
 ---------- AST ------------
@@ -7020,7 +7020,7 @@ CreateRole {
 
 
 ---------- Input ----------
-drop role if exists 'test'
+drop role if exists test
 ---------- Output ---------
 DROP ROLE IF EXISTS 'test'
 ---------- AST ------------
@@ -8258,7 +8258,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON * TO ROLE 'role1';
+GRANT SELECT, CREATE ON * TO ROLE role1;
 ---------- Output ---------
 GRANT SELECT, CREATE ON * TO ROLE role1
 ---------- AST ------------
@@ -8301,7 +8301,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ALL ON *.* TO ROLE 'role2';
+GRANT ALL ON *.* TO ROLE role2;
 ---------- Output ---------
 GRANT ALL PRIVILEGES ON *.* TO ROLE role2
 ---------- AST ------------
@@ -8340,7 +8340,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ALL PRIVILEGES ON * TO ROLE 'role3';
+GRANT ALL PRIVILEGES ON * TO ROLE role3;
 ---------- Output ---------
 GRANT ALL PRIVILEGES ON * TO ROLE role3
 ---------- AST ------------
@@ -8359,7 +8359,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ROLE 'test' TO 'test-user';
+GRANT ROLE test TO 'test-user';
 ---------- Output ---------
 GRANT ROLE test TO USER 'test-user'@'%'
 ---------- AST ------------
@@ -8379,7 +8379,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ROLE 'test' TO USER 'test-user';
+GRANT ROLE test TO USER 'test-user';
 ---------- Output ---------
 GRANT ROLE test TO USER 'test-user'@'%'
 ---------- AST ------------
@@ -8399,7 +8399,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ROLE 'test' TO ROLE 'test-user';
+GRANT ROLE test TO ROLE `test-user`;
 ---------- Output ---------
 GRANT ROLE test TO ROLE test-user
 ---------- AST ------------
@@ -8470,7 +8470,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.* TO ROLE 'role1'
+GRANT SELECT ON db01.* TO ROLE role1
 ---------- Output ---------
 GRANT SELECT ON db01.* TO ROLE role1
 ---------- AST ------------
@@ -8550,7 +8550,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.tb1 TO ROLE 'role1';
+GRANT SELECT ON db01.tb1 TO ROLE role1;
 ---------- Output ---------
 GRANT SELECT ON db01.tb1 TO ROLE role1
 ---------- AST ------------
@@ -8575,7 +8575,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON tb1 TO ROLE 'role1';
+GRANT SELECT ON tb1 TO ROLE role1;
 ---------- Output ---------
 GRANT SELECT ON tb1 TO ROLE role1
 ---------- AST ------------
@@ -8665,7 +8665,7 @@ ShowGrants {
 
 
 ---------- Input ----------
-SHOW GRANTS FOR ROLE 'role1';
+SHOW GRANTS FOR ROLE role1;
 ---------- Output ---------
 SHOW GRANTS FOR ROLE role1
 ---------- AST ------------
@@ -8705,7 +8705,7 @@ Revoke(
 
 
 ---------- Input ----------
-REVOKE SELECT ON tb1 FROM ROLE 'role1';
+REVOKE SELECT ON tb1 FROM ROLE role1;
 ---------- Output ---------
 REVOKE SELECT ON tb1 FROM ROLE role1
 ---------- AST ------------

@@ -236,11 +236,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let set_role = map(
         rule! {
-            SET ~ (DEFAULT)? ~ ROLE ~ #literal_string
+            SET ~ (DEFAULT)? ~ ROLE ~ #ident
         },
         |(_, opt_is_default, _, role_name)| Statement::SetRole {
             is_default: opt_is_default.is_some(),
-            role_name,
+            role_name: role_name.name,
         },
     );
 
@@ -879,20 +879,20 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let show_roles = value(Statement::ShowRoles, rule! { SHOW ~ ROLES });
     let create_role = map(
         rule! {
-            CREATE ~ ROLE ~ ( IF ~ NOT ~ EXISTS )? ~ #parameter_to_string
+            CREATE ~ ROLE ~ ( IF ~ NOT ~ EXISTS )? ~ #ident
         },
         |(_, _, opt_if_not_exists, role_name)| Statement::CreateRole {
             if_not_exists: opt_if_not_exists.is_some(),
-            role_name,
+            role_name: role_name.name,
         },
     );
     let drop_role = map(
         rule! {
-            DROP ~ ROLE ~ ( IF ~ EXISTS )? ~ #literal_string
+            DROP ~ ROLE ~ ( IF ~ EXISTS )? ~ #ident
         },
         |(_, _, opt_if_exists, role_name)| Statement::DropRole {
             if_exists: opt_if_exists.is_some(),
-            role_name,
+            role_name: role_name.name,
         },
     );
     let grant = map(
@@ -1504,8 +1504,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
             | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
             | #show_roles : "`SHOW ROLES`"
-            | #create_role : "`CREATE ROLE [IF NOT EXISTS] '<role_name>']`"
-            | #drop_role : "`DROP ROLE [IF EXISTS] '<role_name>'`"
+            | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>]`"
+            | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
             | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<parameter>, ...) -> <definition expr> [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
@@ -1769,9 +1769,11 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
 pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
     let role = map(
         rule! {
-            ROLE ~ #literal_string
+            ROLE ~ #ident
         },
-        |(_, role_name)| AccountMgrSource::Role { role: role_name },
+        |(_, role_name)| AccountMgrSource::Role {
+            role: role_name.name,
+        },
     );
     let privs = map(
         rule! {
@@ -1915,9 +1917,9 @@ pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
 pub fn grant_option(i: Input) -> IResult<PrincipalIdentity> {
     let role = map(
         rule! {
-            ROLE ~ #literal_string
+            ROLE ~ #ident
         },
-        |(_, role_name)| PrincipalIdentity::Role(role_name),
+        |(_, role_name)| PrincipalIdentity::Role(role_name.name),
     );
 
     let user = map(
@@ -2349,9 +2351,9 @@ pub fn catalog_type(i: Input) -> IResult<CatalogType> {
 pub fn user_option(i: Input) -> IResult<UserOptionItem> {
     let default_role_option = map(
         rule! {
-            "DEFAULT_ROLE" ~ "=" ~ #literal_string
+            "DEFAULT_ROLE" ~ "=" ~ #ident
         },
-        |(_, _, role)| UserOptionItem::DefaultRole(role),
+        |(_, _, role)| UserOptionItem::DefaultRole(role.name),
     );
     let set_network_policy = map(
         rule! {
