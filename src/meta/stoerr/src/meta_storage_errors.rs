@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 use anyerror::AnyError;
 use serde::Deserialize;
 use serde::Serialize;
@@ -34,9 +36,19 @@ pub enum MetaStorageError {
     #[error(transparent)]
     SnapshotError(AnyError),
 
+    // TODO(1): remove this error
     /// An internal error that inform txn to retry.
     #[error("Conflict when execute transaction, just retry")]
     TransactionConflict,
+}
+
+impl MetaStorageError {
+    pub fn snapshot_error<D: fmt::Display, F: FnOnce() -> D>(
+        error: &(impl std::error::Error + 'static),
+        context: F,
+    ) -> Self {
+        MetaStorageError::SnapshotError(AnyError::new(error).add_context(context))
+    }
 }
 
 impl From<std::string::FromUtf8Error> for MetaStorageError {
@@ -48,6 +60,12 @@ impl From<std::string::FromUtf8Error> for MetaStorageError {
 impl From<serde_json::Error> for MetaStorageError {
     fn from(error: serde_json::Error) -> MetaStorageError {
         MetaStorageError::BytesError(MetaBytesError::new(&error))
+    }
+}
+
+impl From<MetaBytesError> for MetaStorageError {
+    fn from(error: MetaBytesError) -> Self {
+        MetaStorageError::BytesError(error)
     }
 }
 

@@ -78,7 +78,8 @@ impl Binder {
         let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Catalog", DataType::String),
-            DataField::new("Create Catalog", DataType::String),
+            DataField::new("Type", DataType::String),
+            DataField::new("Option", DataType::String),
         ]);
         Ok(Plan::ShowCreateCatalog(Box::new(ShowCreateCatalogPlan {
             catalog,

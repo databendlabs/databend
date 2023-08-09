@@ -480,6 +480,7 @@ impl Plan {
                 | Plan::Call(_)
                 | Plan::ShowCreateDatabase(_)
                 | Plan::ShowCreateTable(_)
+                | Plan::ShowCreateCatalog(_)
                 | Plan::ShowFileFormats(_)
                 | Plan::ShowRoles(_)
                 | Plan::DescShare(_)

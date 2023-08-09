@@ -44,6 +44,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 const DEDUPLICATE_LABEL: &str = "X-DATABEND-DEDUPLICATE-LABEL";
+const USER_AGENT: &str = "User-Agent";
 
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
@@ -182,9 +183,19 @@ impl<E> HTTPSessionEndpoint<E> {
             .get(DEDUPLICATE_LABEL)
             .map(|id| id.to_str().unwrap().to_string());
 
-        Ok(HttpQueryContext::new(session, deduplicate_label))
+        let user_agent = req
+            .headers()
+            .get(USER_AGENT)
+            .map(|id| id.to_str().unwrap().to_string());
+
+        Ok(HttpQueryContext::new(
+            session,
+            deduplicate_label,
+            user_agent,
+        ))
     }
 }
+
 #[poem::async_trait]
 impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     type Output = Response;

@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use common_meta_client::MetaGrpcClient;
+use common_base::base::tokio::time::sleep;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::protobuf::Empty;
@@ -31,18 +31,13 @@ async fn test_export() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Write some data
     // - Export all data in json and check it.
+    //
+    // State machine will not be exported, only snapshot will.
+    // Thus in this test we'll gonna trigger a snapshot manually.
 
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
+    let (tc, _addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(
-        vec![addr],
-        "root",
-        "xxx",
-        None,
-        Some(Duration::from_secs(10)),
-        Duration::from_secs(10),
-        None,
-    )?;
+    let client = tc.grpc_client().await?;
 
     info!("--- upsert kv");
     {
@@ -50,6 +45,16 @@ async fn test_export() -> anyhow::Result<()> {
             client.upsert_kv(UpsertKVReq::update(k, &b(k))).await?;
         }
     }
+
+    let mn = tc
+        .grpc_srv
+        .as_ref()
+        .map(|grpc_server| grpc_server.get_meta_node())
+        .unwrap();
+    mn.raft.trigger().snapshot().await?;
+
+    // Wait for snapshot to be ready
+    sleep(Duration::from_secs(2)).await;
 
     let mut grpc_client = client.make_client().await?;
 
@@ -67,6 +72,7 @@ async fn test_export() -> anyhow::Result<()> {
     let want = vec![
         r#"["test-29000-raft_state",{"RaftStateKV":{"key":"Id","value":{"NodeId":0}}}]"#,
         r#"["test-29000-raft_state",{"RaftStateKV":{"key":"HardState","value":{"HardState":{"leader_id":{"term":1,"node_id":0},"committed":true}}}}]"#,
+        r#"["test-29000-raft_state",{"RaftStateKV":{"key":"Committed","value":{"Committed":{"leader_id":{"term":1,"node_id":0},"index":6}}}}]"#,
         r#"["test-29000-raft_log",{"Logs":{"key":0,"value":{"log_id":{"leader_id":{"term":0,"node_id":0},"index":0},"payload":{"Membership":{"configs":[[0]],"nodes":{"0":{}}}}}}}]"#,
         r#"["test-29000-raft_log",{"Logs":{"key":1,"value":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":1},"payload":"Blank"}}}]"#,
         r#"["test-29000-raft_log",{"Logs":{"key":2,"value":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":2},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"AddNode":{"node_id":0,"node":{"name":"0","endpoint":{"addr":"localhost","port":29000},"grpc_api_advertise_address":"127.0.0.1:29000"},"overriding":false}}}}}}}]"#,
@@ -74,14 +80,14 @@ async fn test_export() -> anyhow::Result<()> {
         r#"["test-29000-raft_log",{"Logs":{"key":4,"value":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":4},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"UpsertKV":{"key":"foo","seq":{"GE":0},"value":{"Update":[102,111,111]},"value_meta":null}}}}}}}]"#,
         r#"["test-29000-raft_log",{"Logs":{"key":5,"value":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":5},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"UpsertKV":{"key":"bar","seq":{"GE":0},"value":{"Update":[98,97,114]},"value_meta":null}}}}}}}]"#,
         r#"["test-29000-raft_log",{"Logs":{"key":6,"value":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":6},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"UpsertKV":{"key":"wow","seq":{"GE":0},"value":{"Update":[119,111,119]},"value_meta":null}}}}}}}]"#,
-        r#"["test-29000-state_machine/0",{"Nodes":{"key":0,"value":{"name":"0","endpoint":{"addr":"localhost","port":29000},"grpc_api_advertise_address":"127.0.0.1:29000"}}}]"#,
-        r#"["test-29000-state_machine/0",{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":1,"node_id":0},"index":6}}}}]"#,
-        r#"["test-29000-state_machine/0",{"StateMachineMeta":{"key":"Initialized","value":{"Bool":true}}}]"#,
-        r#"["test-29000-state_machine/0",{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":3},"membership":{"configs":[[0]],"nodes":{"0":{}}}}}}}]"#,
-        r#"["test-29000-state_machine/0",{"GenericKV":{"key":"bar","value":{"seq":2,"meta":null,"data":[98,97,114]}}}]"#,
-        r#"["test-29000-state_machine/0",{"GenericKV":{"key":"foo","value":{"seq":1,"meta":null,"data":[102,111,111]}}}]"#,
-        r#"["test-29000-state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}]"#,
-        r#"["test-29000-state_machine/0",{"Sequences":{"key":"generic-kv","value":3}}]"#,
+        r#"["state_machine/0",{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}]"#,
+        r#"["state_machine/0",{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":1,"node_id":0},"index":6}}}}]"#,
+        r#"["state_machine/0",{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":3},"membership":{"configs":[[0]],"nodes":{"0":{}}}}}}}]"#,
+        r#"["state_machine/0",{"Sequences":{"key":"generic-kv","value":3}}]"#,
+        r#"["state_machine/0",{"Nodes":{"key":0,"value":{"name":"0","endpoint":{"addr":"localhost","port":29000},"grpc_api_advertise_address":"127.0.0.1:29000"}}}]"#,
+        r#"["state_machine/0",{"GenericKV":{"key":"bar","value":{"seq":2,"meta":null,"data":[98,97,114]}}}]"#,
+        r#"["state_machine/0",{"GenericKV":{"key":"foo","value":{"seq":1,"meta":null,"data":[102,111,111]}}}]"#,
+        r#"["state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}]"#,
     ];
 
     // The addresses are built from random number.
