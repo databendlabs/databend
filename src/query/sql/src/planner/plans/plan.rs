@@ -428,10 +428,10 @@ impl Plan {
                 bind_context,
                 ..
             } => bind_context.output_schema(),
-            Plan::Explain { .. } | Plan::ExplainAst { .. } | Plan::ExplainSyntax { .. } => {
-                DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
-            }
-            Plan::ExplainAnalyze { .. } => {
+            Plan::Explain { .. }
+            | Plan::ExplainAst { .. }
+            | Plan::ExplainSyntax { .. }
+            | Plan::ExplainAnalyze { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
             Plan::ShowCreateCatalog(plan) => plan.schema(),
@@ -462,6 +462,7 @@ impl Plan {
             Plan::DropNetworkPolicy(plan) => plan.schema(),
             Plan::DescNetworkPolicy(plan) => plan.schema(),
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
+            Plan::ShowObjectGrantPrivileges(plan) => plan.schema(),
             other => {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())
