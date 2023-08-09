@@ -419,6 +419,8 @@ pub enum BinaryOperator {
     BitwiseXor,
     BitwiseShiftLeft,
     BitwiseShiftRight,
+
+    L2Distance,
 }
 
 impl BinaryOperator {
@@ -445,6 +447,7 @@ impl BinaryOperator {
             BinaryOperator::BitwiseShiftLeft => "bit_shift_left".to_string(),
             BinaryOperator::BitwiseShiftRight => "bit_shift_right".to_string(),
             BinaryOperator::Caret => "pow".to_string(),
+            BinaryOperator::L2Distance => "l2_distance".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
@@ -663,6 +666,9 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::BitwiseShiftRight => {
                 write!(f, ">>")
+            }
+            BinaryOperator::L2Distance => {
+                write!(f, "<->")
             }
         }
     }

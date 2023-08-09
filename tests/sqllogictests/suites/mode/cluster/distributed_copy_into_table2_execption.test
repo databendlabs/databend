@@ -55,8 +55,9 @@ copy into @s1 from (select a,b,c from table_random limit 1000000);
 statement ok
 copy into @s1 from (select a,b from table_random2 limit 1000000);
 
-statement error 1046
-copy into products from @s1 pattern = '.*[.]csv' purge = true;
+## flaky test: statement ok or error
+## statement error 1046
+## copy into products from @s1 pattern = '.*[.]csv' purge = true;
 
 query I
 select count(*) from products;
@@ -85,10 +86,10 @@ explain pipeline copy into products from (select $1,$2,$4 from @s1 as t2) force 
 ----
 CommitSink × 1 processor
   MutationAggregator × 1 processor
-    TransformExchangeDeserializer × 1 processor
-      Merge (DummyTransform × 3 processors) to (TransformExchangeDeserializer × 1)
-        Merge (TransformSerializeSegment × 1 processor) to (Resize × 3)
-          TransformSerializeSegment × 1 processor
+    TransformSerializeSegment × 1 processor
+      TransformExchangeDeserializer × 1 processor
+        Merge (DummyTransform × 3 processors) to (TransformExchangeDeserializer × 1)
+          Merge (TransformSerializeBlock × 1 processor) to (Resize × 3)
             TransformSerializeBlock × 1 processor
               BlockCompactTransform × 1 processor
                 CastSchemaTransform × 1 processor

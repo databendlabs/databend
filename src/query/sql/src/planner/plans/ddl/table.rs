@@ -222,12 +222,20 @@ pub struct AddTableColumnPlan {
     pub table: String,
     pub field: TableField,
     pub comment: String,
+    pub option: AddColumnOption,
 }
 
 impl AddTableColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum AddColumnOption {
+    First,
+    After(String),
+    End,
 }
 
 // Table rename column

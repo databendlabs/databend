@@ -122,7 +122,8 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
     // This way on every node applying a log always get the same result.
     info!("--- get updated kv with new expire, assert the updated value");
     {
-        let resp = learner.sto.state_machine.read().await.get_kv(key).await?;
+        let sm = learner.sto.state_machine.read().await;
+        let resp = sm.kv_api().get_kv(key).await.unwrap();
         let seq_v = resp.unwrap();
         assert_eq!(
             Some(KVMeta {

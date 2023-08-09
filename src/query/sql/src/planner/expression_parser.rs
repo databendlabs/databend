@@ -51,7 +51,6 @@ use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::CastExpr;
 use crate::BaseTableColumn;
-use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IdentifierNormalizer;
 use crate::Metadata;
@@ -351,17 +350,15 @@ pub fn parse_lambda_expr(
     let mut metadata = Metadata::default();
 
     bind_context.set_expr_context(ExprContext::InLambdaFunction);
-    bind_context.add_column_binding(ColumnBinding {
-        database_name: None,
-        table_name: None,
-        column_position: None,
-        table_index: None,
-        column_name: column_name.to_string(),
-        index: 0,
-        data_type: Box::new(data_type.clone()),
-        visibility: Visibility::Visible,
-        virtual_computed_expr: None,
-    });
+    bind_context.add_column_binding(
+        ColumnBindingBuilder::new(
+            column_name.to_string(),
+            0,
+            Box::new(data_type.clone()),
+            Visibility::Visible,
+        )
+        .build(),
+    );
 
     let table_type = infer_schema_type(data_type)?;
     metadata.add_base_table_column(

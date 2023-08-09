@@ -4,7 +4,7 @@ title: LAG
 
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced: v1.1.50"/>
+<FunctionDescription description="Introduced or updated: v1.2.45"/>
 
 LAG allows you to access the value of a column from a preceding row within the same result set. It is typically used to retrieve the value of a column in the previous row, based on a specified ordering.
 
@@ -49,4 +49,20 @@ Product A    | 2000.00     | 1500.00
 Product B    | 500.00      | NULL
 Product B    | 800.00      | 500.00
 Product B    | 1200.00     | 800.00
+
+-- The following statements return the same result.
+SELECT product_name, sale_amount, LAG(sale_amount, -1) OVER (PARTITION BY product_name ORDER BY sale_id) AS next_sale_amount
+FROM sales;
+
+SELECT product_name, sale_amount, LEAD(sale_amount) OVER (PARTITION BY product_name ORDER BY sale_id) AS next_sale_amount
+FROM sales;
+
+product_name|sale_amount|next_sale_amount|
+------------+-----------+----------------+
+Product A   |    1000.00|         1500.00|
+Product A   |    1500.00|         2000.00|
+Product A   |    2000.00|                |
+Product B   |     500.00|          800.00|
+Product B   |     800.00|         1200.00|
+Product B   |    1200.00|                |
 ```

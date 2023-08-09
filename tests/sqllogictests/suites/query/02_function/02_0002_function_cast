@@ -430,9 +430,10 @@ SELECT as_array(parse_json('"ab"'))
 NULL
 
 
-statement error 1001
+query T
 SELECT as_array(parse_json('null'))
-
+----
+NULL
 
 query I
 SELECT count(distinct a) FROM (SELECT rand()::string AS a FROM numbers(10))

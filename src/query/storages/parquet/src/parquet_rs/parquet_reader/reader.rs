@@ -22,6 +22,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -31,6 +32,7 @@ use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::schema::types::ColumnDescPtr;
 use parquet::schema::types::SchemaDescPtr;
+use parquet::schema::types::SchemaDescriptor;
 
 use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_reader::BlockIterator;
@@ -86,7 +88,7 @@ impl ParquetReader {
     pub fn create(
         operator: Operator,
         schema: &ArrowSchema,
-        schema_descr: &SchemaDescPtr,
+        schema_descr: &SchemaDescriptor,
         projection: Projection,
     ) -> Result<Arc<ParquetReader>> {
         let (
@@ -97,7 +99,7 @@ impl ParquetReader {
             projected_column_descriptors,
         ) = project_schema_all(schema, schema_descr, &projection)?;
 
-        let t_schema = arrow_to_table_schema(projected_arrow_schema.clone())?;
+        let t_schema = arrow_to_table_schema(&projected_arrow_schema)?;
         let output_schema = DataSchema::from(&t_schema);
 
         Ok(Arc::new(ParquetReader {
@@ -135,8 +137,11 @@ impl crate::parquet_reader::ParquetReader for ParquetReader {
         let blocks = self
             .get_deserializer(part, chunks, filter)?
             .collect::<Vec<_>>();
-        let blocks: Result<Vec<DataBlock>> = blocks.into_iter().collect();
-        DataBlock::concat(&blocks?)
+        let blocks = blocks.into_iter().collect::<Result<Vec<DataBlock>>>()?;
+        if blocks.is_empty() {
+            return Ok(DataBlock::empty_with_schema(self.output_schema.clone()));
+        }
+        DataBlock::concat(&blocks)
     }
 
     fn get_deserializer(
@@ -184,17 +189,19 @@ impl crate::parquet_reader::ParquetReader for ParquetReader {
             metadata,
             column_chunks,
         };
+        // TODO: use the BlockThresholds of dest table
+        let batch_size = row_group.choose_batch_size(BlockThresholds::default());
         let rows_to_read = match &selection {
             None => part.num_rows,
             Some(s) => s.row_count(),
         };
         let reader = row_group
-            .get_record_batch_reader(rows_to_read, selection)
+            .get_record_batch_reader(batch_size, selection)
             .unwrap();
         Ok(Box::new(RowGroupDeserializer::new(
             reader,
             part.location.clone(),
-            part.num_rows,
+            rows_to_read,
             part.num_rows,
         )))
     }
