@@ -13,7 +13,6 @@ common-datavalues = { path = "../../../datavalues" }
 common-exception = { path = "../../../../common/exception" }
 common-expression = { path = "../../../expression" }
 common-io = { path = "../../../../common/io" }
-common-storage = { path = "../../../../common/storage" }
 
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }

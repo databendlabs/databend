@@ -36,6 +36,7 @@ use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::StageTableInfo;
+use common_catalog::statistics::BasicColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
@@ -75,7 +76,6 @@ use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
 use parking_lot::RwLock;
-use storages_common_table_meta::meta::BasicColumnStatistics;
 
 use crate::binder::copy::parse_file_location;
 use crate::binder::scalar::ScalarBinder;

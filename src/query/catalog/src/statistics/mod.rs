@@ -12,15 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-
-pub mod catalog;
-pub mod catalog_kind;
-pub mod cluster_info;
-pub mod database;
-pub mod plan;
-pub mod statistics;
-pub mod table;
-pub mod table_args;
-pub mod table_context;
-pub mod table_function;
+pub mod basic_statistics;
+pub use basic_statistics::BasicColumnStatistics;

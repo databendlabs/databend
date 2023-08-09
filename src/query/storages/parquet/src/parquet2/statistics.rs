@@ -18,13 +18,13 @@ use common_arrow::arrow::array::UInt64Array;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::parquet::metadata::RowGroupMetaData;
+use common_catalog::statistics::BasicColumnStatistics;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::TableDataType;
 use common_storage::ColumnNodes;
-use storages_common_table_meta::meta::BasicColumnStatistics;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 

@@ -31,6 +31,7 @@ use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::statistics::BasicColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::Parquet2TableColumnStatisticsProvider;
 use common_catalog::table::Table;
@@ -50,7 +51,6 @@ use common_storage::ColumnNodes;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
-use storages_common_table_meta::meta::BasicColumnStatistics;
 
 use crate::parquet2::parquet_table::table::pread::FileMetaData;
 use crate::parquet2::pruning::check_parquet_schema;

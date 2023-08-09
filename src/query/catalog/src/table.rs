@@ -36,7 +36,6 @@ use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
 use common_storage::StorageMetrics;
-use storages_common_table_meta::meta::BasicColumnStatistics;
 use storages_common_table_meta::meta::SnapshotId;
 
 use crate::plan::DataSourceInfo;
@@ -44,6 +43,7 @@ use crate::plan::DataSourcePlan;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
+use crate::statistics::BasicColumnStatistics;
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_args::TableArgs;
 use crate::table_context::TableContext;

@@ -16,12 +16,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_catalog::statistics::BasicColumnStatistics;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
 use itertools::Itertools;
-use storages_common_table_meta::meta::BasicColumnStatistics;
 
 use super::ScalarItem;
 use crate::optimizer::histogram_from_ndv;
