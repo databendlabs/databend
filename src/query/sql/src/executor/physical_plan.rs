@@ -576,6 +576,10 @@ pub struct HashJoin {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
+    // After building the probe key and build key, we apply probe_projections to probe_datablock 
+    // and build_projections to build_datablock, which can help us reduce memory usage and calls
+    // of expensive functions (take_compacted_indices and gather), after processing other_conditions,
+    // we will use projections for final column elimination.
     pub projections: ColumnSet,
     pub probe_projections: ColumnSet,
     pub build_projections: ColumnSet,
