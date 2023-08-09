@@ -170,7 +170,6 @@ impl Processor for TransformHashJoinProbe {
                         Ok(Event::Finished)
                     };
                 }
-
                 self.input_port.set_need_data();
                 Ok(Event::NeedData)
             }
