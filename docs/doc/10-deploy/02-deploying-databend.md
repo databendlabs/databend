@@ -561,7 +561,15 @@ root = "/analyses/databend/storage"
 </TabItem>
 </Tabs>
 
-c. Configure an admin user in the [query.users] section. For more information, see [Configuring Admin Users](../13-sql-clients/00-admin-users.md).
+c. Configure an admin user with the [query.users] sections. For more information, see [Configuring Admin Users](../13-sql-clients/00-admin-users.md). To proceed with the default root user and the authentication type "no_password", ensure that you remove the '#' character before the following lines in the file `databend-query.toml`:
+
+```toml title='databend-query.toml'
+...
+[[query.users]]
+name = "root"
+auth_type = "no_password"
+...
+```
 
 d. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
 
