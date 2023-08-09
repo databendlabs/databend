@@ -11849,6 +11849,31 @@ CreateDatamaskPolicy(
 
 
 ---------- Input ----------
+DESC MASKING POLICY email_mask
+---------- Output ---------
+DESCRIBE MASKING POLICY email_mask
+---------- AST ------------
+DescDatamaskPolicy(
+    DescDatamaskPolicyStmt {
+        name: "email_mask",
+    },
+)
+
+
+---------- Input ----------
+DROP MASKING POLICY IF EXISTS email_mask
+---------- Output ---------
+DROP MASKING POLICY IF EXISTS email_mask
+---------- AST ------------
+DropDatamaskPolicy(
+    DropDatamaskPolicyStmt {
+        if_exists: true,
+        name: "email_mask",
+    },
+)
+
+
+---------- Input ----------
 CREATE VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t
 ---------- Output ---------
 CREATE VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t
