@@ -75,5 +75,6 @@ serde = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
 
+indexmap = "2.0.0"
 url = { version = "2.3" }
 z3 = { version = "0.12.1", features = ["static-link-z3"], optional = true }

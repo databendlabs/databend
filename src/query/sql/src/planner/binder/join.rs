@@ -25,7 +25,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
+use indexmap::IndexMap;
 
+use crate::binder::CteInfo;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::normalize_identifier;
@@ -92,6 +94,7 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
             join.op.clone(),
             &left_context,
             &right_context,
@@ -373,6 +376,7 @@ struct JoinConditionResolver<'a> {
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     m_cte_bound_ctx: HashMap<IndexType, BindContext>,
+    ctes_map: Box<IndexMap<String, CteInfo>>,
     join_op: JoinOperator,
     left_context: &'a BindContext,
     right_context: &'a BindContext,
@@ -387,6 +391,7 @@ impl<'a> JoinConditionResolver<'a> {
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         m_cte_bound_ctx: HashMap<IndexType, BindContext>,
+        ctes_map: Box<IndexMap<String, CteInfo>>,
         join_op: JoinOperator,
         left_context: &'a BindContext,
         right_context: &'a BindContext,
@@ -398,6 +403,7 @@ impl<'a> JoinConditionResolver<'a> {
             name_resolution_ctx,
             metadata,
             m_cte_bound_ctx,
+            ctes_map,
             join_op,
             left_context,
             right_context,
@@ -523,6 +529,7 @@ impl<'a> JoinConditionResolver<'a> {
             self.metadata.clone(),
             &[],
             self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
         // Given two tables: t1(a, b), t2(a, b)
         // A predicate can be regarded as an equi-predicate iff:
@@ -677,6 +684,7 @@ impl<'a> JoinConditionResolver<'a> {
             self.metadata.clone(),
             &[],
             self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
         let (predicate, _) = scalar_binder.bind(predicate).await?;
         let predicate_used_columns = predicate.used_columns();
