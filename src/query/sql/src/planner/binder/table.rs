@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::default::Default;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -265,67 +264,26 @@ impl Binder {
                 } else {
                     None
                 };
+                let mut bind_cte = true;
+                if let Some(cte_name) = &bind_context.cte_name {
+                    // If table name equals to cte name, then skip bind cte and find table from catalog
+                    // Or will dead loop and stack overflow
+                    if cte_name == &table_name {
+                        bind_cte = false;
+                    }
+                }
                 // Check and bind common table expression
-                let ctes_map = bind_context.ctes_map.clone();
+                let ctes_map = self.ctes_map.clone();
                 if let Some(cte_info) = ctes_map.get(&table_name) {
-                    return if !cte_info.materialized {
-                        self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                            .await
-                    } else {
-                        let mut new_bind_context = if cte_info.used_count == 0 {
-                            let (cte_s_expr, mut cte_bind_ctx) = self
-                                .bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                                .await?;
-                            cte_bind_ctx
-                                .materialized_ctes
-                                .insert((cte_info.cte_idx, cte_s_expr.clone()));
-                            let stat_info =
-                                RelExpr::with_s_expr(&cte_s_expr).derive_cardinality()?;
-                            // Add `materialized_cte` to bind_context.
-                            bind_context
-                                .materialized_ctes
-                                .insert((cte_info.cte_idx, cte_s_expr));
-                            bind_context.ctes_map.entry(table_name.clone()).and_modify(
-                                |cte_info| {
-                                    cte_info.stat_info = Some(stat_info);
-                                    cte_info.columns = cte_bind_ctx.columns.clone();
-                                },
-                            );
-                            self.set_m_cte_bound_ctx(cte_info.cte_idx, cte_bind_ctx.clone());
-                            cte_bind_ctx
+                    if bind_cte {
+                        return if !cte_info.materialized {
+                            self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                                .await
                         } else {
-                            // If the cte has been bound, get the bound context from `Binder`'s `m_cte_bound_ctx`
-                            let mut bound_ctx =
-                                self.m_cte_bound_ctx.get(&cte_info.cte_idx).unwrap().clone();
-                            // Resolve the alias name for the bound cte.
-                            let alias_table_name = alias
-                                .as_ref()
-                                .map(|alias| {
-                                    normalize_identifier(&alias.name, &self.name_resolution_ctx)
-                                        .name
-                                })
-                                .unwrap_or_else(|| table_name.to_string());
-                            for column in bound_ctx.columns.iter_mut() {
-                                column.database_name = None;
-                                column.table_name = Some(alias_table_name.clone());
-                            }
-                            // Pass parent to bound_ctx
-                            bound_ctx.parent = bind_context.parent.clone();
-                            bound_ctx
+                            self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
+                                .await
                         };
-                        // `bind_context` is the main BindContext for the whole query
-                        // Update the `used_count` which will be used in runtime phase
-                        bind_context
-                            .ctes_map
-                            .entry(table_name.clone())
-                            .and_modify(|cte_info| {
-                                cte_info.used_count += 1;
-                            });
-                        new_bind_context.ctes_map = bind_context.ctes_map.clone();
-                        let s_expr =
-                            self.bind_cte_scan(bind_context.ctes_map.get(&table_name).unwrap())?;
-                        Ok((s_expr, new_bind_context))
-                    };
+                    }
                 }
 
                 let tenant = self.ctx.get_tenant();
@@ -348,17 +306,29 @@ impl Binder {
                 {
                     Ok(table) => table,
                     Err(_) => {
-                        let mut parent = bind_context.parent.as_ref();
+                        let mut parent = bind_context.parent.as_mut();
                         loop {
                             if parent.is_none() {
                                 break;
                             }
-                            if let Some(cte_info) = parent.unwrap().ctes_map.get(&table_name) {
-                                return self
-                                    .bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                                    .await;
+                            let bind_context = parent.unwrap().as_mut();
+                            let ctes_map = self.ctes_map.clone();
+                            if let Some(cte_info) = ctes_map.get(&table_name) {
+                                return if !cte_info.materialized {
+                                    self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                                        .await
+                                } else {
+                                    self.bind_m_cte(
+                                        bind_context,
+                                        cte_info,
+                                        &table_name,
+                                        alias,
+                                        span,
+                                    )
+                                    .await
+                                };
                             }
-                            parent = parent.unwrap().parent.as_ref();
+                            parent = bind_context.parent.as_mut();
                         }
                         return Err(ErrorCode::UnknownTable(format!(
                             "Unknown table '{table_name}'"
@@ -503,6 +473,7 @@ impl Binder {
                     self.metadata.clone(),
                     &[],
                     self.m_cte_bound_ctx.clone(),
+                    self.ctes_map.clone(),
                 );
                 let table_args = bind_table_args(&mut scalar_binder, params, named_params).await?;
 
@@ -575,7 +546,7 @@ impl Binder {
                     .unwrap_or(false)
                 {
                     // If it is a set-returning function, we bind it as a subquery.
-                    let mut bind_context = BindContext::new();
+                    let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
                     let stmt = SelectStmt {
                         span: *span,
                         hints: None,
@@ -643,12 +614,12 @@ impl Binder {
             } => {
                 // For subquery, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-                let (s_expr, mut new_bind_context) =
+                let (s_expr, mut res_bind_context) =
                     self.bind_query(&mut new_bind_context, subquery).await?;
                 if let Some(alias) = alias {
-                    new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    res_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
-                Ok((s_expr, new_bind_context))
+                Ok((s_expr, res_bind_context))
             }
             TableReference::Stage {
                 span: _,
@@ -882,7 +853,7 @@ impl Binder {
     pub(crate) async fn bind_cte(
         &mut self,
         span: Span,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         table_name: &str,
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
@@ -894,16 +865,17 @@ impl Binder {
             aggregate_info: Default::default(),
             windows: Default::default(),
             lambda_info: Default::default(),
+            cte_name: Some(table_name.to_string()),
+            cte_map_ref: Box::default(),
             in_grouping: false,
-            ctes_map: Box::default(),
-            materialized_ctes: HashSet::new(),
             view_info: None,
             srfs: Default::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
         };
-        let (s_expr, mut new_bind_context) = self
+
+        let (s_expr, mut res_bind_context) = self
             .bind_query(&mut new_bind_context, &cte_info.query)
             .await?;
         let mut cols_alias = cte_info.columns_alias.clone();
@@ -920,22 +892,74 @@ impl Binder {
             .as_ref()
             .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| table_name.to_string());
-        for column in new_bind_context.columns.iter_mut() {
+        for column in res_bind_context.columns.iter_mut() {
             column.database_name = None;
             column.table_name = Some(alias_table_name.clone());
         }
 
-        if cols_alias.len() > new_bind_context.columns.len() {
+        if cols_alias.len() > res_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(format!(
                 "table has {} columns available but {} columns specified",
-                new_bind_context.columns.len(),
+                res_bind_context.columns.len(),
                 cols_alias.len()
             ))
             .set_span(span));
         }
         for (index, column_name) in cols_alias.iter().enumerate() {
-            new_bind_context.columns[index].column_name = column_name.clone();
+            res_bind_context.columns[index].column_name = column_name.clone();
         }
+        Ok((s_expr, res_bind_context))
+    }
+
+    // Bind materialized cte
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_m_cte(
+        &mut self,
+        bind_context: &mut BindContext,
+        cte_info: &CteInfo,
+        table_name: &String,
+        alias: &Option<TableAlias>,
+        span: &Span,
+    ) -> Result<(SExpr, BindContext)> {
+        let new_bind_context = if cte_info.used_count == 0 {
+            let (cte_s_expr, cte_bind_ctx) = self
+                .bind_cte(*span, bind_context, table_name, alias, cte_info)
+                .await?;
+            let stat_info = RelExpr::with_s_expr(&cte_s_expr).derive_cardinality()?;
+            self.ctes_map
+                .entry(table_name.clone())
+                .and_modify(|cte_info| {
+                    cte_info.stat_info = Some(stat_info);
+                    cte_info.columns = cte_bind_ctx.columns.clone();
+                });
+            self.set_m_cte_bound_ctx(cte_info.cte_idx, cte_bind_ctx.clone());
+            self.set_m_cte_bound_s_expr(cte_info.cte_idx, cte_s_expr);
+            cte_bind_ctx
+        } else {
+            // If the cte has been bound, get the bound context from `Binder`'s `m_cte_bound_ctx`
+            let mut bound_ctx = self.m_cte_bound_ctx.get(&cte_info.cte_idx).unwrap().clone();
+            // Resolve the alias name for the bound cte.
+            let alias_table_name = alias
+                .as_ref()
+                .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
+                .unwrap_or_else(|| table_name.to_string());
+            for column in bound_ctx.columns.iter_mut() {
+                column.database_name = None;
+                column.table_name = Some(alias_table_name.clone());
+            }
+            // Pass parent to bound_ctx
+            bound_ctx.parent = bind_context.parent.clone();
+            bound_ctx
+        };
+        // `bind_context` is the main BindContext for the whole query
+        // Update the `used_count` which will be used in runtime phase
+        self.ctes_map
+            .entry(table_name.clone())
+            .and_modify(|cte_info| {
+                cte_info.used_count += 1;
+            });
+        let cte_info = self.ctes_map.get(table_name).unwrap().clone();
+        let s_expr = self.bind_cte_scan(&cte_info)?;
         Ok((s_expr, new_bind_context))
     }
 
