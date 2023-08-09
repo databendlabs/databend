@@ -584,7 +584,7 @@ impl Binder {
     #[async_backtrace::framed]
     pub(crate) async fn bind_values(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         span: Span,
         values: &Vec<Vec<AExpr>>,
         alias: &Option<TableAlias>,
@@ -631,7 +631,7 @@ impl Binder {
         }
 
         let mut scalar_binder = ScalarBinder::new(
-            &mut bind_context,
+            bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
@@ -754,7 +754,7 @@ impl Binder {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
 
-        Ok((s_expr, bind_context))
+        Ok((s_expr, bind_context.clone()))
     }
 
     #[async_backtrace::framed]
