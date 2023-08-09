@@ -79,7 +79,6 @@ pub use transform_limit::TransformLimit;
 pub use transform_materialized_cte::MaterializedCteSink;
 pub use transform_materialized_cte::MaterializedCteSource;
 pub use transform_materialized_cte::MaterializedCteState;
-pub use transform_materialized_cte::TransformMaterializedCte;
 pub use transform_merge_block::TransformMergeBlock;
 pub use transform_resort_addon::TransformResortAddOn;
 pub use transform_runtime_cast_schema::TransformRuntimeCastSchema;

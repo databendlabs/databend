@@ -849,6 +849,7 @@ impl Binder {
                     self.metadata.clone(),
                     &[],
                     self.m_cte_bound_ctx.clone(),
+                    self.ctes_map.clone(),
                 );
 
                 let push_downs = if let Some(expr) = selection {
@@ -1371,6 +1372,7 @@ impl Binder {
             self.metadata.clone(),
             &[],
             self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
         // cluster keys cannot be a udf expression.
         scalar_binder.forbid_udf();

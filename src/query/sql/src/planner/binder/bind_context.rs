@@ -14,8 +14,6 @@
 
 use std::collections::btree_map;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -32,6 +30,7 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use dashmap::DashMap;
 use enum_as_inner::EnumAsInner;
+use indexmap::IndexMap;
 use itertools::Itertools;
 
 use super::AggregateInfo;
@@ -119,14 +118,15 @@ pub struct BindContext {
 
     pub lambda_info: LambdaInfo,
 
+    /// If the `BindContext` is created from a CTE, record the cte name
+    pub cte_name: Option<String>,
+
+    pub cte_map_ref: Box<IndexMap<String, CteInfo>>,
+
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
-
-    pub ctes_map: Box<HashMap<String, CteInfo>>,
-
-    pub materialized_ctes: HashSet<(IndexType, SExpr)>,
 
     /// If current binding table is a view, record its database and name.
     ///
@@ -169,9 +169,9 @@ impl BindContext {
             aggregate_info: AggregateInfo::default(),
             windows: WindowInfo::default(),
             lambda_info: LambdaInfo::default(),
+            cte_name: None,
+            cte_map_ref: Box::default(),
             in_grouping: false,
-            ctes_map: Box::default(),
-            materialized_ctes: HashSet::new(),
             view_info: None,
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
@@ -188,9 +188,9 @@ impl BindContext {
             aggregate_info: Default::default(),
             windows: Default::default(),
             lambda_info: LambdaInfo::default(),
+            cte_name: parent.cte_name,
+            cte_map_ref: parent.cte_map_ref.clone(),
             in_grouping: false,
-            ctes_map: parent.ctes_map.clone(),
-            materialized_ctes: parent.materialized_ctes.clone(),
             view_info: None,
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
@@ -203,8 +203,8 @@ impl BindContext {
     pub fn replace(&self) -> Self {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
-        bind_context.ctes_map = self.ctes_map.clone();
-        bind_context.materialized_ctes = self.materialized_ctes.clone();
+        bind_context.cte_name = self.cte_name.clone();
+        bind_context.cte_map_ref = self.cte_map_ref.clone();
         bind_context
     }
 
