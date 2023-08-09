@@ -46,7 +46,7 @@ pub async fn processlist_handler() -> poem::Result<impl IntoResponse> {
         .map(|process| ProcessInfo {
             id: process.id.clone(),
             typ: process.typ.clone(),
-            state: process.state.clone(),
+            state: process.state.to_string(),
             database: process.database.clone(),
             user: process
                 .user
