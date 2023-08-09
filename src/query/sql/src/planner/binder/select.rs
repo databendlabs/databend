@@ -114,7 +114,7 @@ impl Binder {
             self.metadata
                 .write()
                 .set_max_column_position(max_column_position.max_pos);
-            println!("{:?}", stmt.from);
+
             let cross_joins = stmt
                 .from
                 .iter()

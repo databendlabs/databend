@@ -374,7 +374,7 @@ impl PipelineBuilder {
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         self.main_pipeline.try_resize(max_threads)?;
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformRangeJoinLeft::tagecreate(input, output, state.clone());
+            let transform = TransformRangeJoinLeft::create(input, output, state.clone());
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
