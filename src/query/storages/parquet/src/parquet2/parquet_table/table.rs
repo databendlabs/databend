@@ -272,6 +272,7 @@ pub(super) async fn non_blocking_get_parquet2_file_meta(
     };
 
     // Read parquet meta data, async reading.
+    // TODO(Dousir9): get `max_memory_usage` from ctx.
     let file_metas =
         read_parquet_metas_in_parallel(operator.clone(), locations.clone(), 16, 64, 79819535155)
             .await?;

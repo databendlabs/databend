@@ -174,7 +174,7 @@ async fn check_column_ndv_statistics(
     for (i, num) in expected.iter() {
         let stat = provider.column_statistics(*i);
         assert!(stat.is_some());
-
+        // Safe to unwrap: FuseTable's ndv is not None.
         assert_eq!(stat.unwrap().ndv.unwrap(), *num);
     }
 
