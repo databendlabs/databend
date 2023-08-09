@@ -253,6 +253,16 @@ fn test_statement() {
                 max_files=10;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = CSV
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10
+                max_files=1000;"#,
+        r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
                 CONNECTION = (
                     ENDPOINT_URL = 'http://127.0.0.1:9900'
                 )
@@ -420,6 +430,8 @@ fn test_statement() {
         r#"SELECT * FROM t GROUP BY CUBE (a, b, c)"#,
         r#"SELECT * FROM t GROUP BY ROLLUP (a, b, c)"#,
         r#"CREATE MASKING POLICY email_mask AS (val STRING) RETURN STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
+        r#"DESC MASKING POLICY email_mask"#,
+        r#"DROP MASKING POLICY IF EXISTS email_mask"#,
         r#"CREATE VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t"#,
         r#"ALTER VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t"#,
         r#"DROP VIRTUAL COLUMNS FOR t"#,
