@@ -167,7 +167,7 @@ impl MetaService for MetaServiceImpl {
             let _guard = RequestInFlight::guard();
 
             let req: MetaGrpcReq = r.try_into()?;
-            info!("Received MetaGrpcReq: {:?}", req);
+            info!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
 
             let t0 = Instant::now();
 
@@ -217,7 +217,7 @@ impl MetaService for MetaServiceImpl {
 
             let request = request.into_inner();
 
-            info!("Receive txn_request: {}", request);
+            info!("{}: Receive txn_request: {}", func_name!(), request);
 
             let ret = self.meta_node.transaction(request).await;
             network_metrics::incr_request_result(ret.is_ok());
