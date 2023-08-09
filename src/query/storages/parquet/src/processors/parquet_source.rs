@@ -34,6 +34,7 @@ use serde::Serializer;
 
 use crate::parquet_reader::ParquetPartData;
 use crate::parquet_reader::ParquetReader;
+use crate::ParquetPart;
 
 pub struct ParquetSourceMeta {
     pub parts: Vec<(PartInfoPtr, ParquetPartData)>,
@@ -177,9 +178,10 @@ impl Processor for AsyncParquetSource {
 
         if !parts.is_empty() {
             let part = parts[0].clone();
+            let parquet_part = ParquetPart::from_part(&part)?;
             let block_reader = self.block_reader.clone();
             let data = block_reader
-                .readers_from_non_blocking_io(part.clone())
+                .readers_from_non_blocking_io(parquet_part)
                 .await?;
             metrics_inc_copy_read_part_counter();
             self.output_data = Some(vec![(part, data)]);

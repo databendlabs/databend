@@ -2311,7 +2311,7 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "hostname",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "log",
  "maplit",
@@ -2791,7 +2791,6 @@ dependencies = [
 name = "common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
- "arrow-array",
  "arrow-schema",
  "async-backtrace",
  "async-trait",
@@ -2806,6 +2805,7 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-storage",
+ "common-storages-parquet",
  "futures",
  "icelake",
  "match-template",

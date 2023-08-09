@@ -13,22 +13,19 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hash;
-use std::hash::Hasher;
 
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_parquet::ParquetPart;
 
 /// # TODO
 ///
 /// - we should support different format.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
-pub struct IcebergPartInfo {
-    pub path: String,
-    pub size: u64,
+pub enum IcebergPartInfo {
+    Parquet(ParquetPart),
 }
 
 impl IcebergPartInfo {
@@ -54,8 +51,8 @@ impl PartInfo for IcebergPartInfo {
     }
 
     fn hash(&self) -> u64 {
-        let mut s = DefaultHasher::new();
-        self.path.hash(&mut s);
-        s.finish()
+        match self {
+            IcebergPartInfo::Parquet(p) => p.hash(),
+        }
     }
 }

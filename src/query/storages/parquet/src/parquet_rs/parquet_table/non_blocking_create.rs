@@ -58,7 +58,7 @@ impl ParquetTable {
         let (arrow_schema, schema_descr, compression_ratio) =
             Self::prepare_metas(&first_file, operator.clone()).await?;
 
-        let table_info = create_parquet_table_info(arrow_schema.clone())?;
+        let table_info = create_parquet_table_info(&arrow_schema)?;
 
         Ok(Arc::new(ParquetTable {
             table_info,
@@ -75,7 +75,7 @@ impl ParquetTable {
     }
 
     #[async_backtrace::framed]
-    async fn prepare_metas(
+    pub async fn prepare_metas(
         path: &str,
         operator: Operator,
     ) -> Result<(ArrowSchema, SchemaDescPtr, f64)> {

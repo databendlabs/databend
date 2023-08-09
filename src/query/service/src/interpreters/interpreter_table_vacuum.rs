@@ -30,7 +30,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-#[allow(dead_code)]
 pub struct VacuumTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: VacuumTablePlan,

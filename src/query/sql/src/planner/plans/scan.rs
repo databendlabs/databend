@@ -231,7 +231,6 @@ impl Operator for Scan {
                     precise_cardinality: Some(precise_cardinality),
                     column_stats,
                 };
-
                 // Derive cardinality
                 let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
                 let mut selectivity = MAX_SELECTIVITY;
@@ -241,8 +240,7 @@ impl Operator for Scan {
                 }
                 // Update other columns's statistic according to selectivity.
                 sb.update_other_statistic_by_selectivity(selectivity);
-
-                column_stats = sb.input_stat.column_stats.clone();
+                column_stats = statistics.column_stats;
                 (precise_cardinality as f64) * selectivity
             }
             (Some(precise_cardinality), None) => precise_cardinality as f64,
