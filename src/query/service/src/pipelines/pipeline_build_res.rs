@@ -20,7 +20,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::OneBlockSource;
-use common_profile::ProfSpanSetRef;
+use common_profile::SharedProcessorProfiles;
 
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
@@ -32,7 +32,7 @@ pub struct PipelineBuildResult {
 
     /// Set of profiling spans for the query.
     /// Will be empty if profiling is disabled.
-    pub prof_span_set: ProfSpanSetRef,
+    pub prof_span_set: SharedProcessorProfiles,
 
     pub exchange_injector: Arc<dyn ExchangeInjector>,
 }
@@ -42,7 +42,7 @@ impl PipelineBuildResult {
         PipelineBuildResult {
             main_pipeline: Pipeline::create(),
             sources_pipelines: vec![],
-            prof_span_set: ProfSpanSetRef::default(),
+            prof_span_set: SharedProcessorProfiles::default(),
             exchange_injector: DefaultExchangeInjector::create(),
         }
     }
@@ -61,7 +61,7 @@ impl PipelineBuildResult {
         Ok(PipelineBuildResult {
             main_pipeline,
             sources_pipelines: vec![],
-            prof_span_set: ProfSpanSetRef::default(),
+            prof_span_set: SharedProcessorProfiles::default(),
             exchange_injector: DefaultExchangeInjector::create(),
         })
     }

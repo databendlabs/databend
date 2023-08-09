@@ -65,8 +65,8 @@ fn expected_data_block(
 }
 
 fn check_data_block(expected: Vec<DataBlock>, blocks: Vec<DataBlock>) -> Result<()> {
-    let expected_data_block = DataBlock::concat(&expected)?;
-    let data_block = DataBlock::concat(&blocks)?;
+    let expected_data_block = DataBlock::concat(&expected)?.convert_to_full();
+    let data_block = DataBlock::concat(&blocks)?.convert_to_full();
 
     for (expected_column, column) in expected_data_block
         .columns()
@@ -181,7 +181,7 @@ async fn test_internal_column() -> Result<()> {
     let blocks = res.try_collect::<Vec<DataBlock>>().await?;
 
     let table = fixture.latest_default_table().await?;
-    let (_, parts) = table.read_partitions(ctx.clone(), None).await?;
+    let (_, parts) = table.read_partitions(ctx.clone(), None, true).await?;
     let expected = expected_data_block(&parts, &internal_columns)?;
     check_partitions(&parts, &fixture).await?;
     check_data_block(expected, blocks)?;
@@ -202,7 +202,7 @@ async fn test_internal_column() -> Result<()> {
     let blocks = res.try_collect::<Vec<DataBlock>>().await?;
 
     let table = fixture.latest_default_table().await?;
-    let (_, parts) = table.read_partitions(ctx.clone(), None).await?;
+    let (_, parts) = table.read_partitions(ctx.clone(), None, true).await?;
     let expected = expected_data_block(&parts, &internal_columns)?;
     check_partitions(&parts, &fixture).await?;
     check_data_block(expected, blocks)?;

@@ -17,7 +17,7 @@ use common_exception::Result;
 use common_license::license_manager::LicenseManager;
 use common_license::license_manager::OssLicenseManager;
 use common_tracing::set_panic_hook;
-use tracing::info;
+use log::info;
 
 use crate::clusters::ClusterDiscovery;
 use crate::GlobalServices;
@@ -63,6 +63,12 @@ impl TestGlobalServices {
 
 pub struct TestGuard {
     thread_name: String,
+}
+
+impl TestGuard {
+    pub fn new(thread_name: String) -> Self {
+        Self { thread_name }
+    }
 }
 
 impl Drop for TestGuard {

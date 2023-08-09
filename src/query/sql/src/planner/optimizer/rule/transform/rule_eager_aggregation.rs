@@ -21,6 +21,7 @@ use common_expression::types::DataType;
 use common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::binder::wrap_cast;
+use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::ColumnSet;
@@ -39,7 +40,6 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
-use crate::ColumnBinding;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -50,7 +50,7 @@ use crate::Visibility;
 ///
 /// Input:
 ///                 expression
-///                     |   
+///                     |
 ///              aggregate: SUM(x)
 ///                     |
 ///                    join
@@ -95,7 +95,7 @@ use crate::Visibility;
 ///
 /// Input:
 ///                 expression
-///                     |   
+///                     |
 ///          aggregate: SUM(x), SUM(y)
 ///                     |
 ///                    join
@@ -1326,16 +1326,13 @@ fn modify_final_aggregate_function(agg: &mut AggregateFunction, args_index: usiz
     }
     let agg_func = ScalarExpr::BoundColumnRef(BoundColumnRef {
         span: None,
-        column: ColumnBinding {
-            database_name: None,
-            table_name: None,
-            column_position: None,
-            table_index: None,
-            column_name: "_eager".to_string(),
-            index: args_index,
-            data_type: agg.return_type.clone(),
-            visibility: Visibility::Visible,
-        },
+        column: ColumnBindingBuilder::new(
+            "_eager".to_string(),
+            args_index,
+            agg.return_type.clone(),
+            Visibility::Visible,
+        )
+        .build(),
     });
     if agg.args.is_empty() {
         // eager count
@@ -1389,32 +1386,26 @@ fn create_avg_scalar_item(left_index: usize, right_index: usize) -> ScalarExpr {
         arguments: vec![
             ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span: None,
-                column: ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_position: None,
-                    table_index: None,
-                    column_name: "_eager_final_sum".to_string(),
-                    index: left_index,
-                    data_type: Box::new(DataType::Number(NumberDataType::Float64)),
-                    visibility: Visibility::Visible,
-                },
+                column: ColumnBindingBuilder::new(
+                    "_eager_final_sum".to_string(),
+                    left_index,
+                    Box::new(DataType::Number(NumberDataType::Float64)),
+                    Visibility::Visible,
+                )
+                .build(),
             }),
             wrap_cast(
                 &ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: None,
-                    column: ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_position: None,
-                        table_index: None,
-                        column_name: "_eager_final_count".to_string(),
-                        index: right_index,
-                        data_type: Box::new(DataType::Nullable(Box::new(DataType::Number(
+                    column: ColumnBindingBuilder::new(
+                        "_eager_final_count".to_string(),
+                        right_index,
+                        Box::new(DataType::Nullable(Box::new(DataType::Number(
                             NumberDataType::UInt64,
                         )))),
-                        visibility: Visibility::Visible,
-                    },
+                        Visibility::Visible,
+                    )
+                    .build(),
                 }),
                 &DataType::Number(NumberDataType::UInt64),
             ),
@@ -1598,18 +1589,15 @@ fn create_eager_count_multiply_scalar_item(
                 wrap_cast(
                     &ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_position: None,
-                            table_index: None,
-                            column_name: "_eager_count".to_string(),
-                            index: eager_count_index,
-                            data_type: Box::new(DataType::Nullable(Box::new(DataType::Number(
+                        column: ColumnBindingBuilder::new(
+                            "_eager_count".to_string(),
+                            eager_count_index,
+                            Box::new(DataType::Nullable(Box::new(DataType::Number(
                                 NumberDataType::UInt64,
                             )))),
-                            visibility: Visibility::Visible,
-                        },
+                            Visibility::Visible,
+                        )
+                        .build(),
                     }),
                     &DataType::Number(NumberDataType::UInt64),
                 ),

@@ -264,7 +264,7 @@ macro_rules! register_decimal_compare_op {
                     return_type: DataType::Boolean,
                 },
                 eval: FunctionEval::Scalar {
-                    calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                    calc_domain: Box::new(|_, _| FunctionDomain::Full),
                     eval: Box::new(move |args, _ctx| {
                         op_decimal!(&args[0], &args[1], &common_type, $op)
                     }),
@@ -337,7 +337,7 @@ macro_rules! register_decimal_binary_op {
                     return_type: DataType::Decimal(return_type.clone()),
                 },
                 eval: FunctionEval::Scalar {
-                    calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                    calc_domain: Box::new(|_, _| FunctionDomain::Full),
                     eval: Box::new(move |args, ctx| {
                         let lhs = convert_to_decimal(
                             &args[0],
@@ -433,7 +433,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: return_type.clone(),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(move |args, ctx| {
                     convert_to_decimal(&args[0], ctx, from_type.clone(), return_type.clone())
                 }),
@@ -480,7 +480,7 @@ pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
                 return_type: Float64Type::data_type(),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(move |args, tx| decimal_to_float64(args, arg_type.clone(), tx)),
             },
         };
@@ -513,7 +513,7 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
                 return_type: Float32Type::data_type(),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(move |args, tx| decimal_to_float32(args, arg_type.clone(), tx)),
             },
         };

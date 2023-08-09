@@ -83,10 +83,6 @@ impl UserInfo {
             self.option = user_option;
         };
     }
-
-    pub fn is_root(&self) -> bool {
-        self.name.eq("root") || self.name.eq("default")
-    }
 }
 
 impl TryFrom<Vec<u8>> for UserInfo {
@@ -109,6 +105,8 @@ pub struct UserOption {
     flags: BitFlags<UserOptionFlag>,
 
     default_role: Option<String>,
+
+    network_policy: Option<String>,
 }
 
 impl UserOption {
@@ -116,6 +114,7 @@ impl UserOption {
         Self {
             flags,
             default_role: None,
+            network_policy: None,
         }
     }
 
@@ -133,6 +132,11 @@ impl UserOption {
         self
     }
 
+    pub fn with_network_policy(mut self, network_policy: Option<String>) -> Self {
+        self.network_policy = network_policy;
+        self
+    }
+
     pub fn with_set_flag(mut self, flag: UserOptionFlag) -> Self {
         self.flags.insert(flag);
         self
@@ -146,8 +150,16 @@ impl UserOption {
         self.default_role.as_ref()
     }
 
+    pub fn network_policy(&self) -> Option<&String> {
+        self.network_policy.as_ref()
+    }
+
     pub fn set_default_role(&mut self, default_role: Option<String>) {
         self.default_role = default_role;
+    }
+
+    pub fn set_network_policy(&mut self, network_policy: Option<String>) {
+        self.network_policy = network_policy;
     }
 
     pub fn set_all_flag(&mut self) {

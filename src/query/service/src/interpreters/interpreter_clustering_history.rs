@@ -30,6 +30,7 @@ impl InterpreterClusteringHistory {
         start: SystemTime,
         db_name: &str,
         table_name: &str,
+        block_count: u64,
     ) -> Result<()> {
         ClusteringHistoryQueue::instance()?.append_data(ClusteringHistoryLogElement {
             start_time: start
@@ -42,8 +43,9 @@ impl InterpreterClusteringHistory {
                 .as_micros() as i64,
             database: db_name.to_string(),
             table: table_name.to_string(),
-            reclustered_bytes: ctx.get_scan_progress_value().bytes as u64,
-            reclustered_rows: ctx.get_scan_progress_value().rows as u64,
+            block_count,
+            byte_size: ctx.get_scan_progress_value().bytes as u64,
+            row_count: ctx.get_scan_progress_value().rows as u64,
         })
     }
 }

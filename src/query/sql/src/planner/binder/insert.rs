@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use common_ast::ast::Identifier;
 use common_ast::ast::InsertSource;
 use common_ast::ast::InsertStmt;
 use common_ast::ast::Statement;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
 use common_meta_app::principal::FileFormatOptionsAst;
+use common_meta_app::principal::OnErrorMode;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
@@ -39,14 +42,31 @@ impl Binder {
         schema: &Arc<TableSchema>,
         columns: &[Identifier],
     ) -> Result<Arc<TableSchema>> {
-        let fields = columns
-            .iter()
-            .map(|ident| {
-                schema
-                    .field_with_name(&normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .map(|v| v.clone())
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let fields = if columns.is_empty() {
+            schema
+                .fields()
+                .iter()
+                .filter(|f| f.computed_expr().is_none())
+                .cloned()
+                .collect::<Vec<_>>()
+        } else {
+            columns
+                .iter()
+                .map(|ident| {
+                    let field = schema.field_with_name(
+                        &normalize_identifier(ident, &self.name_resolution_ctx).name,
+                    )?;
+                    if field.computed_expr().is_some() {
+                        Err(ErrorCode::BadArguments(format!(
+                            "The value specified for computed column '{}' is not allowed",
+                            field.name()
+                        )))
+                    } else {
+                        Ok(field.clone())
+                    }
+                })
+                .collect::<Result<Vec<_>>>()?
+        };
         Ok(TableSchemaRefExt::create(fields))
     }
 
@@ -72,12 +92,7 @@ impl Binder {
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
         let table_id = table.get_id();
-
-        let schema = if columns.is_empty() {
-            table.schema()
-        } else {
-            self.schema_project(&table.schema(), columns)?
-        };
+        let schema = self.schema_project(&table.schema(), columns)?;
 
         let input_source: Result<InsertInputSource> = match source.clone() {
             InsertSource::Streaming {
@@ -92,11 +107,20 @@ impl Binder {
                     Ok(InsertInputSource::StreamingWithFormat(format, start, None))
                 }
             }
-            InsertSource::StreamingV2 { settings, start } => {
+            InsertSource::StreamingV2 {
+                settings,
+                on_error_mode,
+                start,
+            } => {
                 let params = FileFormatOptionsAst { options: settings }.try_into()?;
-                Ok(InsertInputSource::StreamingWithFileFormat(
-                    params, start, None,
-                ))
+                Ok(InsertInputSource::StreamingWithFileFormat {
+                    format: params,
+                    start,
+                    on_error_mode: OnErrorMode::from_str(
+                        &on_error_mode.unwrap_or("abort".to_string()),
+                    )?,
+                    input_context_option: None,
+                })
             }
             InsertSource::Values { rest_str } => {
                 let values_str = rest_str.trim_end_matches(';').trim_start().to_owned();

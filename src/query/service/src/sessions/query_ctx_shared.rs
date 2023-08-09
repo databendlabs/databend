@@ -22,6 +22,8 @@ use std::time::SystemTime;
 
 use common_base::base::Progress;
 use common_base::runtime::Runtime;
+use common_catalog::catalog::CatalogManager;
+use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -38,7 +40,6 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
-use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::query_affect::QueryAffect;
@@ -48,14 +49,6 @@ use crate::storages::Table;
 type DatabaseAndTable = (String, String, String);
 
 /// Data that needs to be shared in a query context.
-/// This is very useful, for example, for queries:
-///     USE database_1;
-///     SELECT
-///         (SELECT scalar FROM table_name_1) AS scalar_1,
-///         (SELECT scalar FROM table_name_2) AS scalar_2,
-///         (SELECT scalar FROM table_name_3) AS scalar_3
-///     FROM table_name_4;
-/// For each subquery, they will share a runtime, session, progress, init_query_id
 pub struct QueryContextShared {
     /// total_scan_values for scan stats
     pub(in crate::sessions) total_scan_values: Arc<Progress>,
@@ -89,8 +82,14 @@ pub struct QueryContextShared {
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
+    pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
+
+    // Client User-Agent
+    pub(in crate::sessions) user_agent: Arc<RwLock<String>>,
+    /// Key is (cte index, used_count), value contains cte's materialized blocks
+    pub(in crate::sessions) materialized_cte_tables: MaterializedCtesBlocks,
 }
 
 impl QueryContextShared {
@@ -122,7 +121,10 @@ impl QueryContextShared {
             on_error_mode: Arc::new(RwLock::new(None)),
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
+            can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
+            user_agent: Arc::new(RwLock::new("null".to_string())),
+            materialized_cte_tables: Arc::new(Default::default()),
         }))
     }
 
@@ -269,7 +271,7 @@ impl QueryContextShared {
     ) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
-        let catalog = self.catalog_manager.get_catalog(catalog)?;
+        let catalog = self.catalog_manager.get_catalog(&tenant, catalog).await?;
         let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
         let mut tables_refs = self.tables_refs.lock();
@@ -278,6 +280,13 @@ impl QueryContextShared {
             Entry::Occupied(v) => Ok(v.get().clone()),
             Entry::Vacant(v) => Ok(v.insert(cache_table).clone()),
         }
+    }
+
+    pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
+        let mut tables_refs = self.tables_refs.lock();
+        tables_refs.remove(&table_meta_key);
+        Ok(())
     }
 
     /// Init runtime when first get
@@ -389,7 +398,7 @@ impl Drop for QueryContextShared {
 pub fn short_sql(sql: String) -> String {
     use unicode_segmentation::UnicodeSegmentation;
     let query = sql.trim_start();
-    if query.len() >= 64 && query[..6].eq_ignore_ascii_case("INSERT") {
+    if query.as_bytes().len() >= 64 && query.as_bytes()[..6].eq_ignore_ascii_case(b"INSERT") {
         // keep first 64 graphemes
         String::from_utf8(
             query

@@ -96,16 +96,17 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<u8>, NumberType<u64>,_, _>(
         "geo_to_h3",
-        |_,_,_|FunctionDomain::Full,
+        |_, _, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<u8>, NumberType<u64>>(
             |lon, lat, r, builder, ctx| {
-                match LatLng::new(lat.into(), lon.into()) {
-                    Ok(coord) => {
-                        let h3_cell =  coord.to_cell(Resolution::try_from(r).unwrap());
+                match LatLng::new(lat.into(), lon.into()).map_err(|e| e.to_string()).and_then(|coord| {
+                    Resolution::try_from(r).map_err(|e| e.to_string()).map(|rr| coord.to_cell(rr))
+                }) {
+                    Ok(h3_cell) => {
                         builder.push(h3_cell.into())
                     },
                     Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
+                        ctx.set_error(builder.len(), e);
                         builder.push(0);
                     }
                 }
@@ -116,7 +117,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     // geo distance
     registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
         "geo_distance",
-        |_,_,_,_|FunctionDomain::Full,
+        |_, _, _, _, _| FunctionDomain::Full,
         |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| {
             F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::Wgs84Meters))
         },
@@ -125,7 +126,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     // great circle angle
     registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
         "great_circle_angle",
-        |_,_,_,_|FunctionDomain::Full,
+        |_, _, _, _, _| FunctionDomain::Full,
         |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| {
             F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::SphereDegrees))
         },
@@ -134,7 +135,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     // great circle distance
     registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
         "great_circle_distance",
-        |_,_,_,_|FunctionDomain::Full,
+        |_, _, _, _, _| FunctionDomain::Full,
         |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| {
             F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::SphereMeters))
         },
@@ -142,7 +143,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<Float64Type, Float64Type, StringType, _, _>(
         "geohash_encode",
-        |_, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<Float64Type, Float64Type, StringType>(
             |lon, lat, builder, ctx| {
                 let c = Coord { x: lon.0, y: lat.0 };
@@ -160,7 +161,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<Float64Type, Float64Type, UInt8Type,StringType, _, _>(
         "geohash_encode",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<Float64Type, Float64Type, UInt8Type,StringType>(
             |lon, lat, precision, builder, ctx| {
                 let c = Coord { x: lon.0, y: lat.0 };
@@ -180,7 +181,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry
         .register_passthrough_nullable_1_arg::<StringType, KvPair<Float64Type, Float64Type>, _, _>(
             "geohash_decode",
-            |_| FunctionDomain::Full,
+            |_, _| FunctionDomain::Full,
             vectorize_with_builder_1_arg::<StringType, KvPair<Float64Type, Float64Type>>(
                 |encoded, builder, ctx| match std::str::from_utf8(encoded)
                     .map_err(|e| e.to_string())
@@ -207,7 +208,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt8),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(point_in_ellipses_fn),
             },
         }))
@@ -246,7 +247,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt8),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(point_in_polygon_fn),
             },
         }))
@@ -285,7 +286,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt8),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(point_in_polygon_fn),
             },
         }))
@@ -324,7 +325,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt8),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(point_in_polygon_fn),
             },
         }))

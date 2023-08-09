@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use bumpalo::Bump;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -21,7 +22,7 @@ use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
 
@@ -43,8 +44,8 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
         output: Arc<OutputPort>,
         method: Method,
         params: Arc<AggregatorParams>,
-    ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(BlockMetaTransformer::create(
+    ) -> Result<Box<dyn Processor>> {
+        Ok(Box::new(BlockMetaTransformer::create(
             input,
             output,
             TransformFinalGroupBy::<Method> { method, params },
@@ -59,10 +60,12 @@ where Method: HashMethodBounds
 
     fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
         if let AggregateMeta::Partitioned { bucket, data } = meta {
-            let mut hashtable = self.method.create_hash_table::<()>()?;
+            let arena = Arc::new(Bump::new());
+            let mut hashtable = self.method.create_hash_table::<()>(arena)?;
             'merge_hashtable: for bucket_data in data {
                 match bucket_data {
                     AggregateMeta::Spilled(_) => unreachable!(),
+                    AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Serialized(payload) => {

@@ -12,5 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod computed_columns;
 mod vacuum;
 mod virtual_columns;

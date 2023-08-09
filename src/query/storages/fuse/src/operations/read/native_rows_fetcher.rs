@@ -26,17 +26,17 @@ use common_catalog::plan::Projection;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnNodes;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use super::fuse_rows_fetcher::RowsFetcher;
-use super::native_data_source::DataChunks;
-use super::native_data_source_deserializer::NativeDeserializeDataTransform;
 use crate::io::BlockReader;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
+use crate::io::NativeSourceData;
 use crate::FuseTable;
 
 pub(super) struct NativeRowsFetcher<const BLOCKING_IO: bool> {
@@ -94,12 +94,16 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
             .iter()
             .map(|(prefix, page_idx, idx)| {
                 let block_idx = idx_map[&(*prefix, *page_idx)];
-                (block_idx, *idx as usize, 1_usize)
+                (block_idx as u32, *idx as u32, 1_usize)
             })
             .collect::<Vec<_>>();
 
         let blocks = blocks.iter().collect::<Vec<_>>();
         Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
+    }
+
+    fn schema(&self) -> DataSchema {
+        self.reader.data_schema()
     }
 }
 
@@ -170,15 +174,18 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
         Ok(())
     }
 
-    fn build_blocks(&self, mut chunks: DataChunks, needed_pages: &[u64]) -> Result<Vec<DataBlock>> {
+    fn build_blocks(
+        &self,
+        mut chunks: NativeSourceData,
+        needed_pages: &[u64],
+    ) -> Result<Vec<DataBlock>> {
         let mut array_iters = BTreeMap::new();
 
         for (index, column_node) in self.reader.project_column_nodes.iter().enumerate() {
             let readers = chunks.remove(&index).unwrap();
             if !readers.is_empty() {
                 let leaves = self.column_leaves.get(index).unwrap().clone();
-                let array_iter =
-                    NativeDeserializeDataTransform::build_array_iter(column_node, leaves, readers)?;
+                let array_iter = BlockReader::build_array_iter(column_node, leaves, readers)?;
                 array_iters.insert(index, array_iter);
             }
         }

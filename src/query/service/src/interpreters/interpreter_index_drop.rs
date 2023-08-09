@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use aggregating_index::get_agg_index_handler;
 use common_exception::Result;
+use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::IndexNameIdent;
@@ -49,12 +50,15 @@ impl Interpreter for DropIndexInterpreter {
         let license_manager = get_license_manager();
         license_manager.manager.check_enterprise_enabled(
             &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            "aggregating_index".to_string(),
+            tenant.clone(),
+            Feature::AggregateIndex,
         )?;
 
         let index_name = self.plan.index.clone();
-        let catalog = self.ctx.get_catalog(&self.ctx.get_current_catalog())?;
+        let catalog = self
+            .ctx
+            .get_catalog(&self.ctx.get_current_catalog())
+            .await?;
         let drop_index_req = DropIndexReq {
             if_exists: self.plan.if_exists,
             name_ident: IndexNameIdent { tenant, index_name },

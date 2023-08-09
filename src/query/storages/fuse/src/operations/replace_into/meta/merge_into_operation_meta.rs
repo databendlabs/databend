@@ -13,27 +13,36 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashSet;
 
+use ahash::HashSet;
 use common_exception::ErrorCode;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 
+// This mod need to be refactored, since it not longer aiming to be
+// used in the implementation of `MERGE INTO` statement in the future.
+//
+// unfortunately, distributed `replace-into` is being implemented in parallel,
+// to avoid the potential heavy merge conflicts, the refactoring is postponed.
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum MergeIntoOperation {
-    Delete(DeletionByColumn),
+    Delete(Vec<DeletionByColumn>),
     None,
 }
 
 pub type UniqueKeyDigest = u128;
+pub type RowBloomHashes = Vec<u64>;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DeletionByColumn {
     // used in table meta level pruning
     pub columns_min_max: Vec<(Scalar, Scalar)>,
     // used in block level
     pub key_hashes: HashSet<UniqueKeyDigest>,
+    // bloom hash of the on-conflict columns that will apply bloom pruning
+    pub bloom_hashes: Vec<RowBloomHashes>,
 }
 
 #[typetag::serde(name = "merge_into_operation_meta")]
@@ -43,10 +52,9 @@ impl BlockMetaInfo for MergeIntoOperation {
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match info.as_any().downcast_ref::<MergeIntoOperation>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<MergeIntoOperation>()
+            .is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {

@@ -38,6 +38,14 @@ table_engine_memory_enabled = true
 default_storage_format = 'parquet'
 default_compression = 'zstd'
 
+[[query.users]]
+name = "root"
+auth_type = "no_password"
+
+[[query.users]]
+name = "default"
+auth_type = "no_password"
+
 # [[query.users]]
 # name = "admin"
 # auth_type = "no_password"
@@ -58,7 +66,7 @@ default_compression = 'zstd'
 [log]
 
 [log.file]
-level = "INFO"
+level = "DEBUG"
 format = "text"
 dir = "./.databend/logs_1"
 

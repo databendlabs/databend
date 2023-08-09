@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 
 import os
-import time
 import mysql.connector
 import sys
-import signal
-from multiprocessing import Process
+from datetime import datetime
 
 CURDIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(CURDIR, "../../../helpers"))
 
-from native_client import NativeClient
-from native_client import prompt
+from native_client import NativeClient  # NOQA
+from native_client import prompt  # NOQA
 
 log = None
 
@@ -44,5 +42,24 @@ if __name__ == "__main__":
         mycursor = mydb.cursor()
         mycursor.execute("call admin$license_info();")
         license = mycursor.fetchall()
-        license[0] = license[0][:5]
-        print(license)
+
+        issuer = license[0][0]
+        type_ = license[0][1]
+        organization = license[0][2]
+        issue_at = license[0][3]
+        expire_at = license[0][4]
+        now = datetime.utcnow()
+
+        if now < issue_at or now > expire_at:
+            print(
+                f"License is invalid: issuer: {issuer}, type: {type_}, "
+                f"org: {organization}, issue_at: {issue_at}, expire_at: {expire_at}"
+            )
+            sys.exit(1)
+
+        mycursor = mydb.cursor()
+        mycursor.execute(
+            "select count(*) from system.processes where type = 'FlightSQL';"
+        )
+        all_process = mycursor.fetchall()
+        print(all_process)

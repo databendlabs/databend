@@ -79,6 +79,9 @@ impl HttpClient {
             let mut url = "http://127.0.0.1:8000".to_string();
             url.push_str(&next_uri);
             response = self.response(sql, &url, false).await?;
+            if let Some(error) = response.error {
+                return Err(format!("http query error: {error}").into());
+            }
             let rows = response.data;
             parsed_rows.append(&mut parser_rows(&rows)?);
         }

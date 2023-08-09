@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::types::StringType;
+use common_expression::ComputedExpr;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FromData;
@@ -101,7 +102,12 @@ impl Interpreter for DescribeTableInterpreter {
                     default_exprs.push(value.to_string().as_bytes().to_vec());
                 }
             }
-            extras.push("".to_string().as_bytes().to_vec());
+            let extra = match field.computed_expr() {
+                Some(ComputedExpr::Virtual(expr)) => format!("VIRTUAL COMPUTED COLUMN `{}`", expr),
+                Some(ComputedExpr::Stored(expr)) => format!("STORED COMPUTED COLUMN `{}`", expr),
+                _ => "".to_string(),
+            };
+            extras.push(extra.as_bytes().to_vec());
         }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

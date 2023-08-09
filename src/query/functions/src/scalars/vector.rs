@@ -23,13 +23,14 @@ use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
 use common_openai::OpenAI;
 use common_vector::cosine_distance;
+use common_vector::l2_distance;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // cosine_distance
     // This function takes two Float32 arrays as input and computes the cosine distance between them.
     registry.register_passthrough_nullable_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>, Float32Type, _, _>(
         "cosine_distance",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>,  Float32Type>(
             |lhs, rhs, output, ctx| {
                 let l_f32=
@@ -50,12 +51,38 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    // L2 distance
+    // cosine_distance
+    // This function takes two Float32 arrays as input and computes the l2 distance between them.
+    registry.register_passthrough_nullable_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>, Float32Type, _, _>(
+        "l2_distance",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>,  Float32Type>(
+            |lhs, rhs, output, ctx| {
+                let l_f32=
+                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(lhs) };
+                let r_f32=
+                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(rhs) };
+
+                match l2_distance(l_f32.as_slice(), r_f32.as_slice()) {
+                    Ok(dist) => {
+                        output.push(F32::from(dist));
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                        output.push(F32::from(0.0));
+                    }
+                }
+            }
+        ),
+    );
+
     // embedding_vector
     // This function takes two strings as input, sends an API request to OpenAI, and returns the Float32 array of embeddings.
     // The OpenAI API key is pre-configured during the binder phase, so we rewrite this function and set the API key.
     registry.register_passthrough_nullable_1_arg::<StringType, ArrayType<Float32Type>, _, _>(
         "ai_embedding_vector",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, ArrayType<Float32Type>>(|data, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -103,7 +130,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     // The OpenAI API key is pre-configured during the binder phase, so we rewrite this function and set the API key.
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "ai_text_completion",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, StringType>(|data, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {

@@ -19,6 +19,7 @@ use std::sync::Arc;
 use async_recursion::async_recursion;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::ColumnID;
+use common_ast::ast::ColumnPosition;
 use common_ast::ast::Expr;
 use common_ast::ast::Expr::Array;
 use common_ast::ast::GroupBy;
@@ -34,22 +35,31 @@ use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
+use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
-use tracing::warn;
+use common_expression::type_check::common_super_type;
+use common_expression::types::DataType;
+use common_expression::ROW_ID_COL_NAME;
+use common_functions::BUILTIN_FUNCTIONS;
+use log::warn;
 
 use super::sort::OrderItem;
 use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
+use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::plans::BoundColumnRef;
+use crate::plans::CastExpr;
+use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
@@ -58,6 +68,7 @@ use crate::plans::UnionAll;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::Visibility;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -74,13 +85,18 @@ pub struct SelectItem<'a> {
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(super) async fn bind_select_stmt(
+    pub(crate) async fn bind_select_stmt(
         &mut self,
         bind_context: &mut BindContext,
         stmt: &SelectStmt,
         order_by: &[OrderByExpr],
         limit: usize,
     ) -> Result<(SExpr, BindContext)> {
+        if !order_by.is_empty() {
+            // Currently, we disable aggregating index scan if the query is a single-table query with order by.
+            self.ctx.set_can_scan_from_agg_index(false);
+        }
+
         if let Some(hints) = &stmt.hints {
             if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
                 warn!(
@@ -90,8 +106,15 @@ impl Binder {
             }
         }
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
-            self.bind_one_table(bind_context, stmt).await?
+            let select_list = &stmt.select_list;
+            self.bind_one_table(bind_context, select_list).await?
         } else {
+            let mut max_column_position = MaxColumnPosition::new();
+            max_column_position.visit_select_stmt(stmt);
+            self.metadata
+                .write()
+                .set_max_column_position(max_column_position.max_pos);
+
             let cross_joins = stmt
                 .from
                 .iter()
@@ -142,6 +165,9 @@ impl Binder {
             .normalize_select_list(&mut from_context, &stmt.select_list)
             .await?;
 
+        // analyze lambda
+        self.analyze_lambda(&mut from_context, &mut select_list)?;
+
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
             self.analyze_group_items(&mut from_context, &select_list, group_by)
@@ -154,11 +180,15 @@ impl Binder {
         // because `analyze_window` will rewrite the aggregate functions in the window function's arguments.
         self.analyze_window(&mut from_context, &mut select_list)?;
 
-        let aliases = select_list
-            .items
-            .iter()
-            .map(|item| (item.alias.clone(), item.scalar.clone()))
-            .collect::<Vec<_>>();
+        // Collect duduplicate aliases
+        let mut aliases = vec![];
+        for item in &select_list.items {
+            if !aliases.iter().any(|(name, pre_scalar)| {
+                name == &item.alias && self.judge_equal_scalars(pre_scalar, &item.scalar)
+            }) {
+                aliases.push((item.alias.clone(), item.scalar.clone()));
+            }
+        }
 
         // To support using aliased column in `WHERE` clause,
         // we should bind where after `select_list` is rewritten.
@@ -210,6 +240,10 @@ impl Binder {
             )?;
         }
 
+        if !from_context.lambda_info.lambda_functions.is_empty() {
+            s_expr = self.bind_lambda(&mut from_context, s_expr).await?;
+        }
+
         if !from_context.aggregate_info.aggregate_functions.is_empty()
             || !from_context.aggregate_info.group_items.is_empty()
         {
@@ -258,7 +292,6 @@ impl Binder {
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
-        output_context.ctes_map = from_context.ctes_map;
 
         Ok((s_expr, output_context))
     }
@@ -299,9 +332,9 @@ impl Binder {
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
         if let Some(with) = &query.with {
-            for cte in with.ctes.iter() {
+            for (idx, cte) in with.ctes.iter().enumerate() {
                 let table_name = cte.alias.name.name.clone();
-                if bind_context.ctes_map.contains_key(&table_name) {
+                if bind_context.cte_map_ref.contains_key(&table_name) {
                     return Err(ErrorCode::SemanticError(format!(
                         "duplicate cte {table_name}"
                     )));
@@ -309,8 +342,14 @@ impl Binder {
                 let cte_info = CteInfo {
                     columns_alias: cte.alias.columns.iter().map(|c| c.name.clone()).collect(),
                     query: cte.query.clone(),
+                    materialized: cte.materialized,
+                    cte_idx: idx,
+                    used_count: 0,
+                    stat_info: None,
+                    columns: vec![],
                 };
-                bind_context.ctes_map.insert(table_name, cte_info);
+                self.ctes_map.insert(table_name.clone(), cte_info.clone());
+                bind_context.cte_map_ref.insert(table_name, cte_info);
             }
         }
 
@@ -357,7 +396,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_where(
+    pub async fn bind_where(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
@@ -373,7 +412,10 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             aliases,
+            self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
+        scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
@@ -451,22 +493,51 @@ impl Binder {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn bind_union(
+    pub fn bind_union(
         &mut self,
         left_span: Span,
-        _right_span: Span,
+        right_span: Span,
         left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
         distinct: bool,
     ) -> Result<(SExpr, BindContext)> {
-        let pairs = left_context
+        let mut coercion_types = Vec::with_capacity(left_context.columns.len());
+        for (left_col, right_col) in left_context
             .columns
             .iter()
             .zip(right_context.columns.iter())
-            .map(|(l, r)| (l.index, r.index))
-            .collect();
+        {
+            if left_col.data_type != right_col.data_type {
+                if let Some(data_type) = common_super_type(
+                    *left_col.data_type.clone(),
+                    *right_col.data_type.clone(),
+                    &BUILTIN_FUNCTIONS.default_cast_rules,
+                ) {
+                    coercion_types.push(data_type);
+                } else {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "SetOperation's types cannot be matched, left column {:?}, type: {:?}, right column {:?}, type: {:?}",
+                        left_col.column_name,
+                        left_col.data_type,
+                        right_col.column_name,
+                        right_col.data_type
+                    )));
+                }
+            } else {
+                coercion_types.push(*left_col.data_type.clone());
+            }
+        }
+        let (new_bind_context, pairs, left_expr, right_expr) = self.coercion_union_type(
+            left_span,
+            right_span,
+            left_context,
+            right_context,
+            left_expr,
+            right_expr,
+            coercion_types,
+        )?;
 
         let union_plan = UnionAll { pairs };
         let mut new_expr = SExpr::create_binary(
@@ -478,17 +549,17 @@ impl Binder {
         if distinct {
             new_expr = self.bind_distinct(
                 left_span,
-                &left_context,
-                left_context.all_column_bindings(),
+                &new_bind_context,
+                new_bind_context.all_column_bindings(),
                 &mut HashMap::new(),
                 new_expr,
             )?;
         }
 
-        Ok((new_expr, left_context))
+        Ok((new_expr, new_bind_context))
     }
 
-    fn bind_intersect(
+    pub fn bind_intersect(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -508,7 +579,7 @@ impl Binder {
         )
     }
 
-    fn bind_except(
+    pub fn bind_except(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -529,7 +600,7 @@ impl Binder {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn bind_intersect_or_except(
+    pub fn bind_intersect_or_except(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -579,6 +650,114 @@ impl Binder {
         Ok((s_expr, left_context))
     }
 
+    #[allow(clippy::type_complexity)]
+    #[allow(clippy::too_many_arguments)]
+    fn coercion_union_type(
+        &self,
+        left_span: Span,
+        right_span: Span,
+        left_bind_context: BindContext,
+        right_bind_context: BindContext,
+        mut left_expr: SExpr,
+        mut right_expr: SExpr,
+        coercion_types: Vec<DataType>,
+    ) -> Result<(BindContext, Vec<(IndexType, IndexType)>, SExpr, SExpr)> {
+        let mut left_scalar_items = Vec::with_capacity(left_bind_context.columns.len());
+        let mut right_scalar_items = Vec::with_capacity(right_bind_context.columns.len());
+        let mut new_bind_context = BindContext::new();
+        let mut pairs = Vec::with_capacity(left_bind_context.columns.len());
+        for (idx, (left_col, right_col)) in left_bind_context
+            .columns
+            .iter()
+            .zip(right_bind_context.columns.iter())
+            .enumerate()
+        {
+            let left_index = if *left_col.data_type != coercion_types[idx] {
+                let new_column_index = self
+                    .metadata
+                    .write()
+                    .add_derived_column(left_col.column_name.clone(), coercion_types[idx].clone());
+                let column_binding = ColumnBindingBuilder::new(
+                    left_col.column_name.clone(),
+                    new_column_index,
+                    Box::new(coercion_types[idx].clone()),
+                    Visibility::Visible,
+                )
+                .build();
+                let left_coercion_expr = CastExpr {
+                    span: left_span,
+                    is_try: false,
+                    argument: Box::new(
+                        BoundColumnRef {
+                            span: left_span,
+                            column: left_col.clone(),
+                        }
+                        .into(),
+                    ),
+                    target_type: Box::new(coercion_types[idx].clone()),
+                };
+                left_scalar_items.push(ScalarItem {
+                    scalar: left_coercion_expr.into(),
+                    index: new_column_index,
+                });
+                new_bind_context.add_column_binding(column_binding);
+                new_column_index
+            } else {
+                new_bind_context.add_column_binding(left_col.clone());
+                left_col.index
+            };
+            let right_index = if *right_col.data_type != coercion_types[idx] {
+                let new_column_index = self
+                    .metadata
+                    .write()
+                    .add_derived_column(right_col.column_name.clone(), coercion_types[idx].clone());
+                let right_coercion_expr = CastExpr {
+                    span: right_span,
+                    is_try: false,
+                    argument: Box::new(
+                        BoundColumnRef {
+                            span: right_span,
+                            column: right_col.clone(),
+                        }
+                        .into(),
+                    ),
+                    target_type: Box::new(coercion_types[idx].clone()),
+                };
+                right_scalar_items.push(ScalarItem {
+                    scalar: right_coercion_expr.into(),
+                    index: new_column_index,
+                });
+                new_column_index
+            } else {
+                right_col.index
+            };
+            pairs.push((left_index, right_index));
+        }
+        if !left_scalar_items.is_empty() {
+            left_expr = SExpr::create_unary(
+                Arc::new(
+                    EvalScalar {
+                        items: left_scalar_items,
+                    }
+                    .into(),
+                ),
+                Arc::new(left_expr),
+            );
+        }
+        if !right_scalar_items.is_empty() {
+            right_expr = SExpr::create_unary(
+                Arc::new(
+                    EvalScalar {
+                        items: right_scalar_items,
+                    }
+                    .into(),
+                ),
+                Arc::new(right_expr),
+            );
+        }
+        Ok((new_bind_context, pairs, left_expr, right_expr))
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn analyze_lazy_materialization(
         &self,
@@ -590,22 +769,28 @@ impl Binder {
         order_by: &[OrderItem],
         limit: usize,
     ) -> Result<()> {
-        // Only simple single table Top-N query is supported.
+        // Only simple single table queries with limit are supported.
         // e.g.
+        // SELECT ... FROM t WHERE ... LIMIT ...
         // SELECT ... FROM t WHERE ... ORDER BY ... LIMIT ...
         if stmt.group_by.is_some()
             || stmt.having.is_some()
             || stmt.distinct
-            || !bind_context.ctes_map.is_empty()
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
         {
             return Ok(());
         }
 
-        let limit_threadhold = self.ctx.get_settings().get_lazy_topn_threshold()? as usize;
+        let limit_threadhold = self.ctx.get_settings().get_lazy_read_threshold()? as usize;
 
-        if !(!order_by.is_empty() && limit > 0 && limit <= limit_threadhold) {
+        let where_cols = where_scalar
+            .as_ref()
+            .map(|w| w.used_columns())
+            .unwrap_or_default();
+
+        if limit == 0 || limit > limit_threadhold || (order_by.is_empty() && where_cols.is_empty())
+        {
             return Ok(());
         }
 
@@ -637,6 +822,15 @@ impl Binder {
             select_cols.extend(s.scalar.used_columns())
         }
 
+        // If there are derived columns, we can't use lazy materialization.
+        // (As the derived columns may come from a CTE, the rows fetcher can't know where to fetch the data.)
+        if select_cols
+            .iter()
+            .any(|col| matches!(metadata.column(*col), ColumnEntry::DerivedColumn(_)))
+        {
+            return Ok(());
+        }
+
         let mut order_by_cols = HashSet::with_capacity(order_by.len());
         for o in order_by {
             if let Some(scalar) = scalar_items.get(&o.index) {
@@ -647,11 +841,6 @@ impl Binder {
                 order_by_cols.insert(o.index);
             }
         }
-
-        let where_cols = where_scalar
-            .as_ref()
-            .map(|w| w.used_columns())
-            .unwrap_or_default();
 
         let internal_cols = cols
             .iter()
@@ -665,6 +854,16 @@ impl Binder {
 
         let lazy_cols = select_cols.difference(&non_lazy_cols).copied().collect();
         metadata.add_lazy_columns(lazy_cols);
+
+        // Single table, the table index is 0.
+        let table_index = 0;
+        if metadata.row_id_index_by_table_index(table_index).is_none() {
+            let internal_column = INTERNAL_COLUMN_FACTORY
+                .get_internal_column(ROW_ID_COL_NAME)
+                .unwrap();
+            let index = metadata.add_internal_column(table_index, internal_column);
+            metadata.set_table_row_id_index(table_index, index);
+        }
 
         Ok(())
     }
@@ -732,6 +931,7 @@ impl<'a> SelectRewriter<'a> {
                 args,
                 params: vec![],
                 window: None,
+                lambda: None,
             }),
             alias,
         }
@@ -906,5 +1106,23 @@ impl<'a> SelectRewriter<'a> {
             });
         };
         Ok(())
+    }
+}
+
+pub struct MaxColumnPosition {
+    pub max_pos: usize,
+}
+
+impl MaxColumnPosition {
+    pub fn new() -> Self {
+        Self { max_pos: 0 }
+    }
+}
+
+impl<'a> Visitor<'a> for MaxColumnPosition {
+    fn visit_column_position(&mut self, pos: &ColumnPosition) {
+        if pos.pos > self.max_pos {
+            self.max_pos = pos.pos;
+        }
     }
 }

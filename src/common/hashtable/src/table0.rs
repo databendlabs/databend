@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::alloc::Allocator;
-use std::borrow::Borrow;
 use std::intrinsics::assume;
 use std::mem::MaybeUninit;
 
@@ -131,7 +130,7 @@ where
                 return None;
             }
 
-            if self.entries[i].key.assume_init_ref().borrow() == key {
+            if self.entries[i].key.assume_init_ref() == key {
                 return Some(&self.entries[i]);
             }
         }
@@ -157,7 +156,7 @@ where
             if self.entries[i].is_zero() {
                 return None;
             }
-            if self.entries[i].key.assume_init_ref().borrow() == key {
+            if self.entries[i].key.assume_init_ref() == key {
                 return Some(&mut self.entries[i]);
             }
         }
@@ -173,7 +172,7 @@ where
             if self.entries[i].is_zero() {
                 return None;
             }
-            if self.entries[i].key.assume_init_ref().borrow() == key {
+            if self.entries[i].key.assume_init_ref() == key {
                 return Some(i);
             }
         }

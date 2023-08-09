@@ -15,15 +15,17 @@
 use std::fs::File;
 use std::io::Read;
 use std::string::String;
+use std::time::Duration;
 
 use common_base::base::tokio;
+use common_base::base::tokio::time::Instant;
 use common_base::base::Stoppable;
 use common_meta_types::Node;
 use databend_meta::api::http::v1::cluster_state::nodes_handler;
 use databend_meta::api::http::v1::cluster_state::status_handler;
 use databend_meta::api::HttpService;
-use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
+use log::info;
 use poem::get;
 use poem::http::Method;
 use poem::http::StatusCode;
@@ -33,14 +35,18 @@ use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+/// Test http API "/cluster/nodes"
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_cluster_nodes() -> anyhow::Result<()> {
     let tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
@@ -48,10 +54,10 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let meta_node = MetaNode::start(&tc0.config).await?;
+    let _mn0 = MetaNode::start(&tc0.config).await?;
 
-    let meta_node1 = MetaNode::start(&tc1.config).await?;
-    let res = meta_node1
+    let mn1 = MetaNode::start(&tc1.config).await?;
+    let res = mn1
         .join_cluster(
             &tc1.config.raft_config,
             tc1.config.grpc_api_advertise_address(),
@@ -61,7 +67,7 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
 
     let cluster_router = Route::new()
         .at("/cluster/nodes", get(nodes_handler))
-        .data(meta_node1.clone());
+        .data(mn1.clone());
     let response = cluster_router
         .call(
             Request::builder()
@@ -76,12 +82,11 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     let body = response.into_body().into_vec().await.unwrap();
     let nodes: Vec<Node> = serde_json::from_slice(&body).unwrap();
     assert_eq!(nodes.len(), 2);
-    meta_node.stop().await?;
-    meta_node1.stop().await?;
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_cluster_state() -> anyhow::Result<()> {
     let tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
@@ -89,10 +94,10 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let meta_node = MetaNode::start(&tc0.config).await?;
+    let _mn0 = MetaNode::start(&tc0.config).await?;
 
-    let meta_node1 = MetaNode::start(&tc1.config).await?;
-    let _ = meta_node1
+    let mn1 = MetaNode::start(&tc1.config).await?;
+    let _ = mn1
         .join_cluster(
             &tc1.config.raft_config,
             tc1.config.grpc_api_advertise_address(),
@@ -101,7 +106,7 @@ async fn test_cluster_state() -> anyhow::Result<()> {
 
     let cluster_router = Route::new()
         .at("/cluster/status", get(status_handler))
-        .data(meta_node1.clone());
+        .data(mn1.clone());
     let response = cluster_router
         .call(
             Request::builder()
@@ -122,12 +127,12 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     assert_eq!(voters.len(), 2);
     assert_eq!(non_voters.len(), 0);
     assert_ne!(leader, None);
-    meta_node.stop().await?;
-    meta_node1.stop().await?;
+
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     let addr_str = "127.0.0.1:30003";
 
@@ -150,11 +155,11 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
         )
         .await?;
 
-    let mut srv = HttpService::create(tc1.config, meta_node1);
+    let mut srv = HttpService::create(tc1.config.clone(), meta_node1);
 
     // test cert is issued for "localhost"
-    let state_url = format!("https://{}:30003/v1/cluster/status", TEST_CN_NAME);
-    let node_url = format!("https://{}:30003/v1/cluster/nodes", TEST_CN_NAME);
+    let state_url = || format!("https://{}:30003/v1/cluster/status", TEST_CN_NAME);
+    let node_url = || format!("https://{}:30003/v1/cluster/nodes", TEST_CN_NAME);
 
     // load cert
     let mut buf = Vec::new();
@@ -162,26 +167,45 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     let cert = reqwest::Certificate::from_pem(&buf).unwrap();
 
     srv.start().await.expect("HTTP: admin api error");
+
     // kick off
     let client = reqwest::Client::builder()
         .add_root_certificate(cert)
         .build()
         .unwrap();
-    let resp = client.get(state_url).send().await;
+
+    info!("--- retry until service is ready or timeout ---");
+    {
+        let timeout_at = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < timeout_at {
+            let resp = client.get(state_url()).send().await;
+            if resp.is_ok() {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    }
+
+    let resp = client.get(state_url()).send().await;
     assert!(resp.is_ok());
+
     let resp = resp.unwrap();
     assert!(resp.status().is_success());
     assert_eq!("/v1/cluster/status", resp.url().path());
+
     let state_json = resp.json::<serde_json::Value>().await.unwrap();
     assert_eq!(state_json["voters"].as_array().unwrap().len(), 2);
     assert_eq!(state_json["non_voters"].as_array().unwrap().len(), 0);
     assert_ne!(state_json["leader"].as_object(), None);
 
-    let resp_nodes = client.get(node_url).send().await;
+    let resp_nodes = client.get(node_url()).send().await;
     assert!(resp_nodes.is_ok());
+
     let resp_nodes = resp_nodes.unwrap();
     assert!(resp_nodes.status().is_success());
     assert_eq!("/v1/cluster/nodes", resp_nodes.url().path());
+
     let result = resp_nodes.json::<Vec<Node>>().await.unwrap();
     assert_eq!(result.len(), 2);
     Ok(())

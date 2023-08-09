@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod column_hash;
 pub mod deletion_accumulator;
 pub mod merge_into_mutator;
 pub mod mutator_replace_into;

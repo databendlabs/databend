@@ -35,10 +35,14 @@ use common_expression::Expr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserDefinedFunction;
-use tracing::warn;
+use indexmap::IndexMap;
+use log::warn;
 
 use crate::binder::wrap_cast;
+use crate::binder::ColumnBindingBuilder;
+use crate::binder::CteInfo;
 use crate::normalize_identifier;
+use crate::optimizer::SExpr;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CallPlan;
@@ -50,7 +54,9 @@ use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
+use crate::plans::MaterializedCte;
 use crate::plans::Plan;
+use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
@@ -61,6 +67,7 @@ use crate::ColumnBinding;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::ScalarExpr;
 use crate::TypeChecker;
 use crate::Visibility;
 
@@ -76,6 +83,16 @@ pub struct Binder {
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
+    // Save the equal scalar exprs for joins
+    // Eg: SELECT * FROM (twocolumn AS a JOIN twocolumn AS b USING(x) JOIN twocolumn AS c on a.x = c.x) ORDER BY x LIMIT 1
+    // The eq_scalars is [(a.x, b.x), (a.x, c.x)]
+    pub eq_scalars: Vec<(ScalarExpr, ScalarExpr)>,
+    // Save the bound context for materialized cte, the key is cte_idx
+    pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
+    pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
+    /// Use `IndexMap` because need to keep the insertion order
+    /// Then wrap materialized ctes to main plan.
+    pub ctes_map: Box<IndexMap<String, CteInfo>>,
 }
 
 impl<'a> Binder {
@@ -90,11 +107,25 @@ impl<'a> Binder {
             catalogs,
             name_resolution_ctx,
             metadata,
+            m_cte_bound_ctx: Default::default(),
+            eq_scalars: vec![],
+            m_cte_bound_s_expr: Default::default(),
+            ctes_map: Box::default(),
         }
+    }
+
+    // After the materialized cte was bound, add it to `m_cte_bound_ctx`
+    pub fn set_m_cte_bound_ctx(&mut self, cte_idx: IndexType, bound_ctx: BindContext) {
+        self.m_cte_bound_ctx.insert(cte_idx, bound_ctx);
+    }
+
+    pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
+        self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
     }
 
     #[async_backtrace::framed]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
+        self.ctx.set_status_info("binding");
         let mut init_bind_context = BindContext::new();
         self.bind_statement(&mut init_bind_context, stmt).await
     }
@@ -110,6 +141,8 @@ impl<'a> Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            false,
+            false,
         );
         let mut hint_settings: HashMap<String, String> = HashMap::new();
         for hint in &hints.hints_list {
@@ -150,7 +183,20 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let plan = match stmt {
             Statement::Query(query) => {
-                let (s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                // Wrap `LogicalMaterializedCte` to `s_expr`
+                for (_, cte_info) in self.ctes_map.iter().rev() {
+                    if !cte_info.materialized {
+                        continue;
+                    }
+                    let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
+                    let left_output_columns = cte_info.columns.clone();
+                    s_expr = SExpr::create_binary(
+                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: cte_info.cte_idx})),
+                        Arc::new(cte_s_expr.clone()),
+                        Arc::new(s_expr),
+                    );
+                }
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
                     Some(format_statement(stmt.clone())?)
                 } else {
@@ -194,7 +240,7 @@ impl<'a> Binder {
                     }
                 }
                 self.bind_copy(bind_context, stmt).await?
-            },
+            }
 
             Statement::ShowMetrics => {
                 self.bind_rewrite_to_query(
@@ -245,6 +291,10 @@ impl<'a> Binder {
             Statement::ShowTablesStatus(stmt) => {
                 self.bind_show_tables_status(bind_context, stmt).await?
             }
+            Statement::ShowDropTables(stmt) => {
+                self.bind_show_drop_tables(bind_context, stmt).await?
+            }
+            Statement::AttachTable(stmt) => self.bind_attach_table(stmt).await?,
             Statement::CreateTable(stmt) => self.bind_create_table(stmt).await?,
             Statement::DropTable(stmt) => self.bind_drop_table(stmt).await?,
             Statement::UndropTable(stmt) => self.bind_undrop_table(stmt).await?,
@@ -253,6 +303,7 @@ impl<'a> Binder {
             Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(bind_context, stmt).await?,
             Statement::VacuumTable(stmt) => self.bind_vacuum_table(bind_context, stmt).await?,
+            Statement::VacuumDropTable(stmt) => self.bind_vacuum_drop_table(bind_context, stmt).await?,
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 
@@ -264,6 +315,7 @@ impl<'a> Binder {
             // Indexes
             Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
             Statement::DropIndex(stmt) => self.bind_drop_index(stmt).await?,
+            Statement::RefreshIndex(stmt) => self.bind_refresh_index(bind_context, stmt).await?,
 
             // Virtual Columns
             Statement::CreateVirtualColumns(stmt) => self.bind_create_virtual_columns(stmt).await?,
@@ -277,7 +329,7 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, auth_string FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, auth_string, is_configured FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
@@ -318,14 +370,16 @@ impl<'a> Binder {
                         warn!("In INSERT resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
-                self.bind_insert(bind_context, stmt).await?},
+                self.bind_insert(bind_context, stmt).await?
+            }
             Statement::Replace(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
                         warn!("In REPLACE resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
-                self.bind_replace(bind_context, stmt).await?},
+                self.bind_replace(bind_context, stmt).await?
+            }
             Statement::Delete {
                 hints,
                 table_reference,
@@ -346,7 +400,7 @@ impl<'a> Binder {
                     }
                 }
                 self.bind_update(bind_context, stmt).await?
-            },
+            }
 
             // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
@@ -356,7 +410,7 @@ impl<'a> Binder {
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
             // File Formats
-            Statement::CreateFileFormat{  if_not_exists, name, file_format_options} =>  {
+            Statement::CreateFileFormat { if_not_exists, name, file_format_options } => {
                 if StageFileFormatType::from_str(name).is_ok() {
                     return Err(ErrorCode::SyntaxException(format!(
                         "File format {name} is reserved"
@@ -365,18 +419,18 @@ impl<'a> Binder {
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     if_not_exists: *if_not_exists,
                     name: name.clone(),
-                    file_format_params: file_format_options.clone().try_into()?
+                    file_format_params: file_format_options.clone().try_into()?,
                 }))
-            },
+            }
 
-            Statement::DropFileFormat{
+            Statement::DropFileFormat {
                 if_exists,
                 name,
             } => Plan::DropFileFormat(Box::new(DropFileFormatPlan {
                 if_exists: *if_exists,
                 name: name.clone(),
             })),
-            Statement::ShowFileFormats  => Plan::ShowFileFormats(Box::new(ShowFileFormatsPlan {})),
+            Statement::ShowFileFormats => Plan::ShowFileFormats(Box::new(ShowFileFormatsPlan {})),
 
             // UDFs
             Statement::CreateUDF {
@@ -471,10 +525,10 @@ impl<'a> Binder {
             Statement::CreateShareEndpoint(stmt) => {
                 self.bind_create_share_endpoint(stmt).await?
             }
-                        Statement::ShowShareEndpoint(stmt) => {
+            Statement::ShowShareEndpoint(stmt) => {
                 self.bind_show_share_endpoint(stmt).await?
             }
-                                    Statement::DropShareEndpoint(stmt) => {
+            Statement::DropShareEndpoint(stmt) => {
                 self.bind_drop_share_endpoint(stmt).await?
             }
             Statement::CreateShare(stmt) => {
@@ -513,6 +567,21 @@ impl<'a> Binder {
             Statement::DescDatamaskPolicy(stmt) => {
                 self.bind_desc_data_mask_policy(stmt).await?
             }
+            Statement::CreateNetworkPolicy(stmt) => {
+                self.bind_create_network_policy(stmt).await?
+            }
+            Statement::AlterNetworkPolicy(stmt) => {
+                self.bind_alter_network_policy(stmt).await?
+            }
+            Statement::DropNetworkPolicy(stmt) => {
+                self.bind_drop_network_policy(stmt).await?
+            }
+            Statement::DescNetworkPolicy(stmt) => {
+                self.bind_desc_network_policy(stmt).await?
+            }
+            Statement::ShowNetworkPolicies => {
+                self.bind_show_network_policies().await?
+            }
         };
         Ok(plan)
     }
@@ -534,12 +603,9 @@ impl<'a> Binder {
         Ok(plan)
     }
 
-    /// Create a new ColumnBinding with assigned index
-    pub(crate) fn create_column_binding(
+    /// Create a new ColumnBinding for derived column
+    pub(crate) fn create_derived_column_binding(
         &mut self,
-        database_name: Option<String>,
-        table_name: Option<String>,
-        table_index: Option<IndexType>,
         column_name: String,
         data_type: DataType,
     ) -> ColumnBinding {
@@ -547,16 +613,8 @@ impl<'a> Binder {
             .metadata
             .write()
             .add_derived_column(column_name.clone(), data_type.clone());
-        ColumnBinding {
-            database_name,
-            table_name,
-            column_position: None,
-            table_index,
-            column_name,
-            index,
-            data_type: Box::new(data_type),
-            visibility: Visibility::Visible,
-        }
+        ColumnBindingBuilder::new(column_name, index, Box::new(data_type), Visibility::Visible)
+            .build()
     }
 
     /// Normalize [[<catalog>].<database>].<object>
@@ -582,5 +640,11 @@ impl<'a> Binder {
     /// Normalize <identifier>
     pub fn normalize_object_identifier(&self, ident: &Identifier) -> String {
         normalize_identifier(ident, &self.name_resolution_ctx).name
+    }
+
+    pub fn judge_equal_scalars(&self, left: &ScalarExpr, right: &ScalarExpr) -> bool {
+        self.eq_scalars
+            .iter()
+            .any(|(l, r)| (l == left && r == right) || (l == right && r == left))
     }
 }

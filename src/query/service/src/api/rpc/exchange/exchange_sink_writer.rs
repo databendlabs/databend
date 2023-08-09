@@ -55,12 +55,9 @@ impl AsyncSink for ExchangeWriterSink {
             None => Err(ErrorCode::Internal(
                 "ExchangeWriterSink only recv ExchangeSerializeMeta.",
             )),
-            Some(block_meta) => match ExchangeSerializeMeta::downcast_from(block_meta) {
-                None => Err(ErrorCode::Internal(
-                    "ExchangeWriterSink only recv ExchangeSerializeMeta.",
-                )),
-                Some(block_meta) => Ok(block_meta),
-            },
+            Some(block_meta) => ExchangeSerializeMeta::downcast_from(block_meta).ok_or(
+                ErrorCode::Internal("ExchangeWriterSink only recv ExchangeSerializeMeta."),
+            ),
         }?;
 
         for packet in serialize_meta.packet {

@@ -13,50 +13,64 @@
 // limitations under the License.
 
 use std::cmp;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::Scalar;
+use itertools::Itertools;
+use log::debug;
 use storages_common_table_meta::meta::BlockMeta;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
-use crate::operations::common::Replacement;
-use crate::operations::common::ReplacementLogEntry;
-
-static MAX_BLOCK_COUNT: usize = 50;
+use crate::table_functions::cmp_with_null;
 
 #[derive(Clone)]
 pub struct ReclusterMutator {
-    selected_blocks: Vec<Arc<BlockMeta>>,
-    level: i32,
-    threshold: f64,
-    mutation_logs: MutationLogs,
+    memory_threshold: usize,
+    depth_threshold: f64,
     block_thresholds: BlockThresholds,
+
+    mutation_logs: MutationLogs,
+    selected_blocks: Vec<Arc<BlockMeta>>,
+
+    pub(crate) total_rows: usize,
+    pub(crate) total_bytes: usize,
+    pub(crate) level: i32,
 }
 
 impl ReclusterMutator {
-    pub fn try_create(threshold: f64, block_thresholds: BlockThresholds) -> Result<Self> {
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        depth_threshold: f64,
+        block_thresholds: BlockThresholds,
+    ) -> Result<Self> {
+        let mem_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
+        let max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
+        let memory_threshold =
+            cmp::min(mem_info.avail as usize * 1024, max_memory_usage) * 50 / 100;
         Ok(Self {
-            selected_blocks: Vec::new(),
-            level: 0,
-            threshold,
+            memory_threshold,
+            depth_threshold,
             block_thresholds,
             mutation_logs: Default::default(),
+            selected_blocks: Vec::new(),
+            total_rows: 0,
+            total_bytes: 0,
+            level: 0,
         })
     }
 
-    pub fn selected_blocks(&self) -> Vec<Arc<BlockMeta>> {
-        self.selected_blocks.clone()
-    }
-
-    pub fn level(&self) -> i32 {
-        self.level
+    pub fn take_blocks(&mut self) -> Vec<Arc<BlockMeta>> {
+        std::mem::take(&mut self.selected_blocks)
     }
 
     pub fn mutation_logs(&self) -> MutationLogs {
@@ -69,24 +83,24 @@ impl ReclusterMutator {
         blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>>,
     ) -> Result<bool> {
         for (level, block_metas) in blocks_map.into_iter() {
-            if block_metas.len() <= 1 {
+            if block_metas.len() < 2 {
                 continue;
             }
 
             let mut total_rows = 0;
             let mut total_bytes = 0;
-            let mut points_map: BTreeMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
+            let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
             for (i, (_, meta)) in block_metas.iter().enumerate() {
-                let stats = meta.cluster_stats.clone().unwrap();
-                points_map
-                    .entry(stats.min.clone())
-                    .and_modify(|v| v.0.push(i))
-                    .or_insert((vec![i], vec![]));
-                points_map
-                    .entry(stats.max.clone())
-                    .and_modify(|v| v.1.push(i))
-                    .or_insert((vec![], vec![i]));
-
+                if let Some(stats) = &meta.cluster_stats {
+                    points_map
+                        .entry(stats.min())
+                        .and_modify(|v| v.0.push(i))
+                        .or_insert((vec![i], vec![]));
+                    points_map
+                        .entry(stats.max())
+                        .and_modify(|v| v.1.push(i))
+                        .or_insert((vec![], vec![i]));
+                }
                 total_rows += meta.row_count;
                 total_bytes += meta.block_size;
             }
@@ -99,41 +113,47 @@ impl ReclusterMutator {
                 self.selected_blocks = block_metas
                     .into_iter()
                     .map(|(block_idx, block_meta)| {
-                        let entry = ReplacementLogEntry {
-                            index: block_idx,
-                            op: Replacement::Deleted,
-                        };
                         self.mutation_logs
                             .entries
-                            .push(MutationLogEntry::Replacement(entry));
+                            .push(MutationLogEntry::DeletedBlock { index: block_idx });
                         block_meta
                     })
-                    .collect::<Vec<_>>();
+                    .collect();
+                self.total_rows = total_rows as usize;
+                self.total_bytes = total_bytes as usize;
                 self.level = level;
-
                 return Ok(true);
             }
 
             let mut max_depth = 0;
+            let mut max_points = Vec::new();
             let mut block_depths = Vec::new();
             let mut point_overlaps: Vec<Vec<usize>> = Vec::new();
             let mut unfinished_parts: HashMap<usize, usize> = HashMap::new();
-            for (start, end) in points_map.values() {
-                // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.
-                let point_depth =
-                    if unfinished_parts.len() == 1 && start.len() == 1 && end.len() == 1 {
-                        1
-                    } else {
-                        unfinished_parts.len() + start.len()
-                    };
+            for (i, (_, (start, end))) in points_map
+                .into_iter()
+                .sorted_by(|(a, _), (b, _)| a.iter().cmp_by(b.iter(), cmp_with_null))
+                .enumerate()
+            {
+                let point_depth = if unfinished_parts.len() == 1 && Self::check_point(&start, &end)
+                {
+                    1
+                } else {
+                    unfinished_parts.len() + start.len()
+                };
 
-                if point_depth > max_depth {
-                    max_depth = point_depth;
+                match point_depth.cmp(&max_depth) {
+                    Ordering::Greater => {
+                        max_depth = point_depth;
+                        max_points = vec![i];
+                    }
+                    Ordering::Equal => max_points.push(i),
+                    Ordering::Less => (),
                 }
 
-                for (_, val) in unfinished_parts.iter_mut() {
-                    *val = cmp::max(*val, point_depth);
-                }
+                unfinished_parts
+                    .values_mut()
+                    .for_each(|val| *val = cmp::max(*val, point_depth));
 
                 start.iter().for_each(|&idx| {
                     unfinished_parts.insert(idx, point_depth);
@@ -141,59 +161,62 @@ impl ReclusterMutator {
 
                 point_overlaps.push(unfinished_parts.keys().cloned().collect());
 
-                end.iter().for_each(|&idx| {
-                    let stat = unfinished_parts.remove(&idx).unwrap();
-                    block_depths.push(stat);
+                end.iter().for_each(|idx| {
+                    if let Some(v) = unfinished_parts.remove(idx) {
+                        block_depths.push(v);
+                    }
                 });
             }
-            assert_eq!(unfinished_parts.len(), 0);
+            assert!(unfinished_parts.is_empty());
+            assert!(!max_points.is_empty());
 
             let sum_depth: usize = block_depths.iter().sum();
             // round the float to 4 decimal places.
             let average_depth =
                 (10000.0 * sum_depth as f64 / block_depths.len() as f64).round() / 10000.0;
-            tracing::debug!(
+            debug!(
                 "recluster: average_depth: {} in level {}",
-                average_depth,
-                level
+                average_depth, level
             );
-            if average_depth <= self.threshold {
+            if average_depth <= self.depth_threshold {
                 continue;
             }
 
             // find the max point, gather the blocks.
             let mut selected_idx = HashSet::new();
-            let mut find = false;
-            for overlap in point_overlaps {
-                if overlap.len() == max_depth {
-                    overlap.iter().for_each(|&idx| {
-                        selected_idx.insert(idx);
-                    });
-                    find = true;
-                } else if find {
+            point_overlaps[max_points[0]].iter().for_each(|idx| {
+                selected_idx.insert(*idx);
+            });
+
+            for idx in selected_idx {
+                let (block_idx, block_meta) = block_metas[idx].clone();
+                let memory_usage = self.total_bytes + block_meta.block_size as usize;
+                if memory_usage > self.memory_threshold {
                     break;
                 }
+
+                self.mutation_logs
+                    .entries
+                    .push(MutationLogEntry::DeletedBlock { index: block_idx });
+                self.total_rows += block_meta.row_count as usize;
+                self.total_bytes = memory_usage;
+                self.selected_blocks.push(block_meta);
             }
 
-            self.selected_blocks = selected_idx
-                .iter()
-                .take(MAX_BLOCK_COUNT)
-                .map(|idx| {
-                    let (block_idx, block_meta) = block_metas[*idx].clone();
-                    let entry = ReplacementLogEntry {
-                        index: block_idx,
-                        op: Replacement::Deleted,
-                    };
-                    self.mutation_logs
-                        .entries
-                        .push(MutationLogEntry::Replacement(entry));
-                    block_meta
-                })
-                .collect::<Vec<_>>();
             self.level = level;
             return Ok(true);
         }
 
         Ok(false)
+    }
+
+    // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.
+    fn check_point(start: &[usize], end: &[usize]) -> bool {
+        if start.len() + end.len() > 3 || start.is_empty() || end.is_empty() {
+            return false;
+        }
+
+        let set: HashSet<usize> = HashSet::from_iter(start.iter().chain(end.iter()).cloned());
+        set.len() == 2
     }
 }

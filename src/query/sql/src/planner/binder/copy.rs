@@ -33,6 +33,7 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::parser_values_with_placeholder;
 use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
+use common_ast::Visitor;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
@@ -49,10 +50,11 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
+use log::debug;
 use parking_lot::RwLock;
-use tracing::debug;
 
 use crate::binder::location::parse_uri_location;
+use crate::binder::select::MaxColumnPosition;
 use crate::binder::Binder;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
@@ -92,6 +94,9 @@ impl<'a> Binder {
                     pattern: stmt.pattern.clone(),
                 };
 
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                let catalog_info = catalog.info();
+
                 let table = self
                     .ctx
                     .get_table(&catalog_name, &database_name, &table_name)
@@ -100,7 +105,7 @@ impl<'a> Binder {
                 let required_values_schema: DataSchemaRef = Arc::new(
                     match columns {
                         Some(cols) => self.schema_project(&table.schema(), cols)?,
-                        None => table.schema(),
+                        None => self.schema_project(&table.schema(), &[])?,
                     }
                     .into(),
                 );
@@ -111,7 +116,7 @@ impl<'a> Binder {
                 let stage_schema = infer_table_schema(&required_values_schema)?;
 
                 let plan = CopyIntoTablePlan {
-                    catalog_name,
+                    catalog_info,
                     database_name,
                     table_name,
                     validation_mode,
@@ -128,6 +133,8 @@ impl<'a> Binder {
                     required_values_schema: required_values_schema.clone(),
                     write_mode: CopyIntoTableMode::Copy,
                     query: None,
+
+                    enable_distributed: false,
                 };
 
                 self.bind_copy_into_table_from_location(bind_context, plan)
@@ -171,6 +178,9 @@ impl<'a> Binder {
                 let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
                     .map_err(ErrorCode::SyntaxException)?;
 
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                let catalog_info = catalog.info();
+
                 let table = self
                     .ctx
                     .get_table(&catalog_name, &database_name, &table_name)
@@ -179,14 +189,14 @@ impl<'a> Binder {
                 let required_values_schema: DataSchemaRef = Arc::new(
                     match columns {
                         Some(cols) => self.schema_project(&table.schema(), cols)?,
-                        None => table.schema(),
+                        None => self.schema_project(&table.schema(), &[])?,
                     }
                     .into(),
                 );
                 let stage_schema = infer_table_schema(&required_values_schema)?;
 
                 let plan = CopyIntoTablePlan {
-                    catalog_name,
+                    catalog_info,
                     database_name,
                     table_name,
                     validation_mode,
@@ -203,6 +213,8 @@ impl<'a> Binder {
                     required_values_schema: required_values_schema.clone(),
                     write_mode: CopyIntoTableMode::Copy,
                     query: None,
+
+                    enable_distributed: false,
                 };
 
                 self.bind_copy_into_table_from_location(bind_context, plan)
@@ -304,6 +316,13 @@ impl<'a> Binder {
             ) => {
                 let (catalog_name, database_name, table_name) =
                     self.normalize_object_identifier_triple(catalog, database, table);
+
+                let mut max_column_position = MaxColumnPosition::new();
+                max_column_position.visit_query(query.as_ref());
+                self.metadata
+                    .write()
+                    .set_max_column_position(max_column_position.max_pos);
+
                 let (select_list, location, alias) = check_transform_query(query)?;
                 let (mut stage_info, path) =
                     parse_file_location(&self.ctx, location, BTreeMap::new()).await?;
@@ -313,6 +332,9 @@ impl<'a> Binder {
                     pattern: stmt.pattern.clone(),
                     files: stmt.files.clone(),
                 };
+
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                let catalog_info = catalog.info();
 
                 let table = self
                     .ctx
@@ -328,7 +350,7 @@ impl<'a> Binder {
                 );
 
                 let plan = CopyIntoTablePlan {
-                    catalog_name,
+                    catalog_info,
                     database_name,
                     table_name,
                     required_source_schema: required_values_schema.clone(),
@@ -345,6 +367,8 @@ impl<'a> Binder {
                     write_mode: CopyIntoTableMode::Copy,
                     query: None,
                     validation_mode: ValidationMode::None,
+
+                    enable_distributed: false,
                 };
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
                     .await
@@ -441,13 +465,16 @@ impl<'a> Binder {
                 .await?
         };
 
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
+        let catalog_info = catalog.info();
+
         let (mut stage_info, files_info) = self.bind_attachment(attachment).await?;
         stage_info.copy_options.purge = true;
 
         let stage_schema = infer_table_schema(&data_schema)?;
 
         let plan = CopyIntoTablePlan {
-            catalog_name,
+            catalog_info,
             database_name,
             table_name,
             required_source_schema: data_schema.clone(),
@@ -464,6 +491,8 @@ impl<'a> Binder {
             write_mode,
             query: None,
             validation_mode: ValidationMode::None,
+
+            enable_distributed: false,
         };
 
         self.bind_copy_into_table_from_location(bind_context, plan)
@@ -648,11 +677,12 @@ impl<'a> Binder {
         if need_copy_file_infos.is_empty() {
             return Ok(Plan::Copy(Box::new(CopyPlan::NoFileToCopy)));
         }
-
         plan.stage_table_info.files_to_copy = Some(need_copy_file_infos.clone());
 
+        let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
             .bind_stage_table(
+                table_ctx,
                 bind_context,
                 plan.stage_table_info.stage_info.clone(),
                 plan.stage_table_info.files_info.clone(),

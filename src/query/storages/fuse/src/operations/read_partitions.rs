@@ -35,6 +35,8 @@ use common_exception::Result;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_storage::ColumnNodes;
+use log::debug;
+use log::info;
 use opendal::Operator;
 use sha2::Digest;
 use sha2::Sha256;
@@ -45,8 +47,6 @@ use storages_common_index::RangeIndex;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnMeta;
-use tracing::debug;
-use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::FusePartInfo;
@@ -57,12 +57,13 @@ use crate::pruning::SegmentLocation;
 use crate::FuseTable;
 
 impl FuseTable {
-    #[tracing::instrument(level = "debug", name = "do_read_partitions", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
+    #[minitrace::trace(name = "do_read_partitions")]
     #[async_backtrace::framed]
     pub async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
         let snapshot = self.read_table_snapshot().await?;
@@ -76,10 +77,7 @@ impl FuseTable {
                     .meta_location_generator
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
 
-                let settings = ctx.get_settings();
-                if (settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty())
-                    || is_lazy
-                {
+                if !dry_run || is_lazy {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
@@ -124,7 +122,7 @@ impl FuseTable {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[tracing::instrument(level = "debug", name = "prune_snapshot_blocks", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
+    #[minitrace::trace(name = "prune_snapshot_blocks")]
     #[async_backtrace::framed]
     pub async fn prune_snapshot_blocks(
         &self,
@@ -137,8 +135,8 @@ impl FuseTable {
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         info!(
-            "prune snapshot block start, segment numbers:{}",
-            segments_location.len()
+            "segment numbers" = segments_location.len();
+            "prune snapshot block start"
         );
 
         type CacheItem = (PartStatistics, Partitions);
@@ -167,8 +165,14 @@ impl FuseTable {
             }
         }
 
-        let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
-            FusePruner::create(&ctx, dal.clone(), table_info.schema(), &push_downs)?
+        let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
+            FusePruner::create(
+                &ctx,
+                dal.clone(),
+                table_info.schema(),
+                &push_downs,
+                self.bloom_index_cols(),
+            )?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
 
@@ -179,10 +183,11 @@ impl FuseTable {
                 &push_downs,
                 self.cluster_key_meta.clone(),
                 cluster_keys,
+                self.bloom_index_cols(),
             )?
         };
 
-        let block_metas = pruner.pruning(segments_location).await?;
+        let block_metas = pruner.read_pruning(segments_location).await?;
         let pruning_stats = pruner.pruning_stats();
 
         info!(
@@ -372,9 +377,9 @@ impl FuseTable {
                 let b = b.1.col_stats.get(&top_k.column_id).unwrap();
 
                 if top_k.asc {
-                    (a.min.as_ref(), a.max.as_ref()).cmp(&(b.min.as_ref(), b.max.as_ref()))
+                    (a.min().as_ref(), a.max().as_ref()).cmp(&(b.min().as_ref(), b.max().as_ref()))
                 } else {
-                    (b.max.as_ref(), b.min.as_ref()).cmp(&(a.max.as_ref(), a.min.as_ref()))
+                    (b.max().as_ref(), b.min().as_ref()).cmp(&(a.max().as_ref(), a.min().as_ref()))
                 }
             });
         }
@@ -415,10 +420,9 @@ impl FuseTable {
     }
 
     fn is_exact(push_downs: &Option<PushDownInfo>) -> bool {
-        match push_downs {
-            None => true,
-            Some(extra) => extra.filter.is_none(),
-        }
+        push_downs
+            .as_ref()
+            .map_or(true, |extra| extra.filter.is_none())
     }
 
     fn all_columns_partitions(
@@ -553,22 +557,22 @@ impl FuseTable {
 
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
-        let format_version = meta.location.1;
+        let create_on = meta.create_on;
 
         let sort_min_max = top_k.as_ref().map(|top_k| {
             let stat = meta.col_stats.get(&top_k.column_id).unwrap();
-            (stat.min.clone(), stat.max.clone())
+            (stat.min().clone(), stat.max().clone())
         });
 
         FusePartInfo::create(
             location,
-            format_version,
             rows_count,
             columns_meta,
             virtual_columns_meta,
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
+            create_on,
         )
     }
 
@@ -594,11 +598,11 @@ impl FuseTable {
 
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
-        let format_version = meta.location.1;
+        let create_on = meta.create_on;
 
         let sort_min_max = top_k.and_then(|top_k| {
             let stat = meta.col_stats.get(&top_k.column_id);
-            stat.map(|stat| (stat.min.clone(), stat.max.clone()))
+            stat.map(|stat| (stat.min().clone(), stat.max().clone()))
         });
 
         // TODO
@@ -606,13 +610,13 @@ impl FuseTable {
         // not the count the rows in this partition
         FusePartInfo::create(
             location,
-            format_version,
             rows_count,
             columns_meta,
             virtual_columns_meta,
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
+            create_on,
         )
     }
 }

@@ -33,8 +33,8 @@ use common_metrics::label_gauge;
 use common_settings::Settings;
 use futures::future::Either;
 use futures::StreamExt;
+use log::info;
 use parking_lot::RwLock;
-use tracing::info;
 
 use crate::sessions::session::Session;
 use crate::sessions::ProcessInfo;
@@ -80,7 +80,7 @@ impl SessionManager {
 
     #[async_backtrace::framed]
     pub async fn create_session(&self, typ: SessionType) -> Result<Arc<Session>> {
-        {
+        if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
             let sessions = self.active_sessions.read();
             self.validate_max_active_sessions(sessions.len(), "active sessions")?;
         }
@@ -129,7 +129,9 @@ impl SessionManager {
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
         let mut sessions = self.active_sessions.write();
-        self.validate_max_active_sessions(sessions.len(), "active sessions")?;
+        if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
+            self.validate_max_active_sessions(sessions.len(), "active sessions")?;
+        }
 
         let config = GlobalConfig::instance();
         label_counter(
@@ -262,13 +264,10 @@ impl SessionManager {
 
         // First try to kill the idle session
         active_sessions_read_guard.retain(|_id, weak_ptr| -> bool {
-            match weak_ptr.upgrade() {
-                None => false,
-                Some(session) => {
-                    session.kill();
-                    true
-                }
-            }
+            weak_ptr.upgrade().is_some_and(|session| {
+                session.kill();
+                true
+            })
         });
 
         // active_sessions_read_guard.values().for_each(Session::kill);
@@ -297,10 +296,7 @@ impl SessionManager {
         let active_sessions = self.active_sessions.read();
         active_sessions
             .iter()
-            .filter(|(_, y)| match y.upgrade() {
-                None => false,
-                Some(a) => a.get_type().is_user_session(),
-            })
+            .filter(|(_, y)| y.upgrade().is_some_and(|a| a.get_type().is_user_session()))
             .count()
     }
 

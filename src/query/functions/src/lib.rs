@@ -30,12 +30,13 @@ pub fn is_builtin_function(name: &str) -> bool {
     BUILTIN_FUNCTIONS.contains(name)
         || AggregateFunctionFactory::instance().contains(name)
         || GENERAL_WINDOW_FUNCTIONS.contains(&name)
+        || GENERAL_LAMBDA_FUNCTIONS.contains(&name)
 }
 
 #[ctor]
 pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
 
-pub const GENERAL_WINDOW_FUNCTIONS: [&str; 11] = [
+pub const GENERAL_WINDOW_FUNCTIONS: [&str; 13] = [
     "row_number",
     "rank",
     "dense_rank",
@@ -47,7 +48,11 @@ pub const GENERAL_WINDOW_FUNCTIONS: [&str; 11] = [
     "last_value",
     "last",
     "nth_value",
+    "ntile",
+    "cume_dist",
 ];
+
+pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 3] = ["array_transform", "array_apply", "array_filter"];
 
 fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::empty();

@@ -1,0 +1,83 @@
+statement ok
+set max_block_size = 1;
+
+statement ok
+create table east(rid varchar, id int, dur int null, rev int, cores int);
+
+statement ok
+insert into east values ('r1', 100, 140, 12, 2), ('r2', 99, 100, 12, 8), ('r3', 103,  90,  5, 4);
+
+statement ok
+create table west(rid varchar, t_id int, time int, cost int, cores int);
+
+statement ok
+insert into west values ('s1', 404, 100,  6, 4), ('s2', 400, 140, 11, 2), ('s3', 676,  80, 10, 1), ('s4', 742,  90,  5, 4);
+
+query TT
+SELECT east.rid, west.rid
+FROM east, west
+WHERE east.dur < west.time AND east.rev > west.cost;
+----
+r2	s2
+
+query TT
+SELECT s1.rid, s2.rid
+FROM west s1, west s2
+WHERE s1.time > s2.time AND s1.cost < s2.cost ORDER BY 1, 2;
+----
+s1	s3
+s4	s3
+
+query TT
+SELECT east.rid, west.rid
+FROM east, west
+WHERE east.dur + east.rev < west.time AND east.rev > west.cost;
+----
+r2 s2
+
+query TT
+SELECT s1.rid, s2.rid
+FROM west s1, west s2
+WHERE s1.time > s2.time AND s1.cost < s2.cost AND s1.rid != 's1';
+----
+s4 s3
+
+query TT
+SELECT s1.rid, s2.rid
+FROM west s1, west s2
+WHERE s1.time > s2.time AND s1.cost < s2.cost AND s1.rid > s2.rid;
+----
+s4 s3
+
+query TT
+SELECT east.rid, west.rid
+FROM east, west
+WHERE east.dur < west.time order by 1, 2;
+----
+r2 s2
+r3 s1
+r3 s2
+
+query TT
+SELECT east.rid, west.rid
+FROM east, west
+WHERE east.dur + east.rev < west.time order by 1, 2;
+----
+r2 s2
+r3 s1
+r3 s2
+
+query TT
+SELECT east.rid, west.rid
+FROM east, west
+WHERE east.dur < west.time AND east.dur + west.time < east.rev order by 1, 2;
+----
+
+statement ok
+drop table east;
+
+statement ok
+drop table west;
+
+statement ok
+set max_block_size = 65536;

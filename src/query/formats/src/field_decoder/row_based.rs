@@ -14,8 +14,6 @@
 
 use std::io::BufRead;
 use std::io::Cursor;
-use std::io::Seek;
-use std::io::SeekFrom;
 
 use bstr::ByteSlice;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -38,6 +36,7 @@ use common_expression::with_decimal_type;
 use common_expression::with_number_mapped_type;
 use common_expression::ColumnBuilder;
 use common_io::cursor_ext::BufferReadDateTimeExt;
+use common_io::cursor_ext::DateTimeResType;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_io::cursor_ext::ReadNumberExt;
@@ -232,26 +231,25 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, raw)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let pos = buffer_readr.position();
-        let ts_result = buffer_readr.read_num_text_exact();
-        let ts = match ts_result {
-            Err(_) => {
-                buffer_readr
-                    .seek(SeekFrom::Start(pos))
-                    .expect("buffer reader seek must success");
-                let t = buffer_readr.read_timestamp_text(&self.common_settings().timezone)?;
-                if !buffer_readr.eof() {
-                    let data = buf.to_str().unwrap_or("not utf8");
-                    let msg = format!(
-                        "fail to deserialize timestamp, unexpected end at pos {} of {}",
-                        buffer_readr.position(),
-                        data
-                    );
-                    return Err(ErrorCode::BadBytes(msg));
+        let ts = if !buf.contains(&b'-') {
+            buffer_readr.read_num_text_exact()?
+        } else {
+            let t = buffer_readr.read_timestamp_text(&self.common_settings().timezone, false)?;
+            match t {
+                DateTimeResType::Datetime(t) => {
+                    if !buffer_readr.eof() {
+                        let data = buf.to_str().unwrap_or("not utf8");
+                        let msg = format!(
+                            "fail to deserialize timestamp, unexpected end at pos {} of {}",
+                            buffer_readr.position(),
+                            data
+                        );
+                        return Err(ErrorCode::BadBytes(msg));
+                    }
+                    t.timestamp_micros()
                 }
-                t.timestamp_micros()
+                _ => unreachable!(),
             }
-            Ok(t) => t,
         };
         check_timestamp(ts)?;
         column.push(ts);

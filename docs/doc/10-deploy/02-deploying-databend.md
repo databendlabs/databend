@@ -409,9 +409,9 @@ bucket = "databend"
 ```toml
 [storage]
 # s3
-type = "s3"
+type = "oss"
 
-[storage.s3]
+[storage.oss]
 # How to create a bucket:
 // highlight-next-line
 bucket = "databend"
@@ -423,7 +423,7 @@ bucket = "databend"
 # https://<bucket-name>.<region-id>[-internal].aliyuncs.com
 // highlight-next-line
 endpoint_url = "https://oss-cn-beijing-internal.aliyuncs.com"
-enable_virtual_host_style = true
+# enable_virtual_host_style = true
 
 # How to get access_key_id and secret_access_key:
 # https://help.aliyun.com/document_detail/53045.htm
@@ -561,15 +561,17 @@ root = "/analyses/databend/storage"
 </TabItem>
 </Tabs>
 
-c. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
+c. Configure an admin user in the [query.users] section. For more information, see [Configuring Admin Users](../13-sql-clients/00-admin-users.md).
 
-d. Run the following command to start the Query node:
+d. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
+
+e. Run the following command to start the Query node:
 
 ```shell
 ./databend-query -c ../configs/databend-query.toml > query.log 2>&1 &
 ```
 
-e. Run the following command to check if the Query node was started successfully:
+f. Run the following command to check if the Query node was started successfully:
 
 ```shell
 curl -I  http://127.0.0.1:8080/v1/health

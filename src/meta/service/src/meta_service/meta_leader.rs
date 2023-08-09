@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 
 use common_base::base::tokio::sync::RwLockReadGuard;
 use common_meta_kvapi::kvapi::KVApi;
-use common_meta_raft_store::state_machine::StateMachine;
+use common_meta_raft_store::sm_v002::SMV002;
 use common_meta_sled_store::openraft::ChangeMembers;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::AppliedState;
@@ -32,10 +32,11 @@ use common_meta_types::NodeId;
 use common_meta_types::RaftError;
 use common_meta_types::SeqV;
 use common_metrics::counter::Count;
+use log::as_debug;
+use log::debug;
+use log::info;
 use maplit::btreemap;
 use maplit::btreeset;
-use tracing::debug;
-use tracing::info;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
@@ -65,12 +66,12 @@ impl<'a> MetaLeader<'a> {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, req), fields(target=%req.forward_to_leader))]
+    #[minitrace::trace]
     pub async fn handle_request(
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaOperationError> {
-        debug!("handle_forwardable_req: {:?}", req);
+        debug!(req = as_debug!(&req), target = req.forward_to_leader; "handle_forwardable_req");
 
         match req.body {
             ForwardRequestBody::Ping => Ok(ForwardResponse::Pong),
@@ -90,26 +91,17 @@ impl<'a> MetaLeader<'a> {
 
             ForwardRequestBody::GetKV(req) => {
                 let sm = self.get_state_machine().await;
-                let res = sm
-                    .get_kv(&req.key)
-                    .await
-                    .map_err(|meta_err| MetaDataReadError::new("get_kv", "", &meta_err))?;
+                let res = sm.kv_api().get_kv(&req.key).await.unwrap();
                 Ok(ForwardResponse::GetKV(res))
             }
             ForwardRequestBody::MGetKV(req) => {
                 let sm = self.get_state_machine().await;
-                let res = sm
-                    .mget_kv(&req.keys)
-                    .await
-                    .map_err(|meta_err| MetaDataReadError::new("mget_kv", "", &meta_err))?;
+                let res = sm.kv_api().mget_kv(&req.keys).await.unwrap();
                 Ok(ForwardResponse::MGetKV(res))
             }
             ForwardRequestBody::ListKV(req) => {
                 let sm = self.get_state_machine().await;
-                let res = sm
-                    .prefix_list_kv(&req.prefix)
-                    .await
-                    .map_err(|meta_err| MetaDataReadError::new("list_kv", "", &meta_err))?;
+                let res = sm.kv_api().prefix_list_kv(&req.prefix).await.unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
         }
@@ -121,7 +113,7 @@ impl<'a> MetaLeader<'a> {
     /// - Adds the node to membership to let it become a voter.
     ///
     /// If the node is already in cluster membership, it still returns Ok.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn join(&self, req: JoinRequest) -> Result<(), RaftError<ClientWriteError>> {
         let node_id = req.node_id;
         let endpoint = req.endpoint;
@@ -162,7 +154,7 @@ impl<'a> MetaLeader<'a> {
     /// - Remove the node from cluster.
     ///
     /// If the node is not in cluster membership, it still returns Ok.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn leave(&self, req: LeaveRequest) -> Result<(), MetaOperationError> {
         let node_id = req.node_id;
 
@@ -195,7 +187,7 @@ impl<'a> MetaLeader<'a> {
     /// Write a log through local raft node and return the states before and after applying the log.
     ///
     /// If the raft node is not a leader, it returns MetaRaftError::ForwardToLeader.
-    #[tracing::instrument(level = "debug", skip(self, entry))]
+    #[minitrace::trace]
     pub async fn write(
         &self,
         mut entry: LogEntry,
@@ -229,18 +221,11 @@ impl<'a> MetaLeader<'a> {
     ///
     /// A cluster must have at least one node in it.
     async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
-        let m = {
+        let membership = {
             let sm = self.get_state_machine().await;
-            sm.get_membership()?
+            sm.last_membership_ref().membership().clone()
         };
-        info!("check can_leave: id: {}, membership: {:?}", id, m);
-
-        let membership = match &m {
-            None => {
-                return Ok(Err("no membership, can not leave".to_string()));
-            }
-            Some(x) => x.membership(),
-        };
+        info!("check can_leave: id: {}, membership: {:?}", id, membership);
 
         let last_config = membership.get_joint_config().last().unwrap();
 
@@ -254,7 +239,7 @@ impl<'a> MetaLeader<'a> {
         Ok(Ok(()))
     }
 
-    async fn get_state_machine(&self) -> RwLockReadGuard<'_, StateMachine> {
+    async fn get_state_machine(&self) -> RwLockReadGuard<'_, SMV002> {
         self.sto.state_machine.read().await
     }
 }

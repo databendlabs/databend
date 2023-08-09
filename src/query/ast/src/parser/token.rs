@@ -134,7 +134,7 @@ pub enum TokenKind {
     #[regex(r"[ \t\r\n\f]+", logos::skip)]
     Whitespace,
 
-    #[regex(r"--[^\t\n\f]*", logos::skip)]
+    #[regex(r"--[^\n\f]*", logos::skip)]
     Comment,
 
     #[regex(r"/\*[^\+]([^\*]|(\*[^/]))*\*/", logos::skip)]
@@ -289,8 +289,12 @@ pub enum TokenKind {
     //    reserved list.
     #[token("ALL", ignore(ascii_case))]
     ALL,
+    #[token("ALLOWED_IP_LIST", ignore(ascii_case))]
+    ALLOWED_IP_LIST,
     #[token("ADD", ignore(ascii_case))]
     ADD,
+    #[token("AFTER", ignore(ascii_case))]
+    AFTER,
     #[token("AGGREGATING", ignore(ascii_case))]
     AGGREGATING,
     #[token("ANY", ignore(ascii_case))]
@@ -303,6 +307,8 @@ pub enum TokenKind {
     SOME,
     #[token("ALTER", ignore(ascii_case))]
     ALTER,
+    #[token("ALWAYS", ignore(ascii_case))]
+    ALWAYS,
     #[token("ANALYZE", ignore(ascii_case))]
     ANALYZE,
     #[token("AND", ignore(ascii_case))]
@@ -329,6 +335,8 @@ pub enum TokenKind {
     BINARY,
     #[token("BITMAP", ignore(ascii_case))]
     BITMAP,
+    #[token("BLOCKED_IP_LIST", ignore(ascii_case))]
+    BLOCKED_IP_LIST,
     #[token("BOOL", ignore(ascii_case))]
     BOOL,
     #[token("BOOLEAN", ignore(ascii_case))]
@@ -385,6 +393,8 @@ pub enum TokenKind {
     COUNT,
     #[token("CREATE", ignore(ascii_case))]
     CREATE,
+    #[token("ATTACH", ignore(ascii_case))]
+    ATTACH,
     #[token("CREDENTIALS", ignore(ascii_case))]
     CREDENTIALS,
     #[token("CROSS", ignore(ascii_case))]
@@ -399,6 +409,8 @@ pub enum TokenKind {
     DATABASE,
     #[token("DATABASES", ignore(ascii_case))]
     DATABASES,
+    #[token("DATA", ignore(ascii_case))]
+    DATA,
     #[token("DATE", ignore(ascii_case))]
     DATE,
     #[token("DATE_ADD", ignore(ascii_case))]
@@ -527,6 +539,8 @@ pub enum TokenKind {
     FUSE,
     #[token("GENERATE", ignore(ascii_case))]
     GENERATE,
+    #[token("GENERATED", ignore(ascii_case))]
+    GENERATED,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
@@ -599,6 +613,9 @@ pub enum TokenKind {
     LOCATION_PREFIX,
     #[token("ROLES", ignore(ascii_case))]
     ROLES,
+    /// L2DISTANCE op, from https://github.com/pgvector/pgvector
+    #[token("<->")]
+    L2DISTANCE,
     #[token("LEADING", ignore(ascii_case))]
     LEADING,
     #[token("LEFT", ignore(ascii_case))]
@@ -637,10 +654,14 @@ pub enum TokenKind {
     MONTH,
     #[token("MODIFY", ignore(ascii_case))]
     MODIFY,
+    #[token("MATERIALIZED", ignore(ascii_case))]
+    MATERIALIZED,
     #[token("NON_DISPLAY", ignore(ascii_case))]
     NON_DISPLAY,
     #[token("NATURAL", ignore(ascii_case))]
     NATURAL,
+    #[token("NETWORK", ignore(ascii_case))]
+    NETWORK,
     #[token("NDJSON", ignore(ascii_case))]
     NDJSON,
     #[token("NO_PASSWORD", ignore(ascii_case))]
@@ -665,6 +686,8 @@ pub enum TokenKind {
     ON,
     #[token("OPTIMIZE", ignore(ascii_case))]
     OPTIMIZE,
+    #[token("OPTIONS", ignore(ascii_case))]
+    OPTIONS,
     #[token("OR", ignore(ascii_case))]
     OR,
     #[token("ORDER", ignore(ascii_case))]
@@ -687,6 +710,8 @@ pub enum TokenKind {
     PIPELINE,
     #[token("PLAINTEXT_PASSWORD", ignore(ascii_case))]
     PLAINTEXT_PASSWORD,
+    #[token("POLICIES", ignore(ascii_case))]
+    POLICIES,
     #[token("POLICY", ignore(ascii_case))]
     POLICY,
     #[token("POSITION", ignore(ascii_case))]
@@ -711,6 +736,8 @@ pub enum TokenKind {
     RECORD_DELIMITER,
     #[token("REFERENCE_USAGE", ignore(ascii_case))]
     REFERENCE_USAGE,
+    #[token("REFRESH", ignore(ascii_case))]
+    REFRESH,
     #[token("REGEXP", ignore(ascii_case))]
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]
@@ -819,6 +846,8 @@ pub enum TokenKind {
     SUPER,
     #[token("STATUS", ignore(ascii_case))]
     STATUS,
+    #[token("STORED", ignore(ascii_case))]
+    STORED,
     #[token("STRING", ignore(ascii_case))]
     STRING,
     #[token("SUBSTRING", ignore(ascii_case))]
@@ -1022,6 +1051,7 @@ impl TokenKind {
                 | Abs
                 | SquareRoot
                 | CubeRoot
+                | L2DISTANCE
                 | Placeholder
                 | EOI
         )
@@ -1145,6 +1175,7 @@ impl TokenKind {
             // | TokenKind::CHAR
             | TokenKind::CHARACTER
             | TokenKind::CREATE
+            | TokenKind::ATTACH
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FOR
@@ -1259,6 +1290,7 @@ impl TokenKind {
             | TokenKind::AS
             | TokenKind::BETWEEN
             | TokenKind::CREATE
+            | TokenKind::ATTACH
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FOR

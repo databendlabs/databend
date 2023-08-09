@@ -20,8 +20,10 @@ use common_catalog::table::ColumnStatistics;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
 use itertools::Itertools;
 
+use super::ScalarItem;
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
@@ -56,8 +58,23 @@ pub struct Prewhere {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AggIndexInfo {
     pub index_id: u64,
-    pub selection: Vec<ScalarExpr>,
+    pub schema: TableSchemaRef,
+    pub selection: Vec<ScalarItem>,
     pub predicates: Vec<ScalarExpr>,
+    pub is_agg: bool,
+}
+
+impl AggIndexInfo {
+    pub fn used_columns(&self) -> ColumnSet {
+        let mut used_columns = ColumnSet::new();
+        for item in self.selection.iter() {
+            used_columns.extend(item.scalar.used_columns());
+        }
+        for pred in self.predicates.iter() {
+            used_columns.extend(pred.used_columns());
+        }
+        used_columns
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -214,18 +231,16 @@ impl Operator for Scan {
                     precise_cardinality: Some(precise_cardinality),
                     column_stats,
                 };
-
                 // Derive cardinality
                 let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
                 let mut selectivity = MAX_SELECTIVITY;
                 for pred in prewhere.predicates.iter() {
                     // Compute selectivity for each conjunction
-                    selectivity *= sb.compute_selectivity(pred, true)?;
+                    selectivity = selectivity.min(sb.compute_selectivity(pred, true)?);
                 }
                 // Update other columns's statistic according to selectivity.
                 sb.update_other_statistic_by_selectivity(selectivity);
-
-                column_stats = sb.input_stat.column_stats.clone();
+                column_stats = statistics.column_stats;
                 (precise_cardinality as f64) * selectivity
             }
             (Some(precise_cardinality), None) => precise_cardinality as f64,

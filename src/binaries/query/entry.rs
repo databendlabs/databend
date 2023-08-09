@@ -14,6 +14,7 @@
 
 use std::env;
 
+use background_service::get_background_service_handler;
 use common_base::mem_allocator::GlobalAllocator;
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_base::set_alloc_error_hook;
@@ -33,10 +34,11 @@ use databend_query::servers::FlightSQLServer;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
+use databend_query::servers::MySQLTlsConfig;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
-use tracing::info;
+use log::info;
 
 use crate::local;
 
@@ -93,7 +95,7 @@ pub async fn init_services(conf: &InnerConfig) -> Result<()> {
     GlobalServices::init(conf.clone()).await
 }
 
-pub async fn start_services(conf: &InnerConfig) -> Result<()> {
+async fn precheck_services(conf: &InnerConfig) -> Result<()> {
     if conf.query.max_memory_limit_enabled {
         let size = conf.query.max_server_memory_usage as i64;
         info!("Set memory limit: {}", size);
@@ -125,6 +127,11 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
     #[cfg(not(target_os = "macos"))]
     check_max_open_files();
+    Ok(())
+}
+
+pub async fn start_services(conf: &InnerConfig) -> Result<()> {
+    precheck_services(conf).await?;
 
     let mut shutdown_handle = ShutdownHandle::create()?;
 
@@ -135,7 +142,12 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         let hostname = conf.query.mysql_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.mysql_handler_port);
         let tcp_keepalive_timeout_secs = conf.query.mysql_handler_tcp_keepalive_timeout_secs;
-        let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs)?;
+        let tls_config = MySQLTlsConfig::new(
+            conf.query.mysql_tls_server_cert.clone(),
+            conf.query.mysql_tls_server_key.clone(),
+        );
+
+        let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, tls_config)?;
         let listening = handler.start(listening.parse()?).await?;
         shutdown_handle.add_service(handler);
 
@@ -237,6 +249,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!("Logging:");
     println!("    file: {}", conf.log.file);
     println!("    stderr: {}", conf.log.stderr);
+    println!("    query: {}", conf.log.query);
+    println!("    tracing: {}", conf.log.tracing);
     println!(
         "Meta: {}",
         if conf.meta.is_embedded_meta()? {
@@ -289,7 +303,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         conf.query.mysql_handler_host, conf.query.mysql_handler_port
     );
     println!(
-        "    connect via: mysql -uroot -h{} -P{}",
+        "    connect via: mysql -u${{USER}} -p${{PASSWORD}} -h{} -P{}",
         conf.query.mysql_handler_host, conf.query.mysql_handler_port
     );
     println!("Clickhouse(http)");
@@ -333,24 +347,33 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     }
 
     info!("Ready for connections.");
-    shutdown_handle.wait_for_termination_request().await;
+    if conf.background.enable {
+        println!("Start background service");
+        get_background_service_handler().start().await?;
+        // for one shot background service, we need to drop it manually.
+        drop(shutdown_handle);
+    } else {
+        shutdown_handle.wait_for_termination_request().await;
+    }
     info!("Shutdown server.");
     Ok(())
 }
 
 #[cfg(not(target_os = "macos"))]
 fn check_max_open_files() {
+    use log::warn;
+
     let limits = match limits_rs::get_own_limits() {
         Ok(limits) => limits,
         Err(err) => {
-            tracing::warn!("get system limit of databend-query failed: {:?}", err);
+            warn!("get system limit of databend-query failed: {:?}", err);
             return;
         }
     };
     let max_open_files_limit = limits.max_open_files.soft;
     if let Some(max_open_files) = max_open_files_limit {
         if max_open_files < 65535 {
-            tracing::warn!(
+            warn!(
                 "The open file limit is too low for the databend-query. Please consider increase it by running `ulimit -n 65535`"
             );
         }

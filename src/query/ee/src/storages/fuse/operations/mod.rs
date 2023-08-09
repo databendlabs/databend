@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod handler;
-pub mod vacuum;
+pub mod vacuum_drop_tables;
+pub mod vacuum_table;
 pub mod virtual_columns;
 pub use handler::RealVacuumHandler;

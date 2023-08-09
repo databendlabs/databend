@@ -27,8 +27,11 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_app::schema as mt;
+use common_meta_app::schema::CatalogOption;
+use common_meta_app::schema::IcebergCatalogOption;
 use common_meta_app::schema::IndexType;
 use common_meta_app::share;
+use common_meta_app::storage::StorageS3Config;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
 use common_proto_conv::VER;
@@ -208,7 +211,8 @@ fn new_index_meta() -> mt::IndexMeta {
         table_id: 7,
         index_type: IndexType::AGGREGATING,
         created_on: Utc.with_ymd_and_hms(2015, 3, 9, 20, 0, 9).unwrap(),
-        drop_on: None,
+        dropped_on: None,
+        updated_on: None,
         query: "SELECT a, sum(b) FROM default.t1 WHERE a > 3 GROUP BY b".to_string(),
     }
 }
@@ -277,6 +281,24 @@ fn new_table_statistics() -> common_meta_app::schema::TableStatistics {
         index_data_bytes: 20,
         number_of_segments: Some(1),
         number_of_blocks: Some(2),
+    }
+}
+
+fn new_catalog_meta() -> common_meta_app::schema::CatalogMeta {
+    common_meta_app::schema::CatalogMeta {
+        catalog_option: CatalogOption::Iceberg(IcebergCatalogOption {
+            storage_params: Box::new(common_meta_app::storage::StorageParams::S3(
+                StorageS3Config {
+                    endpoint_url: "http://127.0.0.1:9900".to_string(),
+                    region: "hello".to_string(),
+                    bucket: "world".to_string(),
+                    access_key_id: "databend_has_super_power".to_string(),
+                    secret_access_key: "databend_has_super_power".to_string(),
+                    ..Default::default()
+                },
+            )),
+        }),
+        created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
     }
 }
 
@@ -457,6 +479,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("table statistics:{:?}", buf);
+    }
+
+    // catalog meta
+    {
+        let catalog_meta = new_catalog_meta();
+        let p = catalog_meta.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("catalog catalog_meta:{:?}", buf);
     }
 
     Ok(())

@@ -160,7 +160,7 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("max_execute_time", DefaultSettingValue {
+                ("max_execute_time_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum query execution time in seconds. Setting it to 0 means no limit.",
                     possible_values: None,
@@ -175,12 +175,6 @@ impl DefaultSettings {
                 ("max_result_rows", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum number of rows that can be returned in a query result when no specific row count is specified. Setting it to 0 means no limit.",
-                    possible_values: None,
-                    display_in_show_settings: true,
-                }),
-                ("enable_distributed_eval_index", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Enables evaluated indexes to be created and maintained across multiple nodes.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -271,6 +265,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("spilling_memory_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(100),
+                    desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
@@ -283,9 +283,9 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("lazy_topn_threshold", DefaultSettingValue {
+                ("lazy_read_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
-                    desc: "Enable lazy materialization and set the limit threshold of Top-N queries. Set the value to 0 to disable this setting.",
+                    desc: "Sets the maximum LIMIT in a query to enable lazy read optimization. Setting it to 0 disables the optimization.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -304,6 +304,12 @@ impl DefaultSettings {
                     // license key should not be reported
                     display_in_show_settings: false,
                 }),
+                ("enable_table_lock", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables table lock if necessary (enabled by default).",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("table_lock_expire_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(5),
                     desc: "Sets the seconds that the table lock will expire in.",
@@ -315,6 +321,48 @@ impl DefaultSettings {
                     desc: "Sql duplicate label for deduplication.",
                     possible_values: None,
                     display_in_show_settings: false,
+                }),
+                ("enable_distributed_copy_into", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable distributed execution of copy into.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_aggregating_index_scan", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable scanning aggregating index data while querying.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_auto_reclustering", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables auto re-clustering.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("use_parquet2", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Use parquet2 instead of parquet_rs when infer_schema().",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_replace_into_partitioning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables partitioning for replace-into statement (if table has cluster keys).",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_replace_into_bloom_pruning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables bloom pruning for replace-into statement.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("replace_into_bloom_pruning_max_column_number", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(2),
+                    desc: "Max number of columns used by bloom pruning for replace-into statement.",
+                    possible_values: None,
+                    display_in_show_settings: true,
                 }),
             ]);
 
@@ -386,24 +434,34 @@ impl DefaultSettings {
 
         match default_settings.settings.get(&k) {
             None => Ok((k, None)),
-            Some(setting_value) => match setting_value.value {
-                UserSettingValue::UInt64(_) => {
-                    // decimal 10 * 1.5 to string may result in string like "15.0"
-                    let val = if let Some(p) = v.find('.') {
-                        if v[(p + 1)..].chars().all(|x| x == '0') {
-                            &v[..p]
-                        } else {
-                            return Err(ErrorCode::BadArguments("not a integer"));
-                        }
-                    } else {
-                        &v[..]
-                    };
-
-                    let u64_val = val.parse::<u64>()?;
-                    Ok((k, Some(UserSettingValue::UInt64(u64_val))))
+            Some(setting_value) => {
+                if let Some(possible_values) = &setting_value.possible_values {
+                    if !possible_values.iter().any(|x| x.eq_ignore_ascii_case(&v)) {
+                        return Err(ErrorCode::WrongValueForVariable(format!(
+                            "Invalid setting value: {:?} for variable {:?}, possible values: {:?}",
+                            v, k, possible_values
+                        )));
+                    }
                 }
-                UserSettingValue::String(_) => Ok((k, Some(UserSettingValue::String(v)))),
-            },
+                match setting_value.value {
+                    UserSettingValue::UInt64(_) => {
+                        // decimal 10 * 1.5 to string may result in string like "15.0"
+                        let val = if let Some(p) = v.find('.') {
+                            if v[(p + 1)..].chars().all(|x| x == '0') {
+                                &v[..p]
+                            } else {
+                                return Err(ErrorCode::BadArguments("not a integer"));
+                            }
+                        } else {
+                            &v[..]
+                        };
+
+                        let u64_val = val.parse::<u64>()?;
+                        Ok((k, Some(UserSettingValue::UInt64(u64_val))))
+                    }
+                    UserSettingValue::String(_) => Ok((k, Some(UserSettingValue::String(v)))),
+                }
+            }
         }
     }
 

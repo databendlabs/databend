@@ -76,7 +76,7 @@ impl ExchangeTransform {
                 pipeline.add_pipe(Pipe::create(len, new_outputs, items));
 
                 if params.exchange_injector.exchange_sorting().is_none() {
-                    pipeline.resize(max_threads)?;
+                    pipeline.try_resize(max_threads)?;
                 }
 
                 injector.apply_shuffle_deserializer(params, pipeline)

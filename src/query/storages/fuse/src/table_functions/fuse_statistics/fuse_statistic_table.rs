@@ -33,7 +33,7 @@ use super::fuse_statistic::FuseStatistic;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
-use crate::table_functions::fuse_snapshots::parse_func_history_args;
+use crate::table_functions::parse_db_tb_args;
 use crate::table_functions::string_literal;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
@@ -55,7 +55,8 @@ impl FuseStatisticTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (arg_database_name, arg_table_name) = parse_func_history_args(&table_args)?;
+        let (arg_database_name, arg_table_name) =
+            parse_db_tb_args(&table_args, FUSE_FUNC_STATISTICS)?;
 
         let engine = FUSE_FUNC_STATISTICS.to_owned();
 
@@ -94,6 +95,7 @@ impl Table for FuseStatisticTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         Ok((PartStatistics::default(), Partitions::default()))
     }
@@ -176,7 +178,8 @@ impl AsyncSource for FuseStatisticSource {
         let tenant_id = self.ctx.get_tenant();
         let tbl = self
             .ctx
-            .get_catalog(CATALOG_DEFAULT)?
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
             .get_table(
                 tenant_id.as_str(),
                 self.arg_database_name.as_str(),

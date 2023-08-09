@@ -14,14 +14,12 @@
 
 mod block_compact_mutator;
 mod compact_aggregator;
-mod compact_meta;
 mod compact_part;
 mod compact_source;
 mod segment_compact_mutator;
 
 pub use block_compact_mutator::BlockCompactMutator;
 pub use compact_aggregator::CompactAggregator;
-pub use compact_meta::CompactSourceMeta;
 pub use compact_part::CompactPartInfo;
 pub use compact_source::CompactSource;
 pub use segment_compact_mutator::SegmentCompactMutator;

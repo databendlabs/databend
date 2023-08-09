@@ -250,8 +250,10 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::UnionAll(_)
         | RelOperator::Sort(_)
         | RelOperator::DummyTableScan(_)
+        | RelOperator::CteScan(_)
         | RelOperator::RuntimeFilterSource(_)
-        | RelOperator::Pattern(_) => false,
+        | RelOperator::Pattern(_)
+        | RelOperator::MaterializedCte(_) => false,
         RelOperator::Join(op) => {
             op.left_conditions.iter().any(find_subquery_in_expr)
                 || op.right_conditions.iter().any(find_subquery_in_expr)
@@ -288,6 +290,10 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
             .srfs
             .iter()
             .any(|expr| find_subquery_in_expr(&expr.scalar)),
+        RelOperator::Lambda(op) => op
+            .items
+            .iter()
+            .any(|expr| find_subquery_in_expr(&expr.scalar)),
     }
 }
 
@@ -303,6 +309,7 @@ fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
                 || expr.order_by.iter().any(|o| find_subquery_in_expr(&o.expr))
         }
         ScalarExpr::AggregateFunction(expr) => expr.args.iter().any(find_subquery_in_expr),
+        ScalarExpr::LambdaFunction(expr) => expr.args.iter().any(find_subquery_in_expr),
         ScalarExpr::FunctionCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
         ScalarExpr::CastExpr(expr) => find_subquery_in_expr(&expr.argument),
         ScalarExpr::SubqueryExpr(_) => true,

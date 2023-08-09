@@ -15,6 +15,7 @@
 use std::borrow::BorrowMut;
 use std::sync::Arc;
 
+use bumpalo::Bump;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnBuilder;
@@ -25,7 +26,7 @@ use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
 
@@ -49,8 +50,8 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
         output: Arc<OutputPort>,
         method: Method,
         params: Arc<AggregatorParams>,
-    ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(BlockMetaTransformer::create(
+    ) -> Result<Box<dyn Processor>> {
+        Ok(Box::new(BlockMetaTransformer::create(
             input,
             output,
             TransformFinalAggregate::<Method> { method, params },
@@ -66,7 +67,8 @@ where Method: HashMethodBounds
     fn transform(&mut self, meta: AggregateMeta<Method, usize>) -> Result<DataBlock> {
         if let AggregateMeta::Partitioned { bucket, data } = meta {
             let mut reach_limit = false;
-            let hashtable = self.method.create_hash_table::<usize>()?;
+            let arena = Arc::new(Bump::new());
+            let hashtable = self.method.create_hash_table::<usize>(arena)?;
             let _dropper = AggregateHashTableDropper::create(self.params.clone());
             let mut hash_cell = HashTableCell::<Method, usize>::create(hashtable, _dropper);
             let temp_place = self.params.alloc_layout(&mut hash_cell.arena);
@@ -75,6 +77,7 @@ where Method: HashMethodBounds
             for bucket_data in data {
                 match bucket_data {
                     AggregateMeta::Spilled(_) => unreachable!(),
+                    AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Serialized(payload) => {
@@ -158,6 +161,14 @@ where Method: HashMethodBounds
                                     unsafe { states_binary_columns[idx].index_unchecked(*row) };
                                 aggregate_function.deserialize(state_place, &mut data)?;
                                 aggregate_function.merge(final_place, state_place)?;
+                                if aggregate_function.need_manual_drop_state() {
+                                    unsafe {
+                                        // State may allocate memory out of the arena,
+                                        // drop state to avoid memory leak.
+                                        aggregate_function.drop_state(state_place);
+                                    }
+                                    aggregate_function.init_state(state_place);
+                                }
                             }
                         }
                     }

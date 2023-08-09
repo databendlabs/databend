@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,6 +25,7 @@ use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
+use common_sql::BloomIndexColumns;
 use common_storages_fuse::operations::BlockMetaIndex;
 use common_storages_fuse::pruning::create_segment_location_vector;
 use common_storages_fuse::pruning::FusePruner;
@@ -51,6 +53,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let data_accessor = ctx.get_data_operator()?.operator();
     let seg_writer = SegmentWriter::new(&data_accessor, &location_generator);
 
+    let cluster_key_id = 0;
     let gen_test_seg = |cluster_stats: Option<ClusterStatistics>| async {
         let block_id = Uuid::new_v4().simple().to_string();
         let location = (block_id, DataBlock::VERSION);
@@ -65,10 +68,14 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             None,
             0,
             meta::Compression::Lz4Raw,
+            Some(Utc::now()),
         ));
 
-        let statistics =
-            reduce_block_metas(&[test_block_meta.as_ref()], BlockThresholds::default());
+        let statistics = reduce_block_metas(
+            &[test_block_meta.as_ref()],
+            BlockThresholds::default(),
+            Some(0),
+        );
 
         let segment = SegmentInfo::new(vec![test_block_meta], statistics);
         Ok::<_, ErrorCode>((seg_writer.write_segment(segment).await?, location))
@@ -76,35 +83,35 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
     let mut test_segment_locations = vec![];
     let mut test_block_locations = vec![];
-    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
-        cluster_key_id: 0,
-        min: vec![Scalar::from(1i64)],
-        max: vec![Scalar::from(3i64)],
-        level: 0,
-        pages: None,
-    }))
+    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
+        cluster_key_id,
+        vec![Scalar::from(1i64)],
+        vec![Scalar::from(3i64)],
+        0,
+        None,
+    )))
     .await?;
     test_segment_locations.push(segment_location);
     test_block_locations.push(block_location);
 
-    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
-        cluster_key_id: 0,
-        min: vec![Scalar::from(2i64)],
-        max: vec![Scalar::from(4i64)],
-        level: 0,
-        pages: None,
-    }))
+    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
+        cluster_key_id,
+        vec![Scalar::from(2i64)],
+        vec![Scalar::from(4i64)],
+        0,
+        None,
+    )))
     .await?;
     test_segment_locations.push(segment_location);
     test_block_locations.push(block_location);
 
-    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
-        cluster_key_id: 0,
-        min: vec![Scalar::from(4i64)],
-        max: vec![Scalar::from(5i64)],
-        level: 0,
-        pages: None,
-    }))
+    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
+        cluster_key_id,
+        vec![Scalar::from(4i64)],
+        vec![Scalar::from(5i64)],
+        0,
+        None,
+    )))
     .await?;
     test_segment_locations.push(segment_location);
     test_block_locations.push(block_location);
@@ -125,9 +132,15 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = base_snapshot.segments.clone();
     let segment_locations = create_segment_location_vector(segment_locations, None);
-    let block_metas = FusePruner::create(&ctx, data_accessor.clone(), schema, &None)?
-        .pruning(segment_locations)
-        .await?;
+    let block_metas = FusePruner::create(
+        &ctx,
+        data_accessor.clone(),
+        schema,
+        &None,
+        BloomIndexColumns::All,
+    )?
+    .read_pruning(segment_locations)
+    .await?;
     let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> = BTreeMap::new();
     block_metas.iter().for_each(|(idx, b)| {
         if let Some(stats) = &b.cluster_stats {
@@ -141,11 +154,11 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         }
     });
 
-    let mut mutator = ReclusterMutator::try_create(1.0, BlockThresholds::default())?;
+    let mut mutator = ReclusterMutator::try_create(ctx, 1.0, BlockThresholds::default())?;
 
     let need_recluster = mutator.target_select(blocks_map).await?;
     assert!(need_recluster);
-    assert_eq!(mutator.selected_blocks().len(), 3);
+    assert_eq!(mutator.take_blocks().len(), 3);
 
     Ok(())
 }

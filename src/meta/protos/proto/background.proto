@@ -1,0 +1,143 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package databend_proto;
+
+import "user.proto";
+import "table.proto";
+
+enum BackgroundTaskState {
+    BACKGROUND_TASK_STATE_STARTED = 0;
+    BACKGROUND_TASK_STATE_DONE = 1;
+    BACKGROUND_TASK_STATE_FAILED = 2;
+}
+
+enum BackgroundTaskType {
+    BACKGROUND_TASK_TYPE_COMPACTION = 0;
+    BACKGROUND_TASK_TYPE_VACUUM = 1;
+}
+
+message CompactionStats {
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+    uint64 db_id = 1;
+    uint64 table_id = 2;
+    TableStatistics before_compaction_stats = 3;
+    optional TableStatistics after_compaction_stats = 4;
+    optional float total_compaction_time_secs = 5;
+}
+
+message VacuumStats {
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+}
+
+message BackgroundTaskIdent {
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+
+    // The user this task belongs to
+    string tenant = 1;
+
+    // Task Id, unique id assigned to given task
+    string task_id = 2;
+}
+
+message BackgroundTaskInfo {
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+    optional string last_updated = 3;
+    BackgroundTaskType task_type = 4;
+    BackgroundTaskState task_state = 5;
+    string message = 6;
+    optional CompactionStats compaction_task_stats = 7;
+    optional VacuumStats vacuum_stats = 8;
+    optional ManualTriggerParams manual_trigger = 9;
+    // Audit
+    optional BackgroundJobIdent creator = 90;
+    string created_at = 91;
+}
+
+message BackgroundJobIdent {
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+
+    // The user this job belongs to
+    string tenant = 1;
+
+    string name = 2;
+}
+
+message ManualTriggerParams {
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+
+    string id = 1;
+    UserIdentity trigger = 2;
+    string triggered_at = 3;
+}
+
+message BackgroundJobParams {
+    enum BackgroundJobType {
+        BACKGROUND_JOB_TYPE_ONE_SHOT = 0;
+        BACKGROUND_JOB_TYPE_INTERVAL = 1;
+        BACKGROUND_JOB_TYPE_CRON = 2;
+    }
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+
+    BackgroundJobType job_type = 1;
+    uint64 scheduled_job_interval_seconds = 2;
+    string scheduled_job_cron = 3;
+    optional string scheduled_job_timezone = 4;
+
+    // Manual trigger
+    optional ManualTriggerParams manual_trigger = 5;
+}
+
+// contain real-time job status
+message BackgroundJobStatus {
+    enum BackgroundJobState {
+        BACKGROUND_JOB_STATE_RUNNING = 0;
+        BACKGROUND_JOB_STATE_FAILED = 1;
+        BACKGROUND_JOB_STATE_SUSPENDED = 2;
+    }
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+
+    BackgroundJobState job_state = 2;
+    optional string last_task_id = 4;
+    optional string last_task_run_at = 5;
+
+    optional string next_task_scheduled_time = 6;
+
+}
+
+message BackgroundJobInfo {
+
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+
+    BackgroundJobParams job_params = 1;
+    BackgroundJobStatus job_status = 2;
+    BackgroundTaskType task_type = 3;;
+    string message = 4;
+    optional string last_updated = 5;
+
+    // Audit
+    optional UserIdentity creator = 90;
+    string created_at = 91;
+}

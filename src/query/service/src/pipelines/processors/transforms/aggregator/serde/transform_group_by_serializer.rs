@@ -121,19 +121,11 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
         if let Some(block_meta) = data_block.take_meta() {
             if let Some(block_meta) = AggregateMeta::<Method, ()>::downcast_from(block_meta) {
                 match block_meta {
+                    AggregateMeta::Spilled(_) => unreachable!(),
                     AggregateMeta::Spilling(_) => unreachable!(),
-                    AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Serialized(_) => unreachable!(),
-                    AggregateMeta::Spilled(payload) => {
-                        self.output.push_data(Ok(DataBlock::empty_with_meta(
-                            AggregateSerdeMeta::create_spilled(
-                                payload.bucket,
-                                payload.location,
-                                payload.columns_layout,
-                            ),
-                        )));
-                        return Ok(Event::NeedConsume);
-                    }
+                    AggregateMeta::BucketSpilled(_) => unreachable!(),
+                    AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::HashTable(payload) => {
                         self.input_data =
                             Some(SerializeGroupByStream::create(&self.method, payload));
@@ -149,13 +141,13 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
 
 pub fn serialize_group_by<Method: HashMethodBounds>(
     method: &Method,
-    payload: HashTablePayload<Method, ()>,
+    hashtable: &Method::HashTable<()>,
 ) -> Result<DataBlock> {
-    let keys_len = payload.cell.hashtable.len();
-    let value_size = estimated_key_size(&payload.cell.hashtable);
+    let keys_len = hashtable.len();
+    let value_size = estimated_key_size(hashtable);
     let mut group_key_builder = method.keys_column_builder(keys_len, value_size);
 
-    for group_entity in payload.cell.hashtable.iter() {
+    for group_entity in hashtable.iter() {
         group_key_builder.append_value(group_entity.key());
     }
 

@@ -14,6 +14,7 @@
 
 use std::iter::Iterator;
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use ethnum::i256;
 
 use crate::types::decimal::*;
@@ -157,6 +158,34 @@ impl<D: AsRef<[i256]>> FromData<D, [Vec<i256>; 0]> for Decimal256Type {
             d.as_ref().iter().copied(),
             &[],
         ))
+    }
+}
+
+impl<Num: Decimal> DecimalType<Num> {
+    pub fn from_data_with_size<D: AsRef<[Num]>>(d: D, size: DecimalSize) -> Column {
+        Num::upcast_column(
+            Self::column_from_iter(d.as_ref().iter().copied(), &[]),
+            size,
+        )
+    }
+
+    pub fn from_opt_data_with_size<D: AsRef<[Option<Num>]>>(d: D, size: DecimalSize) -> Column {
+        let mut validity = MutableBitmap::with_capacity(d.as_ref().len());
+        let mut data = Vec::with_capacity(d.as_ref().len());
+        for v in d.as_ref() {
+            if let Some(v) = v {
+                data.push(*v);
+                validity.push(true);
+            } else {
+                data.push(Num::default());
+                validity.push(false);
+            }
+        }
+        let col = Self::from_data_with_size(data, size);
+        Column::Nullable(Box::new(NullableColumn {
+            column: col,
+            validity: validity.into(),
+        }))
     }
 }
 

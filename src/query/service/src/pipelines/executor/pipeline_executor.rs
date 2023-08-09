@@ -27,10 +27,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::future::select;
 use futures_util::future::Either;
+use log::info;
+use log::warn;
+use log::LevelFilter;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
-use tracing::info;
-use tracing::warn;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::RunningGraph;
@@ -286,14 +287,14 @@ impl PipelineExecutor {
     }
 
     fn start_executor_daemon(self: &Arc<Self>) -> Result<()> {
-        if !self.settings.max_execute_time.is_zero() {
+        if !self.settings.max_execute_time_in_seconds.is_zero() {
             // NOTE(wake ref): When runtime scheduling is blocked, holding executor strong ref may cause the executor can not stop.
             let this = Arc::downgrade(self);
-            let max_execute_time = self.settings.max_execute_time;
+            let max_execute_time_in_seconds = self.settings.max_execute_time_in_seconds;
             let finished_notify = self.finished_notify.clone();
             self.async_runtime.spawn(async move {
                 let finished_future = Box::pin(finished_notify.notified());
-                let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time));
+                let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
                 if let Either::Left(_) = select(max_execute_future, finished_future).await {
                     if let Some(executor) = this.upgrade() {
                         executor.finish(Some(ErrorCode::AbortedQuery(
@@ -331,7 +332,7 @@ impl PipelineExecutor {
                     match this_clone.execute_single_thread(thread_num) {
                         Ok(_) => Ok(()),
                         Err(cause) => {
-                            if tracing::enabled!(tracing::Level::TRACE) {
+                            if log::max_level() == LevelFilter::Trace {
                                 Err(cause.add_message_back(format!(
                                     " (while in processor thread {})",
                                     thread_num

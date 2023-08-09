@@ -180,6 +180,7 @@ pub enum Expr {
         args: Vec<Expr>,
         params: Vec<Literal>,
         window: Option<Window>,
+        lambda: Option<Lambda>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
@@ -376,6 +377,12 @@ pub enum WindowFrameBound {
     Following(Option<Box<Expr>>),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Lambda {
+    pub params: Vec<Identifier>,
+    pub expr: Box<Expr>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinaryOperator {
     Plus,
@@ -412,6 +419,8 @@ pub enum BinaryOperator {
     BitwiseXor,
     BitwiseShiftLeft,
     BitwiseShiftRight,
+
+    L2Distance,
 }
 
 impl BinaryOperator {
@@ -438,6 +447,7 @@ impl BinaryOperator {
             BinaryOperator::BitwiseShiftLeft => "bit_shift_left".to_string(),
             BinaryOperator::BitwiseShiftRight => "bit_shift_right".to_string(),
             BinaryOperator::Caret => "pow".to_string(),
+            BinaryOperator::L2Distance => "l2_distance".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
@@ -656,6 +666,9 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::BitwiseShiftRight => {
                 write!(f, ">>")
+            }
+            BinaryOperator::L2Distance => {
+                write!(f, "<->")
             }
         }
     }
@@ -882,6 +895,21 @@ impl Display for WindowSpec {
     }
 }
 
+impl Display for Lambda {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.params.len() == 1 {
+            write!(f, "{}", self.params[0])?;
+        } else {
+            write!(f, "(")?;
+            write_comma_separated_list(f, self.params.clone())?;
+            write!(f, ")")?;
+        }
+        write!(f, " -> {}", self.expr)?;
+
+        Ok(())
+    }
+}
+
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1043,6 +1071,7 @@ impl Display for Expr {
                 args,
                 params,
                 window,
+                lambda,
                 ..
             } => {
                 write!(f, "{name}")?;
@@ -1056,6 +1085,9 @@ impl Display for Expr {
                     write!(f, "DISTINCT ")?;
                 }
                 write_comma_separated_list(f, args)?;
+                if let Some(lambda) = lambda {
+                    write!(f, ", {lambda}")?;
+                }
                 write!(f, ")")?;
 
                 if let Some(window) = window {

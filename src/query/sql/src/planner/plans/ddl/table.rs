@@ -24,6 +24,8 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::TableField;
+use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UndropTableReq;
@@ -46,7 +48,6 @@ pub struct CreateTablePlan {
     pub storage_params: Option<StorageParams>,
     pub part_prefix: String,
     pub options: TableOptions,
-    pub field_default_exprs: Vec<Option<String>>,
     pub field_comments: Vec<String>,
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
@@ -104,7 +105,35 @@ pub struct VacuumTablePlan {
 
 impl VacuumTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+        if self.option.dry_run.is_some() {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "Files",
+                DataType::String,
+            )]))
+        } else {
+            Arc::new(DataSchema::empty())
+        }
+    }
+}
+
+/// Vacuum drop table
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VacuumDropTablePlan {
+    pub catalog: String,
+    pub database: String,
+    pub option: VacuumTableOption,
+}
+
+impl VacuumDropTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        if self.option.dry_run.is_some() {
+            Arc::new(DataSchema::new(vec![
+                DataField::new("Table", DataType::String),
+                DataField::new("File", DataType::String),
+            ]))
+        } else {
+            Arc::new(DataSchema::empty())
+        }
     }
 }
 
@@ -121,6 +150,7 @@ pub struct OptimizeTablePlan {
     pub database: String,
     pub table: String,
     pub action: OptimizeTableAction,
+    pub limit: Option<usize>,
 }
 
 impl OptimizeTablePlan {
@@ -133,8 +163,8 @@ impl OptimizeTablePlan {
 pub enum OptimizeTableAction {
     All,
     Purge(Option<NavigationPoint>),
-    CompactBlocks(Option<usize>),
-    CompactSegments(Option<usize>),
+    CompactBlocks,
+    CompactSegments,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -168,18 +198,59 @@ impl RenameTablePlan {
     }
 }
 
-// Table add column
-#[derive(Clone, Debug, PartialEq)]
-pub struct AddTableColumnPlan {
+/// SetOptions
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetOptionsPlan {
+    pub set_options: TableOptions,
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub schema: TableSchemaRef,
-    pub field_default_exprs: Vec<Option<String>>,
-    pub field_comments: Vec<String>,
+}
+
+impl SetOptionsPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+// Table add column
+#[derive(Clone, Debug, PartialEq)]
+pub struct AddTableColumnPlan {
+    pub tenant: String,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub field: TableField,
+    pub comment: String,
+    pub option: AddColumnOption,
 }
 
 impl AddTableColumnPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum AddColumnOption {
+    First,
+    After(String),
+    End,
+}
+
+// Table rename column
+#[derive(Clone, Debug, PartialEq)]
+pub struct RenameTableColumnPlan {
+    pub tenant: String,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub schema: TableSchema,
+    pub old_column: String,
+    pub new_column: String,
+}
+
+impl RenameTableColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
@@ -206,7 +277,6 @@ pub struct ModifyTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub column: String,
     pub action: ModifyColumnAction,
 }
 

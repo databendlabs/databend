@@ -4,9 +4,6 @@ title: FUSE_STATISTIC
 
 Returns the estimated number of distinct values of each column in a table.
 
-See Also:
-
-- [OPTIMIZE TABLE](../../14-sql-commands/00-ddl/20-table/60-optimize-table.md)
 
 ## Syntax
 

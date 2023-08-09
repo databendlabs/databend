@@ -47,11 +47,13 @@ impl OneBlockProcedure for FuseSnapshotProcedure {
 
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+        assert_eq!(args.len(), 2);
         let database_name = args[0].clone();
         let table_name = args[1].clone();
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
-            .get_catalog(&ctx.get_current_catalog())?
+            .get_catalog(&ctx.get_current_catalog())
+            .await?
             .get_table(
                 tenant_id.as_str(),
                 database_name.as_str(),

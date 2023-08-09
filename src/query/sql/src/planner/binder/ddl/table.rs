@@ -16,10 +16,13 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_ast::ast::AddColumnOption as AstAddColumnOption;
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::AnalyzeTableStmt;
+use common_ast::ast::AttachTableStmt;
 use common_ast::ast::ColumnDefinition;
+use common_ast::ast::ColumnExpr;
 use common_ast::ast::CompactTarget;
 use common_ast::ast::CreateTableSource;
 use common_ast::ast::CreateTableStmt;
@@ -34,6 +37,7 @@ use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::OptimizeTableStmt;
 use common_ast::ast::RenameTableStmt;
 use common_ast::ast::ShowCreateTableStmt;
+use common_ast::ast::ShowDropTablesStmt;
 use common_ast::ast::ShowLimit;
 use common_ast::ast::ShowTablesStatusStmt;
 use common_ast::ast::ShowTablesStmt;
@@ -42,6 +46,7 @@ use common_ast::ast::TableReference;
 use common_ast::ast::TruncateTableStmt;
 use common_ast::ast::UndropTableStmt;
 use common_ast::ast::UriLocation;
+use common_ast::ast::VacuumDropTableStmt;
 use common_ast::ast::VacuumTableStmt;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
@@ -53,10 +58,11 @@ use common_exception::Result;
 use common_expression::infer_schema_type;
 use common_expression::infer_table_schema;
 use common_expression::types::DataType;
-use common_expression::ConstantFolder;
+use common_expression::ComputedExpr;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::TableField;
+use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -64,26 +70,31 @@ use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
+use log::debug;
+use log::error;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use tracing::debug;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
+use crate::parse_computed_expr_to_string;
+use crate::parse_default_expr_to_string;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;
 use crate::planner::semantic::IdentifierNormalizer;
+use crate::plans::AddColumnOption;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
-use crate::plans::CastExpr;
 use crate::plans::CreateTablePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
@@ -95,18 +106,19 @@ use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::Plan;
 use crate::plans::ReclusterTablePlan;
+use crate::plans::RenameTableColumnPlan;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RewriteKind;
+use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::BindContext;
-use crate::ColumnBinding;
 use crate::Planner;
-use crate::ScalarExpr;
 use crate::SelectBuilder;
 
 impl Binder {
@@ -180,8 +192,12 @@ impl Binder {
             }
         };
         debug!("show tables rewrite to: {:?}", query);
-        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowTables)
-            .await
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowTables(database),
+        )
+        .await
     }
 
     #[async_backtrace::framed]
@@ -285,6 +301,51 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_drop_tables(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowDropTablesStmt,
+    ) -> Result<Plan> {
+        let ShowDropTablesStmt { database } = stmt;
+
+        let database = self.check_database_exist(&None, database).await?;
+
+        let mut select_builder = SelectBuilder::from("system.tables_with_history");
+
+        select_builder
+            .with_column("name AS Tables")
+            .with_column("'BASE TABLE' AS Table_type")
+            .with_column("database AS Database")
+            .with_column("catalog AS Catalog")
+            .with_column("engine")
+            .with_column("created_on AS create_time");
+        select_builder.with_column("dropped_on AS drop_time");
+
+        select_builder
+            .with_column("num_rows")
+            .with_column("data_size")
+            .with_column("data_compressed_size")
+            .with_column("index_size");
+
+        select_builder
+            .with_order_by("catalog")
+            .with_order_by("database")
+            .with_order_by("name");
+
+        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter("dropped_on != 'NULL'".to_string());
+
+        let query = select_builder.build();
+        debug!("show drop tables rewrite to: {:?}", query);
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowTables(database),
+        )
+        .await
+    }
+
+    #[async_backtrace::framed]
     async fn check_database_exist(
         &mut self,
         catalog: &Option<Identifier>,
@@ -299,7 +360,8 @@ impl Binder {
             Some(ident) => {
                 let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
                 self.ctx
-                    .get_catalog(&ctl_name)?
+                    .get_catalog(&ctl_name)
+                    .await?
                     .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
                 Ok(database)
@@ -372,7 +434,7 @@ impl Binder {
         }
 
         // Build table schema
-        let (schema, field_default_exprs, field_comments) = match (&source, &as_query) {
+        let (schema, field_comments) = match (&source, &as_query) {
             (Some(source), None) => {
                 // `CREATE TABLE` without `AS SELECT ...`
                 self.analyze_create_table_schema(source).await?
@@ -393,11 +455,11 @@ impl Binder {
                     .collect::<Result<Vec<_>>>()?;
                 let schema = TableSchemaRefExt::create(fields);
                 Self::validate_create_table_schema(&schema)?;
-                (schema, vec![], vec![])
+                (schema, vec![])
             }
             (Some(source), Some(query)) => {
                 // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns specified
-                let (source_schema, source_default_exprs, source_comments) =
+                let (source_schema, source_comments) =
                     self.analyze_create_table_schema(source).await?;
                 let mut init_bind_context = BindContext::new();
                 let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
@@ -415,12 +477,22 @@ impl Binder {
                     return Err(ErrorCode::BadArguments("Number of columns does not match"));
                 }
                 Self::validate_create_table_schema(&source_schema)?;
-                (source_schema, source_default_exprs, source_comments)
+                (source_schema, source_comments)
             }
             _ => Err(ErrorCode::BadArguments(
                 "Incorrect CREATE query: required list of column descriptions or AS section or SELECT..",
             ))?,
         };
+
+        // for fuse engine, we will insert database_id, so if we check it in execute phase,
+        // we can't distinct user key and our internal key.
+        if options.contains_key(&OPT_KEY_DATABASE_ID.to_lowercase()) {
+            error!("invalid opt for fuse table in create table statement");
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "table option {} is invalid for create table statement",
+                OPT_KEY_DATABASE_ID
+            )));
+        }
 
         if engine == Engine::Fuse {
             // Currently, [Table] can not accesses its database id yet, thus
@@ -431,7 +503,7 @@ impl Binder {
             //
             // Later, when database id is kept, let say in `TableInfo`, we can
             // safely eliminate this "FUSE" constant and the table meta option entry.
-            let catalog = self.ctx.get_catalog(&catalog)?;
+            let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog
                 .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
@@ -502,7 +574,6 @@ impl Binder {
             storage_params,
             part_prefix,
             options,
-            field_default_exprs,
             field_comments,
             cluster_key,
             as_select: if let Some(query) = as_query {
@@ -518,6 +589,67 @@ impl Binder {
             },
         };
         Ok(Plan::CreateTable(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_attach_table(
+        &mut self,
+        stmt: &AttachTableStmt,
+    ) -> Result<Plan> {
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
+
+        let mut path = stmt.uri_location.path.clone();
+        // First, to make it easy for users to use, path = "/testbucket/admin/data/1/2" and path = "/testbucket/admin/data/1/2/" are both legal
+        // So we need to remove the last "/"
+        if path.ends_with('/') {
+            path.pop();
+        }
+        // Then, split the path into two parts, the first part is the root, and the second part is the storage_prefix
+        // For example, path = "/testbucket/admin/data/1/2", then root = "/testbucket/admin/data/", storage_prefix = "1/2"
+        // root is used by OpenDAL operator, storage_prefix is used to specify the storage location of the table
+        // Note that the root must end with "/", and the storage_prefix must not start or end with "/"
+        let mut parts = path.split('/').collect::<Vec<_>>();
+        if parts.len() < 2 {
+            return Err(ErrorCode::BadArguments(format!(
+                "Invalid path: {}",
+                stmt.uri_location
+            )));
+        }
+        let storage_prefix = parts.split_off(parts.len() - 2).join("/");
+        let root = format!("{}/", parts.join("/"));
+        let mut options = BTreeMap::new();
+        options.insert(OPT_KEY_STORAGE_PREFIX.to_string(), storage_prefix);
+
+        let mut uri = stmt.uri_location.clone();
+        uri.path = root;
+        let (sp, _) = parse_uri_location(&mut uri)?;
+
+        // create a temporary op to check if params is correct
+        DataOperator::try_create(&sp).await?;
+
+        // Path ends with "/" means it's a directory.
+        let part_prefix = if uri.path.ends_with('/') {
+            uri.part_prefix.clone()
+        } else {
+            "".to_string()
+        };
+
+        Ok(Plan::CreateTable(Box::new(CreateTablePlan {
+            if_not_exists: false,
+            tenant: self.ctx.get_tenant(),
+            catalog,
+            database,
+            table,
+            options,
+            engine: Engine::Fuse,
+            cluster_key: None,
+            as_select: None,
+            schema: Arc::new(TableSchema::default()),
+            field_comments: vec![],
+            storage_params: Some(sp),
+            part_prefix,
+        })))
     }
 
     #[async_backtrace::framed]
@@ -610,25 +742,60 @@ impl Binder {
                     table,
                 })))
             }
-            AlterTableAction::AddColumn { column } => {
-                let (schema, field_default_exprs, field_comments) = self
-                    .analyze_create_table_schema_by_columns(&[column.clone()], true)
+            AlterTableAction::RenameColumn {
+                old_column,
+                new_column,
+            } => {
+                let schema = self
+                    .ctx
+                    .get_table(&catalog, &database, &table)
+                    .await?
+                    .schema();
+                let (new_schema, old_column, new_column) = self
+                    .analyze_rename_column(old_column, new_column, schema)
                     .await?;
-                Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
+                Ok(Plan::RenameTableColumn(Box::new(RenameTableColumnPlan {
+                    tenant: self.ctx.get_tenant(),
                     catalog,
                     database,
                     table,
-                    schema,
-                    field_default_exprs,
-                    field_comments,
+                    schema: new_schema,
+                    old_column,
+                    new_column,
                 })))
             }
-            AlterTableAction::ModifyColumn { column, action } => {
+            AlterTableAction::AddColumn {
+                column,
+                option: ast_option,
+            } => {
+                let schema = self
+                    .ctx
+                    .get_table(&catalog, &database, &table)
+                    .await?
+                    .schema();
+                let (field, comment) = self.analyze_add_column(column, schema).await?;
+                let option = match ast_option {
+                    AstAddColumnOption::First => AddColumnOption::First,
+                    AstAddColumnOption::After(ident) => AddColumnOption::After(
+                        normalize_identifier(ident, &self.name_resolution_ctx).name,
+                    ),
+                    AstAddColumnOption::End => AddColumnOption::End,
+                };
+                Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
+                    tenant: self.ctx.get_tenant(),
+                    catalog,
+                    database,
+                    table,
+                    field,
+                    comment,
+                    option,
+                })))
+            }
+            AlterTableAction::ModifyColumn { action } => {
                 Ok(Plan::ModifyTableColumn(Box::new(ModifyTableColumnPlan {
                     catalog,
                     database,
                     table,
-                    column: column.to_string(),
                     action: action.clone(),
                 })))
             }
@@ -669,6 +836,7 @@ impl Binder {
             AlterTableAction::ReclusterTable {
                 is_final,
                 selection,
+                limit,
             } => {
                 let (_, mut context) = self
                     .bind_table_reference(bind_context, table_reference)
@@ -680,6 +848,8 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
+                    self.m_cte_bound_ctx.clone(),
+                    self.ctes_map.clone(),
                 );
 
                 let push_downs = if let Some(expr) = selection {
@@ -697,6 +867,7 @@ impl Binder {
                     is_final: *is_final,
                     metadata: self.metadata.clone(),
                     push_downs,
+                    limit: limit.map(|v| v as usize),
                 })))
             }
             AlterTableAction::RevertTo { point } => {
@@ -707,6 +878,14 @@ impl Binder {
                     database,
                     table,
                     point,
+                })))
+            }
+            AlterTableAction::SetOptions { set_options } => {
+                Ok(Plan::SetOptions(Box::new(SetOptionsPlan {
+                    set_options: set_options.clone(),
+                    catalog,
+                    database,
+                    table,
                 })))
             }
         }
@@ -785,6 +964,7 @@ impl Binder {
             database,
             table,
             action: ast_action,
+            limit,
         } = stmt;
 
         let (catalog, database, table) =
@@ -800,22 +980,10 @@ impl Binder {
                 };
                 OptimizeTableAction::Purge(p)
             }
-            AstOptimizeTableAction::Compact { target, limit } => {
-                let limit_cnt = match limit {
-                    Some(Expr::Literal {
-                        lit: Literal::UInt64(uint),
-                        ..
-                    }) => Some(*uint as usize),
-                    Some(_) => {
-                        return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
-                    }
-                    _ => None,
-                };
-                match target {
-                    CompactTarget::Block => OptimizeTableAction::CompactBlocks(limit_cnt),
-                    CompactTarget::Segment => OptimizeTableAction::CompactSegments(limit_cnt),
-                }
-            }
+            AstOptimizeTableAction::Compact { target } => match target {
+                CompactTarget::Block => OptimizeTableAction::CompactBlocks,
+                CompactTarget::Segment => OptimizeTableAction::CompactSegments,
+            },
         };
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {
@@ -823,6 +991,7 @@ impl Binder {
             database,
             table,
             action,
+            limit: limit.map(|v| v as usize),
         })))
     }
 
@@ -863,6 +1032,51 @@ impl Binder {
             catalog,
             database,
             table,
+            option,
+        })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_drop_table(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &VacuumDropTableStmt,
+    ) -> Result<Plan> {
+        let VacuumDropTableStmt {
+            catalog,
+            database,
+            option,
+        } = stmt;
+
+        let catalog = catalog
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| "".to_string());
+
+        let option = {
+            let retain_hours = match option.retain_hours {
+                Some(Expr::Literal {
+                    lit: Literal::UInt64(uint),
+                    ..
+                }) => Some(uint as usize),
+                Some(_) => {
+                    return Err(ErrorCode::IllegalDataType("Unsupported hour type"));
+                }
+                _ => None,
+            };
+
+            VacuumTableOption {
+                retain_hours,
+                dry_run: option.dry_run,
+            }
+        };
+        Ok(Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
+            catalog,
+            database,
             option,
         })))
     }
@@ -910,78 +1124,166 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
+    async fn analyze_rename_column(
+        &self,
+        old_column: &Identifier,
+        new_column: &Identifier,
+        table_schema: TableSchemaRef,
+    ) -> Result<(TableSchema, String, String)> {
+        let old_name = normalize_identifier(old_column, &self.name_resolution_ctx).name;
+        let new_name = normalize_identifier(new_column, &self.name_resolution_ctx).name;
+
+        if old_name == new_name {
+            return Err(ErrorCode::SemanticError(
+                "new column name is the same as old column name".to_string(),
+            ));
+        }
+        let mut new_schema = table_schema.as_ref().clone();
+        let mut old_column_existed = false;
+        for (i, field) in table_schema.fields().iter().enumerate() {
+            if field.name() == &new_name {
+                return Err(ErrorCode::SemanticError(
+                    "new column name existed".to_string(),
+                ));
+            }
+            if field.name() == &old_name {
+                new_schema.rename_field(i, &new_name);
+                old_column_existed = true;
+            }
+        }
+        if !old_column_existed {
+            return Err(ErrorCode::SemanticError(
+                "rename column not existed".to_string(),
+            ));
+        }
+        Ok((new_schema, old_name, new_name))
+    }
+
+    #[async_backtrace::framed]
+    async fn analyze_add_column(
+        &self,
+        column: &ColumnDefinition,
+        table_schema: TableSchemaRef,
+    ) -> Result<(TableField, String)> {
+        let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
+        let data_type = resolve_type_name(&column.data_type)?;
+        let mut field = TableField::new(&name, data_type);
+        if let Some(expr) = &column.expr {
+            match expr {
+                ColumnExpr::Default(default_expr) => {
+                    let expr =
+                        parse_default_expr_to_string(self.ctx.clone(), &field, default_expr, true)?;
+                    field = field.with_default_expr(Some(expr));
+                }
+                ColumnExpr::Virtual(virtual_expr) => {
+                    let expr = parse_computed_expr_to_string(
+                        self.ctx.clone(),
+                        table_schema.clone(),
+                        &field,
+                        virtual_expr,
+                    )?;
+                    field = field.with_computed_expr(Some(ComputedExpr::Virtual(expr)));
+                }
+                ColumnExpr::Stored(_) => {
+                    // TODO: support add stored computed expression column.
+                    return Err(ErrorCode::SemanticError(
+                        "can't add a stored computed column".to_string(),
+                    ));
+                }
+            }
+        }
+        let comment = column.comment.clone().unwrap_or_default();
+        Ok((field, comment))
+    }
+
+    #[async_backtrace::framed]
     async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
-        is_add_column: bool,
-    ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
-        let mut bind_context = BindContext::new();
-        let mut scalar_binder = ScalarBinder::new(
-            &mut bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-        );
+    ) -> Result<(TableSchemaRef, Vec<String>)> {
+        let mut has_computed = false;
         let mut fields = Vec::with_capacity(columns.len());
-        let mut fields_default_expr = Vec::with_capacity(columns.len());
         let mut fields_comments = Vec::with_capacity(columns.len());
         for column in columns.iter() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
             let schema_data_type = resolve_type_name(&column.data_type)?;
-
-            fields.push(TableField::new(&name, schema_data_type.clone()));
-            fields_default_expr.push({
-                if let Some(default_expr) = &column.default_expr {
-                    let (expr, _) = scalar_binder.bind(default_expr).await?;
-                    let is_try = schema_data_type.is_nullable();
-                    let cast_expr = ScalarExpr::CastExpr(CastExpr {
-                        span: expr.span(),
-                        is_try,
-                        target_type: Box::new(DataType::from(&schema_data_type)),
-                        argument: Box::new(expr),
-                    })
-                    .as_expr()?;
-
-                    // Added columns are not allowed to use expressions,
-                    // as the default values will be generated at at each query.
-                    if is_add_column && !cast_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "default expression `{}` is not a valid constant. Please provide a valid constant expression as the default value.", cast_expr.sql_display(),
-                        )));
-                    }
-
-                    let expr = if cast_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-                        let (fold_to_constant, _) = ConstantFolder::fold(
-                            &cast_expr,
-                            &self.ctx.get_function_context()?,
-                            &BUILTIN_FUNCTIONS,
-                        );
-                        fold_to_constant
-                    } else {
-                        cast_expr
-                    };
-                    Some(expr.sql_display())
-                } else {
-                    None
-                }
-            });
             fields_comments.push(column.comment.clone().unwrap_or_default());
+
+            let mut field = TableField::new(&name, schema_data_type.clone());
+            if let Some(expr) = &column.expr {
+                match expr {
+                    ColumnExpr::Default(default_expr) => {
+                        let expr = parse_default_expr_to_string(
+                            self.ctx.clone(),
+                            &field,
+                            default_expr,
+                            false,
+                        )?;
+                        field = field.with_default_expr(Some(expr));
+                    }
+                    _ => has_computed = true,
+                }
+            }
+            fields.push(field);
         }
+
+        let fields = if has_computed {
+            let mut source_fields = Vec::with_capacity(fields.len());
+            for (column, field) in columns.iter().zip(fields.iter()) {
+                match &column.expr {
+                    Some(ColumnExpr::Virtual(_)) | Some(ColumnExpr::Stored(_)) => {
+                        continue;
+                    }
+                    _ => {}
+                }
+                source_fields.push(field.clone());
+            }
+            let source_schema = TableSchemaRefExt::create(source_fields);
+            let mut new_fields = Vec::with_capacity(fields.len());
+            for (column, field) in columns.iter().zip(fields.into_iter()) {
+                match &column.expr {
+                    Some(ColumnExpr::Virtual(virtual_expr)) => {
+                        let expr = parse_computed_expr_to_string(
+                            self.ctx.clone(),
+                            source_schema.clone(),
+                            &field,
+                            virtual_expr,
+                        )?;
+                        new_fields
+                            .push(field.with_computed_expr(Some(ComputedExpr::Virtual(expr))));
+                    }
+                    Some(ColumnExpr::Stored(stored_expr)) => {
+                        let expr = parse_computed_expr_to_string(
+                            self.ctx.clone(),
+                            source_schema.clone(),
+                            &field,
+                            stored_expr,
+                        )?;
+                        new_fields.push(field.with_computed_expr(Some(ComputedExpr::Stored(expr))));
+                    }
+                    _ => {
+                        new_fields.push(field);
+                    }
+                }
+            }
+            new_fields
+        } else {
+            fields
+        };
+
         let schema = TableSchemaRefExt::create(fields);
         Self::validate_create_table_schema(&schema)?;
-        Ok((schema, fields_default_expr, fields_comments))
+        Ok((schema, fields_comments))
     }
 
     #[async_backtrace::framed]
     async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource,
-    ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
+    ) -> Result<(TableSchemaRef, Vec<String>)> {
         match source {
             CreateTableSource::Columns(columns) => {
-                self.analyze_create_table_schema_by_columns(columns, false)
-                    .await
+                self.analyze_create_table_schema_by_columns(columns).await
             }
             CreateTableSource::Like {
                 catalog,
@@ -996,14 +1298,14 @@ impl Binder {
                     if let Some(query) = table.get_table_info().options().get(QUERY) {
                         let mut planner = Planner::new(self.ctx.clone());
                         let (plan, _) = planner.plan_sql(query).await?;
-                        Ok((infer_table_schema(&plan.schema())?, vec![], vec![]))
+                        Ok((infer_table_schema(&plan.schema())?, vec![]))
                     } else {
                         Err(ErrorCode::Internal(
                             "Logical error, View Table must have a SelectQuery inside.",
                         ))
                     }
                 } else {
-                    Ok((table.schema(), vec![], table.field_comments().clone()))
+                    Ok((table.schema(), table.field_comments().clone()))
                 }
             }
         }
@@ -1053,16 +1355,14 @@ impl Binder {
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
         for (index, field) in schema.fields().iter().enumerate() {
-            let column = ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_position: None,
-                table_index: None,
-                column_name: field.name().clone(),
+            let column = ColumnBindingBuilder::new(
+                field.name().clone(),
                 index,
-                data_type: Box::new(DataType::from(field.data_type())),
-                visibility: Visibility::Visible,
-            };
+                Box::new(DataType::from(field.data_type())),
+                Visibility::Visible,
+            )
+            .build();
+
             bind_context.columns.push(column);
         }
         let mut scalar_binder = ScalarBinder::new(
@@ -1071,11 +1371,22 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
+        // cluster keys cannot be a udf expression.
+        scalar_binder.forbid_udf();
 
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
+            if cluster_key.used_columns().len() != 1 || !cluster_key.valid_for_clustering() {
+                return Err(ErrorCode::InvalidClusterKeys(format!(
+                    "Cluster by expression `{:#}` is invalid",
+                    cluster_by
+                )));
+            }
+
             let expr = cluster_key.as_expr()?;
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
@@ -1083,6 +1394,15 @@ impl Binder {
                     cluster_by
                 )));
             }
+
+            let data_type = expr.data_type();
+            if !Self::valid_cluster_key_type(data_type) {
+                return Err(ErrorCode::InvalidClusterKeys(format!(
+                    "Unsupported data type '{}' for cluster by expression `{:#}`",
+                    data_type, cluster_by
+                )));
+            }
+
             let mut cluster_by = cluster_by.clone();
             walk_expr_mut(
                 &mut IdentifierNormalizer {
@@ -1094,5 +1414,18 @@ impl Binder {
         }
 
         Ok(cluster_keys)
+    }
+
+    fn valid_cluster_key_type(data_type: &DataType) -> bool {
+        let inner_type = data_type.remove_nullable();
+        matches!(
+            inner_type,
+            DataType::Number(_)
+                | DataType::String
+                | DataType::Timestamp
+                | DataType::Date
+                | DataType::Boolean
+                | DataType::Decimal(_)
+        )
     }
 }

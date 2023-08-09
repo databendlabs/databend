@@ -66,10 +66,27 @@ pub struct DataSchema {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum ComputedExpr {
+    Virtual(String),
+    Stored(String),
+}
+
+impl ComputedExpr {
+    #[inline]
+    pub fn expr(&self) -> &String {
+        match self {
+            ComputedExpr::Virtual(expr) => expr,
+            ComputedExpr::Stored(expr) => expr,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DataField {
     name: String,
     default_expr: Option<String>,
     data_type: DataType,
+    computed_expr: Option<ComputedExpr>,
 }
 
 fn uninit_column_id() -> ColumnId {
@@ -92,6 +109,7 @@ pub struct TableField {
     pub data_type: TableDataType,
     #[serde(default = "uninit_column_id")]
     pub column_id: ColumnId,
+    pub computed_expr: Option<ComputedExpr>,
 }
 
 /// DataType with more information that is only available for table field, e.g, the
@@ -206,6 +224,26 @@ impl DataSchema {
             .find(|&(_, c)| c.name() == name)
     }
 
+    pub fn set_field_type(&mut self, i: FieldIndex, data_type: DataType) {
+        self.fields[i].data_type = data_type;
+    }
+
+    pub fn rename_field(&mut self, i: FieldIndex, new_name: &str) {
+        self.fields[i].name = new_name.to_string();
+    }
+
+    pub fn drop_column(&mut self, column: &str) -> Result<()> {
+        if self.fields.len() == 1 {
+            return Err(ErrorCode::DropColumnEmptyError(
+                "cannot drop table column to empty",
+            ));
+        }
+        let i = self.index_of(column)?;
+        self.fields.remove(i);
+
+        Ok(())
+    }
+
     /// Check to see if `self` is a superset of `other` schema. Here are the comparison rules:
     pub fn contains(&self, other: &DataSchema) -> bool {
         if self.fields.len() != other.fields.len() {
@@ -268,7 +306,7 @@ impl TableSchema {
         if next_column_id > 0 {
             // make sure that field column id has been inited.
             if fields.len() > 1 {
-                assert!(fields[1].column_id() > 0);
+                assert!(fields[1].column_id() > 0 || fields[0].column_id() > 0);
             }
             return (next_column_id, fields);
         }
@@ -358,6 +396,18 @@ impl TableSchema {
         Ok(())
     }
 
+    pub fn add_column(&mut self, field: &TableField, index: usize) -> Result<()> {
+        if self.index_of(field.name()).is_ok() {
+            return Err(ErrorCode::AddColumnExistError(format!(
+                "add column {} already exist",
+                field.name(),
+            )));
+        }
+        let field = field.build_column_id(&mut self.next_column_id);
+        self.fields.insert(index, field);
+        Ok(())
+    }
+
     // Every internal column has constant column id, no need to generate column id of internal columns.
     pub fn add_internal_field(
         &mut self,
@@ -373,7 +423,7 @@ impl TableSchema {
         self.fields.retain(|f| !is_internal_column_id(f.column_id));
     }
 
-    pub fn drop_column(&mut self, column: &str) -> Result<()> {
+    pub fn drop_column(&mut self, column: &str) -> Result<FieldIndex> {
         if self.fields.len() == 1 {
             return Err(ErrorCode::DropColumnEmptyError(
                 "cannot drop table column to empty",
@@ -382,7 +432,7 @@ impl TableSchema {
         let i = self.index_of(column)?;
         self.fields.remove(i);
 
-        Ok(())
+        Ok(i)
     }
 
     pub fn to_leaf_column_id_set(&self) -> HashSet<ColumnId> {
@@ -494,6 +544,10 @@ impl TableSchema {
             }
         }
         false
+    }
+
+    pub fn rename_field(&mut self, i: FieldIndex, new_name: &str) {
+        self.fields[i].name = new_name.to_string();
     }
 
     pub fn fields_map(&self) -> BTreeMap<FieldIndex, TableField> {
@@ -791,6 +845,38 @@ impl TableSchema {
         }
     }
 
+    #[must_use]
+    pub fn remove_computed_fields(&self) -> Self {
+        let new_fields = self
+            .fields()
+            .iter()
+            .filter(|f| f.computed_expr().is_none())
+            .cloned()
+            .collect::<Vec<_>>();
+
+        Self {
+            fields: new_fields,
+            metadata: self.metadata.clone(),
+            next_column_id: self.next_column_id,
+        }
+    }
+
+    #[must_use]
+    pub fn remove_virtual_computed_fields(&self) -> Self {
+        let new_fields = self
+            .fields()
+            .iter()
+            .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        Self {
+            fields: new_fields,
+            metadata: self.metadata.clone(),
+            next_column_id: self.next_column_id,
+        }
+    }
+
     pub fn to_arrow(&self) -> ArrowSchema {
         let fields = self.fields().iter().map(|f| f.into()).collect::<Vec<_>>();
 
@@ -804,6 +890,7 @@ impl DataField {
             name: name.to_string(),
             default_expr: None,
             data_type,
+            computed_expr: None,
         }
     }
 
@@ -812,12 +899,18 @@ impl DataField {
             name: name.to_string(),
             default_expr: None,
             data_type: data_type.wrap_nullable(),
+            computed_expr: None,
         }
     }
 
     #[must_use]
     pub fn with_default_expr(mut self, default_expr: Option<String>) -> Self {
         self.default_expr = default_expr;
+        self
+    }
+
+    pub fn with_computed_expr(mut self, computed_expr: Option<ComputedExpr>) -> Self {
+        self.computed_expr = computed_expr;
         self
     }
 
@@ -831,6 +924,10 @@ impl DataField {
 
     pub fn default_expr(&self) -> Option<&String> {
         self.default_expr.as_ref()
+    }
+
+    pub fn computed_expr(&self) -> Option<&ComputedExpr> {
+        self.computed_expr.as_ref()
     }
 
     #[inline]
@@ -851,6 +948,7 @@ impl TableField {
             default_expr: None,
             data_type,
             column_id: 0,
+            computed_expr: None,
         }
     }
 
@@ -860,6 +958,7 @@ impl TableField {
             default_expr: None,
             data_type,
             column_id,
+            computed_expr: None,
         }
     }
 
@@ -905,6 +1004,7 @@ impl TableField {
             default_expr: self.default_expr.clone(),
             data_type: self.data_type.clone(),
             column_id,
+            computed_expr: self.computed_expr.clone(),
         }
     }
 
@@ -943,6 +1043,11 @@ impl TableField {
         self
     }
 
+    pub fn with_computed_expr(mut self, computed_expr: Option<ComputedExpr>) -> Self {
+        self.computed_expr = computed_expr;
+        self
+    }
+
     pub fn name(&self) -> &String {
         &self.name
     }
@@ -953,6 +1058,10 @@ impl TableField {
 
     pub fn default_expr(&self) -> Option<&String> {
         self.default_expr.as_ref()
+    }
+
+    pub fn computed_expr(&self) -> Option<&ComputedExpr> {
+        self.computed_expr.as_ref()
     }
 
     #[inline]
@@ -1144,7 +1253,9 @@ impl From<&TableField> for DataField {
     fn from(f: &TableField) -> Self {
         let data_type = f.data_type.clone();
         let name = f.name.clone();
-        DataField::new(&name, DataType::from(&data_type)).with_default_expr(f.default_expr.clone())
+        DataField::new(&name, DataType::from(&data_type))
+            .with_default_expr(f.default_expr.clone())
+            .with_computed_expr(f.computed_expr.clone())
     }
 }
 
@@ -1176,6 +1287,7 @@ impl From<&ArrowField> for TableField {
             data_type: f.into(),
             default_expr: None,
             column_id: 0,
+            computed_expr: None,
         }
     }
 }
@@ -1186,6 +1298,7 @@ impl From<&ArrowField> for DataField {
             name: f.name.clone(),
             data_type: DataType::from(&TableDataType::from(f)),
             default_expr: None,
+            computed_expr: None,
         }
     }
 }
@@ -1516,7 +1629,11 @@ pub fn infer_table_schema(data_schema: &DataSchemaRef) -> Result<TableSchemaRef>
     let mut fields = Vec::with_capacity(data_schema.fields().len());
     for field in data_schema.fields() {
         let field_type = infer_schema_type(field.data_type())?;
-        fields.push(TableField::new(field.name(), field_type));
+        fields.push(
+            TableField::new(field.name(), field_type)
+                .with_default_expr(field.default_expr.clone())
+                .with_computed_expr(field.computed_expr.clone()),
+        );
     }
     Ok(TableSchemaRefExt::create(fields))
 }

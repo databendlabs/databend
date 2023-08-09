@@ -12,15 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_stoerr::MetaStorageError;
+use common_meta_types::LogId;
 use common_meta_types::MetaStartupError;
 use common_meta_types::NodeId;
 use common_meta_types::Vote;
-use tracing::debug;
-use tracing::info;
+use log::as_debug;
+use log::debug;
+use log::info;
 
 use crate::config::RaftConfig;
 use crate::key_spaces::RaftStateKV;
@@ -56,15 +60,14 @@ impl RaftState {
     /// 1. If `open` is `Some`,  it tries to open an existent RaftState if there is one.
     /// 2. If `create` is `Some`, it tries to initialize a new RaftState if there is not one.
     /// If none of them is `Some`, it is a programming error and will panic.
-    #[tracing::instrument(level = "debug", skip(db,config,open,create), fields(config_id=%config.config_id))]
+    #[minitrace::trace]
     pub async fn open_create(
         db: &sled::Db,
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
     ) -> Result<RaftState, MetaStartupError> {
-        info!(?config);
-        info!("open: {:?}, create: {:?}", open, create);
+        info!(config = as_debug!(config); "open: {:?}, create: {:?}", open, create);
 
         let tree_name = config.tree_name(TREE_RAFT_STATE);
         let inner = SledTree::open(db, &tree_name, config.is_sync())?;
@@ -102,7 +105,7 @@ impl RaftState {
         Ok(rs)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn set_node_id(&self, id: NodeId) -> Result<(), MetaStorageError> {
         let state = self.state();
         state
@@ -113,9 +116,30 @@ impl RaftState {
 
     /// Initialize a raft state. The only thing to do is to persist the node id
     /// so that next time opening it the caller knows it is initialized.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     async fn init(&self) -> Result<(), MetaStorageError> {
         self.set_node_id(self.id).await
+    }
+
+    pub async fn save_committed(&self, committed: Option<LogId>) -> Result<(), MetaStorageError> {
+        let state = self.state();
+        state
+            .insert(
+                &RaftStateKey::Committed,
+                &RaftStateValue::Committed(committed),
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub fn read_committed(&self) -> Result<Option<LogId>, MetaStorageError> {
+        let state = self.state();
+        let committed = state.get(&RaftStateKey::Committed)?;
+        if let Some(c) = committed {
+            Ok(Option::<LogId>::from(c))
+        } else {
+            Ok(None)
+        }
     }
 
     pub async fn save_vote(&self, vote: &Vote) -> Result<(), MetaStorageError> {
@@ -131,26 +155,6 @@ impl RaftState {
         let hs = state.get(&RaftStateKey::HardState)?;
         let hs = hs.map(Vote::from);
         Ok(hs)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn write_state_machine_id(&self, id: &(u64, u64)) -> Result<(), MetaStorageError> {
-        let state = self.state();
-        state
-            .insert(
-                &RaftStateKey::StateMachineId,
-                &RaftStateValue::StateMachineId(*id),
-            )
-            .await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub fn read_state_machine_id(&self) -> Result<(u64, u64), MetaStorageError> {
-        let state = self.state();
-        let smid = state.get(&RaftStateKey::StateMachineId)?;
-        let smid: (u64, u64) = smid.map_or((0, 0), |v| v.into());
-        Ok(smid)
     }
 
     /// Returns a borrowed sled tree key space to store meta of raft log

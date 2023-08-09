@@ -22,6 +22,7 @@ use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::DataBlock;
 use common_expression::FromData;
+use common_expression::FromOptData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -52,7 +53,7 @@ impl AsyncSystemTable for IndexesTable {
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
+        let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
         let indexes = catalog
             .list_indexes(ListIndexesReq {
                 tenant,
@@ -64,12 +65,14 @@ impl AsyncSystemTable for IndexesTable {
         let mut types = Vec::with_capacity(indexes.len());
         let mut defs = Vec::with_capacity(indexes.len());
         let mut created_on = Vec::with_capacity(indexes.len());
+        let mut updated_on = Vec::with_capacity(indexes.len());
 
         for (_, name, index) in indexes {
             names.push(name.as_bytes().to_vec());
             types.push(index.index_type.to_string().as_bytes().to_vec());
             defs.push(index.query.as_bytes().to_vec());
             created_on.push(index.created_on.timestamp_micros());
+            updated_on.push(index.updated_on.map(|u| u.timestamp_micros()));
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -77,6 +80,7 @@ impl AsyncSystemTable for IndexesTable {
             StringType::from_data(types),
             StringType::from_data(defs),
             TimestampType::from_data(created_on),
+            TimestampType::from_opt_data(updated_on),
         ]))
     }
 }
@@ -88,6 +92,10 @@ impl IndexesTable {
             TableField::new("type", TableDataType::String),
             TableField::new("definition", TableDataType::String),
             TableField::new("created_on", TableDataType::Timestamp),
+            TableField::new(
+                "updated_on",
+                TableDataType::Nullable(Box::new(TableDataType::Timestamp)),
+            ),
         ]);
 
         let table_info = TableInfo {

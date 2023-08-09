@@ -32,3 +32,20 @@ pub fn cosine_distance(from: &[f32], to: &[f32]) -> Result<f32> {
 
     Ok(1.0 - (&a * &b).sum() / ((aa_sum).sqrt() * (bb_sum).sqrt()))
 }
+
+pub fn l2_distance(from: &[f32], to: &[f32]) -> Result<f32> {
+    if from.len() != to.len() {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "Vector length not equal: {:} != {:}",
+            from.len(),
+            to.len(),
+        )));
+    }
+
+    Ok(from
+        .iter()
+        .zip(to.iter())
+        .map(|(a, b)| (a - b).powi(2))
+        .sum::<f32>()
+        .sqrt())
+}

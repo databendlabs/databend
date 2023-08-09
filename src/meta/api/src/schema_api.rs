@@ -14,8 +14,11 @@
 
 use std::sync::Arc;
 
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
+use common_meta_app::schema::CreateCatalogReply;
+use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
@@ -28,6 +31,8 @@ use common_meta_app::schema::CreateVirtualColumnReply;
 use common_meta_app::schema::CreateVirtualColumnReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DeleteTableLockRevReq;
+use common_meta_app::schema::DropCatalogReply;
+use common_meta_app::schema::DropCatalogReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -37,12 +42,21 @@ use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::ExtendTableLockRevReq;
+use common_meta_app::schema::GcDroppedTableReq;
+use common_meta_app::schema::GcDroppedTableResp;
+use common_meta_app::schema::GetCatalogReq;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListCatalogReq;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListDroppedTableReq;
+use common_meta_app::schema::ListDroppedTableResp;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
@@ -51,6 +65,8 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
@@ -61,6 +77,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -68,8 +86,6 @@ use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
-use common_meta_types::GCDroppedDataReply;
-use common_meta_types::GCDroppedDataReq;
 use common_meta_types::MetaId;
 
 use crate::kv_app_error::KVAppError;
@@ -114,10 +130,19 @@ pub trait SchemaApi: Send + Sync {
 
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply, KVAppError>;
 
+    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply, KVAppError>;
+
+    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError>;
+
     async fn list_indexes(
         &self,
         req: ListIndexesReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
+
+    async fn list_indexes_by_table_id(
+        &self,
+        req: ListIndexesByIdReq,
+    ) -> Result<Vec<u64>, KVAppError>;
 
     // virtual column
 
@@ -189,11 +214,20 @@ pub trait SchemaApi: Send + Sync {
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, KVAppError>;
 
-    // gc dropped {table|db} which out of retention time.
-    async fn gc_dropped_data(
+    async fn set_table_column_mask_policy(
         &self,
-        req: GCDroppedDataReq,
-    ) -> Result<GCDroppedDataReply, KVAppError>;
+        req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply, KVAppError>;
+
+    async fn get_drop_table_infos(
+        &self,
+        req: ListDroppedTableReq,
+    ) -> Result<ListDroppedTableResp, KVAppError>;
+
+    async fn gc_drop_tables(
+        &self,
+        req: GcDroppedTableReq,
+    ) -> Result<GcDroppedTableResp, KVAppError>;
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, KVAppError>;
 
@@ -207,6 +241,16 @@ pub trait SchemaApi: Send + Sync {
     async fn extend_table_lock_rev(&self, req: ExtendTableLockRevReq) -> Result<(), KVAppError>;
 
     async fn delete_table_lock_rev(&self, req: DeleteTableLockRevReq) -> Result<(), KVAppError>;
+
+    async fn create_catalog(&self, req: CreateCatalogReq)
+    -> Result<CreateCatalogReply, KVAppError>;
+
+    async fn get_catalog(&self, req: GetCatalogReq) -> Result<Arc<CatalogInfo>, KVAppError>;
+
+    async fn drop_catalog(&self, req: DropCatalogReq) -> Result<DropCatalogReply, KVAppError>;
+
+    async fn list_catalogs(&self, req: ListCatalogReq)
+    -> Result<Vec<Arc<CatalogInfo>>, KVAppError>;
 
     fn name(&self) -> String;
 }

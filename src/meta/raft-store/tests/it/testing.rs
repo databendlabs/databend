@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Once;
+
 use common_base::base::GlobalSequence;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::sled;
+use common_tracing::closure_name;
+use common_tracing::init_logging;
+use common_tracing::Config;
+use minitrace::prelude::*;
 
 pub struct RaftTestContext {
     pub raft_config: RaftConfig,
@@ -36,17 +42,36 @@ pub fn new_raft_test_context() -> RaftTestContext {
     }
 }
 
-/// 1. Open a temp sled::Db for all tests.
-/// 2. Initialize a global tracing.
-#[macro_export]
-macro_rules! init_raft_store_ut {
-    () => {{
+pub fn raft_store_test_harness<F, Fut>(test: F)
+where
+    F: FnOnce() -> Fut + 'static,
+    Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
+{
+    setup_test();
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(3)
+        .enable_all()
+        .build()
+        .unwrap();
+    let root = Span::root(closure_name::<F>(), SpanContext::random());
+    let test = test().in_span(root);
+    rt.block_on(test).unwrap();
+
+    shutdown_test();
+}
+
+fn setup_test() {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
         let t = tempfile::tempdir().expect("create temp dir to sled db");
         common_meta_sled_store::init_temp_sled_db(t);
 
-        let guards =
-            common_tracing::init_logging("meta_unittests", &common_tracing::Config::new_testing());
+        let guards = init_logging("meta_unittests", &Config::new_testing());
+        Box::leak(Box::new(guards));
+    });
+}
 
-        guards
-    }};
+fn shutdown_test() {
+    minitrace::flush();
 }

@@ -97,7 +97,7 @@ pub unsafe fn read_le(data: *const u8, len: usize) -> u64 {
     }
 }
 
-#[cfg(all(any(target_arch = "x86_64"), target_feature = "sse4.2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse4.2"))]
 pub mod sse {
     use std::arch::x86_64::*;
 

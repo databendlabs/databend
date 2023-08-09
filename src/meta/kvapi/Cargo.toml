@@ -10,14 +10,15 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [dependencies]
 common-meta-types = { path = "../types" }
 
 anyhow = { workspace = true }
 async-trait = "0.1.57"
+log = { workspace = true }
+minitrace = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-tracing = "0.1.36"

@@ -24,8 +24,8 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::Opened;
+use log::info;
 use maplit::btreeset;
-use tracing::info;
 
 use crate::tests::service::MetaSrvTestContext;
 
@@ -155,12 +155,10 @@ pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvT
     let mut tc = MetaSrvTestContext::new(nid);
     let addr = tc.config.raft_config.raft_api_advertise_host_endpoint();
 
+    dbg!(&tc.config.raft_config.raft_dir);
+
     // boot up a single-node cluster
     let mn = MetaNode::boot(&tc.config).await?;
-
-    // // Disable heartbeat, because in openraft v0.8 heartbeat is a blank log.
-    // // Log index becomes non-deterministic.
-    // mn.raft.enable_heartbeat(false);
 
     tc.meta_node = Some(mn.clone());
 
@@ -168,7 +166,7 @@ pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvT
         tc.assert_raft_server_connection().await?;
 
         // assert that boot() adds the node to meta.
-        let got = mn.get_node(&nid).await?;
+        let got = mn.get_node(&nid).await;
         assert_eq!(addr, got.unwrap().endpoint, "nid0 is added");
 
         mn.raft
@@ -226,11 +224,6 @@ pub(crate) async fn start_meta_node_non_voter(
 
     {
         tc.assert_raft_server_connection().await?;
-        mn.raft
-            .wait(timeout())
-            .state(ServerState::Learner, "learner started")
-            .await?;
-
         mn.raft
             .wait(timeout())
             .current_leader(0, "non-voter has leader")

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -23,6 +24,8 @@ use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
+use common_sql::BloomIndexColumns;
+use log::warn;
 use opendal::Operator;
 use storages_common_index::BloomIndex;
 use storages_common_index::FilterEvalResult;
@@ -66,22 +69,23 @@ impl BloomPrunerCreator {
         schema: &TableSchemaRef,
         dal: Operator,
         filter_expr: Option<&Expr<String>>,
+        bloom_index_cols: BloomIndexColumns,
     ) -> Result<Option<Arc<dyn BloomPruner + Send + Sync>>> {
         if let Some(expr) = filter_expr {
-            let point_query_cols = BloomIndex::find_eq_columns(expr)?;
+            let bloom_columns_map =
+                bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
+            let bloom_column_fields = bloom_columns_map.values().cloned().collect::<Vec<_>>();
+            let point_query_cols = BloomIndex::find_eq_columns(expr, bloom_column_fields)?;
 
             if !point_query_cols.is_empty() {
                 // convert to filter column names
                 let mut filter_fields = Vec::with_capacity(point_query_cols.len());
                 let mut scalar_map = HashMap::<Scalar, u64>::new();
-                for (col_name, scalar, ty) in point_query_cols.iter() {
-                    if let Ok(field) = schema.field_with_name(col_name) {
-                        filter_fields.push(field.clone());
-                        if !scalar_map.contains_key(scalar) {
-                            let digest =
-                                BloomIndex::calculate_scalar_digest(&func_ctx, scalar, ty)?;
-                            scalar_map.insert(scalar.clone(), digest);
-                        }
+                for (field, scalar, ty) in point_query_cols.into_iter() {
+                    filter_fields.push(field);
+                    if let Entry::Vacant(e) = scalar_map.entry(scalar.clone()) {
+                        let digest = BloomIndex::calculate_scalar_digest(&func_ctx, &scalar, &ty)?;
+                        e.insert(digest);
                     }
                 }
 
@@ -127,13 +131,15 @@ impl BloomPrunerCreator {
         match maybe_filter {
             Ok(filter) => Ok(BloomIndex::from_filter_block(
                 self.func_ctx.clone(),
-                self.data_schema.clone(),
                 filter.filter_schema,
                 filter.filters,
                 version,
             )?
-            .apply(self.filter_expression.clone(), &self.scalar_map)?
-                != FilterEvalResult::MustFalse),
+            .apply(
+                self.filter_expression.clone(),
+                &self.scalar_map,
+                self.data_schema.clone(),
+            )? != FilterEvalResult::MustFalse),
             Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
                 // In case that the index is no longer supported, just return true to indicate
                 // that the block being pruned should be kept. (Although the caller of this method
@@ -160,7 +166,7 @@ impl BloomPruner for BloomPrunerCreator {
                 Ok(v) => v,
                 Err(e) => {
                     // swallow exceptions intentionally, corrupted index should not prevent execution
-                    tracing::warn!("failed to apply bloom pruner, returning true. {}", e);
+                    warn!("failed to apply bloom pruner, returning true. {}", e);
                     true
                 }
             }

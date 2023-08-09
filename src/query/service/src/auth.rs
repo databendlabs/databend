@@ -33,11 +33,12 @@ pub struct AuthMgr {
 pub enum Credential {
     Jwt {
         token: String,
+        client_ip: Option<String>,
     },
     Password {
         name: String,
         password: Option<Vec<u8>>,
-        hostname: Option<String>,
+        client_ip: Option<String>,
     },
 }
 
@@ -64,7 +65,10 @@ impl AuthMgr {
     pub async fn auth(&self, session: Arc<Session>, credential: &Credential) -> Result<()> {
         let user_api = UserApiProvider::instance();
         match credential {
-            Credential::Jwt { token: t } => {
+            Credential::Jwt {
+                token: t,
+                client_ip,
+            } => {
                 let jwt_auth = self
                     .jwt_auth
                     .as_ref()
@@ -85,14 +89,21 @@ impl AuthMgr {
                 let identity = UserIdentity::new(&user_name, "%");
 
                 // create a new user for this identity if not exists
-                let user = match user_api.get_user(&tenant, identity.clone()).await {
+                let user = match user_api
+                    .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
+                    .await
+                {
                     Ok(user_info) => match user_info.auth_info {
                         AuthInfo::JWT => user_info,
                         _ => return Err(ErrorCode::AuthenticateFailure("wrong auth type")),
                     },
                     Err(e) => {
-                        if e.code() != ErrorCode::UNKNOWN_USER {
-                            return Err(ErrorCode::AuthenticateFailure(e.message()));
+                        match e.code() {
+                            ErrorCode::UNKNOWN_USER => {}
+                            ErrorCode::META_SERVICE_ERROR => {
+                                return Err(e);
+                            }
+                            _ => return Err(ErrorCode::AuthenticateFailure(e.message())),
                         }
                         let ensure_user = jwt
                             .custom
@@ -115,11 +126,12 @@ impl AuthMgr {
             Credential::Password {
                 name: n,
                 password: p,
-                hostname: h,
+                client_ip,
             } => {
                 let tenant = session.get_current_tenant();
+                let identity = UserIdentity::new(n, "%");
                 let user = user_api
-                    .get_user_with_client_ip(&tenant, n, h.as_ref().unwrap_or(&"%".to_string()))
+                    .get_user_with_client_ip(&tenant, identity, client_ip.as_deref())
                     .await?;
                 let user = match &user.auth_info {
                     AuthInfo::None => user,

@@ -9,7 +9,7 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [features]
 io-uring = ["sled/io_uring"]
@@ -23,16 +23,18 @@ sled = { workspace = true }
 
 anyerror = { workspace = true }
 byteorder = "1.4.3"
+log = { workspace = true }
+minitrace = { workspace = true }
 once_cell = "1.15.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = "3.4.0"
 thiserror = { workspace = true }
-tracing = "0.1.36"
 
 [dev-dependencies]
+anyhow = { workspace = true }
 common-base = { path = "../../common/base" }
 common-tracing = { path = "../../common/tracing" }
-
-anyhow = { workspace = true }
 pretty_assertions = "1.3.0"
+test-harness = "0.1.1"
+tokio = { workspace = true }

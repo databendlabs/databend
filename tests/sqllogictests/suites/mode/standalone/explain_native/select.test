@@ -36,13 +36,13 @@ explain select * from (select number as a, number + 1 as b from numbers(1)) as t
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1)]
-├── estimated rows: 0.04
+├── estimated rows: 0.20
 └── EvalScalar
     ├── expressions: [numbers.number (#0), numbers.number (#0) + 1]
-    ├── estimated rows: 0.04
+    ├── estimated rows: 0.20
     └── Filter
         ├── filters: [numbers.number (#0) = 1, numbers.number (#0) + 1 = 1]
-        ├── estimated rows: 0.04
+        ├── estimated rows: 0.20
         └── TableScan
             ├── table: default.system.numbers
             ├── read rows: 1

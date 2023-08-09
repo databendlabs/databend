@@ -66,6 +66,12 @@ use common_metrics::label_decrement_gauge_with_val_and_labels;
 use common_metrics::label_histogram_with_val;
 use common_metrics::label_increment_gauge_with_val_and_labels;
 use futures::stream::StreamExt;
+use log::as_debug;
+use log::as_display;
+use log::debug;
+use log::error;
+use log::info;
+use log::warn;
 use parking_lot::Mutex;
 use prost::Message;
 use semver::Version;
@@ -79,10 +85,6 @@ use tonic::transport::Channel;
 use tonic::Code;
 use tonic::Request;
 use tonic::Status;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
-use tracing::warn;
 
 use crate::from_digit_ver;
 use crate::grpc_action::RequestFor;
@@ -133,12 +135,14 @@ impl ItemManager for MetaChannelManager {
     type Item = Channel;
     type Error = MetaNetworkError;
 
-    #[tracing::instrument(level = "debug", err(Debug))]
+    #[logcall::logcall(err = "debug")]
+    #[minitrace::trace]
     async fn build(&self, addr: &Self::Key) -> Result<Self::Item, Self::Error> {
         self.build_channel(addr).await
     }
 
-    #[tracing::instrument(level = "debug", err(Debug))]
+    #[logcall::logcall(err = "debug")]
+    #[minitrace::trace]
     async fn check(&self, mut ch: Self::Item) -> Result<Self::Item, Self::Error> {
         futures::future::poll_fn(|cx| ch.poll_ready(cx))
             .await
@@ -307,7 +311,7 @@ impl MetaGrpcClient {
         )
     }
 
-    #[tracing::instrument(level = "debug", skip(password))]
+    #[minitrace::trace]
     pub fn try_create(
         endpoints: Vec<String>,
         username: &str,
@@ -362,7 +366,7 @@ impl MetaGrpcClient {
     }
 
     /// A worker runs a receiving-loop to accept user-request to metasrv and deals with request in the dedicated runtime.
-    #[tracing::instrument(level = "info", skip_all)]
+    #[minitrace::trace]
     async fn worker_loop(self: Arc<Self>, mut req_rx: Receiver<message::ClientWorkerRequest>) {
         info!("MetaGrpcClient::worker spawned");
 
@@ -376,11 +380,11 @@ impl MetaGrpcClient {
                 Some(x) => x,
             };
 
-            debug!(req = debug(&req), "MetaGrpcClient recv request");
+            debug!(req = as_debug!(&req); "MetaGrpcClient recv request");
 
             if req.resp_tx.is_closed() {
                 debug!(
-                    req = debug(&req),
+                    req = as_debug!(&req);
                     "MetaGrpcClient request.resp_tx is closed, cancel handling this request"
                 );
                 continue;
@@ -452,7 +456,7 @@ impl MetaGrpcClient {
             };
 
             debug!(
-                resp = debug(&resp),
+                resp = as_debug!(&resp);
                 "MetaGrpcClient send response to the handle"
             );
 
@@ -504,14 +508,14 @@ impl MetaGrpcClient {
             let send_res = resp_tx.send(resp);
             if let Err(err) = send_res {
                 error!(
-                    err = debug(err),
+                    err = as_debug!(&err);
                     "MetaGrpcClient failed to send response to the handle. recv-end closed"
                 );
             }
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn make_client(
         &self,
     ) -> Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>, MetaClientError>
@@ -529,6 +533,8 @@ impl MetaGrpcClient {
             endpoints
         };
 
+        debug!("healthy endpoints: {:?}", &endpoints);
+
         let endpoints = if endpoints.is_empty() {
             warn!(
                 "meta-service has no healthy endpoints, force using all(healthy or not) endpoints: {:?}",
@@ -545,6 +551,7 @@ impl MetaGrpcClient {
             .enumerate()
             .map(|(i, a)| (a, i == endpoints.len() - 1))
         {
+            debug!("make_channel to {}", addr);
             let channel = self.make_channel(Some(addr)).await;
             match channel {
                 Ok(c) => {
@@ -587,10 +594,13 @@ impl MetaGrpcClient {
                 }
 
                 Err(net_err) => {
+                    warn!("{} when make_channel to {}", net_err, addr);
+
                     {
                         let mut ue = self.unhealthy_endpoints.lock();
                         ue.insert(addr.to_string(), ());
                     }
+
                     if is_last {
                         let cli_err = MetaClientError::NetworkError(net_err);
                         return Err(cli_err);
@@ -613,7 +623,7 @@ impl MetaGrpcClient {
         ))
     }
 
-    #[tracing::instrument(level = "debug", skip(self), err(Debug))]
+    #[minitrace::trace]
     async fn make_channel(&self, addr: Option<&String>) -> Result<Channel, MetaNetworkError> {
         let addr = if let Some(addr) = addr {
             addr.clone()
@@ -657,7 +667,7 @@ impl MetaGrpcClient {
         (*eps).clone()
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn set_endpoints(&self, endpoints: Vec<String>) -> Result<(), MetaError> {
         Self::endpoints_non_empty(&endpoints)?;
 
@@ -680,7 +690,7 @@ impl MetaGrpcClient {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn sync_endpoints(&self) -> Result<(), MetaError> {
         let mut client = self.make_client().await?;
         let result = client
@@ -768,7 +778,7 @@ impl MetaGrpcClient {
     /// S ---------------+------+------+------------>
     /// S.ver:           2      3      4
     /// ```
-    #[tracing::instrument(level = "debug", skip(client, password, client_ver, min_metasrv_ver))]
+    #[minitrace::trace]
     pub async fn handshake(
         client: &mut MetaServiceClient<Channel>,
         client_ver: &Version,
@@ -777,8 +787,8 @@ impl MetaGrpcClient {
         password: &str,
     ) -> Result<Vec<u8>, MetaHandshakeError> {
         debug!(
-            client_ver = display(client_ver),
-            min_metasrv_ver = display(min_metasrv_ver),
+            client_ver = as_display!(client_ver),
+            min_metasrv_ver = as_display!(min_metasrv_ver);
             "client version"
         );
 
@@ -837,13 +847,13 @@ impl MetaGrpcClient {
     }
 
     /// Create a watching stream that receives KV change events.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     pub(crate) async fn watch(
         &self,
         watch_request: WatchRequest,
     ) -> Result<tonic::codec::Streaming<WatchResponse>, MetaError> {
         debug!(
-            watch_request = debug(&watch_request),
+            watch_request = as_debug!(&watch_request);
             "MetaGrpcClient worker: handle watch request"
         );
 
@@ -853,13 +863,13 @@ impl MetaGrpcClient {
     }
 
     /// Export all data in json from metasrv.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     pub(crate) async fn export(
         &self,
         export_request: message::ExportReq,
     ) -> Result<tonic::codec::Streaming<ExportedChunk>, MetaError> {
         debug!(
-            export_request = debug(&export_request),
+            export_request = as_debug!(&export_request);
             "MetaGrpcClient worker: handle export request"
         );
 
@@ -869,7 +879,7 @@ impl MetaGrpcClient {
     }
 
     /// Export all data in json from metasrv.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     pub(crate) async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
         debug!("MetaGrpcClient::get_client_info");
 
@@ -878,7 +888,7 @@ impl MetaGrpcClient {
         Ok(res.into_inner())
     }
 
-    #[tracing::instrument(level = "debug", skip(self, v))]
+    #[minitrace::trace]
     pub(crate) async fn kv_api<T, R>(&self, v: T) -> Result<R, MetaError>
     where
         T: RequestFor<Reply = R>,
@@ -887,14 +897,17 @@ impl MetaGrpcClient {
     {
         let read_req: MetaGrpcReq = v.into();
 
-        debug!(req = debug(&read_req), "MetaGrpcClient::kv_api request");
+        debug!(
+            req = as_debug!(&read_req);
+            "MetaGrpcClient::kv_api request"
+        );
 
         let req: Request<RaftRequest> = read_req.clone().try_into().map_err(|e| {
             MetaNetworkError::InvalidArgument(InvalidArgument::new(e, "fail to encode request"))
         })?;
 
         debug!(
-            req = debug(&req),
+            req = as_debug!(&req);
             "MetaGrpcClient::kv_api serialized request"
         );
 
@@ -910,7 +923,10 @@ impl MetaGrpcClient {
             .timed_ge(threshold(), info_spent("client::kv_api-1"))
             .await;
 
-        debug!(reply = debug(&result), "MetaGrpcClient::kv_api reply");
+        debug!(
+            reply = as_debug!(&result);
+            "MetaGrpcClient::kv_api reply"
+        );
 
         let rpc_res: Result<RaftReply, Status> = match result {
             Ok(r) => Ok(r.into_inner()),
@@ -944,11 +960,14 @@ impl MetaGrpcClient {
         Ok(resp)
     }
 
-    #[tracing::instrument(level = "debug", skip(self, req))]
+    #[minitrace::trace]
     pub(crate) async fn transaction(&self, req: TxnRequest) -> Result<TxnReply, MetaError> {
         let txn: TxnRequest = req;
 
-        debug!(req = display(&txn), "MetaGrpcClient::transaction request");
+        debug!(
+            req = as_display!(&txn);
+            "MetaGrpcClient::transaction request"
+        );
 
         let req: Request<TxnRequest> = Request::new(txn.clone());
         let req = common_tracing::inject_span_to_tonic_request(req);
@@ -974,7 +993,10 @@ impl MetaGrpcClient {
 
         let reply = result?;
 
-        debug!(reply = display(&reply), "MetaGrpcClient::transaction reply");
+        debug!(
+            reply = as_display!(&reply);
+            "MetaGrpcClient::transaction reply"
+        );
 
         Ok(reply)
     }
@@ -1012,8 +1034,8 @@ fn threshold() -> Duration {
 fn info_spent(msg: impl Display) -> impl Fn(Duration, Duration) {
     move |total, busy| {
         info!(
-            total = ?total,
-            busy = ?busy,
+            total = as_debug!(&total),
+            busy = as_debug!(&busy);
             "{} spent", msg
         );
     }

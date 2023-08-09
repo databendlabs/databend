@@ -35,12 +35,14 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_args::TableArgs;
+use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::StageAttachment;
 use common_config::GlobalConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::date_helper::TzFactory;
+use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -48,23 +50,27 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
+use common_sql::IndexType;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
+use common_storages_parquet::Parquet2Table;
 use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultScan;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
+use log::debug;
+use log::info;
 use parking_lot::RwLock;
-use tracing::debug;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -82,6 +88,14 @@ const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub enum Origin {
+    #[default]
+    Default,
+    HttpHandler,
+    BuiltInProcedure,
+}
+
 #[derive(Clone)]
 pub struct QueryContext {
     version: String,
@@ -91,6 +105,7 @@ pub struct QueryContext {
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
+    origin: Arc<RwLock<Origin>>,
 }
 
 impl QueryContext {
@@ -111,17 +126,20 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
+            origin: Arc::new(RwLock::new(Origin::Default)),
         })
     }
 
-    // Build fuse/system normal table by table info.
-    fn build_table_by_table_info(
+    /// Build fuse/system normal table by table info.
+    ///
+    /// TODO(xuanwo): we should support build table via table info in the future.
+    pub fn build_table_by_table_info(
         &self,
-        catalog_name: &str,
+        catalog_info: &CatalogInfo,
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self.get_catalog(catalog_name)?;
+        let catalog = self.shared.catalog_manager.build_catalog(catalog_info)?;
         match table_args {
             None => catalog.get_table_by_info(table_info),
             Some(table_args) => Ok(catalog
@@ -135,7 +153,7 @@ impl QueryContext {
     // 's3://' here is a s3 external stage, and build it to the external table.
     fn build_external_by_table_info(
         &self,
-        _catalog: &str,
+        _catalog: &CatalogInfo,
         table_info: &StageTableInfo,
         _table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
@@ -145,7 +163,9 @@ impl QueryContext {
     #[async_backtrace::framed]
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
         let tenant_id = self.get_tenant();
-        let catalog = self.get_catalog(self.get_current_catalog().as_str())?;
+        let catalog = self
+            .get_catalog(self.get_current_catalog().as_str())
+            .await?;
         match catalog
             .get_database(tenant_id.as_str(), &new_database_name)
             .await
@@ -160,6 +180,14 @@ impl QueryContext {
         };
 
         Ok(())
+    }
+
+    pub fn set_origin(&self, origin: Origin) {
+        let mut o = self.origin.write();
+        *o = origin;
+    }
+    pub fn get_origin(&self) -> Origin {
+        self.origin.read().clone()
     }
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
@@ -215,8 +243,21 @@ impl QueryContext {
         self.shared.attach_stage(attachment);
     }
 
+    pub fn set_ua(&self, ua: String) {
+        *self.shared.user_agent.write() = ua;
+    }
+
+    pub fn get_ua(&self) -> String {
+        let ua = self.shared.user_agent.read();
+        ua.clone()
+    }
+
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
+    }
+
+    pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        self.shared.evict_table_from_cache(catalog, database, table)
     }
 }
 
@@ -228,12 +269,17 @@ impl TableContext for QueryContext {
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
-            DataSourceInfo::TableSource(table_info) => {
-                self.build_table_by_table_info(&plan.catalog, table_info, plan.tbl_args.clone())
-            }
-            DataSourceInfo::StageSource(stage_info) => {
-                self.build_external_by_table_info(&plan.catalog, stage_info, plan.tbl_args.clone())
-            }
+            DataSourceInfo::TableSource(table_info) => self.build_table_by_table_info(
+                &plan.catalog_info,
+                table_info,
+                plan.tbl_args.clone(),
+            ),
+            DataSourceInfo::StageSource(stage_info) => self.build_external_by_table_info(
+                &plan.catalog_info,
+                stage_info,
+                plan.tbl_args.clone(),
+            ),
+            DataSourceInfo::Parquet2Source(table_info) => Parquet2Table::from_info(table_info),
             DataSourceInfo::ParquetSource(table_info) => ParquetTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
         }
@@ -277,6 +323,9 @@ impl TableContext for QueryContext {
     }
 
     fn set_status_info(&self, info: &str) {
+        // set_status_info is not called frequently, so we can use info! here.
+        // make it easier to match the status to the log.
+        info!("{}: {}", self.get_id(), info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
     }
@@ -334,6 +383,16 @@ impl TableContext for QueryContext {
         self.shared.cacheable.store(cacheable, Ordering::Release);
     }
 
+    fn get_can_scan_from_agg_index(&self) -> bool {
+        self.shared.can_scan_from_agg_index.load(Ordering::Acquire)
+    }
+
+    fn set_can_scan_from_agg_index(&self, enable: bool) {
+        self.shared
+            .can_scan_from_agg_index
+            .store(enable, Ordering::Release);
+    }
+
     fn attach_query_str(&self, kind: String, query: String) {
         self.shared.attach_query_str(kind, query);
     }
@@ -347,10 +406,16 @@ impl TableContext for QueryContext {
         self.fragment_id.fetch_add(1, Ordering::Release)
     }
 
-    fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+    #[async_backtrace::framed]
+    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
-            .get_catalog(catalog_name.as_ref())
+            .get_catalog(&self.get_tenant(), catalog_name.as_ref())
+            .await
+    }
+
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
+        self.shared.catalog_manager.get_default_catalog()
     }
 
     fn get_id(&self) -> String {
@@ -379,6 +444,10 @@ impl TableContext for QueryContext {
 
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.shared.get_current_role()
+    }
+
+    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        self.shared.session.get_all_available_roles().await
     }
 
     fn get_fuse_version(&self) -> String {
@@ -573,7 +642,7 @@ impl TableContext for QueryContext {
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let tenant = self.get_tenant();
-        let catalog = self.get_catalog(catalog_name)?;
+        let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
             .get_table(&tenant, database_name, table_name)
             .await?;
@@ -623,6 +692,28 @@ impl TableContext for QueryContext {
             }
         }
         Ok(results)
+    }
+
+    fn set_materialized_cte(
+        &self,
+        idx: (IndexType, IndexType),
+        blocks: Arc<RwLock<Vec<DataBlock>>>,
+    ) -> Result<()> {
+        let mut ctes = self.shared.materialized_cte_tables.write();
+        ctes.insert(idx, blocks);
+        Ok(())
+    }
+
+    fn get_materialized_cte(
+        &self,
+        idx: (IndexType, IndexType),
+    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
+        let ctes = self.shared.materialized_cte_tables.read();
+        Ok(ctes.get(&idx).cloned())
+    }
+
+    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
+        self.shared.materialized_cte_tables.clone()
     }
 }
 

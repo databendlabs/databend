@@ -43,7 +43,7 @@ impl<T> Iterator for TreeIter<T> {
         let it = tree.iter();
         Some(Ok((name, ItemIter::<T> {
             it,
-            _p: PhantomData::default(),
+            _p: PhantomData,
         })))
     }
 }
@@ -115,6 +115,6 @@ pub fn iter<T>() -> TreeIter<T> {
     TreeIter {
         db,
         tree_names,
-        _p: PhantomData::default(),
+        _p: PhantomData,
     }
 }

@@ -195,7 +195,7 @@ EvalScalar
         ├── aggregate functions: [max(b)]
         ├── estimated rows: 0.00
         └── EvalScalar
-            ├── expressions: [explain_agg_t1.b (#1), explain_agg_t1.a (#0)]
+            ├── expressions: [explain_agg_t1.a (#0), explain_agg_t1.b (#1)]
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.default.explain_agg_t1
@@ -224,7 +224,7 @@ EvalScalar
             ├── aggregate functions: [avg(b), max(b)]
             ├── estimated rows: 0.00
             └── EvalScalar
-                ├── expressions: [explain_agg_t1.b (#1), explain_agg_t1.b (#1), explain_agg_t1.a (#0)]
+                ├── expressions: [explain_agg_t1.a (#0), explain_agg_t1.b (#1), explain_agg_t1.b (#1)]
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.explain_agg_t1
@@ -264,13 +264,12 @@ EvalScalar
         ├── group by: []
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
-        └── HashJoin
+        └── MergeJoin
             ├── join type: INNER
-            ├── build keys: []
-            ├── probe keys: []
-            ├── filters: [t1.a (#0) > t2.a (#1)]
+            ├── range join conditions: [t1.a (#0) "gt" t2.a (#1)]
+            ├── other conditions: []
             ├── estimated rows: 1000.00
-            ├── TableScan(Build)
+            ├── TableScan(Left)
             │   ├── table: default.default.t1
             │   ├── read rows: 10
             │   ├── read bytes: 54
@@ -279,7 +278,7 @@ EvalScalar
             │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
             │   ├── push downs: [filters: [], limit: NONE]
             │   └── estimated rows: 10.00
-            └── TableScan(Probe)
+            └── TableScan(Right)
                 ├── table: default.default.t2
                 ├── read rows: 100
                 ├── read bytes: 414

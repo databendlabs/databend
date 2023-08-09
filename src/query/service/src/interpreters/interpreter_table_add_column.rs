@@ -16,14 +16,18 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_license::license::Feature::ComputedColumn;
+use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_sql::binder::INTERNAL_COLUMN_FACTORY;
+use common_sql::field_default_value;
+use common_sql::plans::AddColumnOption;
 use common_sql::plans::AddTableColumnPlan;
 use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
 
+use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -54,7 +58,8 @@ impl Interpreter for AddTableColumnInterpreter {
 
         let tbl = self
             .ctx
-            .get_catalog(catalog_name)?
+            .get_catalog(catalog_name)
+            .await?
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await
             .ok();
@@ -74,27 +79,28 @@ impl Interpreter for AddTableColumnInterpreter {
                 )));
             }
 
-            let catalog = self.ctx.get_catalog(catalog_name)?;
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
             let mut new_table_meta = table.get_table_info().meta.clone();
-            let mut fields = Vec::with_capacity(self.plan.schema.num_fields());
-            for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
-                let field =
-                    if let Some(Some(default_expr)) = &self.plan.field_default_exprs.get(idx) {
-                        field.with_default_expr(Some(default_expr.clone()))
-                    } else {
-                        field
-                    };
-
-                if INTERNAL_COLUMN_FACTORY.exist(field.name()) {
-                    return Err(ErrorCode::TableWithInternalColumnName(format!(
-                        "Cannot alter table to add a column with the same name as internal column: {}",
-                        field.name()
-                    )));
-                }
-
-                fields.push(field)
+            let field = self.plan.field.clone();
+            if field.computed_expr().is_some() {
+                let license_manager = get_license_manager();
+                license_manager.manager.check_enterprise_enabled(
+                    &self.ctx.get_settings(),
+                    self.plan.tenant.clone(),
+                    ComputedColumn,
+                )?;
             }
-            new_table_meta.add_columns(&fields, &self.plan.field_comments)?;
+
+            if field.default_expr().is_some() {
+                let _ = field_default_value(self.ctx.clone(), &field)?;
+            }
+            is_valid_column(field.name())?;
+            let index = match &self.plan.option {
+                AddColumnOption::First => 0,
+                AddColumnOption::After(name) => new_table_meta.schema.index_of(name)? + 1,
+                AddColumnOption::End => new_table_meta.schema.num_fields(),
+            };
+            new_table_meta.add_column(&field, &self.plan.comment, index)?;
 
             let table_id = table_info.ident.table_id;
             let table_version = table_info.ident.seq;

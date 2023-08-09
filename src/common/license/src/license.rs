@@ -12,8 +12,58 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 use serde::Deserialize;
 use serde::Serialize;
+
+// All enterprise features are defined here.
+pub enum Feature {
+    LicenseInfo,
+    Vacuum,
+    TableLock,
+    Test,
+    VirtualColumns,
+    BackgroundService,
+    DataMask,
+    AggregateIndex,
+    ComputedColumn,
+}
+
+impl Display for Feature {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Feature::VirtualColumns => {
+                write!(f, "virtual_columns")
+            }
+            Feature::LicenseInfo => {
+                write!(f, "license_info")
+            }
+            Feature::Vacuum => {
+                write!(f, "vacuum")
+            }
+            Feature::TableLock => {
+                write!(f, "table_lock")
+            }
+            Feature::Test => {
+                write!(f, "test")
+            }
+            Feature::BackgroundService => {
+                write!(f, "background_service")
+            }
+            Feature::DataMask => {
+                write!(f, "data_mask")
+            }
+            Feature::AggregateIndex => {
+                write!(f, "aggregate_index")
+            }
+            Feature::ComputedColumn => {
+                write!(f, "computed_column")
+            }
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct LicenseInfo {
@@ -21,4 +71,5 @@ pub struct LicenseInfo {
     pub r#type: Option<String>,
     pub org: Option<String>,
     pub tenants: Option<Vec<String>>,
+    pub features: Option<Vec<String>>,
 }

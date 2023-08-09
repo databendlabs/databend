@@ -21,6 +21,8 @@ use common_base::base::tokio::sync::oneshot;
 use common_base::base::tokio::task::JoinHandle;
 use futures::future::Either;
 use futures::FutureExt;
+use log::error;
+use log::info;
 use poem::listener::Acceptor;
 use poem::listener::AcceptorExt;
 use poem::listener::IntoTlsConfigStream;
@@ -28,8 +30,6 @@ use poem::listener::Listener;
 use poem::listener::RustlsConfig;
 use poem::listener::TcpListener;
 use poem::Endpoint;
-use tracing::error;
-use tracing::info;
 
 use crate::HttpError;
 

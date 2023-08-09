@@ -17,13 +17,14 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use crossbeam_channel::TryRecvError;
+use log::trace;
 
 use crate::input_formats::input_pipeline::BlockBuilderTrait;
 use crate::input_formats::input_pipeline::InputFormatPipe;
@@ -59,7 +60,6 @@ pub struct DeserializeTransformer<I: InputFormatPipe> {
     processor: DeserializeProcessor<I>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    rx: crossbeam_channel::Receiver<I::RowBatch>,
     flushing: bool,
 }
 
@@ -68,14 +68,12 @@ impl<I: InputFormatPipe> DeserializeTransformer<I> {
         ctx: Arc<InputContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        rx: crossbeam_channel::Receiver<I::RowBatch>,
     ) -> Result<ProcessorPtr> {
         let processor = DeserializeProcessor::create(ctx)?;
         Ok(ProcessorPtr::create(Box::new(Self {
             processor,
             input,
             output,
-            rx,
             flushing: false,
         })))
     }
@@ -101,45 +99,29 @@ impl<I: InputFormatPipe> Processor for DeserializeTransformer<I> {
         } else {
             match self.processor.output_buffer.pop_front() {
                 Some(data_block) => {
-                    tracing::trace!("DeserializeTransformer push rows {}", data_block.num_rows());
+                    trace!("DeserializeTransformer push rows {}", data_block.num_rows());
                     self.output.push_data(Ok(data_block));
                     Ok(Event::NeedConsume)
                 }
                 None => {
                     if self.processor.input_buffer.is_some() {
                         Ok(Event::Sync)
-                    } else {
-                        if self.input.has_data() {
-                            self.input.pull_data();
-                            match self.rx.try_recv() {
-                                Ok(read_batch) => {
-                                    self.processor.input_buffer = Some(read_batch);
-                                    return Ok(Event::Sync);
-                                }
-                                Err(TryRecvError::Disconnected) => {
-                                    tracing::warn!("DeserializeTransformer rx disconnected");
-                                    self.input.finish();
-                                    self.flushing = true;
-                                    return Ok(Event::Finished);
-                                }
-                                Err(TryRecvError::Empty) => {
-                                    // do nothing
-                                }
-                            }
-                        }
-                        //  !has_data() or try_recv return Empty
-                        if self.input.is_finished() {
-                            if self.flushing {
-                                self.output.finish();
-                                Ok(Event::Finished)
-                            } else {
-                                self.flushing = true;
-                                Ok(Event::Sync)
-                            }
+                    } else if self.input.has_data() {
+                        let block = self.input.pull_data().unwrap()?;
+                        let block_meta = block.get_owned_meta().unwrap();
+                        self.processor.input_buffer = I::RowBatch::downcast_from(block_meta);
+                        Ok(Event::Sync)
+                    } else if self.input.is_finished() {
+                        if self.flushing {
+                            self.output.finish();
+                            Ok(Event::Finished)
                         } else {
-                            self.input.set_need_data();
-                            Ok(Event::NeedData)
+                            self.flushing = true;
+                            Ok(Event::Sync)
                         }
+                    } else {
+                        self.input.set_need_data();
+                        Ok(Event::NeedData)
                     }
                 }
             }

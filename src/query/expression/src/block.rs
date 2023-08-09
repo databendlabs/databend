@@ -186,6 +186,11 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn columns_mut(&mut self) -> &mut [BlockEntry] {
+        &mut self.columns
+    }
+
+    #[inline]
     pub fn get_by_offset(&self, offset: usize) -> &BlockEntry {
         &self.columns[offset]
     }
@@ -286,7 +291,7 @@ impl DataBlock {
         let mut offset = 0;
         let mut remain_rows = self.num_rows;
         while remain_rows >= max_rows_per_block {
-            let cut = self.slice(offset..(offset + max_rows_per_block));
+            let cut = self.slice(offset..(offset + min_rows_per_block));
             res.push(cut);
             offset += min_rows_per_block;
             remain_rows -= min_rows_per_block;
@@ -360,7 +365,7 @@ impl DataBlock {
         }
 
         Ok(Self {
-            columns: self.columns.clone(),
+            columns: self.columns,
             num_rows: self.num_rows,
             meta,
         })

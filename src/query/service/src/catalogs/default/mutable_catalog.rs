@@ -13,12 +13,16 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use chrono::Utc;
+use common_catalog::catalog::Catalog;
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -45,12 +49,19 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::DroppedId;
 use common_meta_app::schema::ExtendTableLockRevReq;
+use common_meta_app::schema::GcDroppedTableReq;
+use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListDroppedTableReq;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
@@ -58,6 +69,8 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -67,6 +80,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -76,10 +91,9 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
-use tracing::info;
+use log::info;
 
 use super::catalog_context::CatalogContext;
-use crate::catalogs::catalog::Catalog;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
@@ -96,6 +110,12 @@ use crate::storages::Table;
 pub struct MutableCatalog {
     ctx: CatalogContext,
     tenant: String,
+}
+
+impl Debug for MutableCatalog {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MutableCatalog").finish_non_exhaustive()
+    }
 }
 
 impl MutableCatalog {
@@ -169,6 +189,14 @@ impl Catalog for MutableCatalog {
         self
     }
 
+    fn name(&self) -> String {
+        "default".to_string()
+    }
+
+    fn info(&self) -> CatalogInfo {
+        CatalogInfo::new_default()
+    }
+
     #[async_backtrace::framed]
     async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self
@@ -186,6 +214,7 @@ impl Catalog for MutableCatalog {
             .meta
             .list_databases(ListDatabaseReq {
                 tenant: tenant.to_string(),
+                filter: None,
             })
             .await?;
 
@@ -235,8 +264,23 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
+        Ok(self.ctx.meta.get_index(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
+        Ok(self.ctx.meta.update_index(req).await?)
+    }
+
+    #[async_backtrace::framed]
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
         Ok(self.ctx.meta.list_indexes(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_indexes_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>> {
+        Ok(self.ctx.meta.list_indexes_by_table_id(req).await?)
     }
 
     // Virtual column
@@ -326,6 +370,35 @@ impl Catalog for MutableCatalog {
         db.list_tables_history().await
     }
 
+    async fn get_drop_table_infos(
+        &self,
+        req: ListDroppedTableReq,
+    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
+        let ctx = DatabaseContext {
+            meta: self.ctx.meta.clone(),
+            storage_factory: self.ctx.storage_factory.clone(),
+            tenant: self.tenant.clone(),
+        };
+        let resp = ctx.meta.get_drop_table_infos(req).await?;
+
+        let drop_ids = resp.drop_ids.clone();
+        let drop_table_infos = resp.drop_table_infos;
+
+        let storage = ctx.storage_factory.clone();
+
+        let mut tables = vec![];
+        for table_info in drop_table_infos {
+            tables.push(storage.get_table(table_info.as_ref())?);
+        }
+        Ok((tables, drop_ids))
+    }
+
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
+        let meta = self.ctx.meta.clone();
+        let resp = meta.gc_drop_tables(req).await?;
+        Ok(resp)
+    }
+
     #[async_backtrace::framed]
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
         let db = self
@@ -389,6 +462,13 @@ impl Catalog for MutableCatalog {
                 db.update_table_meta(req).await
             }
         }
+    }
+
+    async fn set_table_column_mask_policy(
+        &self,
+        req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply> {
+        Ok(self.ctx.meta.set_table_column_mask_policy(req).await?)
     }
 
     #[async_backtrace::framed]

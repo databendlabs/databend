@@ -32,11 +32,11 @@ use common_grpc::ConnectionFactory;
 use common_grpc::DNSResolver;
 use common_meta_client::reply_to_api_result;
 use common_meta_raft_store::config::RaftConfig;
-use common_meta_raft_store::key_spaces::GenericKV;
+use common_meta_raft_store::ondisk::DataVersion;
+use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::storage::Adaptor;
 use common_meta_sled_store::openraft::ChangeMembers;
-use common_meta_sled_store::SledKeySpace;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
@@ -65,16 +65,18 @@ use common_meta_types::RaftMetrics;
 use common_meta_types::TypeConfig;
 use futures::channel::oneshot;
 use itertools::Itertools;
+use log::as_debug;
+use log::as_display;
+use log::debug;
+use log::error;
+use log::info;
+use log::warn;
 use maplit::btreemap;
+use minitrace::prelude::*;
 use openraft::Config;
 use openraft::Raft;
 use openraft::ServerState;
 use openraft::SnapshotPolicy;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
-use tracing::warn;
-use tracing::Instrument;
 
 use crate::configs::Config as MetaConfig;
 use crate::message::ForwardRequest;
@@ -88,6 +90,7 @@ use crate::meta_service::RaftServiceImpl;
 use crate::metrics::server_metrics;
 use crate::network::Network;
 use crate::store::RaftStore;
+use crate::version::METASRV_COMMIT_VERSION;
 use crate::watcher::DispatcherSender;
 use crate::watcher::EventDispatcher;
 use crate::watcher::EventDispatcherHandle;
@@ -98,6 +101,12 @@ use crate::Opened;
 #[derive(serde::Serialize)]
 pub struct MetaNodeStatus {
     pub id: NodeId,
+
+    /// The build version of meta-service binary.
+    pub binary_version: String,
+
+    /// The version of the data this meta-service is serving.
+    pub data_version: DataVersion,
 
     /// The raft service endpoint for internal communication
     pub endpoint: String,
@@ -119,6 +128,12 @@ pub struct MetaNodeStatus {
 
     /// Last log id that has been committed and applied to state machine.
     pub last_applied: LogId,
+
+    /// The last log id contained in the last built snapshot.
+    pub snapshot_last_log_id: Option<LogId>,
+
+    /// The last log id that has been purged, inclusive.
+    pub purged: Option<LogId>,
 
     /// The last known leader node.
     pub leader: Option<Node>,
@@ -295,7 +310,7 @@ impl MetaNode {
     }
 
     /// Start the grpc service for raft communication and meta operation API.
-    #[tracing::instrument(level = "debug", skip(mn))]
+    #[minitrace::trace]
     pub async fn start_grpc(
         mn: Arc<MetaNode>,
         host: &str,
@@ -366,7 +381,7 @@ impl MetaNode {
     /// Open or create a meta node.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     pub async fn open_create(
         config: &RaftConfig,
         open: Option<()>,
@@ -408,7 +423,7 @@ impl MetaNode {
     /// Optionally boot a single node cluster.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     pub async fn open_create_boot(
         config: &RaftConfig,
         open: Option<()>,
@@ -423,7 +438,7 @@ impl MetaNode {
         Ok(mn)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn stop(&self) -> Result<i32, MetaError> {
         let mut rx = self.raft.metrics();
 
@@ -503,21 +518,14 @@ impl MetaNode {
                 server_metrics::set_current_term(mm.current_term);
                 server_metrics::set_last_log_index(mm.last_log_index.unwrap_or_default());
                 server_metrics::set_proposals_applied(mm.last_applied.unwrap_or_default().index);
-                server_metrics::set_last_seq(
-                    meta_node
-                        .get_last_seq()
-                        .await
-                        .map_err(|e| AnyError::new(&e))?,
-                );
+                server_metrics::set_last_seq(meta_node.get_last_seq().await);
 
                 last_leader = mm.current_leader;
             }
 
             Ok::<(), AnyError>(())
         };
-
-        let span = tracing::span!(tracing::Level::INFO, "watch-metrics");
-        let h = tokio::task::spawn(fut.instrument(span));
+        let h = tokio::task::spawn(fut.in_span(Span::enter_with_local_parent("watch-metrics")));
 
         {
             let mut jh = mn.join_handles.lock().await;
@@ -527,9 +535,9 @@ impl MetaNode {
 
     /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
     /// according to config.
-    #[tracing::instrument(level = "debug", skip(config))]
+    #[minitrace::trace]
     pub async fn start(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
-        info!(?config, "start()");
+        info!(config = as_debug!(config); "start()");
         let mn = Self::do_start(config).await?;
         info!("Done starting MetaNode: {:?}", config);
         Ok(mn)
@@ -538,7 +546,7 @@ impl MetaNode {
     /// Leave the cluster if `--leave` is specified.
     ///
     /// Return whether it has left the cluster.
-    #[tracing::instrument(level = "info", skip_all)]
+    #[minitrace::trace]
     pub async fn leave_cluster(conf: &RaftConfig) -> Result<bool, MetaManagementError> {
         if conf.leave_via.is_empty() {
             info!("'--leave-via' is empty, do not need to leave cluster");
@@ -613,7 +621,7 @@ impl MetaNode {
     /// Join to an existent cluster if:
     /// - `--join` is specified
     /// - and this node is not in a cluster.
-    #[tracing::instrument(level = "info", skip(conf, self))]
+    #[minitrace::trace]
     pub async fn join_cluster(
         &self,
         conf: &RaftConfig,
@@ -641,7 +649,7 @@ impl MetaNode {
         Ok(Ok(()))
     }
 
-    #[tracing::instrument(level = "info", skip(conf, self))]
+    #[minitrace::trace]
     async fn do_join_cluster(
         &self,
         conf: &RaftConfig,
@@ -678,14 +686,14 @@ impl MetaNode {
         }
 
         Err(MetaManagementError::Join(AnyError::error(format!(
-            "fail to join {} cluster via {:?}, caused by errors: {}",
+            "fail to join node-{} to cluster via {:?}, errors: {}",
             self.sto.id,
             addrs,
             errors.into_iter().map(|e| e.to_string()).join(", ")
         ))))
     }
 
-    #[tracing::instrument(level = "info", skip(conf, self))]
+    #[minitrace::trace]
     async fn join_via(
         &self,
         conf: &RaftConfig,
@@ -772,20 +780,13 @@ impl MetaNode {
     ///
     ///   Only when the membership is committed, this node can be sure it is in a cluster.
     async fn is_in_cluster(&self) -> Result<Result<String, String>, MetaStorageError> {
-        let m = {
+        let membership = {
             let sm = self.sto.get_state_machine().await;
-            sm.get_membership()?
+            sm.last_membership_ref().membership().clone()
         };
-        info!("is_in_cluster: membership: {:?}", m);
+        info!("is_in_cluster: membership: {:?}", membership);
 
-        let membership = match m {
-            None => {
-                return Ok(Err(format!("node {} has empty membership", self.sto.id)));
-            }
-            Some(x) => x,
-        };
-
-        let voter_ids = membership.membership().voter_ids().collect::<BTreeSet<_>>();
+        let voter_ids = membership.voter_ids().collect::<BTreeSet<_>>();
 
         if voter_ids.contains(&self.sto.id) {
             return Ok(Ok(format!("node {} already in cluster", self.sto.id)));
@@ -820,7 +821,7 @@ impl MetaNode {
 
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
-    #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.raft_config.config_id.as_str()))]
+    #[minitrace::trace]
     pub async fn boot(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
         let mn = Self::open_create(&config.raft_config, None, Some(())).await?;
         mn.init_cluster(config.get_node()).await?;
@@ -830,8 +831,10 @@ impl MetaNode {
     /// Initialized a single node cluster if this node is just created:
     /// - Initializing raft membership.
     /// - Adding current node into the meta data.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn init_cluster(&self, node: Node) -> Result<(), MetaStartupError> {
+        info!("init_cluster: node: {:?}", node);
+
         if self.is_opened() {
             info!("It is opened, skip initializing cluster");
             return Ok(());
@@ -858,34 +861,34 @@ impl MetaNode {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_node(&self, node_id: &NodeId) -> Result<Option<Node>, MetaStorageError> {
+    #[minitrace::trace]
+    pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        let n = sm.get_node(node_id)?;
-        Ok(n)
+        let n = sm.nodes_ref().get(node_id).cloned();
+        n
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_nodes(&self) -> Result<Vec<Node>, MetaStorageError> {
+    #[minitrace::trace]
+    pub async fn get_nodes(&self) -> Vec<Node> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        let nodes = sm.get_nodes()?;
-        Ok(nodes)
+        let nodes = sm.nodes_ref().values().cloned().collect::<Vec<_>>();
+        nodes
     }
 
     pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {
         let voters = self
             .sto
             .get_nodes(|ms| ms.voter_ids().collect::<Vec<_>>())
-            .await?;
+            .await;
 
         let learners = self
             .sto
             .get_nodes(|ms| ms.learner_ids().collect::<Vec<_>>())
-            .await?;
+            .await;
 
         let endpoint = self.sto.get_node_endpoint(&self.sto.id).await?;
 
@@ -897,25 +900,28 @@ impl MetaNode {
         let metrics = self.raft.metrics().borrow().clone();
 
         let leader = if let Some(leader_id) = metrics.current_leader {
-            self.get_node(&leader_id).await?
+            self.get_node(&leader_id).await
         } else {
             None
         };
 
-        let last_seq = self.get_last_seq().await?;
+        let last_seq = self.get_last_seq().await;
 
         Ok(MetaNodeStatus {
             id: self.sto.id,
+            binary_version: METASRV_COMMIT_VERSION.as_str().to_string(),
+            data_version: DATA_VERSION,
             endpoint: endpoint.to_string(),
             db_size,
             state: format!("{:?}", metrics.state),
             is_leader: metrics.state == openraft::ServerState::Leader,
             current_term: metrics.current_term,
             last_log_index: metrics.last_log_index.unwrap_or(0),
-            last_applied: match metrics.last_applied {
-                Some(id) => id,
-                None => LogId::new(CommittedLeaderId::new(0, 0), 0),
-            },
+            last_applied: metrics
+                .last_applied
+                .unwrap_or(LogId::new(CommittedLeaderId::new(0, 0), 0)),
+            snapshot_last_log_id: metrics.snapshot,
+            purged: metrics.purged,
             leader,
             replication: metrics.replication,
             voters,
@@ -924,20 +930,18 @@ impl MetaNode {
         })
     }
 
-    pub(crate) async fn get_last_seq(&self) -> Result<u64, MetaStorageError> {
+    pub(crate) async fn get_last_seq(&self) -> u64 {
         let sm = self.sto.state_machine.read().await;
-        let last_seq = sm.sequences().get(&GenericKV::NAME.to_string())?;
-
-        Ok(last_seq.unwrap_or_default().0)
+        sm.curr_seq()
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_grpc_advertise_addrs(&self) -> Result<Vec<String>, MetaStorageError> {
+    #[minitrace::trace]
+    pub async fn get_grpc_advertise_addrs(&self) -> Vec<String> {
         // inconsistent get: from local state machine
 
         let nodes = {
             let sm = self.sto.state_machine.read().await;
-            sm.get_nodes()?
+            sm.nodes_ref().values().cloned().collect::<Vec<_>>()
         };
 
         let endpoints: Vec<String> = nodes
@@ -951,10 +955,10 @@ impl MetaNode {
                 }
             })
             .collect();
-        Ok(endpoints)
+        endpoints
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn consistent_read<Request, Reply>(&self, req: Request) -> Result<Reply, MetaAPIError>
     where
         Request: Into<ForwardRequestBody> + Debug,
@@ -988,61 +992,92 @@ impl MetaNode {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, req), fields(target=%req.forward_to_leader))]
+    #[minitrace::trace]
     pub async fn handle_forwardable_request(
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaAPIError> {
-        debug!("handle_forwardable_request: {:?}", req);
+        debug!(target = as_display!(&req.forward_to_leader), req = as_debug!(&req); "handle_forwardable_request");
 
         let forward = req.forward_to_leader;
 
-        let assume_leader_res = self.assume_leader().await;
-        debug!("assume_leader: is_err: {}", assume_leader_res.is_err());
+        let mut n_retry = 20;
+        let mut slp = Duration::from_millis(200);
 
-        // Handle the request locally or return a ForwardToLeader error
-        let op_err = match assume_leader_res {
-            Ok(leader) => {
-                let res = leader.handle_request(req.clone()).await;
-                match res {
-                    Ok(x) => return Ok(x),
-                    Err(e) => e,
+        loop {
+            let assume_leader_res = self.assume_leader().await;
+            debug!("assume_leader: is_err: {}", assume_leader_res.is_err());
+
+            // Handle the request locally or return a ForwardToLeader error
+            let op_err = match assume_leader_res {
+                Ok(leader) => {
+                    let res = leader.handle_request(req.clone()).await;
+                    match res {
+                        Ok(x) => return Ok(x),
+                        Err(e) => e,
+                    }
+                }
+                Err(e) => MetaOperationError::ForwardToLeader(e),
+            };
+
+            // If needs to forward, deal with it. Otherwise return the unhandlable error.
+            let to_leader = match op_err {
+                MetaOperationError::ForwardToLeader(err) => err,
+                MetaOperationError::DataError(d_err) => {
+                    return Err(d_err.into());
+                }
+            };
+
+            if forward == 0 {
+                return Err(MetaAPIError::CanNotForward(AnyError::error(
+                    "max number of forward reached",
+                )));
+            }
+
+            let leader_id = to_leader.leader_id.ok_or_else(|| {
+                MetaAPIError::CanNotForward(AnyError::error("need to forward but no known leader"))
+            })?;
+
+            let mut req_cloned = req.clone();
+            // Avoid infinite forward
+            req_cloned.decr_forward();
+
+            let res = self.forward_to(&leader_id, req_cloned).await;
+            let forward_err = match res {
+                Ok(x) => {
+                    return Ok(x);
+                }
+                Err(forward_err) => forward_err,
+            };
+
+            match forward_err {
+                ForwardRPCError::NetworkError(ref net_err) => {
+                    warn!(
+                        "{} retries left, sleep time: {:?}; forward_to {} failed: {}",
+                        n_retry, slp, leader_id, net_err
+                    );
+
+                    n_retry -= 1;
+                    if n_retry == 0 {
+                        error!("no more retry for forward_to {}", leader_id);
+                        return Err(MetaAPIError::from(forward_err));
+                    } else {
+                        tokio::time::sleep(slp).await;
+                        slp = std::cmp::min(slp * 2, Duration::from_secs(1));
+                        continue;
+                    }
+                }
+                ForwardRPCError::RemoteError(_) => {
+                    return Err(MetaAPIError::from(forward_err));
                 }
             }
-            Err(e) => MetaOperationError::ForwardToLeader(e),
-        };
-
-        // If needs to forward, deal with it. Otherwise return the unhandlable error.
-        let to_leader = match op_err {
-            MetaOperationError::ForwardToLeader(err) => err,
-            MetaOperationError::DataError(d_err) => {
-                return Err(d_err.into());
-            }
-        };
-
-        if forward == 0 {
-            return Err(MetaAPIError::CanNotForward(AnyError::error(
-                "max number of forward reached",
-            )));
         }
-
-        let leader_id = to_leader.leader_id.ok_or_else(|| {
-            MetaAPIError::CanNotForward(AnyError::error("need to forward but no known leader"))
-        })?;
-
-        let mut r2 = req.clone();
-        // Avoid infinite forward
-        r2.decr_forward();
-
-        let res: ForwardResponse = self.forward_to(&leader_id, r2).await?;
-
-        Ok(res)
     }
 
     /// Return a MetaLeader if `self` believes it is the leader.
     ///
     /// Otherwise it returns the leader in a ForwardToLeader error.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn assume_leader(&self) -> Result<MetaLeader<'_>, ForwardToLeader> {
         let leader_id = self.get_leader().await.map_err(|e| {
             error!("raft metrics rx closed: {}", e);
@@ -1090,7 +1125,7 @@ impl MetaNode {
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
-    #[tracing::instrument(level = "debug", skip(self, req))]
+    #[minitrace::trace]
     pub async fn write(&self, req: LogEntry) -> Result<AppliedState, MetaAPIError> {
         debug!("req: {:?}", req);
 
@@ -1108,7 +1143,7 @@ impl MetaNode {
 
     /// Try to get the leader from the latest metrics of the local raft node.
     /// If leader is absent, wait for an metrics update in which a leader is set.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn get_leader(&self) -> Result<Option<NodeId>, RecvError> {
         let mut rx = self.raft.metrics();
 
@@ -1135,12 +1170,14 @@ impl MetaNode {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     pub async fn forward_to(
         &self,
         node_id: &NodeId,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, ForwardRPCError> {
+        debug!("forward_to: {} {:?}", node_id, req);
+
         let endpoint = self
             .sto
             .get_node_endpoint(node_id)

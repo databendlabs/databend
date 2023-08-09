@@ -24,6 +24,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use common_exception::Result;
+use common_expression::FieldIndex;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_types::MatchSeq;
@@ -250,9 +251,23 @@ impl TableMeta {
         Ok(())
     }
 
+    pub fn add_column(
+        &mut self,
+        field: &TableField,
+        comment: &str,
+        index: FieldIndex,
+    ) -> Result<()> {
+        let mut new_schema = self.schema.as_ref().to_owned();
+        new_schema.add_column(field, index)?;
+        self.schema = Arc::new(new_schema);
+        self.field_comments.insert(index, comment.to_owned());
+        Ok(())
+    }
+
     pub fn drop_column(&mut self, column: &str) -> Result<()> {
         let mut new_schema = self.schema.as_ref().to_owned();
-        new_schema.drop_column(column)?;
+        let index = new_schema.drop_column(column)?;
+        self.field_comments.remove(index);
         self.schema = Arc::new(new_schema);
         Ok(())
     }
@@ -604,6 +619,28 @@ impl Display for UpsertTableOptionReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum SetTableColumnMaskPolicyAction {
+    // new mask name, old mask name(if any)
+    Set(String, Option<String>),
+    // prev mask name
+    Unset(String),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SetTableColumnMaskPolicyReq {
+    pub tenant: String,
+    pub table_id: u64,
+    pub seq: MatchSeq,
+    pub column: String,
+    pub action: SetTableColumnMaskPolicyAction,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SetTableColumnMaskPolicyReply {
+    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableOptionReply {
     pub share_table_info: Option<Vec<ShareTableInfoMap>>,
 }
@@ -668,8 +705,51 @@ impl ListTableReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum TableInfoFilter {
+    // if datatime is some, filter only dropped tables which drop time before that,
+    // else filter all dropped tables
+    Dropped(Option<DateTime<Utc>>),
+    // filter all dropped tables, including all tables in dropped database and dropped tables in exist dbs,
+    // in this case, `ListTableReq`.db_name will be ignored
+    // return Tables in two cases:
+    //  1) if database drop before date time, then all table in this db will be return;
+    //  2) else, return all the tables drop before data time.
+    AllDroppedTables(Option<DateTime<Utc>>),
+    // return all tables, ignore drop on time.
+    All,
+}
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ListDroppedTableReq {
+    pub inner: DatabaseNameIdent,
+    pub filter: TableInfoFilter,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum DroppedId {
+    // db id, db name
+    Db(u64, String),
+    // db id, table id, table name
+    Table(u64, u64, String),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ListDroppedTableResp {
+    pub drop_table_infos: Vec<Arc<TableInfo>>,
+    pub drop_ids: Vec<DroppedId>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GcDroppedTableReq {
+    pub tenant: String,
+    pub drop_ids: Vec<DroppedId>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GcDroppedTableResp {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct CountTablesKey {
     pub tenant: String,
 }
@@ -1012,9 +1092,9 @@ mod tests {
             let res = TableCopiedFileNameIdent::from_str_key(&key);
             assert!(res.is_err());
             let err = res.unwrap_err();
-            assert_eq!(err, kvapi::KeyError::AtleastSegments {
+            assert_eq!(err, kvapi::KeyError::WrongNumberOfSegments {
                 expect: 3,
-                actual: 2,
+                got: key,
             });
         }
 

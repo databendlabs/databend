@@ -79,3 +79,29 @@ statement ok
 drop table t_11126
 
 # ===============
+
+# issue #11772
+
+statement ok
+drop table if exists t_11772_1;
+
+statement ok
+drop table if exists t_11772_2;
+
+statement ok
+create table t_11772_1(a Int64, b Int64);
+
+statement ok
+create table t_11772_2(a Int64);
+
+statement ok
+select t_11772_2._row_id from t_11772_1, t_11772_2;
+
+statement error 1065
+select _row_id from t_11772_1, t_11772_2;
+
+statement ok
+drop table t_11772_1;
+
+statement ok
+drop table t_11772_2;

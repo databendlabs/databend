@@ -13,29 +13,30 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use common_arrow::native::read::reader::NativeReader;
 use common_catalog::plan::PartInfoPtr;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 
-use crate::io::NativeReaderExt;
+use crate::io::NativeSourceData;
 
-pub type DataChunks = BTreeMap<usize, Vec<NativeReader<Box<dyn NativeReaderExt>>>>;
+pub enum DataSource {
+    AggIndex(NativeSourceData),
+    Normal(NativeSourceData),
+}
 
 pub struct NativeDataSourceMeta {
     pub part: Vec<PartInfoPtr>,
-    pub chunks: Vec<DataChunks>,
+    pub data: Vec<DataSource>,
 }
 
 impl NativeDataSourceMeta {
-    pub fn create(part: Vec<PartInfoPtr>, chunks: Vec<DataChunks>) -> BlockMetaInfoPtr {
-        Box::new(NativeDataSourceMeta { part, chunks })
+    pub fn create(part: Vec<PartInfoPtr>, data: Vec<DataSource>) -> BlockMetaInfoPtr {
+        Box::new(NativeDataSourceMeta { part, data })
     }
 }
 

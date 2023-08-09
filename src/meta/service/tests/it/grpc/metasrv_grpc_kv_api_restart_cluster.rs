@@ -17,17 +17,15 @@
 
 use std::time::Duration;
 
-use common_base::base::tokio;
 use common_base::base::Stoppable;
 use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
-use databend_meta::init_meta_ut;
-use tracing::info;
+use log::info;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::service::start_metasrv_cluster;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
@@ -36,7 +34,8 @@ use crate::tests::start_metasrv_with_context;
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.
 /// - Test upsert kv and read on different nodes.
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
     fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
@@ -53,14 +52,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
             let client = tc.grpc_client().await?;
 
             let k = make_key(tc, key_suffix);
-            let res = client
-                .upsert_kv(UpsertKVReq {
-                    key: k.clone(),
-                    seq: MatchSeq::GE(0),
-                    value: Operation::Update(k.clone().into_bytes()),
-                    value_meta: None,
-                })
-                .await?;
+            let res = client.upsert_kv(UpsertKVReq::update(&k, &b(&k))).await?;
 
             info!("--- upsert res: {:?}", res);
 
@@ -128,7 +120,8 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.
 /// - Test read kv using same grpc client.
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
     fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
@@ -145,25 +138,11 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         for (i, tc) in tcs.iter().enumerate() {
             let k = make_key(tc, key_suffix);
             if i == 0 {
-                let res = client
-                    .upsert_kv(UpsertKVReq {
-                        key: k.clone(),
-                        seq: MatchSeq::GE(0),
-                        value: Operation::Update(k.clone().into_bytes()),
-                        value_meta: None,
-                    })
-                    .await?;
+                let res = client.upsert_kv(UpsertKVReq::update(&k, &b(&k))).await?;
                 info!("--- upsert res: {:?}", res);
             } else {
                 let client = tc.grpc_client().await.unwrap();
-                let res = client
-                    .upsert_kv(UpsertKVReq {
-                        key: k.clone(),
-                        seq: MatchSeq::GE(0),
-                        value: Operation::Update(k.clone().into_bytes()),
-                        value_meta: None,
-                    })
-                    .await?;
+                let res = client.upsert_kv(UpsertKVReq::update(&k, &b(&k))).await?;
                 info!("--- upsert res: {:?}", res);
             }
 
@@ -235,7 +214,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
     let res = client.get_kv(&k).await?;
     let res = res.unwrap();
 
-    assert_eq!(k.into_bytes(), res.data);
+    assert_eq!(b(k), res.data);
 
     Ok(())
 }
@@ -244,4 +223,8 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
 // A raft node waits for a interval of election timeout before starting election
 fn timeout() -> Option<Duration> {
     Some(Duration::from_millis(30_000))
+}
+
+fn b(s: impl ToString) -> Vec<u8> {
+    s.to_string().into_bytes()
 }

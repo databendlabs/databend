@@ -3,6 +3,14 @@ title: CREATE TABLE
 description: Create a new table.
 ---
 
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="Introduced: v1.1.56"/>
+
+import EEFeature from '@site/src/components/EEFeature';
+
+<EEFeature featureName='COMPUTED COLUMNS'/>
+
 Creating tables is one of the most complicated operations for many databases because you might need to:
 
 * Manually specify the engine
@@ -14,8 +22,7 @@ Databend aims to be easy to use by design and does NOT require any of those oper
 - [CREATE TABLE](#create-table): Creates a table from scratch.
 - [CREATE TABLE ... LIKE](#create-table--like): Creates a table with the same column definitions as an existing one.
 - [CREATE TABLE ... AS](#create-table--as): Creates a table and inserts data with the results of a SELECT query.
-- [CREATE TRANSIENT TABLE](#create-transient-table): Creates a table without storing its historical data for Time Travel.
-- [CREATE TABLE ... SNAPSHOT_LOCATION](#create-table--snapshot_location): Creates a table and inserts data with a snapshot file.
+- [CREATE TRANSIENT TABLE](#create-transient-table): Creates a table without storing its historical data for Time Travel..
 - [CREATE TABLE ... EXTERNAL_LOCATION](#create-table--external_location): Creates a table and specifies an S3 bucket for the data storage instead of the FUSE engine.
 
 ## CREATE TABLE
@@ -23,8 +30,8 @@ Databend aims to be easy to use by design and does NOT require any of those oper
 ```sql
 CREATE [TRANSIENT] TABLE [IF NOT EXISTS] [db.]table_name
 (
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }] [AS (<expr>) STORED | VIRTUAL],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }] [AS (<expr>) STORED | VIRTUAL],
     ...
 )
 ```
@@ -92,32 +99,6 @@ Transient tables help save your storage expenses because they do not need extra 
 Syntax:
 ```sql
 CREATE TRANSIENT TABLE ...
-```
-
-## CREATE TABLE ... SNAPSHOT_LOCATION
-
-Creates a table and inserts data from a snapshot file. 
-
-Databend automatically creates snapshots when data updates occur, so a snapshot can be considered as a view of your data at a time point in the past. Databend may store many snapshots of a table (depending on the number of update operations you performed) for the Time Travel feature that allows you to query, back up, and restore from a previous version of your data within the retention period (24 hours by default).
-
-This command enables you to insert the data stored in a snapshot file when you create a table. Please note that the table you create must have same column definitions as the data from the snapshot.
-
-Syntax:
-```sql
-CREATE TABLE [IF NOT EXISTS] [db.]table_name
-(
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
-    ...
-)
-SNAPSHOT_LOCATION = '<SNAPSHOT_FILENAME>';
-```
-
-To obtain the snapshot information (including the snapshot locations) of a table, execute the following command:
-
-```sql
-SELECT * 
-FROM   Fuse_snapshot('<database_name>', '<table_name>'); 
 ```
 
 ## CREATE TABLE ... EXTERNAL_LOCATION
@@ -195,6 +176,7 @@ DESC t_null;
 ```
 
 ## Default Values
+
 ```sql
 DEFAULT <expr>
 ```
@@ -230,6 +212,62 @@ SELECT * FROM t_default_value;
 |    1 | b    |
 +------+------+
 ```
+
+## Computed Columns
+
+Computed columns are columns that are generated from other columns in a table using a scalar expression. When data in any of the columns used in the computation is updated, the computed column will automatically recalculate its value to reflect the update. 
+
+Databend supports two types of computed columns: stored and virtual. Stored computed columns are physically stored in the database and occupy storage space, while virtual computed columns are not physically stored and their values are calculated on the fly when accessed.
+
+Databend supports two syntax options for creating computed columns: one using `AS (<expr>)` and the other using `GENERATED ALWAYS AS (<expr>)`. Both syntaxes allow specifying whether the computed column is stored or virtual.
+
+```sql
+CREATE TABLE [IF NOT EXISTS] [db.]table_name
+(
+    <column_name> <data_type> [ NOT NULL | NULL] AS (<expr>) STORED | VIRTUAL,
+    <column_name> <data_type> [ NOT NULL | NULL] AS (<expr>) STORED | VIRTUAL,
+    ...
+)
+
+CREATE TABLE [IF NOT EXISTS] [db.]table_name
+(
+    <column_name> <data_type> [NOT NULL | NULL] GENERATED ALWAYS AS (<expr>) STORED | VIRTUAL,
+    <column_name> <data_type> [NOT NULL | NULL] GENERATED ALWAYS AS (<expr>) STORED | VIRTUAL,
+    ...
+)
+```
+
+The following is an example of creating a stored computed column: Whenever the values of the "price" or "quantity" columns are updated, the "total_price" column will automatically recalculate and update its stored value.
+
+```sql
+CREATE TABLE IF NOT EXISTS products (
+  id INT,
+  price FLOAT64,
+  quantity INT,
+  total_price FLOAT64 AS (price * quantity) STORED
+);
+```
+
+The following is an example of creating a virtual computed column: The "full_name" column is dynamically calculated based on the current values of the "first_name" and "last_name" columns. It does not occupy additional storage space. Whenever the "first_name" or "last_name" values are accessed, the "full_name" column will be computed and returned.
+
+```sql
+CREATE TABLE IF NOT EXISTS employees (
+  id INT,
+  first_name VARCHAR,
+  last_name VARCHAR,
+  full_name VARCHAR AS (CONCAT(first_name, ' ', last_name)) VIRTUAL
+);
+```
+
+:::tip STORED or VIRTUAL?
+When choosing between stored computed columns and virtual computed columns, consider the following factors:
+
+- Storage Space: Stored computed columns occupy additional storage space in the table because their computed values are physically stored. If you have limited database space or want to minimize storage usage, virtual computed columns can be a better choice.
+
+- Real-time Updates: Stored computed columns update their computed values immediately when the dependent columns are updated. This ensures that you always have the latest computed values when querying. Virtual computed columns, on the other hand, compute their values dynamically during queries, which may slightly increase the processing time.
+
+- Data Integrity and Consistency: Stored computed columns maintain immediate data consistency since their computed values are updated upon write operations. Virtual computed columns, however, calculate their values on-the-fly during queries, which means there might be a momentary inconsistency between write operations and subsequent queries.
+:::
 
 ## MySQL Compatibility
 
@@ -371,57 +409,6 @@ SELECT * FROM visits;
 +-----------+
 ```
 
-### Create Table ... Snapshot_Location
-
-Create a table from a specific snapshot, allowing you to create a new table based on the data at a specific point in time:
-
-```sql
-CREATE TABLE members 
-  ( 
-     name VARCHAR 
-  ); 
-
-INSERT INTO members 
-VALUES     ('Amy'); 
-
-SELECT snapshot_id, 
-       timestamp, 
-       snapshot_location 
-FROM   fuse_snapshot('default', 'members'); 
-+-----------------------------------+----------------------------+------------------------------------------------------------+
-| snapshot_id                       | timestamp                  | snapshot_location                                          |
-+-----------------------------------+----------------------------+------------------------------------------------------------+
-|  b5931727ee404869ab99b25bf9e672a9 | 2022-08-29 17:53:54.243561 | 418920/604411/_ss/b5931727ee404869ab99b25bf9e672a9_v1.json |
-+-----------------------------------+----------------------------+------------------------------------------------------------+
-
-INSERT INTO members 
-VALUES     ('Bob'); 
-
-SELECT snapshot_id, 
-       timestamp, 
-       snapshot_location 
-FROM   fuse_snapshot('default', 'members'); 
-+----------------------------------+----------------------------+------------------------------------------------------------+
-| snapshot_id                      | timestamp                  | snapshot_location                                          |
-|----------------------------------|----------------------------|------------------------------------------------------------|
-| b5931727ee404869ab99b25bf9e672a9 | 2022-08-29 17:53:54.243561 | 418920/604411/_ss/b5931727ee404869ab99b25bf9e672a9_v1.json |
-| 12637e70dd1c4abbab15470fa0a6d69b | 2022-08-29 18:04:18.973272 | 418920/604411/_ss/12637e70dd1c4abbab15470fa0a6d69b_v1.json |
-+----------------------------------+----------------------------+------------------------------------------------------------+
-
--- Create a new table with a snapshot (ID: b5931727ee404869ab99b25bf9e672a9)
-CREATE TABLE members_previous 
-  ( 
-     name VARCHAR 
-  )
-snapshot_location='418920/604411/_ss/b5931727ee404869ab99b25bf9e672a9_v1.json';
-
--- The created table contains "Amy" that is stored in the snapshot
-SELECT * 
-FROM   members_previous; 
----
-Amy
-```
-
 ### Create Table ... External_Location
 
 Create a table with data stored on an external location, such as Amazon S3:
@@ -437,4 +424,65 @@ CONNECTION=(
   SECRET_ACCESS_KEY='<your_aws_secret_key>' 
   ENDPOINT_URL='https://s3.amazonaws.com'
 );
+```
+
+### Create Table ... Column As STORED | VIRTUAL
+
+The following example demonstrates a table with a stored computed column that automatically recalculates based on updates to the "price" or "quantity" columns:
+
+```sql
+-- Create the table with a stored computed column
+CREATE TABLE IF NOT EXISTS products (
+  id INT,
+  price FLOAT64,
+  quantity INT,
+  total_price FLOAT64 AS (price * quantity) STORED
+);
+
+-- Insert data into the table
+INSERT INTO products (id, price, quantity)
+VALUES (1, 10.5, 3),
+       (2, 15.2, 5),
+       (3, 8.7, 2);
+
+-- Query the table to see the computed column
+SELECT id, price, quantity, total_price
+FROM products;
+
+---
++------+-------+----------+-------------+
+| id   | price | quantity | total_price |
++------+-------+----------+-------------+
+|    1 |  10.5 |        3 |        31.5 |
+|    2 |  15.2 |        5 |        76.0 |
+|    3 |   8.7 |        2 |        17.4 |
++------+-------+----------+-------------+
+```
+
+In this example, we create a table called student_profiles with a Variant type column named profile to store JSON data. We also add a virtual computed column named *age* that extracts the age property from the profile column and casts it to an integer.
+
+```sql
+-- Create the table with a virtual computed column
+CREATE TABLE student_profiles (
+    id STRING,
+    profile VARIANT,
+    age INT NULL AS (profile['age']::INT) VIRTUAL
+);
+
+-- Insert data into the table
+INSERT INTO student_profiles (id, profile) VALUES
+    ('d78236', '{"id": "d78236", "name": "Arthur Read", "age": "16", "school": "PVPHS", "credits": 120, "sports": "none"}'),
+    ('f98112', '{"name": "Buster Bunny", "age": "15", "id": "f98112", "school": "TEO", "credits": 67, "clubs": "MUN"}'),
+    ('t63512', '{"name": "Ernie Narayan", "school" : "Brooklyn Tech", "id": "t63512", "sports": "Track and Field", "clubs": "Chess"}');
+
+-- Query the table to see the computed column
+SELECT * FROM student_profiles;
+
++--------+------------------------------------------------------------------------------------------------------------+------+
+| id     | profile                                                                                                    | age  |
++--------+------------------------------------------------------------------------------------------------------------+------+
+| d78236 | {"age":"16","credits":120,"id":"d78236","name":"Arthur Read","school":"PVPHS","sports":"none"}             |   16 |
+| f98112 | {"age":"15","clubs":"MUN","credits":67,"id":"f98112","name":"Buster Bunny","school":"TEO"}                 |   15 |
+| t63512 | {"clubs":"Chess","id":"t63512","name":"Ernie Narayan","school":"Brooklyn Tech","sports":"Track and Field"} | NULL |
++--------+------------------------------------------------------------------------------------------------------------+------+
 ```

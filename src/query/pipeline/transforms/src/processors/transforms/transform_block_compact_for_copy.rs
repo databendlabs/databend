@@ -83,6 +83,7 @@ impl Compactor for BlockCompactorForCopy {
                 self.thresholds.min_rows_per_block
             };
             res.extend(block.split_by_rows_no_tail(rows_per_block));
+            blocks.remove(size - 1);
         } else if self.thresholds.check_large_enough(num_rows, num_bytes) {
             // pass through the new data block just arrived
             res.push(block);
@@ -110,7 +111,7 @@ impl Compactor for BlockCompactorForCopy {
         Ok(res)
     }
 
-    fn compact_final(&mut self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn compact_final(&mut self, blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
         let mut res = vec![];
         if self.accumulated_rows != 0 {
             if self.aborting.load(Ordering::Relaxed) {
@@ -119,7 +120,7 @@ impl Compactor for BlockCompactorForCopy {
                 ));
             }
 
-            let block = DataBlock::concat(blocks)?;
+            let block = DataBlock::concat(&blocks)?;
             res.push(block);
         }
 

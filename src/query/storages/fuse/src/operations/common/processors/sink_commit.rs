@@ -25,9 +25,15 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
+use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
+use log::debug;
+use log::error;
+use log::info;
+use log::warn;
 use opendal::Operator;
 use storages_common_table_meta::meta::ClusterKey;
+use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use table_lock::TableLockHandlerWrapper;
@@ -35,6 +41,8 @@ use table_lock::TableLockHeartbeat;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_inc_commit_aborts;
+use crate::metrics::metrics_inc_commit_copied_files;
+use crate::metrics::metrics_inc_commit_milliseconds;
 use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
@@ -53,10 +61,12 @@ enum State {
     GenerateSnapshot {
         previous: Option<Arc<TableSnapshot>>,
         cluster_key_meta: Option<ClusterKey>,
+        table_info: TableInfo,
     },
     TryCommit {
         data: Vec<u8>,
         snapshot: TableSnapshot,
+        table_info: TableInfo,
     },
     AbortOperation,
     Finish,
@@ -82,11 +92,15 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     abort_operation: AbortOperation,
     heartbeat: TableLockHeartbeat,
+    need_lock: bool,
+    start_time: Instant,
+    prev_snapshot_id: Option<SnapshotId>,
 }
 
 impl<F> CommitSink<F>
 where F: SnapshotGenerator + Send + 'static
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
@@ -94,6 +108,8 @@ where F: SnapshotGenerator + Send + 'static
         snapshot_gen: F,
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,
+        need_lock: bool,
+        prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
@@ -110,14 +126,25 @@ where F: SnapshotGenerator + Send + 'static
             retries: 0,
             max_retry_elapsed,
             input,
+            need_lock,
+            start_time: Instant::now(),
+            prev_snapshot_id,
         })))
     }
 
+    fn is_error_recoverable(&self, e: &ErrorCode) -> bool {
+        // When prev_snapshot_id is some, means it is an alter table column modification.
+        // In this case if commit to meta fail and error is TABLE_VERSION_MISMATCHED operation will be aborted.
+        if self.prev_snapshot_id.is_some() && e.code() == ErrorCode::TABLE_VERSION_MISMATCHED {
+            return false;
+        }
+        FuseTable::is_error_recoverable(e, self.transient)
+    }
+
     fn read_meta(&mut self) -> Result<Event> {
+        self.start_time = Instant::now();
         {
-            let status = "begin commit";
-            self.ctx.set_status_info(status);
-            tracing::info!(status);
+            self.ctx.set_status_info("begin commit");
         }
 
         let input_meta = self
@@ -130,16 +157,16 @@ where F: SnapshotGenerator + Send + 'static
 
         self.input.finish();
 
-        let meta = CommitMeta::downcast_ref_from(&input_meta)
+        let meta = CommitMeta::downcast_from(input_meta)
             .ok_or(ErrorCode::Internal("No commit meta. It's a bug"))?;
 
-        self.snapshot_gen.set_merged_segments(meta.segments.clone());
-        self.snapshot_gen.set_merged_summary(meta.summary.clone());
-        self.abort_operation = meta.abort_operation.clone();
+        self.abort_operation = meta.abort_operation;
 
         self.backoff = FuseTable::set_backoff(self.max_retry_elapsed);
 
-        if meta.need_lock {
+        self.snapshot_gen
+            .set_conflict_resolve_context(meta.conflict_resolve_context);
+        if self.need_lock {
             self.state = State::TryLock;
         } else {
             self.state = State::FillDefault;
@@ -154,7 +181,7 @@ impl<F> Processor for CommitSink<F>
 where F: SnapshotGenerator + Send + 'static
 {
     fn name(&self) -> String {
-        "MutationSink".to_string()
+        "CommitSink".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -197,6 +224,7 @@ where F: SnapshotGenerator + Send + 'static
             State::GenerateSnapshot {
                 previous,
                 cluster_key_meta,
+                table_info,
             } => {
                 let schema = self.table.schema().as_ref().clone();
                 match self
@@ -207,13 +235,13 @@ where F: SnapshotGenerator + Send + 'static
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,
                             snapshot,
+                            table_info,
                         };
                     }
                     Err(e) => {
-                        tracing::error!(
+                        error!(
                             "commit mutation failed after {} retries, error: {:?}",
-                            self.retries,
-                            e,
+                            self.retries, e,
                         );
                         self.state = State::AbortOperation;
                     }
@@ -232,15 +260,30 @@ where F: SnapshotGenerator + Send + 'static
 
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
+                // save current table info when commit to meta server
+                // if table_id not match, update table meta will fail
+                let table_info = fuse_table.table_info.clone();
+                // check if snapshot has been changed
+                let snapshot_has_changed = self.prev_snapshot_id.is_some_and(|prev_snapshot_id| {
+                    previous
+                        .as_ref()
+                        .map_or(true, |previous| previous.snapshot_id != prev_snapshot_id)
+                });
+                if snapshot_has_changed {
+                    error!("commit mutation failed cause snapshot has changed when commit");
+                    // if snapshot has changed abort operation
+                    self.state = State::AbortOperation;
+                } else {
+                    self.snapshot_gen
+                        .fill_default_values(schema, &previous)
+                        .await?;
 
-                self.snapshot_gen
-                    .fill_default_values(schema, &previous)
-                    .await?;
-
-                self.state = State::GenerateSnapshot {
-                    previous,
-                    cluster_key_meta: fuse_table.cluster_key_meta.clone(),
-                };
+                    self.state = State::GenerateSnapshot {
+                        previous,
+                        cluster_key_meta: fuse_table.cluster_key_meta.clone(),
+                        table_info,
+                    };
+                }
             }
             State::TryLock => {
                 let table_info = self.table.get_table_info();
@@ -251,7 +294,7 @@ where F: SnapshotGenerator + Send + 'static
                         self.state = State::FillDefault;
                     }
                     Err(e) => {
-                        tracing::error!(
+                        error!(
                             "commit mutation failed cause get lock failed, error: {:?}",
                             e
                         );
@@ -259,7 +302,11 @@ where F: SnapshotGenerator + Send + 'static
                     }
                 }
             }
-            State::TryCommit { data, snapshot } => {
+            State::TryCommit {
+                data,
+                snapshot,
+                table_info,
+            } => {
                 let location = self
                     .location_gen
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
@@ -268,7 +315,7 @@ where F: SnapshotGenerator + Send + 'static
 
                 match FuseTable::update_table_meta(
                     self.ctx.as_ref(),
-                    self.table.get_table_info(),
+                    &table_info,
                     &self.location_gen,
                     snapshot,
                     location,
@@ -283,7 +330,7 @@ where F: SnapshotGenerator + Send + 'static
                             let latest = self.table.refresh(self.ctx.as_ref()).await?;
                             let tbl = FuseTable::try_from_table(latest.as_ref())?;
 
-                            tracing::warn!(
+                            warn!(
                                 "transient table detected, purging historical data. ({})",
                                 tbl.table_info.ident
                             );
@@ -291,28 +338,39 @@ where F: SnapshotGenerator + Send + 'static
                             let keep_last_snapshot = true;
                             let snapshot_files = tbl.list_snapshot_files().await?;
                             if let Err(e) = tbl
-                                .do_purge(&self.ctx, snapshot_files, keep_last_snapshot, None)
+                                .do_purge(
+                                    &self.ctx,
+                                    snapshot_files,
+                                    None,
+                                    keep_last_snapshot,
+                                    false,
+                                )
                                 .await
                             {
                                 // Errors of GC, if any, are ignored, since GC task can be picked up
-                                tracing::warn!(
+                                warn!(
                                     "GC of transient table not success (this is not a permanent error). the error : {}",
                                     e
                                 );
                             } else {
-                                tracing::info!("GC of transient table done");
+                                info!("GC of transient table done");
                             }
                         }
                         metrics_inc_commit_mutation_success();
+                        let duration = self.start_time.elapsed();
+                        if let Some(files) = &self.copied_files {
+                            metrics_inc_commit_copied_files(files.file_info.len() as u64);
+                        }
+                        metrics_inc_commit_milliseconds(duration.as_millis());
                         self.heartbeat.shutdown().await?;
                         self.state = State::Finish;
                     }
-                    Err(e) if FuseTable::is_error_recoverable(&e, self.transient) => {
+                    Err(e) if self.is_error_recoverable(&e) => {
                         let table_info = self.table.get_table_info();
                         match self.backoff.next_backoff() {
                             Some(d) => {
                                 let name = table_info.name.clone();
-                                tracing::debug!(
+                                debug!(
                                     "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
                                     d.as_millis(),
                                     name.as_str(),
@@ -358,16 +416,22 @@ where F: SnapshotGenerator + Send + 'static
                 self.state = State::GenerateSnapshot {
                     previous,
                     cluster_key_meta,
+                    table_info: fuse_table.table_info.clone(),
                 };
             }
             State::AbortOperation => {
+                let duration = self.start_time.elapsed();
                 metrics_inc_commit_aborts();
+                // todo: use histogram when it ready
+                metrics_inc_commit_milliseconds(duration.as_millis());
                 self.heartbeat.shutdown().await?;
                 let op = self.abort_operation.clone();
                 op.abort(self.ctx.clone(), self.dal.clone()).await?;
-                return Err(ErrorCode::StorageOther(
-                    "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-                ));
+                return Err(ErrorCode::StorageOther(format!(
+                    "transaction aborted after {} retries, which took {} ms",
+                    self.retries,
+                    duration.as_millis()
+                )));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

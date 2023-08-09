@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataSchemaRef;
+use common_license::license::Feature::VirtualColumns;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::VirtualColumnNameIdent;
@@ -55,7 +56,7 @@ impl Interpreter for AlterVirtualColumnsInterpreter {
         license_manager.manager.check_enterprise_enabled(
             &self.ctx.get_settings(),
             tenant.clone(),
-            "alter_virtual_columns".to_string(),
+            VirtualColumns,
         )?;
 
         let catalog_name = self.plan.catalog.clone();
@@ -67,7 +68,7 @@ impl Interpreter for AlterVirtualColumnsInterpreter {
             .await?;
 
         let table_id = table.get_id();
-        let catalog = self.ctx.get_catalog(&catalog_name)?;
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
 
         let update_virtual_column_req = UpdateVirtualColumnReq {
             name_ident: VirtualColumnNameIdent { tenant, table_id },

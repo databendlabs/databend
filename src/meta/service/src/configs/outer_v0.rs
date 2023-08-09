@@ -21,7 +21,9 @@ use common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
 use common_meta_types::MetaStartupError;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
+use common_tracing::QueryLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
+use common_tracing::TracingConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -214,6 +216,10 @@ impl Config {
         // Load from config file first.
         {
             let config_file = if !arg_conf.config_file.is_empty() {
+                // TODO: remove this `allow(clippy::redundant_clone)`
+                // as soon as this issue is fixed:
+                // https://github.com/rust-lang/rust-clippy/issues/10940
+                #[allow(clippy::redundant_clone)]
                 arg_conf.config_file.clone()
             } else if let Ok(path) = env::var("METASRV_CONFIG_FILE") {
                 path
@@ -573,6 +579,11 @@ impl Into<InnerLogConfig> for LogConfig {
         InnerLogConfig {
             file: self.file.into(),
             stderr: self.stderr.into(),
+            query: QueryLogConfig {
+                on: false,
+                dir: "".to_string(),
+            },
+            tracing: TracingConfig::from_env(),
         }
     }
 }
@@ -665,8 +676,10 @@ impl Default for StderrLogConfig {
 impl Into<InnerStderrLogConfig> for StderrLogConfig {
     fn into(self) -> InnerStderrLogConfig {
         InnerStderrLogConfig {
-            on: self.stderr_on,
-            level: self.stderr_level,
+            on: std::env::var("LOG_STDERR_ON").as_deref() == Ok("true")
+                || std::env::var("RUST_LOG").is_ok()
+                || self.stderr_on,
+            level: std::env::var("RUST_LOG").unwrap_or(self.stderr_level),
             format: self.stderr_format,
         }
     }

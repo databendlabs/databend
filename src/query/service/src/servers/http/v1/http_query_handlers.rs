@@ -14,6 +14,8 @@
 
 use common_exception::ErrorCode;
 use common_expression::DataSchemaRef;
+use log::error;
+use log::info;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;
@@ -26,8 +28,6 @@ use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
-use tracing::error;
-use tracing::info;
 
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
@@ -38,6 +38,7 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::http::v1::JsonBlock;
 use crate::sessions::QueryAffect;
+
 const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 const HEADER_QUERY_STATE: &str = "X-DATABEND-QUERY-STATE";
 const HEADER_QUERY_PAGE_ROWS: &str = "X-DATABEND-QUERY-PAGE-ROWS";
@@ -204,6 +205,7 @@ async fn query_final_handler(
     _ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
+    info!("final http query: {}", query_id);
     let http_query_manager = HttpQueryManager::instance();
     match http_query_manager.remove_query(&query_id).await {
         Some(query) => {
@@ -226,6 +228,7 @@ async fn query_cancel_handler(
     _ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> impl IntoResponse {
+    info!("kill http query: {}", query_id);
     let http_query_manager = HttpQueryManager::instance();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
@@ -278,7 +281,7 @@ pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
-    info!("receive http query: {:?}", req);
+    info!("new http query request: {:?}", req);
     let http_query_manager = HttpQueryManager::instance();
     let sql = req.sql.clone();
 

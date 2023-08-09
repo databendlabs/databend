@@ -22,14 +22,16 @@ use common_exception::Result;
 use common_storages_fuse::FuseTable;
 use databend_query::test_kits::table_test_fixture::append_sample_data;
 use databend_query::test_kits::table_test_fixture::check_data_dir;
+use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use databend_query::test_kits::utils::generate_orphan_files;
 use databend_query::test_kits::utils::generate_snapshot_with_segments;
 use databend_query::test_kits::utils::query_count;
 use enterprise_query::storages::fuse::do_vacuum;
-use enterprise_query::storages::fuse::operations::vacuum::get_snapshot_referenced_files;
-use enterprise_query::storages::fuse::operations::vacuum::SnapshotReferencedFiles;
+use enterprise_query::storages::fuse::do_vacuum_drop_tables;
+use enterprise_query::storages::fuse::operations::vacuum_table::get_snapshot_referenced_files;
+use enterprise_query::storages::fuse::operations::vacuum_table::SnapshotReferencedFiles;
 
 async fn check_files_existence(
     fixture: &TestFixture,
@@ -60,7 +62,7 @@ async fn check_dry_run_files(fixture: &TestFixture, files: Vec<&Vec<String>>) ->
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
-    let files_opt = do_vacuum(fuse_table, table_ctx, retention_time, Some(1000)).await?;
+    let files_opt = do_vacuum(fuse_table, table_ctx, retention_time, true).await?;
 
     assert!(files_opt.is_some());
     let purge_files = files_opt.unwrap();
@@ -323,13 +325,50 @@ async fn test_fuse_do_vacuum() -> Result<()> {
         .await?;
     }
 
+    // first set retention_period as a bigger value cause `do_vacuum` does not vacuum files
+    table_ctx.get_settings().set_retention_period(1024)?;
+
     // do gc.
     {
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
-        do_vacuum(fuse_table, table_ctx, retention_time, None).await?;
+        do_vacuum(fuse_table, table_ctx, retention_time, false).await?;
+    }
+
+    // check that after do_vacuum, files number has not changed
+    {
+        let expected_num_of_snapshot = 3;
+        let expected_num_of_segment = 2 + (orphan_segment_file_num * 3) as u32;
+        let expected_num_of_blocks =
+            2 + (orphan_segment_file_num * orphan_block_per_segment_num * 3) as u32;
+        let expected_num_of_index = expected_num_of_blocks;
+        let expected_num_of_ts = 0;
+        check_data_dir(
+            &fixture,
+            "do_gc_orphan_files: verify generate retention files and referenced files",
+            expected_num_of_snapshot,
+            expected_num_of_ts,
+            expected_num_of_segment,
+            expected_num_of_blocks,
+            expected_num_of_index,
+            Some(()),
+            None,
+        )
+        .await?;
+    }
+
+    // set retention_period as a smaller value cause `do_vacuum` gc files
+    table_ctx.get_settings().set_retention_period(0)?;
+
+    // do gc.
+    {
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let table = fixture.latest_default_table().await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
+        do_vacuum(fuse_table, table_ctx, retention_time, false).await?;
     }
 
     assert_eq!(data_count, {
@@ -406,7 +445,7 @@ async fn test_fuse_do_vacuum() -> Result<()> {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
-        do_vacuum(fuse_table, table_ctx, retention_time, None).await?;
+        do_vacuum(fuse_table, table_ctx, retention_time, false).await?;
     }
 
     // check files number
@@ -455,5 +494,75 @@ async fn test_fuse_do_vacuum() -> Result<()> {
         query_count(stream).await? as usize
     });
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_do_vacuum_drop_table() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    table_ctx.get_settings().set_retention_period(0)?;
+    fixture.create_default_table().await?;
+
+    let number_of_block = 1;
+    append_sample_data(number_of_block, &fixture).await?;
+
+    let table = fixture.latest_default_table().await?;
+
+    check_data_dir(
+        &fixture,
+        "test_fuse_do_vacuum_drop_table: verify generate files",
+        1,
+        0,
+        1,
+        1,
+        1,
+        None,
+        None,
+    )
+    .await?;
+
+    // do gc.
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+    let qry = format!("drop table {}.{}", db, tbl);
+    let ctx = fixture.ctx();
+    execute_command(ctx, &qry).await?;
+
+    // verify dry run never delete files
+    {
+        do_vacuum_drop_tables(vec![table.clone()], Some(100)).await?;
+        check_data_dir(
+            &fixture,
+            "test_fuse_do_vacuum_drop_table: verify generate files",
+            1,
+            0,
+            1,
+            1,
+            1,
+            None,
+            None,
+        )
+        .await?;
+    }
+
+    {
+        do_vacuum_drop_tables(vec![table], None).await?;
+
+        // after vacuum drop tables, verify the files number
+        check_data_dir(
+            &fixture,
+            "test_fuse_do_vacuum_drop_table: verify generate retention files",
+            0,
+            0,
+            0,
+            0,
+            0,
+            None,
+            None,
+        )
+        .await?;
+    }
     Ok(())
 }

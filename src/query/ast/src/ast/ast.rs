@@ -57,6 +57,22 @@ impl Identifier {
     pub fn is_quoted(&self) -> bool {
         self.quote.is_some()
     }
+
+    pub fn from_name(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            quote: None,
+            span: Span::default(),
+        }
+    }
+
+    pub fn from_name_with_quoted(name: impl Into<String>, quote: Option<char>) -> Self {
+        Self {
+            name: name.into(),
+            quote,
+            span: Span::default(),
+        }
+    }
 }
 
 impl Display for Identifier {

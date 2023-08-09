@@ -445,6 +445,16 @@ impl DataOperator {
         Ok(())
     }
 
+    /// Create a new data operator without check.
+    pub fn try_new(sp: &StorageParams) -> common_exception::Result<DataOperator> {
+        let operator = init_operator(sp)?;
+
+        Ok(DataOperator {
+            operator,
+            params: sp.clone(),
+        })
+    }
+
     #[async_backtrace::framed]
     pub async fn try_create(sp: &StorageParams) -> common_exception::Result<DataOperator> {
         let operator = init_operator(sp)?;

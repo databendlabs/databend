@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::iter::Iterator;
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_base::base::tokio;
@@ -27,6 +28,7 @@ use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
+use common_storages_fuse::FusePartInfo;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
@@ -41,12 +43,14 @@ fn test_to_partitions() -> Result<()> {
     let num_of_col = 10;
     let num_of_block = 5;
 
-    let col_stats_gen = |col_size| ColumnStatistics {
-        min: Scalar::from(1i64),
-        max: Scalar::from(2i64),
-        null_count: 0,
-        in_memory_size: col_size as u64,
-        distinct_of_values: None,
+    let col_stats_gen = |col_size| {
+        ColumnStatistics::new(
+            Scalar::from(1i64),
+            Scalar::from(2i64),
+            0,
+            col_size as u64,
+            None,
+        )
     };
 
     let col_metas_gen = |col_size| {
@@ -95,6 +99,7 @@ fn test_to_partitions() -> Result<()> {
         bloom_filter_location,
         bloom_filter_size,
         meta::Compression::Lz4Raw,
+        Some(Utc::now()),
     ));
 
     let blocks_metas = (0..num_of_block)
@@ -171,9 +176,15 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
             projection: Some(proj),
             ..Default::default()
         };
-        let (stats, parts) = table.read_partitions(ctx.clone(), Some(push_downs)).await?;
+        let (stats, parts) = table
+            .read_partitions(ctx.clone(), Some(push_downs), true)
+            .await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
         assert!(!parts.is_empty());
+
+        let part = parts.partitions[0].clone();
+        let fuse_part = FusePartInfo::from_part(&part)?;
+        assert!(fuse_part.create_on.is_some())
     }
     Ok(())
 }

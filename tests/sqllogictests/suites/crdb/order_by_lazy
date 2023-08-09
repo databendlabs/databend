@@ -1,6 +1,6 @@
 # Use lazy materialization for Top-N queries.
 statement ok
-set lazy_topn_threshold=100
+set lazy_read_threshold=100
 
 statement ok
 drop table if exists t
@@ -72,12 +72,8 @@ SELECT a AS foo, b FROM t ORDER BY foo DESC
 2 8
 1 9
 
-query II
+statement error 1065
 SELECT a AS foo, b AS foo FROM t ORDER BY foo
-----
-1 9
-2 8
-3 7
 
 query II
 SELECT a AS foo, (a) AS foo FROM t ORDER BY foo LIMIT 1
@@ -410,8 +406,6 @@ NULL 6
 2 5
 4 8
 
-statement ok
-set lazy_topn_threshold=0
 
 statement ok
 drop table if exists t

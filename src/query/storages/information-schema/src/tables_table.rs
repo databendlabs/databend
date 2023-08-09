@@ -25,6 +25,32 @@ use common_storages_view::view_table::QUERY;
 pub struct TablesTable {}
 
 impl TablesTable {
+    // desc  information_schema.tables;
+    // +-----------------+--------------------------------------------------------------------+------+-----+---------+-------+
+    // | Field           | Type                                                               | Null | Key | Default | Extra |
+    // +-----------------+--------------------------------------------------------------------+------+-----+---------+-------+
+    // | TABLE_CATALOG   | varchar(64)                                                        | NO   |     | NULL    |       |
+    // | TABLE_SCHEMA    | varchar(64)                                                        | NO   |     | NULL    |       |
+    // | TABLE_NAME      | varchar(64)                                                        | NO   |     | NULL    |       |
+    // | TABLE_TYPE      | enum('BASE TABLE','VIEW','SYSTEM VIEW')                            | NO   |     | NULL    |       |
+    // | ENGINE          | varchar(64)                                                        | YES  |     | NULL    |       |
+    // | VERSION         | int                                                                | YES  |     | NULL    |       |
+    // | ROW_FORMAT      | enum('Fixed','Dynamic','Compressed','Redundant','Compact','Paged') | YES  |     | NULL    |       |
+    // | TABLE_ROWS      | bigint unsigned                                                    | YES  |     | NULL    |       |
+    // | AVG_ROW_LENGTH  | bigint unsigned                                                    | YES  |     | NULL    |       |
+    // | DATA_LENGTH     | bigint unsigned                                                    | YES  |     | NULL    |       |
+    // | MAX_DATA_LENGTH | bigint unsigned                                                    | YES  |     | NULL    |       |
+    // | INDEX_LENGTH    | bigint unsigned                                                    | YES  |     | NULL    |       |
+    // | DATA_FREE       | bigint unsigned                                                    | YES  |     | NULL    |       |
+    // | AUTO_INCREMENT  | bigint unsigned                                                    | YES  |     | NULL    |       |
+    // | CREATE_TIME     | timestamp                                                          | NO   |     | NULL    |       |
+    // | UPDATE_TIME     | datetime                                                           | YES  |     | NULL    |       |
+    // | CHECK_TIME      | datetime                                                           | YES  |     | NULL    |       |
+    // | TABLE_COLLATION | varchar(64)                                                        | YES  |     | NULL    |       |
+    // | CHECKSUM        | bigint                                                             | YES  |     | NULL    |       |
+    // | CREATE_OPTIONS  | varchar(256)                                                       | YES  |     | NULL    |       |
+    // | TABLE_COMMENT   | text                                                               | YES  |     | NULL    |       |
+    // +-----------------+--------------------------------------------------------------------+------+-----+---------+-------+
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let query = "SELECT
             database AS table_catalog,
@@ -36,6 +62,10 @@ impl TablesTable {
             dropped_on AS drop_time,
             data_size AS data_length,
             index_size AS index_length,
+            num_rows AS table_rows,
+            NULL AS auto_increment,
+            NULL AS table_collation,
+            NULL AS data_free,
             '' AS table_comment
         FROM system.tables;";
 

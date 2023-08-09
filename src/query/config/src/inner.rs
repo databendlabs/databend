@@ -31,11 +31,12 @@ use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;
 
 use super::config::Config;
+use crate::background_config::InnerBackgroundConfig;
 
 /// Inner config for query.
 ///
 /// All function should implement based on this Config.
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct InnerConfig {
     pub cmd: String,
     pub config_file: String,
@@ -61,6 +62,9 @@ pub struct InnerConfig {
 
     // Cache Config
     pub cache: CacheConfig,
+
+    // Background Config
+    pub background: InnerBackgroundConfig,
 }
 
 impl InnerConfig {
@@ -118,7 +122,24 @@ impl InnerConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+impl Debug for InnerConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("InnerConfig")
+            .field("cmd", &self.cmd)
+            .field("config_file", &self.config_file)
+            .field("query", &self.query.sanitize())
+            .field("log", &self.log)
+            .field("meta", &self.meta)
+            .field("storage", &self.storage)
+            .field("local", &self.local)
+            .field("catalogs", &self.catalogs)
+            .field("cache", &self.cache)
+            .field("background", &self.background)
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
     pub tenant_id: String,
@@ -128,6 +149,8 @@ pub struct QueryConfig {
     pub mysql_handler_host: String,
     pub mysql_handler_port: u16,
     pub mysql_handler_tcp_keepalive_timeout_secs: u64,
+    pub mysql_tls_server_cert: String,
+    pub mysql_tls_server_key: String,
     pub max_active_sessions: u64,
     pub max_server_memory_usage: u64,
     pub max_memory_limit_enabled: bool,
@@ -198,6 +221,8 @@ impl Default for QueryConfig {
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
             mysql_handler_tcp_keepalive_timeout_secs: 120,
+            mysql_tls_server_cert: "".to_string(),
+            mysql_tls_server_key: "".to_string(),
             max_active_sessions: 256,
             max_server_memory_usage: 0,
             max_memory_limit_enabled: false,
@@ -257,6 +282,16 @@ impl QueryConfig {
             rpc_tls_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert.clone(),
             domain_name: self.rpc_tls_query_service_domain_name.clone(),
         }
+    }
+
+    pub fn sanitize(&self) -> Self {
+        let mut sanitized = self.clone();
+        sanitized.databend_enterprise_license = self
+            .databend_enterprise_license
+            .clone()
+            .map(|s| mask_string(&s, 3));
+        sanitized.openai_api_key = mask_string(&self.openai_api_key, 3);
+        sanitized
     }
 }
 

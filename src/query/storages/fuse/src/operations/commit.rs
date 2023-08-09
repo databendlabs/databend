@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
 use backoff::ExponentialBackoffBuilder;
+use chrono::Utc;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
@@ -34,31 +34,36 @@ use common_meta_types::MatchSeq;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use log::debug;
+use log::info;
+use log::warn;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use tracing::info;
-use tracing::warn;
 
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
+use crate::metrics::metrics_inc_commit_mutation_latest_snapshot_append_only;
 use crate::metrics::metrics_inc_commit_mutation_retry;
 use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
+use crate::operations::common::ConflictResolveContext;
+use crate::operations::common::MutationKind;
 use crate::operations::common::TableMutationAggregator;
+use crate::operations::common::TransformSerializeSegment;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
 
@@ -74,18 +79,24 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
+        prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
-        pipeline.resize(1)?;
+        let block_thresholds = self.get_block_thresholds();
+
+        pipeline.try_resize(1)?;
+
+        pipeline.add_transform(|input, output| {
+            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
+            proc.into_processor()
+        })?;
 
         pipeline.add_transform(|input, output| {
             let aggregator = TableMutationAggregator::create(
+                self,
                 ctx.clone(),
                 vec![],
                 Statistics::default(),
-                self.get_block_thresholds(),
-                self.meta_location_generator().clone(),
-                self.schema(),
-                self.get_operator(),
+                MutationKind::Insert,
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
@@ -101,6 +112,8 @@ impl FuseTable {
                 snapshot_gen.clone(),
                 input,
                 None,
+                false,
+                prev_snapshot_id,
             )
         })?;
 
@@ -195,9 +208,10 @@ impl FuseTable {
             number_of_segments: Some(snapshot.segments.len() as u64),
             number_of_blocks: Some(stats.block_count),
         };
+        new_table_meta.updated_on = Utc::now();
 
         // 2. prepare the request
-        let catalog = ctx.get_catalog(table_info.catalog())?;
+        let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
@@ -283,6 +297,7 @@ impl FuseTable {
 
         let mut latest_snapshot = base_snapshot.clone();
         let mut latest_table_info = &self.table_info;
+        let default_cluster_key_id = self.cluster_key_id();
 
         // holding the reference of latest table during retries
         let mut latest_table_ref: Arc<dyn Table>;
@@ -291,11 +306,7 @@ impl FuseTable {
         let mut concurrently_appended_segment_locations: &[Location] = &[];
 
         // Status
-        {
-            let status = "mutation: begin try to commit";
-            ctx.set_status_info(status);
-            info!(status);
-        }
+        ctx.set_status_info("mutation: begin try to commit");
 
         loop {
             let mut snapshot_tobe_committed =
@@ -309,6 +320,7 @@ impl FuseTable {
                 &base_summary,
                 concurrently_appended_segment_locations,
                 schema,
+                default_cluster_key_id,
             )
             .await?;
             snapshot_tobe_committed.segments = segments_tobe_committed;
@@ -329,7 +341,7 @@ impl FuseTable {
                     match backoff.next_backoff() {
                         Some(d) => {
                             let name = self.table_info.name.clone();
-                            tracing::debug!(
+                            debug!(
                                 "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
                                 d.as_millis(),
                                 name.as_str(),
@@ -351,25 +363,24 @@ impl FuseTable {
                             latest_table_info = &latest_fuse_table.table_info;
 
                             // Check if there is only insertion during the operation.
-                            match MutatorConflictDetector::detect_conflicts(
-                                base_snapshot.as_ref(),
-                                latest_snapshot.as_ref(),
-                            ) {
-                                Conflict::Unresolvable => {
-                                    abort_operation
-                                        .abort(ctx.clone(), self.operator.clone())
-                                        .await?;
-                                    metrics_inc_commit_mutation_unresolvable_conflict();
-                                    break Err(ErrorCode::StorageOther(
-                                        "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-                                    ));
-                                }
-                                Conflict::ResolvableAppend(range_of_newly_append) => {
-                                    info!("resolvable conflicts detected");
-                                    metrics_inc_commit_mutation_resolvable_conflict();
-                                    concurrently_appended_segment_locations =
-                                        &latest_snapshot.segments[range_of_newly_append];
-                                }
+                            if let Some(range_of_newly_append) =
+                                ConflictResolveContext::is_latest_snapshot_append_only(
+                                    &base_snapshot,
+                                    &latest_snapshot,
+                                )
+                            {
+                                info!("resolvable conflicts detected");
+                                metrics_inc_commit_mutation_latest_snapshot_append_only();
+                                concurrently_appended_segment_locations =
+                                    &latest_snapshot.segments[range_of_newly_append];
+                            } else {
+                                abort_operation
+                                    .abort(ctx.clone(), self.operator.clone())
+                                    .await?;
+                                metrics_inc_commit_mutation_unresolvable_conflict();
+                                break Err(ErrorCode::UnresolvableConflict(
+                                    "segment compact conflict with other operations",
+                                ));
                             }
 
                             retries += 1;
@@ -414,6 +425,7 @@ impl FuseTable {
         base_summary: &Statistics,
         concurrently_appended_segment_locations: &[Location],
         schema: TableSchemaRef,
+        default_cluster_key_id: Option<u32>,
     ) -> Result<(Vec<Location>, Statistics)> {
         if concurrently_appended_segment_locations.is_empty() {
             Ok((base_segments.to_owned(), base_summary.clone()))
@@ -433,8 +445,11 @@ impl FuseTable {
             let mut new_statistics = base_summary.clone();
             for result in concurrent_appended_segment_infos.into_iter() {
                 let concurrent_appended_segment = result?;
-                new_statistics =
-                    merge_statistics(&new_statistics, &concurrent_appended_segment.summary);
+                new_statistics = merge_statistics(
+                    &new_statistics,
+                    &concurrent_appended_segment.summary,
+                    default_cluster_key_id,
+                );
             }
             Ok((new_segments, new_statistics))
         }
@@ -482,35 +497,5 @@ impl FuseTable {
     // check if there are any fuse table legacy options
     pub fn remove_legacy_options(table_options: &mut BTreeMap<String, String>) {
         table_options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
-    }
-}
-
-pub enum Conflict {
-    Unresolvable,
-    // resolvable conflicts with append only operation
-    // the range embedded is the range of segments that are appended in the latest snapshot
-    ResolvableAppend(Range<usize>),
-}
-
-// wraps a namespace, to clarify the who is detecting conflict
-pub struct MutatorConflictDetector;
-
-impl MutatorConflictDetector {
-    // detects conflicts, as a mutator, working on the base snapshot, with latest snapshot
-    pub fn detect_conflicts(base: &TableSnapshot, latest: &TableSnapshot) -> Conflict {
-        let base_segments = &base.segments;
-        let latest_segments = &latest.segments;
-
-        let base_segments_len = base_segments.len();
-        let latest_segments_len = latest_segments.len();
-
-        if latest_segments_len >= base_segments_len
-            && base_segments[0..base_segments_len]
-                == latest_segments[(latest_segments_len - base_segments_len)..latest_segments_len]
-        {
-            Conflict::ResolvableAppend(0..(latest_segments_len - base_segments_len))
-        } else {
-            Conflict::Unresolvable
-        }
     }
 }

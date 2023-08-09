@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 
@@ -23,11 +24,12 @@ use crate::optimizer::RelationalProperty;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
+use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::WindowFuncType;
 
 // Visitor that find Expressions that match a particular predicate
-struct Finder<'a, F>
+pub struct Finder<'a, F>
 where F: Fn(&ScalarExpr) -> bool
 {
     find_fn: &'a F,
@@ -37,13 +39,15 @@ where F: Fn(&ScalarExpr) -> bool
 impl<'a, F> Finder<'a, F>
 where F: Fn(&ScalarExpr) -> bool
 {
-    /// Create a new finder with the `test_fn`
-    #[allow(dead_code)]
-    fn new(find_fn: &'a F) -> Self {
+    pub fn new(find_fn: &'a F) -> Self {
         Self {
             find_fn,
             scalars: Vec::new(),
         }
+    }
+
+    pub fn scalars(&self) -> &[ScalarExpr] {
+        &self.scalars
     }
 }
 
@@ -198,6 +202,10 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
             .args
             .iter()
             .all(|arg| prune_by_children(arg, columns)),
+        ScalarExpr::LambdaFunction(scalar) => scalar
+            .args
+            .iter()
+            .all(|arg| prune_by_children(arg, columns)),
         ScalarExpr::FunctionCall(scalar) => scalar
             .arguments
             .iter()
@@ -205,6 +213,49 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
         ScalarExpr::CastExpr(expr) => prune_by_children(expr.argument.as_ref(), columns),
         ScalarExpr::SubqueryExpr(_) => false,
     }
+}
+
+/// Wrap cast scalar to target type
+pub fn wrap_cast_scalar(
+    scalar: &ScalarExpr,
+    data_type: &DataType,
+    target_type: &DataType,
+) -> Result<ScalarExpr> {
+    let target_scalar = if target_type.remove_nullable() == DataType::Variant {
+        match data_type.remove_nullable() {
+            DataType::Boolean
+            | DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::Date
+            | DataType::Bitmap
+            | DataType::Variant => wrap_cast(scalar, target_type),
+            DataType::String => {
+                // parse string to JSON value
+                let func = ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: "parse_json".to_string(),
+                    params: vec![],
+                    arguments: vec![scalar.clone()],
+                });
+                wrap_cast(&func, target_type)
+            }
+            _ => {
+                if data_type == &DataType::Null && target_type.is_nullable() {
+                    scalar.clone()
+                } else {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "unable to cast type `{}` to type `{}`",
+                        data_type, target_type
+                    )));
+                }
+            }
+        }
+    } else {
+        wrap_cast(scalar, target_type)
+    };
+
+    Ok(target_scalar)
 }
 
 /// Wrap a cast expression with given target type

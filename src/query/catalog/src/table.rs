@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_expression::types::NumberScalar;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
+use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableField;
@@ -36,6 +37,7 @@ use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
 use common_storage::StorageMetrics;
+use storages_common_table_meta::meta::SnapshotId;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
@@ -90,7 +92,7 @@ pub trait Table: Sync + Send {
     }
 
     /// whether column prune(projection) can help in table read
-    fn benefit_column_prune(&self) -> bool {
+    fn support_column_projection(&self) -> bool {
         false
     }
 
@@ -153,6 +155,7 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let (_, _) = (ctx, push_downs);
         Err(ErrorCode::Unimplemented(format!(
@@ -220,8 +223,9 @@ pub trait Table: Sync + Send {
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
+        prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, copied_files, pipeline, overwrite);
+        let (_, _, _, _, _) = (ctx, copied_files, pipeline, overwrite, prev_snapshot_id);
 
         Ok(())
     }
@@ -237,10 +241,11 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
+        limit: Option<usize>,
         keep_last_snapshot: bool,
-        dry_run_limit: Option<usize>,
+        dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        let (_, _, _, _) = (ctx, instant, keep_last_snapshot, dry_run_limit);
+        let (_, _, _, _, _) = (ctx, instant, limit, keep_last_snapshot, dry_run);
 
         Ok(None)
     }
@@ -272,33 +277,27 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    #[async_backtrace::framed]
-    async fn delete(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<usize>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        let (_, _, _, _) = (ctx, filter, col_indices, pipeline);
-
-        Err(ErrorCode::Unimplemented(format!(
-            "table {}, engine type {}, does not support DELETE FROM",
-            self.name(),
-            self.get_table_info().engine(),
-        )))
-    }
-
+    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     async fn update(
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<usize>,
-        update_list: Vec<(usize, RemoteExpr<String>)>,
+        col_indices: Vec<FieldIndex>,
+        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
+        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _, _, _) = (ctx, filter, col_indices, update_list, pipeline);
+        let (_, _, _, _, _, _, _) = (
+            ctx,
+            filter,
+            col_indices,
+            update_list,
+            computed_list,
+            query_row_id_col,
+            pipeline,
+        );
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support UPDATE",
@@ -337,14 +336,16 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    // return the selected block num.
     #[async_backtrace::framed]
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<()> {
-        let (_, _, _) = (ctx, pipeline, push_downs);
+        limit: Option<usize>,
+        pipeline: &mut Pipeline,
+    ) -> Result<u64> {
+        let (_, _, _, _) = (ctx, push_downs, limit, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support recluster",
@@ -370,6 +371,10 @@ pub trait Table: Sync + Send {
     fn is_stage_table(&self) -> bool {
         false
     }
+
+    fn result_can_be_cached(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait::async_trait]
@@ -379,7 +384,7 @@ pub trait TableExt: Table {
         let table_info = self.get_table_info();
         let name = table_info.name.clone();
         let tid = table_info.ident.table_id;
-        let catalog = ctx.get_catalog(table_info.catalog())?;
+        let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
         let table_info: TableInfo = TableInfo {
             ident,
@@ -407,6 +412,8 @@ pub struct TableStatistics {
     pub data_size: Option<u64>,
     pub data_size_compressed: Option<u64>,
     pub index_size: Option<u64>,
+    pub number_of_blocks: Option<u64>,
+    pub number_of_segments: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -473,7 +480,7 @@ pub trait ColumnStatisticsProvider {
                         max.push(0);
                     }
                 }
-                for idx in (0..min.len()).rev() {
+                for idx in 0..min.len() {
                     min_value = min_value * 128 + min[idx] as u32;
                     max_value = max_value * 128 + max[idx] as u32;
                 }
@@ -511,4 +518,12 @@ mod column_stats_provider_impls {
 pub struct NavigationDescriptor {
     pub database_name: String,
     pub point: NavigationPoint,
+}
+
+#[derive(Debug, Clone)]
+pub struct DeletionFilters {
+    // the filter expression for the deletion
+    pub filter: RemoteExpr<String>,
+    // just "not(filter)"
+    pub inverted_filter: RemoteExpr<String>,
 }

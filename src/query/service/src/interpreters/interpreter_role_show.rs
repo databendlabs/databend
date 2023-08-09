@@ -22,11 +22,12 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FromData;
 use common_sql::plans::ShowRolesPlan;
+use common_storages_fuse::TableContext;
+use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 
 #[derive(Debug)]
 pub struct ShowRolesInterpreter {
@@ -50,9 +51,11 @@ impl Interpreter for ShowRolesInterpreter {
         self.plan.schema()
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "show_roles_execute");
+
         let session = self.ctx.get_current_session();
         let mut roles = session.get_all_available_roles().await?;
         roles.sort_by(|a, b| a.name.cmp(&b.name));

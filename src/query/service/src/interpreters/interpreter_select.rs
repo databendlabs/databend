@@ -29,11 +29,13 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformDummy;
 use common_sql::executor::PhysicalPlan;
 use common_sql::parse_result_scan_args;
+use common_sql::ColumnBinding;
 use common_sql::MetadataRef;
 use common_storages_result_cache::gen_result_cache_key;
 use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::WriteResultCacheSink;
 use common_users::UserApiProvider;
+use log::error;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -73,10 +75,19 @@ impl SelectInterpreter {
         })
     }
 
+    pub fn get_ignore_result(&self) -> bool {
+        self.ignore_result
+    }
+
+    pub fn get_result_columns(&self) -> Vec<ColumnBinding> {
+        self.bind_context.columns.clone()
+    }
+
     #[inline]
     #[async_backtrace::framed]
     pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
-        let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone());
+        let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
+        self.ctx.set_status_info("building physical plan");
         builder.build(&self.s_expr).await
     }
 
@@ -192,9 +203,11 @@ impl Interpreter for SelectInterpreter {
 
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
-    #[tracing::instrument(level = "debug", name = "select_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace(name = "select_interpreter_execute")]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        self.ctx.set_status_info("preparing plan");
+
         // 0. Need to build physical plan first to get the partitions.
         let physical_plan = self.build_physical_plan().await?;
         if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
@@ -249,7 +262,7 @@ impl Interpreter for SelectInterpreter {
                 }
                 Err(e) => {
                     // 2.3 If an error occurs, turn back to the normal pipeline.
-                    tracing::error!("Failed to read query result cache. {}", e);
+                    error!("Failed to read query result cache. {}", e);
                 }
             }
         }

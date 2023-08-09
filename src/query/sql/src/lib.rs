@@ -16,7 +16,8 @@
 #![feature(box_patterns)]
 #![feature(let_chains)]
 #![feature(try_blocks)]
-#![feature(box_syntax)]
+#![feature(extend_one)]
+#![feature(default_free_fn)]
 
 pub mod evaluator;
 pub mod executor;

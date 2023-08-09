@@ -20,6 +20,8 @@ use std::hash::Hasher;
 use std::ops::Range;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
@@ -34,9 +36,8 @@ use storages_common_table_meta::meta::Compression;
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct FusePartInfo {
     pub location: String,
-    /// FusePartInfo itself is not versioned
-    /// the `format_version` is the version of the block which the `location` points to
-    pub format_version: u64,
+
+    pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
     pub virtual_columns_meta: Option<HashMap<String, VirtualColumnMeta>>,
@@ -53,10 +54,9 @@ impl PartInfo for FusePartInfo {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<FusePartInfo>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<FusePartInfo>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {
@@ -70,17 +70,17 @@ impl FusePartInfo {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         location: String,
-        format_version: u64,
         rows_count: u64,
         columns_meta: HashMap<ColumnId, ColumnMeta>,
         virtual_columns_meta: Option<HashMap<String, VirtualColumnMeta>>,
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
         block_meta_index: Option<BlockMetaIndex>,
+        create_on: Option<DateTime<Utc>>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FusePartInfo {
             location,
-            format_version,
+            create_on,
             columns_meta,
             virtual_columns_meta,
             nums_rows: rows_count as usize,
@@ -91,12 +91,11 @@ impl FusePartInfo {
     }
 
     pub fn from_part(info: &PartInfoPtr) -> Result<&FusePartInfo> {
-        match info.as_any().downcast_ref::<FusePartInfo>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
+        info.as_any()
+            .downcast_ref::<FusePartInfo>()
+            .ok_or(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to FusePartInfo.",
-            )),
-        }
+            ))
     }
 
     pub fn range(&self) -> Option<&Range<usize>> {

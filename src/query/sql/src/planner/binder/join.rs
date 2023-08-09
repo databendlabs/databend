@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
@@ -24,7 +25,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
+use indexmap::IndexMap;
 
+use crate::binder::CteInfo;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::normalize_identifier;
@@ -40,6 +43,7 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
+use crate::IndexType;
 use crate::MetadataRef;
 
 pub struct JoinConditions {
@@ -52,7 +56,7 @@ pub struct JoinConditions {
 impl Binder {
     #[async_recursion]
     #[async_backtrace::framed]
-    pub(super) async fn bind_join(
+    pub(crate) async fn bind_join(
         &mut self,
         bind_context: &BindContext,
         left_context: BindContext,
@@ -89,6 +93,8 @@ impl Binder {
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
+            self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
             join.op.clone(),
             &left_context,
             &right_context,
@@ -111,6 +117,7 @@ impl Binder {
             non_equi_conditions,
             other_conditions,
         };
+
         let s_expr = match &join.op {
             JoinOperator::Inner => {
                 self.bind_join_with_type(JoinType::Inner, join_conditions, left_child, right_child)
@@ -191,6 +198,11 @@ impl Binder {
             other_conditions,
             &mut non_equi_conditions,
         )?;
+
+        for (left, right) in left_conditions.iter().zip(right_conditions.iter()) {
+            self.eq_scalars.push((left.clone(), right.clone()));
+        }
+
         let logical_join = Join {
             left_conditions,
             right_conditions,
@@ -363,6 +375,8 @@ struct JoinConditionResolver<'a> {
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
+    m_cte_bound_ctx: HashMap<IndexType, BindContext>,
+    ctes_map: Box<IndexMap<String, CteInfo>>,
     join_op: JoinOperator,
     left_context: &'a BindContext,
     right_context: &'a BindContext,
@@ -376,6 +390,8 @@ impl<'a> JoinConditionResolver<'a> {
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
+        m_cte_bound_ctx: HashMap<IndexType, BindContext>,
+        ctes_map: Box<IndexMap<String, CteInfo>>,
         join_op: JoinOperator,
         left_context: &'a BindContext,
         right_context: &'a BindContext,
@@ -386,6 +402,8 @@ impl<'a> JoinConditionResolver<'a> {
             ctx,
             name_resolution_ctx,
             metadata,
+            m_cte_bound_ctx,
+            ctes_map,
             join_op,
             left_context,
             right_context,
@@ -510,6 +528,8 @@ impl<'a> JoinConditionResolver<'a> {
             self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
         // Given two tables: t1(a, b), t2(a, b)
         // A predicate can be regarded as an equi-predicate iff:
@@ -594,7 +614,10 @@ impl<'a> JoinConditionResolver<'a> {
                 .join_context
                 .columns
                 .iter_mut()
-                .filter(|col_binding| col_binding.column_name == join_key_name)
+                .filter(|col_binding| {
+                    col_binding.column_name == join_key_name
+                        && col_binding.visibility != Visibility::UnqualifiedWildcardInVisible
+                })
                 .nth(idx)
             {
                 // Always make the second using column in the join_context invisible in unqualified wildcard.
@@ -660,6 +683,8 @@ impl<'a> JoinConditionResolver<'a> {
             self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
         let (predicate, _) = scalar_binder.bind(predicate).await?;
         let predicate_used_columns = predicate.used_columns();

@@ -32,6 +32,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
+use crate::columns_table::GrantObjectVisibilityChecker;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 
@@ -56,18 +57,28 @@ impl AsyncSystemTable for DatabasesTable {
         let tenant = ctx.get_tenant();
         let catalogs = CatalogManager::instance();
         let catalogs: Vec<(String, Arc<dyn Catalog>)> = catalogs
-            .catalogs
+            .list_catalogs(&tenant)
+            .await?
             .iter()
-            .map(|e| (e.key().clone(), e.value().clone()))
+            .map(|e| (e.name(), e.clone()))
             .collect();
 
         let mut catalog_names = vec![];
         let mut db_names = vec![];
         let mut db_id = vec![];
+
+        let user = ctx.get_current_user()?;
+        let roles = ctx.get_current_available_roles().await?;
+        let visibility_checker = GrantObjectVisibilityChecker::new(&user, &roles);
+
         for (ctl_name, catalog) in catalogs.into_iter() {
             let databases = catalog.list_databases(tenant.as_str()).await?;
+            let final_dbs = databases
+                .into_iter()
+                .filter(|db| visibility_checker.check_database_visibility(&ctl_name, db.name()))
+                .collect::<Vec<_>>();
 
-            for db in databases {
+            for db in final_dbs {
                 catalog_names.push(ctl_name.clone().into_bytes());
                 let db_name = db.name().to_string().into_bytes();
                 db_names.push(db_name);

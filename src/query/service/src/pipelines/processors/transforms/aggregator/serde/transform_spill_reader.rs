@@ -29,14 +29,17 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use itertools::Itertools;
+use log::info;
 use opendal::Operator;
-use tracing::error;
-use tracing::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SpilledPayload;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_data_deserialize_milliseconds;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_read_bytes;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_read_count;
+use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spill_read_milliseconds;
 
 type DeserializingMeta<Method, V> = (AggregateMeta<Method, V>, VecDeque<Vec<u8>>);
 
@@ -96,7 +99,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 .get_meta()
                 .and_then(AggregateMeta::<Method, V>::downcast_ref_from)
             {
-                if matches!(block_meta, AggregateMeta::Spilled(_)) {
+                if matches!(block_meta, AggregateMeta::BucketSpilled(_)) {
                     self.input.set_not_need_data();
                     let block_meta = data_block.take_meta().unwrap();
                     self.reading_meta = AggregateMeta::<Method, V>::downcast_from(block_meta);
@@ -105,7 +108,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
 
                 if let AggregateMeta::Partitioned { data, .. } = block_meta {
                     for meta in data {
-                        if matches!(meta, AggregateMeta::Spilled(_)) {
+                        if matches!(meta, AggregateMeta::BucketSpilled(_)) {
                             self.input.set_not_need_data();
                             let block_meta = data_block.take_meta().unwrap();
                             self.reading_meta =
@@ -132,10 +135,11 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
     fn process(&mut self) -> Result<()> {
         if let Some((meta, mut read_data)) = self.deserializing_meta.take() {
             match meta {
+                AggregateMeta::Spilled(_) => unreachable!(),
                 AggregateMeta::Spilling(_) => unreachable!(),
                 AggregateMeta::HashTable(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
-                AggregateMeta::Spilled(payload) => {
+                AggregateMeta::BucketSpilled(payload) => {
                     debug_assert!(read_data.len() == 1);
                     let data = read_data.pop_front().unwrap();
 
@@ -145,8 +149,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                     let mut new_data = Vec::with_capacity(data.len());
 
                     for meta in data {
-                        if matches!(&meta, AggregateMeta::Spilled(_)) {
-                            if let AggregateMeta::Spilled(payload) = meta {
+                        if matches!(&meta, AggregateMeta::BucketSpilled(_)) {
+                            if let AggregateMeta::BucketSpilled(payload) = meta {
                                 let data = read_data.pop_front().unwrap();
                                 new_data.push(Self::deserialize(payload, data));
                             }
@@ -171,19 +175,16 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
     async fn async_process(&mut self) -> Result<()> {
         if let Some(block_meta) = self.reading_meta.take() {
             match &block_meta {
+                AggregateMeta::Spilled(_) => unreachable!(),
                 AggregateMeta::Spilling(_) => unreachable!(),
                 AggregateMeta::HashTable(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
-                AggregateMeta::Spilled(payload) => {
+                AggregateMeta::BucketSpilled(payload) => {
                     let instant = Instant::now();
-                    let data = self.operator.read(&payload.location).await?;
-
-                    if let Err(cause) = self.operator.delete(&payload.location).await {
-                        error!(
-                            "Cannot delete spill file {}, cause: {:?}",
-                            &payload.location, cause
-                        );
-                    }
+                    let data = self
+                        .operator
+                        .range_read(&payload.location, payload.data_range.clone())
+                        .await?;
 
                     info!(
                         "Read aggregate spill {} successfully, elapsed: {:?}",
@@ -196,18 +197,21 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::Partitioned { data, .. } => {
                     let mut read_data = Vec::with_capacity(data.len());
                     for meta in data {
-                        if let AggregateMeta::Spilled(payload) = meta {
+                        if let AggregateMeta::BucketSpilled(payload) = meta {
                             let location = payload.location.clone();
                             let operator = self.operator.clone();
+                            let data_range = payload.data_range.clone();
                             read_data.push(common_base::base::tokio::spawn(
                                 async_backtrace::frame!(async move {
                                     let instant = Instant::now();
-                                    let data = operator.read(&location).await?;
+                                    let data = operator.range_read(&location, data_range).await?;
 
-                                    if let Err(cause) = operator.delete(&location).await {
-                                        error!(
-                                            "Cannot delete spill file {}, cause: {:?}",
-                                            location, cause
+                                    // perf
+                                    {
+                                        metrics_inc_aggregate_spill_read_count();
+                                        metrics_inc_aggregate_spill_read_bytes(data.len() as u64);
+                                        metrics_inc_aggregate_spill_read_milliseconds(
+                                            instant.elapsed().as_millis() as u64,
                                         );
                                     }
 
@@ -261,12 +265,21 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
         })))
     }
 
-    fn deserialize(payload: SpilledPayload, data: Vec<u8>) -> AggregateMeta<Method, V> {
+    fn deserialize(payload: BucketSpilledPayload, data: Vec<u8>) -> AggregateMeta<Method, V> {
         let mut begin = 0;
         let mut columns = Vec::with_capacity(payload.columns_layout.len());
+
+        let now = Instant::now();
         for column_layout in payload.columns_layout {
-            columns.push(deserialize_column(&data[begin..begin + column_layout]).unwrap());
-            begin += column_layout;
+            columns.push(deserialize_column(&data[begin..begin + column_layout as usize]).unwrap());
+            begin += column_layout as usize;
+        }
+
+        // perf
+        {
+            metrics_inc_aggregate_spill_data_deserialize_milliseconds(
+                now.elapsed().as_millis() as u64
+            );
         }
 
         AggregateMeta::<Method, V>::Serialized(SerializedPayload {

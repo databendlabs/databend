@@ -98,8 +98,9 @@ pub struct IndexMeta {
 
     pub index_type: IndexType,
     pub created_on: DateTime<Utc>,
-    // if used in CreateIndexReq, this field MUST set to None.
-    pub drop_on: Option<DateTime<Utc>>,
+    // if used in CreateIndexReq, `dropped_on` and `updated_on` MUST set to None.
+    pub dropped_on: Option<DateTime<Utc>>,
+    pub updated_on: Option<DateTime<Utc>>,
     pub query: String,
 }
 
@@ -109,7 +110,8 @@ impl Default for IndexMeta {
             table_id: 0,
             index_type: IndexType::default(),
             created_on: Utc::now(),
-            drop_on: None,
+            dropped_on: None,
+            updated_on: None,
             query: "".to_string(),
         }
     }
@@ -157,6 +159,36 @@ impl Display for DropIndexReq {
 pub struct DropIndexReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetIndexReq {
+    pub name_ident: IndexNameIdent,
+}
+
+impl Display for GetIndexReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "get_index:{}/{}",
+            self.name_ident.tenant, self.name_ident.index_name
+        )
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetIndexReply {
+    pub index_id: u64,
+    pub index_meta: IndexMeta,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpdateIndexReq {
+    pub index_id: u64,
+    pub index_name: String,
+    pub index_meta: IndexMeta,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpdateIndexReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ListIndexesReq {
     pub tenant: String,
     pub table_id: Option<MetaId>,
@@ -165,6 +197,21 @@ pub struct ListIndexesReq {
 impl ListIndexesReq {
     pub fn new(tenant: impl Into<String>, table_id: Option<MetaId>) -> ListIndexesReq {
         ListIndexesReq {
+            tenant: tenant.into(),
+            table_id,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ListIndexesByIdReq {
+    pub tenant: String,
+    pub table_id: MetaId,
+}
+
+impl ListIndexesByIdReq {
+    pub fn new(tenant: impl Into<String>, table_id: MetaId) -> Self {
+        Self {
             tenant: tenant.into(),
             table_id,
         }

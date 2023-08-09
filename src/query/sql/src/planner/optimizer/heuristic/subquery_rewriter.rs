@@ -24,7 +24,7 @@ use common_expression::Scalar;
 use common_functions::aggregates::AggregateCountFunction;
 
 use crate::binder::wrap_cast;
-use crate::binder::ColumnBinding;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
@@ -35,6 +35,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
+use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
@@ -54,7 +55,7 @@ pub enum UnnestResult {
     // Semi/Anti Join, Cross join for EXISTS
     SimpleJoin,
     MarkJoin { marker_index: IndexType },
-    SingleJoin,
+    SingleJoin { output_index: Option<IndexType> },
 }
 
 pub struct FlattenInfo {
@@ -143,18 +144,22 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
             }
 
-            RelOperator::Join(_) | RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
-                Arc::new(s_expr.plan().clone()),
-                Arc::new(self.rewrite(s_expr.child(0)?)?),
-                Arc::new(self.rewrite(s_expr.child(1)?)?),
-            )),
+            RelOperator::Join(_) | RelOperator::UnionAll(_) | RelOperator::MaterializedCte(_) => {
+                Ok(SExpr::create_binary(
+                    Arc::new(s_expr.plan().clone()),
+                    Arc::new(self.rewrite(s_expr.child(0)?)?),
+                    Arc::new(self.rewrite(s_expr.child(1)?)?),
+                ))
+            }
 
             RelOperator::Limit(_) | RelOperator::Sort(_) => Ok(SExpr::create_unary(
                 Arc::new(s_expr.plan().clone()),
                 Arc::new(self.rewrite(s_expr.child(0)?)?),
             )),
 
-            RelOperator::DummyTableScan(_) | RelOperator::Scan(_) => Ok(s_expr.clone()),
+            RelOperator::DummyTableScan(_) | RelOperator::Scan(_) | RelOperator::CteScan(_) => {
+                Ok(s_expr.clone())
+            }
 
             _ => Err(ErrorCode::Internal("Invalid plan type")),
         }
@@ -173,6 +178,7 @@ impl SubqueryRewriter {
             ScalarExpr::ConstantExpr(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::WindowFunction(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::AggregateFunction(_) => Ok((scalar.clone(), s_expr.clone())),
+            ScalarExpr::LambdaFunction(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::FunctionCall(func) => {
                 let mut args = vec![];
                 let mut s_expr = s_expr.clone();
@@ -242,15 +248,20 @@ impl SubqueryRewriter {
                 }
                 let (index, name) = if let UnnestResult::MarkJoin { marker_index } = result {
                     (marker_index, marker_index.to_string())
-                } else if let UnnestResult::SingleJoin = result {
-                    let mut output_column = subquery.output_column;
-                    if let Some(index) = self.derived_columns.get(&output_column.index) {
-                        output_column.index = *index;
+                } else if let UnnestResult::SingleJoin { output_index } = result {
+                    if let Some(output_idx) = output_index {
+                        // uncorrelated scalar subquery
+                        (output_idx, "_if_scalar_subquery".to_string())
+                    } else {
+                        let mut output_column = subquery.output_column;
+                        if let Some(index) = self.derived_columns.get(&output_column.index) {
+                            output_column.index = *index;
+                        }
+                        (
+                            output_column.index,
+                            format!("scalar_subquery_{:?}", output_column.index),
+                        )
                     }
-                    (
-                        output_column.index,
-                        format!("scalar_subquery_{:?}", output_column.index),
-                    )
                 } else {
                     let index = subquery.output_column.index;
                     (index, format!("subquery_{}", index))
@@ -266,16 +277,8 @@ impl SubqueryRewriter {
 
                 let column_ref = ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: subquery.span,
-                    column: ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_position: None,
-                        table_index: None,
-                        column_name: name,
-                        index,
-                        data_type,
-                        visibility: Visibility::Visible,
-                    },
+                    column: ColumnBindingBuilder::new(name, index, data_type, Visibility::Visible)
+                        .build(),
                 });
 
                 let scalar = if flatten_info.from_count_func {
@@ -333,24 +336,7 @@ impl SubqueryRewriter {
         subquery: &SubqueryExpr,
     ) -> Result<(SExpr, UnnestResult)> {
         match subquery.typ {
-            SubqueryType::Scalar => {
-                let join_plan = Join {
-                    left_conditions: vec![],
-                    right_conditions: vec![],
-                    non_equi_conditions: vec![],
-                    join_type: JoinType::Single,
-                    marker_index: None,
-                    from_correlated_subquery: false,
-                    contain_runtime_filter: false,
-                }
-                .into();
-                let s_expr = SExpr::create_binary(
-                    Arc::new(join_plan),
-                    Arc::new(left.clone()),
-                    Arc::new(*subquery.subquery.clone()),
-                );
-                Ok((s_expr, UnnestResult::SingleJoin))
-            }
+            SubqueryType::Scalar => self.rewrite_uncorrelated_scalar_subquery(left, subquery),
             SubqueryType::Exists | SubqueryType::NotExists => {
                 let mut subquery_expr = *subquery.subquery.clone();
                 // Wrap Limit to current subquery
@@ -402,21 +388,18 @@ impl SubqueryRewriter {
                     arguments: vec![
                         BoundColumnRef {
                             span: subquery.span,
-                            column: ColumnBinding {
-                                database_name: None,
-                                table_name: None,
-                                column_position: None,
-                                table_index: None,
-                                column_name: "count(*)".to_string(),
-                                index: agg_func_index,
-                                data_type: Box::new(agg_func.return_type()?),
-                                visibility: Visibility::Visible,
-                            },
+                            column: ColumnBindingBuilder::new(
+                                "count(*)".to_string(),
+                                agg_func_index,
+                                Box::new(agg_func.return_type()?),
+                                Visibility::Visible,
+                            )
+                            .build(),
                         }
                         .into(),
                         ConstantExpr {
                             span: subquery.span,
-                            value: common_expression::Scalar::Number(NumberScalar::UInt64(1)),
+                            value: Scalar::Number(NumberScalar::UInt64(1)),
                         }
                         .into(),
                     ],
@@ -460,16 +443,13 @@ impl SubqueryRewriter {
                 let left_condition = wrap_cast(
                     &ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: subquery.span,
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_position: None,
-                            table_index: None,
+                        column: ColumnBindingBuilder::new(
                             column_name,
-                            index: output_column.index,
-                            data_type: output_column.data_type,
-                            visibility: Visibility::Visible,
-                        },
+                            output_column.index,
+                            output_column.data_type,
+                            Visibility::Visible,
+                        )
+                        .build(),
                     }),
                     &subquery.data_type,
                 );
@@ -524,6 +504,169 @@ impl SubqueryRewriter {
             }
             _ => unreachable!(),
         }
+    }
+
+    fn rewrite_uncorrelated_scalar_subquery(
+        &mut self,
+        left: &SExpr,
+        subquery: &SubqueryExpr,
+    ) -> Result<(SExpr, UnnestResult)> {
+        // Use cross join which brings chance to push down filter under cross join.
+        // Such as `SELECT * FROM c WHERE c_id=(SELECT max(c_id) FROM o WHERE ship='WA');`
+        // We can push down `c_id = max(c_id)` to cross join then make it as inner join.
+        let join_plan = Join {
+            left_conditions: vec![],
+            right_conditions: vec![],
+            non_equi_conditions: vec![],
+            join_type: JoinType::Cross,
+            marker_index: None,
+            from_correlated_subquery: false,
+            contain_runtime_filter: false,
+        }
+        .into();
+
+        // For some cases, empty result set will be occur, we should return null instead of empty set.
+        // So let wrap an expression: `if(count()=0, null, any(subquery.output_column)`
+        let count_func = ScalarExpr::AggregateFunction(AggregateFunction {
+            func_name: "count".to_string(),
+            distinct: false,
+            params: vec![],
+            args: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: subquery.output_column.clone(),
+            })],
+            return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+            display_name: "count".to_string(),
+        });
+        let any_func = ScalarExpr::AggregateFunction(AggregateFunction {
+            func_name: "any".to_string(),
+            distinct: false,
+            params: vec![],
+            return_type: subquery.output_column.data_type.clone(),
+            args: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: subquery.output_column.clone(),
+            })],
+            display_name: "any".to_string(),
+        });
+        // Add `count_func` and `any_func` to metadata
+        let count_idx = self.metadata.write().add_derived_column(
+            "_count_scalar_subquery".to_string(),
+            DataType::Number(NumberDataType::UInt64),
+        );
+        let any_idx = self.metadata.write().add_derived_column(
+            "_any_scalar_subquery".to_string(),
+            *subquery.output_column.data_type.clone(),
+        );
+        // Aggregate operator
+        let agg = SExpr::create_unary(
+            Arc::new(
+                Aggregate {
+                    mode: AggregateMode::Initial,
+                    group_items: vec![],
+                    aggregate_functions: vec![
+                        ScalarItem {
+                            scalar: count_func,
+                            index: count_idx,
+                        },
+                        ScalarItem {
+                            scalar: any_func,
+                            index: any_idx,
+                        },
+                    ],
+                    from_distinct: false,
+                    limit: None,
+                    grouping_id_index: 0,
+                    grouping_sets: vec![],
+                }
+                .into(),
+            ),
+            Arc::new(*subquery.subquery.clone()),
+        );
+
+        let limit = SExpr::create_unary(
+            Arc::new(
+                Limit {
+                    limit: Some(1),
+                    offset: 0,
+                }
+                .into(),
+            ),
+            Arc::new(agg),
+        );
+
+        // Wrap expression
+        let count_col_ref = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                "_count_scalar_subquery".to_string(),
+                count_idx,
+                Box::new(DataType::Number(NumberDataType::UInt64)),
+                Visibility::Visible,
+            )
+            .build(),
+        });
+        let any_col_ref = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                "_any_scalar_subquery".to_string(),
+                any_idx,
+                subquery.output_column.data_type.clone(),
+                Visibility::Visible,
+            )
+            .build(),
+        });
+        let eq_func = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "eq".to_string(),
+            params: vec![],
+            arguments: vec![
+                count_col_ref,
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::Number(NumberScalar::UInt8(0)),
+                }),
+            ],
+        });
+        // If function
+        let if_func = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "if".to_string(),
+            params: vec![],
+            arguments: vec![
+                eq_func,
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::Null,
+                }),
+                any_col_ref,
+            ],
+        });
+        let if_func_idx = self.metadata.write().add_derived_column(
+            "_if_scalar_subquery".to_string(),
+            *subquery.output_column.data_type.clone(),
+        );
+        let scalar_expr = SExpr::create_unary(
+            Arc::new(
+                EvalScalar {
+                    items: vec![ScalarItem {
+                        scalar: if_func,
+                        index: if_func_idx,
+                    }],
+                }
+                .into(),
+            ),
+            Arc::new(limit),
+        );
+
+        let s_expr = SExpr::create_binary(
+            Arc::new(join_plan),
+            Arc::new(left.clone()),
+            Arc::new(scalar_expr),
+        );
+        Ok((s_expr, UnnestResult::SingleJoin {
+            output_index: Some(if_func_idx),
+        }))
     }
 }
 

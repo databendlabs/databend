@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::SendableDataBlockStream;
+use log::error;
 
 use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
@@ -50,6 +51,7 @@ pub trait Interpreter: Sync + Send {
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
     #[async_backtrace::framed]
     async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+        ctx.set_status_info("building pipeline");
         InterpreterMetrics::record_query_start(&ctx);
         log_query_start(&ctx);
 
@@ -57,7 +59,6 @@ pub trait Interpreter: Sync + Send {
             log_query_finished(&ctx, Some(err.clone()));
             return Err(err);
         }
-
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
             Err(build_error) => {
@@ -84,6 +85,8 @@ pub trait Interpreter: Sync + Send {
                 Some(error) => Err(error.clone()),
             }
         });
+
+        ctx.set_status_info("executing pipeline");
 
         let settings = ctx.get_settings();
         let query_id = ctx.get_id();
@@ -132,7 +135,7 @@ fn log_query_start(ctx: &QueryContext) {
     }
 
     if let Err(error) = InterpreterQueryLog::log_start(ctx, now, None) {
-        tracing::error!("interpreter.start.error: {:?}", error)
+        error!("interpreter.start.error: {:?}", error)
     }
 }
 
@@ -146,6 +149,6 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>) {
     }
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error) {
-        tracing::error!("interpreter.finish.error: {:?}", error)
+        error!("interpreter.finish.error: {:?}", error)
     }
 }

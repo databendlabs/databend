@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_filter_reader;
+pub mod block_filter_reader;
 mod column_filter_reader;
 
 pub use block_filter_reader::BloomBlockFilterReader;

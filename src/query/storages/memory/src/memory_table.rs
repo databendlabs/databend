@@ -51,6 +51,7 @@ use common_storage::StorageMetrics;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use storages_common_table_meta::meta::SnapshotId;
 
 use crate::memory_part::MemoryPartInfo;
 
@@ -76,14 +77,11 @@ impl MemoryTable {
         let blocks = {
             let mut in_mem_data = IN_MEMORY_DATA.write();
             let x = in_mem_data.get(table_id);
-            match x {
-                None => {
-                    let blocks = Arc::new(RwLock::new(vec![]));
-                    in_mem_data.insert(*table_id, blocks.clone());
-                    blocks
-                }
-                Some(blocks) => blocks.clone(),
-            }
+            x.cloned().unwrap_or_else(|| {
+                let blocks = Arc::new(RwLock::new(vec![]));
+                in_mem_data.insert(*table_id, blocks.clone());
+                blocks
+            })
         };
 
         let table = Self {
@@ -149,7 +147,7 @@ impl Table for MemoryTable {
         &self.table_info
     }
 
-    fn benefit_column_prune(&self) -> bool {
+    fn support_column_projection(&self) -> bool {
         true
     }
 
@@ -162,6 +160,7 @@ impl Table for MemoryTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let blocks = self.blocks.read();
 
@@ -248,8 +247,9 @@ impl Table for MemoryTable {
         pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
+        _prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
-        pipeline.resize(1)?;
+        pipeline.try_resize(1)?;
 
         pipeline.add_sink(|input| {
             Ok(ProcessorPtr::create(MemoryTableSink::create(

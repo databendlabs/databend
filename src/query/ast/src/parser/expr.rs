@@ -291,8 +291,9 @@ pub enum ExprElement {
         distinct: bool,
         name: Identifier,
         args: Vec<Expr>,
-        window: Option<Window>,
         params: Vec<Literal>,
+        window: Option<Window>,
+        lambda: Option<Lambda>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
@@ -395,6 +396,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 BinaryOperator::BitwiseOr => Affix::Infix(Precedence(22), Associativity::Left),
                 BinaryOperator::BitwiseAnd => Affix::Infix(Precedence(22), Associativity::Left),
                 BinaryOperator::BitwiseXor => Affix::Infix(Precedence(22), Associativity::Left),
+                BinaryOperator::L2Distance => Affix::Infix(Precedence(22), Associativity::Left),
 
                 BinaryOperator::BitwiseShiftLeft => {
                     Affix::Infix(Precedence(23), Associativity::Left)
@@ -491,6 +493,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 args,
                 params,
                 window,
+                lambda,
             } => Expr::FunctionCall {
                 span: transform_span(elem.span.0),
                 distinct,
@@ -498,6 +501,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 args,
                 params,
                 window,
+                lambda,
             },
             ExprElement::Case {
                 operand,
@@ -830,6 +834,25 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             args: opt_args.unwrap_or_default(),
             params: vec![],
             window: None,
+            lambda: None,
+        },
+    );
+
+    let function_call_with_lambda = map(
+        rule! {
+            #function_name
+            ~ "(" ~ #subexpr(0) ~ "," ~ #ident ~ "->" ~ #subexpr(0) ~ ")"
+        },
+        |(name, _, arg, _, param, _, expr, _)| ExprElement::FunctionCall {
+            distinct: false,
+            name,
+            args: vec![arg],
+            params: vec![],
+            window: None,
+            lambda: Some(Lambda {
+                params: vec![param],
+                expr: Box::new(expr),
+            }),
         },
     );
 
@@ -845,6 +868,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             args: opt_args.unwrap_or_default(),
             params: vec![],
             window: Some(window.1),
+            lambda: None,
         },
     );
 
@@ -860,6 +884,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             args: opt_args.unwrap_or_default(),
             params: params.map(|x| x.1).unwrap_or_default(),
             window: None,
+            lambda: None,
         },
     );
 
@@ -1028,6 +1053,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
             | #count_all_with_window : "`COUNT(*) OVER ...`"
+            | #function_call_with_lambda : "<function>"
             | #function_call_with_window : "<function>"
             | #function_call_with_params : "<function>"
             | #function_call : "<function>"
@@ -1068,6 +1094,7 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             value(BinaryOperator::Div, rule! { DIV }),
             value(BinaryOperator::Modulo, rule! { "%" }),
             value(BinaryOperator::StringConcat, rule! { "||" }),
+            value(BinaryOperator::L2Distance, rule! { "<->" }),
             value(BinaryOperator::Gt, rule! { ">" }),
             value(BinaryOperator::Lt, rule! { "<" }),
             value(BinaryOperator::Gte, rule! { ">=" }),

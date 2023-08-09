@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::buffer::Buffer;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -123,12 +126,9 @@ impl TryFrom<ThriftFileMetaData> for BloomIndexMeta {
 pub struct BloomIndex {
     pub func_ctx: FunctionContext,
 
-    /// The schema of the source table, which the filter work for.
-    pub source_schema: TableSchemaRef,
-
     /// The schema of the filter block.
     ///
-    /// It is a sub set of `source_schema`.
+    /// It is a sub set of the source table's schema.
     pub filter_schema: TableSchemaRef,
 
     pub version: u64,
@@ -154,10 +154,9 @@ pub enum FilterEvalResult {
 
 impl BloomIndex {
     /// Load a filter directly from the source table's schema and the corresponding filter parquet file.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     pub fn from_filter_block(
         func_ctx: FunctionContext,
-        source_schema: TableSchemaRef,
         filter_schema: TableSchemaRef,
         filters: Vec<Arc<Xor8Filter>>,
         version: u64,
@@ -165,7 +164,6 @@ impl BloomIndex {
         Ok(Self {
             version,
             func_ctx,
-            source_schema,
             filter_schema,
             filters,
             column_distinct_count: HashMap::new(),
@@ -177,94 +175,74 @@ impl BloomIndex {
     /// All input blocks should belong to a Parquet file, e.g. the block array represents the parquet file in memory.
     pub fn try_create(
         func_ctx: FunctionContext,
-        source_schema: TableSchemaRef,
         version: u64,
         data_blocks_tobe_indexed: &[&DataBlock],
+        bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ) -> Result<Option<Self>> {
         if data_blocks_tobe_indexed.is_empty() {
             return Err(ErrorCode::BadArguments("block is empty"));
         }
 
-        let num_columns = data_blocks_tobe_indexed[0].num_columns();
-        if num_columns == 0 {
-            return Ok(None);
-        }
-
-        let mut fields = Vec::new();
-        let mut columns = Vec::new();
-        for i in 0..num_columns {
-            let data_type = &data_blocks_tobe_indexed[0].get_by_offset(i).data_type;
-            match data_type {
-                DataType::Map(box inner_ty) => {
-                    // Add bloom filter for the value of map type
-                    let val_type = match inner_ty {
-                        DataType::Tuple(kv_tys) => kv_tys[1].clone(),
-                        _ => unreachable!(),
-                    };
-                    if Xor8Filter::supported_type(&val_type) {
-                        fields.push(source_schema.field(i));
-
-                        let source_columns = data_blocks_tobe_indexed
-                            .iter()
-                            .map(|block| {
-                                let value = &block.get_by_offset(i).value;
-                                let column =
-                                    value.convert_to_full_column(data_type, block.num_rows());
-                                let map_column =
-                                    MapType::<AnyType, AnyType>::try_downcast_column(&column)
-                                        .unwrap();
-                                map_column.values.values
-                            })
-                            .collect::<Vec<_>>();
-                        let column = Column::concat(&source_columns);
-                        columns.push((column, val_type));
-                    }
-                }
-                _ => {
-                    if Xor8Filter::supported_type(data_type) {
-                        fields.push(source_schema.field(i));
-
-                        let source_columns = data_blocks_tobe_indexed
-                            .iter()
-                            .map(|block| {
-                                let value = &block.get_by_offset(i).value;
-                                value.convert_to_full_column(data_type, block.num_rows())
-                            })
-                            .collect::<Vec<_>>();
-                        let column = Column::concat(&source_columns);
-                        columns.push((column, data_type.clone()));
-                    }
-                }
-            };
-        }
-        if columns.is_empty() {
+        if data_blocks_tobe_indexed[0].num_columns() == 0 {
             return Ok(None);
         }
 
         let mut filter_fields = vec![];
         let mut filters = vec![];
         let mut column_distinct_count = HashMap::<usize, usize>::new();
-        for (field, (column, data_type)) in fields.into_iter().zip(columns.iter()) {
-            let (column, validity) = if data_type.is_nullable() {
-                let col = Self::calculate_column_digest(
-                    &func_ctx,
-                    column,
-                    data_type,
-                    &DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                )?;
-                let nullable_column =
-                    NullableType::<UInt64Type>::try_downcast_column(&col).unwrap();
-                (nullable_column.column, Some(nullable_column.validity))
-            } else {
-                let col = Self::calculate_column_digest(
-                    &func_ctx,
-                    column,
-                    data_type,
-                    &DataType::Number(NumberDataType::UInt64),
-                )?;
-                let column = UInt64Type::try_downcast_column(&col).unwrap();
-                (column, None)
+        for (index, field) in bloom_columns_map.into_iter() {
+            let field_type = &data_blocks_tobe_indexed[0].get_by_offset(index).data_type;
+            let (column, data_type) = match field_type {
+                DataType::Map(box inner_ty) => {
+                    // Add bloom filter for the value of map type
+                    let val_type = match inner_ty {
+                        DataType::Tuple(kv_tys) => kv_tys[1].clone(),
+                        _ => unreachable!(),
+                    };
+                    if !Xor8Filter::supported_type(&val_type) {
+                        continue;
+                    }
+                    let source_columns = data_blocks_tobe_indexed
+                        .iter()
+                        .map(|block| {
+                            let value = &block.get_by_offset(index).value;
+                            let column = value.convert_to_full_column(field_type, block.num_rows());
+                            let map_column =
+                                MapType::<AnyType, AnyType>::try_downcast_column(&column).unwrap();
+                            map_column.values.values
+                        })
+                        .collect::<Vec<_>>();
+                    let column = Column::concat(&source_columns);
+
+                    if Self::check_large_string(&column) {
+                        continue;
+                    }
+
+                    (column, val_type)
+                }
+                _ => {
+                    if !Xor8Filter::supported_type(field_type) {
+                        continue;
+                    }
+                    let source_columns = data_blocks_tobe_indexed
+                        .iter()
+                        .map(|block| {
+                            let value = &block.get_by_offset(index).value;
+                            value.convert_to_full_column(field_type, block.num_rows())
+                        })
+                        .collect::<Vec<_>>();
+                    let column = Column::concat(&source_columns);
+
+                    if Self::check_large_string(&column) {
+                        continue;
+                    }
+
+                    (column, field_type.clone())
+                }
             };
+
+            let (column, validity) =
+                Self::calculate_nullable_column_digest(&func_ctx, &column, &data_type)?;
 
             // create filter per column
             let mut filter_builder = Xor8Builder::create();
@@ -285,15 +263,18 @@ impl BloomIndex {
                 match field.data_type() {
                     TableDataType::Map(_) => {}
                     _ => {
-                        let idx = source_schema.index_of(field.name().as_str()).unwrap();
-                        column_distinct_count.insert(idx, len);
+                        column_distinct_count.insert(index, len);
                     }
                 }
             }
 
-            let filter_name = Self::build_filter_column_name(version, field)?;
+            let filter_name = Self::build_filter_column_name(version, &field)?;
             filter_fields.push(TableField::new(&filter_name, TableDataType::String));
             filters.push(Arc::new(filter));
+        }
+
+        if filter_fields.is_empty() {
+            return Ok(None);
         }
 
         let filter_schema = Arc::new(TableSchema::new(filter_fields));
@@ -301,7 +282,6 @@ impl BloomIndex {
         Ok(Some(Self {
             func_ctx,
             version,
-            source_schema,
             filter_schema,
             filters,
             column_distinct_count,
@@ -324,17 +304,24 @@ impl BloomIndex {
     /// This happens when the data doesn't show up in the filter.
     ///
     /// Otherwise return `Uncertain`.
-    #[tracing::instrument(level = "debug", name = "block_filter_index_eval", skip_all)]
+    #[minitrace::trace(name = "block_filter_index_eval")]
     pub fn apply(
         &self,
         mut expr: Expr<String>,
         scalar_map: &HashMap<Scalar, u64>,
+        data_schema: TableSchemaRef,
     ) -> Result<FilterEvalResult> {
         visit_expr_column_eq_constant(
             &mut expr,
             &mut |span, col_name, scalar, ty, return_type| {
+                let filter_column = &Self::build_filter_column_name(
+                    self.version,
+                    data_schema.field_with_name(col_name)?,
+                )?;
+
                 // If the column doesn't contain the constant, we rewrite the expression to `false`.
-                if self.find(col_name, scalar, ty, scalar_map)? == FilterEvalResult::MustFalse {
+                if self.find(filter_column, scalar, ty, scalar_map)? == FilterEvalResult::MustFalse
+                {
                     Ok(Some(Expr::Constant {
                         span,
                         scalar: Scalar::Boolean(false),
@@ -376,6 +363,36 @@ impl BloomIndex {
         Ok(column)
     }
 
+    /// calculate digest for column that may have null values
+    ///
+    /// returns (column, validity) where column is the digest of the column
+    /// and validity is the optional bitmap of the null values
+    pub fn calculate_nullable_column_digest(
+        func_ctx: &FunctionContext,
+        column: &Column,
+        data_type: &DataType,
+    ) -> Result<(Buffer<u64>, Option<Bitmap>)> {
+        Ok(if data_type.is_nullable() {
+            let col = Self::calculate_column_digest(
+                func_ctx,
+                column,
+                data_type,
+                &DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+            )?;
+            let nullable_column = NullableType::<UInt64Type>::try_downcast_column(&col).unwrap();
+            (nullable_column.column, Some(nullable_column.validity))
+        } else {
+            let col = Self::calculate_column_digest(
+                func_ctx,
+                column,
+                data_type,
+                &DataType::Number(NumberDataType::UInt64),
+            )?;
+            let column = UInt64Type::try_downcast_column(&col).unwrap();
+            (column, None)
+        })
+    }
+
     /// calculate digest for constant scalar
     pub fn calculate_scalar_digest(
         func_ctx: &FunctionContext,
@@ -396,11 +413,16 @@ impl BloomIndex {
     }
 
     /// Find all columns that match the pattern of `col = <constant>` in the expression.
-    pub fn find_eq_columns(expr: &Expr<String>) -> Result<Vec<(String, Scalar, DataType)>> {
+    pub fn find_eq_columns(
+        expr: &Expr<String>,
+        fields: Vec<TableField>,
+    ) -> Result<Vec<(TableField, Scalar, DataType)>> {
         let mut cols = Vec::new();
         visit_expr_column_eq_constant(&mut expr.clone(), &mut |_, col_name, scalar, ty, _| {
-            if Xor8Filter::supported_type(ty) && !scalar.is_null() {
-                cols.push((col_name.to_string(), scalar.clone(), ty.clone()));
+            if let Some(v) = fields.iter().find(|f: &&TableField| f.name() == col_name) {
+                if Xor8Filter::supported_type(ty) && !scalar.is_null() {
+                    cols.push((v.clone(), scalar.clone(), ty.clone()));
+                }
             }
             Ok(None)
         })?;
@@ -424,16 +446,11 @@ impl BloomIndex {
 
     fn find(
         &self,
-        column_name: &str,
+        filter_column: &str,
         target: &Scalar,
         ty: &DataType,
         scalar_map: &HashMap<Scalar, u64>,
     ) -> Result<FilterEvalResult> {
-        let filter_column = &Self::build_filter_column_name(
-            self.version,
-            self.source_schema.field_with_name(column_name)?,
-        )?;
-
         if !self.filter_schema.has_field(filter_column)
             || !Xor8Filter::supported_type(ty)
             || target.is_null()
@@ -449,10 +466,9 @@ impl BloomIndex {
             let data_value = scalar_to_datavalue(target);
             filter.contains(&data_value)
         } else {
-            match scalar_map.get(target) {
-                Some(digest) => filter.contains_digest(*digest),
-                None => true,
-            }
+            scalar_map
+                .get(target)
+                .map_or(true, |digest| filter.contains_digest(*digest))
         };
 
         if contains {
@@ -460,6 +476,34 @@ impl BloomIndex {
         } else {
             Ok(FilterEvalResult::MustFalse)
         }
+    }
+
+    pub fn supported_type(data_type: &TableDataType) -> bool {
+        let data_type = DataType::from(data_type);
+        Self::supported_data_type(&data_type)
+    }
+
+    pub fn supported_data_type(data_type: &DataType) -> bool {
+        let mut data_type = data_type;
+        if let DataType::Map(box inner_ty) = data_type {
+            data_type = match inner_ty {
+                DataType::Tuple(kv_tys) => &kv_tys[1],
+                _ => unreachable!(),
+            };
+        }
+        Xor8Filter::supported_type(data_type)
+    }
+
+    /// Checks if the average length of a string column exceeds 256 bytes.
+    /// If it does, the bloom index for the column will not be established.
+    fn check_large_string(column: &Column) -> bool {
+        if let Column::String(v) = &column {
+            let bytes_per_row = v.data().len() / v.len().max(1);
+            if bytes_per_row > 256 {
+                return true;
+            }
+        }
+        false
     }
 }
 

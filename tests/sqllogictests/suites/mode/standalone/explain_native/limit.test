@@ -105,9 +105,9 @@ EvalScalar
                         ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(CAST(is_not_null(scalar_subquery_5 (#5)) AS Boolean NULL), scalar_subquery_5 (#5), 0))]
                         ├── estimated rows: 0.20
                         └── HashJoin
-                            ├── join type: SINGLE
+                            ├── join type: LEFT SINGLE
                             ├── build keys: [number (#2)]
-                            ├── probe keys: [number (#0)]
+                            ├── probe keys: [CAST(number (#0) AS UInt64 NULL)]
                             ├── filters: []
                             ├── estimated rows: 1.00
                             ├── EvalScalar(Build)

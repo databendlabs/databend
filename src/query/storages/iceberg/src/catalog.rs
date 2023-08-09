@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_catalog::catalog::Catalog;
+use common_catalog::catalog::CatalogCreator;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
 use common_catalog::table::Table;
@@ -24,6 +25,8 @@ use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -43,15 +46,20 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -61,6 +69,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -74,20 +84,41 @@ use futures::TryStreamExt;
 use opendal::Metakey;
 
 use crate::database::IcebergDatabase;
+use crate::table::IcebergTable;
 
 pub const ICEBERG_CATALOG: &str = "iceberg";
 
+#[derive(Debug)]
+pub struct IcebergCreator;
+
+impl CatalogCreator for IcebergCreator {
+    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
+        let opt = match &info.meta.catalog_option {
+            CatalogOption::Iceberg(opt) => opt,
+            _ => unreachable!(
+                "trying to create iceberg catalog from other catalog, must be an internal bug"
+            ),
+        };
+
+        let data_operator = DataOperator::try_new(&opt.storage_params)?;
+        let catalog: Arc<dyn Catalog> =
+            Arc::new(IcebergCatalog::try_create(info.clone(), data_operator)?);
+
+        Ok(catalog)
+    }
+}
+
 /// `Catalog` for a external iceberg storage
+///
 /// - Metadata of databases are saved in meta store
 /// - Instances of `Database` are created from reading subdirectories of
 ///    Iceberg table
 /// - Table metadata are saved in external Iceberg storage
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct IcebergCatalog {
-    /// name of this iceberg table
-    name: String,
-    /// is this catalog flatten
-    flatten: bool,
+    /// info of this iceberg table.
+    info: CatalogInfo,
+
     /// underlying storage access operator
     operator: DataOperator,
 }
@@ -95,7 +126,8 @@ pub struct IcebergCatalog {
 impl IcebergCatalog {
     /// create a new iceberg catalog from the endpoint_address
     ///
-    /// # NOTE:
+    /// # NOTE
+    ///
     /// endpoint_url should be set as in `Stage`s.
     /// For example, to create a iceberg catalog on S3, the endpoint_url should be:
     ///
@@ -106,26 +138,15 @@ impl IcebergCatalog {
     ///
     /// Such catalog will be seen as an `flatten` catalogs,
     /// a `default` database will be generated directly
-    #[tracing::instrument(level = "debug", skip(operator))]
-    pub fn try_create(name: &str, flatten: bool, operator: DataOperator) -> Result<Self> {
-        Ok(Self {
-            name: name.to_string(),
-            flatten,
-            operator,
-        })
+    #[minitrace::trace]
+    pub fn try_create(info: CatalogInfo, operator: DataOperator) -> Result<Self> {
+        Ok(Self { info, operator })
     }
 
     /// list read databases
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn list_database_from_read(&self) -> Result<Vec<Arc<dyn Database>>> {
-        if self.flatten {
-            // is flatten catalog, return `default` catalog
-            // with an operator points to it's root
-            return Ok(vec![Arc::new(
-                IcebergDatabase::create_database_omitted_default(&self.name, self.operator.clone()),
-            )]);
-        }
         let op = self.operator.operator();
         let mut dbs = vec![];
         let mut ls = op.list("/").await?;
@@ -149,22 +170,16 @@ impl IcebergCatalog {
 
 #[async_trait]
 impl Catalog for IcebergCatalog {
-    #[tracing::instrument(level = "debug", skip(self))]
+    fn name(&self) -> String {
+        self.info.name_ident.catalog_name.clone()
+    }
+    fn info(&self) -> CatalogInfo {
+        self.info.clone()
+    }
+
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
-        if self.flatten {
-            // is flatten catalog, must return `default` catalog
-            if db_name != "default" {
-                return Err(ErrorCode::UnknownDatabase(format!(
-                    "Database {db_name} does not exist"
-                )));
-            }
-            let tbl: Arc<dyn Database> = Arc::new(
-                IcebergDatabase::create_database_omitted_default(&self.name, self.operator.clone()),
-            );
-            return Ok(tbl);
-        }
-
         let rel_path = format!("{db_name}/");
 
         let operator = self.operator.operator();
@@ -181,8 +196,10 @@ impl Catalog for IcebergCatalog {
             .map_root(|root| format!("{root}{rel_path}"));
         let db_root = DataOperator::try_create(&db_sp).await?;
 
-        Ok(Arc::new(IcebergDatabase::create_database_from_read(
-            &self.name, db_name, db_root,
+        Ok(Arc::new(IcebergDatabase::create(
+            &self.name(),
+            db_name,
+            db_root,
         )))
     }
 
@@ -211,8 +228,19 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
-    fn get_table_by_info(&self, _table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        unimplemented!()
+    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        let table_sp = table_info
+            .meta
+            .storage_params
+            .clone()
+            .ok_or(ErrorCode::BadArguments(
+                "table storage params not set, this is not a valid table info for iceberg table",
+            ))?;
+
+        let op = DataOperator::try_new(&table_sp)?;
+        let table = IcebergTable::try_new(op, table_info.clone())?;
+
+        Ok(Arc::new(table))
     }
 
     #[async_backtrace::framed]
@@ -223,7 +251,7 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn get_table(
         &self,
@@ -302,6 +330,14 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn set_table_column_mask_policy(
+        &self,
+        _req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
     async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
         unimplemented!()
     }
@@ -367,7 +403,22 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
     async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_indexes_by_table_id(&self, _req: ListIndexesByIdReq) -> Result<Vec<u64>> {
         unimplemented!()
     }
 

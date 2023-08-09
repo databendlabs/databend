@@ -5,6 +5,7 @@ set -e
 BENCHMARK_ID=${BENCHMARK_ID:-$(date +%s)}
 BENCHMARK_DATASET=${BENCHMARK_DATASET:-hits}
 BENCHMARK_SIZE=${BENCHMARK_SIZE:-Medium}
+BENCHMARK_CACHE_SIZE=${BENCHMARK_CACHE_SIZE:-50}
 BENCHMARK_VERSION=${BENCHMARK_VERSION:-}
 BENCHMARK_DATABASE=${BENCHMARK_DATABASE:-default}
 
@@ -37,9 +38,9 @@ Medium)
     yq -i '.cluster_size = "16"' -o json result.json
     yq -i '.machine = "Medium"' -o json result.json
     ;;
-Large)
+XLarge)
     yq -i '.cluster_size = "64"' -o json result.json
-    yq -i '.machine = "Large"' -o json result.json
+    yq -i '.machine = "XLarge"' -o json result.json
     ;;
 *)
     echo "Unsupported benchmark size: ${BENCHMARK_SIZE}"
@@ -54,10 +55,10 @@ export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:
 
 echo "Creating warehouse..."
 echo "DROP WAREHOUSE IF EXISTS '${CLOUD_WAREHOUSE}';" | bendsql
-echo "CREATE WAREHOUSE '${CLOUD_WAREHOUSE}' WITH version='${BENCHMARK_VERSION}' warehouse_size='${BENCHMARK_SIZE}';" | bendsql
+echo "CREATE WAREHOUSE '${CLOUD_WAREHOUSE}' WITH version='${BENCHMARK_VERSION}' warehouse_size='${BENCHMARK_SIZE}' cache_size=${BENCHMARK_CACHE_SIZE};" | bendsql
 echo "SHOW WAREHOUSES;" | bendsql --output table
 
-max_retry=15
+max_retry=20
 counter=0
 until bendsql --query="SHOW WAREHOUSES LIKE '${CLOUD_WAREHOUSE}'" | grep -q "Running"; do
     if [[ $counter -gt $max_retry ]]; then
@@ -68,6 +69,9 @@ until bendsql --query="SHOW WAREHOUSES LIKE '${CLOUD_WAREHOUSE}'" | grep -q "Run
     counter=$((counter + 1))
     sleep 10
 done
+
+echo "Checking session settings..."
+bendsql --query="select * from system.settings where value != default;" -o table
 
 echo "Running queries..."
 

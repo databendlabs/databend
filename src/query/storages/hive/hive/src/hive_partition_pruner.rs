@@ -20,6 +20,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::Expr;
 use common_expression::TableSchema;
+use log::debug;
 use storages_common_index::RangeIndex;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
@@ -58,13 +59,8 @@ impl HivePartitionPruner {
                 let field = self.partition_schema.fields()[index].clone();
                 let scalar = str_field_to_scalar(kv[1], &field.data_type().into())?;
                 let null_count = u64::from(scalar.is_null());
-                let column_stats = ColumnStatistics {
-                    min: scalar.clone(),
-                    max: scalar,
-                    null_count,
-                    in_memory_size: 0,
-                    distinct_of_values: None,
-                };
+                let column_stats =
+                    ColumnStatistics::new(scalar.clone(), scalar, null_count, 0, None);
                 stats.insert(index as u32, column_stats);
             }
             data.push(stats);
@@ -97,7 +93,7 @@ impl HivePartitionPruner {
                 filtered_partitions.push(partitions[idx].clone());
             }
         }
-        tracing::debug!("hive pruned partitions: {:?}", filtered_partitions);
+        debug!("hive pruned partitions: {:?}", filtered_partitions);
         Ok(filtered_partitions)
     }
 }

@@ -14,10 +14,7 @@
 
 #![allow(non_snake_case)]
 
-use std::backtrace::Backtrace;
-use std::sync::Arc;
-
-use crate::exception::ErrorCodeBacktrace;
+use crate::exception_backtrace::capture;
 use crate::ErrorCode;
 
 macro_rules! build_exceptions {
@@ -35,9 +32,10 @@ macro_rules! build_exceptions {
                     #[$meta]
                 )*
                 pub fn $body(display_text: impl Into<String>) -> ErrorCode {
-                    let bt = Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture())));
+                    let bt = capture();
                     ErrorCode::create(
                         $code,
+                        stringify!($body),
                         display_text.into(),
                         None,
                         bt,
@@ -144,6 +142,11 @@ build_exceptions! {
     UnmatchColumnDataType(1114),
     VirtualColumnNotFound(1115),
     VirtualColumnAlreadyExists(1116),
+    ColumnReferencedByComputedColumn(1117),
+    // The table is not a clustered table.
+    UnclusteredTable(1118),
+    UnknownCatalog(11119),
+    UnknownCatalogType(11120),
 
     // Data Related Errors
 
@@ -176,7 +179,14 @@ build_exceptions! {
     /// LicenseKeyInvalid is used when license key verification error occurs
     ///
     /// For example: license key is expired
-    LicenseKeyInvalid(1402)
+    LicenseKeyInvalid(1402),
+
+    BackgroundJobAlreadyExists(1501),
+    UnknownBackgroundJob(1502),
+
+    // Index related errors.
+    UnsupportedIndex(1601),
+    RefreshIndexError(1602),
 }
 
 // Meta service errors [2001, 3000].
@@ -203,6 +213,10 @@ build_exceptions! {
     IllegalUserInfoFormat(2203),
     UnknownRole(2204),
     InvalidRole(2206),
+    UnknownNetworkPolicy(2207),
+    NetworkPolicyAlreadyExists(2208),
+    IllegalNetworkPolicy(2209),
+    NetworkPolicyIsUsedByUser(2210),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
@@ -278,11 +292,11 @@ build_exceptions! {
     CannotShareDatabaseCreatedFromShare(2718),
 
     // Index error codes.
-    UnsupportedIndex(2719),
     CreateIndexWithDropTime(2720),
     IndexAlreadyExists(2721),
     UnknownIndex(2722),
     DropIndexWithDropTime(2723),
+    GetIndexWithDropTime(2724),
 
     // Variable error codes.
     UnknownVariable(2801),
@@ -305,6 +319,7 @@ build_exceptions! {
     StorageInsecure(3903),
     DeprecatedIndexFormat(3904),
     StorageOther(4000),
+    UnresolvableConflict(4001),
 }
 
 // Service errors [5001,6000].

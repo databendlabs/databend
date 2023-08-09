@@ -23,6 +23,7 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_sql::binder::ColumnBindingBuilder;
 use common_sql::plans::Join;
 use common_sql::plans::Scan;
 use databend_query::sql::optimizer::SExpr;
@@ -32,7 +33,6 @@ use databend_query::sql::plans::BoundColumnRef;
 use databend_query::sql::plans::ConstantExpr;
 use databend_query::sql::plans::Filter;
 use databend_query::sql::plans::FunctionCall;
-use databend_query::sql::ColumnBinding;
 use databend_query::sql::Visibility;
 use databend_query::storages::Table;
 use parking_lot::RwLock;
@@ -84,6 +84,7 @@ fn test_format() {
         Arc::new(DummyTable::new("table".to_string())),
         None,
         false,
+        false,
     );
     let col1 = metadata.add_base_table_column(
         "col1".to_string(),
@@ -92,11 +93,13 @@ fn test_format() {
         None,
         None,
         None,
+        None,
     );
     let col2 = metadata.add_base_table_column(
         "col2".to_string(),
         TableDataType::Boolean,
         tab1,
+        None,
         None,
         None,
         None,
@@ -113,16 +116,13 @@ fn test_format() {
                         arguments: vec![
                             BoundColumnRef {
                                 span: None,
-                                column: ColumnBinding {
-                                    database_name: None,
-                                    table_name: None,
-                                    column_position: None,
-                                    table_index: None,
-                                    column_name: "col1".to_string(),
-                                    index: col1,
-                                    data_type: Box::new(DataType::Boolean),
-                                    visibility: Visibility::Visible,
-                                },
+                                column: ColumnBindingBuilder::new(
+                                    "col1".to_string(),
+                                    col1,
+                                    Box::new(DataType::Boolean),
+                                    Visibility::Visible,
+                                )
+                                .build(),
                             }
                             .into(),
                             ConstantExpr {
@@ -137,16 +137,13 @@ fn test_format() {
                 left_conditions: vec![
                     BoundColumnRef {
                         span: None,
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_position: None,
-                            table_index: None,
-                            column_name: "col2".to_string(),
-                            index: col2,
-                            data_type: Box::new(DataType::Boolean),
-                            visibility: Visibility::Visible,
-                        },
+                        column: ColumnBindingBuilder::new(
+                            "col2".to_string(),
+                            col2,
+                            Box::new(DataType::Boolean),
+                            Visibility::Visible,
+                        )
+                        .build(),
                     }
                     .into(),
                 ],

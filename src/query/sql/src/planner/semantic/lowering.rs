@@ -24,6 +24,7 @@ use common_expression::Expr;
 use common_expression::RawExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 
+use crate::binder::ColumnBindingBuilder;
 use crate::plans::ScalarExpr;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
@@ -192,33 +193,39 @@ impl ScalarExpr {
             },
             ScalarExpr::WindowFunction(win) => RawExpr::ColumnRef {
                 span: None,
-                id: ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_position: None,
-                    table_index: None,
-                    column_name: win.display_name.clone(),
-                    index: usize::MAX,
-                    data_type: Box::new(win.func.return_type()),
-                    visibility: Visibility::Visible,
-                },
+                id: ColumnBindingBuilder::new(
+                    win.display_name.clone(),
+                    usize::MAX,
+                    Box::new(win.func.return_type()),
+                    Visibility::Visible,
+                )
+                .build(),
                 data_type: win.func.return_type(),
                 display_name: win.display_name.clone(),
             },
             ScalarExpr::AggregateFunction(agg) => RawExpr::ColumnRef {
                 span: None,
-                id: ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    table_index: None,
-                    column_position: None,
-                    column_name: agg.display_name.clone(),
-                    index: usize::MAX,
-                    data_type: Box::new((*agg.return_type).clone()),
-                    visibility: Visibility::Visible,
-                },
+                id: ColumnBindingBuilder::new(
+                    agg.display_name.clone(),
+                    usize::MAX,
+                    Box::new((*agg.return_type).clone()),
+                    Visibility::Visible,
+                )
+                .build(),
                 data_type: (*agg.return_type).clone(),
                 display_name: agg.display_name.clone(),
+            },
+            ScalarExpr::LambdaFunction(func) => RawExpr::ColumnRef {
+                span: None,
+                id: ColumnBindingBuilder::new(
+                    func.display_name.clone(),
+                    usize::MAX,
+                    Box::new((*func.return_type).clone()),
+                    Visibility::Visible,
+                )
+                .build(),
+                data_type: (*func.return_type).clone(),
+                display_name: func.display_name.clone(),
             },
             ScalarExpr::FunctionCall(func) => RawExpr::FunctionCall {
                 span: func.span,
@@ -247,14 +254,11 @@ impl ScalarExpr {
 }
 
 fn new_dummy_column(data_type: DataType) -> ColumnBinding {
-    ColumnBinding {
-        database_name: None,
-        table_name: None,
-        column_position: None,
-        table_index: None,
-        column_name: "DUMMY".to_string(),
-        index: usize::MAX,
-        data_type: Box::new(data_type),
-        visibility: Visibility::Visible,
-    }
+    ColumnBindingBuilder::new(
+        "DUMMY".to_string(),
+        usize::MAX,
+        Box::new(data_type),
+        Visibility::Visible,
+    )
+    .build()
 }

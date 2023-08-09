@@ -7,44 +7,97 @@ BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 
 meta_dir="$SCRIPT_PATH/_meta_dir"
 meta_json="$SCRIPT_PATH/meta.txt"
-want_exported="$SCRIPT_PATH/want_exported"
+meta_json_v002="$SCRIPT_PATH/meta_v002.txt"
+want_exported="$SCRIPT_PATH/want_exported_v002"
+want_snapshot_v002="$SCRIPT_PATH/want_snapshot_v002"
 
 exported="$SCRIPT_PATH/exported"
 grpc_exported="$SCRIPT_PATH/grpc_exported"
 
 chmod +x ./target/${BUILD_PROFILE}/databend-metactl
+chmod +x ./target/${BUILD_PROFILE}/databend-meta
+
+# rm -rf "$meta_dir" || echo "Skip rm: $meta_dir"
+
+metactl_import_export () {
+    local ver="$1"
+    local src="$2"
+    local want_exported="$3"
+    local want_snapshot="$4"
+
+    local title="$ver"
+
+    echo " === "
+    echo " === ${title} 1. Test import $src into dir: $meta_dir"
+    echo " === "
+
+    echo " === import into $meta_dir"
+    cat $src |
+        ./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir "$meta_dir"
+
+    sleep 1
+
+    echo " === "
+    echo " === ${title} 1.1. Check snapshot data"
+    echo " === "
+
+    snapshot_path="$(ls $meta_dir/df_meta/V002/snapshot/1-0-83-*.snap)"
+    echo "=== snapshot path:"
+    ls $snapshot_path
+
+    echo "=== check snapshot content"
+    diff "$want_snapshot" "$snapshot_path"
+
+
+    echo " === "
+    echo " === ${title} 2. Test export from dir: $meta_dir to file $exported"
+    echo " === "
+
+    echo " === export from $meta_dir"
+    ./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir "$meta_dir" >$exported
+
+    echo " === check backup date: $want_exported and exported: $exported"
+    diff $want_exported $exported
+
+    echo " === "
+    echo " === ${title} 3. Test export from running meta-service to file $grpc_exported"
+    echo " === "
+
+    echo " === start databend-meta"
+    # Give it a very big heartbeat interval to prevent election.
+    # Election will change the `vote` in storage and thus fail the following `diff`
+    # in this test.
+    ./target/${BUILD_PROFILE}/databend-meta --single --heartbeat-interval 100000 --raft-dir "$meta_dir" --log-file-level=debug &
+    METASRV_PID=$!
+    echo " === pid: $METASRV_PID"
+    sleep 10
+
+    echo " === export from running databend-meta to $grpc_exported"
+    ./target/${BUILD_PROFILE}/databend-metactl --export --grpc-api-address "localhost:9191" >$grpc_exported
+
+    echo " === grpc_exported file data start..."
+    cat $grpc_exported
+    echo " === grpc_exported file data end"
+    diff $want_exported $grpc_exported
+
+    kill $METASRV_PID
+    sleep 1
+}
+
+metactl_import_export 'V0'   "$meta_json"      "$want_exported" "$want_snapshot_v002"
+metactl_import_export 'V002' "$meta_json_v002" "$want_exported" "$want_snapshot_v002"
+
 
 echo " === "
-echo " === 1. Test import $meta_json into dir: $meta_dir"
+echo " === 4. Test export from empty running metasrv to file $grpc_exported"
+echo " ===    Check important entries"
 echo " === "
 
-echo " === import into $meta_dir"
-cat $meta_json |
-    ./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir "$meta_dir"
-
-sleep 1
-
-echo " === "
-echo " === 2. Test export from dir: $meta_dir to file $exported"
-echo " === "
-
-
-echo " === export from $meta_dir"
-./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir "$meta_dir" >$exported
-
-echo " === check backup date: $want_exported and exported: $exported"
-diff $want_exported $exported
-
-
-echo " === "
-echo " === 3. Test export from running metasrv to file $grpc_exported"
-echo " === "
-
+rm -rf "$meta_dir"
 
 echo " === start a single node databend-meta"
 # test export from grpc
-chmod +x ./target/${BUILD_PROFILE}/databend-meta
-./target/${BUILD_PROFILE}/databend-meta --single &
+./target/${BUILD_PROFILE}/databend-meta --single --raft-dir "$meta_dir" --log-file-level=debug &
 METASRV_PID=$!
 echo $METASRV_PID
 sleep 10
@@ -65,7 +118,7 @@ else
 fi
 
 echo " === check if there is a header record in it"
-if grep -Fxq '["header",{"DataHeader":{"key":"header","value":{"version":"V001","upgrading":null}}}]' $grpc_exported; then
+if grep -Fxq '["header",{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}]' $grpc_exported; then
     echo " === Header record found, good!"
 else
     echo " === No Header record found!!!"
@@ -74,36 +127,11 @@ fi
 
 
 kill $METASRV_PID
+
 sleep 3
 
-
 echo " === "
-echo " === 4. Test import data with header $grpc_exported to dir $meta_dir"
-echo " === "
-
-echo " === import into $meta_dir"
-cat $grpc_exported |
-    ./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir "$meta_dir"
-
-
-echo " === "
-echo " === 5. Test export data with header from dir: $meta_dir to file $exported"
-echo " === "
-
-echo " === export from $meta_dir"
-./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir "$meta_dir" >$exported
-
-echo " === exported file data start..."
-cat $exported
-echo " === exported file data end"
-
-echo " === check backup data $grpc_exported and exported $exported"
-diff $grpc_exported $exported
-
-
-
-echo " === "
-echo " === 6. Test import data with incompatible header $grpc_exported to dir $meta_dir"
+echo " === 5. Test import data with incompatible header $grpc_exported to dir $meta_dir"
 echo " === "
 
 
@@ -114,5 +142,3 @@ cat $grpc_exported |
     ./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir "$meta_dir"  \
     && { echo " === expect error when importing incompatible header"; exit 1; } \
     || echo " === error is expected. OK";
-
-

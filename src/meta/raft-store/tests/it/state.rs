@@ -11,18 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use common_base::base::tokio;
+
 use common_meta_raft_store::state::RaftState;
 use common_meta_types::Vote;
+use test_harness::test;
 
-use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
+use crate::testing::raft_store_test_harness;
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_state_create() -> anyhow::Result<()> {
     // - create a raft state
     // - creating another raft state in the same sled db should fail
@@ -54,11 +52,8 @@ async fn test_raft_state_create() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_state_open() -> anyhow::Result<()> {
     // - create a raft state
     // - open it.
@@ -80,11 +75,8 @@ async fn test_raft_state_open() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
     let mut tc = new_raft_test_context();
     let db = &tc.db;
@@ -98,11 +90,8 @@ async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_raft_state_write_read_vote() -> anyhow::Result<()> {
     // - create a raft state
     // - write vote and the read it.
@@ -129,37 +118,5 @@ async fn test_raft_state_write_read_vote() -> anyhow::Result<()> {
 
     let got = rs.read_vote()?;
     assert_eq!(Some(hs), got);
-    Ok(())
-}
-
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
-async fn test_raft_state_write_read_state_machine_id() -> anyhow::Result<()> {
-    // - create a raft state
-    // - write state machine id and the read it.
-
-    let mut tc = new_raft_test_context();
-    let db = &tc.db;
-    tc.raft_config.id = 3;
-    let rs = RaftState::open_create(db, &tc.raft_config, None, Some(())).await?;
-
-    // read got a None
-
-    let got = rs.read_state_machine_id()?;
-    assert_eq!((0, 0), got);
-
-    // write hard state
-
-    let smid = (1, 2);
-
-    rs.write_state_machine_id(&smid).await?;
-
-    // read the written
-
-    let got = rs.read_state_machine_id()?;
-    assert_eq!((1, 2), got);
     Ok(())
 }

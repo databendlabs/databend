@@ -65,6 +65,7 @@ pub struct QueryLogElement {
     // User.
     pub tenant_id: String,
     pub cluster_id: String,
+    pub node_id: String,
     pub sql_user: String,
 
     #[serde(skip_serializing)]
@@ -111,6 +112,7 @@ pub struct QueryLogElement {
     // Client.
     pub client_info: String,
     pub client_address: String,
+    pub user_agent: String,
 
     // Exception.
     pub exception_code: i32,
@@ -139,6 +141,7 @@ impl SystemLogElement for QueryLogElement {
             // User.
             TableField::new("tenant_id", TableDataType::String),
             TableField::new("cluster_id", TableDataType::String),
+            TableField::new("node_id", TableDataType::String),
             TableField::new("sql_user", TableDataType::String),
             TableField::new("sql_user_quota", TableDataType::String),
             TableField::new("sql_user_privileges", TableDataType::String),
@@ -207,6 +210,7 @@ impl SystemLogElement for QueryLogElement {
             // Client.
             TableField::new("client_info", TableDataType::String),
             TableField::new("client_address", TableDataType::String),
+            TableField::new("user_agent", TableDataType::String),
             // Exception.
             TableField::new(
                 "exception_code",
@@ -238,11 +242,14 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::String(self.tenant_id.as_bytes().to_vec()).as_ref());
-
         columns
             .next()
             .unwrap()
             .push(Scalar::String(self.cluster_id.as_bytes().to_vec()).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::String(self.node_id.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
@@ -371,6 +378,10 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::String(self.client_address.as_bytes().to_vec()).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::String(self.user_agent.as_bytes().to_vec()).as_ref());
         // Exception.
         columns
             .next()

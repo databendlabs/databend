@@ -49,15 +49,14 @@ use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::interpreters::common::append2table;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::builders::build_append2table_with_commit_pipeline;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
-use crate::schedulers::build_distributed_pipeline;
-use crate::schedulers::build_local_pipeline;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -166,13 +165,17 @@ impl Interpreter for InsertInterpreter {
                     _ => {}
                 }
             }
-            InsertInputSource::StreamingWithFileFormat(params, _, input_context) => {
+            InsertInputSource::StreamingWithFileFormat {
+                format,
+                input_context_option: input_context,
+                ..
+            } => {
                 let input_context = input_context.as_ref().expect("must success").clone();
                 input_context
                     .format
                     .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
 
-                if params.get_type().has_inner_schema() {
+                if format.get_type().has_inner_schema() {
                     let dest_schema = plan.schema();
                     let func_ctx = self.ctx.get_function_context()?;
 
@@ -198,13 +201,14 @@ impl Interpreter for InsertInterpreter {
                         ..
                     } => {
                         let mut builder1 =
-                            PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
+                            PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                         (builder1.build(s_expr).await?, bind_context.columns.clone())
                     }
                     _ => unreachable!(),
                 };
 
-                let catalog = self.plan.catalog.clone();
+                let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+                let catalog_info = catalog.info();
 
                 let insert_select_plan = match select_plan {
                     PhysicalPlan::Exchange(ref mut exchange) => {
@@ -212,8 +216,11 @@ impl Interpreter for InsertInterpreter {
                         let input = exchange.input.clone();
                         exchange.input = Box::new(PhysicalPlan::DistributedInsertSelect(Box::new(
                             DistributedInsertSelect {
+                                // TODO(leiysky): we reuse the id of exchange here,
+                                // which is not correct. We should generate a new id for insert.
+                                plan_id: exchange.plan_id,
                                 input,
-                                catalog,
+                                catalog_info,
                                 table_info: table1.get_table_info().clone(),
                                 select_schema: plan.schema(),
                                 select_column_bindings,
@@ -226,8 +233,11 @@ impl Interpreter for InsertInterpreter {
                     other_plan => {
                         // insert should wait until all nodes finished
                         PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
+                            // TODO: we reuse the id of other plan here,
+                            // which is not correct. We should generate a new id for insert.
+                            plan_id: other_plan.get_id(),
                             input: Box::new(other_plan),
-                            catalog,
+                            catalog_info,
                             table_info: table1.get_table_info().clone(),
                             select_schema: plan.schema(),
                             select_column_bindings,
@@ -237,17 +247,19 @@ impl Interpreter for InsertInterpreter {
                     }
                 };
 
-                let mut build_res = if !insert_select_plan.is_distributed_plan() {
-                    build_local_pipeline(&self.ctx, &insert_select_plan, false).await
-                } else {
-                    build_distributed_pipeline(&self.ctx, &insert_select_plan).await
-                }?;
+                let mut build_res = build_query_pipeline_without_render_result_set(
+                    &self.ctx,
+                    &insert_select_plan,
+                    false,
+                )
+                .await?;
 
                 table.commit_insertion(
                     self.ctx.clone(),
                     &mut build_res.main_pipeline,
                     None,
                     self.plan.overwrite,
+                    None,
                 )?;
 
                 return Ok(build_res);
@@ -256,15 +268,15 @@ impl Interpreter for InsertInterpreter {
 
         let append_mode = match &self.plan.source {
             InsertInputSource::StreamingWithFormat(..)
-            | InsertInputSource::StreamingWithFileFormat(..) => AppendMode::Copy,
+            | InsertInputSource::StreamingWithFileFormat { .. } => AppendMode::Copy,
             _ => AppendMode::Normal,
         };
 
-        append2table(
+        build_append2table_with_commit_pipeline(
             self.ctx.clone(),
+            &mut build_res.main_pipeline,
             table.clone(),
             plan.schema(),
-            &mut build_res,
             None,
             self.plan.overwrite,
             append_mode,

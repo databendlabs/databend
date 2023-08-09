@@ -29,10 +29,12 @@ use itertools::Itertools;
 
 use super::prune_by_children;
 use super::ExprContext;
+use super::Finder;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
@@ -43,6 +45,7 @@ use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -208,6 +211,25 @@ impl<'a> AggregateRewriter<'a> {
                 }
                 .into())
             }
+
+            ScalarExpr::LambdaFunction(lambda_func) => {
+                let new_args = lambda_func
+                    .args
+                    .iter()
+                    .map(|arg| self.visit(arg))
+                    .collect::<Result<Vec<_>>>()?;
+
+                Ok(LambdaFunc {
+                    span: lambda_func.span,
+                    func_name: lambda_func.func_name.clone(),
+                    display_name: lambda_func.display_name.clone(),
+                    args: new_args,
+                    params: lambda_func.params.clone(),
+                    lambda_expr: lambda_func.lambda_expr.clone(),
+                    return_type: lambda_func.return_type.clone(),
+                }
+                .into())
+            }
         }
     }
 
@@ -232,19 +254,14 @@ impl<'a> AggregateRewriter<'a> {
                     .add_derived_column(name.clone(), arg.data_type()?);
 
                 // Generate a ColumnBinding for each argument of aggregates
-                let column_binding = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-
-                    // TODO(leiysky): use a more reasonable name, since aggregate arguments
-                    // can not be referenced, the name is only for debug
-                    column_position: None,
-                    table_index: None,
-                    column_name: name,
+                let column_binding = ColumnBindingBuilder::new(
+                    name,
                     index,
-                    data_type: Box::new(arg.data_type()?),
-                    visibility: Visibility::Visible,
-                };
+                    Box::new(arg.data_type()?),
+                    Visibility::Visible,
+                )
+                .build();
+
                 replaced_args.push(
                     BoundColumnRef {
                         span: arg.span(),
@@ -369,13 +386,7 @@ impl Binder {
                     column.column_name = item.alias.clone();
                     column
                 } else {
-                    self.create_column_binding(
-                        None,
-                        None,
-                        None,
-                        item.alias.clone(),
-                        item.scalar.data_type()?,
-                    )
+                    self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
                 };
                 available_aliases.push((column, item.scalar.clone()));
             }
@@ -388,6 +399,18 @@ impl Binder {
                     bind_context,
                     select_list,
                     exprs,
+                    &available_aliases,
+                    false,
+                    &mut vec![],
+                )
+                .await
+            }
+            GroupBy::All => {
+                let groups = self.resolve_group_all(select_list)?;
+                self.resolve_group_items(
+                    bind_context,
+                    select_list,
+                    &groups,
                     &available_aliases,
                     false,
                     &mut vec![],
@@ -420,7 +443,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_aggregate(
+    pub async fn bind_aggregate(
         &mut self,
         bind_context: &mut BindContext,
         child: SExpr,
@@ -446,6 +469,7 @@ impl Binder {
 
         let mut new_expr = child;
         if !scalar_items.is_empty() {
+            scalar_items.sort_by_key(|item| item.index);
             let eval_scalar = EvalScalar {
                 items: scalar_items,
             };
@@ -510,10 +534,7 @@ impl Binder {
         let grouping_sets = grouping_sets.into_iter().unique().collect();
         agg_info.grouping_sets = grouping_sets;
         // Add a virtual column `_grouping_id` to group items.
-        let grouping_id_column = self.create_column_binding(
-            None,
-            None,
-            None,
+        let grouping_id_column = self.create_derived_column_binding(
             "_grouping_id".to_string(),
             DataType::Number(NumberDataType::UInt32),
         );
@@ -534,6 +555,25 @@ impl Binder {
             }),
         });
         Ok(())
+    }
+
+    fn resolve_group_all(&mut self, select_list: &SelectList<'_>) -> Result<Vec<Expr>> {
+        // Resolve group items with `FROM` context. Since the alias item can not be resolved
+        // from the context, we can detect the failure and fallback to resolving with `available_aliases`.
+
+        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::AggregateFunction(_));
+        let mut groups = Vec::new();
+        for (idx, select_item) in select_list.items.iter().enumerate() {
+            let finder = Finder::new(&f);
+            let finder = select_item.scalar.accept(finder)?;
+            if finder.scalars().is_empty() {
+                groups.push(Expr::Literal {
+                    span: None,
+                    lit: Literal::UInt64(idx as u64 + 1),
+                });
+            }
+        }
+        Ok(groups)
     }
 
     #[async_backtrace::framed]
@@ -569,7 +609,7 @@ impl Binder {
                     {
                         column_ref.column.clone()
                     } else {
-                        self.create_column_binding(None, None, None, alias, scalar.data_type()?)
+                        self.create_derived_column_binding(alias, scalar.data_type()?)
                     };
                     bind_context.aggregate_info.group_items.push(ScalarItem {
                         scalar: scalar.clone(),
@@ -590,6 +630,8 @@ impl Binder {
                 &self.name_resolution_ctx,
                 self.metadata.clone(),
                 &[],
+                self.m_cte_bound_ctx.clone(),
+                self.ctes_map.clone(),
             );
             let (scalar_expr, _) = scalar_binder
                 .bind(expr)

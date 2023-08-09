@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
+use log::warn;
 use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
@@ -51,14 +52,12 @@ impl State {
 }
 
 // Use this executor when the pipeline is pushing pipeline (exists sink but not exists source)
-#[allow(dead_code)]
 pub struct PipelinePushingExecutor {
     state: Arc<State>,
     executor: Arc<PipelineExecutor>,
     sender: SyncSender<Option<DataBlock>>,
 }
 
-#[allow(dead_code)]
 impl PipelinePushingExecutor {
     fn wrap_pipeline(
         ctx: Arc<QueryContext>,
@@ -79,7 +78,7 @@ impl PipelinePushingExecutor {
         source_pipe_builder.add_source(output, pushing_source);
 
         new_pipeline.add_pipe(source_pipe_builder.finalize());
-        new_pipeline.resize(pipeline.input_len())?;
+        new_pipeline.try_resize(pipeline.input_len())?;
         for pipe in &pipeline.pipes {
             new_pipeline.add_pipe(pipe.clone())
         }
@@ -166,7 +165,7 @@ impl Drop for PipelinePushingExecutor {
         }
 
         if let Err(cause) = self.sender.send(None) {
-            tracing::warn!("Executor send last data is failure {:?}", cause);
+            warn!("Executor send last data is failure {:?}", cause);
         }
     }
 }

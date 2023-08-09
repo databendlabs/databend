@@ -49,6 +49,7 @@ pub enum RuleID {
     PushDownFilterJoin,
     PushDownFilterScan,
     PushDownFilterSort,
+    PushDownFilterProjectSet,
     PushDownLimitUnion,
     PushDownLimitOuterJoin,
     RulePushDownLimitExpression,
@@ -64,16 +65,12 @@ pub enum RuleID {
     FoldCountAggregate,
     PushDownPrewhere,
     TryApplyAggIndex,
+    CommuteJoin,
 
     // Exploration rules
-    CommuteJoin,
-    RightAssociateJoin,
-    LeftAssociateJoin,
-    ExchangeJoin,
     CommuteJoinBaseTable,
     LeftExchangeJoin,
     EagerAggregation,
-    RightExchangeJoin,
 }
 
 impl Display for RuleID {
@@ -84,6 +81,7 @@ impl Display for RuleID {
             RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),
             RuleID::PushDownFilterScan => write!(f, "PushDownFilterScan"),
             RuleID::PushDownFilterSort => write!(f, "PushDownFilterSort"),
+            RuleID::PushDownFilterProjectSet => write!(f, "PushDownFilterProjectSet"),
             RuleID::PushDownLimitUnion => write!(f, "PushDownLimitUnion"),
             RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
             RuleID::RulePushDownLimitExpression => write!(f, "PushDownLimitExpression"),
@@ -104,12 +102,8 @@ impl Display for RuleID {
 
             RuleID::CommuteJoin => write!(f, "CommuteJoin"),
             RuleID::CommuteJoinBaseTable => write!(f, "CommuteJoinBaseTable"),
-            RuleID::LeftAssociateJoin => write!(f, "LeftAssociateJoin"),
-            RuleID::RightAssociateJoin => write!(f, "RightAssociateJoin"),
             RuleID::LeftExchangeJoin => write!(f, "LeftExchangeJoin"),
             RuleID::EagerAggregation => write!(f, "EagerAggregation"),
-            RuleID::RightExchangeJoin => write!(f, "RightExchangeJoin"),
-            RuleID::ExchangeJoin => write!(f, "ExchangeJoin"),
             RuleID::TryApplyAggIndex => write!(f, "TryApplyAggIndex"),
         }
     }

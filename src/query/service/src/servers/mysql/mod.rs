@@ -19,10 +19,12 @@ mod mysql_metrics;
 mod mysql_session;
 #[allow(clippy::unused_io_amount)]
 mod reject_connection;
+mod tls;
 mod writers;
 
 pub use self::mysql_federated::MySQLFederated;
 pub use self::mysql_handler::MySQLHandler;
 pub use self::mysql_session::MySQLConnection;
+pub use self::tls::MySQLTlsConfig;
 
 const MYSQL_VERSION: &str = "8.0.26";

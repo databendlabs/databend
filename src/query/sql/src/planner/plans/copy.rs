@@ -24,13 +24,14 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::schema::CatalogInfo;
 use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
-use tracing::info;
+use log::info;
 
 use crate::plans::Plan;
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum ValidationMode {
     None,
     ReturnNRows(u64),
@@ -59,16 +60,26 @@ impl FromStr for ValidationMode {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum CopyIntoTableMode {
     Insert { overwrite: bool },
     Replace,
     Copy,
 }
 
+impl CopyIntoTableMode {
+    pub fn is_overwrite(&self) -> bool {
+        match self {
+            CopyIntoTableMode::Insert { overwrite } => *overwrite,
+            CopyIntoTableMode::Replace => false,
+            CopyIntoTableMode::Copy => false,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct CopyIntoTablePlan {
-    pub catalog_name: String,
+    pub catalog_info: CatalogInfo,
     pub database_name: String,
     pub table_name: String,
 
@@ -82,16 +93,13 @@ pub struct CopyIntoTablePlan {
 
     pub stage_table_info: StageTableInfo,
     pub query: Option<Box<Plan>>,
-}
 
-fn set_and_log_status(ctx: &Arc<dyn TableContext>, status: &str) {
-    ctx.set_status_info(status);
-    info!(status);
+    pub enable_distributed: bool,
 }
 
 impl CopyIntoTablePlan {
     pub async fn collect_files(&self, ctx: &Arc<dyn TableContext>) -> Result<Vec<StageFileInfo>> {
-        set_and_log_status(ctx, "begin to list files");
+        ctx.set_status_info("begin to list files");
         let start = Instant::now();
 
         let stage_table_info = &self.stage_table_info;
@@ -127,7 +135,7 @@ impl CopyIntoTablePlan {
 
         let num_all_files = all_source_file_infos.len();
 
-        info!("end to list files: got {} files", num_all_files);
+        ctx.set_status_info(&format!("end list files: got {} files", num_all_files));
 
         let need_copy_file_infos = if self.force {
             info!(
@@ -137,18 +145,20 @@ impl CopyIntoTablePlan {
             all_source_file_infos
         } else {
             // Status.
-            set_and_log_status(ctx, "begin to filter out copied files");
+            ctx.set_status_info("begin filtering out copied files");
             let files = ctx
                 .filter_out_copied_files(
-                    &self.catalog_name,
+                    self.catalog_info.catalog_name(),
                     &self.database_name,
                     &self.table_name,
                     &all_source_file_infos,
                     max_files,
                 )
                 .await?;
-
-            info!("end filtering out copied files: {}", num_all_files);
+            ctx.set_status_info(&format!(
+                "end filtering out copied files: {}",
+                num_all_files
+            ));
             files
         };
 
@@ -167,7 +177,7 @@ impl CopyIntoTablePlan {
 impl Debug for CopyIntoTablePlan {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let CopyIntoTablePlan {
-            catalog_name,
+            catalog_info,
             database_name,
             table_name,
             validation_mode,
@@ -178,7 +188,8 @@ impl Debug for CopyIntoTablePlan {
         } = self;
         write!(
             f,
-            "Copy into {catalog_name:}.{database_name:}.{table_name:}"
+            "Copy into {:}.{database_name:}.{table_name:}",
+            catalog_info.catalog_name()
         )?;
         write!(f, ", validation_mode: {validation_mode:?}")?;
         write!(f, ", from: {stage_table_info:?}")?;

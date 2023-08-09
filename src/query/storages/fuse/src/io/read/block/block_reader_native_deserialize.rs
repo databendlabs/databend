@@ -18,8 +18,13 @@ use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field;
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::native::read::batch_read::batch_read_array;
+use common_arrow::native::read::column_iter_to_arrays;
+use common_arrow::native::read::reader::NativeReader;
+use common_arrow::native::read::ArrayIter;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -36,6 +41,7 @@ use super::block_reader_deserialize::DeserializedArray;
 use super::block_reader_deserialize::FieldDeserializationContext;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::BlockReader;
+use crate::io::NativeReaderExt;
 use crate::io::UncompressedBuffer;
 use crate::metrics::*;
 
@@ -256,6 +262,42 @@ impl BlockReader {
             }
         } else {
             Ok(None)
+        }
+    }
+
+    pub(crate) fn build_array_iter(
+        column_node: &ColumnNode,
+        leaves: Vec<ColumnDescriptor>,
+        readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
+    ) -> Result<ArrayIter<'static>> {
+        let field = column_node.field.clone();
+        let is_nested = column_node.is_nested;
+        match column_iter_to_arrays(readers, leaves, field, is_nested) {
+            Ok(array_iter) => Ok(array_iter),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    pub(crate) fn build_virtual_array_iter(
+        name: String,
+        leaf: ColumnDescriptor,
+        readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
+    ) -> Result<ArrayIter<'static>> {
+        let is_nested = false;
+        let leaves = vec![leaf];
+        let field = ArrowField::new(
+            name,
+            ArrowType::Extension(
+                "Variant".to_string(),
+                Box::new(ArrowType::LargeBinary),
+                None,
+            ),
+            true,
+        );
+
+        match column_iter_to_arrays(readers, leaves, field, is_nested) {
+            Ok(array_iter) => Ok(array_iter),
+            Err(err) => Err(err.into()),
         }
     }
 }

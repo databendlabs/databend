@@ -20,6 +20,7 @@ use super::query::pretty_table;
 use crate::ast::format::syntax::interweave_comma;
 use crate::ast::format::syntax::parenthesized;
 use crate::ast::format::syntax::NEST_FACTOR;
+use crate::ast::AddColumnOption;
 use crate::ast::AlterTableAction;
 use crate::ast::AlterTableStmt;
 use crate::ast::AlterViewStmt;
@@ -154,12 +155,27 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
         AlterTableAction::RenameTable { new_table } => RcDoc::line()
             .append(RcDoc::text("RENAME TO "))
             .append(RcDoc::text(new_table.to_string())),
-        AlterTableAction::AddColumn { column } => RcDoc::line()
+        AlterTableAction::RenameColumn {
+            old_column,
+            new_column,
+        } => RcDoc::line()
+            .append(RcDoc::text("RENAME COLUMN "))
+            .append(RcDoc::text(old_column.to_string()))
+            .append(RcDoc::text(" TO "))
+            .append(RcDoc::text(new_column.to_string())),
+        AlterTableAction::AddColumn { column, option } => RcDoc::line()
             .append(RcDoc::text("ADD COLUMN "))
-            .append(RcDoc::text(column.to_string())),
-        AlterTableAction::ModifyColumn { column, action } => RcDoc::line()
-            .append(RcDoc::text("MODIFY COLUMN "))
             .append(RcDoc::text(column.to_string()))
+            .append(match option {
+                AddColumnOption::First => RcDoc::space().append(RcDoc::text("FIRST")),
+                AddColumnOption::After(ident) => {
+                    RcDoc::space().append(RcDoc::text(format!("AFTER {ident}")))
+                }
+                AddColumnOption::End => RcDoc::nil(),
+            }),
+        AlterTableAction::ModifyColumn { action } => RcDoc::line()
+            .append(RcDoc::text("MODIFY COLUMN "))
+            .append(RcDoc::text(action.to_string()))
             .append(RcDoc::text(format!(" {}", action))),
         AlterTableAction::DropColumn { column } => RcDoc::line()
             .append(RcDoc::text("DROP COLUMN "))
@@ -175,6 +191,7 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
         AlterTableAction::ReclusterTable {
             is_final,
             selection,
+            limit,
         } => RcDoc::line()
             .append(RcDoc::text("RECLUSTER"))
             .append(if is_final {
@@ -190,11 +207,24 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
                 )
             } else {
                 RcDoc::nil()
+            })
+            .append(if let Some(limit) = limit {
+                RcDoc::text(format!(" LIMIT {limit}"))
+            } else {
+                RcDoc::nil()
             }),
         AlterTableAction::RevertTo { point } => match point {
             TimeTravelPoint::Snapshot(sid) => RcDoc::text(format!(" AT (SNAPSHOT => {sid})")),
             TimeTravelPoint::Timestamp(ts) => RcDoc::text(format!(" AT (TIMESTAMP => {ts})")),
         },
+        AlterTableAction::SetOptions { set_options } => {
+            let mut doc = RcDoc::line();
+            doc = doc.append(RcDoc::text("SET OPTIONS: "));
+            for (key, value) in set_options.into_iter() {
+                doc = doc.append(RcDoc::text(format!("{key} to {value} ")));
+            }
+            doc
+        }
     }
 }
 

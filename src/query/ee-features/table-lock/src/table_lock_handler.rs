@@ -17,8 +17,10 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::TableInfo;
+use log::info;
 
 use crate::TableLockHeartbeat;
 
@@ -64,13 +66,18 @@ impl TableLockHandlerWrapper {
     }
 
     pub fn instance(ctx: Arc<dyn TableContext>) -> Arc<TableLockHandlerWrapper> {
+        let enabled_table_lock = ctx.get_settings().get_enable_table_lock().unwrap_or(false);
+
+        info!("Table lock enabled : [{}]", enabled_table_lock);
+
+        if !enabled_table_lock {
+            // dummy lock does nothing
+            return Arc::new(TableLockHandlerWrapper::new(Box::new(DummyTableLock {})));
+        }
+
         let enterprise_enabled = get_license_manager()
             .manager
-            .check_enterprise_enabled(
-                &ctx.get_settings(),
-                ctx.get_tenant(),
-                "table_lock".to_string(),
-            )
+            .check_enterprise_enabled(&ctx.get_settings(), ctx.get_tenant(), Feature::TableLock)
             .is_ok();
         if enterprise_enabled {
             GlobalInstance::get()

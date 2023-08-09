@@ -23,6 +23,7 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -36,6 +37,7 @@ use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use dashmap::DashMap;
+use parking_lot::RwLock;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -43,6 +45,8 @@ use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::table::Table;
+
+pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
 
 #[derive(Debug)]
 pub struct ProcessInfo {
@@ -97,12 +101,15 @@ pub trait TableContext: Send + Sync {
     fn get_partitions_shas(&self) -> Vec<String>;
     fn get_cacheable(&self) -> bool;
     fn set_cacheable(&self, cacheable: bool);
+    fn get_can_scan_from_agg_index(&self) -> bool;
+    fn set_can_scan_from_agg_index(&self, enable: bool);
 
     fn attach_query_str(&self, kind: String, query: String);
     fn get_query_str(&self) -> String;
 
     fn get_fragment_id(&self) -> usize;
-    fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
+    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
     fn check_aborting(&self) -> Result<()>;
@@ -110,6 +117,7 @@ pub trait TableContext: Send + Sync {
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
+    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>>;
     fn get_fuse_version(&self) -> String;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> String;
@@ -151,4 +159,17 @@ pub trait TableContext: Send + Sync {
         files: &[StageFileInfo],
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>>;
+
+    fn set_materialized_cte(
+        &self,
+        idx: (usize, usize),
+        mem_table: Arc<RwLock<Vec<DataBlock>>>,
+    ) -> Result<()>;
+
+    fn get_materialized_cte(
+        &self,
+        idx: (usize, usize),
+    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>>;
+
+    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks;
 }

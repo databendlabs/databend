@@ -20,10 +20,11 @@ use common_base::base::tokio;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::UpsertKV;
-use databend_meta::init_meta_ut;
+use log::info;
 use maplit::btreeset;
-use tracing::info;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::meta_node::start_meta_node_cluster;
 
 /// When a follower is dumping a snapshot, it should not block append entries request.
@@ -32,7 +33,8 @@ use crate::tests::meta_node::start_meta_node_cluster;
 /// Building a snapshot includes two steps:
 /// 1. Dumping the state machine to a in-memory struct.
 /// 2. Serialize the dumped data.
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_node_dumping_snapshot_does_not_block_append_entries() -> anyhow::Result<()> {
     info!("--- initialize cluster 2 voters");
     let (mut _log_index, mut tcs) = start_meta_node_cluster(btreeset![0, 1], btreeset![]).await?;
@@ -46,12 +48,12 @@ async fn test_meta_node_dumping_snapshot_does_not_block_append_entries() -> anyh
     info!("--- block dumping snapshot from state machine for 5 seconds");
     {
         let mut sm = mn1.sto.get_state_machine().await;
-        let mut blocking_config = sm.blocking_config_mut();
-        blocking_config.dump_snapshot = Duration::from_secs(5);
+        let blocking_config = sm.blocking_config_mut();
+        blocking_config.write_snapshot = Duration::from_secs(5);
     }
 
     info!("--- trigger building snapshot");
-    mn1.raft.trigger_snapshot().await?;
+    mn1.raft.trigger().snapshot().await?;
 
     info!("--- Wait 500 ms for snapshot to be begin building");
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -77,7 +79,8 @@ async fn test_meta_node_dumping_snapshot_does_not_block_append_entries() -> anyh
 /// Building a snapshot includes two steps:
 /// 1. Dumping the state machine to a in-memory struct.
 /// 2. Serialize the dumped data.
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_node_serializing_snapshot_does_not_block_append_entries() -> anyhow::Result<()> {
     info!("--- initialize cluster 2 voters");
     let (mut _log_index, mut tcs) = start_meta_node_cluster(btreeset![0, 1], btreeset![]).await?;
@@ -91,12 +94,12 @@ async fn test_meta_node_serializing_snapshot_does_not_block_append_entries() -> 
     info!("--- block dumping snapshot from state machine for 5 seconds");
     {
         let mut sm = mn1.sto.get_state_machine().await;
-        let mut blocking_config = sm.blocking_config_mut();
-        blocking_config.serde_snapshot = Duration::from_secs(5);
+        let blocking_config = sm.blocking_config_mut();
+        blocking_config.compact_snapshot = Duration::from_secs(5);
     }
 
     info!("--- trigger building snapshot");
-    mn1.raft.trigger_snapshot().await?;
+    mn1.raft.trigger().snapshot().await?;
 
     info!("--- Wait 500 ms for snapshot to be begin building");
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;

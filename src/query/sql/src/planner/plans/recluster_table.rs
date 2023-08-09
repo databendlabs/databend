@@ -24,4 +24,5 @@ pub struct ReclusterTablePlan {
     pub is_final: bool,
     pub metadata: MetadataRef,
     pub push_downs: Option<ScalarExpr>,
+    pub limit: Option<usize>,
 }

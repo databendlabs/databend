@@ -94,7 +94,8 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
             args,
             params,
             window,
-        } => visitor.visit_function_call(*span, *distinct, name, args, params, window),
+            lambda,
+        } => visitor.visit_function_call(*span, *distinct, name, args, params, window, lambda),
         Expr::Case {
             span,
             operand,
@@ -372,6 +373,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::ShowCreateTable(stmt) => visitor.visit_show_create_table(stmt),
         Statement::DescribeTable(stmt) => visitor.visit_describe_table(stmt),
         Statement::ShowTablesStatus(stmt) => visitor.visit_show_tables_status(stmt),
+        Statement::ShowDropTables(stmt) => visitor.visit_show_drop_tables(stmt),
         Statement::CreateTable(stmt) => visitor.visit_create_table(stmt),
         Statement::DropTable(stmt) => visitor.visit_drop_table(stmt),
         Statement::UndropTable(stmt) => visitor.visit_undrop_table(stmt),
@@ -380,6 +382,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::TruncateTable(stmt) => visitor.visit_truncate_table(stmt),
         Statement::OptimizeTable(stmt) => visitor.visit_optimize_table(stmt),
         Statement::VacuumTable(stmt) => visitor.visit_vacuum_table(stmt),
+        Statement::VacuumDropTable(stmt) => visitor.visit_vacuum_drop_table(stmt),
         Statement::AnalyzeTable(stmt) => visitor.visit_analyze_table(stmt),
         Statement::ExistsTable(stmt) => visitor.visit_exists_table(stmt),
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
@@ -387,6 +390,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
         Statement::CreateIndex(stmt) => visitor.visit_create_index(stmt),
         Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
+        Statement::RefreshIndex(stmt) => visitor.visit_refresh_index(stmt),
         Statement::CreateVirtualColumns(stmt) => visitor.visit_create_virtual_columns(stmt),
         Statement::AlterVirtualColumns(stmt) => visitor.visit_alter_virtual_columns(stmt),
         Statement::DropVirtualColumns(stmt) => visitor.visit_drop_virtual_columns(stmt),
@@ -469,5 +473,11 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::CreateDatamaskPolicy(stmt) => visitor.visit_create_data_mask_policy(stmt),
         Statement::DropDatamaskPolicy(stmt) => visitor.visit_drop_data_mask_policy(stmt),
         Statement::DescDatamaskPolicy(stmt) => visitor.visit_desc_data_mask_policy(stmt),
+        Statement::AttachTable(_) => {}
+        Statement::CreateNetworkPolicy(stmt) => visitor.visit_create_network_policy(stmt),
+        Statement::AlterNetworkPolicy(stmt) => visitor.visit_alter_network_policy(stmt),
+        Statement::DropNetworkPolicy(stmt) => visitor.visit_drop_network_policy(stmt),
+        Statement::DescNetworkPolicy(stmt) => visitor.visit_desc_network_policy(stmt),
+        Statement::ShowNetworkPolicies => visitor.visit_show_network_policies(),
     }
 }

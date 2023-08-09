@@ -18,20 +18,17 @@ use std::time::Instant;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockMetaInfoPtr;
-use common_expression::BlockThresholds;
 use common_expression::DataBlock;
-use common_expression::TableSchemaRef;
 use common_pipeline_transforms::processors::transforms::transform_accumulating_async::AsyncAccumulatingTransform;
-use opendal::Operator;
+use log::debug;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
-use tracing::debug;
-use tracing::info;
 
-use crate::io::TableMetaLocationGenerator;
+use crate::operations::common::mutation_accumulator::MutationKind;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::MutationAccumulator;
 use crate::operations::common::MutationLogs;
+use crate::FuseTable;
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
 pub struct TableMutationAggregator {
@@ -44,22 +41,18 @@ pub struct TableMutationAggregator {
 
 impl TableMutationAggregator {
     pub fn create(
+        table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         base_segments: Vec<Location>,
         base_summary: Statistics,
-        thresholds: BlockThresholds,
-        location_gen: TableMetaLocationGenerator,
-        schema: TableSchemaRef,
-        dal: Operator,
+        mutation_kind: MutationKind,
     ) -> Self {
         let mutation_accumulator = MutationAccumulator::new(
             ctx.clone(),
-            schema,
-            dal,
-            location_gen,
-            thresholds,
+            table,
             base_segments,
             base_summary,
+            mutation_kind,
         );
 
         TableMutationAggregator {
@@ -71,9 +64,9 @@ impl TableMutationAggregator {
     }
 
     pub fn accumulate_log_entry(&mut self, mutation_logs: MutationLogs) {
-        for entry in &mutation_logs.entries {
+        mutation_logs.entries.into_iter().for_each(|entry| {
             self.mutation_accumulator.accumulate_log_entry(entry);
-        }
+        })
     }
 }
 
@@ -95,7 +88,6 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
                 self.start_time.elapsed().as_secs()
             );
             self.ctx.set_status_info(&status);
-            info!(status);
         }
         Ok(None)
     }

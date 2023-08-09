@@ -204,7 +204,21 @@ pub fn check_number<Index: ColumnIndex, T: Number>(
     expr: &Expr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<T> {
-    let (expr, _) = ConstantFolder::fold(expr, func_ctx, fn_registry);
+    let (expr, _) = if expr.data_type() != &DataType::Number(T::data_type()) {
+        ConstantFolder::fold(
+            &Expr::Cast {
+                span,
+                is_try: false,
+                expr: Box::new(expr.clone()),
+                dest_type: DataType::Number(T::data_type()),
+            },
+            func_ctx,
+            fn_registry,
+        )
+    } else {
+        ConstantFolder::fold(expr, func_ctx, fn_registry)
+    };
+
     match expr {
         Expr::Constant {
             scalar: Scalar::Number(num),
@@ -408,11 +422,14 @@ pub fn try_check_function<Index: ColumnIndex>(
         .max()
         .map(|max_generic_idx| {
             (0..max_generic_idx + 1)
-                .map(|idx| match subst.0.get(&idx) {
-                    Some(ty) => Ok(ty.clone()),
-                    None => Err(ErrorCode::from_string_no_backtrace(format!(
-                        "unable to resolve generic T{idx}"
-                    ))),
+                .map(|idx| {
+                    subst
+                        .0
+                        .get(&idx)
+                        .cloned()
+                        .ok_or(ErrorCode::from_string_no_backtrace(format!(
+                            "unable to resolve generic T{idx}"
+                        )))
                 })
                 .collect::<Result<Vec<_>>>()
         })

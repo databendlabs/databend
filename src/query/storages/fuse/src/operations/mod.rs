@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod agg_index_sink;
 mod analyze;
 mod append;
 mod commit;
-mod common;
+pub mod common;
 mod compact;
 mod delete;
 mod gc;
@@ -32,8 +33,11 @@ mod truncate;
 mod update;
 pub mod util;
 
+pub use agg_index_sink::AggIndexSink;
 pub use common::BlockMetaIndex;
 pub use common::FillInternalColumnProcessor;
+pub use common::MutationKind;
+pub use common::TransformSerializeBlock;
 pub use compact::CompactOptions;
 pub use mutation::BlockCompactMutator;
 pub use mutation::CompactPartInfo;

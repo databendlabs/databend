@@ -23,6 +23,10 @@ use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::DropIndexReply;
 use common_meta_app::schema::DropIndexReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 
 pub struct RealAggregatingIndexHandler {}
 
@@ -44,6 +48,24 @@ impl AggregatingIndexHandler for RealAggregatingIndexHandler {
         req: DropIndexReq,
     ) -> Result<DropIndexReply> {
         catalog.drop_index(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn do_get_index(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        req: GetIndexReq,
+    ) -> Result<GetIndexReply> {
+        catalog.get_index(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn do_update_index(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        req: UpdateIndexReq,
+    ) -> Result<UpdateIndexReply> {
+        catalog.update_index(req).await
     }
 }
 

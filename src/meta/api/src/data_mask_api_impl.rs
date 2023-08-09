@@ -26,12 +26,19 @@ use common_meta_app::data_mask::DropDatamaskReply;
 use common_meta_app::data_mask::DropDatamaskReq;
 use common_meta_app::data_mask::GetDatamaskReply;
 use common_meta_app::data_mask::GetDatamaskReq;
+use common_meta_app::data_mask::MaskpolicyTableIdList;
+use common_meta_app::data_mask::MaskpolicyTableIdListKey;
+use common_meta_app::schema::TableId;
+use common_meta_app::schema::TableMeta;
 use common_meta_kvapi::kvapi;
 use common_meta_types::ConditionResult::Eq;
 use common_meta_types::MetaError;
+use common_meta_types::TxnCondition;
+use common_meta_types::TxnOp;
 use common_meta_types::TxnRequest;
 use common_tracing::func_name;
-use tracing::debug;
+use log::as_debug;
+use log::debug;
 
 use crate::data_mask_api::DatamaskApi;
 use crate::fetch_id;
@@ -55,7 +62,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
         &self,
         req: CreateDatamaskReq,
     ) -> Result<CreateDatamaskReply, KVAppError> {
-        debug!(req = debug(&req), "DatamaskApi: {}", func_name!());
+        debug!(req = as_debug!(&req); "DatamaskApi: {}", func_name!());
 
         let name_key = &req.name;
 
@@ -65,7 +72,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             trials.next().unwrap()?;
             // Get db mask by name to ensure absence
             let (seq, id) = get_u64_value(self, name_key).await?;
-            debug!(seq, id, ?name_key, "create_data_mask");
+            debug!(seq = seq, id = id, name_key = as_debug!(name_key); "create_data_mask");
 
             if seq > 0 {
                 return if req.if_not_exists {
@@ -83,22 +90,29 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             // Create data mask by inserting these record:
             // name -> id
             // id -> policy
+            // data mask name -> data mask table id list
 
             let id = fetch_id(self, IdGenerator::data_mask_id()).await?;
             let id_key = DatamaskId { id };
+            let id_list_key = MaskpolicyTableIdListKey {
+                tenant: name_key.tenant.clone(),
+                name: name_key.name.clone(),
+            };
 
             debug!(
-                id = debug(&id_key),
-                name_key = debug(&name_key),
+                id = as_debug!(&id_key),
+                name_key = as_debug!(name_key);
                 "new datamask id"
             );
 
             {
                 let meta: DatamaskMeta = req.clone().into();
+                let id_list = MaskpolicyTableIdList::default();
                 let condition = vec![txn_cond_seq(name_key, Eq, 0)];
                 let if_then = vec![
                     txn_op_put(name_key, serialize_u64(id)?), // name -> db_id
                     txn_op_put(&id_key, serialize_struct(&meta)?), // id -> meta
+                    txn_op_put(&id_list_key, serialize_struct(&id_list)?), /* data mask name -> id_list */
                 ];
 
                 let txn_req = TxnRequest {
@@ -110,9 +124,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = debug(&name_key),
-                    id = debug(&id_key),
-                    succ = display(succ),
+                    name = as_debug!(name_key),
+                    id = as_debug!(&id_key),
+                    succ = succ;
                     "create_data_mask"
                 );
 
@@ -126,7 +140,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
     }
 
     async fn drop_data_mask(&self, req: DropDatamaskReq) -> Result<DropDatamaskReply, KVAppError> {
-        debug!(req = debug(&req), "DatamaskApi: {}", func_name!());
+        debug!(req = as_debug!(&req); "DatamaskApi: {}", func_name!());
 
         let name_key = &req.name;
         let ctx = &func_name!();
@@ -151,11 +165,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 }
             };
             let id_key = DatamaskId { id };
-            let condition = vec![
+            let mut condition = vec![
                 txn_cond_seq(name_key, Eq, id_seq),
                 txn_cond_seq(&id_key, Eq, data_mask_seq),
             ];
-            let if_then = vec![txn_op_del(name_key), txn_op_del(&id_key)];
+            let mut if_then = vec![txn_op_del(name_key), txn_op_del(&id_key)];
+
+            clear_table_column_mask_policy(self, name_key, &mut condition, &mut if_then).await?;
 
             let txn_req = TxnRequest {
                 condition,
@@ -166,9 +182,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                name = debug(name_key),
-                id = debug(&DatamaskId { id }),
-                succ = display(succ),
+                name = as_debug!(name_key),
+                id = as_debug!(&DatamaskId { id }),
+                succ = succ;
                 "drop_data_mask"
             );
 
@@ -181,7 +197,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
     }
 
     async fn get_data_mask(&self, req: GetDatamaskReq) -> Result<GetDatamaskReply, KVAppError> {
-        debug!(req = debug(&req), "DatamaskApi: {}", func_name!());
+        debug!(req = as_debug!(&req); "DatamaskApi: {}", func_name!());
 
         let name_key = &req.name;
 
@@ -224,7 +240,7 @@ pub fn data_mask_has_to_exist(
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq, ?name_ident, "data mask does not exist");
+        debug!(seq = seq, name_ident = as_debug!(name_ident); "data mask does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownDatamask(
             UnknownDatamask::new(&name_ident.name, format!("{}: {}", msg, name_ident)),
@@ -232,4 +248,45 @@ pub fn data_mask_has_to_exist(
     } else {
         Ok(())
     }
+}
+
+async fn clear_table_column_mask_policy(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    name_ident: &DatamaskNameIdent,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> Result<(), KVAppError> {
+    let id_list_key = MaskpolicyTableIdListKey {
+        tenant: name_ident.tenant.clone(),
+        name: name_ident.name.clone(),
+    };
+    let (id_list_seq, id_list_opt): (_, Option<MaskpolicyTableIdList>) =
+        get_pb_value(kv_api, &id_list_key).await?;
+    if let Some(id_list) = id_list_opt {
+        condition.push(txn_cond_seq(&id_list_key, Eq, id_list_seq));
+        if_then.push(txn_op_del(&id_list_key));
+
+        // remove mask policy from table meta
+        for table_id in id_list.id_list.into_iter() {
+            let tbid = TableId { table_id };
+
+            let (tb_meta_seq, table_meta_opt): (_, Option<TableMeta>) =
+                get_pb_value(kv_api, &tbid).await?;
+            if let Some(mut table_meta) = table_meta_opt {
+                if let Some(column_mask_policy) = table_meta.column_mask_policy {
+                    let new_column_mask_policy = column_mask_policy
+                        .into_iter()
+                        .filter(|(_, name)| name != &name_ident.name)
+                        .collect();
+
+                    table_meta.column_mask_policy = Some(new_column_mask_policy);
+
+                    condition.push(txn_cond_seq(&tbid, Eq, tb_meta_seq));
+                    if_then.push(txn_op_put(&tbid, serialize_struct(&table_meta)?));
+                }
+            }
+        }
+    }
+
+    Ok(())
 }

@@ -17,7 +17,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::AuthType;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::PasswordHashMethod;
 use common_meta_app::principal::UserGrantSet;
@@ -35,8 +34,7 @@ async fn test_user_manager() -> Result<()> {
 
     let tenant = "test";
     let username = "test-user1";
-    let hostname = "localhost";
-    let hostname2 = "%";
+    let hostname = "%";
     let pwd = "test-pwd";
 
     let auth_info = AuthInfo::Password {
@@ -64,16 +62,10 @@ async fn test_user_manager() -> Result<()> {
         user_mgr.add_user(tenant, user_info, true).await?;
     }
 
-    // add user hostname2.
-    {
-        let user_info = UserInfo::new(username, hostname2, auth_info.clone());
-        user_mgr.add_user(tenant, user_info, false).await?;
-    }
-
     // get all users.
     {
         let users = user_mgr.get_users(tenant).await?;
-        assert_eq!(2, users.len());
+        assert_eq!(1, users.len());
         assert_eq!(pwd.as_bytes(), users[0].auth_info.get_password().unwrap());
     }
 
@@ -86,22 +78,13 @@ async fn test_user_manager() -> Result<()> {
         assert_eq!(pwd.as_bytes(), user_info.auth_info.get_password().unwrap());
     }
 
-    // get user hostname2.
-    {
-        let user_info = user_mgr
-            .get_user(tenant, UserIdentity::new(username, hostname2))
-            .await?;
-        assert_eq!(hostname2, user_info.hostname);
-        assert_eq!(pwd.as_bytes(), user_info.auth_info.get_password().unwrap());
-    }
-
     // drop.
     {
         user_mgr
             .drop_user(tenant, UserIdentity::new(username, hostname), false)
             .await?;
         let users = user_mgr.get_users(tenant).await?;
-        assert_eq!(1, users.len());
+        assert_eq!(0, users.len());
     }
 
     // repeat drop same user not with if exist.
@@ -181,7 +164,7 @@ async fn test_user_manager() -> Result<()> {
     // alter.
     {
         let user = "test";
-        let hostname = "localhost";
+        let hostname = "%";
         let pwd = "test";
         let auth_info = AuthInfo::Password {
             hash_value: Vec::from(pwd),
@@ -237,182 +220,6 @@ async fn test_user_manager() -> Result<()> {
             .await;
         // ErrorCode::UnknownUser
         assert_eq!(not_exist.err().unwrap().code(), 2201)
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_user_manager_with_root_user() -> Result<()> {
-    let conf = RpcClientConf::default();
-    let user_mgr = UserApiProvider::try_create_simple(conf).await?;
-
-    let tenant = "test";
-    let username1 = "default";
-    let username2 = "root";
-
-    let hostname1 = "127.0.0.1";
-    let hostname2 = "localhost";
-    let hostname3 = "otherhost";
-
-    // Get user via username `default` and hostname `127.0.0.1`.
-    {
-        let user = user_mgr
-            .get_user(tenant, UserIdentity::new(username1, hostname1))
-            .await?;
-        assert_eq!(user.name, username1);
-        assert_eq!(user.hostname, hostname1);
-        assert_eq!(user.auth_info, AuthInfo::None);
-        assert!(user.grants.verify_privilege(&GrantObject::Global, vec![
-            UserPrivilegeType::Create,
-            UserPrivilegeType::Select,
-            UserPrivilegeType::Insert,
-            UserPrivilegeType::Super
-        ]));
-    }
-
-    // Get user via username `default` and hostname `localhost`.
-    {
-        let user = user_mgr
-            .get_user(tenant, UserIdentity::new(username1, hostname2))
-            .await?;
-        assert_eq!(user.name, username1);
-        assert_eq!(user.hostname, hostname2);
-        assert_eq!(user.auth_info, AuthInfo::None);
-        assert!(user.grants.verify_privilege(&GrantObject::Global, vec![
-            UserPrivilegeType::Create,
-            UserPrivilegeType::Select,
-            UserPrivilegeType::Insert,
-            UserPrivilegeType::Super
-        ]));
-    }
-
-    // Get user via username `default` and hostname `otherhost` will be denied.
-    {
-        let res = user_mgr
-            .get_user(tenant, UserIdentity::new(username1, hostname3))
-            .await;
-        assert!(res.is_err());
-        assert_eq!(
-            "Code: 2201, Text = only accept root from localhost, current: 'default'@'otherhost'.",
-            res.err().unwrap().to_string()
-        );
-    }
-
-    // Get user via username `root` and hostname `127.0.0.1`.
-    {
-        let user = user_mgr
-            .get_user(tenant, UserIdentity::new(username2, hostname1))
-            .await?;
-        assert_eq!(user.name, username2);
-        assert_eq!(user.hostname, hostname1);
-        assert_eq!(user.auth_info, AuthInfo::None);
-        assert!(user.grants.verify_privilege(&GrantObject::Global, vec![
-            UserPrivilegeType::Create,
-            UserPrivilegeType::Select,
-            UserPrivilegeType::Insert,
-            UserPrivilegeType::Super
-        ]));
-    }
-
-    // Get user via username `root` and hostname `localhost`.
-    {
-        let user = user_mgr
-            .get_user(tenant, UserIdentity::new(username2, hostname2))
-            .await?;
-        assert_eq!(user.name, username2);
-        assert_eq!(user.hostname, hostname2);
-        assert_eq!(user.auth_info, AuthInfo::None);
-        assert!(user.grants.verify_privilege(&GrantObject::Global, vec![
-            UserPrivilegeType::Create,
-            UserPrivilegeType::Select,
-            UserPrivilegeType::Insert,
-            UserPrivilegeType::Super
-        ]));
-    }
-
-    // Get user via username `root` and hostname `otherhost` will be denied.
-    {
-        let res = user_mgr
-            .get_user(tenant, UserIdentity::new(username2, hostname3))
-            .await;
-        assert!(res.is_err());
-        assert_eq!(
-            "Code: 2201, Text = only accept root from localhost, current: 'root'@'otherhost'.",
-            res.err().unwrap().to_string()
-        );
-    }
-
-    // create `root` user.
-    {
-        let user_info = UserInfo::new(username2, hostname2, AuthInfo::None);
-        let res = user_mgr.add_user(tenant, user_info, false).await;
-        assert!(res.is_err());
-        assert_eq!(
-            "Code: 2202, Text = User cannot be created with builtin user name root.",
-            res.err().unwrap().to_string()
-        );
-    }
-
-    // drop `root` user.
-    {
-        let user_info = UserIdentity::new(username2, hostname2);
-        let res = user_mgr.drop_user(tenant, user_info, false).await;
-        assert!(res.is_err());
-        assert_eq!(
-            "Code: 2202, Text = Builtin user root cannot be dropped.",
-            res.err().unwrap().to_string()
-        );
-    }
-
-    // alter password for `root` user.
-    {
-        let new_pwd = "test1";
-        let user_info = UserIdentity::new(username2, hostname2);
-        let auth_info = AuthInfo::Password {
-            hash_value: Vec::from(new_pwd),
-            hash_method: PasswordHashMethod::DoubleSha1,
-        };
-        user_mgr
-            .update_user(tenant, user_info.clone(), Some(auth_info), None)
-            .await?;
-        let new_user = user_mgr.get_user(tenant, user_info).await?;
-        assert_eq!(new_user.name, username2);
-        assert_eq!(new_user.hostname, hostname2);
-        assert_eq!(new_user.auth_info.get_type(), AuthType::DoubleSha1Password);
-        assert_eq!(
-            new_user.auth_info.get_password().unwrap(),
-            Vec::from(new_pwd)
-        );
-        assert_eq!(
-            new_user.auth_info.get_password_type().unwrap(),
-            PasswordHashMethod::DoubleSha1
-        );
-    }
-
-    // alter password for `root` user again.
-    {
-        let new_pwd = "test2";
-        let user_info = UserIdentity::new(username2, hostname2);
-        let auth_info = AuthInfo::Password {
-            hash_value: Vec::from(new_pwd),
-            hash_method: PasswordHashMethod::DoubleSha1,
-        };
-        user_mgr
-            .update_user(tenant, user_info.clone(), Some(auth_info), None)
-            .await?;
-        let new_user = user_mgr.get_user(tenant, user_info).await?;
-        assert_eq!(new_user.name, username2);
-        assert_eq!(new_user.hostname, hostname2);
-        assert_eq!(new_user.auth_info.get_type(), AuthType::DoubleSha1Password);
-        assert_eq!(
-            new_user.auth_info.get_password().unwrap(),
-            Vec::from(new_pwd)
-        );
-        assert_eq!(
-            new_user.auth_info.get_password_type().unwrap(),
-            PasswordHashMethod::DoubleSha1
-        );
     }
 
     Ok(())

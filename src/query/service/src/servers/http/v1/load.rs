@@ -30,6 +30,9 @@ use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
 use common_sql::Planner;
 use futures::StreamExt;
+use log::debug;
+use log::info;
+use log::warn;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -43,6 +46,7 @@ use tokio::sync::mpsc::Sender;
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;
+use crate::servers::http::middleware::sanitize_request_headers;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
@@ -89,6 +93,10 @@ pub async fn streaming_load(
     req: &Request,
     mut multipart: Multipart,
 ) -> PoemResult<Json<LoadResponse>> {
+    info!(
+        "new streaming load request:, headers={:?}",
+        sanitize_request_headers(req.headers()),
+    );
     let session = ctx.get_session(SessionType::HTTPStreamingLoad);
     let context = session
         .create_query_context()
@@ -129,7 +137,12 @@ pub async fn streaming_load(
     let schema = plan.schema();
     match &mut plan {
         Plan::Insert(insert) => match &mut insert.source {
-            InsertInputSource::StreamingWithFileFormat(params, start, input_context_ref) => {
+            InsertInputSource::StreamingWithFileFormat {
+                format,
+                on_error_mode,
+                start,
+                input_context_option,
+            } => {
                 let sql_rest = &insert_sql[*start..].trim();
                 if !sql_rest.is_empty() {
                     return Err(poem::Error::from_string(
@@ -151,18 +164,19 @@ pub async fn streaming_load(
                     InputContext::try_create_from_insert_file_format(
                         rx,
                         context.get_settings(),
-                        params.clone(),
+                        format.clone(),
                         table_schema,
                         context.get_scan_progress(),
                         false,
                         to_table.get_block_thresholds(),
+                        on_error_mode.clone(),
                     )
                     .await
                     .map_err(|err| err.display_with_sql(insert_sql))
                     .map_err(InternalServerError)?,
                 );
-                *input_context_ref = Some(input_context.clone());
-                tracing::info!("streaming load with file_format {:?}", input_context);
+                *input_context_option = Some(input_context.clone());
+                info!("streaming load with file_format {:?}", input_context);
 
                 let handler = context.spawn(execute_query(context.clone(), plan));
                 let files = read_multi_part(multipart, tx, &input_context).await?;
@@ -227,7 +241,7 @@ async fn read_multi_part(
                     ))))
                     .await
                 {
-                    tracing::warn!("Multipart channel disconnect. {}", cause);
+                    warn!("Multipart channel disconnect. {}", cause);
                 }
                 return Err(cause.into());
             }
@@ -239,7 +253,7 @@ async fn read_multi_part(
                 let compression = input_context
                     .get_compression_alg(&filename)
                     .map_err(BadRequest)?;
-                tracing::debug!("Multipart start read {}", &filename);
+                debug!("Multipart start read {}", &filename);
                 files.push(filename.clone());
                 let mut async_reader = field.into_async_read();
                 let mut is_start = true;
@@ -252,7 +266,7 @@ async fn read_multi_part(
                         break;
                     } else {
                         batch.truncate(n);
-                        tracing::debug!("Multipart read {} bytes", n);
+                        debug!("Multipart read {} bytes", n);
                         if let Err(e) = tx
                             .send(Ok(StreamingReadBatch {
                                 data: batch,
@@ -262,7 +276,7 @@ async fn read_multi_part(
                             }))
                             .await
                         {
-                            tracing::warn!(" Multipart fail to send ReadBatch: {}", e);
+                            warn!(" Multipart fail to send ReadBatch: {}", e);
                         }
                         is_start = false;
                     }

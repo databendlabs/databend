@@ -16,6 +16,4 @@ mod fragments;
 mod scheduler;
 
 pub use fragments::*;
-pub use scheduler::build_distributed_pipeline;
-pub use scheduler::build_local_pipeline;
-pub use scheduler::build_query_pipeline;
+pub use scheduler::*;

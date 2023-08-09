@@ -21,6 +21,7 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 
+use super::AggIndexInfo;
 use crate::plan::Projection;
 
 /// Information of Virtual Columns.
@@ -64,14 +65,6 @@ pub struct PrewhereInfo {
     pub filter: RemoteExpr<String>,
     /// Optional prewhere virtual columns
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
-pub struct AggIndexInfo {
-    pub index_id: u64,
-    // The index in aggregating index is the offset in the output list.
-    pub selection: Vec<RemoteExpr>,
-    pub filter: Option<RemoteExpr>,
 }
 
 /// Extras is a wrapper for push down items.

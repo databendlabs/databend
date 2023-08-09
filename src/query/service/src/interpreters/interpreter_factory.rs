@@ -17,12 +17,14 @@ use std::sync::Arc;
 use common_ast::ast::ExplainKind;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
-use tracing::error;
+use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
+use super::interpreter_catalog_show_create::ShowCreateCatalogInterpreter;
 use super::interpreter_index_create::CreateIndexInterpreter;
 use super::interpreter_index_drop::DropIndexInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
+use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
@@ -120,7 +122,9 @@ impl InterpreterFactory {
                 *copy_plan.clone(),
             )?)),
             // catalogs
-            Plan::ShowCreateCatalog(_) => todo!(),
+            Plan::ShowCreateCatalog(plan) => Ok(Arc::new(
+                ShowCreateCatalogInterpreter::try_create(ctx, *plan.clone())?,
+            )),
             Plan::CreateCatalog(plan) => Ok(Arc::new(CreateCatalogInterpreter::try_create(
                 ctx,
                 *plan.clone(),
@@ -172,6 +176,13 @@ impl InterpreterFactory {
                 ctx,
                 *rename_table.clone(),
             )?)),
+            Plan::SetOptions(set_options) => Ok(Arc::new(SetOptionsInterpreter::try_create(
+                ctx,
+                *set_options.clone(),
+            )?)),
+            Plan::RenameTableColumn(rename_table_column) => Ok(Arc::new(
+                RenameTableColumnInterpreter::try_create(ctx, *rename_table_column.clone())?,
+            )),
             Plan::AddTableColumn(add_table_column) => Ok(Arc::new(
                 AddTableColumnInterpreter::try_create(ctx, *add_table_column.clone())?,
             )),
@@ -200,6 +211,9 @@ impl InterpreterFactory {
                 ctx,
                 *vacuum_table.clone(),
             )?)),
+            Plan::VacuumDropTable(vacuum_drop_table) => Ok(Arc::new(
+                VacuumDropTablesInterpreter::try_create(ctx, *vacuum_drop_table.clone())?,
+            )),
             Plan::AnalyzeTable(analyze_table) => Ok(Arc::new(AnalyzeTableInterpreter::try_create(
                 ctx,
                 *analyze_table.clone(),
@@ -233,7 +247,10 @@ impl InterpreterFactory {
                 ctx,
                 *index.clone(),
             )?)),
-
+            Plan::RefreshIndex(index) => Ok(Arc::new(RefreshIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
             // Virtual columns
             Plan::CreateVirtualColumns(create_virtual_columns) => Ok(Arc::new(
                 CreateVirtualColumnsInterpreter::try_create(ctx, *create_virtual_columns.clone())?,
@@ -429,6 +446,25 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
+
+            Plan::CreateNetworkPolicy(p) => Ok(Arc::new(
+                CreateNetworkPolicyInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::AlterNetworkPolicy(p) => Ok(Arc::new(AlterNetworkPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropNetworkPolicy(p) => Ok(Arc::new(DropNetworkPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescNetworkPolicy(p) => Ok(Arc::new(DescNetworkPolicyInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::ShowNetworkPolicies(p) => Ok(Arc::new(
+                ShowNetworkPoliciesInterpreter::try_create(ctx, *p.clone())?,
+            )),
         }
     }
 }

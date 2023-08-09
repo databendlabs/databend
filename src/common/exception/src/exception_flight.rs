@@ -25,6 +25,7 @@ impl From<ErrorCode> for FlightData {
     fn from(error: ErrorCode) -> Self {
         let serialized_error = serde_json::to_vec::<SerializedError>(&SerializedError {
             code: error.code(),
+            name: error.name(),
             message: error.message(),
             span: error.span(),
             backtrace: error.backtrace_str(),
@@ -49,6 +50,7 @@ impl TryFrom<FlightData> for ErrorCode {
             Ok(serialized_error) => match serialized_error.backtrace.len() {
                 0 => Ok(ErrorCode::create(
                     serialized_error.code,
+                    serialized_error.name,
                     serialized_error.message,
                     None,
                     None,
@@ -56,6 +58,7 @@ impl TryFrom<FlightData> for ErrorCode {
                 .set_span(serialized_error.span)),
                 _ => Ok(ErrorCode::create(
                     serialized_error.code,
+                    serialized_error.name,
                     serialized_error.message,
                     None,
                     Some(ErrorCodeBacktrace::Serialized(Arc::new(

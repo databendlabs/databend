@@ -17,11 +17,12 @@ use std::sync::Arc;
 use common_expression::TableSchema;
 use common_meta_app::schema::TableInfo;
 
+use crate::plan::Parquet2TableInfo;
 use crate::plan::ParquetTableInfo;
 use crate::plan::ResultScanTableInfo;
 use crate::plan::StageTableInfo;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum DataSourceInfo {
     // Normal table source, `fuse/system`.
     TableSource(TableInfo),
@@ -29,6 +30,7 @@ pub enum DataSourceInfo {
     StageSource(StageTableInfo),
     // stage source with parquet format used for select.
     ParquetSource(ParquetTableInfo),
+    Parquet2Source(Parquet2TableInfo),
     // Table Function Result_Scan
     ResultScanSource(ResultScanTableInfo),
 }
@@ -39,6 +41,7 @@ impl DataSourceInfo {
             DataSourceInfo::TableSource(table_info) => table_info.schema(),
             DataSourceInfo::StageSource(table_info) => table_info.schema(),
             DataSourceInfo::ParquetSource(table_info) => table_info.schema(),
+            DataSourceInfo::Parquet2Source(table_info) => table_info.schema(),
             DataSourceInfo::ResultScanSource(table_info) => table_info.schema(),
         }
     }
@@ -48,6 +51,7 @@ impl DataSourceInfo {
             DataSourceInfo::TableSource(table_info) => table_info.desc.clone(),
             DataSourceInfo::StageSource(table_info) => table_info.desc(),
             DataSourceInfo::ParquetSource(table_info) => table_info.desc(),
+            DataSourceInfo::Parquet2Source(table_info) => table_info.desc(),
             DataSourceInfo::ResultScanSource(table_info) => table_info.desc(),
         }
     }

@@ -26,6 +26,8 @@ use common_base::runtime::TrySpawn;
 use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::info;
+use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -255,7 +257,7 @@ impl HttpQuery {
                         .set_setting(k.to_string(), v.to_string())
                         .or_else(|e| {
                             if e.code() == ErrorCode::UNKNOWN_VARIABLE {
-                                tracing::warn!("unknown session setting: {}", k);
+                                warn!("unknown session setting: {}", k);
                                 Ok(())
                             } else {
                                 Err(e)
@@ -272,12 +274,21 @@ impl HttpQuery {
             }
         };
 
-        let session_id = session.get_id().clone();
-
+        let deduplicate_label = &ctx.deduplicate_label;
+        let user_agent = &ctx.user_agent;
         let ctx = session.create_query_context().await?;
+
+        if let Some(label) = deduplicate_label {
+            ctx.get_settings().set_deduplicate_label(label.clone())?;
+        }
+        if let Some(ua) = user_agent {
+            ctx.set_ua(ua.clone());
+        }
+
+        let session_id = session.get_id().clone();
         let id = ctx.get_id();
         let sql = &request.sql;
-        tracing::info!("run query_id={id} in session_id={session_id}, sql='{sql}'");
+        info!(query_id = id, session_id = session_id, sql = sql; "run");
 
         match &request.stage_attachment {
             Some(attachment) => ctx.attach_stage(StageAttachment {
@@ -327,10 +338,9 @@ impl HttpQuery {
                         stop_time: Instant::now(),
                         affect: ctx_clone.get_affect(),
                     };
-                    tracing::info!(
+                    info!(
                         "http query {}, change state to Stopped, fail to start {:?}",
-                        &query_id,
-                        e
+                        &query_id, e
                     );
                     Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state)))
                         .await;

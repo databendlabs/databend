@@ -32,7 +32,7 @@ use crate::BindContext;
 use crate::IndexType;
 
 impl Binder {
-    pub(super) fn bind_distinct(
+    pub fn bind_distinct(
         &self,
         span: Span,
         bind_context: &BindContext,

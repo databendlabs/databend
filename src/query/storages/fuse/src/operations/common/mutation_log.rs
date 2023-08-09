@@ -21,11 +21,11 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::FormatVersion;
-use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
 
+use super::ConflictResolveContext;
 use crate::operations::common::AbortOperation;
+use crate::operations::mutation::MutationDeletedSegment;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct MutationLogs {
@@ -34,20 +34,21 @@ pub struct MutationLogs {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum MutationLogEntry {
-    Replacement(ReplacementLogEntry),
-    Append(AppendOperationLogEntry),
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct ReplacementLogEntry {
-    pub index: BlockMetaIndex,
-    pub op: Replacement,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum Replacement {
-    Replaced(Arc<BlockMeta>),
-    Deleted, // replace something with nothing
+    AppendSegment {
+        segment_location: String,
+        segment_info: Arc<SegmentInfo>,
+        format_version: FormatVersion,
+    },
+    DeletedBlock {
+        index: BlockMetaIndex,
+    },
+    DeletedSegment {
+        deleted_segment: MutationDeletedSegment,
+    },
+    Replaced {
+        index: BlockMetaIndex,
+        block_meta: Arc<BlockMeta>,
+    },
     DoNothing,
 }
 
@@ -59,27 +60,6 @@ pub struct BlockMetaIndex {
     // pub range: Option<Range<usize>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AppendOperationLogEntry {
-    pub segment_location: String,
-    pub segment_info: Arc<SegmentInfo>,
-    pub format_version: FormatVersion,
-}
-
-impl AppendOperationLogEntry {
-    pub fn new(
-        segment_location: String,
-        segment_info: Arc<SegmentInfo>,
-        format_version: FormatVersion,
-    ) -> Self {
-        Self {
-            segment_location,
-            segment_info,
-            format_version,
-        }
-    }
-}
-
 #[typetag::serde(name = "mutation_logs_meta")]
 impl BlockMetaInfo for MutationLogs {
     fn as_any(&self) -> &dyn Any {
@@ -87,20 +67,13 @@ impl BlockMetaInfo for MutationLogs {
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match info.as_any().downcast_ref::<MutationLogs>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<MutationLogs>()
+            .is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
-    }
-}
-
-impl MutationLogs {
-    pub fn push_append(&mut self, log_entry: AppendOperationLogEntry) {
-        self.entries.push(MutationLogEntry::Append(log_entry))
     }
 }
 
@@ -127,24 +100,18 @@ impl TryFrom<DataBlock> for MutationLogs {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CommitMeta {
-    pub segments: Vec<Location>,
-    pub summary: Statistics,
+    pub conflict_resolve_context: ConflictResolveContext,
     pub abort_operation: AbortOperation,
-    pub need_lock: bool,
 }
 
 impl CommitMeta {
     pub fn new(
-        segments: Vec<Location>,
-        summary: Statistics,
+        conflict_resolve_context: ConflictResolveContext,
         abort_operation: AbortOperation,
-        need_lock: bool,
     ) -> Self {
         CommitMeta {
-            segments,
-            summary,
+            conflict_resolve_context,
             abort_operation,
-            need_lock,
         }
     }
 }
@@ -156,10 +123,9 @@ impl BlockMetaInfo for CommitMeta {
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match info.as_any().downcast_ref::<CommitMeta>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<CommitMeta>()
+            .is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {

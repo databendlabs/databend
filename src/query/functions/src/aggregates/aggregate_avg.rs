@@ -139,7 +139,7 @@ where T: SumState
         let state = place.get::<AvgState<T>>();
         state
             .value
-            .merge_avg_result(builder, state.count, self.scale_add)
+            .merge_avg_result(builder, state.count, self.scale_add, &None)
     }
 }
 

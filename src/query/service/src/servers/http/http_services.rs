@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_http::HttpError;
 use common_http::HttpShutdownHandler;
 use common_meta_types::anyerror::AnyError;
+use log::info;
 use poem::get;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
@@ -32,12 +33,12 @@ use poem::put;
 use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Route;
-use tracing::info;
 
 use super::v1::upload_to_stage;
 use crate::auth::AuthMgr;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::v1::clickhouse_router;
+use crate::servers::http::v1::list_suggestions;
 use crate::servers::http::v1::query_route;
 use crate::servers::http::v1::streaming_load;
 use crate::servers::Server;
@@ -53,7 +54,7 @@ impl HttpHandlerKind {
         match self {
             HttpHandlerKind::Query => {
                 format!(
-                    r#" curl -u root: --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
+                    r#" curl -u${{USER}} -p${{PASSWORD}}: --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
 "#,
                     sock,
                 )
@@ -61,8 +62,8 @@ impl HttpHandlerKind {
             HttpHandlerKind::Clickhouse => {
                 let json = r#"{"foo": "bar"}"#;
                 format!(
-                    r#" echo 'create table test(foo string)' | curl -u root: '{:?}' --data-binary  @-
-echo '{}' | curl -u root: '{:?}/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachRow' --data-binary @-"#,
+                    r#" echo 'create table test(foo string)' | curl -u${{USER}} -p${{PASSWORD}}: '{:?}' --data-binary  @-
+echo '{}' | curl -u${{USER}} -p${{PASSWORD}}: '{:?}/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachRow' --data-binary @-"#,
                     sock, json, sock,
                 )
             }
@@ -89,12 +90,14 @@ impl HttpHandler {
         ep.with(session_middleware).boxed()
     }
 
+    #[allow(clippy::let_with_type_underscore)]
     #[async_backtrace::framed]
     async fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
         let ep_v1 = Route::new()
             .nest("/query", query_route())
             .at("/streaming_load", put(streaming_load))
-            .at("/upload_to_stage", put(upload_to_stage));
+            .at("/upload_to_stage", put(upload_to_stage))
+            .at("/suggested_background_tasks", get(list_suggestions));
         let ep_v1 = self.wrap_auth(ep_v1);
 
         let ep_clickhouse = Route::new().nest("/", clickhouse_router());

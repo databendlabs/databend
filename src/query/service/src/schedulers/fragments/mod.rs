@@ -19,6 +19,7 @@ mod query_fragment_actions_display;
 
 pub use fragmenter::Fragmenter;
 pub use plan_fragment::PlanFragment;
+pub use plan_fragment::ReplaceReadSource;
 pub use query_fragment_actions::QueryFragmentAction;
 pub use query_fragment_actions::QueryFragmentActions;
 pub use query_fragment_actions::QueryFragmentsActions;

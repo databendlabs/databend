@@ -14,11 +14,11 @@
 
 use anyerror::AnyError;
 use common_base::base::*;
+use log::info;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::time::Duration;
-use tracing::info;
 
 /// A task that takes 100 years to gracefully stop.
 #[derive(Default)]

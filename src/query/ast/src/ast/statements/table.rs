@@ -103,6 +103,22 @@ impl Display for ShowTablesStatusStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ShowDropTablesStmt {
+    pub database: Option<Identifier>,
+}
+
+impl Display for ShowDropTablesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW DROP TABLE")?;
+        if let Some(database) = &self.database {
+            write!(f, " FROM {database}")?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateTableStmt {
     pub if_not_exists: bool,
     pub catalog: Option<Identifier>,
@@ -154,6 +170,31 @@ impl Display for CreateTableStmt {
         if let Some(as_query) = &self.as_query {
             write!(f, " AS {as_query}")?;
         }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub uri_location: UriLocation,
+}
+
+impl Display for AttachTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "ATTACH TABLE ")?;
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+
+        write!(f, " FROM {0}", self.uri_location)?;
 
         Ok(())
     }
@@ -284,9 +325,13 @@ pub enum AlterTableAction {
     },
     AddColumn {
         column: ColumnDefinition,
+        option: AddColumnOption,
+    },
+    RenameColumn {
+        old_column: Identifier,
+        new_column: Identifier,
     },
     ModifyColumn {
-        column: Identifier,
         action: ModifyColumnAction,
     },
     DropColumn {
@@ -299,23 +344,38 @@ pub enum AlterTableAction {
     ReclusterTable {
         is_final: bool,
         selection: Option<Expr>,
+        limit: Option<u64>,
     },
     RevertTo {
         point: TimeTravelPoint,
+    },
+    SetOptions {
+        set_options: BTreeMap<String, String>,
     },
 }
 
 impl Display for AlterTableAction {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            AlterTableAction::SetOptions { set_options } => {
+                write!(f, "SET OPTIONS: ").expect("Set Options Write Error ");
+                write_space_separated_map(f, set_options.iter())
+            }
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")
             }
-            AlterTableAction::AddColumn { column } => {
-                write!(f, "ADD COLUMN {column}")
+            AlterTableAction::RenameColumn {
+                old_column,
+                new_column,
+            } => {
+                write!(f, "RENAME COLUMN {old_column} TO {new_column}")
             }
-            AlterTableAction::ModifyColumn { column, action } => {
-                write!(f, "MODIFY COLUMN {column} {action}")
+            AlterTableAction::AddColumn { column, option } => {
+                write!(f, "ADD COLUMN {column}{option}")?;
+                Ok(())
+            }
+            AlterTableAction::ModifyColumn { action } => {
+                write!(f, "MODIFY COLUMN {action}")
             }
             AlterTableAction::DropColumn { column } => {
                 write!(f, "DROP COLUMN {column}")
@@ -330,6 +390,7 @@ impl Display for AlterTableAction {
             AlterTableAction::ReclusterTable {
                 is_final,
                 selection,
+                limit,
             } => {
                 write!(f, "RECLUSTER")?;
                 if *is_final {
@@ -338,12 +399,32 @@ impl Display for AlterTableAction {
                 if let Some(conditions) = selection {
                     write!(f, " WHERE {conditions}")?;
                 }
+                if let Some(limit) = limit {
+                    write!(f, " LIMIT {limit}")?;
+                }
                 Ok(())
             }
             AlterTableAction::RevertTo { point } => {
                 write!(f, "REVERT TO {}", point)?;
                 Ok(())
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AddColumnOption {
+    End,
+    First,
+    After(Identifier),
+}
+
+impl Display for AddColumnOption {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            AddColumnOption::First => write!(f, " FIRST"),
+            AddColumnOption::After(ident) => write!(f, " AFTER {ident}"),
+            AddColumnOption::End => Ok(()),
         }
     }
 }
@@ -434,11 +515,33 @@ impl Display for VacuumTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct VacuumDropTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub option: VacuumTableOption,
+}
+
+impl Display for VacuumDropTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM DROP TABLE ")?;
+        if self.catalog.is_some() || self.database.is_some() {
+            write!(f, "FROM ")?;
+            write_period_separated_list(f, self.catalog.iter().chain(&self.database))?;
+            write!(f, " ")?;
+        }
+        write!(f, "{}", &self.option)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct OptimizeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub action: OptimizeTableAction,
+    pub limit: Option<u64>,
 }
 
 impl Display for OptimizeTableStmt {
@@ -452,6 +555,9 @@ impl Display for OptimizeTableStmt {
                 .chain(Some(&self.table)),
         )?;
         write!(f, " {}", &self.action)?;
+        if let Some(limit) = self.limit {
+            write!(f, " LIMIT {limit}")?;
+        }
 
         Ok(())
     }
@@ -535,10 +641,14 @@ pub struct VacuumTableOption {
 impl Display for VacuumTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if let Some(retain_hours) = &self.retain_hours {
-            write!(f, " RETAIN {} HOURS", retain_hours)?;
+            write!(f, "RETAIN {} HOURS", retain_hours)?;
         }
         if self.dry_run.is_some() {
-            write!(f, " DRY RUN")?;
+            if self.retain_hours.is_some() {
+                write!(f, " DRY RUN")?;
+            } else {
+                write!(f, "DRY RUN")?;
+            }
         }
         Ok(())
     }
@@ -547,13 +657,8 @@ impl Display for VacuumTableOption {
 #[derive(Debug, Clone, PartialEq)]
 pub enum OptimizeTableAction {
     All,
-    Purge {
-        before: Option<TimeTravelPoint>,
-    },
-    Compact {
-        target: CompactTarget,
-        limit: Option<Expr>,
-    },
+    Purge { before: Option<TimeTravelPoint> },
+    Compact { target: CompactTarget },
 }
 
 impl Display for OptimizeTableAction {
@@ -567,7 +672,7 @@ impl Display for OptimizeTableAction {
                 }
                 Ok(())
             }
-            OptimizeTableAction::Compact { target, limit } => {
+            OptimizeTableAction::Compact { target } => {
                 match target {
                     CompactTarget::Block => {
                         write!(f, "COMPACT BLOCK")?;
@@ -576,9 +681,6 @@ impl Display for OptimizeTableAction {
                         write!(f, "COMPACT SEGMENT")?;
                     }
                 }
-                if let Some(limit) = limit {
-                    write!(f, " LIMIT {limit}")?;
-                }
                 Ok(())
             }
         }
@@ -586,10 +688,34 @@ impl Display for OptimizeTableAction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum ColumnExpr {
+    Default(Box<Expr>),
+    Virtual(Box<Expr>),
+    Stored(Box<Expr>),
+}
+
+impl Display for ColumnExpr {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ColumnExpr::Default(expr) => {
+                write!(f, " DEFAULT {expr}")?;
+            }
+            ColumnExpr::Virtual(expr) => {
+                write!(f, " AS ({expr}) VIRTUAL")?;
+            }
+            ColumnExpr::Stored(expr) => {
+                write!(f, " AS ({expr}) STORED")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ColumnDefinition {
     pub name: Identifier,
     pub data_type: TypeName,
-    pub default_expr: Option<Box<Expr>>,
+    pub expr: Option<ColumnExpr>,
     pub comment: Option<String>,
 }
 
@@ -601,8 +727,8 @@ impl Display for ColumnDefinition {
             write!(f, " NOT NULL")?;
         }
 
-        if let Some(default_expr) = &self.default_expr {
-            write!(f, " DEFAULT {default_expr}")?;
+        if let Some(expr) = &self.expr {
+            write!(f, "{expr}")?;
         }
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT '{comment}'")?;
@@ -613,13 +739,43 @@ impl Display for ColumnDefinition {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ModifyColumnAction {
-    SetMaskingPolicy(String),
+    // (column name id, masking policy name)
+    SetMaskingPolicy(Identifier, String),
+    // column name id
+    UnsetMaskingPolicy(Identifier),
+    // vec<(column name id, type name)>
+    SetDataType(Vec<(Identifier, TypeName)>),
+    // column name id
+    ConvertStoredComputedColumn(Identifier),
 }
 
 impl Display for ModifyColumnAction {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match &self {
-            ModifyColumnAction::SetMaskingPolicy(name) => write!(f, "SET MASKING POLICY {}", name)?,
+            ModifyColumnAction::SetMaskingPolicy(column, name) => {
+                write!(f, "{} SET MASKING POLICY {}", column, name)?
+            }
+            ModifyColumnAction::UnsetMaskingPolicy(column) => {
+                write!(f, "{} UNSET MASKING POLICY", column)?
+            }
+            ModifyColumnAction::SetDataType(column_type_name_vec) => {
+                let ret = column_type_name_vec
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (column, type_name))| {
+                        if i > 0 {
+                            format!(" COLUMN {} {}", column, type_name)
+                        } else {
+                            format!("{} {}", column, type_name)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                write!(f, "{}", ret)?
+            }
+            ModifyColumnAction::ConvertStoredComputedColumn(column) => {
+                write!(f, "{} DROP STORED", column)?
+            }
         }
 
         Ok(())

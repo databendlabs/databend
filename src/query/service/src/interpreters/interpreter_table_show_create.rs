@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
+use common_expression::ComputedExpr;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
@@ -25,8 +26,8 @@ use common_expression::Value;
 use common_sql::plans::ShowCreateTablePlan;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
+use log::debug;
 use storages_common_table_meta::table::is_internal_opt_key;
-use tracing::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -57,7 +58,7 @@ impl Interpreter for ShowCreateTableInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
 
         let table = catalog
             .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
@@ -112,6 +113,15 @@ impl Interpreter for ShowCreateTableInterpreter {
                     }
                     None => "".to_string(),
                 };
+                let computed_expr = match field.computed_expr() {
+                    Some(ComputedExpr::Virtual(expr)) => {
+                        format!(" AS ({expr}) VIRTUAL")
+                    }
+                    Some(ComputedExpr::Stored(expr)) => {
+                        format!(" AS ({expr}) STORED")
+                    }
+                    _ => "".to_string(),
+                };
                 // compatibility: creating table in the old planner will not have `fields_comments`
                 let comment = if field_comments.len() == n_fields && !field_comments[idx].is_empty()
                 {
@@ -124,10 +134,11 @@ impl Interpreter for ShowCreateTableInterpreter {
                     "".to_string()
                 };
                 let column = format!(
-                    "  `{}` {}{}{}",
+                    "  `{}` {}{}{}{}",
                     field.name(),
                     field.data_type().sql_name(),
                     default_expr,
+                    computed_expr,
                     comment
                 );
 

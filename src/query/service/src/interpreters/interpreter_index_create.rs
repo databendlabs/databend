@@ -18,6 +18,7 @@ use aggregating_index::get_agg_index_handler;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::IndexMeta;
@@ -54,7 +55,7 @@ impl Interpreter for CreateIndexInterpreter {
         license_manager.manager.check_enterprise_enabled(
             &self.ctx.get_settings(),
             tenant.clone(),
-            "aggregating_index".to_string(),
+            Feature::AggregateIndex,
         )?;
 
         let index_name = self.plan.index_name.clone();
@@ -65,7 +66,7 @@ impl Interpreter for CreateIndexInterpreter {
             ));
         }
 
-        let catalog = self.ctx.get_catalog(&catalog)?;
+        let catalog = self.ctx.get_catalog(&catalog).await?;
 
         let create_index_req = CreateIndexReq {
             if_not_exists: self.plan.if_not_exists,
@@ -74,7 +75,8 @@ impl Interpreter for CreateIndexInterpreter {
                 table_id: self.plan.table_id,
                 index_type: IndexType::AGGREGATING,
                 created_on: Utc::now(),
-                drop_on: None,
+                dropped_on: None,
+                updated_on: None,
                 query: self.plan.query.clone(),
             },
         };

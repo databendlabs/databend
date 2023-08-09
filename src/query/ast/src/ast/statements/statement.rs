@@ -107,6 +107,8 @@ pub enum Statement {
     ShowCreateTable(ShowCreateTableStmt),
     DescribeTable(DescribeTableStmt),
     ShowTablesStatus(ShowTablesStatusStmt),
+    ShowDropTables(ShowDropTablesStmt),
+    AttachTable(AttachTableStmt),
     CreateTable(CreateTableStmt),
     DropTable(DropTableStmt),
     UndropTable(UndropTableStmt),
@@ -115,6 +117,7 @@ pub enum Statement {
     TruncateTable(TruncateTableStmt),
     OptimizeTable(OptimizeTableStmt),
     VacuumTable(VacuumTableStmt),
+    VacuumDropTable(VacuumDropTableStmt),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
     // Columns
@@ -128,6 +131,7 @@ pub enum Statement {
     // Indexes
     CreateIndex(CreateIndexStmt),
     DropIndex(DropIndexStmt),
+    RefreshIndex(RefreshIndexStmt),
 
     // VirtualColumns
     CreateVirtualColumns(CreateVirtualColumnsStmt),
@@ -227,6 +231,13 @@ pub enum Statement {
     CreateDatamaskPolicy(CreateDatamaskPolicyStmt),
     DropDatamaskPolicy(DropDatamaskPolicyStmt),
     DescDatamaskPolicy(DescDatamaskPolicyStmt),
+
+    // network policy
+    CreateNetworkPolicy(CreateNetworkPolicyStmt),
+    AlterNetworkPolicy(AlterNetworkPolicyStmt),
+    DropNetworkPolicy(DropNetworkPolicyStmt),
+    DescNetworkPolicy(DescNetworkPolicyStmt),
+    ShowNetworkPolicies,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -374,6 +385,8 @@ impl Display for Statement {
             Statement::ShowCreateTable(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ShowTablesStatus(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowDropTables(stmt) => write!(f, "{stmt}")?,
+            Statement::AttachTable(stmt) => write!(f, "{stmt}")?,
             Statement::CreateTable(stmt) => write!(f, "{stmt}")?,
             Statement::DropTable(stmt) => write!(f, "{stmt}")?,
             Statement::UndropTable(stmt) => write!(f, "{stmt}")?,
@@ -382,6 +395,7 @@ impl Display for Statement {
             Statement::TruncateTable(stmt) => write!(f, "{stmt}")?,
             Statement::OptimizeTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumTable(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumDropTable(stmt) => write!(f, "{stmt}")?,
             Statement::AnalyzeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ExistsTable(stmt) => write!(f, "{stmt}")?,
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
@@ -389,6 +403,7 @@ impl Display for Statement {
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,
             Statement::CreateVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::AlterVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::DropVirtualColumns(stmt) => write!(f, "{stmt}")?,
@@ -536,6 +551,11 @@ impl Display for Statement {
             Statement::CreateDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DropDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DescDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateNetworkPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterNetworkPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DropNetworkPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DescNetworkPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowNetworkPolicies => write!(f, "SHOW NETWORK POLICIES")?,
         }
         Ok(())
     }

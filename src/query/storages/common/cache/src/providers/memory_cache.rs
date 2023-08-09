@@ -40,7 +40,7 @@ impl InMemoryCacheBuilder {
     where
         M: CountableMeter<String, Arc<V>>,
     {
-        let cache = LruCache::with_meter_and_hasher(capacity, meter, DefaultHashBuilder::new());
+        let cache = LruCache::with_meter_and_hasher(capacity, meter, DefaultHashBuilder::default());
         Arc::new(RwLock::new(cache))
     }
 
@@ -53,7 +53,7 @@ impl InMemoryCacheBuilder {
     // new cache that cache `Vec<u8>`, and metered by byte size
     pub fn new_bytes_cache(capacity: u64) -> InMemoryBytesCacheHolder {
         let cache =
-            LruCache::with_meter_and_hasher(capacity, BytesMeter, DefaultHashBuilder::new());
+            LruCache::with_meter_and_hasher(capacity, BytesMeter, DefaultHashBuilder::default());
         Arc::new(RwLock::new(cache))
     }
 }

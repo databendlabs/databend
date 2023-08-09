@@ -626,7 +626,6 @@ fn test_load_old_user() -> anyhow::Result<()> {
         let p: pb::UserInfo =
             common_protos::prost::Message::decode(user_info_v1.as_slice()).map_err(print_err)?;
         let got = mt::principal::UserInfo::from_pb(p).map_err(print_err)?;
-        println!("got: {:?}", got);
         assert_eq!(got.name, "test_user".to_string());
         assert_eq!(got.option.default_role().clone(), None);
     }
@@ -661,6 +660,28 @@ fn test_load_old_user() -> anyhow::Result<()> {
             common_protos::prost::Message::decode(user_info_v3.as_slice()).map_err(print_err)?;
         let got = mt::principal::UserInfo::from_pb(p).map_err(print_err)?;
         assert!(got.option.flags().is_empty());
+    }
+
+    {
+        // a legacy UserInfo with NetworkPolicy
+        let user_info_v5: Vec<u8> = vec![
+            10, 9, 116, 101, 115, 116, 95, 117, 115, 101, 114, 18, 9, 108, 111, 99, 97, 108, 104,
+            111, 115, 116, 26, 25, 18, 17, 10, 13, 116, 101, 115, 116, 95, 112, 97, 115, 115, 119,
+            111, 114, 100, 16, 1, 160, 6, 49, 168, 6, 24, 34, 26, 10, 18, 10, 8, 10, 0, 160, 6, 49,
+            168, 6, 24, 16, 2, 160, 6, 49, 168, 6, 24, 160, 6, 49, 168, 6, 24, 42, 15, 8, 10, 16,
+            128, 80, 24, 128, 160, 1, 160, 6, 49, 168, 6, 24, 50, 25, 8, 1, 18, 5, 114, 111, 108,
+            101, 49, 26, 8, 109, 121, 112, 111, 108, 105, 99, 121, 160, 6, 49, 168, 6, 24, 160, 6,
+            49, 168, 6, 24,
+        ];
+
+        let p: pb::UserInfo =
+            common_protos::prost::Message::decode(user_info_v5.as_slice()).map_err(print_err)?;
+        let got = mt::principal::UserInfo::from_pb(p).map_err(print_err)?;
+        let mut want = test_user_info();
+        want.option = want
+            .option
+            .with_network_policy(Some("mypolicy".to_string()));
+        assert_eq!(want, got);
     }
 
     Ok(())

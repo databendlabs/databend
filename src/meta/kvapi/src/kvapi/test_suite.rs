@@ -38,8 +38,8 @@ use common_meta_types::TxnPutResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::With;
-use tracing::debug;
-use tracing::info;
+use log::debug;
+use log::info;
 
 use crate::kvapi;
 use crate::kvapi::UpsertKVReq;
@@ -47,7 +47,7 @@ use crate::kvapi::UpsertKVReq;
 pub struct TestSuite {}
 
 impl kvapi::TestSuite {
-    #[tracing::instrument(level = "info", skip(self, builder))]
+    #[minitrace::trace]
     pub async fn test_all<KV, B>(&self, builder: B) -> anyhow::Result<()>
     where
         KV: kvapi::KVApi,
@@ -89,7 +89,7 @@ impl kvapi::TestSuite {
 }
 
 impl kvapi::TestSuite {
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_write_read<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_write_read() start");
         {
@@ -134,7 +134,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_delete<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_delete() start");
         let test_key = "test_key";
@@ -155,6 +155,8 @@ impl kvapi::TestSuite {
 
             assert_eq!(res.prev, res.result);
 
+            // dbg!("delete with wrong seq", &res);
+
             // seq match
             let res = kv
                 .upsert_kv(UpsertKVReq::delete(test_key).with(MatchSeq::Exact(seq)))
@@ -170,13 +172,18 @@ impl kvapi::TestSuite {
 
         // key not exist
         let res = kv.upsert_kv(UpsertKVReq::delete("not exists")).await?;
+        // dbg!("delete non-exist key", &res);
+
         assert_eq!(None, res.prev);
         assert_eq!(None, res.result);
 
         // do not care seq
-        kv.upsert_kv(UpsertKVReq::update(test_key, b"v2")).await?;
+        let _res = kv.upsert_kv(UpsertKVReq::update(test_key, b"v2")).await?;
+        // dbg!("update with v2", &res);
 
         let res = kv.upsert_kv(UpsertKVReq::delete(test_key)).await?;
+        // dbg!("delete", &res);
+
         assert_eq!(
             (Some(SeqV::with_meta(2, None, b"v2".to_vec())), None),
             (res.prev, res.result)
@@ -185,7 +192,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_update<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_update() start");
         let test_key = "test_key_for_update";
@@ -231,7 +238,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_timeout<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_timeout() start");
 
@@ -245,14 +252,17 @@ impl kvapi::TestSuite {
             .unwrap()
             .as_secs();
 
-        kv.upsert_kv(UpsertKVReq::update("k1", b"v1").with(KVMeta {
-            expire_at: Some(now + 2),
-        }))
-        .await?;
+        let _res = kv
+            .upsert_kv(UpsertKVReq::update("k1", b"v1").with(KVMeta {
+                expire_at: Some(now + 2),
+            }))
+            .await?;
+        // dbg!("upsert non expired k1", _res);
 
         info!("---get unexpired");
         {
             let res = kv.get_kv("k1").await?;
+            // dbg!("got non expired k1", &res);
             assert!(res.is_some(), "got unexpired");
         }
 
@@ -260,6 +270,7 @@ impl kvapi::TestSuite {
         {
             tokio::time::sleep(tokio::time::Duration::from_millis(3000)).await;
             let res = kv.get_kv("k1").await?;
+            // dbg!("k1 expired", &res);
             debug!("got k1:{:?}", res);
             assert!(res.is_none(), "got expired");
         }
@@ -271,22 +282,28 @@ impl kvapi::TestSuite {
 
         info!("--- expired entry act as if it does not exist, an ADD op should apply");
         {
-            kv.upsert_kv(
-                UpsertKVReq::update("k1", b"v1")
-                    .with(MatchSeq::Exact(0))
-                    .with(KVMeta {
-                        expire_at: Some(now - 1),
-                    }),
-            )
-            .await?;
-            kv.upsert_kv(
-                UpsertKVReq::update("k2", b"v2")
-                    .with(MatchSeq::Exact(0))
-                    .with(KVMeta {
-                        expire_at: Some(now + 10),
-                    }),
-            )
-            .await?;
+            // dbg!("start upsert expired k1");
+            let _res = kv
+                .upsert_kv(
+                    UpsertKVReq::update("k1", b"v1")
+                        .with(MatchSeq::Exact(0))
+                        .with(KVMeta {
+                            expire_at: Some(now - 1),
+                        }),
+                )
+                .await?;
+            // dbg!("update expired k1", _res);
+
+            let _res = kv
+                .upsert_kv(
+                    UpsertKVReq::update("k2", b"v2")
+                        .with(MatchSeq::Exact(0))
+                        .with(KVMeta {
+                            expire_at: Some(now + 10),
+                        }),
+                )
+                .await?;
+            // dbg!("update non expired k2", _res);
 
             info!("--- mget should not return expired");
             let res = kv.mget_kv(&["k1".to_string(), "k2".to_string()]).await?;
@@ -328,7 +345,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_meta<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_meta() start");
 
@@ -399,7 +416,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_list<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_list() start");
 
@@ -430,7 +447,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, kv))]
+    #[minitrace::trace]
     pub async fn kv_mget<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_mget() start");
 
@@ -1016,7 +1033,7 @@ impl kvapi::TestSuite {
 
 /// Test that write and read should be forwarded to leader
 impl kvapi::TestSuite {
-    #[tracing::instrument(level = "info", skip(self, kv1, kv2))]
+    #[minitrace::trace]
     pub async fn kv_write_read_across_nodes<KV: kvapi::KVApi>(
         &self,
         kv1: &KV,

@@ -23,6 +23,7 @@ pub use self::http::HttpHandlerKind;
 pub use self::mysql::MySQLConnection;
 pub use self::mysql::MySQLFederated;
 pub use self::mysql::MySQLHandler;
+pub use self::mysql::MySQLTlsConfig;
 
 pub(crate) mod federated_helper;
 pub mod flight_sql;

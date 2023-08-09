@@ -18,6 +18,7 @@ use bstr::ByteSlice;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::AsyncReadExt;
+use log::debug;
 
 use crate::input_formats::InputContext;
 use crate::input_formats::SplitInfo;
@@ -35,7 +36,7 @@ impl BeyondEndReader {
         let split_info = &self.split_info;
         if split_info.num_file_splits > 1 && split_info.seq_in_file < split_info.num_file_splits - 1
         {
-            tracing::debug!("reading beyond end of split {}", split_info);
+            debug!("reading beyond end of split {}", split_info);
             // todo(youngsofun): use the avg and max row size
             let mut res = Vec::new();
             let batch_size = 1024;

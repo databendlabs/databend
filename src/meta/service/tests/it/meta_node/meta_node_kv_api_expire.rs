@@ -14,7 +14,6 @@
 
 use std::time::Duration;
 
-use common_base::base::tokio;
 use common_base::base::tokio::time::sleep;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::Cmd;
@@ -24,9 +23,10 @@ use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
 use common_meta_types::With;
-use databend_meta::init_meta_ut;
-use tracing::info;
+use log::info;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::meta_node::start_meta_node_leader;
 use crate::tests::meta_node::start_meta_node_non_voter;
 
@@ -35,7 +35,8 @@ use crate::tests::meta_node::start_meta_node_non_voter;
 /// - Start a leader, write kv with expiration;
 /// - Assert expired kv can not be read and write.
 /// - Bring up a learner, replicate logs from leader, rebuild the same state machine.
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
     let mut log_index = 0;
 
@@ -121,7 +122,8 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
     // This way on every node applying a log always get the same result.
     info!("--- get updated kv with new expire, assert the updated value");
     {
-        let resp = learner.sto.state_machine.read().await.get_kv(key).await?;
+        let sm = learner.sto.state_machine.read().await;
+        let resp = sm.kv_api().get_kv(key).await.unwrap();
         let seq_v = resp.unwrap();
         assert_eq!(
             Some(KVMeta {

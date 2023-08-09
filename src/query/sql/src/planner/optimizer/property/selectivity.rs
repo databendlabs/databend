@@ -73,7 +73,7 @@ impl<'a> SelectivityEstimator<'a> {
             ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
                 let left_selectivity = self.compute_selectivity(&func.arguments[0], update)?;
                 let right_selectivity = self.compute_selectivity(&func.arguments[1], update)?;
-                left_selectivity * right_selectivity
+                left_selectivity.min(right_selectivity)
             }
 
             ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
@@ -290,13 +290,12 @@ impl<'a> SelectivityEstimator<'a> {
                 let new_ndv = (column_stat.ndv * selectivity).ceil();
                 column_stat.ndv = new_ndv;
                 if let Some(histogram) = &mut column_stat.histogram {
-                    let new_ndv = new_ndv as u64;
-                    if new_ndv <= 2 {
+                    if new_ndv as u64 <= 2 {
                         column_stat.histogram = None;
-                        return;
-                    }
-                    for bucket in histogram.buckets.iter_mut() {
-                        bucket.update(selectivity);
+                    } else {
+                        for bucket in histogram.buckets.iter_mut() {
+                            bucket.update(selectivity);
+                        }
                     }
                 }
             }

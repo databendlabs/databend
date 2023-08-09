@@ -37,6 +37,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use log::debug;
 use opendal::Operator;
 
 use crate::hive_parquet_block_reader::DataBlockDeserializer;
@@ -126,15 +127,11 @@ impl HiveTableSource {
         })))
     }
 
-    fn try_get_partitions(&mut self) -> Result<()> {
-        match self.ctx.get_partition() {
-            None => self.state = State::Finish,
-            Some(part_info) => {
-                self.state = State::ReadMeta(Some(part_info));
-            }
-        }
-
-        Ok(())
+    fn try_get_partitions(&mut self) {
+        self.state = self
+            .ctx
+            .get_partition()
+            .map_or(State::Finish, |part_info| State::ReadMeta(Some(part_info)));
     }
 
     fn exec_prewhere_filter(
@@ -277,12 +274,7 @@ impl Processor for HiveTableSource {
 
     fn event(&mut self) -> Result<Event> {
         if matches!(self.state, State::ReadMeta(None)) {
-            match self.ctx.get_partition() {
-                None => self.state = State::Finish,
-                Some(part_info) => {
-                    self.state = State::ReadMeta(Some(part_info));
-                }
-            }
+            self.try_get_partitions();
         }
 
         if self.output.is_finished() {
@@ -291,11 +283,6 @@ impl Processor for HiveTableSource {
 
         if !self.output.can_push() {
             return Ok(Event::NeedConsume);
-        }
-
-        if matches!(self.state, State::Finish) {
-            self.output.finish();
-            return Ok(Event::Finished);
         }
 
         if matches!(self.state, State::Generated(_, _)) {
@@ -317,7 +304,7 @@ impl Processor for HiveTableSource {
                         self.state = State::ReadPrewhereData(hive_blocks);
                     }
                     false => {
-                        self.try_get_partitions()?;
+                        self.try_get_partitions();
                     }
                 }
             }
@@ -355,7 +342,7 @@ impl Processor for HiveTableSource {
             State::ReadMeta(Some(part)) => {
                 if self.delay > 0 {
                     sleep(Duration::from_millis(self.delay as u64)).await;
-                    tracing::debug!("sleep for {}ms", self.delay);
+                    debug!("sleep for {}ms", self.delay);
                     self.delay = 0;
                 }
                 let part = HivePartInfo::from_part(&part)?;
@@ -371,7 +358,7 @@ impl Processor for HiveTableSource {
                         self.state = State::ReadPrewhereData(hive_blocks);
                     }
                     false => {
-                        self.try_get_partitions()?;
+                        self.try_get_partitions();
                     }
                 }
                 Ok(())

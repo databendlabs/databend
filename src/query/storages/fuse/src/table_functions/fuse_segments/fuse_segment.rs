@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_exception::Result;
-use common_expression::types::number::UInt64Type;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
+use common_expression::types::UInt64Type;
 use common_expression::DataBlock;
 use common_expression::FromData;
 use common_expression::TableDataType;
@@ -38,40 +38,51 @@ use crate::FuseTable;
 pub struct FuseSegment<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
-    pub snapshot_id: String,
+    pub snapshot_id: Option<String>,
+    pub limit: Option<usize>,
 }
 
 impl<'a> FuseSegment<'a> {
-    pub fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable, snapshot_id: String) -> Self {
+    pub fn new(
+        ctx: Arc<dyn TableContext>,
+        table: &'a FuseTable,
+        snapshot_id: Option<String>,
+        limit: Option<usize>,
+    ) -> Self {
         Self {
             ctx,
             table,
             snapshot_id,
+            limit,
         }
     }
 
     #[async_backtrace::framed]
     pub async fn get_segments(&self) -> Result<DataBlock> {
         let tbl = self.table;
+        let snapshot_id = self.snapshot_id.clone();
         let maybe_snapshot = tbl.read_table_snapshot().await?;
         if let Some(snapshot) = maybe_snapshot {
-            // prepare the stream of snapshot
-            let snapshot_version = tbl.snapshot_format_version(None).await?;
-            let snapshot_location = tbl
-                .meta_location_generator
-                .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
-            let reader = MetaReaders::table_snapshot_reader(tbl.get_operator());
-            let mut snapshot_stream = reader.snapshot_history(
-                snapshot_location,
-                snapshot_version,
-                tbl.meta_location_generator().clone(),
-            );
-
             // find the element by snapshot_id in stream
-            while let Some((snapshot, _)) = snapshot_stream.try_next().await? {
-                if snapshot.snapshot_id.simple().to_string() == self.snapshot_id {
-                    return self.to_block(&snapshot.segments).await;
+            if let Some(snapshot_id) = snapshot_id {
+                // prepare the stream of snapshot
+                let snapshot_version = tbl.snapshot_format_version(None).await?;
+                let snapshot_location = tbl
+                    .meta_location_generator
+                    .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
+                let reader = MetaReaders::table_snapshot_reader(tbl.get_operator());
+                let mut snapshot_stream = reader.snapshot_history(
+                    snapshot_location,
+                    snapshot_version,
+                    tbl.meta_location_generator().clone(),
+                );
+                while let Some((snapshot, _)) = snapshot_stream.try_next().await? {
+                    if snapshot.snapshot_id.simple().to_string() == snapshot_id {
+                        return self.to_block(&snapshot.segments).await;
+                    }
                 }
+            } else {
+                return self.to_block(&snapshot.segments).await;
             }
         }
 
@@ -82,7 +93,9 @@ impl<'a> FuseSegment<'a> {
 
     #[async_backtrace::framed]
     async fn to_block(&self, segment_locations: &[Location]) -> Result<DataBlock> {
-        let len = segment_locations.len();
+        let limit = self.limit.unwrap_or(usize::MAX);
+        let len = std::cmp::min(segment_locations.len(), limit);
+
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
         let mut block_count: Vec<u64> = Vec::with_capacity(len);
         let mut row_count: Vec<u64> = Vec::with_capacity(len);
@@ -95,18 +108,37 @@ impl<'a> FuseSegment<'a> {
             self.table.operator.clone(),
             self.table.schema(),
         );
-        let segments = segments_io
-            .read_segments::<Arc<SegmentInfo>>(segment_locations, true)
-            .await?;
-        for (idx, segment) in segments.into_iter().enumerate() {
-            let segment = segment?;
-            format_versions.push(segment_locations[idx].1);
-            block_count.push(segment.summary.block_count);
-            row_count.push(segment.summary.row_count);
-            compressed.push(segment.summary.compressed_byte_size);
-            uncompressed.push(segment.summary.uncompressed_byte_size);
-            file_location.push(segment_locations[idx].0.clone().into_bytes());
+
+        let mut row_num = 0;
+        let mut end_flag = false;
+        let chunk_size =
+            std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
+        for chunk in segment_locations.chunks(chunk_size) {
+            let segments = segments_io
+                .read_segments::<Arc<SegmentInfo>>(chunk, true)
+                .await?;
+
+            for (idx, segment) in segments.into_iter().enumerate() {
+                let segment = segment?;
+                format_versions.push(segment_locations[idx].1);
+                block_count.push(segment.summary.block_count);
+                row_count.push(segment.summary.row_count);
+                compressed.push(segment.summary.compressed_byte_size);
+                uncompressed.push(segment.summary.uncompressed_byte_size);
+                file_location.push(segment_locations[idx].0.clone().into_bytes());
+
+                row_num += 1;
+                if row_num >= limit {
+                    end_flag = true;
+                    break;
+                }
+            }
+
+            if end_flag {
+                break;
+            }
         }
+
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(file_location),
             UInt64Type::from_data(format_versions),

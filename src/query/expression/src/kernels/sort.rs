@@ -43,6 +43,27 @@ pub struct SortColumnDescription {
     pub is_nullable: bool,
 }
 
+#[derive(Clone, Debug)]
+pub struct SortField {
+    pub data_type: DataType,
+    pub asc: bool,
+    pub nulls_first: bool,
+}
+
+impl SortField {
+    pub fn new(ty: DataType) -> Self {
+        Self::new_with_options(ty, true, true)
+    }
+
+    pub fn new_with_options(ty: DataType, asc: bool, nulls_first: bool) -> Self {
+        Self {
+            data_type: ty,
+            asc,
+            nulls_first,
+        }
+    }
+}
+
 impl DataBlock {
     pub fn sort(
         block: &DataBlock,

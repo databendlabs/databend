@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
-use common_meta_kvapi::kvapi::KVApi;
 use common_meta_sled_store::openraft::LogIdOptionExt;
 use common_meta_sled_store::openraft::ServerState;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
-use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
-use tracing::info;
+use log::info;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::meta_node::start_meta_node_non_voter;
 use crate::tests::meta_node::timeout;
 use crate::tests::service::MetaSrvTestContext;
 
-#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     // - Bring up a cluster of 3.
     // - Write just enough logs to trigger a snapshot.
@@ -121,7 +121,8 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
     for i in 0..n_req {
         let key = format!("test_meta_node_snapshot_replication-key-{}", i);
-        let got = mn1.get_kv(&key).await?;
+        let sm = mn1.sto.get_state_machine().await;
+        let got = sm.get_kv(&key);
         match got {
             None => {
                 panic!("expect get some value for {}", key)

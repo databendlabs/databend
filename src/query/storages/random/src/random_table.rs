@@ -95,6 +95,7 @@ impl Table for RandomTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
@@ -112,10 +113,7 @@ impl Table for RandomTable {
                         }
                     };
                 }
-                let limit = match push_downs.limit {
-                    Some(limit) => limit,
-                    None => block_size,
-                };
+                let limit = push_downs.limit.unwrap_or(block_size);
                 (schema, limit)
             }
             None => (self.schema(), block_size),
@@ -148,7 +146,7 @@ impl Table for RandomTable {
         Ok((statistics, parts))
     }
 
-    fn benefit_column_prune(&self) -> bool {
+    fn support_column_projection(&self) -> bool {
         true
     }
 

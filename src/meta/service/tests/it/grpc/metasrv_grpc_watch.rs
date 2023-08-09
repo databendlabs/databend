@@ -39,9 +39,11 @@ use common_meta_types::TxnDeleteByPrefixRequest;
 use common_meta_types::TxnDeleteRequest;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnPutRequest;
-use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
-use tracing::info;
+use log::info;
+use test_harness::test;
+
+use crate::testing::meta_service_test_harness;
 
 async fn test_watch_main(
     addr: String,
@@ -113,7 +115,8 @@ async fn test_watch_txn_main(
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_watch() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Watch some key.
@@ -131,13 +134,13 @@ async fn test_watch() -> anyhow::Result<()> {
             filter_type: FilterType::All.into(),
         };
 
-        let key_a = "a".to_string();
-        let key_b = "b".to_string();
+        let key_a = s("a");
+        let key_b = s("b");
 
-        let val_a = "a".as_bytes().to_vec();
-        let val_b = "b".as_bytes().to_vec();
-        let val_new = "new".as_bytes().to_vec();
-        let val_z = "z".as_bytes().to_vec();
+        let val_a = b("a");
+        let val_b = b("b");
+        let val_new = b("new");
+        let val_z = b("z");
 
         let watch_events = vec![
             // set a->a
@@ -198,15 +201,15 @@ async fn test_watch() -> anyhow::Result<()> {
     {
         let key_str = "1";
         let watch = WatchRequest {
-            key: key_str.to_string(),
+            key: s(key_str),
             key_end: None,
             // filter only delete events
             filter_type: FilterType::Delete.into(),
         };
 
-        let key = key_str.to_string();
-        let val = "old".as_bytes().to_vec();
-        let val_new = "new".as_bytes().to_vec();
+        let key = s(key_str);
+        let val = b("old");
+        let val_new = b("new");
 
         // has only delete events
         let watch_events = vec![
@@ -249,18 +252,8 @@ async fn test_watch() -> anyhow::Result<()> {
             let client = make_client(&addr)?;
 
             let updates = vec![
-                UpsertKVReq::new(
-                    delete_key,
-                    MatchSeq::GE(0),
-                    Operation::Update(delete_key.as_bytes().to_vec()),
-                    None,
-                ),
-                UpsertKVReq::new(
-                    watch_delete_by_prefix_key,
-                    MatchSeq::GE(0),
-                    Operation::Update(watch_delete_by_prefix_key.as_bytes().to_vec()),
-                    None,
-                ),
+                UpsertKVReq::update(delete_key, &b(delete_key)),
+                UpsertKVReq::update(watch_delete_by_prefix_key, &b(watch_delete_by_prefix_key)),
             ];
 
             for update in updates {
@@ -272,8 +265,8 @@ async fn test_watch() -> anyhow::Result<()> {
 
         let k1 = "watch_txn_key";
 
-        let txn_key = k1.to_string();
-        let txn_val = "txn_val".as_bytes().to_vec();
+        let txn_key = s(k1);
+        let txn_val = b("txn_val");
 
         let (start, end) = kvapi::prefix_to_range(watch_prefix)?;
 
@@ -332,18 +325,18 @@ async fn test_watch() -> anyhow::Result<()> {
                 prev: None,
             },
             Event {
-                key: delete_key.to_string(),
+                key: s(delete_key),
                 prev: Some(SeqV {
                     seq,
-                    data: delete_key.as_bytes().to_vec(),
+                    data: b(delete_key),
                 }),
                 current: None,
             },
             Event {
-                key: watch_delete_by_prefix_key.to_string(),
+                key: s(watch_delete_by_prefix_key),
                 prev: Some(SeqV {
                     seq: seq + 1,
-                    data: watch_delete_by_prefix_key.as_bytes().to_vec(),
+                    data: b(watch_delete_by_prefix_key),
                 }),
                 current: None,
             },
@@ -355,7 +348,8 @@ async fn test_watch() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_watch_expired_events() -> anyhow::Result<()> {
     // Test events emitted when cleaning expired key:
     // - Before applying, 32 expired keys will be cleaned.
@@ -364,7 +358,9 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
     let watch_prefix = "w_";
-    let now = now();
+    let now_sec = now();
+    let expire = now_sec + 11;
+    // dbg!(now_sec, expire);
 
     info!("--- prepare data that are gonna expire");
     {
@@ -376,106 +372,74 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
             else_then: vec![],
         };
 
-        // Every apply() will clean upto 32 expired keys.
-        // Assert next apply will clean up upto 32 expired keys.
+        // Every apply() will clean all expired keys.
         for i in 0..(32 + 1) {
             let k = format!("w_auto_gc_{}", i);
-            txn.if_then.push(TxnOp {
-                request: Some(txn_op::Request::Put(TxnPutRequest {
-                    key: s(&k),
-                    value: b(&k),
-                    prev_value: true,
-                    expire_at: Some(now - 10),
-                })),
-            });
+            txn.if_then
+                .push(TxnOp::put_with_expire(&k, b(&k), Some(expire - 10)));
         }
 
-        // Other expired key will only be cleaned if they are read
+        // Expired key wont be cleaned when they are read, although read returns None.
 
-        txn.if_then.push(TxnOp {
-            request: Some(txn_op::Request::Put(TxnPutRequest {
-                key: s("w_b1"),
-                value: b("w_b1"),
-                prev_value: true,
-                expire_at: Some(now - 1),
-            })),
-        });
-        txn.if_then.push(TxnOp {
-            request: Some(txn_op::Request::Put(TxnPutRequest {
-                key: s("w_b2"),
-                value: b("w_b2"),
-                prev_value: true,
-                expire_at: Some(now - 1),
-            })),
-        });
-        txn.if_then.push(TxnOp {
-            request: Some(txn_op::Request::Put(TxnPutRequest {
-                key: s("w_b3a"),
-                value: b("w_b3a"),
-                prev_value: true,
-                expire_at: Some(now - 1),
-            })),
-        });
-        txn.if_then.push(TxnOp {
-            request: Some(txn_op::Request::Put(TxnPutRequest {
-                key: s("w_b3b"),
-                value: b("w_b3b"),
-                prev_value: true,
-                expire_at: Some(now - 1),
-            })),
-        });
+        txn.if_then
+            .push(TxnOp::put_with_expire("w_b1", b("w_b1"), Some(expire - 5)));
+        txn.if_then
+            .push(TxnOp::put_with_expire("w_b2", b("w_b2"), Some(expire - 5)));
+        txn.if_then.push(TxnOp::put_with_expire(
+            "w_b3a",
+            b("w_b3a"),
+            Some(expire - 5),
+        ));
+        txn.if_then.push(TxnOp::put_with_expire(
+            "w_b3b",
+            b("w_b3b"),
+            Some(expire + 5),
+        ));
 
         client.transaction(txn).await?;
     }
 
-    let (start, end) = kvapi::prefix_to_range(watch_prefix)?;
-    let watch = WatchRequest {
-        key: start,
-        key_end: Some(end),
-        filter_type: FilterType::All.into(),
+    info!("--- start watching");
+    let watch_client = make_client(&addr)?;
+    let mut client_stream = {
+        let (start, end) = kvapi::prefix_to_range(watch_prefix)?;
+        let watch = WatchRequest {
+            key: start,
+            key_end: Some(end),
+            filter_type: FilterType::All.into(),
+        };
+        watch_client.request(watch).await?
     };
 
-    let txn = TxnRequest {
-        condition: vec![],
-        if_then: vec![
-            TxnOp {
-                request: Some(txn_op::Request::Put(TxnPutRequest {
-                    key: s("w_b1"),
-                    value: b("w_b1_override"),
-                    prev_value: true,
-                    expire_at: None,
-                })),
-            },
-            TxnOp {
-                request: Some(txn_op::Request::Delete(TxnDeleteRequest {
-                    key: s("w_b2"),
-                    prev_value: true,
-                    match_seq: None,
-                })),
-            },
-            TxnOp {
-                request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
-                    prefix: s("w_b3"),
-                })),
-            },
-        ],
-        else_then: vec![],
-    };
+    info!("--- sleep {} for expiration", expire - now_sec);
+    tokio::time::sleep(Duration::from_secs(expire - now_sec)).await;
 
-    info!("--- apply txn and check emitted events");
+    info!("--- apply another txn in another thread to override keys");
     {
+        let txn = TxnRequest {
+            condition: vec![],
+            if_then: vec![
+                TxnOp::put("w_b1", b("w_b1_override")),
+                TxnOp::delete("w_b2"),
+                TxnOp {
+                    request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
+                        prefix: s("w_b3"),
+                    })),
+                },
+            ],
+            else_then: vec![],
+        };
+
         let client = make_client(&addr)?;
-        let mut client_stream = client.request(watch).await?;
+        let _h = tokio::spawn(async move {
+            let _res = client.transaction(txn).await;
+        });
+    }
 
-        {
-            let client = make_client(&addr)?;
-            let _h = tokio::spawn(async move {
-                let _res = client.transaction(txn).await;
-            });
-        }
-
+    info!("--- check emitted events");
+    {
         // 32 expired keys are auto cleaned.
-        for i in 0..32 {
+        for i in 0..(32 + 1) {
             let k = format!("w_auto_gc_{}", i);
             let want = del_event(&k, 1 + i, &k);
             let msg = client_stream.message().await?.unwrap();
@@ -487,9 +451,9 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         let seq = 34;
         let watch_events = vec![
             del_event("w_b1", seq, "w_b1"),              // expired
-            add_event("w_b1", seq + 4, "w_b1_override"), // override
             del_event("w_b2", seq + 1, "w_b2"),          // expired
             del_event("w_b3a", seq + 2, "w_b3a"),        // expired
+            add_event("w_b1", seq + 4, "w_b1_override"), // override
             del_event("w_b3b", seq + 3, "w_b3b"),        // expired
         ];
 
@@ -502,7 +466,8 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_watch_stream_count() -> anyhow::Result<()> {
     // When the client drops the stream, databend-meta should reclaim the resources.
 
@@ -521,7 +486,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
 
     let watcher_count = Arc::new(std::sync::Mutex::new(0usize));
 
-    tracing::info!("one watcher");
+    info!("one watcher");
     {
         let cnt = watcher_count.clone();
 
@@ -534,7 +499,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
         assert_eq!(1, *watcher_count.lock().unwrap());
     }
 
-    tracing::info!("second watcher");
+    info!("second watcher");
     {
         let client2 = make_client(&addr)?;
         let _watch_stream2 = client2.request(watch_req()).await?;
@@ -550,10 +515,10 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
         assert_eq!(2, *watcher_count.lock().unwrap());
     }
 
-    tracing::info!("wait a while for MetaNode to process stream cleanup");
+    info!("wait a while for MetaNode to process stream cleanup");
     sleep(Duration::from_millis(2_000)).await;
 
-    tracing::info!("second watcher is removed");
+    info!("second watcher is removed");
     {
         let cnt = watcher_count.clone();
 

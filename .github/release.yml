@@ -1,7 +1,4 @@
 changelog:
-  exclude:
-    authors:
-      - Mergify
   categories:
     - title: Accepted RFCs 🛫
       labels:

@@ -21,9 +21,10 @@ use comfy_table::Cell;
 use comfy_table::Table;
 use common_io::display_decimal_128;
 use common_io::display_decimal_256;
+use croaring::treemap::NativeSerializer;
+use croaring::Treemap;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
-use roaring::RoaringTreemap;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
@@ -140,7 +141,7 @@ impl<'a> Debug for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
+                let rb = Treemap::deserialize(bits).unwrap();
                 write!(f, "{rb:?}")
             }
             ScalarRef::Tuple(fields) => {
@@ -219,7 +220,7 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
+                let rb = Treemap::deserialize(bits).unwrap();
                 write!(f, "{rb:?}")
             }
             ScalarRef::Tuple(fields) => {
@@ -378,8 +379,11 @@ impl Debug for DecimalColumn {
 impl Debug for StringColumn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StringColumn")
-            .field("data", &format_args!("0x{}", &hex::encode(&*self.data)))
-            .field("offsets", &self.offsets)
+            .field(
+                "data",
+                &format_args!("0x{}", &hex::encode(self.data().as_slice())),
+            )
+            .field("offsets", &self.offsets())
             .finish()
     }
 }
@@ -893,6 +897,7 @@ impl<T: Display> Display for SimpleDomain<T> {
         write!(f, "{{{}..={}}}", self.min, self.max)
     }
 }
+
 impl Display for Domain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {

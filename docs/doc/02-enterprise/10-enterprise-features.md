@@ -2,22 +2,10 @@
 title: Enterprise Features
 ---
 
-Databend Cloud distributes a single binary that provides both core and enterprise features. You can use core features without any
-license key. However, to use the Enterprise features, you need either a trial or an Enterprise license key.
+This page provides an updated list of available enterprise features. To access these features, you will require an enterprise or trial license. For more details, see [Licensing Databend](20-license.md).
 
-The page lists Enterprise features.
-
-If you want to obtain trial/enterprise license keys, please check in [here](https://databend.rs/doc/faq/license-faqs#obtain-a-license).
-
-Once, you obtained your license key, please take a look on our [License FAQs](https://databend.rs/doc/faq/license-faqs/) about how to [SET](https://databend.rs/doc/faq/license-faqs/#set-a-license) a license
-and [VERIFY](https://databend.rs/doc/faq/license-faqs/#verify-a-license) your license.
-
-
-
-| Feature                                                                             | Description                                                                                                                                                                                                                                                             |
-|-------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [Data Vacuum with Fail-Safe](../14-sql-commands/00-ddl/20-table/91-vacuum-table.md) | Deep clean your storage space:<br/>- Remove orphan segment and block files. <br/>- Ensure secure data cleaning with fail-safe guarantees. <br/>- Safely preview the removal of data files using the dry-run option. |
-
-
-
-
+| Feature                                                                                        	 | Description                                                                                                                                                                                                                                                                                                                                                                                 	 |
+|--------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [Vacuum Dropped Tables](../14-sql-commands/00-ddl/20-table/91-vacuum-drop-table.md)            	 | Optimize storage and data management for dropped tables:<br/>- Efficiently free up storage by removing dropped tables' data files.<br/>- Utilize the 'Retain N hours' option to specify a time window during which dropped table data files are retained for potential recovery. <br/>- Safely preview the removal of data files using the dry-run option.                                  	 |
+| [Vacuum Historical Data](../14-sql-commands/00-ddl/20-table/91-vacuum-table.md)            	 | Deep clean your storage space:<br/>- Remove orphan segment and block files. <br/>- Safely preview the removal of data files using the dry-run option.                                                                                                                                                                         	 |
+| [Computed Columns](../14-sql-commands/00-ddl/20-table/10-ddl-create-table.md#computed-columns) 	 | Computed columns save you time and effort by enabling derivation of new columns from existing ones:<br/>- Automatic updates ensure accurate and consistent data.<br/>- Advanced analysis and calculations can now be performed within the database.<br/>- Two types of computed columns: stored and virtual. Virtual columns save you space as they are calculated on-the-fly when queried. 	 |

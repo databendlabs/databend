@@ -580,7 +580,7 @@ CreateTable(
                             precision: 38,
                             scale: 0,
                         },
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -633,15 +633,17 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: Some(
-                            Literal {
-                                span: Some(
-                                    59..60,
-                                ),
-                                lit: UInt64(
-                                    1,
-                                ),
-                            },
+                        expr: Some(
+                            Default(
+                                Literal {
+                                    span: Some(
+                                        59..60,
+                                    ),
+                                    lit: UInt64(
+                                        1,
+                                    ),
+                                },
+                            ),
                         ),
                         comment: None,
                     },
@@ -654,7 +656,7 @@ CreateTable(
                             ),
                         },
                         data_type: String,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -707,15 +709,17 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: Some(
-                            Literal {
-                                span: Some(
-                                    50..51,
-                                ),
-                                lit: UInt64(
-                                    1,
-                                ),
-                            },
+                        expr: Some(
+                            Default(
+                                Literal {
+                                    span: Some(
+                                        50..51,
+                                    ),
+                                    lit: UInt64(
+                                        1,
+                                    ),
+                                },
+                            ),
                         ),
                         comment: None,
                     },
@@ -728,7 +732,7 @@ CreateTable(
                             ),
                         },
                         data_type: String,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -848,7 +852,7 @@ CreateTable(
                                 String,
                             ],
                         },
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -866,7 +870,263 @@ CreateTable(
                                 String,
                             ],
                         },
-                        default_expr: None,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (a string, b string, c string as (concat(a, ' ', b)) stored );
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (a STRING NOT NULL, b STRING NOT NULL, c STRING NOT NULL AS (concat(a, ' ', b)) STORED)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Some(
+                    27..28,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Some(
+                29..30,
+            ),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                32..33,
+                            ),
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                42..43,
+                            ),
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Some(
+                                52..53,
+                            ),
+                        },
+                        data_type: String,
+                        expr: Some(
+                            Stored(
+                                FunctionCall {
+                                    span: Some(
+                                        65..82,
+                                    ),
+                                    distinct: false,
+                                    name: Identifier {
+                                        name: "concat",
+                                        quote: None,
+                                        span: Some(
+                                            65..71,
+                                        ),
+                                    },
+                                    args: [
+                                        ColumnRef {
+                                            span: Some(
+                                                72..73,
+                                            ),
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    name: "a",
+                                                    quote: None,
+                                                    span: Some(
+                                                        72..73,
+                                                    ),
+                                                },
+                                            ),
+                                        },
+                                        Literal {
+                                            span: Some(
+                                                75..78,
+                                            ),
+                                            lit: String(
+                                                " ",
+                                            ),
+                                        },
+                                        ColumnRef {
+                                            span: Some(
+                                                80..81,
+                                            ),
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    name: "b",
+                                                    quote: None,
+                                                    span: Some(
+                                                        80..81,
+                                                    ),
+                                                },
+                                            ),
+                                        },
+                                    ],
+                                    params: [],
+                                    window: None,
+                                    lambda: None,
+                                },
+                            ),
+                        ),
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (a int, b int, c int generated always as (a + b) virtual );
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (a Int32 NOT NULL, b Int32 NOT NULL, c Int32 NOT NULL AS ((a + b)) VIRTUAL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Some(
+                    27..28,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Some(
+                29..30,
+            ),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                32..33,
+                            ),
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                39..40,
+                            ),
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Some(
+                                46..47,
+                            ),
+                        },
+                        data_type: Int32,
+                        expr: Some(
+                            Virtual(
+                                BinaryOp {
+                                    span: Some(
+                                        75..76,
+                                    ),
+                                    op: Plus,
+                                    left: ColumnRef {
+                                        span: Some(
+                                            73..74,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    73..74,
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                    right: ColumnRef {
+                                        span: Some(
+                                            77..78,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Some(
+                                                    77..78,
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                },
+                            ),
+                        ),
                         comment: None,
                     },
                 ],
@@ -1017,7 +1277,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -1087,7 +1347,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -1448,7 +1708,7 @@ CreateTable(
                         data_type: Nullable(
                             Timestamp,
                         ),
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -1460,7 +1720,7 @@ CreateTable(
                             ),
                         },
                         data_type: Timestamp,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -2138,7 +2398,7 @@ CreateTable(
                         data_type: Nullable(
                             Int32,
                         ),
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2152,7 +2412,7 @@ CreateTable(
                         data_type: Nullable(
                             Int64,
                         ),
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2166,7 +2426,7 @@ CreateTable(
                         data_type: Nullable(
                             String,
                         ),
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -2211,7 +2471,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2223,7 +2483,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int64,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2235,7 +2495,7 @@ CreateTable(
                             ),
                         },
                         data_type: String,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -2280,7 +2540,7 @@ CreateTable(
                             ),
                         },
                         data_type: String,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -2325,15 +2585,17 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: Some(
-                            Literal {
-                                span: Some(
-                                    30..31,
-                                ),
-                                lit: UInt64(
-                                    1,
-                                ),
-                            },
+                        expr: Some(
+                            Default(
+                                Literal {
+                                    span: Some(
+                                        30..31,
+                                    ),
+                                    lit: UInt64(
+                                        1,
+                                    ),
+                                },
+                            ),
                         ),
                         comment: None,
                     },
@@ -2519,6 +2781,50 @@ AlterUser(
 
 
 ---------- Input ----------
+ALTER USER u1 WITH SET NETWORK POLICY = 'policy1';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH SET NETWORK POLICY = 'policy1'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            SetNetworkPolicy(
+                "policy1",
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH UNSET NETWORK POLICY;
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH UNSET NETWORK POLICY
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            UnsetNetworkPolicy,
+        ],
+    },
+)
+
+
+---------- Input ----------
 CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING
 ---------- Output ---------
 CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANTSETTING
@@ -2542,6 +2848,33 @@ CreateUser(
             ),
             TenantSetting(
                 true,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+CREATE USER u1 IDENTIFIED BY '123456' WITH SET NETWORK POLICY='policy1'
+---------- Output ---------
+CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH SET NETWORK POLICY = 'policy1'
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        if_not_exists: false,
+        user: UserIdentity {
+            username: "u1",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "123456",
+            ),
+        },
+        user_options: [
+            SetNetworkPolicy(
+                "policy1",
             ),
         ],
     },
@@ -6434,6 +6767,7 @@ Query(
                                     ],
                                     params: [],
                                     window: None,
+                                    lambda: None,
                                 },
                                 accessor: Period {
                                     key: Identifier {
@@ -6612,16 +6946,16 @@ ListStage {
 
 
 ---------- Input ----------
-create user 'test-e'@'localhost' identified by 'password';
+create user 'test-e' identified by 'password';
 ---------- Output ---------
-CREATE USER 'test-e'@'localhost' IDENTIFIED BY 'password'
+CREATE USER 'test-e'@'%' IDENTIFIED BY 'password'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
         if_not_exists: false,
         user: UserIdentity {
             username: "test-e",
-            hostname: "localhost",
+            hostname: "%",
         },
         auth_option: AuthOption {
             auth_type: None,
@@ -6635,30 +6969,30 @@ CreateUser(
 
 
 ---------- Input ----------
-drop user if exists 'test-j'@'localhost';
+drop user if exists 'test-j';
 ---------- Output ---------
-DROP USER IF EXISTS 'test-j'@'localhost'
+DROP USER IF EXISTS 'test-j'@'%'
 ---------- AST ------------
 DropUser {
     if_exists: true,
     user: UserIdentity {
         username: "test-j",
-        hostname: "localhost",
+        hostname: "%",
     },
 }
 
 
 ---------- Input ----------
-alter user 'test-e'@'localhost' identified by 'new-password';
+alter user 'test-e' identified by 'new-password';
 ---------- Output ---------
-ALTER USER 'test-e'@'localhost' IDENTIFIED BY 'new-password'
+ALTER USER 'test-e'@'%' IDENTIFIED BY 'new-password'
 ---------- AST ------------
 AlterUser(
     AlterUserStmt {
         user: Some(
             UserIdentity {
                 username: "test-e",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
         auth_option: Some(
@@ -6694,6 +7028,132 @@ DropRole {
     if_exists: true,
     role_name: "test",
 }
+
+
+---------- Input ----------
+OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Compact {
+            target: Segment,
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t COMPACT LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t COMPACT BLOCK LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Compact {
+            target: Block,
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t PURGE BEFORE  (SNAPSHOT => 9828b23f74664ff3806f44bbc1925ea5) LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Purge {
+            before: Some(
+                Snapshot(
+                    "9828b23f74664ff3806f44bbc1925ea5",
+                ),
+            ),
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t PURGE BEFORE  (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Purge {
+            before: Some(
+                Timestamp(
+                    Cast {
+                        span: Some(
+                            72..83,
+                        ),
+                        expr: Literal {
+                            span: Some(
+                                44..72,
+                            ),
+                            lit: String(
+                                "2023-06-26 09:49:02.038483",
+                            ),
+                        },
+                        target_type: Timestamp,
+                        pg_style: true,
+                    },
+                ),
+            ),
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
 
 
 ---------- Input ----------
@@ -6778,9 +7238,9 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0;
+ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;
 ---------- Output ---------
-ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0)
+ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0) LIMIT 10
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -6837,15 +7297,65 @@ AlterTable(
                     },
                 },
             ),
+            limit: Some(
+                10,
+            ),
         },
     },
 )
 
 
 ---------- Input ----------
-ALTER TABLE t ADD COLUMN a float default 101 COMMENT 'hello';
+ALTER TABLE t ADD COLUMN c int null;
 ---------- Output ---------
-ALTER TABLE t ADD COLUMN a Float32 NOT NULL DEFAULT 101 COMMENT 'hello'
+ALTER TABLE t ADD COLUMN c Int32 NULL
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: AddColumn {
+            column: ColumnDefinition {
+                name: Identifier {
+                    name: "c",
+                    quote: None,
+                    span: Some(
+                        25..26,
+                    ),
+                },
+                data_type: Nullable(
+                    Int32,
+                ),
+                expr: None,
+                comment: None,
+            },
+            option: End,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t ADD COLUMN a float default 1.1 COMMENT 'hello' FIRST;
+---------- Output ---------
+ALTER TABLE t ADD COLUMN a Float32 NOT NULL DEFAULT 1.1 COMMENT 'hello' FIRST
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -6878,18 +7388,133 @@ AlterTable(
                     ),
                 },
                 data_type: Float32,
-                default_expr: Some(
-                    Literal {
-                        span: Some(
-                            41..44,
-                        ),
-                        lit: UInt64(
-                            101,
-                        ),
-                    },
+                expr: Some(
+                    Default(
+                        Literal {
+                            span: Some(
+                                41..44,
+                            ),
+                            lit: Decimal256 {
+                                value: 11,
+                                precision: 76,
+                                scale: 1,
+                            },
+                        },
+                    ),
                 ),
                 comment: Some(
                     "hello",
+                ),
+            },
+            option: First,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t ADD COLUMN b string default 'b' AFTER a;
+---------- Output ---------
+ALTER TABLE t ADD COLUMN b STRING NOT NULL DEFAULT 'b' AFTER a
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: AddColumn {
+            column: ColumnDefinition {
+                name: Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Some(
+                        25..26,
+                    ),
+                },
+                data_type: String,
+                expr: Some(
+                    Default(
+                        Literal {
+                            span: Some(
+                                42..45,
+                            ),
+                            lit: String(
+                                "b",
+                            ),
+                        },
+                    ),
+                ),
+                comment: None,
+            },
+            option: After(
+                Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Some(
+                        52..53,
+                    ),
+                },
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t RENAME COLUMN a TO b;
+---------- Output ---------
+ALTER TABLE t RENAME COLUMN a TO b
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: RenameColumn {
+            old_column: Identifier {
+                name: "a",
+                quote: None,
+                span: Some(
+                    28..29,
+                ),
+            },
+            new_column: Identifier {
+                name: "b",
+                quote: None,
+                span: Some(
+                    33..34,
                 ),
             },
         },
@@ -6963,16 +7588,236 @@ AlterTable(
             unpivot: None,
         },
         action: ModifyColumn {
-            column: Identifier {
-                name: "b",
-                quote: None,
-                span: Some(
-                    28..29,
-                ),
-            },
             action: SetMaskingPolicy(
+                Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Some(
+                        28..29,
+                    ),
+                },
                 "mask",
             ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY;
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyColumn {
+            action: UnsetMaskingPolicy(
+                Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Some(
+                        28..29,
+                    ),
+                },
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY COLUMN a int, COLUMN b float;
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN a Int32, COLUMN b Float32
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyColumn {
+            action: SetDataType(
+                [
+                    (
+                        Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                28..29,
+                            ),
+                        },
+                        Int32,
+                    ),
+                    (
+                        Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                42..43,
+                            ),
+                        },
+                        Float32,
+                    ),
+                ],
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY COLUMN a int;
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN a Int32
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyColumn {
+            action: SetDataType(
+                [
+                    (
+                        Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                28..29,
+                            ),
+                        },
+                        Int32,
+                    ),
+                ],
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY COLUMN a DROP STORED;
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN a DROP STORED
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyColumn {
+            action: ConvertStoredComputedColumn(
+                Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Some(
+                        28..29,
+                    ),
+                },
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);
+---------- Output ---------
+ALTER TABLE t SET OPTIONS: block_per_segment='500' snapshot_location='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk'
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: SetOptions {
+            set_options: {
+                "block_per_segment": "500",
+                "snapshot_location": "1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk",
+            },
         },
     },
 )
@@ -7108,7 +7953,7 @@ VacuumTable(
 ---------- Input ----------
 VACUUM TABLE t RETAIN 4 HOURS DRY RUN;
 ---------- Output ---------
-VACUUM TABLE t  RETAIN 4 HOURS DRY RUN
+VACUUM TABLE t RETAIN 4 HOURS DRY RUN
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -7143,7 +7988,7 @@ VacuumTable(
 ---------- Input ----------
 VACUUM TABLE t RETAIN 40 HOURS;
 ---------- Output ---------
-VACUUM TABLE t  RETAIN 40 HOURS
+VACUUM TABLE t RETAIN 40 HOURS
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -7161,6 +8006,94 @@ VacuumTable(
                 Literal {
                     span: Some(
                         22..24,
+                    ),
+                    lit: UInt64(
+                        40,
+                    ),
+                },
+            ),
+            dry_run: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE RETAIN 20 HOURS;
+---------- Output ---------
+VACUUM DROP TABLE RETAIN 20 HOURS
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: None,
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        25..27,
+                    ),
+                    lit: UInt64(
+                        20,
+                    ),
+                },
+            ),
+            dry_run: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN;
+---------- Output ---------
+VACUUM DROP TABLE RETAIN 30 HOURS DRY RUN
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: None,
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        25..27,
+                    ),
+                    lit: UInt64(
+                        30,
+                    ),
+                },
+            ),
+            dry_run: Some(
+                (),
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE FROM db RETAIN 40 HOURS;
+---------- Output ---------
+VACUUM DROP TABLE FROM db RETAIN 40 HOURS
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Some(
+                    23..25,
+                ),
+            },
+        ),
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        33..35,
                     ),
                     lit: UInt64(
                         40,
@@ -7202,7 +8135,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: None,
+                        expr: None,
                         comment: Some(
                             "col comment",
                         ),
@@ -7223,9 +8156,9 @@ CreateTable(
 
 
 ---------- Input ----------
-GRANT CREATE, CREATE USER ON * TO 'test-grant'@'localhost';
+GRANT CREATE, CREATE USER ON * TO 'test-grant';
 ---------- Output ---------
-GRANT CREATE, CREATE USER ON * TO USER 'test-grant'@'localhost'
+GRANT CREATE, CREATE USER ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7241,7 +8174,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7249,9 +8182,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';
+GRANT SELECT, CREATE ON * TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7267,7 +8200,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7275,9 +8208,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON *.* TO 'test-grant'@'localhost';
+GRANT SELECT, CREATE ON *.* TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON *.* TO USER 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7291,7 +8224,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7299,9 +8232,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';
+GRANT SELECT, CREATE ON * TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7317,7 +8250,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7348,9 +8281,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ALL ON *.* TO 'test-grant'@'localhost';
+GRANT ALL ON *.* TO 'test-grant';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'localhost'
+GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7360,7 +8293,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7385,9 +8318,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';
+GRANT ALL PRIVILEGES ON * TO 'test-grant';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'localhost'
+GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7399,7 +8332,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7483,9 +8416,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.* TO 'test-grant'@'localhost';
+GRANT SELECT ON db01.* TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+GRANT SELECT ON db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7502,7 +8435,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7510,9 +8443,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';
+GRANT SELECT ON db01.* TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+GRANT SELECT ON db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7529,7 +8462,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7561,9 +8494,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
+GRANT SELECT ON db01.tb1 TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7581,7 +8514,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7589,9 +8522,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';
+GRANT SELECT ON db01.tb1 TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7609,7 +8542,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7698,16 +8631,16 @@ ShowGrants {
 
 
 ---------- Input ----------
-SHOW GRANTS FOR 'test-grant'@'localhost';
+SHOW GRANTS FOR 'test-grant';
 ---------- Output ---------
-SHOW GRANTS FOR USER 'test-grant'@'localhost'
+SHOW GRANTS FOR USER 'test-grant'@'%'
 ---------- AST ------------
 ShowGrants {
     principal: Some(
         User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     ),
@@ -7715,16 +8648,16 @@ ShowGrants {
 
 
 ---------- Input ----------
-SHOW GRANTS FOR USER 'test-grant'@'localhost';
+SHOW GRANTS FOR USER 'test-grant';
 ---------- Output ---------
-SHOW GRANTS FOR USER 'test-grant'@'localhost'
+SHOW GRANTS FOR USER 'test-grant'@'%'
 ---------- AST ------------
 ShowGrants {
     principal: Some(
         User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     ),
@@ -7746,9 +8679,9 @@ ShowGrants {
 
 
 ---------- Input ----------
-REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';
+REVOKE SELECT, CREATE ON * FROM 'test-grant';
 ---------- Output ---------
-REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'localhost'
+REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -7764,7 +8697,7 @@ Revoke(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -10799,6 +11732,7 @@ CreateDatamaskPolicy(
                             args: [],
                             params: [],
                             window: None,
+                            lambda: None,
                         },
                         list: [
                             Literal {
@@ -11114,6 +12048,198 @@ GenerateVirtualColumns(
                 29..30,
             ),
         },
+    },
+)
+
+
+---------- Input ----------
+CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'
+---------- Output ---------
+CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_LIST = ('192.168.10.99') COMMENT = 'test'
+---------- AST ------------
+CreateNetworkPolicy(
+    CreateNetworkPolicyStmt {
+        if_not_exists: false,
+        name: "mypolicy",
+        allowed_ip_list: [
+            "192.168.10.0/24",
+        ],
+        blocked_ip_list: Some(
+            [
+                "192.168.10.99",
+            ],
+        ),
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'
+---------- Output ---------
+ALTER NETWORK POLICY mypolicy SET  ALLOWED_IP_LIST = ('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST = ('192.168.1.99') COMMENT = 'test'
+---------- AST ------------
+AlterNetworkPolicy(
+    AlterNetworkPolicyStmt {
+        if_exists: false,
+        name: "mypolicy",
+        allowed_ip_list: Some(
+            [
+                "192.168.10.0/24",
+                "192.168.255.1",
+            ],
+        ),
+        blocked_ip_list: Some(
+            [
+                "192.168.1.99",
+            ],
+        ),
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+--各环节转各环节转各环节转各环节转各
+  select 34343
+---------- Output ---------
+SELECT 34343
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            56..68,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    56..68,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                63..68,
+                            ),
+                            lit: UInt64(
+                                34343,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+-- 96477300355	31379974136	3.074486292973661
+select 34343
+---------- Output ---------
+SELECT 34343
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            45..57,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    45..57,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                52..57,
+                            ),
+                            lit: UInt64(
+                                34343,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+-- xxxxx
+  select 34343;
+---------- Output ---------
+SELECT 34343
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            11..23,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    11..23,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                18..23,
+                            ),
+                            lit: UInt64(
+                                34343,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
     },
 )
 

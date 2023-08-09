@@ -83,6 +83,9 @@
         &.nowItemLinux {
           background-color: var(--indigo-5);
         }
+        &.nowItemLinuxUbuntu {
+          background-color:  #ED6547;
+        }
       }
     }
 
@@ -134,6 +137,9 @@
         &.buttonLinux {
           background-color: var(--indigo-5);
         }
+        &.buttonLinuxUbuntu {
+          background-color: #ED6547;
+        }
       }
       .listItem {
         display: flex;
@@ -160,6 +166,7 @@
           row-gap: 12px;
           padding: 12px 12px!important;
           .downArea {
+            flex-wrap: wrap;
             gap: 6px;
           }
 

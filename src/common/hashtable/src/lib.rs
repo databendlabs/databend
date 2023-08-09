@@ -103,7 +103,6 @@ pub type LookupHashMapIter<'a, K, const CAPACITY: usize, V> = LookupTableIter<'a
 pub type LookupHashMapIterMut<'a, K, const CAPACITY: usize, V> =
     LookupTableIterMut<'a, CAPACITY, K, V>;
 
-pub use hashjoin_hashtable::MarkerKind;
 pub use hashjoin_hashtable::RawEntry;
 pub use hashjoin_hashtable::RowPtr;
 pub use hashjoin_string_hashtable::StringRawEntry;

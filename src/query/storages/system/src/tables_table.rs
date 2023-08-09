@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
+use common_expression::types::TimestampType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::FromOptData;
@@ -35,7 +36,9 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use log::warn;
 
+use crate::columns_table::GrantObjectVisibilityChecker;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
@@ -102,15 +105,21 @@ where TablesTable<T>: HistoryAware
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
         let ctls: Vec<(String, Arc<dyn Catalog>)> = catalog_mgr
-            .catalogs
+            .list_catalogs(&tenant)
+            .await?
             .iter()
-            .map(|e| (e.key().to_string(), e.value().clone()))
+            .map(|e| (e.name(), e.clone()))
             .collect();
 
         let mut catalogs = vec![];
         let mut databases = vec![];
 
         let mut database_tables = vec![];
+
+        let user = ctx.get_current_user()?;
+        let roles = ctx.get_current_available_roles().await?;
+        let visibility_checker = GrantObjectVisibilityChecker::new(&user, &roles);
+
         for (ctl_name, ctl) in ctls.into_iter() {
             let mut dbs = Vec::new();
             if let Some(push_downs) = &push_downs {
@@ -139,7 +148,11 @@ where TablesTable<T>: HistoryAware
             }
             let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
 
-            for db in dbs {
+            let final_dbs = dbs
+                .into_iter()
+                .filter(|db| visibility_checker.check_database_visibility(ctl_name, db.name()))
+                .collect::<Vec<_>>();
+            for db in final_dbs {
                 let name = db.name().to_string().into_boxed_str();
                 let name: &str = Box::leak(name);
                 let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
@@ -149,24 +162,28 @@ where TablesTable<T>: HistoryAware
                         // is easy to get errors with invalid configs, but system.tables is better not
                         // to be affected by it.
                         if db.get_db_info().meta.from_share.is_some() {
-                            tracing::warn!(
-                                "list tables failed on sharing db {}: {}",
-                                db.name(),
-                                err
-                            );
+                            warn!("list tables failed on sharing db {}: {}", db.name(), err);
                             continue;
                         }
                         return Err(err);
                     }
                 };
+
                 for table in tables {
-                    catalogs.push(ctl_name.as_bytes().to_vec());
-                    databases.push(name.as_bytes().to_vec());
-                    database_tables.push(table);
+                    // If db1 is visible, do not means db1.table1 is visible. An user may have a grant about db1.table2, so db1 is visible
+                    // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
+                    if visibility_checker.check_table_visibility(ctl_name, db.name(), table.name())
+                    {
+                        catalogs.push(ctl_name.as_bytes().to_vec());
+                        databases.push(name.as_bytes().to_vec());
+                        database_tables.push(table);
+                    }
                 }
             }
         }
 
+        let mut number_of_blocks: Vec<Option<u64>> = Vec::new();
+        let mut number_of_segments: Vec<Option<u64>> = Vec::new();
         let mut num_rows: Vec<Option<u64>> = Vec::new();
         let mut data_size: Vec<Option<u64>> = Vec::new();
         let mut data_compressed_size: Vec<Option<u64>> = Vec::new();
@@ -175,6 +192,8 @@ where TablesTable<T>: HistoryAware
         for tbl in &database_tables {
             let stats = tbl.table_statistics()?;
             num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
+            number_of_blocks.push(stats.as_ref().and_then(|v| v.number_of_blocks));
+            number_of_segments.push(stats.as_ref().and_then(|v| v.number_of_segments));
             data_size.push(stats.as_ref().and_then(|v| v.data_size));
             data_compressed_size.push(stats.as_ref().and_then(|v| v.data_size_compressed));
             index_size.push(stats.as_ref().and_then(|v| v.index_size));
@@ -217,6 +236,12 @@ where TablesTable<T>: HistoryAware
             .collect();
         let dropped_owns: Vec<Vec<u8>> =
             dropped_owns.iter().map(|s| s.as_bytes().to_vec()).collect();
+
+        let updated_on = database_tables
+            .iter()
+            .map(|v| v.get_table_info().meta.updated_on.timestamp_micros())
+            .collect::<Vec<_>>();
+
         let cluster_bys: Vec<String> = database_tables
             .iter()
             .map(|v| {
@@ -238,7 +263,6 @@ where TablesTable<T>: HistoryAware
                 }
             })
             .collect();
-
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(catalogs),
             StringType::from_data(databases),
@@ -250,10 +274,13 @@ where TablesTable<T>: HistoryAware
             StringType::from_data(is_transient),
             StringType::from_data(created_owns),
             StringType::from_data(dropped_owns),
+            TimestampType::from_data(updated_on),
             UInt64Type::from_opt_data(num_rows),
             UInt64Type::from_opt_data(data_size),
             UInt64Type::from_opt_data(data_compressed_size),
             UInt64Type::from_opt_data(index_size),
+            UInt64Type::from_opt_data(number_of_segments),
+            UInt64Type::from_opt_data(number_of_blocks),
         ]))
     }
 }
@@ -273,6 +300,7 @@ where TablesTable<T>: HistoryAware
             TableField::new("is_transient", TableDataType::String),
             TableField::new("created_on", TableDataType::String),
             TableField::new("dropped_on", TableDataType::String),
+            TableField::new("updated_on", TableDataType::Timestamp),
             TableField::new(
                 "num_rows",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
@@ -287,6 +315,14 @@ where TablesTable<T>: HistoryAware
             ),
             TableField::new(
                 "index_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "number_of_segments",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "number_of_blocks",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
         ])

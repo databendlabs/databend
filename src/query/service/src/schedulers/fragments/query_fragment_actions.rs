@@ -54,15 +54,13 @@ impl QueryFragmentAction {
 #[derive(Debug)]
 pub struct QueryFragmentActions {
     pub fragment_id: usize,
-    pub exchange_actions: bool,
     pub data_exchange: Option<DataExchange>,
     pub fragment_actions: Vec<QueryFragmentAction>,
 }
 
 impl QueryFragmentActions {
-    pub fn create(exchange_actions: bool, fragment_id: usize) -> QueryFragmentActions {
+    pub fn create(fragment_id: usize) -> QueryFragmentActions {
         QueryFragmentActions {
-            exchange_actions,
             fragment_id,
             data_exchange: None,
             fragment_actions: vec![],
@@ -107,13 +105,15 @@ impl QueryFragmentActions {
 
 pub struct QueryFragmentsActions {
     ctx: Arc<QueryContext>,
+    enable_profiling: bool,
     pub fragments_actions: Vec<QueryFragmentActions>,
 }
 
 impl QueryFragmentsActions {
-    pub fn create(ctx: Arc<QueryContext>) -> QueryFragmentsActions {
+    pub fn create(ctx: Arc<QueryContext>, enable_profiling: bool) -> QueryFragmentsActions {
         QueryFragmentsActions {
             ctx,
+            enable_profiling,
             fragments_actions: Vec::new(),
         }
     }
@@ -130,12 +130,9 @@ impl QueryFragmentsActions {
     }
 
     pub fn get_root_actions(&self) -> Result<&QueryFragmentActions> {
-        match self.fragments_actions.last() {
-            None => Err(ErrorCode::Internal(
-                "Logical error, call get_root_actions in empty QueryFragmentsActions",
-            )),
-            Some(entity) => Ok(entity),
-        }
+        self.fragments_actions.last().ok_or(ErrorCode::Internal(
+            "Logical error, call get_root_actions in empty QueryFragmentsActions",
+        ))
     }
 
     pub fn pop_root_actions(&mut self) -> Option<QueryFragmentActions> {
@@ -183,6 +180,7 @@ impl QueryFragmentsActions {
             nodes_info.clone(),
             changed_settings.clone(),
             cluster.local_id(),
+            self.enable_profiling,
         );
 
         for (executor, fragments) in fragments_packets.into_iter() {
@@ -196,6 +194,7 @@ impl QueryFragmentsActions {
                 executors_info,
                 changed_settings.clone(),
                 cluster.local_id(),
+                self.enable_profiling,
             ));
         }
 

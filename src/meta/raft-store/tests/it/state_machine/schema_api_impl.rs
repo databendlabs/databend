@@ -16,13 +16,15 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use common_base::base::tokio;
+use common_meta_api::BackgroundApiTestSuite;
 use common_meta_api::SchemaApiTestSuite;
 use common_meta_api::ShareApiTestSuite;
 use common_meta_kvapi::kvapi;
 use common_meta_raft_store::state_machine::StateMachine;
+use test_harness::test;
 
 use crate::testing::new_raft_test_context;
+use crate::testing::raft_store_test_harness;
 use crate::testing::RaftTestContext;
 
 #[derive(Clone)]
@@ -48,16 +50,14 @@ impl kvapi::ApiBuilder<StateMachine> for StateMachineBuilder {
     }
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_meta_embedded_single() -> anyhow::Result<()> {
     let builder = StateMachineBuilder {
         test_context: Default::default(),
     };
 
     SchemaApiTestSuite::test_single_node(builder.clone()).await?;
-    ShareApiTestSuite::test_single_node_share(builder).await
+    ShareApiTestSuite::test_single_node_share(builder.clone()).await?;
+    BackgroundApiTestSuite::test_single_node(builder).await
 }

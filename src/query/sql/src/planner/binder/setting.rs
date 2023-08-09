@@ -46,6 +46,8 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            false,
+            false,
         );
         let variable = variable.name.clone();
 
