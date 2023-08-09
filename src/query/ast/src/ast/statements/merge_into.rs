@@ -26,7 +26,6 @@ use crate::ast::Identifier;
 pub enum MatchOperation {
     Update { update_list: Vec<UpdateExpr> },
     Delete,
-    Insert(InsertOperation),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -91,13 +90,6 @@ impl Display for MergeIntoStmt {
                             }
                             MatchOperation::Delete => {
                                 write!(f, " DELETE ")?;
-                            }
-                            MatchOperation::Insert(insert_operation) => {
-                                write!(
-                                    f,
-                                    " INSERT {:?} {:?} ",
-                                    insert_operation.columns, insert_operation.values
-                                )?;
                             }
                         }
                     }
