@@ -253,6 +253,16 @@ fn test_statement() {
                 max_files=10;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = CSV
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10
+                max_files=1000;"#,
+        r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
                 CONNECTION = (
                     ENDPOINT_URL = 'http://127.0.0.1:9900'
                 )
