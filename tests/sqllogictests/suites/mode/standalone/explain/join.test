@@ -224,13 +224,13 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 2.40
+├── estimated rows: 2.67
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [a.x (#0)]
     ├── probe keys: [b.x (#1)]
     ├── filters: []
-    ├── estimated rows: 2.40
+    ├── estimated rows: 2.67
     ├── Filter(Build)
     │   ├── filters: [is_true(a.x (#0) > 42)]
     │   ├── estimated rows: 3.00
@@ -261,13 +261,13 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 1.82
+├── estimated rows: 1.21
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [a.x (#0)]
     ├── probe keys: [b.x (#1)]
     ├── filters: []
-    ├── estimated rows: 1.82
+    ├── estimated rows: 1.21
     ├── Filter(Build)
     │   ├── filters: [is_true(a.x (#0) > 44 OR a.x (#0) < 43)]
     │   ├── estimated rows: 1.75
@@ -298,13 +298,13 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 2.40
+├── estimated rows: 3.00
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [a.x (#0)]
     ├── probe keys: [b.x (#1)]
     ├── filters: []
-    ├── estimated rows: 2.40
+    ├── estimated rows: 3.00
     ├── Filter(Build)
     │   ├── filters: [is_true(a.x (#0) > 42), is_true(a.x (#0) < 45)]
     │   ├── estimated rows: 3.00
