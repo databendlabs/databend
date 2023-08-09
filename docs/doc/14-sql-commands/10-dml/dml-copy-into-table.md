@@ -217,7 +217,7 @@ copyOptions ::=
 | FORCE                 | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped.                                                                        | Optional |
 | DISABLE_VARIANT_CHECK | If `True`, this will allow the variant field to insert invalid JSON strings. Default: `False`.                                                                                                                           | Optional |
 | ON_ERROR              | Decides how to handle a file that contains errors: 'continue' to skip and proceed, 'abort' to terminate on error, 'abort_N' to terminate when errors ≥ N. Default is 'abort'. Note: 'abort_N' not available for Parquet files. | Optional |
-| MAX_FILES             | Sets the maximum number of files to load. Defaults to `0` meaning no limits.                                                                                                                                             | Optional |
+| MAX_FILES             | Sets the maximum number of files to load that have not been loaded already. The value can be set up to 500; any value greater than 500 will be treated as 500.                                                                                                                                             | Optional |
 
 :::tip
 When importing large volumes of data, such as logs, it is recommended to set both `PURGE` and `FORCE` to True. This ensures efficient data import without the need for interaction with the Meta server (updating the copied-files set). However, it is important to be aware that this may lead to duplicate data imports.
