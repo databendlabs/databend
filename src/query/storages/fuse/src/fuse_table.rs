@@ -798,6 +798,5 @@ impl FuseTableColumnStatisticsProvider {
 impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
     fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics> {
         self.column_stats.get(&column_id).cloned().flatten()
-        }
     }
 }
