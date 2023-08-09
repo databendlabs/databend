@@ -212,7 +212,7 @@ HashJoin
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
 ├── filters: []
-├── estimated rows: 2.40
+├── estimated rows: 2.67
 ├── Filter(Build)
 │   ├── filters: [is_true(a.x (#0) > 42)]
 │   ├── estimated rows: 3.00
@@ -246,7 +246,7 @@ HashJoin
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
 ├── filters: []
-├── estimated rows: 1.82
+├── estimated rows: 1.21
 ├── Filter(Build)
 │   ├── filters: [is_true(a.x (#0) > 44 OR a.x (#0) < 43)]
 │   ├── estimated rows: 1.75
@@ -280,7 +280,7 @@ HashJoin
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
 ├── filters: []
-├── estimated rows: 2.40
+├── estimated rows: 3.00
 ├── Filter(Build)
 │   ├── filters: [is_true(a.x (#0) > 42), is_true(a.x (#0) < 45)]
 │   ├── estimated rows: 3.00
