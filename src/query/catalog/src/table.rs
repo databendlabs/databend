@@ -468,7 +468,6 @@ pub struct DeletionFilters {
 }
 
 use std::collections::HashMap;
-// #[derive(Default)]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct Parquet2TableColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
