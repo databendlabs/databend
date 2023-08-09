@@ -16,10 +16,13 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::anyhow;
 use common_base::base::GlobalInstance;
+use common_base::base::tokio::sync::mpsc::channel;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
@@ -38,6 +41,7 @@ use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageRedisConfig;
 use common_meta_app::storage::StorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig;
+use futures::StreamExt;
 use log::warn;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
@@ -84,6 +88,43 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
 
     Ok(op)
 }
+
+pub async fn run_copy_command(source: &StorageParams, dest: &StorageParams, source_path: &str, dest_path: &str) -> Result<()> {
+    // TODO: stuff like S3 has eventual consistency, which might be lead to confusing results
+    let src = init_operator(source)?;
+    let dst = init_operator(dest)?;
+    
+    let lister = src.list(source_path).await?;
+    loop {
+        // TODO: what should we do if copying fails in the middle of the process?
+        // Currently, it just stops and returns an error. 
+        // We might want to have a dedicated struct for error handling
+        match lister.next_page().await? {
+            Some(entries) if entries.len() == 0 => break,
+            None => break,
+            Some(entries) => {
+                for i in entries {
+                    let task = async move {
+                        let src_reader = src.reader(i.path()).await?;
+    
+                        let mut dst_writer = {
+                            let mut dest_path = dest_path.to_string();
+                            dest_path.push_str(&i.path().replace(source_path, ""));
+                           
+                            dst.writer(&dest_path).await?
+                        };
+                        while let Some(item) = src_reader.next().await {
+                            dst_writer.write(item?).await?;
+                        }
+                    };
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
 
 pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
     let ob = Operator::new(builder)?;
