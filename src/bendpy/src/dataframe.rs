@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
 use std::sync::Arc;
 
 use arrow::pyarrow::PyArrowType;
@@ -21,6 +22,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
+use databend_query::sql::dataframe::Dataframe;
 use databend_query::sql::plans::Plan;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
@@ -42,22 +44,30 @@ pub(crate) struct PyBoxSize {
 #[derive(Clone)]
 pub(crate) struct PyDataFrame {
     ctx: Arc<QueryContext>,
-    pub(crate) df: Plan,
+    pub(crate) plan: Option<Plan>,
+    df: Option<Arc<Dataframe>>,
     display_width: PyBoxSize,
 }
 
 impl PyDataFrame {
     /// creates a new PyDataFrame
-    pub fn new(ctx: Arc<QueryContext>, df: Plan, display_width: PyBoxSize) -> Self {
+    pub fn new(
+        ctx: Arc<QueryContext>,
+        plan: Option<Plan>,
+        df: Option<Arc<Dataframe>>,
+        display_width: PyBoxSize,
+    ) -> Self {
         Self {
             ctx,
+            plan,
             df,
             display_width,
         }
     }
 
     async fn df_collect(&self) -> Result<Vec<DataBlock>> {
-        let interpreter = InterpreterFactory::get(self.ctx.clone(), &self.df).await?;
+        let interpreter =
+            InterpreterFactory::get(self.ctx.clone(), &self.plan.clone().unwrap()).await?;
         let stream = interpreter.execute(self.ctx.clone()).await?;
         let blocks = stream.map(|v| v.unwrap()).collect::<Vec<_>>().await;
         Ok(blocks)
@@ -89,7 +99,7 @@ impl PyDataFrame {
         let display_width = self.get_box();
         Ok(PyDataBlocks {
             blocks: blocks.unwrap(),
-            schema: self.df.schema(),
+            schema: self.plan.clone().unwrap().schema(),
             display_width,
         })
     }
@@ -112,7 +122,7 @@ impl PyDataFrame {
 
     pub fn schema(&self) -> PySchema {
         PySchema {
-            schema: self.df.schema(),
+            schema: self.plan.clone().unwrap().schema(),
         }
     }
 
@@ -122,7 +132,7 @@ impl PyDataFrame {
             .into_iter()
             .map(|block| {
                 block
-                    .to_record_batch(self.df.schema().as_ref())
+                    .to_record_batch(self.plan.clone().unwrap().schema().as_ref())
                     .unwrap()
                     .to_pyarrow(py)
             })
@@ -133,7 +143,7 @@ impl PyDataFrame {
     /// Collect the batches and pass to Arrow Table
     pub fn to_arrow_table(&self, py: Python) -> PyResult<PyObject> {
         let batches = self.to_py_arrow(py)?.to_object(py);
-        let schema = ArrowSchema::from(self.df.schema().as_ref());
+        let schema = ArrowSchema::from(self.plan.clone().unwrap().schema().as_ref());
         let schema = PyArrowType(schema);
         let schema = schema.into_py(py);
 
@@ -169,6 +179,21 @@ impl PyDataFrame {
             let result: PyObject = dataframe.call1(args)?.into();
             Ok(result)
         })
+    }
+
+    fn limit(&mut self, py: Python, offset: usize, limit: Option<usize>) -> PyResult<Self> {
+        if let Some(df) = self.df.clone() {
+            let df = wait_for_future(py, df.limit(limit, offset)).unwrap();
+            let plan = df.into_plan(false).unwrap();
+            Ok(PyDataFrame {
+                ctx: self.ctx.clone(),
+                plan: Some(plan),
+                df: Some(Arc::new(df)),
+                display_width: self.display_width.clone(),
+            })
+        } else {
+            Ok(self.clone())
+        }
     }
 }
 

@@ -20,6 +20,7 @@ use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
+use databend_query::sql::dataframe::Dataframe;
 use databend_query::sql::Planner;
 use pyo3::prelude::*;
 
@@ -66,6 +67,28 @@ impl PySessionContext {
     fn sql(&mut self, sql: &str, py: Python) -> PyResult<PyDataFrame> {
         let ctx = wait_for_future(py, self.session.create_query_context()).unwrap();
         let res = wait_for_future(py, plan_sql(&ctx, sql));
+
+        match res {
+            Err(err) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Error: {}",
+                err
+            ))),
+            Ok(res) => {
+                // if res.df.has_result_set() {
+                //     return Ok(res);
+                // } else {
+                //     return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                //         "Error: sql method only supports SELECT queries",
+                //     ));
+                // }
+                Ok(res)
+            }
+        }
+    }
+
+    fn dataframe(&mut self, table: &str, py: Python, db: Option<&str>) -> PyResult<PyDataFrame> {
+        let ctx = wait_for_future(py, self.session.create_query_context()).unwrap();
+        let res = wait_for_future(py, generate_df(&ctx, db, table));
 
         match res {
             Err(err) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
@@ -167,5 +190,24 @@ impl PySessionContext {
 async fn plan_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<PyDataFrame> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(sql).await?;
-    Ok(PyDataFrame::new(ctx.clone(), plan, default_box_size()))
+    Ok(PyDataFrame::new(
+        ctx.clone(),
+        Some(plan),
+        None,
+        default_box_size(),
+    ))
+}
+
+async fn generate_df(
+    ctx: &Arc<QueryContext>,
+    db: Option<&str>,
+    table: &str,
+) -> Result<PyDataFrame> {
+    let df = Dataframe::scan(ctx.clone(), db, table).await?;
+    Ok(PyDataFrame::new(
+        ctx.clone(),
+        None,
+        Some(Arc::new(df)),
+        default_box_size(),
+    ))
 }

@@ -17,6 +17,7 @@
 mod context;
 mod datablock;
 mod dataframe;
+mod expr;
 mod schema;
 mod utils;
 

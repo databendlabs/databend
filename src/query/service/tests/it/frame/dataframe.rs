@@ -99,6 +99,16 @@ async fn test_dataframe() -> Result<()> {
         test_case(sql, df, fixture.ctx()).await?;
     }
 
+    // limit
+    {
+        let sql = "select * from system.tables";
+        let df = Dataframe::scan(query_ctx.clone(), Some("system"), "tables")
+            .await
+            .unwrap();
+
+        test_case(sql, df, fixture.ctx()).await?;
+    }
+
     // sort
     {
         let sql = "select `Engine` from system.engines order by `Engine`";

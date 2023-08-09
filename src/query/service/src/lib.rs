@@ -53,6 +53,7 @@ pub mod test_kits;
 
 mod global_services;
 
+pub use common_ast as ast;
 pub use common_sql as sql;
 pub use common_storages_factory as storages;
 pub use global_services::GlobalServices;
