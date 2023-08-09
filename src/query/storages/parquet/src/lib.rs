@@ -18,7 +18,7 @@
 mod parquet2;
 mod parquet_part;
 mod parquet_reader;
-mod parquet_rs;
+mod parquet_rs_old;
 mod processors;
 mod utils;
 
@@ -30,6 +30,6 @@ pub use parquet_part::ParquetSmallFilesPart;
 pub use parquet_reader::BlockIterator;
 pub use parquet_reader::ParquetPartData;
 pub use parquet_reader::ParquetReader;
-pub use parquet_rs::ParquetPartitionPruner;
-pub use parquet_rs::ParquetReader as ParquetRSReader;
-pub use parquet_rs::ParquetTable;
+pub use parquet_rs_old::ParquetPartitionPruner;
+pub use parquet_rs_old::ParquetReader as ParquetRSReader;
+pub use parquet_rs_old::ParquetTable;

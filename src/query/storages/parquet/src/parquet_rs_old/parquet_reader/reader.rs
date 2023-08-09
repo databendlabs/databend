@@ -37,12 +37,12 @@ use parquet::schema::types::SchemaDescriptor;
 use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_reader::BlockIterator;
 use crate::parquet_reader::OneBlock;
-use crate::parquet_rs::column_nodes::ColumnNodesRS;
-use crate::parquet_rs::convert::convert_column_meta;
-use crate::parquet_rs::parquet_reader::row_group_reader::bitmap_to_selection;
-use crate::parquet_rs::parquet_reader::row_group_reader::InMemoryRowGroup;
-use crate::parquet_rs::parquet_table::arrow_to_table_schema;
-use crate::parquet_rs::projection::project_schema_all;
+use crate::parquet_rs_old::column_nodes::ColumnNodesRS;
+use crate::parquet_rs_old::convert::convert_column_meta;
+use crate::parquet_rs_old::parquet_reader::row_group_reader::bitmap_to_selection;
+use crate::parquet_rs_old::parquet_reader::row_group_reader::InMemoryRowGroup;
+use crate::parquet_rs_old::parquet_table::arrow_to_table_schema;
+use crate::parquet_rs_old::projection::project_schema_all;
 
 /// The reader to parquet files with a projected schema.
 ///

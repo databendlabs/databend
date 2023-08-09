@@ -32,7 +32,7 @@ use parquet::file::statistics::Statistics;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
-use crate::parquet_rs::column_nodes::ColumnNodesRS;
+use crate::parquet_rs_old::column_nodes::ColumnNodesRS;
 
 /// Collect statistics of a batch of row groups of the specified columns.
 ///

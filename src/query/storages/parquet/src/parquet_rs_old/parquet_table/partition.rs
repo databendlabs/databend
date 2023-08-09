@@ -22,7 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use super::ParquetTable;
-use crate::parquet_rs::pruning::ParquetPartitionPruner;
+use crate::parquet_rs_old::pruning::ParquetPartitionPruner;
 
 impl ParquetTable {
     #[inline]

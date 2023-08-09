@@ -33,7 +33,7 @@ use storages_common_index::RangeIndex;
 
 use super::ParquetTable;
 use crate::parquet_part::ParquetPart;
-use crate::parquet_rs::parquet_reader::ParquetReader;
+use crate::parquet_rs_old::parquet_reader::ParquetReader;
 use crate::processors::AsyncParquetSource;
 use crate::processors::ParquetDeserializeTransform;
 use crate::processors::ParquetPrewhereInfo;

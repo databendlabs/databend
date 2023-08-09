@@ -31,8 +31,8 @@ use parquet::schema::types::SchemaDescriptor;
 use parquet::schema::types::Type;
 use parquet::schema::types::TypePtr;
 
-use crate::parquet_rs::column_nodes::ColumnNodeRS;
-use crate::parquet_rs::column_nodes::ColumnNodesRS;
+use crate::parquet_rs_old::column_nodes::ColumnNodeRS;
+use crate::parquet_rs_old::column_nodes::ColumnNodesRS;
 
 /// Project a [`Schema`] by picking the fields at the given indices.
 pub fn project_arrow_schema_normal(schema: &Schema, indices: &[usize]) -> Schema {

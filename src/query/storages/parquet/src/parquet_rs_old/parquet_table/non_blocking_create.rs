@@ -29,7 +29,7 @@ use opendal::Operator;
 use parquet::schema::types::SchemaDescPtr;
 
 use super::table::create_parquet_table_info;
-use crate::parquet_rs::parquet_table::blocking_create::get_compression_ratio;
+use crate::parquet_rs_old::parquet_table::blocking_create::get_compression_ratio;
 use crate::ParquetTable;
 
 impl ParquetTable {

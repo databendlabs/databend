@@ -45,9 +45,9 @@ use crate::parquet_part::collect_small_file_parts;
 use crate::parquet_part::ColumnMeta;
 use crate::parquet_part::ParquetPart;
 use crate::parquet_part::ParquetRowGroupPart;
-use crate::parquet_rs::column_nodes::ColumnNodesRS;
-use crate::parquet_rs::convert::convert_compression_to_arrow2;
-use crate::parquet_rs::statistics::collect_row_group_stats;
+use crate::parquet_rs_old::column_nodes::ColumnNodesRS;
+use crate::parquet_rs_old::convert::convert_compression_to_arrow2;
+use crate::parquet_rs_old::statistics::collect_row_group_stats;
 use crate::processors::SmallFilePrunner;
 
 /// Prune parquet row groups and pages.
