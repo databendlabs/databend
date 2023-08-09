@@ -20,7 +20,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::FunctionContext;
+use indexmap::IndexMap;
 
+use crate::binder::CteInfo;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
@@ -35,6 +37,7 @@ pub struct ScalarBinder<'a> {
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     m_cte_bound_ctx: HashMap<IndexType, BindContext>,
+    ctes_map: Box<IndexMap<String, CteInfo>>,
     aliases: &'a [(String, ScalarExpr)],
     allow_pushdown: bool,
     forbid_udf: bool,
@@ -48,6 +51,7 @@ impl<'a> ScalarBinder<'a> {
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
         m_cte_bound_ctx: HashMap<IndexType, BindContext>,
+        ctes_map: Box<IndexMap<String, CteInfo>>,
     ) -> Self {
         ScalarBinder {
             bind_context,
@@ -55,6 +59,7 @@ impl<'a> ScalarBinder<'a> {
             name_resolution_ctx,
             metadata,
             m_cte_bound_ctx,
+            ctes_map,
             aliases,
             allow_pushdown: false,
             forbid_udf: false,
@@ -81,6 +86,7 @@ impl<'a> ScalarBinder<'a> {
             self.forbid_udf,
         );
         type_checker.set_m_cte_bound_ctx(self.m_cte_bound_ctx.clone());
+        type_checker.set_ctes_map(self.ctes_map.clone());
         Ok(*type_checker.resolve(expr).await?)
     }
 
