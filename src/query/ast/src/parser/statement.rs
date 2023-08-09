@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::min;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -42,6 +43,9 @@ use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
 use crate::ErrorKind;
+
+const MAX_COPIED_FILES_NUM: usize = 500;
+
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
     ShareGrantObjectName(ShareGrantObjectName),
@@ -2421,7 +2425,7 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         ),
         map(
             rule! { MAX_FILES ~ "=" ~ #literal_u64 },
-            |(_, _, max_files)| CopyOption::MaxFiles(max_files as usize),
+            |(_, _, max_files)| CopyOption::MaxFiles(min(MAX_COPIED_FILES_NUM, max_files as usize)),
         ),
         map(
             rule! { MAX_FILE_SIZE ~ "=" ~ #literal_u64 },
