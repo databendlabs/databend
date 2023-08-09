@@ -30,6 +30,8 @@ pub enum StateMachineMetaKey {
     LastApplied,
 
     /// Whether the state machine is initialized.
+    ///
+    /// No longer used since `DataVersion::V0002`
     Initialized,
 
     /// The last membership config

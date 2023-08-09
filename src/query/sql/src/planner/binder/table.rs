@@ -23,6 +23,7 @@ use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
 use common_ast::ast::Indirection;
+use common_ast::ast::InsertSource;
 use common_ast::ast::Join;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
@@ -57,7 +58,9 @@ use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_license::license::Feature::AggregateIndex;
 use common_license::license_manager::get_license_manager;
+use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::FileFormatParams;
+use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::IndexMeta;
@@ -85,11 +88,16 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
+use crate::optimizer::optimize;
+use crate::optimizer::OptimizerConfig;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::CopyIntoTableMode;
 use crate::plans::CteScan;
+use crate::plans::InsertInputSource;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
@@ -101,6 +109,78 @@ use crate::TableInternalColumn;
 use crate::VirtualColumn;
 
 impl Binder {
+    #[async_backtrace::framed]
+    pub async fn get_source(
+        &mut self,
+        bind_context: &mut BindContext,
+        catalog_name: String,
+        database_name: String,
+        table_name: String,
+        schema: Arc<TableSchema>,
+        source: InsertSource,
+    ) -> Result<InsertInputSource> {
+        match source {
+            InsertSource::Streaming {
+                format,
+                rest_str,
+                start,
+            } => {
+                if format.to_uppercase() == "VALUES" {
+                    let data = rest_str.trim_end_matches(';').trim_start().to_owned();
+                    Ok(InsertInputSource::Values(data))
+                } else {
+                    Ok(InsertInputSource::StreamingWithFormat(format, start, None))
+                }
+            }
+            InsertSource::StreamingV2 {
+                settings,
+                on_error_mode,
+                start,
+            } => {
+                let params = FileFormatOptionsAst { options: settings }.try_into()?;
+                Ok(InsertInputSource::StreamingWithFileFormat {
+                    format: params,
+                    start,
+                    on_error_mode: OnErrorMode::from_str(
+                        &on_error_mode.unwrap_or("abort".to_string()),
+                    )?,
+                    input_context_option: None,
+                })
+            }
+            InsertSource::Values { rest_str } => {
+                let values_str = rest_str.trim_end_matches(';').trim_start().to_owned();
+                match self.ctx.get_stage_attachment() {
+                    Some(attachment) => {
+                        let plan = self
+                            .bind_copy_from_attachment(
+                                bind_context,
+                                attachment,
+                                catalog_name,
+                                database_name,
+                                table_name,
+                                Arc::new(schema.into()),
+                                &values_str,
+                                CopyIntoTableMode::Replace,
+                            )
+                            .await?;
+                        Ok(InsertInputSource::Stage(Box::new(plan)))
+                    }
+                    None => Ok(InsertInputSource::Values(values_str)),
+                }
+            }
+            InsertSource::Select { query } => {
+                let statement = Statement::Query(query);
+                let select_plan = self.bind_statement(bind_context, &statement).await?;
+                let enable_distributed_optimization = false;
+                let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
+                    enable_distributed_optimization,
+                }));
+                let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;
+                Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
+            }
+        }
+    }
+
     #[async_backtrace::framed]
     pub async fn bind_one_table(
         &mut self,

@@ -23,6 +23,7 @@ use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
 use common_openai::OpenAI;
 use common_vector::cosine_distance;
+use common_vector::l2_distance;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // cosine_distance
@@ -38,6 +39,32 @@ pub fn register(registry: &mut FunctionRegistry) {
                     unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(rhs) };
 
                 match cosine_distance(l_f32.as_slice(), r_f32.as_slice()) {
+                    Ok(dist) => {
+                        output.push(F32::from(dist));
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                        output.push(F32::from(0.0));
+                    }
+                }
+            }
+        ),
+    );
+
+    // L2 distance
+    // cosine_distance
+    // This function takes two Float32 arrays as input and computes the l2 distance between them.
+    registry.register_passthrough_nullable_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>, Float32Type, _, _>(
+        "l2_distance",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>,  Float32Type>(
+            |lhs, rhs, output, ctx| {
+                let l_f32=
+                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(lhs) };
+                let r_f32=
+                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(rhs) };
+
+                match l2_distance(l_f32.as_slice(), r_f32.as_slice()) {
                     Ok(dist) => {
                         output.push(F32::from(dist));
                     }

@@ -12,5 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Clone, Debug)]
-pub struct MergeIntoPlan {}
+use common_expression::Expr;
+use common_expression::TableSchemaRef;
+use common_meta_types::MetaId;
+
+use super::InsertInputSource;
+
+#[derive(Clone)]
+pub struct MergeIntoPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub table_id: MetaId,
+    pub schema: TableSchemaRef,
+    pub source: InsertInputSource,
+    pub join_expr: Expr,
+}
+
+impl std::fmt::Debug for MergeIntoPlan {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}

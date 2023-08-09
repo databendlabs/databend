@@ -18,6 +18,7 @@ use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_stoerr::MetaStorageError;
+use common_meta_types::LogId;
 use common_meta_types::MetaStartupError;
 use common_meta_types::NodeId;
 use common_meta_types::Vote;
@@ -120,6 +121,27 @@ impl RaftState {
         self.set_node_id(self.id).await
     }
 
+    pub async fn save_committed(&self, committed: Option<LogId>) -> Result<(), MetaStorageError> {
+        let state = self.state();
+        state
+            .insert(
+                &RaftStateKey::Committed,
+                &RaftStateValue::Committed(committed),
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub fn read_committed(&self) -> Result<Option<LogId>, MetaStorageError> {
+        let state = self.state();
+        let committed = state.get(&RaftStateKey::Committed)?;
+        if let Some(c) = committed {
+            Ok(Option::<LogId>::from(c))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub async fn save_vote(&self, vote: &Vote) -> Result<(), MetaStorageError> {
         let state = self.state();
         state
@@ -133,26 +155,6 @@ impl RaftState {
         let hs = state.get(&RaftStateKey::HardState)?;
         let hs = hs.map(Vote::from);
         Ok(hs)
-    }
-
-    #[minitrace::trace]
-    pub async fn write_state_machine_id(&self, id: &(u64, u64)) -> Result<(), MetaStorageError> {
-        let state = self.state();
-        state
-            .insert(
-                &RaftStateKey::StateMachineId,
-                &RaftStateValue::StateMachineId(*id),
-            )
-            .await?;
-        Ok(())
-    }
-
-    #[minitrace::trace]
-    pub fn read_state_machine_id(&self) -> Result<(u64, u64), MetaStorageError> {
-        let state = self.state();
-        let smid = state.get(&RaftStateKey::StateMachineId)?;
-        let smid: (u64, u64) = smid.map_or((0, 0), |v| v.into());
-        Ok(smid)
     }
 
     /// Returns a borrowed sled tree key space to store meta of raft log

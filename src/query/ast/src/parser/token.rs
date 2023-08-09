@@ -613,6 +613,9 @@ pub enum TokenKind {
     LOCATION_PREFIX,
     #[token("ROLES", ignore(ascii_case))]
     ROLES,
+    /// L2DISTANCE op, from https://github.com/pgvector/pgvector
+    #[token("<->")]
+    L2DISTANCE,
     #[token("LEADING", ignore(ascii_case))]
     LEADING,
     #[token("LEFT", ignore(ascii_case))]
@@ -1054,6 +1057,7 @@ impl TokenKind {
                 | Abs
                 | SquareRoot
                 | CubeRoot
+                | L2DISTANCE
                 | Placeholder
                 | EOI
         )

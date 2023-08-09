@@ -30,7 +30,7 @@ use common_exception::Result;
 use common_expression::FieldIndex;
 use common_expression::Scalar;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
 pub struct ColumnMeta {
     pub offset: u64,
     pub length: u64,
@@ -43,7 +43,7 @@ pub struct ColumnMeta {
     pub has_dictionary: bool,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum ParquetPart {
     RowGroup(ParquetRowGroupPart),
     SmallFiles(ParquetSmallFilesPart),
@@ -69,7 +69,7 @@ impl ParquetPart {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ParquetSmallFilesPart {
     pub files: Vec<(String, u64)>,
     pub estimated_uncompressed_size: u64,
@@ -84,7 +84,7 @@ impl ParquetSmallFilesPart {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ParquetRowGroupPart {
     pub location: String,
     pub num_rows: usize,

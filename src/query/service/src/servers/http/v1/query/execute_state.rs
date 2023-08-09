@@ -270,8 +270,7 @@ async fn execute(
             DataType::String,
             common_expression::Value::Scalar(Scalar::String(err.to_string().into_bytes())),
         );
-        let size = data.memory_size();
-        block_sender.send(DataBlock::new(vec![data], 1), size).await;
+        block_sender.send(DataBlock::new(vec![data], 1), 1).await;
         return Err(err);
     }
     let mut data_stream = data_stream_res.unwrap();
@@ -288,8 +287,7 @@ async fn execute(
                 DataType::String,
                 common_expression::Value::Scalar(Scalar::String(err.to_string().into_bytes())),
             );
-            let size = data.memory_size();
-            block_sender.send(DataBlock::new(vec![data], 1), size).await;
+            block_sender.send(DataBlock::new(vec![data], 1), 1).await;
             Executor::stop(&executor, Err(err), false).await;
             block_sender.close();
         }
@@ -309,8 +307,7 @@ async fn execute(
                                 err.to_string().into_bytes(),
                             )),
                         );
-                        let size = data.memory_size();
-                        block_sender.send(DataBlock::new(vec![data], 1), size).await;
+                        block_sender.send(DataBlock::new(vec![data], 1), 1).await;
                         block_sender.close();
                         return Err(err);
                     }
