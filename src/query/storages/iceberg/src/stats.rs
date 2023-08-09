@@ -68,13 +68,13 @@ fn get_column_stats(
                 .as_ref()
                 .and_then(|dc| dc.get(&iceberg_col_id))
                 .map(|dc| *dc as u64);
-            Some(ColumnStatistics {
+            Some(ColumnStatistics::new(
                 min,
                 max,
-                null_count: *nc as u64,
-                in_memory_size: 0, // this field is not used.
+                *nc as u64,
+                0, // this field is not used.
                 distinct_of_values,
-            })
+            ))
         }
         (_, _, _) => None,
     }
