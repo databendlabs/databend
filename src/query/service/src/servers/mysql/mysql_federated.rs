@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_config::DATABEND_COMMIT_VERSION;
 use common_expression::types::StringType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
@@ -30,36 +29,12 @@ use regex::Regex;
 
 use crate::servers::federated_helper::FederatedHelper;
 use crate::servers::federated_helper::LazyBlockFunc;
-use crate::servers::mysql::MYSQL_VERSION;
 
-#[allow(dead_code)]
-pub struct MySQLFederated {
-    mysql_version: String,
-    databend_version: String,
-}
+pub struct MySQLFederated {}
 
 impl MySQLFederated {
     pub fn create() -> Self {
-        MySQLFederated {
-            mysql_version: MYSQL_VERSION.to_string(),
-            databend_version: DATABEND_COMMIT_VERSION.to_string(),
-        }
-    }
-
-    // Build block for select @@variable.
-    // Format:
-    // |@@variable|
-    // |value|
-    #[allow(dead_code)]
-    fn select_variable_block(name: &str, value: &str) -> Option<(TableSchemaRef, DataBlock)> {
-        let schema = TableSchemaRefExt::create(vec![TableField::new(
-            &format!("@@{}", name),
-            TableDataType::String,
-        )]);
-        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec![
-            value.as_bytes().to_vec(),
-        ])]);
-        Some((schema, block))
+        MySQLFederated {}
     }
 
     // Build block for select function.
@@ -260,7 +235,7 @@ impl MySQLFederated {
             (Regex::new("(?i)^(/\\*!40103 SET(.*) \\*/)$").unwrap(), None),
             (Regex::new("(?i)^(/\\*!40111 SET(.*) \\*/)$").unwrap(), None),
             (Regex::new("(?i)^(/\\*!40101 SET(.*) \\*/)$").unwrap(), None),
-            (Regex::new("(?i)^(/\\*!40014 SET(.*) \\*/)$").unwrap(), None), 
+            (Regex::new("(?i)^(/\\*!40014 SET(.*) \\*/)$").unwrap(), None),
             (Regex::new("(?i)^(/\\*!40000 SET(.*) \\*/)$").unwrap(), None),
             (Regex::new("(?i)^(/\\*!40000 ALTER(.*) \\*/)$").unwrap(), None),
         ];

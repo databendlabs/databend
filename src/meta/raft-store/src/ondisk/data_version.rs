@@ -28,21 +28,26 @@ pub enum DataVersion {
     /// The first version.
     /// The Data is compatible with openraft v07 and v08, using openraft::compat.
     V0,
+
     /// Get rid of compat, use only openraft v08 data types.
     V001,
+
+    /// Store snapshot in a file.
+    V002,
 }
 
 impl fmt::Debug for DataVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DataVersion::V0 => write!(
+            Self::V0 => write!(
                 f,
                 "V0(2023-04-21: compatible with openraft v07 and v08, using openraft::compat)"
             ),
-            DataVersion::V001 => write!(
+            Self::V001 => write!(
                 f,
                 "V001(2023-05-15: Get rid of compat, use only openraft v08 data types)"
             ),
+            Self::V002 => write!(f, "V002(2023-07-22: Store snapshot in a file)"),
         }
     }
 }
@@ -50,8 +55,9 @@ impl fmt::Debug for DataVersion {
 impl fmt::Display for DataVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DataVersion::V0 => write!(f, "V0"),
-            DataVersion::V001 => write!(f, "V001"),
+            Self::V0 => write!(f, "V0"),
+            Self::V001 => write!(f, "V001"),
+            Self::V002 => write!(f, "V002"),
         }
     }
 }
@@ -61,7 +67,8 @@ impl DataVersion {
     pub fn next(&self) -> Option<Self> {
         match self {
             Self::V0 => Some(Self::V001),
-            Self::V001 => None,
+            Self::V001 => Some(Self::V002),
+            Self::V002 => None,
         }
     }
 
@@ -75,6 +82,7 @@ impl DataVersion {
         match self {
             Self::V0 => Self::V0,
             Self::V001 => Self::V0,
+            Self::V002 => Self::V0,
         }
     }
 

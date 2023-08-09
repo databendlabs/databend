@@ -116,7 +116,6 @@ pub struct TransformPartialAggregate<Method: HashMethodBounds> {
 }
 
 impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
-    #[allow(dead_code)]
     pub fn try_create(
         ctx: Arc<QueryContext>,
         method: Method,
