@@ -563,6 +563,10 @@ root = "/analyses/databend/storage"
 
 c. Configure an admin user with the [query.users] sections. For more information, see [Configuring Admin Users](../13-sql-clients/00-admin-users.md). To proceed with the default root user and the authentication type "no_password", ensure that you remove the '#' character before the following lines in the file `databend-query.toml`:
 
+:::caution
+Using "no_password" authentication for the root user in this tutorial is just an example and not recommended for production due to potential security risks.
+:::
+
 ```toml title='databend-query.toml'
 ...
 [[query.users]]
@@ -592,22 +596,6 @@ In this section, we will run some queries against Databend to verify the deploym
 a. Download and install a MySQL client on your local machine.
 
 b. Create a connection to 127.0.0.1 from your SQL client. In the connection, set the port to `3307`, and set the username to `root`.
-
-:::tip
-
-**Create new users**. The `root` user only works when you access Databend from localhost. You will need to create new users and grant proper privileges first to connect to Databend remotely. For example,
-
-```sql
--- Create a user named "eric" with the password "databend"
-CREATE USER eric IDENTIFIED BY 'databend';
-
--- Grant the ALL privilege on all existing tables in the default database to the user eric:
-GRANT ALL ON default.* TO eric;
-```
-
-For more information about creating new users, see [CREATE USER](../14-sql-commands/00-ddl/30-user/01-user-create-user.md).
-
-:::
 
 c. Run the following commands and check if the query is successful:
 
