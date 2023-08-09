@@ -21,6 +21,7 @@ use std::sync::Arc;
 use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
+use common_ast::ast::Expr as AExpr;
 use common_ast::ast::Indirection;
 use common_ast::ast::Join;
 use common_ast::ast::SelectStmt;
@@ -44,10 +45,16 @@ use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
+use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
+use common_expression::ColumnBuilder;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
+use common_expression::DataBlock;
 use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRefExt;
+use common_expression::Evaluator;
 use common_expression::FunctionKind;
 use common_expression::Scalar;
 use common_expression::TableDataType;
@@ -74,30 +81,31 @@ use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
+use indexmap::IndexMap;
 use parking_lot::RwLock;
 
 use crate::binder::copy::parse_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
+use crate::binder::wrap_cast_scalar;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
+use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::ConstantTableScan;
 use crate::plans::CteScan;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnEntry;
-use crate::DerivedColumn;
 use crate::IndexType;
-use crate::TableInternalColumn;
-use crate::VirtualColumn;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -565,7 +573,188 @@ impl Binder {
                     .await
             }
             TableReference::Join { .. } => unreachable!(),
+            TableReference::Values {
+                span,
+                values,
+                alias,
+            } => self.bind_values(bind_context, *span, values, alias).await,
         }
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_values(
+        &mut self,
+        bind_context: &mut BindContext,
+        span: Span,
+        values: &Vec<Vec<AExpr>>,
+        alias: &Option<TableAlias>,
+    ) -> Result<(SExpr, BindContext)> {
+        if values.is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "Values lists must have at least one row".to_string(),
+            )
+            .set_span(span));
+        }
+        let same_length = values.windows(2).all(|v| v[0].len() == v[1].len());
+        if !same_length {
+            return Err(ErrorCode::SemanticError(
+                "Values lists must all be the same length".to_string(),
+            )
+            .set_span(span));
+        }
+
+        let num_rows = values.len();
+        let num_cols = values[0].len();
+
+        let mut names = match alias {
+            Some(alias) => {
+                if alias.columns.len() > num_cols {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "table {} has {} columns available but {} columns specified",
+                        alias.name,
+                        num_cols,
+                        alias.columns.len()
+                    ))
+                    .set_span(span));
+                }
+                alias
+                    .columns
+                    .iter()
+                    .map(|c| c.to_string())
+                    .collect::<Vec<_>>()
+            }
+            None => vec![],
+        };
+        // For columns whose names are not specified, assigns default column names col0, col2, etc.
+        for i in names.len()..num_cols {
+            names.push(format!("col{}", i));
+        }
+
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            HashMap::new(),
+            Box::new(IndexMap::new()),
+        );
+
+        let mut col_scalars = vec![Vec::with_capacity(values.len()); num_cols];
+        let mut common_types: Vec<Option<DataType>> = vec![None; num_cols];
+
+        for row_values in values.iter() {
+            for (i, value) in row_values.iter().enumerate() {
+                let (scalar, data_type) = scalar_binder.bind(value).await?;
+                col_scalars[i].push((scalar, data_type.clone()));
+
+                // Get the common data type for each columns.
+                match &common_types[i] {
+                    Some(common_type) => {
+                        if common_type != &data_type {
+                            let new_common_type = common_super_type(
+                                common_type.clone(),
+                                data_type.clone(),
+                                &BUILTIN_FUNCTIONS.default_cast_rules,
+                            );
+                            if new_common_type.is_none() {
+                                return Err(ErrorCode::SemanticError(format!(
+                                    "{} and {} don't have common data type",
+                                    common_type, data_type
+                                ))
+                                .set_span(span));
+                            }
+                            common_types[i] = new_common_type;
+                        }
+                    }
+                    None => {
+                        common_types[i] = Some(data_type);
+                    }
+                }
+            }
+        }
+
+        let mut value_fields = Vec::with_capacity(names.len());
+        for (name, common_type) in names.into_iter().zip(common_types.into_iter()) {
+            let value_field = DataField::new(&name, common_type.unwrap());
+            value_fields.push(value_field);
+        }
+        let value_schema = DataSchema::new(value_fields);
+
+        let input = DataBlock::empty();
+        let func_ctx = self.ctx.get_function_context()?;
+        let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        // use values to build columns
+        let mut value_columns = Vec::with_capacity(col_scalars.len());
+        for (scalars, value_field) in col_scalars.iter().zip(value_schema.fields().iter()) {
+            let mut builder =
+                ColumnBuilder::with_capacity(value_field.data_type(), col_scalars.len());
+            for (scalar, value_type) in scalars {
+                let scalar = if value_type != value_field.data_type() {
+                    wrap_cast_scalar(scalar, value_type, value_field.data_type())?
+                } else {
+                    scalar.clone()
+                };
+                let expr = scalar.as_expr()?.project_column_ref(|col| {
+                    value_schema.index_of(&col.index.to_string()).unwrap()
+                });
+                let result = evaluator.run(&expr)?;
+
+                match result.as_scalar() {
+                    Some(val) => {
+                        builder.push(val.as_ref());
+                    }
+                    None => {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "Value must be a scalar, but get {}",
+                            result
+                        ))
+                        .set_span(span));
+                    }
+                }
+            }
+            value_columns.push(builder.build());
+        }
+
+        // add column bindings
+        let mut columns = ColumnSet::new();
+        let mut fields = Vec::with_capacity(values.len());
+        for value_field in value_schema.fields() {
+            let index = self
+                .metadata
+                .write()
+                .add_derived_column(value_field.name().clone(), value_field.data_type().clone());
+            columns.insert(index);
+
+            let column_binding = ColumnBindingBuilder::new(
+                value_field.name().clone(),
+                index,
+                Box::new(value_field.data_type().clone()),
+                Visibility::Visible,
+            )
+            .build();
+            bind_context.add_column_binding(column_binding);
+
+            let field = DataField::new(&index.to_string(), value_field.data_type().clone());
+            fields.push(field);
+        }
+        let schema = DataSchemaRefExt::create(fields);
+
+        let s_expr = SExpr::create_leaf(Arc::new(
+            ConstantTableScan {
+                values: value_columns,
+                num_rows,
+                schema,
+                columns,
+            }
+            .into(),
+        ));
+        if let Some(alias) = alias {
+            bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+        }
+
+        Ok((s_expr, bind_context.clone()))
     }
 
     #[async_backtrace::framed]
@@ -946,24 +1135,7 @@ impl Binder {
             SExpr::create_leaf(Arc::new(
                 Scan {
                     table_index,
-                    columns: columns
-                        .into_iter()
-                        .map(|col| match col {
-                            ColumnEntry::BaseTableColumn(BaseTableColumn {
-                                column_index, ..
-                            }) => column_index,
-                            ColumnEntry::DerivedColumn(DerivedColumn { column_index, .. }) => {
-                                column_index
-                            }
-                            ColumnEntry::InternalColumn(TableInternalColumn {
-                                column_index,
-                                ..
-                            }) => column_index,
-                            ColumnEntry::VirtualColumn(VirtualColumn { column_index, .. }) => {
-                                column_index
-                            }
-                        })
-                        .collect(),
+                    columns: columns.into_iter().map(|col| col.index()).collect(),
                     statistics: Statistics {
                         statistics: stat,
                         col_stats,
