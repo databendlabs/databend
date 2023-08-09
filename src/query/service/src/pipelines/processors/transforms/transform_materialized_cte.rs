@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Notify;
@@ -20,11 +19,8 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
-use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::Sink;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
@@ -93,57 +89,6 @@ impl MaterializedCteState {
             notified.await;
         }
         Ok(())
-    }
-}
-
-pub struct TransformMaterializedCte {
-    input_port: Arc<InputPort>,
-    output_port: Arc<OutputPort>,
-}
-
-impl TransformMaterializedCte {
-    pub fn create(input_port: Arc<InputPort>, output_port: Arc<OutputPort>) -> Box<dyn Processor> {
-        Box::new(TransformMaterializedCte {
-            input_port,
-            output_port,
-        })
-    }
-}
-
-#[async_trait::async_trait]
-impl Processor for TransformMaterializedCte {
-    fn name(&self) -> String {
-        "TransformMaterializedCte".to_string()
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        if self.output_port.is_finished() {
-            self.input_port.finish();
-            return Ok(Event::Finished);
-        }
-
-        if !self.output_port.can_push() {
-            self.input_port.set_not_need_data();
-            return Ok(Event::NeedConsume);
-        }
-
-        if self.input_port.has_data() {
-            let data = self.input_port.pull_data().unwrap();
-            self.output_port.push_data(data);
-            return Ok(Event::NeedConsume);
-        }
-
-        if self.input_port.is_finished() {
-            self.output_port.finish();
-            return Ok(Event::Finished);
-        }
-
-        self.input_port.set_need_data();
-        Ok(Event::NeedData)
     }
 }
 
