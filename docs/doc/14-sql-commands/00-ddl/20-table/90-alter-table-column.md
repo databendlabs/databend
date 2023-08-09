@@ -1,13 +1,15 @@
 ---
 title: ALTER TABLE COLUMN
-description:
-  Adds or drops a column of a table.
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="Introduced or updated: v1.2.50"/>
 
-Modifies a table by adding, converting, renaming, removing, or changing the type of a column.
+import EEFeature from '@site/src/components/EEFeature';
+
+<EEFeature featureName='MASKING POLICY'/>
+
+Modifies a table by adding, converting, renaming, changing, or removing a column.
 
 ## Syntax
 
@@ -36,6 +38,13 @@ RENAME COLUMN <column_name> TO <new_column_name>;
 ALTER TABLE [IF EXISTS] [database.]<table_name> 
 MODIFY COLUMN <column_name> <new_data_type>[, COLUMN <column_name> <new_data_type>, ...]
 
+-- Set / Unset masking policy for a column
+ALTER TABLE [IF EXISTS] [database.]<table_name>
+MODIFY COLUMN <column_name> SET MASKING POLICY <policy_name>
+
+ALTER TABLE [IF EXISTS] [database.]<table_name>
+MODIFY COLUMN <column_name> UNSET MASKING POLICY
+
 -- Remove a column
 ALTER TABLE [IF EXISTS] [database.]<table_name> 
 DROP COLUMN <column_name>;
@@ -45,6 +54,7 @@ DROP COLUMN <column_name>;
 - Only a constant value can be accepted as a default value when adding a new column. If a non-constant expression is used, an error will occur.
 - Adding a stored computed column with ALTER TABLE is not supported yet.
 - When you change the data type of a table's columns, there's a risk of conversion errors. For example, if you try to convert a column with text (String) to numbers (Float), it might cause problems.
+- When you set a masking policy for a column, make sure that the data type (refer to the parameter *arg_type_to_mask* in the syntax of [CREATE MASKING POLICY](../102-mask-policy/create-mask-policy.md)) defined in the policy matches the column.
 :::
 
 ## Examples
@@ -206,4 +216,43 @@ id|name           |age|
  1|John Doe       |25 |
  2|Jane Smith     |28 |
  3|Michael Johnson|22 |
+```
+
+### Example 5: Setting Masking Policy a Column
+
+This example illustrates the process of setting up a masking policy to selectively reveal or mask sensitive data based on user roles.
+
+```sql
+-- Create a table and insert sample data
+CREATE TABLE user_info (
+    id INT,
+    email STRING
+);
+
+INSERT INTO user_info (id, email) VALUES (1, 'sue@example.com');
+INSERT INTO user_info (id, email) VALUES (2, 'eric@example.com');
+
+-- Create a role
+CREATE ROLE 'MANAGERS';
+GRANT ALL ON *.* TO ROLE 'MANAGERS';
+
+-- Create a user and grant the role to the user
+CREATE USER manager_user IDENTIFIED BY 'databend';
+GRANT ROLE 'MANAGERS' TO 'manager_user';
+
+-- Create a masking policy
+CREATE MASKING POLICY email_mask AS (val STRING) 
+    RETURN STRING -> CASE WHEN current_role() IN ('MANAGERS') THEN VAL ELSE '*********' END 
+    COMMENT = 'hide_email';
+
+-- Associate the masking policy with the 'email' column
+ALTER TABLE user_info MODIFY COLUMN email SET MASKING POLICY email_mask;
+
+-- Query with the Root user
+SELECT * FROM user_info;
+
+id|email    |
+--+---------+
+ 2|*********|
+ 1|*********|
 ```
