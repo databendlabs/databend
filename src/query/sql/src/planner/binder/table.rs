@@ -81,6 +81,7 @@ use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
+use indexmap::IndexMap;
 use parking_lot::RwLock;
 
 use crate::binder::copy::parse_file_location;
@@ -637,6 +638,7 @@ impl Binder {
             self.metadata.clone(),
             &[],
             HashMap::new(),
+            Box::new(IndexMap::new()),
         );
 
         let mut col_scalars = vec![Vec::with_capacity(values.len()); num_cols];
