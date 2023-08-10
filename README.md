@@ -264,6 +264,7 @@ For general help in using Databend, please refer to the official documentation. 
 
 ## Roadmap
 
+- [Roadmap v1.3](https://github.com/datafuselabs/databend/issues/11868)
 - [Roadmap v1.2](https://github.com/datafuselabs/databend/issues/11073)
 - [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
 - [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
