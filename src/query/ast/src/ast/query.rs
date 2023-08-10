@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 
 use common_exception::Span;
 
+use super::InsertSource;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::ColumnID;
@@ -281,6 +282,12 @@ pub enum TableReference {
         values: Vec<Vec<Expr>>,
         alias: Option<TableAlias>,
     },
+    // for merge into source
+    MergeIntoSourceReference {
+        span: Span,
+        source: InsertSource,
+        alias: Option<TableAlias>,
+    },
 }
 
 impl TableReference {
@@ -419,6 +426,11 @@ impl Display for Unpivot {
 impl Display for TableReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            TableReference::MergeIntoSourceReference {
+                span: _,
+                source: _,
+                alias: _,
+            } => unimplemented!(),
             TableReference::Table {
                 span: _,
                 catalog,

@@ -255,6 +255,11 @@ impl Binder {
         table_ref: &TableReference,
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
+            TableReference::MergeIntoSourceReference {
+                span,
+                source,
+                alias,
+            } => unimplemented!(),
             TableReference::Table {
                 span,
                 catalog,
