@@ -60,7 +60,7 @@ fn data_mask_body(i: Input) -> IResult<Expr> {
 }
 
 fn data_mask_return_type(i: Input) -> IResult<TypeName> {
-    map(rule! { RETURN ~ #type_name }, |(_, type_name)| type_name)(i)
+    map(rule! { RETURNS ~ #type_name }, |(_, type_name)| type_name)(i)
 }
 
 pub fn data_mask_policy(i: Input) -> IResult<DataMaskPolicy> {

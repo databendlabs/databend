@@ -371,6 +371,33 @@ impl UnmatchColumnDataType {
 }
 
 #[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error(
+    "UnmatchMaskPolicyReturnType: `{arg_name}`:`{arg_type}` mismatch with return type `{return_type}` while `{context}`"
+)]
+pub struct UnmatchMaskPolicyReturnType {
+    arg_name: String,
+    arg_type: String,
+    return_type: String,
+    context: String,
+}
+
+impl UnmatchMaskPolicyReturnType {
+    pub fn new(
+        arg_name: impl Into<String>,
+        arg_type: impl Into<String>,
+        return_type: impl Into<String>,
+        context: impl Into<String>,
+    ) -> Self {
+        Self {
+            arg_name: arg_name.into(),
+            arg_type: arg_type.into(),
+            return_type: return_type.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownTable: `{table_name}` while `{context}`")]
 pub struct UnknownTable {
     table_name: String,
@@ -899,6 +926,9 @@ pub enum AppError {
     UnmatchColumnDataType(#[from] UnmatchColumnDataType),
 
     #[error(transparent)]
+    UnmatchMaskPolicyReturnType(#[from] UnmatchMaskPolicyReturnType),
+
+    #[error(transparent)]
     VirtualColumnNotFound(#[from] VirtualColumnNotFound),
 
     #[error(transparent)]
@@ -1180,6 +1210,15 @@ impl AppErrorMessage for UnmatchColumnDataType {
     }
 }
 
+impl AppErrorMessage for UnmatchMaskPolicyReturnType {
+    fn message(&self) -> String {
+        format!(
+            "'{}':'{}' mismatch with return type '{}'",
+            self.arg_name, self.arg_type, self.return_type
+        )
+    }
+}
+
 impl AppErrorMessage for VirtualColumnNotFound {
     fn message(&self) -> String {
         format!("Virtual Column for table '{}' not found", self.table_id)
@@ -1273,6 +1312,9 @@ impl From<AppError> for ErrorCode {
             }
             AppError::UnknownBackgroundJob(err) => ErrorCode::UnknownBackgroundJob(err.message()),
             AppError::UnmatchColumnDataType(err) => ErrorCode::UnmatchColumnDataType(err.message()),
+            AppError::UnmatchMaskPolicyReturnType(err) => {
+                ErrorCode::UnmatchMaskPolicyReturnType(err.message())
+            }
             AppError::VirtualColumnNotFound(err) => ErrorCode::VirtualColumnNotFound(err.message()),
             AppError::VirtualColumnAlreadyExists(err) => {
                 ErrorCode::VirtualColumnAlreadyExists(err.message())
