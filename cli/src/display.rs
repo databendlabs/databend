@@ -397,7 +397,7 @@ fn create_table(
     schema: SchemaRef,
     results: &[Row],
     replace_newline: bool,
-    max_rows: usize,
+    mut max_rows: usize,
     mut max_width: usize,
     max_col_width: usize,
 ) -> Result<Table> {
@@ -419,6 +419,7 @@ fn create_table(
 
     if !replace_newline {
         max_width = usize::MAX;
+        max_rows = usize::MAX;
     }
 
     let row_count: usize = results.len();
