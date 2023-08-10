@@ -50,6 +50,8 @@ pub trait BloomBlockFilterReader {
 
 #[async_trait::async_trait]
 impl BloomBlockFilterReader for Location {
+    // NOTE that the `columns` will be de-duplicated first,
+    // and the filters contained by the returned `BlockFilter` may not order by `columns`
     #[async_backtrace::framed]
     async fn read_block_filter(
         &self,

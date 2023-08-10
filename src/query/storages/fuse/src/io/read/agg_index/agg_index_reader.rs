@@ -48,6 +48,7 @@ pub struct AggIndexReader {
     actual_table_field_len: usize,
     // If the index is the result of an aggregation query.
     is_agg: bool,
+    agg_functions_len: usize,
 }
 
 impl AggIndexReader {
@@ -82,6 +83,7 @@ impl AggIndexReader {
             actual_table_field_len: agg.actual_table_field_len,
             is_agg: agg.is_agg,
             compression,
+            agg_functions_len: agg.agg_functions_len,
         })
     }
 
@@ -129,7 +131,7 @@ impl AggIndexReader {
         Ok(DataBlock::new_with_meta(
             output_columns,
             block.num_rows(),
-            Some(AggIndexMeta::create(self.is_agg)),
+            Some(AggIndexMeta::create(self.is_agg, self.agg_functions_len)),
         ))
     }
 }

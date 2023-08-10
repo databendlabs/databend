@@ -32,7 +32,6 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
 use common_expression::HashMethodKind;
-use common_expression::RemoteExpr;
 use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
@@ -438,6 +437,8 @@ impl PipelineBuilder {
             &join.build_keys,
             join.build.output_schema()?,
             join.probe.output_schema()?,
+            &join.probe_projections,
+            &join.build_projections,
             HashJoinDesc::create(join)?,
         )
     }
@@ -650,6 +651,7 @@ impl PipelineBuilder {
         self.main_pipeline.add_transform(|input, output| {
             let transform = CompoundBlockOperator::new(
                 vec![BlockOperator::Filter {
+                    projections: filter.projections.clone(),
                     expr: predicate.clone(),
                 }],
                 self.ctx.get_function_context()?,
@@ -700,12 +702,6 @@ impl PipelineBuilder {
         let exprs = eval_scalar
             .exprs
             .iter()
-            .filter(|(scalar, idx)| {
-                if let RemoteExpr::ColumnRef { id, .. } = scalar {
-                    return idx.to_string() != input_schema.field(*id).name().as_str();
-                }
-                true
-            })
             .map(|(scalar, _)| scalar.as_expr(&BUILTIN_FUNCTIONS))
             .collect::<Vec<_>>();
 
@@ -713,7 +709,10 @@ impl PipelineBuilder {
             return Ok(());
         }
 
-        let op = BlockOperator::Map { exprs };
+        let op = BlockOperator::Map {
+            exprs,
+            projections: Some(eval_scalar.projections.clone()),
+        };
 
         let func_ctx = self.ctx.get_function_context()?;
 
@@ -745,12 +744,12 @@ impl PipelineBuilder {
         self.build_pipeline(&project_set.input)?;
 
         let op = BlockOperator::FlatMap {
+            projections: project_set.projections.clone(),
             srf_exprs: project_set
                 .srf_exprs
                 .iter()
                 .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
                 .collect(),
-            unused_indices: project_set.unused_indices.clone(),
         };
 
         let func_ctx = self.ctx.get_function_context()?;
@@ -1359,6 +1358,7 @@ impl PipelineBuilder {
             let transform = TransformHashJoinProbe::create(
                 input,
                 output,
+                join.projections.clone(),
                 TransformHashJoinProbe::attach(state.clone())?,
                 max_block_size,
                 func_ctx.clone(),

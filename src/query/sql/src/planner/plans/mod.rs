@@ -30,7 +30,7 @@ mod kill;
 mod lambda;
 mod limit;
 mod materialized_cte;
-mod operator;
+pub mod operator;
 mod pattern;
 mod plan;
 mod presign;

@@ -56,7 +56,7 @@ impl Display for CreateDatamaskPolicyStmt {
         }
         write!(
             f,
-            ") RETURN {} -> {}",
+            ") RETURNS {} -> {}",
             self.policy.return_type, self.policy.body
         )?;
         if let Some(comment) = &self.policy.comment {

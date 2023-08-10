@@ -59,4 +59,3 @@ USE default
 
 statement ok
 DROP DATABASE IF EXISTS test_virtual_db
-
