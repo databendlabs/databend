@@ -112,13 +112,10 @@ docker run --net=host  datafuselabs/databend
 <details>
 <summary>Connecting to Databend</summary>
 
-- [How to Connect Databend with MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler)
-- [How to Connect Databend with ClickHouse HTTP Handler](https://databend.rs/doc/integrations/api/clickhouse-handler)
-- [How to Connect Databend with DBeaver SQL IDE](https://databend.rs/doc/integrations/gui-tool/dbeaver)
-- [How to Execute Queries in Python](https://databend.rs/doc/develop/python)
-- [How to Query Databend in Jupyter Notebooks](https://databend.rs/doc/integrations/gui-tool/jupyter)
-- [How to Execute Queries in Golang](https://databend.rs/doc/develop/golang)
-- [How to Work with Databend in Node.js](https://databend.rs/doc/develop/nodejs)
+- [Connecting to Databend with BendSQL](https://databend.rs/doc/sql-clients/bendsql)
+- [Connecting to Databend with JDBC](https://databend.rs/doc/sql-clients/jdbc)
+- [Connecting to Databend with MySQL-Compatible Clients](https://databend.rs/doc/sql-clients/mysql)
+  
 </details>
 
 <details>
