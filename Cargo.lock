@@ -1875,7 +1875,6 @@ dependencies = [
  "common-storage",
  "common-tracing",
  "common-users",
- "databend-thrift",
  "hex",
  "log",
  "once_cell",
@@ -3865,19 +3864,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "walkdir",
-]
-
-[[package]]
-name = "databend-thrift"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc3d226b30a88cc6bef2071b4fb7f5fc6f73133fd88d9618007c0924d3d5b853"
-dependencies = [
- "byteorder",
- "integer-encoding",
- "log",
- "ordered-float 2.10.0",
- "threadpool",
 ]
 
 [[package]]
