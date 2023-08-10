@@ -1910,6 +1910,7 @@ name = "common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arrow-schema",
  "backtrace",
  "bincode 2.0.0-rc.2",
  "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
@@ -1918,6 +1919,7 @@ dependencies = [
  "common-meta-types",
  "http",
  "opendal",
+ "parquet",
  "paste",
  "prost",
  "serde",
@@ -2874,6 +2876,7 @@ dependencies = [
 name = "common-storages-parquet"
 version = "0.1.0"
 dependencies = [
+ "arrow-array",
  "arrow-buffer",
  "arrow-schema",
  "async-backtrace",

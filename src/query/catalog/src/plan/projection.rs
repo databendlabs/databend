@@ -20,6 +20,8 @@ use common_expression::FieldIndex;
 use common_expression::TableSchema;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
+use parquet_rs::arrow::ProjectionMask;
+use parquet_rs::schema::types::SchemaDescriptor;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum Projection {
@@ -101,6 +103,27 @@ impl Projection {
             }
         }
     }
+
+    pub fn to_arrow_projection(&self, schema: &SchemaDescriptor) -> Result<ProjectionMask> {
+        Ok(match self {
+            Projection::Columns(indices) => ProjectionMask::roots(schema, indices.clone()),
+            Projection::InnerColumns(path_indices) => {
+                let paths: Vec<&Vec<usize>> = path_indices.values().collect();
+                let mut leaves = vec![];
+                let mut leave_id = 0;
+                for path in paths {
+                    traverse_physcial_type(
+                        schema.root_schema(),
+                        path,
+                        &mut leaves,
+                        &mut leave_id,
+                        true,
+                    )?;
+                }
+                ProjectionMask::leaves(schema, leaves)
+            }
+        })
+    }
 }
 
 impl core::fmt::Debug for Projection {
@@ -113,4 +136,32 @@ impl core::fmt::Debug for Projection {
             }
         }
     }
+}
+
+fn traverse_physcial_type(
+    ty: &parquet_rs::schema::types::Type,
+    path: &[FieldIndex],
+    leaves: &mut Vec<usize>,
+    leave_id: &mut usize,
+    mask: bool,
+) -> Result<()> {
+    match ty {
+        parquet_rs::schema::types::Type::PrimitiveType { .. } => {
+            if mask {
+                leaves.push(*leave_id);
+            }
+            *leave_id += 1;
+        }
+        parquet_rs::schema::types::Type::GroupType { fields, .. } => {
+            for (index, field) in fields.iter().enumerate() {
+                if mask && !path.is_empty() && path[0] == index {
+                    traverse_physcial_type(field, &path[1..], leaves, leave_id, true)?;
+                } else {
+                    traverse_physcial_type(field, path, leaves, leave_id, false)?;
+                }
+            }
+        }
+    }
+
+    Ok(())
 }

@@ -14,10 +14,13 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![deny(unused_crate_dependencies)]
+#![feature(try_blocks)]
+#![feature(impl_trait_in_assoc_type)]
 
 mod parquet2;
 mod parquet_part;
 mod parquet_reader;
+mod parquet_rs;
 mod parquet_rs_old;
 mod processors;
 mod utils;
@@ -30,6 +33,7 @@ pub use parquet_part::ParquetSmallFilesPart;
 pub use parquet_reader::BlockIterator;
 pub use parquet_reader::ParquetPartData;
 pub use parquet_reader::ParquetReader;
+pub use parquet_rs::ParquetRSTable;
 pub use parquet_rs_old::ParquetPartitionPruner;
 pub use parquet_rs_old::ParquetReader as ParquetRSReader;
 pub use parquet_rs_old::ParquetTable;

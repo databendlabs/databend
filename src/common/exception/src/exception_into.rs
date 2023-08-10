@@ -118,6 +118,23 @@ impl From<common_arrow::parquet::error::Error> for ErrorCode {
     }
 }
 
+impl From<arrow_schema::ArrowError> for ErrorCode {
+    fn from(error: arrow_schema::ArrowError) -> Self {
+        match error {
+            arrow_schema::ArrowError::NotYetImplemented(v) => {
+                ErrorCode::Unimplemented(format!("arrow: {v}"))
+            }
+            v => ErrorCode::from_std_error(v),
+        }
+    }
+}
+
+impl From<parquet::errors::ParquetError> for ErrorCode {
+    fn from(error: parquet::errors::ParquetError) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
 impl From<bincode::error::EncodeError> for ErrorCode {
     fn from(error: bincode::error::EncodeError) -> Self {
         ErrorCode::from_std_error(error)
