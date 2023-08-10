@@ -15,12 +15,13 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use super::InsertSource;
 use super::UpdateExpr;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
-use crate::ast::TableReference;
+use crate::ast::TableAlias;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatchOperation {
@@ -57,7 +58,8 @@ pub struct MergeIntoStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    pub source_reference: TableReference,
+    pub source: InsertSource,
+    pub alias: Option<TableAlias>,
     pub join_expr: Expr,
     pub merge_options: Vec<MergeOption>,
 }
@@ -72,7 +74,7 @@ impl Display for MergeIntoStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-        write!(f, " USING {} ON {}", self.source_reference, self.join_expr)?;
+        write!(f, " USING {} ON {}", self.source, self.join_expr)?;
 
         for clause in &self.merge_options {
             match clause {

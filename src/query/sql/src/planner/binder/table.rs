@@ -256,9 +256,9 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
             TableReference::MergeIntoSourceReference {
-                span,
-                source,
-                alias,
+                span: _,
+                source: _,
+                alias: _,
             } => unimplemented!(),
             TableReference::Table {
                 span,

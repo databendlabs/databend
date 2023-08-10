@@ -162,11 +162,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 catalog,
                 database,
                 table,
-                source_reference: TableReference::MergeIntoSourceReference {
-                    span: None,
-                    source,
-                    alias,
-                },
+                source,
+                alias,
                 join_expr,
                 merge_options,
             })

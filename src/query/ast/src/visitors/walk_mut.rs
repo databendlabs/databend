@@ -215,6 +215,11 @@ pub fn walk_select_target_mut<V: VisitorMut>(visitor: &mut V, target: &mut Selec
 
 pub fn walk_table_reference_mut<V: VisitorMut>(visitor: &mut V, table_ref: &mut TableReference) {
     match table_ref {
+        TableReference::MergeIntoSourceReference {
+            span: _,
+            source: _,
+            alias: _,
+        } => unimplemented!(),
         TableReference::Table {
             catalog,
             database,
