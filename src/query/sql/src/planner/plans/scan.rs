@@ -124,6 +124,7 @@ impl Scan {
     }
 
     fn used_columns(&self) -> ColumnSet {
+        // .
         let mut used_columns = ColumnSet::new();
         if let Some(preds) = &self.push_down_predicates {
             for pred in preds.iter() {
