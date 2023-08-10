@@ -33,34 +33,32 @@ impl VersionedReader<CompactSegmentInfo> for (SegmentInfoVersion, TableSchemaRef
         let schema = &self.1;
         let mut buffer: Vec<u8> = vec![];
         reader.read_to_end(&mut buffer).await?;
-        let bytes_of_current_format = match &self.0 {
-            SegmentInfoVersion::V4(_) => Ok(buffer),
+        match &self.0 {
+            SegmentInfoVersion::V4(_) => CompactSegmentInfo::from_slice(&buffer),
             SegmentInfoVersion::V3(_) => {
                 let current: SegmentInfo = SegmentInfoV3::from_slice(&buffer)?.into();
-                current.to_bytes()
+                current.try_into()
             }
             SegmentInfoVersion::V2(v) => {
                 let v2 = load_json(&buffer, v).await?;
                 let current: SegmentInfo = v2.into();
-                current.to_bytes()
+                current.try_into()
             }
             SegmentInfoVersion::V1(v) => {
                 let v1 = load_json(&buffer, v).await?;
                 // need leaf fields info to migrate from v1
                 let fields = schema.leaf_fields();
                 let current: SegmentInfo = (v1, &fields[..]).into();
-                current.to_bytes()
+                current.try_into()
             }
-
             SegmentInfoVersion::V0(v) => {
                 let v0 = load_json(&buffer, v).await?;
                 // need leaf fields info to migrate from v0
                 let fields = schema.leaf_fields();
                 let current: SegmentInfo = (v0, &fields[..]).into();
-                current.to_bytes()
+                current.try_into()
             }
-        }?;
-
-        CompactSegmentInfo::from_slice(&bytes_of_current_format)
+            SegmentInfoVersion::V5(_) => unimplemented!(),
+        }
     }
 }

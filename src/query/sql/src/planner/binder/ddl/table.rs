@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_ast::ast::AddColumnOption as AstAddColumnOption;
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::AnalyzeTableStmt;
@@ -90,6 +91,7 @@ use crate::parse_default_expr_to_string;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;
 use crate::planner::semantic::IdentifierNormalizer;
+use crate::plans::AddColumnOption;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
@@ -762,13 +764,23 @@ impl Binder {
                     new_column,
                 })))
             }
-            AlterTableAction::AddColumn { column } => {
+            AlterTableAction::AddColumn {
+                column,
+                option: ast_option,
+            } => {
                 let schema = self
                     .ctx
                     .get_table(&catalog, &database, &table)
                     .await?
                     .schema();
                 let (field, comment) = self.analyze_add_column(column, schema).await?;
+                let option = match ast_option {
+                    AstAddColumnOption::First => AddColumnOption::First,
+                    AstAddColumnOption::After(ident) => AddColumnOption::After(
+                        normalize_identifier(ident, &self.name_resolution_ctx).name,
+                    ),
+                    AstAddColumnOption::End => AddColumnOption::End,
+                };
                 Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
                     tenant: self.ctx.get_tenant(),
                     catalog,
@@ -776,6 +788,7 @@ impl Binder {
                     table,
                     field,
                     comment,
+                    option,
                 })))
             }
             AlterTableAction::ModifyColumn { action } => {
@@ -836,6 +849,7 @@ impl Binder {
                     self.metadata.clone(),
                     &[],
                     self.m_cte_bound_ctx.clone(),
+                    self.ctes_map.clone(),
                 );
 
                 let push_downs = if let Some(expr) = selection {
@@ -1358,6 +1372,7 @@ impl Binder {
             self.metadata.clone(),
             &[],
             self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
         // cluster keys cannot be a udf expression.
         scalar_binder.forbid_udf();

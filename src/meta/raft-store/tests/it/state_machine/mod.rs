@@ -41,7 +41,6 @@ use crate::testing::raft_store_test_harness;
 
 mod expire;
 mod schema_api_impl;
-mod snapshot;
 
 #[test(harness = raft_store_test_harness)]
 #[minitrace::trace]

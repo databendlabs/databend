@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use super::select::SelectList;
+use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
@@ -32,7 +33,6 @@ use crate::plans::WindowFunc;
 use crate::plans::WindowOrderBy;
 use crate::BindContext;
 use crate::Binder;
-use crate::ColumnBinding;
 use crate::MetadataRef;
 use crate::Visibility;
 
@@ -152,17 +152,13 @@ impl<'a> LambdaRewriter<'a> {
                             .add_derived_column(name.clone(), new_arg.data_type()?);
 
                         // Generate a ColumnBinding for each argument of lambda function
-                        let column = ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_position: None,
-                            table_index: None,
-                            column_name: name,
+                        let column = ColumnBindingBuilder::new(
+                            name,
                             index,
-                            data_type: Box::new(new_arg.data_type()?),
-                            visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
-                        };
+                            Box::new(new_arg.data_type()?),
+                            Visibility::Visible,
+                        )
+                        .build();
 
                         BoundColumnRef {
                             span: new_arg.span(),
@@ -185,17 +181,13 @@ impl<'a> LambdaRewriter<'a> {
                     .write()
                     .add_derived_column(lambda_func.display_name.clone(), scalar.data_type()?);
 
-                let column = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_position: None,
-                    table_index: None,
-                    column_name: lambda_func.display_name.clone(),
+                let column = ColumnBindingBuilder::new(
+                    lambda_func.display_name.clone(),
                     index,
-                    data_type: Box::new(scalar.data_type()?),
-                    visibility: Visibility::Visible,
-                    virtual_computed_expr: None,
-                };
+                    Box::new(scalar.data_type()?),
+                    Visibility::Visible,
+                )
+                .build();
 
                 let replaced_column = BoundColumnRef {
                     span: scalar.span(),

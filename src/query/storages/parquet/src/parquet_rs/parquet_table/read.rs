@@ -38,6 +38,7 @@ use crate::processors::AsyncParquetSource;
 use crate::processors::ParquetDeserializeTransform;
 use crate::processors::ParquetPrewhereInfo;
 use crate::processors::SyncParquetSource;
+use crate::ParquetPartitionPruner;
 
 impl ParquetTable {
     fn build_filter(filter: &RemoteExpr<String>, schema: &DataSchema) -> Expr {
@@ -156,6 +157,17 @@ impl ParquetTable {
 
         pipeline.try_resize(num_deserializer)?;
 
+        let pruner = Arc::new(ParquetPartitionPruner::try_create(
+            ctx.clone(),
+            &self.arrow_schema,
+            self.schema_descr.clone(),
+            &self.schema_from,
+            &plan.push_downs,
+            self.read_options,
+            self.compression_ratio,
+            true,
+        )?);
+
         pipeline.add_transform(|input, output| {
             ParquetDeserializeTransform::create(
                 ctx.clone(),
@@ -166,7 +178,7 @@ impl ParquetTable {
                 prewhere_info.clone(),
                 source_reader.clone(),
                 remain_reader.clone(),
-                Arc::new(self.create_pruner(ctx.clone(), plan.push_downs.clone(), true)?),
+                pruner.clone(),
             )
         })
     }

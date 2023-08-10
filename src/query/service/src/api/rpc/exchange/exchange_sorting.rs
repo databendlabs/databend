@@ -83,10 +83,6 @@ impl Processor for TransformExchangeSorting {
             return Ok(Event::Finished);
         }
 
-        if !self.output.can_push() {
-            return Ok(Event::NeedConsume);
-        }
-
         let mut unready_inputs = false;
         let mut all_inputs_finished = true;
         for (index, input) in self.inputs.iter().enumerate() {
@@ -101,12 +97,18 @@ impl Processor for TransformExchangeSorting {
                     let block_number = self.sorting.block_number(&data_block)?;
                     self.buffer[index] = Some((block_number, data_block));
                     self.buffer_len += 1;
+                    input.set_need_data();
                     continue;
                 }
 
-                input.set_need_data();
                 unready_inputs = true;
             }
+
+            input.set_need_data();
+        }
+
+        if !self.output.can_push() {
+            return Ok(Event::NeedConsume);
         }
 
         if all_inputs_finished && self.buffer_len == 0 {

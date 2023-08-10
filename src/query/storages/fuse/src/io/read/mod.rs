@@ -14,7 +14,7 @@
 
 mod agg_index;
 mod block;
-mod bloom;
+pub mod bloom;
 pub mod meta;
 mod read_settings;
 mod snapshot_history_reader;

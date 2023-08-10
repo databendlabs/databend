@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -32,14 +31,15 @@ use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserGrantSet;
+use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_sql::Planner;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
-use common_users::RoleCacheManager;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -154,6 +154,7 @@ impl ColumnsTable {
 
         let mut tables = Vec::new();
         let mut databases = Vec::new();
+
         if let Some(push_downs) = push_downs {
             if let Some(filter) = push_downs.filter {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
@@ -184,41 +185,14 @@ impl ColumnsTable {
 
         let tenant = ctx.get_tenant();
         let user = ctx.get_current_user()?;
-        let grant_set = user.grants;
+        let roles = ctx.get_current_available_roles().await?;
+        let visibility_checker = GrantObjectVisibilityChecker::new(&user, &roles);
 
-        let (unique_object, global_object_priv) =
-            generate_unique_object(&tenant, grant_set).await?;
-
-        let mut access_dbs = HashMap::new();
-        let mut final_dbs = vec![];
-        let mut access_tables: HashSet<(String, String)> = HashSet::new();
-        if !global_object_priv {
-            for object in unique_object {
-                match object {
-                    GrantObject::Database(catalog, db) => {
-                        if catalog == CATALOG_DEFAULT && databases.contains(&db) {
-                            access_dbs.insert(db.clone(), false);
-                        }
-                    }
-                    GrantObject::Table(catalog, db, table) => {
-                        if catalog == CATALOG_DEFAULT && databases.contains(&db) {
-                            access_tables.insert((db.clone(), table));
-                            if !access_dbs.contains_key(&db) {
-                                access_dbs.insert(db.clone(), true);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            for db in &databases {
-                if access_dbs.contains_key(db) {
-                    final_dbs.push(db.to_string());
-                }
-            }
-        } else {
-            final_dbs = databases;
-        }
+        let final_dbs: Vec<String> = databases
+            .iter()
+            .filter(|db| visibility_checker.check_database_visibility(CATALOG_DEFAULT, db))
+            .cloned()
+            .collect();
 
         let mut rows: Vec<(String, String, TableField)> = vec![];
         for database in final_dbs {
@@ -239,25 +213,14 @@ impl ColumnsTable {
             };
 
             for table in tables {
-                if global_object_priv {
+                if visibility_checker.check_table_visibility(
+                    CATALOG_DEFAULT,
+                    &database,
+                    table.name(),
+                ) {
                     let fields = generate_fields(&ctx, &table).await?;
                     for field in fields {
                         rows.push((database.clone(), table.name().into(), field.clone()))
-                    }
-                } else if let Some(contain_table_priv) = access_dbs.get(&database) {
-                    if *contain_table_priv {
-                        if access_tables.contains(&(database.to_string(), table.name().to_string()))
-                        {
-                            let fields = generate_fields(&ctx, &table).await?;
-                            for field in fields {
-                                rows.push((database.clone(), table.name().into(), field.clone()))
-                            }
-                        }
-                    } else {
-                        let fields = generate_fields(&ctx, &table).await?;
-                        for field in fields {
-                            rows.push((database.clone(), table.name().into(), field.clone()))
-                        }
                     }
                 }
             }
@@ -288,40 +251,102 @@ async fn generate_fields(
     Ok(fields)
 }
 
-pub(crate) async fn generate_unique_object(
-    tenant: &str,
-    grant_set: UserGrantSet,
-) -> Result<(HashSet<GrantObject>, bool)> {
-    let mut unique_object: HashSet<GrantObject> = HashSet::new();
-    let mut global_object_priv = false;
-    let _objects = RoleCacheManager::instance()
-        .find_related_roles(tenant, &grant_set.roles())
-        .await?
-        .into_iter()
-        .map(|role| role.grants)
-        .fold(grant_set, |a, b| a | b)
-        .entries()
-        .iter()
-        .map(|e| {
-            let object = e.object();
-            match object {
-                GrantObject::Global => {
-                    global_object_priv = true;
-                }
-                GrantObject::Database(catalog, ldb) => {
-                    unique_object
-                        .insert(GrantObject::Database(catalog.to_string(), ldb.to_string()));
-                }
-                GrantObject::Table(catalog, ldb, ltab) => {
-                    unique_object.insert(GrantObject::Table(
-                        catalog.to_string(),
-                        ldb.to_string(),
-                        ltab.to_string(),
-                    ));
+/// GrantObjectVisibilityChecker is used to check whether a user has the privilege to access a
+/// database or table.
+/// It is used in `SHOW DATABASES` and `SHOW TABLES` statements.
+pub struct GrantObjectVisibilityChecker {
+    granted_global: bool,
+    granted_databases: HashSet<(String, String)>,
+    granted_tables: HashSet<(String, String, String)>,
+    extra_databases: HashSet<(String, String)>,
+}
+
+impl GrantObjectVisibilityChecker {
+    pub fn new(user: &UserInfo, available_roles: &Vec<RoleInfo>) -> Self {
+        let mut granted_global = false;
+        let mut granted_databases = HashSet::new();
+        let mut granted_tables = HashSet::new();
+        let mut extra_databases = HashSet::new();
+
+        let mut grant_sets: Vec<&UserGrantSet> = vec![&user.grants];
+        for role in available_roles {
+            grant_sets.push(&role.grants);
+        }
+
+        for grant_set in grant_sets {
+            for ent in grant_set.entries() {
+                match ent.object() {
+                    GrantObject::Global => {
+                        granted_global = true;
+                    }
+                    GrantObject::Database(catalog, db) => {
+                        granted_databases.insert((catalog.to_string(), db.to_string()));
+                    }
+                    GrantObject::Table(catalog, db, table) => {
+                        granted_tables.insert((
+                            catalog.to_string(),
+                            db.to_string(),
+                            table.to_string(),
+                        ));
+                        // if table is visible, the table's database is also treated as visible
+                        extra_databases.insert((catalog.to_string(), db.to_string()));
+                    }
                 }
             }
-        })
-        .collect::<Vec<_>>();
+        }
 
-    Ok((unique_object, global_object_priv))
+        Self {
+            granted_global,
+            granted_databases,
+            granted_tables,
+            extra_databases,
+        }
+    }
+
+    pub fn check_database_visibility(&self, catalog: &str, db: &str) -> bool {
+        if self.granted_global {
+            return true;
+        }
+
+        if self
+            .granted_databases
+            .contains(&(catalog.to_string(), db.to_string()))
+        {
+            return true;
+        }
+
+        // if one of the tables in the database is granted, the database is also visible
+        if self
+            .extra_databases
+            .contains(&(catalog.to_string(), db.to_string()))
+        {
+            return true;
+        }
+
+        false
+    }
+
+    pub fn check_table_visibility(&self, catalog: &str, database: &str, table: &str) -> bool {
+        if self.granted_global {
+            return true;
+        }
+
+        // if database is granted, all the tables in it are visible
+        if self
+            .granted_databases
+            .contains(&(catalog.to_string(), database.to_string()))
+        {
+            return true;
+        }
+
+        if self.granted_tables.contains(&(
+            catalog.to_string(),
+            database.to_string(),
+            table.to_string(),
+        )) {
+            return true;
+        }
+
+        false
+    }
 }

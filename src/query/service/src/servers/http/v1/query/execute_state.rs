@@ -22,7 +22,10 @@ use common_base::base::ProgressValues;
 use common_base::runtime::CatchUnwindFuture;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::BlockEntry;
 use common_expression::DataBlock;
+use common_expression::Scalar;
 use common_sql::plans::Plan;
 use common_sql::PlanExtras;
 use common_sql::Planner;
@@ -240,7 +243,7 @@ impl ExecuteState {
         let res = execute(interpreter, ctx_clone, block_sender, executor_clone.clone());
         match CatchUnwindFuture::create(res).await {
             Ok(Err(err)) => {
-                Executor::stop(&executor_clone, Err(err), false).await;
+                Executor::stop(&executor_clone, Err(err.clone()), false).await;
                 block_sender_closer.close();
             }
             Err(e) => {
@@ -260,8 +263,17 @@ async fn execute(
     block_sender: SizedChannelSender<DataBlock>,
     executor: Arc<RwLock<Executor>>,
 ) -> Result<()> {
-    let mut data_stream = interpreter.execute(ctx.clone()).await?;
-
+    let data_stream_res = interpreter.execute(ctx.clone()).await;
+    if let Err(err) = data_stream_res {
+        // duplicate codes, but there is an async call
+        let data = BlockEntry::new(
+            DataType::String,
+            common_expression::Value::Scalar(Scalar::String(err.to_string().into_bytes())),
+        );
+        block_sender.send(DataBlock::new(vec![data], 1), 1).await;
+        return Err(err);
+    }
+    let mut data_stream = data_stream_res.unwrap();
     match data_stream.next().await {
         None => {
             let block = DataBlock::empty_with_schema(interpreter.schema());
@@ -270,6 +282,12 @@ async fn execute(
             block_sender.close();
         }
         Some(Err(err)) => {
+            // duplicate codes, but there is an async call
+            let data = BlockEntry::new(
+                DataType::String,
+                common_expression::Value::Scalar(Scalar::String(err.to_string().into_bytes())),
+            );
+            block_sender.send(DataBlock::new(vec![data], 1), 1).await;
             Executor::stop(&executor, Err(err), false).await;
             block_sender.close();
         }
@@ -282,6 +300,14 @@ async fn execute(
                         block_sender.send(block.clone(), block.num_rows()).await;
                     }
                     Err(err) => {
+                        // duplicate codes, but there is an async call
+                        let data = BlockEntry::new(
+                            DataType::String,
+                            common_expression::Value::Scalar(Scalar::String(
+                                err.to_string().into_bytes(),
+                            )),
+                        );
+                        block_sender.send(DataBlock::new(vec![data], 1), 1).await;
                         block_sender.close();
                         return Err(err);
                     }

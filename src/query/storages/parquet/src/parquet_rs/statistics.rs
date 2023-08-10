@@ -76,7 +76,7 @@ pub fn collect_row_group_stats(
     Ok(stats)
 }
 
-/// according to https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#json
+/// according to https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
 fn convert_column_statistics(s: &Statistics, typ: DataType) -> ColumnStatistics {
     let (max, min) = if s.has_min_max_set() {
         match s {
@@ -169,13 +169,13 @@ fn convert_column_statistics(s: &Statistics, typ: DataType) -> ColumnStatistics 
     } else {
         (Scalar::Null, Scalar::Null)
     };
-    ColumnStatistics {
+    ColumnStatistics::new(
         min,
         max,
-        null_count: s.null_count(),
-        in_memory_size: 0, // this field is not used.
-        distinct_of_values: s.distinct_count(),
-    }
+        s.null_count(),
+        0, // this field is not used.
+        s.distinct_count(),
+    )
 }
 
 fn decode_decimal128_from_bytes(arr: &FixedLenByteArray, size: DecimalSize) -> Scalar {

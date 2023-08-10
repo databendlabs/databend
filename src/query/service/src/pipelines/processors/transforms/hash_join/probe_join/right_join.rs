@@ -35,6 +35,7 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
@@ -56,9 +57,10 @@ impl JoinHashTable {
             .iter()
             .map(|c| &c.data_block)
             .collect::<Vec<_>>();
-        let total_num_rows = data_blocks
+        let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
         let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
         let right_single_scan_map = if self.hash_join_desc.join_type == JoinType::RightSingle {
             outer_scan_map
@@ -97,29 +99,38 @@ impl JoinHashTable {
                         ));
                     }
 
-                    let build_block = self.row_space.gather(
-                        local_build_indexes,
-                        &data_blocks,
-                        &total_num_rows,
-                    )?;
-                    let mut probe_block = DataBlock::take_compacted_indices(
-                        input,
-                        &local_probe_indexes[0..probe_indexes_len],
-                        max_block_size,
-                    )?;
+                    let probe_block = if is_probe_projected {
+                        let probe_block = DataBlock::take_compacted_indices(
+                            input,
+                            &local_probe_indexes[0..probe_indexes_len],
+                            max_block_size,
+                        )?;
 
-                    // The join type is right join, we need to wrap nullable for probe side.
-                    let nullable_columns = probe_block
-                        .columns()
-                        .iter()
-                        .map(|c| Self::set_validity(c, max_block_size, true_validity))
-                        .collect::<Vec<_>>();
-                    probe_block = DataBlock::new(nullable_columns, max_block_size);
+                        // The join type is right join, we need to wrap nullable for probe side.
+                        let nullable_columns = probe_block
+                            .columns()
+                            .iter()
+                            .map(|c| Self::set_validity(c, max_block_size, true_validity))
+                            .collect::<Vec<_>>();
+                        Some(DataBlock::new(nullable_columns, max_block_size))
+                    } else {
+                        None
+                    };
+                    let build_block = if is_build_projected {
+                        Some(self.row_space.gather(
+                            local_build_indexes,
+                            &data_blocks,
+                            &build_num_rows,
+                        )?)
+                    } else {
+                        None
+                    };
+                    let result_block =
+                        self.merge_eq_block(probe_block, build_block, max_block_size);
 
-                    if !probe_block.is_empty() {
-                        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+                    if !result_block.is_empty() {
                         if self.hash_join_desc.other_predicate.is_none() {
-                            result_blocks.push(merged_block);
+                            result_blocks.push(result_block);
                             if self.hash_join_desc.join_type == JoinType::RightSingle {
                                 self.update_right_single_scan_map(
                                     local_build_indexes,
@@ -134,12 +145,12 @@ impl JoinHashTable {
                             }
                         } else {
                             let (bm, all_true, all_false) = self.get_other_filters(
-                                &merged_block,
+                                &result_block,
                                 self.hash_join_desc.other_predicate.as_ref().unwrap(),
                             )?;
 
                             if all_true {
-                                result_blocks.push(merged_block);
+                                result_blocks.push(result_block);
                                 if self.hash_join_desc.join_type == JoinType::RightSingle {
                                     self.update_right_single_scan_map(
                                         local_build_indexes,
@@ -175,7 +186,7 @@ impl JoinHashTable {
                                     }
                                 }
                                 let filtered_block =
-                                    DataBlock::filter_with_bitmap(merged_block, &validity)?;
+                                    DataBlock::filter_with_bitmap(result_block, &validity)?;
                                 result_blocks.push(filtered_block);
                             }
                         }
@@ -209,33 +220,44 @@ impl JoinHashTable {
             }
         }
 
-        let build_block = self.row_space.gather(
-            &local_build_indexes[0..matched_num],
-            &data_blocks,
-            &total_num_rows,
-        )?;
-        let mut probe_block = DataBlock::take_compacted_indices(
-            input,
-            &local_probe_indexes[0..probe_indexes_len],
-            matched_num,
-        )?;
+        if probe_indexes_len == 0 {
+            return Ok(result_blocks);
+        }
 
-        // The join type is right join, we need to wrap nullable for probe side.
-        let mut validity = MutableBitmap::new();
-        validity.extend_constant(matched_num, true);
-        let validity: Bitmap = validity.into();
-        let nullable_columns = probe_block
-            .columns()
-            .iter()
-            .map(|c| Self::set_validity(c, probe_block.num_rows(), &validity))
-            .collect::<Vec<_>>();
-        probe_block = DataBlock::new(nullable_columns, validity.len());
+        let probe_block = if is_probe_projected {
+            let probe_block = DataBlock::take_compacted_indices(
+                input,
+                &local_probe_indexes[0..probe_indexes_len],
+                matched_num,
+            )?;
 
-        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+            // The join type is right join, we need to wrap nullable for probe side.
+            let mut validity = MutableBitmap::new();
+            validity.extend_constant(matched_num, true);
+            let validity: Bitmap = validity.into();
+            let nullable_columns = probe_block
+                .columns()
+                .iter()
+                .map(|c| Self::set_validity(c, probe_block.num_rows(), &validity))
+                .collect::<Vec<_>>();
+            Some(DataBlock::new(nullable_columns, validity.len()))
+        } else {
+            None
+        };
+        let build_block = if is_build_projected {
+            Some(self.row_space.gather(
+                &local_build_indexes[0..matched_num],
+                &data_blocks,
+                &build_num_rows,
+            )?)
+        } else {
+            None
+        };
+        let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
-        if !merged_block.is_empty() {
+        if !result_block.is_empty() {
             if self.hash_join_desc.other_predicate.is_none() {
-                result_blocks.push(merged_block);
+                result_blocks.push(result_block);
                 if self.hash_join_desc.join_type == JoinType::RightSingle {
                     self.update_right_single_scan_map(
                         &local_build_indexes[0..matched_num],
@@ -250,12 +272,12 @@ impl JoinHashTable {
                 }
             } else {
                 let (bm, all_true, all_false) = self.get_other_filters(
-                    &merged_block,
+                    &result_block,
                     self.hash_join_desc.other_predicate.as_ref().unwrap(),
                 )?;
 
                 if all_true {
-                    result_blocks.push(merged_block);
+                    result_blocks.push(result_block);
                     if self.hash_join_desc.join_type == JoinType::RightSingle {
                         self.update_right_single_scan_map(
                             &local_build_indexes[0..matched_num],
@@ -288,7 +310,7 @@ impl JoinHashTable {
                             idx += 1;
                         }
                     }
-                    let filtered_block = DataBlock::filter_with_bitmap(merged_block, &validity)?;
+                    let filtered_block = DataBlock::filter_with_bitmap(result_block, &validity)?;
                     result_blocks.push(filtered_block);
                 }
             }

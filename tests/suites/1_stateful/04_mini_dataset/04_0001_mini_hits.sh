@@ -55,7 +55,7 @@ hits_statements=(
   "SELECT '====== SQL21 ======';"
   "SELECT COUNT(*) FROM hits WHERE URL LIKE '%produkty%';"
   "SELECT '====== SQL22 ======';"
-  "SELECT SearchPhrase AS c, MIN(URL), COUNT(*) AS c FROM hits WHERE URL LIKE '%google%' AND SearchPhrase <> '' GROUP BY SearchPhrase ORDER BY c DESC LIMIT 10;"
+  "SELECT SearchPhrase AS c, MIN(URL), COUNT(*) FROM hits WHERE URL LIKE '%google%' AND SearchPhrase <> '' GROUP BY SearchPhrase ORDER BY c DESC LIMIT 10;"
   "SELECT '====== SQL23 ======';"
   "SELECT SearchPhrase AS c, MIN(URL), MIN(Title), COUNT(*), COUNT(DISTINCT UserID) FROM hits WHERE Title LIKE '%Google%' AND URL NOT LIKE '%.google.%' AND SearchPhrase <> '' GROUP BY SearchPhrase ORDER BY c DESC LIMIT 10;"
   "SELECT '====== SQL24 ======';"

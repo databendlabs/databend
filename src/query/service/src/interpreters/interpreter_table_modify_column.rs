@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_ast::ast::Identifier;
@@ -30,6 +29,8 @@ use common_license::license::Feature::ComputedColumn;
 use common_license::license::Feature::DataMask;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::DatabaseType;
+use common_meta_app::schema::SetTableColumnMaskPolicyAction;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
@@ -72,7 +73,6 @@ impl ModifyTableColumnInterpreter {
         &self,
         catalog: Arc<dyn Catalog>,
         table: &Arc<dyn Table>,
-        table_meta: TableMeta,
         column: String,
         mask_name: String,
     ) -> Result<PipelineBuildResult> {
@@ -89,11 +89,12 @@ impl ModifyTableColumnInterpreter {
             .get_data_mask(meta_api, self.ctx.get_tenant(), mask_name.clone())
             .await?;
 
+        // check if column type match to the input type
+        let policy_data_type = policy.args[0].1.to_string().to_lowercase();
         let schema = table.schema();
         let table_info = table.get_table_info();
         if let Some((_, data_field)) = schema.column_with_name(&column) {
             let data_type = data_field.data_type().to_string().to_lowercase();
-            let policy_data_type = policy.args[0].1.to_string().to_lowercase();
             if data_type != policy_data_type {
                 return Err(ErrorCode::UnmatchColumnDataType(format!(
                     "Column '{}' data type {} does not match to the mask policy type {}",
@@ -107,27 +108,24 @@ impl ModifyTableColumnInterpreter {
             )));
         }
 
-        let mut new_table_meta = table_meta;
-
-        let mut column_mask_policy = match &new_table_meta.column_mask_policy {
-            Some(column_mask_policy) => column_mask_policy.clone(),
-            None => BTreeMap::new(),
-        };
-        column_mask_policy.insert(column.clone(), mask_name);
-        new_table_meta.column_mask_policy = Some(column_mask_policy);
-
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
-        let req = UpdateTableMetaReq {
-            table_id,
+        let prev_column_mask_name =
+            if let Some(column_mask_policy) = &table_info.meta.column_mask_policy {
+                column_mask_policy.get(&column).cloned()
+            } else {
+                None
+            };
+        let req = SetTableColumnMaskPolicyReq {
+            tenant: self.ctx.get_tenant(),
             seq: MatchSeq::Exact(table_version),
-            new_table_meta,
-            copied_files: None,
-            deduplicated_label: None,
+            table_id,
+            column,
+            action: SetTableColumnMaskPolicyAction::Set(mask_name, prev_column_mask_name),
         };
 
-        let res = catalog.update_table_meta(table_info, req).await?;
+        let res = catalog.set_table_column_mask_policy(req).await?;
 
         if let Some(share_table_info) = res.share_table_info {
             save_share_table_info(
@@ -137,6 +135,55 @@ impl ModifyTableColumnInterpreter {
             )
             .await?;
         }
+        Ok(PipelineBuildResult::create())
+    }
+
+    // unset data mask policy to a column is a ee feature.
+    async fn do_unset_data_mask_policy(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        table: &Arc<dyn Table>,
+        column: String,
+    ) -> Result<PipelineBuildResult> {
+        let license_manager = get_license_manager();
+        license_manager.manager.check_enterprise_enabled(
+            &self.ctx.get_settings(),
+            self.ctx.get_tenant(),
+            DataMask,
+        )?;
+
+        let table_info = table.get_table_info();
+        let table_id = table_info.ident.table_id;
+        let table_version = table_info.ident.seq;
+
+        let prev_column_mask_name =
+            if let Some(column_mask_policy) = &table_info.meta.column_mask_policy {
+                column_mask_policy.get(&column).cloned()
+            } else {
+                None
+            };
+
+        if let Some(prev_column_mask_name) = prev_column_mask_name {
+            let req = SetTableColumnMaskPolicyReq {
+                tenant: self.ctx.get_tenant(),
+                seq: MatchSeq::Exact(table_version),
+                table_id,
+                column,
+                action: SetTableColumnMaskPolicyAction::Unset(prev_column_mask_name),
+            };
+
+            let res = catalog.set_table_column_mask_policy(req).await?;
+
+            if let Some(share_table_info) = res.share_table_info {
+                save_share_table_info(
+                    &self.ctx.get_tenant(),
+                    self.ctx.get_data_operator()?.operator(),
+                    share_table_info,
+                )
+                .await?;
+            }
+        }
+
         Ok(PipelineBuildResult::create())
     }
 
@@ -245,7 +292,10 @@ impl ModifyTableColumnInterpreter {
             } => {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                (builder1.build(&s_expr).await?, bind_context.columns.clone())
+                (
+                    builder1.build(&s_expr, bind_context.column_set()).await?,
+                    bind_context.columns.clone(),
+                )
             }
             _ => unreachable!(),
         };
@@ -409,14 +459,12 @@ impl Interpreter for ModifyTableColumnInterpreter {
         // need to check whether this column is referenced by other computed columns.
         match &self.plan.action {
             ModifyColumnAction::SetMaskingPolicy(column, mask_name) => {
-                self.do_set_data_mask_policy(
-                    catalog,
-                    table,
-                    table_meta,
-                    column.to_string(),
-                    mask_name.clone(),
-                )
-                .await
+                self.do_set_data_mask_policy(catalog, table, column.to_string(), mask_name.clone())
+                    .await
+            }
+            ModifyColumnAction::UnsetMaskingPolicy(column) => {
+                self.do_unset_data_mask_policy(catalog, table, column.to_string())
+                    .await
             }
             ModifyColumnAction::SetDataType(column_name_types) => {
                 self.do_set_data_type(table, column_name_types).await

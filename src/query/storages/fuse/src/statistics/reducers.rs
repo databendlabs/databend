@@ -53,8 +53,8 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             let mut in_memory_size = 0;
 
             for col_stats in stats {
-                min_stats.push(col_stats.min.clone());
-                max_stats.push(col_stats.max.clone());
+                min_stats.push(col_stats.min().clone());
+                max_stats.push(col_stats.max().clone());
 
                 null_count += col_stats.null_count;
                 in_memory_size += col_stats.in_memory_size;
@@ -72,13 +72,10 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 .max_by(|x, y| x.cmp(y))
                 .unwrap_or(Scalar::Null);
 
-            acc.insert(*id, ColumnStatistics {
-                min,
-                max,
-                null_count,
-                in_memory_size,
-                distinct_of_values: None,
-            });
+            acc.insert(
+                *id,
+                ColumnStatistics::new(min, max, null_count, in_memory_size, None),
+            );
             acc
         })
 }
@@ -103,8 +100,8 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
                 return None;
             }
 
-            min_stats.push(stat.min.clone());
-            max_stats.push(stat.max.clone());
+            min_stats.push(stat.min());
+            max_stats.push(stat.max());
             levels.push(stat.level);
         } else {
             return None;
@@ -115,13 +112,13 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
     let max = max_stats.into_iter().max_by(|x, y| x.cmp(y)).unwrap();
     let level = levels.into_iter().max().unwrap_or(0);
 
-    Some(ClusterStatistics {
+    Some(ClusterStatistics::new(
         cluster_key_id,
         min,
         max,
         level,
-        pages: None,
-    })
+        None,
+    ))
 }
 
 pub fn merge_statistics(

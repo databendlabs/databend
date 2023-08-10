@@ -15,8 +15,11 @@
 statement ok
 drop MASKING POLICY if exists mask
 
+statement error 1121
+CREATE MASKING POLICY mask AS (val STRING,num int) RETURNS INT -> CASE WHEN current_role() IN ('ANALYST') THEN 100 ELSE 200 END comment = 'this is a masking policy'
+
 statement ok
-CREATE MASKING POLICY mask AS (val STRING,num int) RETURN STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'
+CREATE MASKING POLICY mask AS (val STRING,num int) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'
 
 statement ok
 drop MASKING POLICY if exists mask

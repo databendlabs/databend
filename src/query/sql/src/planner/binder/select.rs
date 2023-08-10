@@ -18,12 +18,14 @@ use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use common_ast::ast::BinaryOperator;
+use common_ast::ast::CTESource;
 use common_ast::ast::ColumnID;
 use common_ast::ast::ColumnPosition;
 use common_ast::ast::Expr;
 use common_ast::ast::Expr::Array;
 use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
+use common_ast::ast::Indirection;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
@@ -180,11 +182,15 @@ impl Binder {
         // because `analyze_window` will rewrite the aggregate functions in the window function's arguments.
         self.analyze_window(&mut from_context, &mut select_list)?;
 
-        let aliases = select_list
-            .items
-            .iter()
-            .map(|item| (item.alias.clone(), item.scalar.clone()))
-            .collect::<Vec<_>>();
+        // Collect duduplicate aliases
+        let mut aliases = vec![];
+        for item in &select_list.items {
+            if !aliases.iter().any(|(name, pre_scalar)| {
+                name == &item.alias && self.judge_equal_scalars(pre_scalar, &item.scalar)
+            }) {
+                aliases.push((item.alias.clone(), item.scalar.clone()));
+            }
+        }
 
         // To support using aliased column in `WHERE` clause,
         // we should bind where after `select_list` is rewritten.
@@ -288,8 +294,6 @@ impl Binder {
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
-        output_context.ctes_map = from_context.ctes_map;
-        output_context.materialized_ctes = from_context.materialized_ctes;
 
         Ok((s_expr, output_context))
     }
@@ -332,21 +336,60 @@ impl Binder {
         if let Some(with) = &query.with {
             for (idx, cte) in with.ctes.iter().enumerate() {
                 let table_name = cte.alias.name.name.clone();
-                if bind_context.ctes_map.contains_key(&table_name) {
+                if bind_context.cte_map_ref.contains_key(&table_name) {
                     return Err(ErrorCode::SemanticError(format!(
                         "duplicate cte {table_name}"
                     )));
                 }
+                let (materialized, cte_query) = match &cte.source {
+                    CTESource::Query {
+                        materialized,
+                        box query,
+                    } => (*materialized, query.clone()),
+                    CTESource::Values(values) => {
+                        // rewrite value clause as a query
+                        let values_query = Query {
+                            span: None,
+                            with: None,
+                            body: SetExpr::Select(Box::new(SelectStmt {
+                                span: None,
+                                hints: None,
+                                distinct: false,
+                                select_list: vec![SelectTarget::QualifiedName {
+                                    qualified: vec![Indirection::Star(None)],
+                                    exclude: None,
+                                }],
+                                from: vec![TableReference::Values {
+                                    span: None,
+                                    values: values.clone(),
+                                    alias: Some(cte.alias.clone()),
+                                }],
+                                selection: None,
+                                group_by: None,
+                                having: None,
+                                window_list: None,
+                            })),
+                            order_by: vec![],
+                            limit: vec![],
+                            offset: None,
+                            ignore_result: false,
+                        };
+
+                        (false, values_query)
+                    }
+                };
+
                 let cte_info = CteInfo {
                     columns_alias: cte.alias.columns.iter().map(|c| c.name.clone()).collect(),
-                    query: cte.query.clone(),
-                    materialized: cte.materialized,
+                    query: cte_query,
+                    materialized,
                     cte_idx: idx,
                     used_count: 0,
                     stat_info: None,
                     columns: vec![],
                 };
-                bind_context.ctes_map.insert(table_name, cte_info);
+                self.ctes_map.insert(table_name.clone(), cte_info.clone());
+                bind_context.cte_map_ref.insert(table_name, cte_info);
             }
         }
 
@@ -410,6 +453,7 @@ impl Binder {
             self.metadata.clone(),
             aliases,
             self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
         scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
@@ -772,7 +816,6 @@ impl Binder {
         if stmt.group_by.is_some()
             || stmt.having.is_some()
             || stmt.distinct
-            || !bind_context.ctes_map.is_empty()
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
         {

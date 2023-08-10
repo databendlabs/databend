@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -52,7 +53,7 @@ pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<
 pub struct ProcessInfo {
     pub id: String,
     pub typ: String,
-    pub state: String,
+    pub state: ProcessInfoState,
     pub database: String,
     pub user: Option<UserInfo>,
     pub settings: Arc<Settings>,
@@ -65,6 +66,23 @@ pub struct ProcessInfo {
     pub mysql_connection_id: Option<u32>,
     pub created_time: SystemTime,
     pub status_info: Option<String>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ProcessInfoState {
+    Query,
+    Aborting,
+    Idle,
+}
+
+impl Display for ProcessInfoState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProcessInfoState::Query => write!(f, "Query"),
+            ProcessInfoState::Aborting => write!(f, "Aborting"),
+            ProcessInfoState::Idle => write!(f, "Idle"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -117,6 +135,7 @@ pub trait TableContext: Send + Sync {
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
+    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>>;
     fn get_fuse_version(&self) -> String;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> String;

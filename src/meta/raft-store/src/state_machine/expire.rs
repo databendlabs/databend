@@ -33,7 +33,9 @@ use common_meta_sled_store::SledOrderedSerde;
 use common_meta_sled_store::SledSerde;
 
 /// The identifier of the index for kv with expiration.
-#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(
+    Default, Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, PartialOrd, Ord,
+)]
 pub struct ExpireKey {
     /// The time in millisecond when a key will be expired.
     pub time_ms: u64,
@@ -42,6 +44,15 @@ pub struct ExpireKey {
     ///
     /// The `seq` of value is globally unique in meta-store.
     pub seq: u64,
+}
+
+impl ExpireKey {
+    /// Return true if the provided time in millisecond is expired.
+    ///
+    /// NOTE that `time_ms` equal to `self.time_ms` is not considered expired.
+    pub fn is_expired(&self, time_ms: u64) -> bool {
+        time_ms > self.time_ms
+    }
 }
 
 /// The value of an expiration index is the record key.

@@ -56,12 +56,11 @@ impl PartInfo for Mutation {
 
 impl Mutation {
     pub fn from_part(info: &PartInfoPtr) -> Result<&Mutation> {
-        match info.as_any().downcast_ref::<Mutation>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
+        info.as_any()
+            .downcast_ref::<Mutation>()
+            .ok_or(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to Mutation.",
-            )),
-        }
+            ))
     }
 }
 
@@ -77,10 +76,9 @@ impl PartInfo for MutationDeletedSegment {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<MutationDeletedSegment>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<MutationDeletedSegment>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {
@@ -109,10 +107,9 @@ impl PartInfo for MutationPartInfo {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<MutationPartInfo>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<MutationPartInfo>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {

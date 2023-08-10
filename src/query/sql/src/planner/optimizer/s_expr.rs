@@ -253,7 +253,8 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::CteScan(_)
         | RelOperator::RuntimeFilterSource(_)
         | RelOperator::Pattern(_)
-        | RelOperator::MaterializedCte(_) => false,
+        | RelOperator::MaterializedCte(_)
+        | RelOperator::ConstantTableScan(_) => false,
         RelOperator::Join(op) => {
             op.left_conditions.iter().any(find_subquery_in_expr)
                 || op.right_conditions.iter().any(find_subquery_in_expr)

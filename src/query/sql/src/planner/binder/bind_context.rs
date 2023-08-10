@@ -14,8 +14,6 @@
 
 use std::collections::btree_map;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -32,6 +30,8 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use dashmap::DashMap;
 use enum_as_inner::EnumAsInner;
+use indexmap::IndexMap;
+use itertools::Itertools;
 
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
@@ -85,7 +85,7 @@ pub enum Visibility {
     UnqualifiedWildcardInVisible,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InternalColumnBinding {
     /// Database name of this `InternalColumnBinding` in current context
     pub database_name: Option<String>,
@@ -95,7 +95,7 @@ pub struct InternalColumnBinding {
     pub internal_column: InternalColumn,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NameResolutionResult {
     Column(ColumnBinding),
     InternalColumn(InternalColumnBinding),
@@ -118,14 +118,15 @@ pub struct BindContext {
 
     pub lambda_info: LambdaInfo,
 
+    /// If the `BindContext` is created from a CTE, record the cte name
+    pub cte_name: Option<String>,
+
+    pub cte_map_ref: Box<IndexMap<String, CteInfo>>,
+
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
-
-    pub ctes_map: Box<HashMap<String, CteInfo>>,
-
-    pub materialized_ctes: HashSet<(IndexType, SExpr)>,
 
     /// If current binding table is a view, record its database and name.
     ///
@@ -168,9 +169,9 @@ impl BindContext {
             aggregate_info: AggregateInfo::default(),
             windows: WindowInfo::default(),
             lambda_info: LambdaInfo::default(),
+            cte_name: None,
+            cte_map_ref: Box::default(),
             in_grouping: false,
-            ctes_map: Box::default(),
-            materialized_ctes: HashSet::new(),
             view_info: None,
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
@@ -187,9 +188,9 @@ impl BindContext {
             aggregate_info: Default::default(),
             windows: Default::default(),
             lambda_info: LambdaInfo::default(),
+            cte_name: parent.cte_name,
+            cte_map_ref: parent.cte_map_ref.clone(),
             in_grouping: false,
-            ctes_map: parent.ctes_map.clone(),
-            materialized_ctes: parent.materialized_ctes.clone(),
             view_info: None,
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
@@ -202,8 +203,8 @@ impl BindContext {
     pub fn replace(&self) -> Self {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
-        bind_context.ctes_map = self.ctes_map.clone();
-        bind_context.materialized_ctes = self.materialized_ctes.clone();
+        bind_context.cte_name = self.cte_name.clone();
+        bind_context.cte_map_ref = self.cte_map_ref.clone();
         bind_context
     }
 
@@ -262,8 +263,8 @@ impl BindContext {
         available_aliases: &[(String, ScalarExpr)],
     ) -> Result<NameResolutionResult> {
         let mut result = vec![];
-
         // Lookup parent context to resolve outer reference.
+        let mut alias_match_count = 0;
         if self.expr_context.prefer_resolve_alias() {
             for (alias, scalar) in available_aliases {
                 if database.is_none() && table.is_none() && column == alias {
@@ -271,21 +272,34 @@ impl BindContext {
                         alias: alias.clone(),
                         scalar: scalar.clone(),
                     });
+
+                    alias_match_count += 1;
                 }
             }
 
-            self.search_bound_columns_recursively(database, table, column, &mut result);
+            if alias_match_count == 0 {
+                self.search_bound_columns_recursively(database, table, column, &mut result);
+            }
         } else {
             self.search_bound_columns_recursively(database, table, column, &mut result);
 
-            for (alias, scalar) in available_aliases {
-                if database.is_none() && table.is_none() && column == alias {
-                    result.push(NameResolutionResult::Alias {
-                        alias: alias.clone(),
-                        scalar: scalar.clone(),
-                    });
+            if result.is_empty() {
+                for (alias, scalar) in available_aliases {
+                    if database.is_none() && table.is_none() && column == alias {
+                        result.push(NameResolutionResult::Alias {
+                            alias: alias.clone(),
+                            scalar: scalar.clone(),
+                        });
+                        alias_match_count += 1;
+                    }
                 }
             }
+        }
+
+        if result.len() > 1 && !result.iter().all_equal() {
+            return Err(ErrorCode::SemanticError(format!(
+                "column {column} reference or alias is ambiguous, please use another alias name",
+            )));
         }
 
         if result.is_empty() {
@@ -324,6 +338,8 @@ impl BindContext {
         }
     }
 
+    // Search bound column recursively from the parent context.
+    // If current context found results, it'll stop searching.
     pub fn search_bound_columns_recursively(
         &self,
         database: Option<&str>,
@@ -339,6 +355,7 @@ impl BindContext {
                     result.push(NameResolutionResult::Column(column_binding.clone()));
                 }
             }
+
             if !result.is_empty() {
                 return;
             }
@@ -352,6 +369,7 @@ impl BindContext {
                 };
                 result.push(NameResolutionResult::InternalColumn(column_binding));
             }
+
             if !result.is_empty() {
                 return;
             }

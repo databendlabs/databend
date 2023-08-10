@@ -1,0 +1,127 @@
+statement ok
+DROP DATABASE IF EXISTS issue_12294
+
+statement ok
+CREATE DATABASE issue_12294
+
+statement ok
+USE issue_12294
+
+# https://github.com/datafuselabs/databend/issues/12294
+# on-conflict with nullable column
+
+# scenario I : non-clustered table
+statement ok
+create table t(a int null, b int null);
+
+statement ok
+create table t1(a int null, b int null);
+
+statement ok
+insert into t values
+    (1,null),
+    (null,2),
+    (3,3);
+
+statement ok
+insert into t1 values
+    (2,null),
+    (2,3);
+
+statement ok
+replace into t on(b) select * from t1;
+
+# on-conflict with nullable column "b", thus both (2,null) and (1,null) should be kept
+query II
+select * from t order by a;
+----
+1 NULL
+2 NULL
+2 3
+NULL 2
+
+statement ok
+drop table t;
+
+statement ok
+drop table t1;
+
+# scenario II : clustered table
+statement ok
+create table t(a int null, b int null) cluster by(a);
+
+statement ok
+create table t1(a int null, b int null);
+
+statement ok
+insert into t values
+    (1,null),
+    (null,2),
+    (3,3);
+
+statement ok
+insert into t1 values
+    (2,null),
+    (2,3);
+
+statement ok
+replace into t on(b) select * from t1;
+
+# on-conflict with nullable column "b", thus both (2,null) and (1,null) should be kept
+query II
+select * from t order by a;
+----
+1 NULL
+2 NULL
+2 3
+NULL 2
+
+statement ok
+drop table t;
+
+statement ok
+drop table t1;
+
+# supplementary scenario : multiple nullable columns
+statement ok
+create table t(a int null, b int null, c int) cluster by(a);
+
+statement ok
+create table t1(a int null, b int null, c int);
+
+statement ok
+insert into t values
+    (1,null, 1),
+    (null,2, 2),
+    (3,3,3);
+
+statement ok
+insert into t1 values
+    (2,null, 4),
+    (2,3,5),
+    (3,3,6);
+
+statement ok
+replace into t on(a, b) select * from t1;
+
+query II
+select * from t order by a;
+----
+1 NULL 1
+2 NULL 4
+2 3 5
+3 3 6
+NULL 2 2
+
+statement ok
+drop table t;
+
+statement ok
+drop table t1;
+
+statement ok
+DROP DATABASE issue_12294
+
+
+
+

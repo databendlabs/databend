@@ -44,11 +44,19 @@ impl RowScalarValue for Value<AnyType> {
     }
 }
 
-pub fn row_hash_of_columns(column_values: &[&Value<AnyType>], row_idx: usize) -> Result<u128> {
+/// For row contains null value, None will be returned
+pub fn row_hash_of_columns(
+    column_values: &[&Value<AnyType>],
+    row_idx: usize,
+) -> Result<Option<u128>> {
     let mut sip = sip128::SipHasher24::new();
     for col in column_values {
         let value = col.row_scalar(row_idx)?;
         match value {
+            ScalarRef::Null => {
+                // the whole row is ignored if any column is null
+                return Ok(None);
+            }
             ScalarRef::Number(v) => match v {
                 NumberScalar::UInt8(v) => sip.write_u8(v),
                 NumberScalar::UInt16(v) => sip.write_u16(v),
@@ -85,5 +93,5 @@ pub fn row_hash_of_columns(column_values: &[&Value<AnyType>], row_idx: usize) ->
             }
         }
     }
-    Ok(sip.finish128().as_u128())
+    Ok(Some(sip.finish128().as_u128()))
 }

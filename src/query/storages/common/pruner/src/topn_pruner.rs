@@ -103,9 +103,9 @@ impl TopNPrunner {
             }
             // no nulls
             if *asc {
-                a.1.min.cmp(&b.1.min)
+                a.1.min().cmp(b.1.min())
             } else {
-                a.1.max.cmp(&b.1.max).reverse()
+                a.1.max().cmp(b.1.max()).reverse()
             }
         });
         Ok(id_stats

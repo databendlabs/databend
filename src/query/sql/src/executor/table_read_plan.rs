@@ -37,6 +37,7 @@ use common_license::license_manager::get_license_manager;
 use common_settings::Settings;
 use common_users::UserApiProvider;
 use data_mask_feature::get_datamask_handler;
+use log::info;
 use parking_lot::RwLock;
 
 use crate::binder::ColumnBindingBuilder;
@@ -157,6 +158,7 @@ impl ToReadDataSourcePlan for dyn Table {
             output_schema = Arc::new(schema);
         }
 
+        // check if need to apply data mask policy
         let data_mask_policy = if let DataSourceInfo::TableSource(table_info) = &source_info {
             let table_meta = &table_info.meta;
             let tenant = ctx.get_tenant();
@@ -176,54 +178,58 @@ impl ToReadDataSourcePlan for dyn Table {
                     let handler = get_datamask_handler();
                     for (i, field) in output_schema.fields().iter().enumerate() {
                         if let Some(mask_policy) = column_mask_policy.get(field.name()) {
-                            let policy = handler
+                            if let Ok(policy) = handler
                                 .get_data_mask(
                                     meta_api.clone(),
                                     tenant.clone(),
                                     mask_policy.clone(),
                                 )
-                                .await?;
+                                .await
+                            {
+                                let args = &policy.args;
+                                let mut aliases = Vec::with_capacity(args.len());
+                                for (i, (arg_name, arg_type)) in args.iter().enumerate() {
+                                    let table_data_type =
+                                        resolve_type_name_by_str(arg_type.as_str())?;
+                                    let data_type = (&table_data_type).into();
+                                    let bound_column = BoundColumnRef {
+                                        span: None,
+                                        column: ColumnBindingBuilder::new(
+                                            arg_name.to_string(),
+                                            i,
+                                            Box::new(data_type),
+                                            Visibility::Visible,
+                                        )
+                                        .build(),
+                                    };
+                                    let scalar_expr = ScalarExpr::BoundColumnRef(bound_column);
+                                    aliases.push((arg_name.clone(), scalar_expr));
+                                }
 
-                            let args = &policy.args;
-                            let mut aliases = Vec::with_capacity(args.len());
-                            for (i, (arg_name, arg_type)) in args.iter().enumerate() {
-                                let table_data_type = resolve_type_name_by_str(arg_type.as_str())?;
-                                let data_type = (&table_data_type).into();
-                                let bound_column = BoundColumnRef {
-                                    span: None,
-                                    column: ColumnBindingBuilder::new(
-                                        arg_name.to_string(),
-                                        i,
-                                        Box::new(data_type),
-                                        Visibility::Visible,
-                                    )
-                                    .build(),
-                                };
-                                let scalar_expr = ScalarExpr::BoundColumnRef(bound_column);
-                                aliases.push((arg_name.clone(), scalar_expr));
+                                let body = &policy.body;
+                                let tokens = tokenize_sql(body)?;
+                                let ast_expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
+                                let mut bind_context = BindContext::new();
+                                let settings = Settings::create("".to_string());
+                                let name_resolution_ctx =
+                                    NameResolutionContext::try_from(settings.as_ref())?;
+                                let metadata = Arc::new(RwLock::new(Metadata::default()));
+                                let mut type_checker = TypeChecker::new(
+                                    &mut bind_context,
+                                    ctx.clone(),
+                                    &name_resolution_ctx,
+                                    metadata,
+                                    &aliases,
+                                    false,
+                                    false,
+                                );
+
+                                let scalar = type_checker.resolve(&ast_expr).await?;
+                                let expr = scalar.0.as_expr()?.project_column_ref(|col| col.index);
+                                mask_policy_map.insert(i, expr.as_remote_expr());
+                            } else {
+                                info!("cannot find mask policy {}/{}", tenant, mask_policy);
                             }
-
-                            let body = &policy.body;
-                            let tokens = tokenize_sql(body)?;
-                            let ast_expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
-                            let mut bind_context = BindContext::new();
-                            let settings = Settings::create("".to_string());
-                            let name_resolution_ctx =
-                                NameResolutionContext::try_from(settings.as_ref())?;
-                            let metadata = Arc::new(RwLock::new(Metadata::default()));
-                            let mut type_checker = TypeChecker::new(
-                                &mut bind_context,
-                                ctx.clone(),
-                                &name_resolution_ctx,
-                                metadata,
-                                &aliases,
-                                false,
-                                false,
-                            );
-
-                            let scalar = type_checker.resolve(&ast_expr).await?;
-                            let expr = scalar.0.as_expr()?.project_column_ref(|col| col.index);
-                            mask_policy_map.insert(i, expr.as_remote_expr());
                         }
                     }
                     Some(mask_policy_map)

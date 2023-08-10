@@ -35,10 +35,12 @@ use common_expression::Expr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserDefinedFunction;
+use indexmap::IndexMap;
 use log::warn;
 
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::CteInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::udf_validator::UDFValidator;
@@ -65,6 +67,7 @@ use crate::ColumnBinding;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::ScalarExpr;
 use crate::TypeChecker;
 use crate::Visibility;
 
@@ -80,8 +83,16 @@ pub struct Binder {
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
+    // Save the equal scalar exprs for joins
+    // Eg: SELECT * FROM (twocolumn AS a JOIN twocolumn AS b USING(x) JOIN twocolumn AS c on a.x = c.x) ORDER BY x LIMIT 1
+    // The eq_scalars is [(a.x, b.x), (a.x, c.x)]
+    pub eq_scalars: Vec<(ScalarExpr, ScalarExpr)>,
     // Save the bound context for materialized cte, the key is cte_idx
     pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
+    pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
+    /// Use `IndexMap` because need to keep the insertion order
+    /// Then wrap materialized ctes to main plan.
+    pub ctes_map: Box<IndexMap<String, CteInfo>>,
 }
 
 impl<'a> Binder {
@@ -97,12 +108,19 @@ impl<'a> Binder {
             name_resolution_ctx,
             metadata,
             m_cte_bound_ctx: Default::default(),
+            eq_scalars: vec![],
+            m_cte_bound_s_expr: Default::default(),
+            ctes_map: Box::default(),
         }
     }
 
     // After the materialized cte was bound, add it to `m_cte_bound_ctx`
     pub fn set_m_cte_bound_ctx(&mut self, cte_idx: IndexType, bound_ctx: BindContext) {
         self.m_cte_bound_ctx.insert(cte_idx, bound_ctx);
+    }
+
+    pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
+        self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
     }
 
     #[async_backtrace::framed]
@@ -167,17 +185,15 @@ impl<'a> Binder {
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
                 // Wrap `LogicalMaterializedCte` to `s_expr`
-                for materialized_cte in bind_context.materialized_ctes.iter() {
-                    let mut left_output_columns = vec![];
-                    for cte in bind_context.ctes_map.values() {
-                        if cte.cte_idx == materialized_cte.0 {
-                            left_output_columns = cte.columns.clone();
-                            break;
-                        }
+                for (_, cte_info) in self.ctes_map.iter().rev() {
+                    if !cte_info.materialized {
+                        continue;
                     }
+                    let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
+                    let left_output_columns = cte_info.columns.clone();
                     s_expr = SExpr::create_binary(
-                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: materialized_cte.0})),
-                        Arc::new(materialized_cte.1.clone()),
+                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: cte_info.cte_idx})),
+                        Arc::new(cte_s_expr.clone()),
                         Arc::new(s_expr),
                     );
                 }
@@ -624,5 +640,11 @@ impl<'a> Binder {
     /// Normalize <identifier>
     pub fn normalize_object_identifier(&self, ident: &Identifier) -> String {
         normalize_identifier(ident, &self.name_resolution_ctx).name
+    }
+
+    pub fn judge_equal_scalars(&self, left: &ScalarExpr, right: &ScalarExpr) -> bool {
+        self.eq_scalars
+            .iter()
+            .any(|(l, r)| (l == left && r == right) || (l == right && r == left))
     }
 }

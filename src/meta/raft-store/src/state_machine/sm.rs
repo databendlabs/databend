@@ -117,7 +117,7 @@ pub struct StateMachine {
 
 /// A key-value pair in a snapshot is a vec of two `Vec<u8>`.
 pub type SnapshotKeyValue = Vec<Vec<u8>>;
-type DeleteByPrefixKeyMap = BTreeMap<TxnDeleteByPrefixRequest, Vec<(String, SeqV)>>;
+pub(crate) type DeleteByPrefixKeyMap = BTreeMap<TxnDeleteByPrefixRequest, Vec<(String, SeqV)>>;
 
 /// Snapshot data for serialization and for transport.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -140,8 +140,8 @@ impl SerializableSnapshot {
 /// Configuration of what operation to block for testing purpose.
 #[derive(Debug, Clone, Default)]
 pub struct BlockingConfig {
-    pub dump_snapshot: Duration,
-    pub serde_snapshot: Duration,
+    pub write_snapshot: Duration,
+    pub compact_snapshot: Duration,
 }
 
 impl StateMachine {
@@ -156,19 +156,6 @@ impl StateMachine {
 
     pub fn tree_name(config: &RaftConfig, sm_id: u64) -> String {
         config.tree_name(format!("{}/{}", TREE_STATE_MACHINE, sm_id))
-    }
-
-    #[minitrace::trace]
-    pub fn clean(config: &RaftConfig, sm_id: u64) -> Result<(), MetaStorageError> {
-        let tree_name = StateMachine::tree_name(config, sm_id);
-        debug!("cleaning tree: {}", &tree_name);
-
-        let db = get_sled_db();
-
-        // it blocks and slow
-        db.drop_tree(tree_name)?;
-
-        Ok(())
     }
 
     #[minitrace::trace]
@@ -212,6 +199,7 @@ impl StateMachine {
     /// - all key values in state machine;
     /// - the last applied log id
     /// - and a snapshot id that uniquely identifies this snapshot.
+    // TODO: remove it
     pub fn build_snapshot(
         &self,
     ) -> Result<
@@ -243,7 +231,7 @@ impl StateMachine {
         let snap = SerializableSnapshot { kvs };
 
         if cfg!(debug_assertions) {
-            let sl = self.blocking_config().dump_snapshot;
+            let sl = self.blocking_config().write_snapshot;
             if !sl.is_zero() {
                 warn!("start    build snapshot sleep 1000s");
                 std::thread::sleep(sl);
@@ -372,10 +360,7 @@ impl StateMachine {
 
         debug!("sled tx done: {:?}", entry);
 
-        let applied_state = match opt_applied_state {
-            Some(r) => r,
-            None => AppliedState::None,
-        };
+        let applied_state = opt_applied_state.unwrap_or(AppliedState::None);
 
         // Send queued change events to subscriber
         if let Some(subscriber) = &self.subscriber {

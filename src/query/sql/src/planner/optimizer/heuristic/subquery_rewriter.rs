@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::vec;
 
 use common_exception::ErrorCode;
 use common_exception::Result;

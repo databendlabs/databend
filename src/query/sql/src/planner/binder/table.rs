@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::default::Default;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -22,6 +21,7 @@ use std::sync::Arc;
 use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
+use common_ast::ast::Expr as AExpr;
 use common_ast::ast::Indirection;
 use common_ast::ast::Join;
 use common_ast::ast::SelectStmt;
@@ -36,7 +36,7 @@ use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::StageTableInfo;
-use common_catalog::table::ColumnStatistics;
+use common_catalog::statistics::BasicColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
@@ -45,10 +45,16 @@ use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
+use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
+use common_expression::ColumnBuilder;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
+use common_expression::DataBlock;
 use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRefExt;
+use common_expression::Evaluator;
 use common_expression::FunctionKind;
 use common_expression::Scalar;
 use common_expression::TableDataType;
@@ -75,30 +81,31 @@ use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
+use indexmap::IndexMap;
 use parking_lot::RwLock;
 
 use crate::binder::copy::parse_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
+use crate::binder::wrap_cast_scalar;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
+use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::ConstantTableScan;
 use crate::plans::CteScan;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnEntry;
-use crate::DerivedColumn;
 use crate::IndexType;
-use crate::TableInternalColumn;
-use crate::VirtualColumn;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -185,67 +192,26 @@ impl Binder {
                 } else {
                     None
                 };
+                let mut bind_cte = true;
+                if let Some(cte_name) = &bind_context.cte_name {
+                    // If table name equals to cte name, then skip bind cte and find table from catalog
+                    // Or will dead loop and stack overflow
+                    if cte_name == &table_name {
+                        bind_cte = false;
+                    }
+                }
                 // Check and bind common table expression
-                let ctes_map = bind_context.ctes_map.clone();
+                let ctes_map = self.ctes_map.clone();
                 if let Some(cte_info) = ctes_map.get(&table_name) {
-                    return if !cte_info.materialized {
-                        self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                            .await
-                    } else {
-                        let mut new_bind_context = if cte_info.used_count == 0 {
-                            let (cte_s_expr, mut cte_bind_ctx) = self
-                                .bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                                .await?;
-                            cte_bind_ctx
-                                .materialized_ctes
-                                .insert((cte_info.cte_idx, cte_s_expr.clone()));
-                            let stat_info =
-                                RelExpr::with_s_expr(&cte_s_expr).derive_cardinality()?;
-                            // Add `materialized_cte` to bind_context.
-                            bind_context
-                                .materialized_ctes
-                                .insert((cte_info.cte_idx, cte_s_expr));
-                            bind_context.ctes_map.entry(table_name.clone()).and_modify(
-                                |cte_info| {
-                                    cte_info.stat_info = Some(stat_info);
-                                    cte_info.columns = cte_bind_ctx.columns.clone();
-                                },
-                            );
-                            self.set_m_cte_bound_ctx(cte_info.cte_idx, cte_bind_ctx.clone());
-                            cte_bind_ctx
+                    if bind_cte {
+                        return if !cte_info.materialized {
+                            self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                                .await
                         } else {
-                            // If the cte has been bound, get the bound context from `Binder`'s `m_cte_bound_ctx`
-                            let mut bound_ctx =
-                                self.m_cte_bound_ctx.get(&cte_info.cte_idx).unwrap().clone();
-                            // Resolve the alias name for the bound cte.
-                            let alias_table_name = alias
-                                .as_ref()
-                                .map(|alias| {
-                                    normalize_identifier(&alias.name, &self.name_resolution_ctx)
-                                        .name
-                                })
-                                .unwrap_or_else(|| table_name.to_string());
-                            for column in bound_ctx.columns.iter_mut() {
-                                column.database_name = None;
-                                column.table_name = Some(alias_table_name.clone());
-                            }
-                            // Pass parent to bound_ctx
-                            bound_ctx.parent = bind_context.parent.clone();
-                            bound_ctx
+                            self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
+                                .await
                         };
-                        // `bind_context` is the main BindContext for the whole query
-                        // Update the `used_count` which will be used in runtime phase
-                        bind_context
-                            .ctes_map
-                            .entry(table_name.clone())
-                            .and_modify(|cte_info| {
-                                cte_info.used_count += 1;
-                            });
-                        new_bind_context.ctes_map = bind_context.ctes_map.clone();
-                        let s_expr =
-                            self.bind_cte_scan(bind_context.ctes_map.get(&table_name).unwrap())?;
-                        Ok((s_expr, new_bind_context))
-                    };
+                    }
                 }
 
                 let tenant = self.ctx.get_tenant();
@@ -268,17 +234,29 @@ impl Binder {
                 {
                     Ok(table) => table,
                     Err(_) => {
-                        let mut parent = bind_context.parent.as_ref();
+                        let mut parent = bind_context.parent.as_mut();
                         loop {
                             if parent.is_none() {
                                 break;
                             }
-                            if let Some(cte_info) = parent.unwrap().ctes_map.get(&table_name) {
-                                return self
-                                    .bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                                    .await;
+                            let bind_context = parent.unwrap().as_mut();
+                            let ctes_map = self.ctes_map.clone();
+                            if let Some(cte_info) = ctes_map.get(&table_name) {
+                                return if !cte_info.materialized {
+                                    self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                                        .await
+                                } else {
+                                    self.bind_m_cte(
+                                        bind_context,
+                                        cte_info,
+                                        &table_name,
+                                        alias,
+                                        span,
+                                    )
+                                    .await
+                                };
                             }
-                            parent = parent.unwrap().parent.as_ref();
+                            parent = bind_context.parent.as_mut();
                         }
                         return Err(ErrorCode::UnknownTable(format!(
                             "Unknown table '{table_name}'"
@@ -423,6 +401,7 @@ impl Binder {
                     self.metadata.clone(),
                     &[],
                     self.m_cte_bound_ctx.clone(),
+                    self.ctes_map.clone(),
                 );
                 let table_args = bind_table_args(&mut scalar_binder, params, named_params).await?;
 
@@ -495,7 +474,7 @@ impl Binder {
                     .unwrap_or(false)
                 {
                     // If it is a set-returning function, we bind it as a subquery.
-                    let mut bind_context = BindContext::new();
+                    let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
                     let stmt = SelectStmt {
                         span: *span,
                         hints: None,
@@ -563,12 +542,12 @@ impl Binder {
             } => {
                 // For subquery, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-                let (s_expr, mut new_bind_context) =
+                let (s_expr, mut res_bind_context) =
                     self.bind_query(&mut new_bind_context, subquery).await?;
                 if let Some(alias) = alias {
-                    new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    res_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
-                Ok((s_expr, new_bind_context))
+                Ok((s_expr, res_bind_context))
             }
             TableReference::Stage {
                 span: _,
@@ -594,7 +573,188 @@ impl Binder {
                     .await
             }
             TableReference::Join { .. } => unreachable!(),
+            TableReference::Values {
+                span,
+                values,
+                alias,
+            } => self.bind_values(bind_context, *span, values, alias).await,
         }
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_values(
+        &mut self,
+        bind_context: &mut BindContext,
+        span: Span,
+        values: &Vec<Vec<AExpr>>,
+        alias: &Option<TableAlias>,
+    ) -> Result<(SExpr, BindContext)> {
+        if values.is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "Values lists must have at least one row".to_string(),
+            )
+            .set_span(span));
+        }
+        let same_length = values.windows(2).all(|v| v[0].len() == v[1].len());
+        if !same_length {
+            return Err(ErrorCode::SemanticError(
+                "Values lists must all be the same length".to_string(),
+            )
+            .set_span(span));
+        }
+
+        let num_rows = values.len();
+        let num_cols = values[0].len();
+
+        let mut names = match alias {
+            Some(alias) => {
+                if alias.columns.len() > num_cols {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "table {} has {} columns available but {} columns specified",
+                        alias.name,
+                        num_cols,
+                        alias.columns.len()
+                    ))
+                    .set_span(span));
+                }
+                alias
+                    .columns
+                    .iter()
+                    .map(|c| c.to_string())
+                    .collect::<Vec<_>>()
+            }
+            None => vec![],
+        };
+        // For columns whose names are not specified, assigns default column names col0, col2, etc.
+        for i in names.len()..num_cols {
+            names.push(format!("col{}", i));
+        }
+
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            HashMap::new(),
+            Box::new(IndexMap::new()),
+        );
+
+        let mut col_scalars = vec![Vec::with_capacity(values.len()); num_cols];
+        let mut common_types: Vec<Option<DataType>> = vec![None; num_cols];
+
+        for row_values in values.iter() {
+            for (i, value) in row_values.iter().enumerate() {
+                let (scalar, data_type) = scalar_binder.bind(value).await?;
+                col_scalars[i].push((scalar, data_type.clone()));
+
+                // Get the common data type for each columns.
+                match &common_types[i] {
+                    Some(common_type) => {
+                        if common_type != &data_type {
+                            let new_common_type = common_super_type(
+                                common_type.clone(),
+                                data_type.clone(),
+                                &BUILTIN_FUNCTIONS.default_cast_rules,
+                            );
+                            if new_common_type.is_none() {
+                                return Err(ErrorCode::SemanticError(format!(
+                                    "{} and {} don't have common data type",
+                                    common_type, data_type
+                                ))
+                                .set_span(span));
+                            }
+                            common_types[i] = new_common_type;
+                        }
+                    }
+                    None => {
+                        common_types[i] = Some(data_type);
+                    }
+                }
+            }
+        }
+
+        let mut value_fields = Vec::with_capacity(names.len());
+        for (name, common_type) in names.into_iter().zip(common_types.into_iter()) {
+            let value_field = DataField::new(&name, common_type.unwrap());
+            value_fields.push(value_field);
+        }
+        let value_schema = DataSchema::new(value_fields);
+
+        let input = DataBlock::empty();
+        let func_ctx = self.ctx.get_function_context()?;
+        let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        // use values to build columns
+        let mut value_columns = Vec::with_capacity(col_scalars.len());
+        for (scalars, value_field) in col_scalars.iter().zip(value_schema.fields().iter()) {
+            let mut builder =
+                ColumnBuilder::with_capacity(value_field.data_type(), col_scalars.len());
+            for (scalar, value_type) in scalars {
+                let scalar = if value_type != value_field.data_type() {
+                    wrap_cast_scalar(scalar, value_type, value_field.data_type())?
+                } else {
+                    scalar.clone()
+                };
+                let expr = scalar.as_expr()?.project_column_ref(|col| {
+                    value_schema.index_of(&col.index.to_string()).unwrap()
+                });
+                let result = evaluator.run(&expr)?;
+
+                match result.as_scalar() {
+                    Some(val) => {
+                        builder.push(val.as_ref());
+                    }
+                    None => {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "Value must be a scalar, but get {}",
+                            result
+                        ))
+                        .set_span(span));
+                    }
+                }
+            }
+            value_columns.push(builder.build());
+        }
+
+        // add column bindings
+        let mut columns = ColumnSet::new();
+        let mut fields = Vec::with_capacity(values.len());
+        for value_field in value_schema.fields() {
+            let index = self
+                .metadata
+                .write()
+                .add_derived_column(value_field.name().clone(), value_field.data_type().clone());
+            columns.insert(index);
+
+            let column_binding = ColumnBindingBuilder::new(
+                value_field.name().clone(),
+                index,
+                Box::new(value_field.data_type().clone()),
+                Visibility::Visible,
+            )
+            .build();
+            bind_context.add_column_binding(column_binding);
+
+            let field = DataField::new(&index.to_string(), value_field.data_type().clone());
+            fields.push(field);
+        }
+        let schema = DataSchemaRefExt::create(fields);
+
+        let s_expr = SExpr::create_leaf(Arc::new(
+            ConstantTableScan {
+                values: value_columns,
+                num_rows,
+                schema,
+                columns,
+            }
+            .into(),
+        ));
+        if let Some(alias) = alias {
+            bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+        }
+
+        Ok((s_expr, bind_context.clone()))
     }
 
     #[async_backtrace::framed]
@@ -802,7 +962,7 @@ impl Binder {
     pub(crate) async fn bind_cte(
         &mut self,
         span: Span,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         table_name: &str,
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
@@ -814,16 +974,17 @@ impl Binder {
             aggregate_info: Default::default(),
             windows: Default::default(),
             lambda_info: Default::default(),
+            cte_name: Some(table_name.to_string()),
+            cte_map_ref: Box::default(),
             in_grouping: false,
-            ctes_map: Box::default(),
-            materialized_ctes: HashSet::new(),
             view_info: None,
             srfs: Default::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
         };
-        let (s_expr, mut new_bind_context) = self
+
+        let (s_expr, mut res_bind_context) = self
             .bind_query(&mut new_bind_context, &cte_info.query)
             .await?;
         let mut cols_alias = cte_info.columns_alias.clone();
@@ -840,22 +1001,74 @@ impl Binder {
             .as_ref()
             .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| table_name.to_string());
-        for column in new_bind_context.columns.iter_mut() {
+        for column in res_bind_context.columns.iter_mut() {
             column.database_name = None;
             column.table_name = Some(alias_table_name.clone());
         }
 
-        if cols_alias.len() > new_bind_context.columns.len() {
+        if cols_alias.len() > res_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(format!(
                 "table has {} columns available but {} columns specified",
-                new_bind_context.columns.len(),
+                res_bind_context.columns.len(),
                 cols_alias.len()
             ))
             .set_span(span));
         }
         for (index, column_name) in cols_alias.iter().enumerate() {
-            new_bind_context.columns[index].column_name = column_name.clone();
+            res_bind_context.columns[index].column_name = column_name.clone();
         }
+        Ok((s_expr, res_bind_context))
+    }
+
+    // Bind materialized cte
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_m_cte(
+        &mut self,
+        bind_context: &mut BindContext,
+        cte_info: &CteInfo,
+        table_name: &String,
+        alias: &Option<TableAlias>,
+        span: &Span,
+    ) -> Result<(SExpr, BindContext)> {
+        let new_bind_context = if cte_info.used_count == 0 {
+            let (cte_s_expr, cte_bind_ctx) = self
+                .bind_cte(*span, bind_context, table_name, alias, cte_info)
+                .await?;
+            let stat_info = RelExpr::with_s_expr(&cte_s_expr).derive_cardinality()?;
+            self.ctes_map
+                .entry(table_name.clone())
+                .and_modify(|cte_info| {
+                    cte_info.stat_info = Some(stat_info);
+                    cte_info.columns = cte_bind_ctx.columns.clone();
+                });
+            self.set_m_cte_bound_ctx(cte_info.cte_idx, cte_bind_ctx.clone());
+            self.set_m_cte_bound_s_expr(cte_info.cte_idx, cte_s_expr);
+            cte_bind_ctx
+        } else {
+            // If the cte has been bound, get the bound context from `Binder`'s `m_cte_bound_ctx`
+            let mut bound_ctx = self.m_cte_bound_ctx.get(&cte_info.cte_idx).unwrap().clone();
+            // Resolve the alias name for the bound cte.
+            let alias_table_name = alias
+                .as_ref()
+                .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
+                .unwrap_or_else(|| table_name.to_string());
+            for column in bound_ctx.columns.iter_mut() {
+                column.database_name = None;
+                column.table_name = Some(alias_table_name.clone());
+            }
+            // Pass parent to bound_ctx
+            bound_ctx.parent = bind_context.parent.clone();
+            bound_ctx
+        };
+        // `bind_context` is the main BindContext for the whole query
+        // Update the `used_count` which will be used in runtime phase
+        self.ctes_map
+            .entry(table_name.clone())
+            .and_modify(|cte_info| {
+                cte_info.used_count += 1;
+            });
+        let cte_info = self.ctes_map.get(table_name).unwrap().clone();
+        let s_expr = self.bind_cte_scan(&cte_info)?;
         Ok((s_expr, new_bind_context))
     }
 
@@ -870,8 +1083,7 @@ impl Binder {
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let table = self.metadata.read().table(table_index).clone();
         let statistics_provider = table.table().column_statistics_provider().await?;
-
-        let mut col_stats: HashMap<IndexType, Option<ColumnStatistics>> = HashMap::new();
+        let mut col_stats: HashMap<IndexType, Option<BasicColumnStatistics>> = HashMap::new();
         for column in columns.iter() {
             match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -922,24 +1134,7 @@ impl Binder {
             SExpr::create_leaf(Arc::new(
                 Scan {
                     table_index,
-                    columns: columns
-                        .into_iter()
-                        .map(|col| match col {
-                            ColumnEntry::BaseTableColumn(BaseTableColumn {
-                                column_index, ..
-                            }) => column_index,
-                            ColumnEntry::DerivedColumn(DerivedColumn { column_index, .. }) => {
-                                column_index
-                            }
-                            ColumnEntry::InternalColumn(TableInternalColumn {
-                                column_index,
-                                ..
-                            }) => column_index,
-                            ColumnEntry::VirtualColumn(VirtualColumn { column_index, .. }) => {
-                                column_index
-                            }
-                        })
-                        .collect(),
+                    columns: columns.into_iter().map(|col| col.index()).collect(),
                     statistics: Statistics {
                         statistics: stat,
                         col_stats,

@@ -29,8 +29,8 @@ use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
 use crate::meta::format::MetaCompression;
 use crate::meta::format::SegmentHeader;
-use crate::meta::statistics::FormatVersion;
 use crate::meta::v2::BlockMeta;
+use crate::meta::FormatVersion;
 use crate::meta::MetaEncoding;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
@@ -71,7 +71,7 @@ impl SegmentInfo {
 
     // Total block bytes of this segment.
     pub fn total_bytes(&self) -> u64 {
-        self.blocks.iter().map(|v| v.block_size).sum()
+        self.summary.uncompressed_byte_size
     }
 
     // Encode self.blocks as RawBlockMeta.
@@ -250,14 +250,7 @@ impl CompactSegmentInfo {
 impl TryFrom<&CompactSegmentInfo> for SegmentInfo {
     type Error = ErrorCode;
     fn try_from(value: &CompactSegmentInfo) -> Result<Self, Self::Error> {
-        let mut reader = Cursor::new(&value.raw_block_metas.bytes);
-        let blocks: Vec<Arc<BlockMeta>> = read_and_deserialize(
-            &mut reader,
-            value.raw_block_metas.bytes.len() as u64,
-            &value.raw_block_metas.encoding,
-            &value.raw_block_metas.compression,
-        )?;
-
+        let blocks = value.block_metas()?;
         Ok(SegmentInfo {
             format_version: value.format_version,
             blocks,
@@ -274,6 +267,19 @@ impl TryFrom<&SegmentInfo> for CompactSegmentInfo {
         Ok(Self {
             format_version: value.format_version,
             summary: value.summary.clone(),
+            raw_block_metas: bytes,
+        })
+    }
+}
+
+impl TryFrom<SegmentInfo> for CompactSegmentInfo {
+    type Error = ErrorCode;
+
+    fn try_from(value: SegmentInfo) -> Result<Self, Self::Error> {
+        let bytes = value.block_raw_bytes()?;
+        Ok(Self {
+            format_version: value.format_version,
+            summary: value.summary,
             raw_block_metas: bytes,
         })
     }

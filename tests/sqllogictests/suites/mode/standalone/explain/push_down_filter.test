@@ -12,7 +12,7 @@ query T
 explain select name, json_path_query(details, '$.features.*') as all_features, json_path_query_first(details, '$.features.*') as first_feature from products where name = 'Laptop' and first_feature = '16GB' and all_features = '512GB';
 ----
 EvalScalar
-├── expressions: [products.name (#0), get(1)(json_path_query (#2)), json_path_query_first(products.details (#1), '$.features.*')]
+├── expressions: [get(1)(json_path_query (#2)), json_path_query_first(products.details (#1), '$.features.*')]
 ├── estimated rows: 0.12
 └── Filter
     ├── filters: [is_true(TRY_CAST(get(1)(json_path_query (#2)) AS String NULL) = '512GB')]
@@ -42,7 +42,7 @@ query T
 explain select name, json_path_query(details, '$.features.*') as all_features, json_path_query_first(details, '$.features.*') as first_feature from products where name = 'Laptop' and first_feature = '16GB';
 ----
 EvalScalar
-├── expressions: [products.name (#0), get(1)(json_path_query (#2)), json_path_query_first(products.details (#1), '$.features.*')]
+├── expressions: [get(1)(json_path_query (#2)), json_path_query_first(products.details (#1), '$.features.*')]
 ├── estimated rows: 0.60
 └── ProjectSet
     ├── estimated rows: 0.60

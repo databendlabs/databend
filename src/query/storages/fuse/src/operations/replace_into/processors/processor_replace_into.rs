@@ -21,6 +21,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_pipeline_core::pipe::Pipe;
@@ -32,6 +33,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use storages_common_table_meta::meta::ColumnStatistics;
 
+use crate::metrics::metrics_inc_replace_block_number_input;
 use crate::metrics::metrics_inc_replace_process_input_block_time_ms;
 use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
 use crate::operations::replace_into::OnConflictField;
@@ -56,6 +58,7 @@ impl ReplaceIntoProcessor {
         ctx: &dyn TableContext,
         on_conflict_fields: Vec<OnConflictField>,
         cluster_keys: Vec<RemoteExpr<String>>,
+        bloom_filter_column_indexes: Vec<FieldIndex>,
         table_schema: &TableSchema,
         target_table_empty: bool,
         table_range_idx: HashMap<ColumnId, ColumnStatistics>,
@@ -64,6 +67,7 @@ impl ReplaceIntoProcessor {
             ctx,
             on_conflict_fields,
             cluster_keys,
+            bloom_filter_column_indexes,
             table_schema,
             table_range_idx,
         )?;
@@ -164,6 +168,7 @@ impl Processor for ReplaceIntoProcessor {
             let start = Instant::now();
             let merge_into_action = self.replace_into_mutator.process_input_block(&data_block)?;
             metrics_inc_replace_process_input_block_time_ms(start.elapsed().as_millis() as u64);
+            metrics_inc_replace_block_number_input(1);
             if !self.target_table_empty {
                 self.output_data_merge_into_action =
                     Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));

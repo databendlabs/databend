@@ -72,12 +72,8 @@ SELECT a AS foo, b FROM t ORDER BY foo DESC
 2 8
 1 9
 
-query II
+statement error 1065
 SELECT a AS foo, b AS foo FROM t ORDER BY foo
-----
-1 9
-2 8
-3 7
 
 query II
 SELECT a AS foo, (a) AS foo FROM t ORDER BY foo LIMIT 1

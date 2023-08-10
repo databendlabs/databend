@@ -59,13 +59,8 @@ impl HivePartitionPruner {
                 let field = self.partition_schema.fields()[index].clone();
                 let scalar = str_field_to_scalar(kv[1], &field.data_type().into())?;
                 let null_count = u64::from(scalar.is_null());
-                let column_stats = ColumnStatistics {
-                    min: scalar.clone(),
-                    max: scalar,
-                    null_count,
-                    in_memory_size: 0,
-                    distinct_of_values: None,
-                };
+                let column_stats =
+                    ColumnStatistics::new(scalar.clone(), scalar, null_count, 0, None);
                 stats.insert(index as u32, column_stats);
             }
             data.push(stats);

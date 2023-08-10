@@ -36,6 +36,7 @@ use super::ProjectSet;
 use super::RowFetch;
 use super::Sort;
 use super::TableScan;
+use crate::executor::ConstantTableScan;
 use crate::executor::CteScan;
 use crate::executor::MaterializedCte;
 use crate::executor::RangeJoin;
@@ -77,6 +78,7 @@ pub trait PhysicalPlanReplacer {
                 self.replace_copy_into_table_from_query(plan)
             }
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
+            PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
         }
     }
 
@@ -88,11 +90,16 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::CteScan(plan.clone()))
     }
 
+    fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::ConstantTableScan(plan.clone()))
+    }
+
     fn replace_filter(&mut self, plan: &Filter) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::Filter(Filter {
             plan_id: plan.plan_id,
+            projections: plan.projections.clone(),
             input: Box::new(input),
             predicates: plan.predicates.clone(),
             stat_info: plan.stat_info.clone(),
@@ -116,6 +123,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::EvalScalar(EvalScalar {
             plan_id: plan.plan_id,
+            projections: plan.projections.clone(),
             input: Box::new(input),
             exprs: plan.exprs.clone(),
             stat_info: plan.stat_info.clone(),
@@ -181,6 +189,9 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: plan.plan_id,
+            projections: plan.projections.clone(),
+            probe_projections: plan.probe_projections.clone(),
+            build_projections: plan.build_projections.clone(),
             build: Box::new(build),
             probe: Box::new(probe),
             build_keys: plan.build_keys.clone(),
@@ -365,7 +376,7 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             srf_exprs: plan.srf_exprs.clone(),
-            unused_indices: plan.unused_indices.clone(),
+            projections: plan.projections.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -406,7 +417,9 @@ impl PhysicalPlan {
         if pre_visit(plan) {
             visit(plan);
             match plan {
-                PhysicalPlan::TableScan(_) | PhysicalPlan::CteScan(_) => {}
+                PhysicalPlan::TableScan(_)
+                | PhysicalPlan::CteScan(_)
+                | PhysicalPlan::ConstantTableScan(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }

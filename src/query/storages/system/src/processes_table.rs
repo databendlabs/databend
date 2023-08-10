@@ -79,7 +79,7 @@ impl SyncSystemTable for ProcessesTable {
 
             processes_id.push(process_info.id.clone().into_bytes());
             processes_type.push(process_info.typ.clone().into_bytes());
-            processes_state.push(process_info.state.clone().into_bytes());
+            processes_state.push(process_info.state.to_string().into_bytes());
             processes_database.push(process_info.database.clone().into_bytes());
             processes_host.push(ProcessesTable::process_host(&process_info.client_address));
             processes_user.push(

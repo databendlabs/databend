@@ -66,10 +66,7 @@ impl BlockMetaInfo for AggregateSerdeMeta {
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match AggregateSerdeMeta::downcast_ref_from(info) {
-            None => false,
-            Some(other) => self == other,
-        }
+        AggregateSerdeMeta::downcast_ref_from(info).is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {

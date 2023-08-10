@@ -1354,8 +1354,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
-            AlterTableAction::AddColumn { column } => {
-                let action_name = format!("Action Add column {}", column);
+            AlterTableAction::AddColumn { column, option } => {
+                let action_name = match option {
+                    AddColumnOption::First => format!("Action Add column {} first", column),
+                    AddColumnOption::After(ident) => {
+                        format!("Action Add column {} after {}", column, ident)
+                    }
+                    AddColumnOption::End => format!("Action Add column {}", column),
+                };
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
@@ -1372,6 +1378,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     ModifyColumnAction::SetMaskingPolicy(column, mask_name) => (
                         format!("Action ModifyColumn column {}", column),
                         format!("Action SetMaskingPolicy {}", mask_name),
+                    ),
+                    ModifyColumnAction::UnsetMaskingPolicy(column) => (
+                        format!("Action ModifyColumn column {}", column),
+                        "Action UnsetMaskingPolicy".to_string(),
                     ),
                     ModifyColumnAction::SetDataType(column_type_name_vec) => {
                         let action_name = "Action ModifyColumn".to_string();
@@ -2343,14 +2353,37 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_with(&mut self, with: &'ast With) {
         let mut children = Vec::with_capacity(with.ctes.len());
         for cte in with.ctes.iter() {
-            self.visit_query(&cte.query);
-            let query_child = self.children.pop().unwrap();
+            let source_child = match &cte.source {
+                CTESource::Query { query, .. } => {
+                    self.visit_query(query);
+                    self.children.pop().unwrap()
+                }
+                CTESource::Values(values) => {
+                    let mut value_children = Vec::with_capacity(values.len());
+                    for (i, row_values) in values.iter().enumerate() {
+                        let mut row_children = Vec::with_capacity(row_values.len());
+                        for value in row_values {
+                            self.visit_expr(value);
+                            row_children.push(self.children.pop().unwrap());
+                        }
+                        let row_name = format!("Row {}", i);
+                        let row_format_ctx =
+                            AstFormatContext::with_children(row_name, row_children.len());
+                        let row_node = FormatTreeNode::with_children(row_format_ctx, row_children);
+                        value_children.push(row_node);
+                    }
+                    let value_format_ctx =
+                        AstFormatContext::with_children("Values".to_string(), value_children.len());
+                    FormatTreeNode::with_children(value_format_ctx, value_children)
+                }
+            };
+
             let cte_format_ctx = AstFormatContext::with_children_alias(
                 "CTE".to_string(),
                 1,
                 Some(format!("{}", cte.alias)),
             );
-            let cte_node = FormatTreeNode::with_children(cte_format_ctx, vec![query_child]);
+            let cte_node = FormatTreeNode::with_children(cte_format_ctx, vec![source_child]);
             children.push(cte_node);
         }
 
@@ -2708,6 +2741,36 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 };
                 let node = FormatTreeNode::with_children(format_ctx, children);
                 self.children.push(node)
+            }
+            TableReference::Values {
+                span: _,
+                values,
+                alias,
+            } => {
+                let mut children = Vec::with_capacity(values.len());
+                for (i, row_values) in values.iter().enumerate() {
+                    let mut row_children = Vec::with_capacity(row_values.len());
+                    for value in row_values {
+                        self.visit_expr(value);
+                        row_children.push(self.children.pop().unwrap());
+                    }
+                    let row_name = format!("Row {}", i);
+                    let row_format_ctx =
+                        AstFormatContext::with_children(row_name, row_children.len());
+                    let row_node = FormatTreeNode::with_children(row_format_ctx, row_children);
+                    children.push(row_node);
+                }
+                let format_ctx = if let Some(alias) = alias {
+                    AstFormatContext::with_children_alias(
+                        "Values".to_string(),
+                        children.len(),
+                        Some(format!("{}", alias)),
+                    )
+                } else {
+                    AstFormatContext::with_children("Values".to_string(), children.len())
+                };
+                let node = FormatTreeNode::with_children(format_ctx, children);
+                self.children.push(node);
             }
         }
     }
