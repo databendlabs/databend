@@ -21,6 +21,7 @@ use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::Change;
 use common_meta_types::SeqV;
+use common_tracing::func_name;
 use log::debug;
 use log::warn;
 use sled::transaction::ConflictableTransactionError;
@@ -301,6 +302,7 @@ impl SledTree {
         let mut batch = sled::Batch::default();
 
         for t in kvs.into_iter() {
+            debug!("{}: append kvs", func_name!());
             let key = t.as_key();
             let value = t.as_value();
 
@@ -310,6 +312,7 @@ impl SledTree {
             batch.insert(k, v);
         }
 
+        debug!("{}: applying the batch", func_name!());
         self.tree.apply_batch(batch)?;
 
         self.flush_async(true).await?;
@@ -360,9 +363,12 @@ impl SledTree {
 
     #[minitrace::trace]
     async fn flush_async(&self, flush: bool) -> Result<(), MetaStorageError> {
+        debug!("{}: flush: {}", func_name!(), flush);
+
         if flush && self.sync {
             self.tree.flush_async().await?;
         }
+        debug!("{}: flush: {} Done", func_name!(), flush);
         Ok(())
     }
 }

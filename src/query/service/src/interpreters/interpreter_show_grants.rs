@@ -71,7 +71,7 @@ impl Interpreter for ShowGrantsInterpreter {
                     let role = UserApiProvider::instance()
                         .get_role(&tenant, role.clone())
                         .await?;
-                    (format!("'{}'", role.identity()), role.grants)
+                    (format!("ROLE `{}`", role.identity()), role.grants)
                 }
             },
         };

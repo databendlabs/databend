@@ -18,12 +18,14 @@ use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use common_ast::ast::BinaryOperator;
+use common_ast::ast::CTESource;
 use common_ast::ast::ColumnID;
 use common_ast::ast::ColumnPosition;
 use common_ast::ast::Expr;
 use common_ast::ast::Expr::Array;
 use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
+use common_ast::ast::Indirection;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
@@ -292,8 +294,6 @@ impl Binder {
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
-        output_context.ctes_map = from_context.ctes_map;
-        output_context.materialized_ctes = from_context.materialized_ctes;
 
         Ok((s_expr, output_context))
     }
@@ -336,21 +336,60 @@ impl Binder {
         if let Some(with) = &query.with {
             for (idx, cte) in with.ctes.iter().enumerate() {
                 let table_name = cte.alias.name.name.clone();
-                if bind_context.ctes_map.contains_key(&table_name) {
+                if bind_context.cte_map_ref.contains_key(&table_name) {
                     return Err(ErrorCode::SemanticError(format!(
                         "duplicate cte {table_name}"
                     )));
                 }
+                let (materialized, cte_query) = match &cte.source {
+                    CTESource::Query {
+                        materialized,
+                        box query,
+                    } => (*materialized, query.clone()),
+                    CTESource::Values(values) => {
+                        // rewrite value clause as a query
+                        let values_query = Query {
+                            span: None,
+                            with: None,
+                            body: SetExpr::Select(Box::new(SelectStmt {
+                                span: None,
+                                hints: None,
+                                distinct: false,
+                                select_list: vec![SelectTarget::QualifiedName {
+                                    qualified: vec![Indirection::Star(None)],
+                                    exclude: None,
+                                }],
+                                from: vec![TableReference::Values {
+                                    span: None,
+                                    values: values.clone(),
+                                    alias: Some(cte.alias.clone()),
+                                }],
+                                selection: None,
+                                group_by: None,
+                                having: None,
+                                window_list: None,
+                            })),
+                            order_by: vec![],
+                            limit: vec![],
+                            offset: None,
+                            ignore_result: false,
+                        };
+
+                        (false, values_query)
+                    }
+                };
+
                 let cte_info = CteInfo {
                     columns_alias: cte.alias.columns.iter().map(|c| c.name.clone()).collect(),
-                    query: cte.query.clone(),
-                    materialized: cte.materialized,
+                    query: cte_query,
+                    materialized,
                     cte_idx: idx,
                     used_count: 0,
                     stat_info: None,
                     columns: vec![],
                 };
-                bind_context.ctes_map.insert(table_name, cte_info);
+                self.ctes_map.insert(table_name.clone(), cte_info.clone());
+                bind_context.cte_map_ref.insert(table_name, cte_info);
             }
         }
 
@@ -414,6 +453,7 @@ impl Binder {
             self.metadata.clone(),
             aliases,
             self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
         scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
@@ -604,7 +644,7 @@ impl Binder {
         &mut self,
         left_span: Span,
         right_span: Span,
-        mut left_context: BindContext,
+        left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
@@ -646,10 +686,6 @@ impl Binder {
             non_equi_conditions: vec![],
             other_conditions: vec![],
         };
-        left_context.ctes_map.extend(*right_context.ctes_map);
-        left_context
-            .materialized_ctes
-            .extend(right_context.materialized_ctes);
         let s_expr = self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr)?;
         Ok((s_expr, left_context))
     }
@@ -669,18 +705,6 @@ impl Binder {
         let mut left_scalar_items = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_scalar_items = Vec::with_capacity(right_bind_context.columns.len());
         let mut new_bind_context = BindContext::new();
-        new_bind_context
-            .materialized_ctes
-            .extend(left_bind_context.materialized_ctes);
-        new_bind_context
-            .materialized_ctes
-            .extend(right_bind_context.materialized_ctes);
-        new_bind_context
-            .ctes_map
-            .extend(*left_bind_context.ctes_map);
-        new_bind_context
-            .ctes_map
-            .extend(*right_bind_context.ctes_map);
         let mut pairs = Vec::with_capacity(left_bind_context.columns.len());
         for (idx, (left_col, right_col)) in left_bind_context
             .columns
@@ -792,7 +816,6 @@ impl Binder {
         if stmt.group_by.is_some()
             || stmt.having.is_some()
             || stmt.distinct
-            || !bind_context.ctes_map.is_empty()
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
         {

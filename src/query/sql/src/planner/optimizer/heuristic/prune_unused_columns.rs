@@ -322,7 +322,7 @@ impl UnusedColumnPruner {
             }
 
             RelOperator::MaterializedCte(cte) => {
-                if self.apply_lazy {
+                if !self.apply_lazy {
                     return Ok(expr.clone());
                 }
                 let left_output_column = RelExpr::with_s_expr(expr)
@@ -373,6 +373,17 @@ impl UnusedColumnPruner {
                         Arc::new(RelOperator::Lambda(Lambda { items: used })),
                         Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                     ))
+                }
+            }
+
+            RelOperator::ConstantTableScan(p) => {
+                let used: ColumnSet = required.intersection(&p.columns).cloned().collect();
+                if used == p.columns {
+                    Ok(expr.clone())
+                } else {
+                    Ok(SExpr::create_leaf(Arc::new(
+                        RelOperator::ConstantTableScan(p.prune_columns(used)),
+                    )))
                 }
             }
 

@@ -7,11 +7,11 @@ RUN apt-get update && apt-get install -y git ripgrep && \
     chmod +x /tmp/install.sh && \
     /tmp/install.sh --yes && \
     printf 'eval "$(starship init bash)"' >> /etc/bash.bashrc && \
-    curl -sSLo /tmp/lsd.deb https://github.com/Peltoche/lsd/releases/download/0.21.0/lsd_0.21.0_amd64.deb && \
-    dpkg -i /tmp/lsd.deb && \
     rm -rf /tmp/* /var/lib/apt/lists/*
 
+RUN useradd -u 1000 builder
 RUN mkdir /home/builder && chown -R builder /home/builder && \
     usermod --shell /bin/bash builder
+RUN printf "builder ALL=(ALL:ALL) NOPASSWD:ALL\n" > /etc/sudoers.d/databend
 
 USER builder

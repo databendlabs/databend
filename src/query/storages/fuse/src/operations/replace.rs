@@ -430,7 +430,8 @@ impl FuseTable {
                 } else {
                     let maybe_col_stats =
                         col_stats_provider.column_statistics(key.table_field.column_id);
-                    maybe_col_stats.map(|col_stats| (idx, col_stats.number_of_distinct_values))
+                    // Safe to unwrap: ndv in FuseTable's ColumnStatistics is not None.
+                    maybe_col_stats.map(|col_stats| (idx, col_stats.ndv.unwrap()))
                 }
             })
             .collect::<Vec<_>>();

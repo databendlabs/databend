@@ -1823,6 +1823,8 @@ Functions overloads:
 1 json_path_query_first(Variant NULL, String NULL) :: Variant NULL
 0 json_to_string(Variant) :: String
 1 json_to_string(Variant NULL) :: String NULL
+0 l2_distance(Array(Float32), Array(Float32)) :: Float32
+1 l2_distance(Array(Float32) NULL, Array(Float32) NULL) :: Float32 NULL
 0 left(String, UInt64) :: String
 1 left(String NULL, UInt64 NULL) :: String NULL
 0 length(Variant NULL) :: UInt32 NULL

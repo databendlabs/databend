@@ -109,17 +109,10 @@ impl Operator for Filter {
         // Update other columns's statistic according to selectivity.
         sb.update_other_statistic_by_selectivity(selectivity);
         let cardinality = input_cardinality * selectivity;
-
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
             HashMap::new()
         } else {
-            for (_, column_stat) in statistics.column_stats.iter_mut() {
-                if cardinality < input_cardinality {
-                    column_stat.histogram = None;
-                    column_stat.ndv = (column_stat.ndv * selectivity).ceil();
-                }
-            }
             statistics.column_stats
         };
         Ok(Arc::new(StatInfo {
