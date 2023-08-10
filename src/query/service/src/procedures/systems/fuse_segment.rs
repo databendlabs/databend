@@ -17,33 +17,42 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
+use common_procedures::ProcedureFeatures;
+use common_procedures::ProcedureSignature;
 
 use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
-use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::fuse::table_functions::FuseSegment;
 use crate::storages::fuse::FuseTable;
 
-pub struct FuseSegmentProcedure {}
+pub struct FuseSegmentProcedure {
+    sig: Box<dyn ProcedureSignature>,
+}
 
 impl FuseSegmentProcedure {
-    pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(FuseSegmentProcedure {}.into_procedure())
+    pub fn try_create(sig: Box<dyn ProcedureSignature>) -> Result<Box<dyn Procedure>> {
+        Ok(FuseSegmentProcedure { sig }.into_procedure())
+    }
+}
+
+impl ProcedureSignature for FuseSegmentProcedure {
+    fn name(&self) -> &str {
+        self.sig.name()
+    }
+
+    fn features(&self) -> ProcedureFeatures {
+        self.sig.features()
+    }
+
+    fn schema(&self) -> Arc<DataSchema> {
+        self.sig.schema()
     }
 }
 
 #[async_trait::async_trait]
 impl OneBlockProcedure for FuseSegmentProcedure {
-    fn name(&self) -> &str {
-        "FUSE_SEGMENT"
-    }
-
-    fn features(&self) -> ProcedureFeatures {
-        ProcedureFeatures::default().num_arguments(3)
-    }
-
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         assert!(args.len() >= 2);
@@ -71,9 +80,5 @@ impl OneBlockProcedure for FuseSegmentProcedure {
         Ok(FuseSegment::new(ctx, tbl, snapshot_id, None)
             .get_segments()
             .await?)
-    }
-
-    fn schema(&self) -> Arc<DataSchema> {
-        Arc::new(FuseSegment::schema().into())
     }
 }

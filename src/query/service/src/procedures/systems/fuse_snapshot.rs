@@ -17,34 +17,43 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
+use common_procedures::ProcedureFeatures;
+use common_procedures::ProcedureSignature;
 use common_storages_fuse::FuseTable;
 
 use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
-use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::fuse::table_functions::FuseSnapshot;
 
-pub struct FuseSnapshotProcedure {}
+pub struct FuseSnapshotProcedure {
+    sig: Box<dyn ProcedureSignature>,
+}
 
 impl FuseSnapshotProcedure {
-    pub fn try_create() -> Result<Box<dyn Procedure>> {
+    pub fn try_create(sig: Box<dyn ProcedureSignature>) -> Result<Box<dyn Procedure>> {
         // Ok(Box::new(FuseSnapshotProcedure {}.to_procedure()))
-        Ok(FuseSnapshotProcedure {}.into_procedure())
+        Ok(FuseSnapshotProcedure { sig }.into_procedure())
+    }
+}
+
+impl ProcedureSignature for FuseSnapshotProcedure {
+    fn name(&self) -> &str {
+        self.sig.name()
+    }
+
+    fn features(&self) -> ProcedureFeatures {
+        self.sig.features()
+    }
+
+    fn schema(&self) -> Arc<DataSchema> {
+        self.sig.schema()
     }
 }
 
 #[async_trait::async_trait]
 impl OneBlockProcedure for FuseSnapshotProcedure {
-    fn name(&self) -> &str {
-        "FUSE_SNAPSHOT"
-    }
-
-    fn features(&self) -> ProcedureFeatures {
-        ProcedureFeatures::default().variadic_arguments(2, 3)
-    }
-
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         assert_eq!(args.len(), 2);
@@ -64,9 +73,5 @@ impl OneBlockProcedure for FuseSnapshotProcedure {
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
         Ok(FuseSnapshot::new(ctx, tbl).get_snapshots(None).await?)
-    }
-
-    fn schema(&self) -> Arc<DataSchema> {
-        Arc::new(FuseSnapshot::schema().into())
     }
 }

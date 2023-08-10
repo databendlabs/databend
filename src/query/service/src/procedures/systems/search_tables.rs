@@ -18,38 +18,44 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
-use common_storages_system::TablesTableWithoutHistory;
+use common_procedures::ProcedureFeatures;
+use common_procedures::ProcedureSignature;
 use futures::TryStreamExt;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
-use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::Planner;
 
-pub struct SearchTablesProcedure {}
+pub struct SearchTablesProcedure {
+    sig: Box<dyn ProcedureSignature>,
+}
 
 impl SearchTablesProcedure {
-    pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(SearchTablesProcedure {}.into_procedure())
+    pub fn try_create(sig: Box<dyn ProcedureSignature>) -> Result<Box<dyn Procedure>> {
+        Ok(SearchTablesProcedure { sig }.into_procedure())
+    }
+}
+
+impl ProcedureSignature for SearchTablesProcedure {
+    fn name(&self) -> &str {
+        self.sig.name()
+    }
+
+    fn features(&self) -> ProcedureFeatures {
+        self.sig.features()
+    }
+
+    fn schema(&self) -> Arc<DataSchema> {
+        self.sig.schema()
     }
 }
 
 #[async_trait::async_trait]
 impl OneBlockProcedure for SearchTablesProcedure {
-    fn name(&self) -> &str {
-        "SEARCH_TABLES"
-    }
-
-    fn features(&self) -> ProcedureFeatures {
-        ProcedureFeatures::default()
-            .num_arguments(1)
-            .management_mode_required(true)
-    }
-
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         assert_eq!(args.len(), 1);
@@ -85,9 +91,5 @@ impl OneBlockProcedure for SearchTablesProcedure {
         } else {
             Ok(DataBlock::empty())
         }
-    }
-
-    fn schema(&self) -> Arc<DataSchema> {
-        Arc::new(TablesTableWithoutHistory::schema().into())
     }
 }

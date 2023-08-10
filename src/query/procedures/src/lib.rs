@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod admins;
-mod procedure;
-mod procedure_factory;
-pub mod systems;
+mod admins;
+mod procedure_sig;
+mod procedure_sig_factory;
+mod systems;
 
-pub use procedure::OneBlockProcedure;
-pub use procedure::Procedure;
-pub use procedure_factory::ProcedureFactory;
+pub use procedure_sig::ProcedureFeatures;
+pub use procedure_sig::ProcedureSignature;
+pub use procedure_sig_factory::ProcedureSigFactory;

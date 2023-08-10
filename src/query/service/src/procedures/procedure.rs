@@ -22,19 +22,16 @@ use common_expression::DataSchema;
 use common_expression::SendableDataBlockStream;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
+use common_procedures::ProcedureFeatures;
+use common_procedures::ProcedureSignature;
 use common_sql::validate_function_arg;
 use futures::StreamExt;
 
-use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 #[async_trait::async_trait]
-pub trait Procedure: Sync + Send {
-    fn name(&self) -> &str;
-
-    fn features(&self) -> ProcedureFeatures;
-
+pub trait Procedure: Sync + Send + ProcedureSignature {
     fn validate(&self, ctx: Arc<QueryContext>, args: &[String]) -> Result<()> {
         let features = self.features();
 
@@ -71,8 +68,6 @@ pub trait Procedure: Sync + Send {
         args: Vec<String>,
         pipeline: &mut Pipeline,
     ) -> Result<()>;
-
-    fn schema(&self) -> Arc<DataSchema>;
 }
 
 /// Procedure that returns all the data in one DataBlock
@@ -82,7 +77,7 @@ pub trait Procedure: Sync + Send {
 /// Technically, it is not [Procedure] but a builder of procedure.
 /// The method `into_procedure` is be used while registering to [ProcedureFactory],
 #[async_trait::async_trait]
-pub trait OneBlockProcedure {
+pub trait OneBlockProcedure: ProcedureSignature {
     fn into_procedure(self) -> Box<dyn Procedure>
     where
         Self: Send + Sync,
@@ -91,13 +86,7 @@ pub trait OneBlockProcedure {
         Box::new(impls::OneBlockProcedureWrapper(self))
     }
 
-    fn name(&self) -> &str;
-
-    fn features(&self) -> ProcedureFeatures;
-
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock>;
-
-    fn schema(&self) -> Arc<DataSchema>;
 }
 
 /// Procedure that returns data as [SendableBlockStream]
@@ -105,7 +94,7 @@ pub trait OneBlockProcedure {
 /// Technically, it is not [Procedure] but a builder of procedure.
 /// The method `into_procedure` is be used while registering to [ProcedureFactory],
 #[async_trait::async_trait]
-pub trait StreamProcedure
+pub trait StreamProcedure: ProcedureSignature
 where Self: Sized
 {
     fn into_procedure(self) -> Box<dyn Procedure>
@@ -116,17 +105,11 @@ where Self: Sized
         Box::new(impls::StreamProcedureWrapper(self))
     }
 
-    fn name(&self) -> &str;
-
-    fn features(&self) -> ProcedureFeatures;
-
     async fn data_stream(
         &self,
         ctx: Arc<QueryContext>,
         args: Vec<String>,
     ) -> Result<SendableDataBlockStream>;
-
-    fn schema(&self) -> Arc<DataSchema>;
 }
 
 mod impls {
@@ -140,9 +123,8 @@ mod impls {
     // To avoid implementation conflicts, introduce a new type
     pub(in self::super) struct OneBlockProcedureWrapper<T>(pub T);
 
-    #[async_trait::async_trait]
-    impl<T> Procedure for OneBlockProcedureWrapper<T>
-    where T: OneBlockProcedure + Sync + Send
+    impl<T> ProcedureSignature for OneBlockProcedureWrapper<T>
+    where T: OneBlockProcedure + ProcedureSignature + Send + Sync
     {
         fn name(&self) -> &str {
             self.0.name()
@@ -152,6 +134,15 @@ mod impls {
             self.0.features()
         }
 
+        fn schema(&self) -> Arc<DataSchema> {
+            self.0.schema()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl<T> Procedure for OneBlockProcedureWrapper<T>
+    where T: OneBlockProcedure + Sync + Send + ProcedureSignature
+    {
         #[async_backtrace::framed]
         async fn eval(
             &self,
@@ -175,18 +166,13 @@ mod impls {
 
             Ok(())
         }
-
-        fn schema(&self) -> Arc<DataSchema> {
-            self.0.schema()
-        }
     }
 
     // To avoid implementation conflicts, introduce a new type
     pub(in self::super) struct StreamProcedureWrapper<T>(pub T);
 
-    #[async_trait::async_trait]
-    impl<T> Procedure for StreamProcedureWrapper<T>
-    where T: StreamProcedure + Sync + Send
+    impl<T> ProcedureSignature for StreamProcedureWrapper<T>
+    where T: Send + StreamProcedure + Sync
     {
         fn name(&self) -> &str {
             self.0.name()
@@ -196,6 +182,15 @@ mod impls {
             self.0.features()
         }
 
+        fn schema(&self) -> Arc<DataSchema> {
+            self.0.schema()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl<T> Procedure for StreamProcedureWrapper<T>
+    where T: StreamProcedure + Sync + Send
+    {
         #[async_backtrace::framed]
         async fn eval(
             &self,
@@ -215,10 +210,6 @@ mod impls {
             )]));
 
             Ok(())
-        }
-
-        fn schema(&self) -> Arc<DataSchema> {
-            self.0.schema()
         }
     }
 }

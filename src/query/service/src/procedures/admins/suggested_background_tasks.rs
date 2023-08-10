@@ -19,17 +19,16 @@ use background_service::Suggestion;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::BooleanType;
-use common_expression::types::DataType;
 use common_expression::types::StringType;
 use common_expression::types::VariantType;
 use common_expression::DataBlock;
-use common_expression::DataField;
 use common_expression::DataSchema;
-use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
 use common_expression::FromOptData;
 use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
+use common_procedures::ProcedureFeatures;
+use common_procedures::ProcedureSignature;
 use common_sql::Planner;
 use log::error;
 use log::info;
@@ -38,16 +37,17 @@ use tokio_stream::StreamExt;
 use crate::interpreters::InterpreterFactory;
 use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
-use crate::procedures::ProcedureFeatures;
 use crate::sessions::query_ctx::Origin;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub struct SuggestedBackgroundTasksProcedure;
+pub struct SuggestedBackgroundTasksProcedure {
+    sig: Box<dyn ProcedureSignature>,
+}
 
 impl SuggestedBackgroundTasksProcedure {
-    pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(SuggestedBackgroundTasksProcedure {}.into_procedure())
+    pub fn try_create(sig: Box<dyn ProcedureSignature>) -> Result<Box<dyn Procedure>> {
+        Ok(SuggestedBackgroundTasksProcedure { sig }.into_procedure())
     }
 }
 
@@ -87,18 +87,22 @@ impl SuggestedBackgroundTasksProcedure {
     }
 }
 
-#[async_trait::async_trait]
-impl OneBlockProcedure for SuggestedBackgroundTasksProcedure {
+impl ProcedureSignature for SuggestedBackgroundTasksProcedure {
     fn name(&self) -> &str {
-        "SUGGESTED_BACKGROUND_TASKS"
+        self.sig.name()
     }
 
     fn features(&self) -> ProcedureFeatures {
-        ProcedureFeatures::default()
-            .variadic_arguments(0, 1)
-            .management_mode_required(false)
+        self.sig.features()
     }
 
+    fn schema(&self) -> Arc<DataSchema> {
+        self.sig.schema()
+    }
+}
+
+#[async_trait::async_trait]
+impl OneBlockProcedure for SuggestedBackgroundTasksProcedure {
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, _args: Vec<String>) -> Result<DataBlock> {
         let license_mgr = get_license_manager();
@@ -110,17 +114,6 @@ impl OneBlockProcedure for SuggestedBackgroundTasksProcedure {
         )?;
         let suggestions = Self::all_suggestions(ctx).await?;
         self.to_block(suggestions)
-    }
-
-    fn schema(&self) -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![
-            DataField::new("type", DataType::String),
-            DataField::new("database_name", DataType::String),
-            DataField::new("table_name", DataType::String),
-            DataField::new("table_statistics", DataType::Variant),
-            DataField::new("should_do_segment_compact", DataType::Boolean),
-            DataField::new("should_do_compact", DataType::Boolean),
-        ])
     }
 }
 

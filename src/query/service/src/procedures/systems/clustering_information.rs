@@ -17,33 +17,42 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
+use common_procedures::ProcedureFeatures;
+use common_procedures::ProcedureSignature;
 
 use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
-use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::fuse::table_functions::ClusteringInformation;
 use crate::storages::fuse::FuseTable;
 
-pub struct ClusteringInformationProcedure {}
+pub struct ClusteringInformationProcedure {
+    sig: Box<dyn ProcedureSignature>,
+}
 
 impl ClusteringInformationProcedure {
-    pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(ClusteringInformationProcedure {}.into_procedure())
+    pub fn try_create(sig: Box<dyn ProcedureSignature>) -> Result<Box<dyn Procedure>> {
+        Ok(ClusteringInformationProcedure { sig }.into_procedure())
+    }
+}
+
+impl ProcedureSignature for ClusteringInformationProcedure {
+    fn name(&self) -> &str {
+        self.sig.name()
+    }
+
+    fn features(&self) -> ProcedureFeatures {
+        self.sig.features()
+    }
+
+    fn schema(&self) -> Arc<DataSchema> {
+        self.sig.schema()
     }
 }
 
 #[async_trait::async_trait]
 impl OneBlockProcedure for ClusteringInformationProcedure {
-    fn name(&self) -> &str {
-        "CLUSTERING_INFORMATION"
-    }
-
-    fn features(&self) -> ProcedureFeatures {
-        ProcedureFeatures::default().num_arguments(2)
-    }
-
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         assert_eq!(args.len(), 2);
@@ -65,9 +74,5 @@ impl OneBlockProcedure for ClusteringInformationProcedure {
         Ok(ClusteringInformation::new(ctx, tbl)
             .get_clustering_info()
             .await?)
-    }
-
-    fn schema(&self) -> Arc<DataSchema> {
-        Arc::new(ClusteringInformation::schema().into())
     }
 }

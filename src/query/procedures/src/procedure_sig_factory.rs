@@ -17,37 +17,34 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_procedures::ProcedureSigFactory;
-use common_procedures::ProcedureSignature;
 use once_cell::sync::Lazy;
 
-use crate::procedures::admins::AdminProcedure;
-use crate::procedures::systems::SystemProcedure;
-use crate::procedures::Procedure;
+use crate::admins::AdminProcedureSig;
+use crate::systems::SystemProcedureSig;
+use crate::ProcedureSignature;
 
-pub type Factory2Creator =
-    Box<dyn Fn(Box<dyn ProcedureSignature>) -> Result<Box<dyn Procedure>> + Send + Sync>;
+pub type Factory2Creator = Box<dyn Fn() -> Result<Box<dyn ProcedureSignature>> + Send + Sync>;
 
-pub struct ProcedureFactory {
+pub struct ProcedureSigFactory {
     creators: HashMap<String, Factory2Creator>,
 }
 
-static FUNCTION_FACTORY: Lazy<Arc<ProcedureFactory>> = Lazy::new(|| {
-    let mut factory = ProcedureFactory::create();
-    SystemProcedure::register(&mut factory);
-    AdminProcedure::register(&mut factory);
+static FUNCTION_SIGNATURE_FACTORY: Lazy<Arc<ProcedureSigFactory>> = Lazy::new(|| {
+    let mut factory = ProcedureSigFactory::create();
+    SystemProcedureSig::register(&mut factory);
+    AdminProcedureSig::register(&mut factory);
     Arc::new(factory)
 });
 
-impl ProcedureFactory {
-    pub fn create() -> ProcedureFactory {
-        ProcedureFactory {
+impl ProcedureSigFactory {
+    pub fn create() -> ProcedureSigFactory {
+        ProcedureSigFactory {
             creators: Default::default(),
         }
     }
 
-    pub fn instance() -> &'static ProcedureFactory {
-        FUNCTION_FACTORY.as_ref()
+    pub fn instance() -> &'static ProcedureSigFactory {
+        FUNCTION_SIGNATURE_FACTORY.as_ref()
     }
 
     pub fn register(&mut self, name: &str, creator: Factory2Creator) {
@@ -55,13 +52,12 @@ impl ProcedureFactory {
         creators.insert(name.to_lowercase(), creator);
     }
 
-    pub fn get(&self, name: impl AsRef<str>) -> Result<Box<dyn Procedure>> {
+    pub fn get(&self, name: impl AsRef<str>) -> Result<Box<dyn ProcedureSignature>> {
         let origin_name = name.as_ref();
         let name = origin_name.to_lowercase();
         match self.creators.get(&name) {
             Some(creator) => {
-                let sig = ProcedureSigFactory::instance().get(&name)?;
-                let inner = creator(sig)?;
+                let inner = creator()?;
                 Ok(inner)
             }
             None => Err(ErrorCode::UnknownFunction(format!(

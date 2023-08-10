@@ -45,6 +45,7 @@ members = [
     "src/query/pipeline/sinks",
     "src/query/pipeline/sources",
     "src/query/pipeline/transforms",
+    "src/query/procedures",
     "src/query/profile",
     "src/query/settings",
     "src/query/sql",

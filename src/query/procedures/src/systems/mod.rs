@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod visitor;
-mod visitor_mut;
-mod walk;
-mod walk_mut;
+mod clustering_information;
+mod execute_job;
+mod fuse_block;
+mod fuse_column;
+mod fuse_segment;
+mod fuse_snapshot;
+mod search_tables;
+mod system;
 
-pub use visitor::Visitor;
-pub use visitor_mut::VisitorMut;
-pub use walk::*;
-pub use walk_mut::*;
+pub use system::SystemProcedureSig;

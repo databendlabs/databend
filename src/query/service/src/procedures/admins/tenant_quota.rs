@@ -22,41 +22,46 @@ use common_expression::types::NumberDataType;
 use common_expression::types::ValueType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
-use common_expression::DataField;
 use common_expression::DataSchema;
-use common_expression::DataSchemaRefExt;
 use common_expression::Value;
 use common_meta_app::principal::UserOptionFlag;
 use common_meta_app::tenant::TenantQuota;
 use common_meta_types::MatchSeq;
+use common_procedures::ProcedureFeatures;
+use common_procedures::ProcedureSignature;
 use common_users::UserApiProvider;
 
 use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
-use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub struct TenantQuotaProcedure;
+pub struct TenantQuotaProcedure {
+    sig: Box<dyn ProcedureSignature>,
+}
 
 impl TenantQuotaProcedure {
-    pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(TenantQuotaProcedure {}.into_procedure())
+    pub fn try_create(sig: Box<dyn ProcedureSignature>) -> Result<Box<dyn Procedure>> {
+        Ok(TenantQuotaProcedure { sig }.into_procedure())
+    }
+}
+
+impl ProcedureSignature for TenantQuotaProcedure {
+    fn name(&self) -> &str {
+        self.sig.name()
+    }
+
+    fn features(&self) -> ProcedureFeatures {
+        self.sig.features()
+    }
+
+    fn schema(&self) -> Arc<DataSchema> {
+        self.sig.schema()
     }
 }
 
 #[async_trait::async_trait]
 impl OneBlockProcedure for TenantQuotaProcedure {
-    fn name(&self) -> &str {
-        "TENANT_QUOTA"
-    }
-
-    fn features(&self) -> ProcedureFeatures {
-        ProcedureFeatures::default()
-            .variadic_arguments(0, 5)
-            .management_mode_required(true)
-    }
-
     /// args:
     /// tenant_id: string
     /// max_databases: u32
@@ -101,21 +106,6 @@ impl OneBlockProcedure for TenantQuotaProcedure {
             .await?;
 
         self.to_block(&quota)
-    }
-
-    fn schema(&self) -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![
-            DataField::new("max_databases", DataType::Number(NumberDataType::UInt32)),
-            DataField::new(
-                "max_tables_per_database",
-                DataType::Number(NumberDataType::UInt32),
-            ),
-            DataField::new("max_stages", DataType::Number(NumberDataType::UInt32)),
-            DataField::new(
-                "max_files_per_stage",
-                DataType::Number(NumberDataType::UInt32),
-            ),
-        ])
     }
 }
 

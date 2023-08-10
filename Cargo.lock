@@ -2501,6 +2501,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-procedures"
+version = "0.1.0"
+dependencies = [
+ "common-exception",
+ "common-expression",
+ "common-meta-app",
+ "common-storages-fuse",
+ "common-storages-system",
+ "once_cell",
+]
+
+[[package]]
 name = "common-profile"
 version = "0.1.0"
 dependencies = [
@@ -3764,6 +3776,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-procedures",
  "common-profile",
  "common-settings",
  "common-sharing",

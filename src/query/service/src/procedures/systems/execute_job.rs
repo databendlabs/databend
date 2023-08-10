@@ -19,33 +19,39 @@ use common_catalog::table_context::TableContext;
 pub use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
-use common_expression::DataSchemaRefExt;
+use common_procedures::ProcedureFeatures;
+use common_procedures::ProcedureSignature;
 
 use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
-use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 
-pub struct ExecuteJobProcedure {}
+pub struct ExecuteJobProcedure {
+    sig: Box<dyn ProcedureSignature>,
+}
 
 impl ExecuteJobProcedure {
-    pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(ExecuteJobProcedure {}.into_procedure())
+    pub fn try_create(sig: Box<dyn ProcedureSignature>) -> Result<Box<dyn Procedure>> {
+        Ok(ExecuteJobProcedure { sig }.into_procedure())
+    }
+}
+
+impl ProcedureSignature for ExecuteJobProcedure {
+    fn name(&self) -> &str {
+        self.sig.name()
+    }
+
+    fn features(&self) -> ProcedureFeatures {
+        self.sig.features()
+    }
+
+    fn schema(&self) -> Arc<DataSchema> {
+        self.sig.schema()
     }
 }
 
 #[async_trait::async_trait]
 impl OneBlockProcedure for ExecuteJobProcedure {
-    fn name(&self) -> &str {
-        "EXECUTE_JOB"
-    }
-
-    fn features(&self) -> ProcedureFeatures {
-        ProcedureFeatures::default()
-            .num_arguments(1)
-            .management_mode_required(false)
-    }
-
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         assert_eq!(args.len(), 1);
@@ -56,9 +62,5 @@ impl OneBlockProcedure for ExecuteJobProcedure {
             .execute_scheduled_job(ctx.get_tenant(), ctx.get_current_user()?.identity(), name)
             .await?;
         Ok(DataBlock::empty())
-    }
-
-    fn schema(&self) -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![])
     }
 }

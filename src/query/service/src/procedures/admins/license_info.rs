@@ -22,44 +22,49 @@ use common_exception::ToErrorCode;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
-use common_expression::DataField;
 use common_expression::DataSchema;
-use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_license::license::Feature;
 use common_license::license::LicenseInfo;
 use common_license::license_manager::get_license_manager;
+use common_procedures::ProcedureFeatures;
+use common_procedures::ProcedureSignature;
 use humantime::Duration as HumanDuration;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::Clock;
 
 use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
-use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub struct LicenseInfoProcedure;
+pub struct LicenseInfoProcedure {
+    sig: Box<dyn ProcedureSignature>,
+}
 
 impl LicenseInfoProcedure {
-    pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(LicenseInfoProcedure {}.into_procedure())
+    pub fn try_create(sig: Box<dyn ProcedureSignature>) -> Result<Box<dyn Procedure>> {
+        Ok(LicenseInfoProcedure { sig }.into_procedure())
+    }
+}
+
+impl ProcedureSignature for LicenseInfoProcedure {
+    fn name(&self) -> &str {
+        self.sig.name()
+    }
+
+    fn features(&self) -> ProcedureFeatures {
+        self.sig.features()
+    }
+
+    fn schema(&self) -> Arc<DataSchema> {
+        self.sig.schema()
     }
 }
 
 #[async_trait::async_trait]
 impl OneBlockProcedure for LicenseInfoProcedure {
-    fn name(&self) -> &str {
-        "LICENSE_INFO"
-    }
-
-    fn features(&self) -> ProcedureFeatures {
-        ProcedureFeatures::default()
-            .variadic_arguments(0, 1)
-            .management_mode_required(false)
-    }
-
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, _args: Vec<String>) -> Result<DataBlock> {
         let settings = ctx.get_settings();
@@ -85,18 +90,6 @@ impl OneBlockProcedure for LicenseInfoProcedure {
                 format!("current license invalid for {}", ctx.get_tenant())
             })?;
         self.to_block(&info)
-    }
-
-    fn schema(&self) -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![
-            DataField::new("license_issuer", DataType::String),
-            DataField::new("license_type", DataType::String),
-            DataField::new("organization", DataType::String),
-            DataField::new("issued_at", DataType::Timestamp),
-            DataField::new("expire_at", DataType::Timestamp),
-            // formatted string calculate the available time from now to expiry of license
-            DataField::new("available_time_until_expiry", DataType::String),
-        ])
     }
 }
 
