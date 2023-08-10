@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::convert::TryFrom;
 use std::io::BufRead;
 use std::io::Cursor;
@@ -75,10 +75,9 @@ use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
 use common_sql::executor::AsyncSourcerPlan;
+use common_sql::executor::ConstantTableScan;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
-use common_sql::executor::ConstantTableScan;
-use common_sql::executor::CopyIntoTableFromQuery;
 use common_sql::executor::CteScan;
 use common_sql::executor::Deduplicate;
 use common_sql::executor::DeletePartial;
