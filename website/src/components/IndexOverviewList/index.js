@@ -13,7 +13,7 @@ const IndexOverviewList = ()=> {
     setItems(targetDoc?.items || []);
   });
   return (
-    <div>
+    <>
       {
         items?.length > 0 &&
           <ul>
@@ -26,7 +26,7 @@ const IndexOverviewList = ()=> {
             }
           </ul>
         }
-    </div>
+    </>
   );
 };
 export default IndexOverviewList;
