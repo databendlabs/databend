@@ -38,8 +38,7 @@ use crate::client::MySQLClient;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 use crate::util::get_files;
-use crate::util::prepare_tpcds_data;
-use crate::util::prepare_tpch_data;
+use crate::util::lazy_prepare_data;
 
 mod arg;
 mod client;
@@ -78,28 +77,6 @@ impl sqllogictest::AsyncDB for Databend {
 pub async fn main() -> Result<()> {
     env_logger::init();
     let args = SqlLogicTestArgs::parse();
-    match (&args.dir, &args.skipped_dir) {
-        (None, None) => {
-            prepare_tpch_data()?;
-            prepare_tpcds_data()?;
-        }
-        (Some(dir), _) => {
-            if dir == "tpch" {
-                prepare_tpch_data()?;
-            }
-            if dir == "tpcds" {
-                prepare_tpcds_data()?;
-            }
-        }
-        (None, Some(skipped_dir)) => {
-            if skipped_dir != "tpch" {
-                prepare_tpch_data()?;
-            }
-            if skipped_dir != "tpcds" {
-                prepare_tpcds_data()?;
-            }
-        }
-    }
     let handlers = match &args.handlers {
         Some(hs) => hs.iter().map(|s| s.as_str()).collect(),
         None => vec![HANDLER_MYSQL, HANDLER_HTTP, HANDLER_CLICKHOUSE],
@@ -221,11 +198,14 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
             num_of_tests += parse_file::<DefaultColumnType>(file.as_ref().unwrap().path())
                 .unwrap()
                 .len();
+
+            lazy_prepare_data(file.as_ref().unwrap().path())?;
+
             if args.complete {
                 let col_separator = " ";
                 let validator = default_validator;
                 let column_validator = default_column_validator;
-                let mut runner = Runner::new(create_databend(&client_type).await?);
+                let mut runner = Runner::new(|| async { create_databend(&client_type).await });
                 runner
                     .update_test_file(
                         file.unwrap().path(),
@@ -297,7 +277,7 @@ async fn run_file_async(
     let mut error_records = vec![];
     let no_fail_fast = SqlLogicTestArgs::parse().no_fail_fast;
     let records = parse_file(&filename).unwrap();
-    let mut runner = Runner::new(create_databend(client_type).await.unwrap());
+    let mut runner = Runner::new(|| async { create_databend(client_type).await });
     for record in records.into_iter() {
         if let Record::Halt { .. } = record {
             break;

@@ -39,7 +39,7 @@ impl OneBlockSource {
 #[async_trait::async_trait]
 impl Processor for OneBlockSource {
     fn name(&self) -> String {
-        "OncBlockSource".to_string()
+        "OneBlockSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

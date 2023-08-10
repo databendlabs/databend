@@ -118,11 +118,15 @@ jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "fe6835a" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.3", features = ["compat-07"] }
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.8", features = [
+    "compat-07",
+    "tracing-log",
+] }
 
 # type helper
 derive_more = "0.99.17"
 lazy_static = "1.4.0"
+itertools = "0.10.5"
 
 # error
 anyhow = { version = "1.0.65" }
@@ -205,7 +209,7 @@ rustc-demangle = { opt-level = 3 }
 
 [profile.test]
 opt-level = 0
-debug = 0
+debug = true
 codegen-units = 16
 lto = false
 debug-assertions = true
@@ -220,3 +224,4 @@ arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e113
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "693c265" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 croaring = { git = "https://github.com/RoaringBitmap/croaring-rs", rev = "13a71b4" }
+opendal = { git = "https://github.com/apache/incubator-opendal", rev = "f02d627" }

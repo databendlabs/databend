@@ -27,6 +27,7 @@ use common_expression::FromData;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
+use common_sql::plans::AddColumnOption;
 use common_sql::plans::AddTableColumnPlan;
 use common_sql::plans::DropTableColumnPlan;
 use common_sql::Planner;
@@ -78,10 +79,10 @@ async fn check_segment_column_ids(
 
     let snapshot = snapshot_reader.read(&params).await?;
     if let Some(expected_column_min_max) = expected_column_min_max {
-        for (column_id, (min, max)) in expected_column_min_max {
-            if let Some(stat) = snapshot.summary.col_stats.get(&column_id) {
-                assert_eq!(min, stat.min);
-                assert_eq!(max, stat.max);
+        for (column_id, (min, max)) in &expected_column_min_max {
+            if let Some(stat) = snapshot.summary.col_stats.get(column_id) {
+                assert_eq!(min, stat.min());
+                assert_eq!(max, stat.max());
             }
         }
     }
@@ -176,6 +177,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         table: fixture.default_table_name(),
         field,
         comment: "".to_string(),
+        option: AddColumnOption::End,
     };
     let interpreter = AddTableColumnInterpreter::try_create(ctx.clone(), add_table_column_plan)?;
     interpreter.execute(ctx.clone()).await?;

@@ -238,18 +238,13 @@ impl NativeDeserializeDataTransform {
         plan: &DataSourcePlan,
         schema: &DataSchema,
     ) -> Result<Arc<Option<Expr>>> {
-        Ok(
-            match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-                None => Arc::new(None),
-                Some(v) => {
-                    let expr = v
-                        .filter
-                        .as_expr(&BUILTIN_FUNCTIONS)
-                        .project_column_ref(|name| schema.column_with_name(name).unwrap().0);
-                    Arc::new(Some(expr))
-                }
-            },
-        )
+        Ok(Arc::new(
+            PushDownInfo::prewhere_of_push_downs(&plan.push_downs).map(|v| {
+                v.filter
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .project_column_ref(|name| schema.column_with_name(name).unwrap().0)
+            }),
+        ))
     }
 
     fn add_block(&mut self, data_block: DataBlock) -> Result<()> {

@@ -241,10 +241,7 @@ impl<R> StorageMetricsWrapper<R> {
 
 impl<R: oio::Read> oio::Read for StorageMetricsWrapper<R> {
     fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<Result<usize>> {
-        let start = match self.last_pending {
-            None => Instant::now(),
-            Some(t) => t,
-        };
+        let start = self.last_pending.unwrap_or(Instant::now());
 
         let result = self.inner.poll_read(cx, buf);
 

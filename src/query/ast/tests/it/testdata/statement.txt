@@ -2732,7 +2732,7 @@ AlterUser(
 
 
 ---------- Input ----------
-ALTER USER u1 WITH DEFAULT_ROLE = 'role1';
+ALTER USER u1 WITH DEFAULT_ROLE = role1;
 ---------- Output ---------
 ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1'
 ---------- AST ------------
@@ -2755,7 +2755,7 @@ AlterUser(
 
 
 ---------- Input ----------
-ALTER USER u1 WITH DEFAULT_ROLE = 'role1', TENANTSETTING;
+ALTER USER u1 WITH DEFAULT_ROLE = role1, TENANTSETTING;
 ---------- Output ---------
 ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1' TENANTSETTING
 ---------- AST ------------
@@ -7009,12 +7009,34 @@ AlterUser(
 
 
 ---------- Input ----------
+create role test
+---------- Output ---------
+CREATE ROLE 'test'
+---------- AST ------------
+CreateRole {
+    if_not_exists: false,
+    role_name: "test",
+}
+
+
+---------- Input ----------
 create role 'test'
 ---------- Output ---------
 CREATE ROLE 'test'
 ---------- AST ------------
 CreateRole {
     if_not_exists: false,
+    role_name: "test",
+}
+
+
+---------- Input ----------
+drop role if exists test
+---------- Output ---------
+DROP ROLE IF EXISTS 'test'
+---------- AST ------------
+DropRole {
+    if_exists: true,
     role_name: "test",
 }
 
@@ -7306,9 +7328,56 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t ADD COLUMN a float default 101 COMMENT 'hello';
+ALTER TABLE t ADD COLUMN c int null;
 ---------- Output ---------
-ALTER TABLE t ADD COLUMN a Float32 NOT NULL DEFAULT 101 COMMENT 'hello'
+ALTER TABLE t ADD COLUMN c Int32 NULL
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: AddColumn {
+            column: ColumnDefinition {
+                name: Identifier {
+                    name: "c",
+                    quote: None,
+                    span: Some(
+                        25..26,
+                    ),
+                },
+                data_type: Nullable(
+                    Int32,
+                ),
+                expr: None,
+                comment: None,
+            },
+            option: End,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t ADD COLUMN a float default 1.1 COMMENT 'hello' FIRST;
+---------- Output ---------
+ALTER TABLE t ADD COLUMN a Float32 NOT NULL DEFAULT 1.1 COMMENT 'hello' FIRST
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -7347,9 +7416,11 @@ AlterTable(
                             span: Some(
                                 41..44,
                             ),
-                            lit: UInt64(
-                                101,
-                            ),
+                            lit: Decimal256 {
+                                value: 11,
+                                precision: 76,
+                                scale: 1,
+                            },
                         },
                     ),
                 ),
@@ -7357,6 +7428,71 @@ AlterTable(
                     "hello",
                 ),
             },
+            option: First,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t ADD COLUMN b string default 'b' AFTER a;
+---------- Output ---------
+ALTER TABLE t ADD COLUMN b STRING NOT NULL DEFAULT 'b' AFTER a
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: AddColumn {
+            column: ColumnDefinition {
+                name: Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Some(
+                        25..26,
+                    ),
+                },
+                data_type: String,
+                expr: Some(
+                    Default(
+                        Literal {
+                            span: Some(
+                                42..45,
+                            ),
+                            lit: String(
+                                "b",
+                            ),
+                        },
+                    ),
+                ),
+                comment: None,
+            },
+            option: After(
+                Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Some(
+                        52..53,
+                    ),
+                },
+            ),
         },
     },
 )
@@ -7483,6 +7619,47 @@ AlterTable(
                     ),
                 },
                 "mask",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY;
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyColumn {
+            action: UnsetMaskingPolicy(
+                Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Some(
+                        28..29,
+                    ),
+                },
             ),
         },
     },
@@ -8103,7 +8280,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON * TO ROLE 'role1';
+GRANT SELECT, CREATE ON * TO ROLE role1;
 ---------- Output ---------
 GRANT SELECT, CREATE ON * TO ROLE role1
 ---------- AST ------------
@@ -8146,7 +8323,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ALL ON *.* TO ROLE 'role2';
+GRANT ALL ON *.* TO ROLE role2;
 ---------- Output ---------
 GRANT ALL PRIVILEGES ON *.* TO ROLE role2
 ---------- AST ------------
@@ -8185,7 +8362,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ALL PRIVILEGES ON * TO ROLE 'role3';
+GRANT ALL PRIVILEGES ON * TO ROLE role3;
 ---------- Output ---------
 GRANT ALL PRIVILEGES ON * TO ROLE role3
 ---------- AST ------------
@@ -8204,7 +8381,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ROLE 'test' TO 'test-user';
+GRANT ROLE test TO 'test-user';
 ---------- Output ---------
 GRANT ROLE test TO USER 'test-user'@'%'
 ---------- AST ------------
@@ -8224,7 +8401,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ROLE 'test' TO USER 'test-user';
+GRANT ROLE test TO USER 'test-user';
 ---------- Output ---------
 GRANT ROLE test TO USER 'test-user'@'%'
 ---------- AST ------------
@@ -8244,7 +8421,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ROLE 'test' TO ROLE 'test-user';
+GRANT ROLE test TO ROLE `test-user`;
 ---------- Output ---------
 GRANT ROLE test TO ROLE test-user
 ---------- AST ------------
@@ -8315,7 +8492,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.* TO ROLE 'role1'
+GRANT SELECT ON db01.* TO ROLE role1
 ---------- Output ---------
 GRANT SELECT ON db01.* TO ROLE role1
 ---------- AST ------------
@@ -8395,7 +8572,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.tb1 TO ROLE 'role1';
+GRANT SELECT ON db01.tb1 TO ROLE role1;
 ---------- Output ---------
 GRANT SELECT ON db01.tb1 TO ROLE role1
 ---------- AST ------------
@@ -8420,7 +8597,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON tb1 TO ROLE 'role1';
+GRANT SELECT ON tb1 TO ROLE role1;
 ---------- Output ---------
 GRANT SELECT ON tb1 TO ROLE role1
 ---------- AST ------------
@@ -8510,6 +8687,20 @@ ShowGrants {
 
 
 ---------- Input ----------
+SHOW GRANTS FOR ROLE role1;
+---------- Output ---------
+SHOW GRANTS FOR ROLE role1
+---------- AST ------------
+ShowGrants {
+    principal: Some(
+        Role(
+            "role1",
+        ),
+    ),
+}
+
+
+---------- Input ----------
 SHOW GRANTS FOR ROLE 'role1';
 ---------- Output ---------
 SHOW GRANTS FOR ROLE role1
@@ -8550,6 +8741,29 @@ Revoke(
 
 
 ---------- Input ----------
+REVOKE SELECT ON tb1 FROM ROLE role1;
+---------- Output ---------
+REVOKE SELECT ON tb1 FROM ROLE role1
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Select,
+            ],
+            level: Table(
+                None,
+                "tb1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
 REVOKE SELECT ON tb1 FROM ROLE 'role1';
 ---------- Output ---------
 REVOKE SELECT ON tb1 FROM ROLE role1
@@ -8570,6 +8784,84 @@ Revoke(
         ),
     },
 )
+
+
+---------- Input ----------
+drop role 'role1';
+---------- Output ---------
+DROP ROLE 'role1'
+---------- AST ------------
+DropRole {
+    if_exists: false,
+    role_name: "role1",
+}
+
+
+---------- Input ----------
+GRANT ROLE test TO ROLE 'test-user';
+---------- Output ---------
+GRANT ROLE test TO ROLE test-user
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Role {
+            role: "test",
+        },
+        principal: Role(
+            "test-user",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ROLE test TO ROLE `test-user`;
+---------- Output ---------
+GRANT ROLE test TO ROLE test-user
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Role {
+            role: "test",
+        },
+        principal: Role(
+            "test-user",
+        ),
+    },
+)
+
+
+---------- Input ----------
+SET ROLE `test-user`;
+---------- Output ---------
+SET ROLE test-user
+---------- AST ------------
+SetRole {
+    is_default: false,
+    role_name: "test-user",
+}
+
+
+---------- Input ----------
+SET ROLE 'test-user';
+---------- Output ---------
+SET ROLE test-user
+---------- AST ------------
+SetRole {
+    is_default: false,
+    role_name: "test-user",
+}
+
+
+---------- Input ----------
+SET ROLE ROLE1;
+---------- Output ---------
+SET ROLE ROLE1
+---------- AST ------------
+SetRole {
+    is_default: false,
+    role_name: "ROLE1",
+}
 
 
 ---------- Input ----------
@@ -8705,6 +8997,70 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         max_files: 10,
+        max_file_size: 0,
+        split_size: 0,
+        single: false,
+        purge: false,
+        force: false,
+        disable_variant_check: false,
+        on_error: "abort",
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = CSV
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10
+                max_files=1000;
+---------- Output ---------
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 MAX_FILES = 500 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+---------- AST ------------
+Copy(
+    CopyStmt {
+        hints: None,
+        src: UriLocation(
+            UriLocation {
+                protocol: "s3",
+                name: "mybucket",
+                path: "/data.csv",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {},
+                },
+            },
+        ),
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Some(
+                    10..17,
+                ),
+            },
+            columns: None,
+        },
+        files: None,
+        pattern: None,
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+        max_files: 500,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -11536,9 +11892,9 @@ Query(
 
 
 ---------- Input ----------
-CREATE MASKING POLICY email_mask AS (val STRING) RETURN STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'
+CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'
 ---------- Output ---------
-CREATE MASKING POLICY email_mask AS (val STRING) RETURN STRING -> CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END COMMENT = 'this is a masking policy'
+CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END COMMENT = 'this is a masking policy'
 ---------- AST ------------
 CreateDatamaskPolicy(
     CreateDatamaskPolicyStmt {
@@ -11554,24 +11910,24 @@ CreateDatamaskPolicy(
             return_type: String,
             body: Case {
                 span: Some(
-                    66..134,
+                    67..135,
                 ),
                 operand: None,
                 conditions: [
                     InList {
                         span: Some(
-                            91..105,
+                            92..106,
                         ),
                         expr: FunctionCall {
                             span: Some(
-                                76..90,
+                                77..91,
                             ),
                             distinct: false,
                             name: Identifier {
                                 name: "current_role",
                                 quote: None,
                                 span: Some(
-                                    76..88,
+                                    77..89,
                                 ),
                             },
                             args: [],
@@ -11582,7 +11938,7 @@ CreateDatamaskPolicy(
                         list: [
                             Literal {
                                 span: Some(
-                                    95..104,
+                                    96..105,
                                 ),
                                 lit: String(
                                     "ANALYST",
@@ -11595,7 +11951,7 @@ CreateDatamaskPolicy(
                 results: [
                     ColumnRef {
                         span: Some(
-                            111..114,
+                            112..115,
                         ),
                         database: None,
                         table: None,
@@ -11604,7 +11960,7 @@ CreateDatamaskPolicy(
                                 name: "VAL",
                                 quote: None,
                                 span: Some(
-                                    111..114,
+                                    112..115,
                                 ),
                             },
                         ),
@@ -11613,7 +11969,7 @@ CreateDatamaskPolicy(
                 else_result: Some(
                     Literal {
                         span: Some(
-                            120..131,
+                            121..132,
                         ),
                         lit: String(
                             "*********",
@@ -11625,6 +11981,31 @@ CreateDatamaskPolicy(
                 "this is a masking policy",
             ),
         },
+    },
+)
+
+
+---------- Input ----------
+DESC MASKING POLICY email_mask
+---------- Output ---------
+DESCRIBE MASKING POLICY email_mask
+---------- AST ------------
+DescDatamaskPolicy(
+    DescDatamaskPolicyStmt {
+        name: "email_mask",
+    },
+)
+
+
+---------- Input ----------
+DROP MASKING POLICY IF EXISTS email_mask
+---------- Output ---------
+DROP MASKING POLICY IF EXISTS email_mask
+---------- AST ------------
+DropDatamaskPolicy(
+    DropDatamaskPolicyStmt {
+        if_exists: true,
+        name: "email_mask",
     },
 )
 
@@ -11972,6 +12353,53 @@ Query(
                         expr: Literal {
                             span: Some(
                                 63..68,
+                            ),
+                            lit: UInt64(
+                                34343,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+-- 96477300355	31379974136	3.074486292973661
+select 34343
+---------- Output ---------
+SELECT 34343
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            45..57,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    45..57,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                52..57,
                             ),
                             lit: UInt64(
                                 34343,

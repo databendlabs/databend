@@ -2,7 +2,7 @@
 title: Loading from Stage
 ---
 
-Databend enables you to easily import data from files uploaded to either the user stage or an internal/external stage. To do so, you can first upload the files to a stage with [PRESIGN](../../14-sql-commands/00-ddl/80-presign/presign.md), and then employ the [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command to load the data from the staged file. Please note that the files must be in a format supported by Databend, otherwise the data cannot be imported. For more information on the file formats supported by Databend, see [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md).
+Databend enables you to easily import data from files uploaded to either the user stage or an internal/external stage. To do so, you can first upload the files to a stage with [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md), and then employ the [COPY INTO](/14-sql-commands/10-dml/dml-copy-into-table.md) command to load the data from the staged file. Please note that the files must be in a format supported by Databend, otherwise the data cannot be imported. For more information on the file formats supported by Databend, see [Input & Output File Formats](/13-sql-reference/50-file-format-options.md).
 
 ![image](/img/load/load-data-from-stage.jpeg)
 
@@ -64,7 +64,7 @@ books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-06-27 16:03:51.000 +0
 
 ### Step 2. Copy Data into Table
 
-1. Load data into the target table with the [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command:
+1. Load data into the target table with the [COPY INTO](/14-sql-commands/10-dml/dml-copy-into-table.md) command:
 
 ```sql
 COPY INTO books FROM @~ files=('books.parquet') FILE_FORMAT = (TYPE = PARQUET);
@@ -88,7 +88,7 @@ Follow this tutorial to upload the sample file to an internal stage and load dat
 
 ### Step 1. Create an Internal Stage
 
-1. Create an internal stage with the [CREATE STAGE](../../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) command:
+1. Create an internal stage with the [CREATE STAGE](/14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) command:
 
 ```sql
 CREATE STAGE my_internal_stage;
@@ -136,7 +136,7 @@ books.parquet                      |   998|"88432bf90aadb79073682988b39d461c"|20
 
 ### Step 3. Copy Data into Table
 
-1. Load data into the target table with the [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command:
+1. Load data into the target table with the [COPY INTO](/14-sql-commands/10-dml/dml-copy-into-table.md) command:
 
 ```sql
 COPY INTO books FROM @my_internal_stage files=('books.parquet') FILE_FORMAT = (TYPE = PARQUET);
@@ -159,7 +159,7 @@ Follow this tutorial to upload the sample file to an external stage and load dat
 
 ### Step 1. Create an External Stage
 
-1. Create an external stage with the [CREATE STAGE](../../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) command:
+1. Create an external stage with the [CREATE STAGE](/14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) command:
 
 ```sql
 CREATE STAGE my_external_stage url = 's3://databend' CONNECTION =(ENDPOINT_URL= 'http://127.0.0.1:9000' aws_key_id='ROOTUSER' aws_secret_key='CHANGEME123');
@@ -204,7 +204,7 @@ books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-06-28 04:13:15.178 +0
 
 ### Step 3. Copy Data into Table
 
-1. Load data into the target table with the [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command:
+1. Load data into the target table with the [COPY INTO](/14-sql-commands/10-dml/dml-copy-into-table.md) command:
 
 ```sql
 COPY INTO books FROM @my_external_stage files=('books.parquet') FILE_FORMAT = (TYPE = PARQUET);

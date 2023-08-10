@@ -81,7 +81,7 @@ pub struct PartitionPruner {
     pub max_memory_usage: u64,
 }
 
-fn check_parquet_schema(
+pub fn check_parquet_schema(
     expect: &SchemaDescriptor,
     actual: &SchemaDescriptor,
     path: &str,
@@ -203,7 +203,7 @@ impl PartitionPruner {
                     .zip(row_group_stats.as_ref())
                     .map(|((_, offset), stats)| {
                         let stat = stats[rg_idx].get(&(*offset as u32)).unwrap();
-                        (stat.min.clone(), stat.max.clone())
+                        (stat.min().clone(), stat.max().clone())
                     });
 
                 column_metas.insert(*index, ColumnMeta {

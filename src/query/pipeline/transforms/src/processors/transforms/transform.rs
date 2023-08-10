@@ -16,6 +16,7 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
@@ -160,8 +161,15 @@ impl<T: Transform> Transformer<T> {
     }
 }
 
+pub enum UnknownMode {
+    Pass,
+    Ignore,
+    Error,
+}
+
 // Transform for block meta and ignoring the block columns.
 pub trait BlockMetaTransform<B: BlockMetaInfo>: Send + 'static {
+    const UNKNOWN_MODE: UnknownMode = UnknownMode::Ignore;
     const NAME: &'static str;
 
     fn transform(&mut self, meta: B) -> Result<DataBlock>;
@@ -182,7 +190,7 @@ pub struct BlockMetaTransformer<B: BlockMetaInfo, T: BlockMetaTransform<B>> {
 
     called_on_start: bool,
     called_on_finish: bool,
-    input_data: Option<DataBlock>,
+    input_data: Option<B>,
     output_data: Option<DataBlock>,
     _phantom_data: PhantomData<B>,
 }
@@ -217,53 +225,60 @@ impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> Processor for BlockMetaTransfor
             return Ok(Event::Sync);
         }
 
-        match self.output.is_finished() {
-            true => self.finish_input(),
-            false if !self.output.can_push() => self.not_need_data(),
-            false => match self.output_data.take() {
-                None if self.input_data.is_some() => Ok(Event::Sync),
-                None => self.pull_data(),
-                Some(data) => {
-                    self.output.push_data(Ok(data));
-                    Ok(Event::NeedConsume)
-                }
-            },
-        }
-    }
-
-    fn process(&mut self) -> Result<()> {
-        if !self.called_on_start {
-            self.called_on_start = true;
-            self.transform.on_start()?;
-            return Ok(());
-        }
-
-        if let Some(mut data_block) = self.input_data.take() {
-            debug_assert!(data_block.is_empty());
-            if let Some(block_meta) = data_block.take_meta() {
-                if let Some(block_meta) = B::downcast_from(block_meta) {
-                    let data_block = self.transform.transform(block_meta)?;
-                    self.output_data = Some(data_block);
-                }
+        if self.output.is_finished() {
+            if !self.called_on_finish {
+                return Ok(Event::Sync);
             }
 
-            return Ok(());
+            self.input.finish();
+            return Ok(Event::Finished);
         }
 
-        if !self.called_on_finish {
-            self.called_on_finish = true;
-            self.transform.on_finish()?;
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
         }
 
-        Ok(())
-    }
-}
+        if let Some(output_data) = self.output_data.take() {
+            self.output.push_data(Ok(output_data));
+            return Ok(Event::NeedConsume);
+        }
 
-impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> BlockMetaTransformer<B, T> {
-    fn pull_data(&mut self) -> Result<Event> {
-        if self.input.has_data() {
-            self.input_data = Some(self.input.pull_data().unwrap()?);
+        if self.input_data.is_some() {
             return Ok(Event::Sync);
+        }
+
+        if self.input.has_data() {
+            let mut data_block = self.input.pull_data().unwrap()?;
+
+            if let Some(block_meta) = data_block.take_meta() {
+                if B::downcast_ref_from(&block_meta).is_some() {
+                    let block_meta = B::downcast_from(block_meta).unwrap();
+                    if data_block.num_rows() != 0 {
+                        return Err(ErrorCode::Internal("DataBlockMeta has rows"));
+                    }
+
+                    self.input_data = Some(block_meta);
+                    return Ok(Event::Sync);
+                }
+
+                data_block = data_block.add_meta(Some(block_meta))?;
+            }
+
+            match T::UNKNOWN_MODE {
+                UnknownMode::Ignore => { /* do nothing */ }
+                UnknownMode::Pass => {
+                    self.output.push_data(Ok(data_block));
+                    return Ok(Event::NeedConsume);
+                }
+                UnknownMode::Error => {
+                    return Err(ErrorCode::Internal(format!(
+                        "{} only recv {}",
+                        T::NAME,
+                        std::any::type_name::<B>()
+                    )));
+                }
+            }
         }
 
         if self.input.is_finished() {
@@ -280,18 +295,23 @@ impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> BlockMetaTransformer<B, T> {
         Ok(Event::NeedData)
     }
 
-    fn not_need_data(&mut self) -> Result<Event> {
-        self.input.set_not_need_data();
-        Ok(Event::NeedConsume)
-    }
-
-    fn finish_input(&mut self) -> Result<Event> {
-        match !self.called_on_finish {
-            true => Ok(Event::Sync),
-            false => {
-                self.input.finish();
-                Ok(Event::Finished)
-            }
+    fn process(&mut self) -> Result<()> {
+        if !self.called_on_start {
+            self.called_on_start = true;
+            self.transform.on_start()?;
+            return Ok(());
         }
+
+        if let Some(block_meta) = self.input_data.take() {
+            self.output_data = Some(self.transform.transform(block_meta)?);
+            return Ok(());
+        }
+
+        if !self.called_on_finish {
+            self.called_on_finish = true;
+            self.transform.on_finish()?;
+        }
+
+        Ok(())
     }
 }

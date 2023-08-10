@@ -23,5 +23,6 @@ mod decimal;
 mod group_by;
 mod kernel;
 mod row;
+mod schema;
 mod serde;
 mod sort;

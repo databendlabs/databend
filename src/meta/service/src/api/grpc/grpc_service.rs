@@ -19,6 +19,7 @@ use std::task::Poll;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
 use common_base::base::tokio::sync::mpsc;
+use common_base::base::tokio::time::Instant;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
 use common_meta_client::MetaGrpcReq;
@@ -159,18 +160,21 @@ impl MetaService for MetaServiceImpl {
 
     async fn kv_api(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
         let root = common_tracing::start_trace_for_remote_request(func_name!(), &r);
+
         let reply = async {
             self.check_token(r.metadata())?;
             network_metrics::incr_recv_bytes(r.get_ref().encoded_len() as u64);
             let _guard = RequestInFlight::guard();
 
             let req: MetaGrpcReq = r.try_into()?;
-            info!("Received MetaGrpcReq: {:?}", req);
+            info!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
+
+            let t0 = Instant::now();
 
             let m = &self.meta_node;
-            let reply = match req {
+            let reply = match &req {
                 MetaGrpcReq::UpsertKV(a) => {
-                    let res = m.upsert_kv(a).await;
+                    let res = m.upsert_kv(a.clone()).await;
                     RaftReply::from(res)
                 }
                 MetaGrpcReq::GetKV(a) => {
@@ -186,6 +190,9 @@ impl MetaService for MetaServiceImpl {
                     RaftReply::from(res)
                 }
             };
+
+            let elapsed = t0.elapsed();
+            info!("Handled(elapsed: {:?}) MetaGrpcReq: {:?}", elapsed, req);
 
             Ok::<_, tonic::Status>(reply)
         }
@@ -210,7 +217,7 @@ impl MetaService for MetaServiceImpl {
 
             let request = request.into_inner();
 
-            info!("Receive txn_request: {}", request);
+            info!("{}: Receive txn_request: {}", func_name!(), request);
 
             let ret = self.meta_node.transaction(request).await;
             network_metrics::incr_request_result(ret.is_ok());
@@ -293,9 +300,7 @@ impl MetaService for MetaServiceImpl {
         let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
-        let members = meta_node.get_grpc_advertise_addrs().await.map_err(|e| {
-            Status::internal(format!("Cannot get metasrv member list, error: {:?}", e))
-        })?;
+        let members = meta_node.get_grpc_advertise_addrs().await;
 
         let resp = MemberListReply { data: members };
         network_metrics::incr_sent_bytes(resp.encoded_len() as u64);

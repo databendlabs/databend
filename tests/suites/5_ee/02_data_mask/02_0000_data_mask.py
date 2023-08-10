@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
         mycursor = mydb.cursor()
         mycursor.execute(
-            "CREATE MASKING POLICY mask AS (val STRING,num int) RETURN STRING -> CASE WHEN "
+            "CREATE MASKING POLICY mask AS (val STRING,num int) RETURNS STRING -> CASE WHEN "
             "current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy';"
         )
 
@@ -63,22 +63,71 @@ if __name__ == "__main__":
 
         mycursor = mydb.cursor()
         mycursor.execute(
-            "CREATE MASKING POLICY maska AS (val int) RETURN int -> CASE WHEN "
+            "CREATE MASKING POLICY maska AS (val int) RETURNS int -> CASE WHEN "
             "current_role() IN ('ANALYST') THEN VAL ELSE 200 END comment = 'this is a masking policy';"
         )
         mycursor = mydb.cursor()
         mycursor.execute(
-            "CREATE MASKING POLICY maskb AS (val STRING) RETURN STRING -> CASE WHEN "
+            "CREATE MASKING POLICY maskb AS (val STRING) RETURNS STRING -> CASE WHEN "
             "current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy';"
         )
+        mycursor = mydb.cursor()
+        mycursor.execute(
+            "CREATE MASKING POLICY maskc AS (val int) RETURNS int -> CASE WHEN "
+            "current_role() IN ('ANALYST') THEN VAL ELSE 111 END comment = 'this is a masking policy';"
+        )
 
+        # set column a masking policy
         sql = " alter table data_mask_test modify column b set masking policy maskb"
         mycursor.execute(sql)
         mycursor.execute("select * from data_mask_test")
         data = mycursor.fetchall()
         print(data)
 
+        # set column b masking policy
         sql = " alter table data_mask_test modify column a set masking policy maska"
+        mycursor.execute(sql)
+        mycursor.execute("select * from data_mask_test")
+        data = mycursor.fetchall()
+        print(data)
+
+        # unset column a masking policy
+        sql = " alter table data_mask_test modify column a unset masking policy"
+        mycursor.execute(sql)
+        mycursor.execute("select * from data_mask_test")
+        data = mycursor.fetchall()
+        print(data)
+
+        # set column a masking policy to maska
+        sql = " alter table data_mask_test modify column a set masking policy maska"
+        mycursor.execute(sql)
+        mycursor.execute("select * from data_mask_test")
+        data = mycursor.fetchall()
+        print(data)
+
+        # set column a masking policy from maska to maskc
+        sql = " alter table data_mask_test modify column a set masking policy maskc"
+        mycursor.execute(sql)
+        mycursor.execute("select * from data_mask_test")
+        data = mycursor.fetchall()
+        print(data)
+
+        # drop masking policy maska
+        sql = " drop MASKING POLICY if exists maska"
+        mycursor.execute(sql)
+        mycursor.execute("select * from data_mask_test")
+        data = mycursor.fetchall()
+        print(data)
+
+        # drop masking policy maskb
+        sql = " drop MASKING POLICY if exists maskb"
+        mycursor.execute(sql)
+        mycursor.execute("select * from data_mask_test")
+        data = mycursor.fetchall()
+        print(data)
+
+        # drop masking policy maskc
+        sql = " drop MASKING POLICY if exists maskc"
         mycursor.execute(sql)
         mycursor.execute("select * from data_mask_test")
         data = mycursor.fetchall()

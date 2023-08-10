@@ -15,7 +15,10 @@
 pub use v0::ColumnMeta as SingleColumnMeta;
 pub use v1::TableSnapshotStatistics;
 pub use v2::BlockMeta;
+pub use v2::ClusterStatistics;
 pub use v2::ColumnMeta;
+pub use v2::ColumnStatistics;
+pub use v2::Statistics;
 pub use v4::CompactSegmentInfo;
 pub use v4::SegmentInfo;
 pub use v4::TableSnapshot;

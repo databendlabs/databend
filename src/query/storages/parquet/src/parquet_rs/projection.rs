@@ -106,7 +106,7 @@ pub fn project_column_nodes<'a>(
     Ok(column_nodes)
 }
 
-fn project_parquet_schema(schema: &SchemaDescPtr, projection: &Projection) -> SchemaDescPtr {
+fn project_parquet_schema(schema: &SchemaDescriptor, projection: &Projection) -> SchemaDescPtr {
     let fields = schema.root_schema().get_fields();
     let mut fields = match projection {
         Projection::Columns(indices) => indices
@@ -182,7 +182,7 @@ fn traverse_paths_parquet_schema(
 #[allow(clippy::type_complexity)]
 pub fn project_schema_all(
     schema: &Schema,
-    schema_descr: &SchemaDescPtr,
+    schema_descr: &SchemaDescriptor,
     projection: &Projection,
 ) -> Result<(
     Schema,

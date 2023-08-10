@@ -18,3 +18,9 @@ CONNECTION=(
 EOF
 
 echo "SELECT count(*) FROM iceberg_ctl.iceberg_db.iceberg_tbl;" | $MYSQL_CLIENT_CONNECT
+
+echo "SELECT * FROM iceberg_ctl.iceberg_db.iceberg_tbl WHERE id = 5;" | $MYSQL_CLIENT_CONNECT
+
+echo "SELECT data FROM iceberg_ctl.iceberg_db.iceberg_tbl WHERE id > 3 ORDER BY id;" | $MYSQL_CLIENT_CONNECT
+
+echo "SELECT data FROM iceberg_ctl.iceberg_db.iceberg_tbl WHERE id > 3 ORDER BY data;" | $MYSQL_CLIENT_CONNECT

@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::buffer::Buffer;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -239,26 +241,8 @@ impl BloomIndex {
                 }
             };
 
-            let (column, validity) = if data_type.is_nullable() {
-                let col = Self::calculate_column_digest(
-                    &func_ctx,
-                    &column,
-                    &data_type,
-                    &DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                )?;
-                let nullable_column =
-                    NullableType::<UInt64Type>::try_downcast_column(&col).unwrap();
-                (nullable_column.column, Some(nullable_column.validity))
-            } else {
-                let col = Self::calculate_column_digest(
-                    &func_ctx,
-                    &column,
-                    &data_type,
-                    &DataType::Number(NumberDataType::UInt64),
-                )?;
-                let column = UInt64Type::try_downcast_column(&col).unwrap();
-                (column, None)
-            };
+            let (column, validity) =
+                Self::calculate_nullable_column_digest(&func_ctx, &column, &data_type)?;
 
             // create filter per column
             let mut filter_builder = Xor8Builder::create();
@@ -379,6 +363,36 @@ impl BloomIndex {
         Ok(column)
     }
 
+    /// calculate digest for column that may have null values
+    ///
+    /// returns (column, validity) where column is the digest of the column
+    /// and validity is the optional bitmap of the null values
+    pub fn calculate_nullable_column_digest(
+        func_ctx: &FunctionContext,
+        column: &Column,
+        data_type: &DataType,
+    ) -> Result<(Buffer<u64>, Option<Bitmap>)> {
+        Ok(if data_type.is_nullable() {
+            let col = Self::calculate_column_digest(
+                func_ctx,
+                column,
+                data_type,
+                &DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+            )?;
+            let nullable_column = NullableType::<UInt64Type>::try_downcast_column(&col).unwrap();
+            (nullable_column.column, Some(nullable_column.validity))
+        } else {
+            let col = Self::calculate_column_digest(
+                func_ctx,
+                column,
+                data_type,
+                &DataType::Number(NumberDataType::UInt64),
+            )?;
+            let column = UInt64Type::try_downcast_column(&col).unwrap();
+            (column, None)
+        })
+    }
+
     /// calculate digest for constant scalar
     pub fn calculate_scalar_digest(
         func_ctx: &FunctionContext,
@@ -452,10 +466,9 @@ impl BloomIndex {
             let data_value = scalar_to_datavalue(target);
             filter.contains(&data_value)
         } else {
-            match scalar_map.get(target) {
-                Some(digest) => filter.contains_digest(*digest),
-                None => true,
-            }
+            scalar_map
+                .get(target)
+                .map_or(true, |digest| filter.contains_digest(*digest))
         };
 
         if contains {
@@ -466,14 +479,19 @@ impl BloomIndex {
     }
 
     pub fn supported_type(data_type: &TableDataType) -> bool {
-        let mut data_type = DataType::from(data_type);
+        let data_type = DataType::from(data_type);
+        Self::supported_data_type(&data_type)
+    }
+
+    pub fn supported_data_type(data_type: &DataType) -> bool {
+        let mut data_type = data_type;
         if let DataType::Map(box inner_ty) = data_type {
             data_type = match inner_ty {
-                DataType::Tuple(kv_tys) => kv_tys[1].clone(),
+                DataType::Tuple(kv_tys) => &kv_tys[1],
                 _ => unreachable!(),
             };
         }
-        Xor8Filter::supported_type(&data_type)
+        Xor8Filter::supported_type(data_type)
     }
 
     /// Checks if the average length of a string column exceeds 256 bytes.

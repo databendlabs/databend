@@ -65,6 +65,14 @@ impl Identifier {
             span: Span::default(),
         }
     }
+
+    pub fn from_name_with_quoted(name: impl Into<String>, quote: Option<char>) -> Self {
+        Self {
+            name: name.into(),
+            quote,
+            span: Span::default(),
+        }
+    }
 }
 
 impl Display for Identifier {

@@ -1,13 +1,21 @@
-statement error 2302
-create table test as
+statement ok
+create table test_timestamp as
 select '2021-02-04 19:30:00'::timestamp t
 
-statement error 1065
-select *
-from test
-where (t::date) = '2021-02-04'::date
 
-statement error 1065
+query T
 select *
-from test
+from test_timestamp
+where (t::date) = '2021-02-04'::date
+----
+2021-02-04 19:30:00.000000
+
+query T
+select *
+from test_timestamp
 where (t::date) = '2021-02-04'
+----
+2021-02-04 19:30:00.000000
+
+statement ok
+drop table test_timestamp

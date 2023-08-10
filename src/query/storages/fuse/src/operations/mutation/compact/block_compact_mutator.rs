@@ -222,9 +222,9 @@ impl BlockCompactMutator {
                     } else if b.cluster_key_id != default_cluster_key {
                         Ordering::Greater
                     } else {
-                        let ord = a.min.cmp(&b.min);
+                        let ord = a.min().cmp(&b.min());
                         if ord == Ordering::Equal {
-                            a.max.cmp(&b.max)
+                            a.max().cmp(&b.max())
                         } else {
                             ord
                         }

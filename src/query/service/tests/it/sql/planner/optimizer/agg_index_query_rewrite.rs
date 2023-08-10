@@ -454,11 +454,7 @@ async fn plan_sql(
     } = plan
     {
         let s_expr = if optimize {
-            let optimizer = HeuristicOptimizer::new(
-                ctx.get_function_context()?,
-                &bind_context,
-                metadata.clone(),
-            );
+            let optimizer = HeuristicOptimizer::new(ctx.get_function_context()?, metadata.clone());
             optimizer.optimize(*s_expr, &DEFAULT_REWRITE_RULES)?
         } else {
             *s_expr

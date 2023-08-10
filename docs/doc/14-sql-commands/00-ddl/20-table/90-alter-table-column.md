@@ -1,20 +1,26 @@
 ---
 title: ALTER TABLE COLUMN
-description:
-  Adds or drops a column of a table.
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced: v1.2.8"/>
+<FunctionDescription description="Introduced or updated: v1.2.50"/>
 
-Modifies a table by adding, converting, renaming, or removing a column.
+import EEFeature from '@site/src/components/EEFeature';
+
+<EEFeature featureName='MASKING POLICY'/>
+
+Modifies a table by adding, converting, renaming, changing, or removing a column.
 
 ## Syntax
 
 ```sql
--- Add a column
+-- Add a column to the end of the table
 ALTER TABLE [IF EXISTS] [database.]<table_name> 
 ADD COLUMN <column_name> <data_type> [NOT NULL | NULL] [DEFAULT <constant_value>];
+
+-- Add a column to a specified position
+ALTER TABLE [IF EXISTS] [database.]<table_name> 
+ADD COLUMN <column_name> <data_type> [NOT NULL | NULL] [DEFAULT <constant_value>] [FIRST | AFTER <column_name>]
 
 -- Add a virtual computed column
 ALTER TABLE [IF EXISTS] [database.]<table_name> 
@@ -28,6 +34,17 @@ MODIFY COLUMN <column_name> DROP STORED;
 ALTER TABLE [IF EXISTS] [database.]<table_name>
 RENAME COLUMN <column_name> TO <new_column_name>;
 
+-- Change the data type of one or multiple columns
+ALTER TABLE [IF EXISTS] [database.]<table_name> 
+MODIFY COLUMN <column_name> <new_data_type>[, COLUMN <column_name> <new_data_type>, ...]
+
+-- Set / Unset masking policy for a column
+ALTER TABLE [IF EXISTS] [database.]<table_name>
+MODIFY COLUMN <column_name> SET MASKING POLICY <policy_name>
+
+ALTER TABLE [IF EXISTS] [database.]<table_name>
+MODIFY COLUMN <column_name> UNSET MASKING POLICY
+
 -- Remove a column
 ALTER TABLE [IF EXISTS] [database.]<table_name> 
 DROP COLUMN <column_name>;
@@ -36,38 +53,80 @@ DROP COLUMN <column_name>;
 :::note
 - Only a constant value can be accepted as a default value when adding a new column. If a non-constant expression is used, an error will occur.
 - Adding a stored computed column with ALTER TABLE is not supported yet.
+- When you change the data type of a table's columns, there's a risk of conversion errors. For example, if you try to convert a column with text (String) to numbers (Float), it might cause problems.
+- When you set a masking policy for a column, make sure that the data type (refer to the parameter *arg_type_to_mask* in the syntax of [CREATE MASKING POLICY](../102-mask-policy/create-mask-policy.md)) defined in the policy matches the column.
 :::
 
 ## Examples
 
 ### Example 1: Adding, Renaming, and Removing a Column
 
-This example illustrates the creation of a table called "default.users" with columns for id, username, email, and age. It showcases the addition of columns for business_email, middle_name, and phone_number with various constraints. The example also demonstrates the renaming and subsequent removal of the "age" column.
+This example illustrates the creation of a table called "default.users" with columns 'username', 'email', and 'age'. It showcases the addition of columns 'id' and 'middle_name' with various constraints. The example also demonstrates the renaming and subsequent removal of the "age" column.
 
 ```sql
 -- Create a table
 CREATE TABLE default.users (
-  id INT,
   username VARCHAR(50) NOT NULL,
   email VARCHAR(255),
   age INT
 );
 
--- Add a column with a default value
+-- Add a column to the end of the table
 ALTER TABLE default.users
 ADD COLUMN business_email VARCHAR(255) NOT NULL DEFAULT 'example@example.com';
 
--- Add a column allowing NULL values
-ALTER TABLE default.users
-ADD COLUMN middle_name VARCHAR(50) NULL;
+DESC default.users;
 
--- Add a column with NOT NULL constraint
+Field         |Type   |Null|Default              |Extra|
+--------------+-------+----+---------------------+-----+
+username      |VARCHAR|NO  |''                   |     |
+email         |VARCHAR|NO  |''                   |     |
+age           |INT    |NO  |0                    |     |
+business_email|VARCHAR|NO  |'example@example.com'|     |
+
+-- Add a column to the beginning of the table
 ALTER TABLE default.users
-ADD COLUMN phone_number VARCHAR(20) NOT NULL;
+ADD COLUMN id int NOT NULL FIRST;
+
+DESC default.users;
+
+Field         |Type   |Null|Default              |Extra|
+--------------+-------+----+---------------------+-----+
+id            |INT    |NO  |0                    |     |
+username      |VARCHAR|NO  |''                   |     |
+email         |VARCHAR|NO  |''                   |     |
+age           |INT    |NO  |0                    |     |
+business_email|VARCHAR|NO  |'example@example.com'|     |
+
+-- Add a column after the column 'username'
+ALTER TABLE default.users
+ADD COLUMN middle_name VARCHAR(50) NULL AFTER username;
+
+DESC default.users;
+
+Field         |Type   |Null|Default              |Extra|
+--------------+-------+----+---------------------+-----+
+id            |INT    |NO  |0                    |     |
+username      |VARCHAR|NO  |''                   |     |
+middle_name   |VARCHAR|YES |NULL                 |     |
+email         |VARCHAR|NO  |''                   |     |
+age           |INT    |NO  |0                    |     |
+business_email|VARCHAR|NO  |'example@example.com'|     |
 
 -- Rename a column
 ALTER TABLE default.users
 RENAME COLUMN age TO new_age;
+
+DESC default.users;
+
+Field         |Type   |Null|Default              |Extra|
+--------------+-------+----+---------------------+-----+
+id            |INT    |NO  |0                    |     |
+username      |VARCHAR|NO  |''                   |     |
+middle_name   |VARCHAR|YES |NULL                 |     |
+email         |VARCHAR|NO  |''                   |     |
+new_age       |INT    |NO  |0                    |     |
+business_email|VARCHAR|NO  |'example@example.com'|     |
 
 -- Remove a column
 ALTER TABLE default.users
@@ -79,10 +138,9 @@ Field         |Type   |Null|Default              |Extra|
 --------------+-------+----+---------------------+-----+
 id            |INT    |NO  |0                    |     |
 username      |VARCHAR|NO  |''                   |     |
+middle_name   |VARCHAR|YES |NULL                 |     |
 email         |VARCHAR|NO  |''                   |     |
 business_email|VARCHAR|NO  |'example@example.com'|     |
-middle_name   |VARCHAR|YES |NULL                 |     |
-phone_number  |VARCHAR|NO  |''                   |     |
 ```
 
 ### Example 2: Adding a Computed Column
@@ -131,4 +189,78 @@ CREATE TABLE IF NOT EXISTS products (
 
 ALTER TABLE products
 MODIFY COLUMN total_price DROP STORED;
+```
+
+### Example 4: Changing Data Type of a Column
+
+This example creates a table named "students_info" with columns for "id," "name," and "age," inserts some sample data, and then modifies the data type of the "age" column from INT to VARCHAR(10).
+
+```sql
+CREATE TABLE students_info (
+  id INT,
+  name VARCHAR(50),
+  age INT
+);
+
+INSERT INTO students_info VALUES
+  (1, 'John Doe', 25),
+  (2, 'Jane Smith', 28),
+  (3, 'Michael Johnson', 22);
+
+ALTER TABLE students_info MODIFY COLUMN age VARCHAR(10);
+
+SELECT * FROM students_info;
+
+id|name           |age|
+--+---------------+---+
+ 1|John Doe       |25 |
+ 2|Jane Smith     |28 |
+ 3|Michael Johnson|22 |
+```
+
+### Example 5: Setting Masking Policy a Column
+
+This example illustrates the process of setting up a masking policy to selectively reveal or mask sensitive data based on user roles.
+
+```sql
+-- Create a table and insert sample data
+CREATE TABLE user_info (
+    id INT,
+    email STRING
+);
+
+INSERT INTO user_info (id, email) VALUES (1, 'sue@example.com');
+INSERT INTO user_info (id, email) VALUES (2, 'eric@example.com');
+
+-- Create a role
+CREATE ROLE 'MANAGERS';
+GRANT ALL ON *.* TO ROLE 'MANAGERS';
+
+-- Create a user and grant the role to the user
+CREATE USER manager_user IDENTIFIED BY 'databend';
+GRANT ROLE 'MANAGERS' TO 'manager_user';
+
+-- Create a masking policy
+CREATE MASKING POLICY email_mask
+AS
+  (val string)
+  RETURNS string ->
+  CASE
+  WHEN current_role() IN ('MANAGERS') THEN
+    val
+  ELSE
+    '*********'
+  END
+  COMMENT = 'hide_email';
+
+-- Associate the masking policy with the 'email' column
+ALTER TABLE user_info MODIFY COLUMN email SET MASKING POLICY email_mask;
+
+-- Query with the Root user
+SELECT * FROM user_info;
+
+id|email    |
+--+---------+
+ 2|*********|
+ 1|*********|
 ```

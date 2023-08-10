@@ -189,7 +189,7 @@ impl DPhpy {
                     };
                     self.filters.insert(filter);
                 }
-                if !is_inner_join || (left_is_subquery && right_is_subquery) {
+                if !is_inner_join {
                     let (new_s_expr, optimized) = self.new_children(s_expr)?;
                     self.join_relations.push(JoinRelation::new(&new_s_expr));
                     Ok((new_s_expr, optimized))
@@ -256,6 +256,7 @@ impl DPhpy {
             | RelOperator::Pattern(_)
             | RelOperator::RuntimeFilterSource(_) => unreachable!(),
             RelOperator::DummyTableScan(_)
+            | RelOperator::ConstantTableScan(_)
             | RelOperator::CteScan(_)
             | RelOperator::MaterializedCte(_) => Ok((s_expr, true)),
         }

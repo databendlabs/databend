@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::iter::TrustedLen;
+use std::sync::atomic::Ordering;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -33,18 +34,55 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         match self.hash_join_desc.join_type {
-            JoinType::Inner => self.probe_inner_join(hash_table, probe_state, keys_iter, input),
+            JoinType::Inner => self.probe_inner_join(
+                hash_table,
+                probe_state,
+                keys_iter,
+                input,
+                is_probe_projected,
+            ),
             JoinType::LeftSemi => {
-                self.probe_left_semi_join(hash_table, probe_state, keys_iter, input)
+                if self.hash_join_desc.other_predicate.is_none() {
+                    self.left_semi_anti_join::<true, _, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
+                        input,
+                    )
+                } else {
+                    self.left_semi_anti_join_with_conjunct::<true, _, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
+                        input,
+                        is_probe_projected,
+                    )
+                }
             }
             JoinType::LeftAnti => {
-                self.probe_left_anti_semi_join(hash_table, probe_state, keys_iter, input)
+                if self.hash_join_desc.other_predicate.is_none() {
+                    self.left_semi_anti_join::<false, _, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
+                        input,
+                    )
+                } else {
+                    self.left_semi_anti_join_with_conjunct::<false, _, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
+                        input,
+                        is_probe_projected,
+                    )
+                }
             }
             JoinType::RightSemi => {
                 if self.hash_join_desc.other_predicate.is_none() {
@@ -55,6 +93,7 @@ impl JoinHashTable {
                         probe_state,
                         keys_iter,
                         input,
+                        is_probe_projected,
                     )
                 }
             }
@@ -67,25 +106,37 @@ impl JoinHashTable {
                         probe_state,
                         keys_iter,
                         input,
+                        is_probe_projected,
                     )
                 }
             }
             // Single join is similar to left join, but the result is a single row.
             JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    self.probe_left_join::<_, _>(hash_table, probe_state, keys_iter, input)
+                    self.probe_left_join::<_, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
+                        input,
+                        is_probe_projected,
+                    )
                 } else {
                     self.probe_left_join_with_conjunct::<_, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
                         input,
+                        is_probe_projected,
                     )
                 }
             }
-            JoinType::Right | JoinType::RightSingle => {
-                self.probe_right_join::<_, _>(hash_table, probe_state, keys_iter, input)
-            }
+            JoinType::Right | JoinType::RightSingle => self.probe_right_join::<_, _>(
+                hash_table,
+                probe_state,
+                keys_iter,
+                input,
+                is_probe_projected,
+            ),
             // Three cases will produce Mark join:
             // 1. uncorrelated ANY subquery: only have one kind of join condition, equi-condition or non-equi-condition.
             // 2. correlated ANY subquery: must have two kinds of join condition, one is equi-condition and the other is non-equi-condition.
@@ -103,15 +154,23 @@ impl JoinHashTable {
                     probe_state,
                     keys_iter,
                     input,
+                    is_probe_projected,
                 ),
             },
             JoinType::RightMark => match self.hash_join_desc.other_predicate.is_none() {
-                true => self.probe_right_mark_join(hash_table, probe_state, keys_iter, input),
+                true => self.probe_right_mark_join(
+                    hash_table,
+                    probe_state,
+                    keys_iter,
+                    input,
+                    is_probe_projected,
+                ),
                 false => self.probe_right_mark_join_with_conjunct(
                     hash_table,
                     probe_state,
                     keys_iter,
                     input,
+                    is_probe_projected,
                 ),
             },
             _ => Err(ErrorCode::Unimplemented(format!(
@@ -121,23 +180,40 @@ impl JoinHashTable {
         }
     }
 
-    pub(crate) fn left_fast_return(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
+    pub(crate) fn left_fast_return(
+        &self,
+        input: DataBlock,
+        is_probe_projected: bool,
+    ) -> Result<Vec<DataBlock>> {
         if self.hash_join_desc.join_type == JoinType::LeftAnti {
-            return Ok(vec![input.clone()]);
+            return Ok(vec![input]);
         }
-        let null_build_block = DataBlock::new(
-            self.row_space
-                .data_schema
-                .fields()
-                .iter()
-                .map(|df| BlockEntry {
-                    data_type: df.data_type().clone(),
-                    value: Value::Scalar(Scalar::Null),
-                })
-                .collect(),
-            input.num_rows(),
-        );
+        let input_num_rows = input.num_rows();
+        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
+        let probe_block = if is_probe_projected {
+            Some(input)
+        } else {
+            None
+        };
+        let build_block = if is_build_projected {
+            let null_build_block = DataBlock::new(
+                self.row_space
+                    .build_schema
+                    .fields()
+                    .iter()
+                    .map(|df| BlockEntry {
+                        data_type: df.data_type().clone(),
+                        value: Value::Scalar(Scalar::Null),
+                    })
+                    .collect(),
+                input_num_rows,
+            );
+            Some(null_build_block)
+        } else {
+            None
+        };
+        let result_block = self.merge_eq_block(probe_block, build_block, input_num_rows);
 
-        Ok(vec![self.merge_eq_block(&null_build_block, input)?])
+        Ok(vec![result_block])
     }
 }
