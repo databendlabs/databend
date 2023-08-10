@@ -301,6 +301,19 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn merge_block(&mut self, block: DataBlock) {
+        self.columns.reserve(block.num_columns());
+        for column in block.columns.into_iter() {
+            #[cfg(debug_assertions)]
+            if let Value::Column(col) = &column.value {
+                assert_eq!(self.num_rows, col.len());
+                assert_eq!(col.data_type(), column.data_type);
+            }
+            self.columns.push(column);
+        }
+    }
+
+    #[inline]
     pub fn add_column(&mut self, entry: BlockEntry) {
         #[cfg(debug_assertions)]
         if let Value::Column(col) = &entry.value {
@@ -509,6 +522,36 @@ impl DataBlock {
         }
 
         Ok(DataBlock::new(columns, num_rows))
+    }
+
+    #[inline]
+    pub fn project(mut self, projections: &HashSet<usize>) -> Self {
+        let mut columns = Vec::with_capacity(projections.len());
+        for (index, column) in self.columns.into_iter().enumerate() {
+            if !projections.contains(&index) {
+                continue;
+            }
+            columns.push(column);
+        }
+        self.columns = columns;
+        self
+    }
+
+    #[inline]
+    pub fn project_with_agg_index(
+        self,
+        projections: &HashSet<usize>,
+        agg_functions_len: usize,
+    ) -> Self {
+        let mut columns = Vec::with_capacity(projections.len());
+        let agg_functions_offset = self.columns.len() - agg_functions_len;
+        for (index, column) in self.columns.into_iter().enumerate() {
+            if !projections.contains(&index) && index < agg_functions_offset {
+                continue;
+            }
+            columns.push(column);
+        }
+        DataBlock::new_with_meta(columns, self.num_rows, self.meta)
     }
 }
 

@@ -81,7 +81,7 @@ pub struct PartitionPruner {
     pub max_memory_usage: u64,
 }
 
-fn check_parquet_schema(
+pub fn check_parquet_schema(
     expect: &SchemaDescriptor,
     actual: &SchemaDescriptor,
     path: &str,

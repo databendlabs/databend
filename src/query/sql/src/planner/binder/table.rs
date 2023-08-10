@@ -36,7 +36,7 @@ use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::StageTableInfo;
-use common_catalog::table::ColumnStatistics;
+use common_catalog::statistics::BasicColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
@@ -1083,8 +1083,7 @@ impl Binder {
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let table = self.metadata.read().table(table_index).clone();
         let statistics_provider = table.table().column_statistics_provider().await?;
-
-        let mut col_stats: HashMap<IndexType, Option<ColumnStatistics>> = HashMap::new();
+        let mut col_stats: HashMap<IndexType, Option<BasicColumnStatistics>> = HashMap::new();
         for column in columns.iter() {
             match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn {

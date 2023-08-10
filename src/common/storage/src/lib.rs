@@ -62,3 +62,7 @@ pub use stage::init_stage_operator;
 pub use stage::StageFileInfo;
 pub use stage::StageFileStatus;
 pub use stage::StageFilesInfo;
+
+mod statistics;
+pub use statistics::Datum;
+pub use statistics::F64;

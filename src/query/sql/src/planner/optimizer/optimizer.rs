@@ -35,7 +35,6 @@ use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::optimizer::RESIDUAL_RULES;
 use crate::plans::CopyPlan;
 use crate::plans::Plan;
-use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -69,13 +68,7 @@ pub fn optimize(
             formatted_ast,
             ignore_result,
         } => Ok(Plan::Query {
-            s_expr: Box::new(optimize_query(
-                ctx,
-                opt_ctx,
-                metadata.clone(),
-                bind_context.clone(),
-                *s_expr,
-            )?),
+            s_expr: Box::new(optimize_query(ctx, opt_ctx, metadata.clone(), *s_expr)?),
             bind_context,
             metadata,
             rewrite_kind,
@@ -90,16 +83,11 @@ pub fn optimize(
                 if let box Plan::Query {
                     ref s_expr,
                     ref metadata,
-                    ref bind_context,
                     ..
                 } = plan
                 {
-                    let (memo, cost_map) = get_optimized_memo(
-                        ctx,
-                        *s_expr.clone(),
-                        metadata.clone(),
-                        bind_context.clone(),
-                    )?;
+                    let (memo, cost_map) =
+                        get_optimized_memo(ctx, *s_expr.clone(), metadata.clone())?;
                     Ok(Plan::Explain {
                         kind: ExplainKind::Memo(display_memo(&memo, &cost_map)?),
                         plan,
@@ -156,21 +144,20 @@ pub fn optimize_query(
     ctx: Arc<dyn TableContext>,
     opt_ctx: Arc<OptimizerContext>,
     metadata: MetadataRef,
-    bind_context: Box<BindContext>,
     s_expr: SExpr,
 ) -> Result<SExpr> {
     let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
 
-    let heuristic =
-        HeuristicOptimizer::new(ctx.get_function_context()?, &bind_context, metadata.clone());
-    let mut result = heuristic.optimize(s_expr, &DEFAULT_REWRITE_RULES)?;
+    let heuristic = HeuristicOptimizer::new(ctx.get_function_context()?, metadata.clone());
+    let mut result = heuristic.pre_optimize(s_expr)?;
+    result = heuristic.optimize_expression(&result, &DEFAULT_REWRITE_RULES)?;
     let mut dphyp_optimized = false;
     if ctx.get_settings().get_enable_dphyp()? {
         let (dp_res, optimized) =
             DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result.clone()))?;
         if optimized {
+            result = (*dp_res).clone();
             dphyp_optimized = true;
-            result = heuristic.optimize_expression(&dp_res, &RESIDUAL_RULES)?;
         }
     }
     let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, dphyp_optimized)?;
@@ -189,7 +176,7 @@ pub fn optimize_query(
     if enable_distributed_query {
         result = optimize_distributed_query(ctx.clone(), &result)?;
     }
-
+    result = heuristic.optimize_expression(&result, &RESIDUAL_RULES)?;
     Ok(result)
 }
 
@@ -198,10 +185,8 @@ fn get_optimized_memo(
     ctx: Arc<dyn TableContext>,
     s_expr: SExpr,
     metadata: MetadataRef,
-    bind_context: Box<BindContext>,
 ) -> Result<(Memo, HashMap<IndexType, CostContext>)> {
-    let heuristic =
-        HeuristicOptimizer::new(ctx.get_function_context()?, &bind_context, metadata.clone());
+    let heuristic = HeuristicOptimizer::new(ctx.get_function_context()?, metadata.clone());
     let result = heuristic.optimize(s_expr, &DEFAULT_REWRITE_RULES)?;
 
     let mut cascades = CascadesOptimizer::create(ctx, metadata, false)?;

@@ -18,14 +18,11 @@ use common_exception::Result;
 use common_expression::FunctionContext;
 use once_cell::sync::Lazy;
 
-use super::prune_unused_columns::UnusedColumnPruner;
 use crate::optimizer::heuristic::decorrelate::decorrelate_subquery;
 use crate::optimizer::rule::TransformResult;
-use crate::optimizer::ColumnSet;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::BindContext;
 use crate::MetadataRef;
 
 pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
@@ -61,51 +58,27 @@ pub static RESIDUAL_RULES: Lazy<Vec<RuleID>> =
 
 /// A heuristic query optimizer. It will apply specific transformation rules in order and
 /// implement the logical plans with default implementation rules.
-pub struct HeuristicOptimizer<'a> {
+pub struct HeuristicOptimizer {
     func_ctx: FunctionContext,
-    bind_context: &'a BindContext,
     metadata: MetadataRef,
 }
 
-impl<'a> HeuristicOptimizer<'a> {
-    pub fn new(
-        func_ctx: FunctionContext,
-        bind_context: &'a BindContext,
-        metadata: MetadataRef,
-    ) -> Self {
-        HeuristicOptimizer {
-            func_ctx,
-            bind_context,
-            metadata,
-        }
+impl HeuristicOptimizer {
+    pub fn new(func_ctx: FunctionContext, metadata: MetadataRef) -> Self {
+        HeuristicOptimizer { func_ctx, metadata }
     }
 
-    fn pre_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn pre_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
         let mut s_expr = s_expr;
         if s_expr.contain_subquery() {
             s_expr = decorrelate_subquery(self.metadata.clone(), s_expr)?;
         }
-
-        // always pruner the unused columns before and after optimization
-        // Don't consider lazy columns pruning in pre optimize, because the order of each operator is not determined.
-        let mut pruner = UnusedColumnPruner::new(self.metadata.clone(), false);
-        let require_columns: ColumnSet = self.bind_context.column_set();
-        pruner.remove_unused_columns(&s_expr, require_columns)
-    }
-
-    fn post_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
-        // Consider lazy columns pruning in post optimize
-        let mut pruner = UnusedColumnPruner::new(self.metadata.clone(), true);
-        let require_columns: ColumnSet = self.bind_context.column_set();
-        pruner.remove_unused_columns(&s_expr, require_columns)
+        Ok(s_expr)
     }
 
     pub fn optimize(&self, s_expr: SExpr, rules: &[RuleID]) -> Result<SExpr> {
         let pre_optimized = self.pre_optimize(s_expr)?;
-        let optimized = self.optimize_expression(&pre_optimized, rules)?;
-        let post_optimized = self.post_optimize(optimized)?;
-
-        Ok(post_optimized)
+        self.optimize_expression(&pre_optimized, rules)
     }
 
     pub fn optimize_expression(&self, s_expr: &SExpr, rules: &[RuleID]) -> Result<SExpr> {

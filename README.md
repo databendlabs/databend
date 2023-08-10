@@ -124,14 +124,44 @@ docker run --net=host  datafuselabs/databend
 <details>
 <summary>Loading Data into Databend</summary>
 
-- [How to Load Data from Local File System](https://databend.rs/doc/load-data/load/local)
+- [How to Load Data from Local File](https://databend.rs/doc/load-data/load/local)
+- [How to Load Data from Bucket](https://databend.rs/doc/load-data/load/s3)
+- [How to Load Data from Stage](https://databend.rs/doc/load-data/load/stage)
 - [How to Load Data from Remote Files](https://databend.rs/doc/load-data/load/http)
-- [How to Load Data from Amazon S3](https://databend.rs/doc/load-data/load/s3)
-- [How to Load Data from Databend Stages](https://databend.rs/doc/load-data/load/stage)
 - [Querying Data in Staged Files](https://databend.rs/doc/load-data/transform/querying-stage)
 - [Transforming Data During a Load](https://databend.rs/doc/load-data/transform/data-load-transform)
 - [How to Unload Data from Databend](https://databend.rs/doc/load-data/unload)
+ 
 </details>
+
+<details>
+<summary>Loading Data Tools with Databend</summary>
+
+- [Apache Kafka](https://databend.rs/doc/load-data/load-db/kafka)
+- [Airbyte](https://databend.rs/doc/load-data/load-db/airbyte)
+- [dbt](https://databend.rs/doc/load-data/load-db/dbt)
+- [Debezium](https://databend.rs/doc/load-data/load-db/debezium)
+- [Apache Flink CDC](https://databend.rs/doc/load-data/load-db/flink-cdc)
+- [DataDog Vector](https://databend.rs/doc/load-data/load-db/vector)
+- [Addax](https://databend.rs/doc/load-data/load-db/addax)
+- [DataX](https://databend.rs/doc/load-data/load-db/datax)
+
+</details>
+
+<details>
+<summary>Visualize Tools with Databend</summary>
+
+- [Metabase](https://databend.rs/doc/integrations/metabase)
+- [Tableau](https://databend.rs/doc/integrations/tableau)
+- [Grafana](https://databend.rs/doc/integrations/grafana)
+- [Jupyter Notebook](https://databend.rs/doc/integrations/jupyter)
+- [Deepnote](https://databend.rs/doc/integrations/deepnote)
+- [MindsDB](https://databend.rs/doc/integrations/mindsdb)
+- [Redash](https://databend.rs/doc/integrations/redash)
+
+</details>
+
+
 
 <details>
 <summary>Managing Users</summary>
@@ -189,6 +219,24 @@ docker run --net=host  datafuselabs/databend
 - [Computing Text Similarities](https://databend.rs/doc/sql-functions/ai-functions/ai-cosine-distance)
 - [Text Completion with AI](https://databend.rs/doc/sql-functions/ai-functions/ai-text-completion)
 </details>
+
+<details>
+<summary>Data Governance</summary>
+
+- [How to Create Data Masking Policy](https://databend.rs/doc/sql-commands/ddl/mask-policy/create-mask-policy)
+- [How to Drop Data Masking Policy](https://databend.rs/doc/sql-commands/ddl/mask-policy/drop-mask-policy)
+ 
+</details>
+
+<details>
+<summary>Securing Databend</summary>
+
+- [How to Create Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-create-policy)
+- [How to Drop Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-drop-policy)
+- [How to Alter Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-alter-policy)
+
+</details>
+
 
 <details>
 <summary>Performance</summary>
