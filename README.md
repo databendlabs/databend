@@ -1,4 +1,4 @@
-<h1 align="center">Pioneering Cloud (Data+AI) Analytics</h1>
+<h1 align="center">The Future of Cloud [Data+AI] Analytics</h1>
 
 <div align="center">
 
