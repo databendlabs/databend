@@ -23,6 +23,7 @@ use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 
 use crate::plan::datasource::datasource_info::parquet_read_options::ParquetReadOptions;
+use crate::table::Parquet2TableColumnStatisticsProvider;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct Parquet2TableInfo {
@@ -36,6 +37,8 @@ pub struct Parquet2TableInfo {
     pub files_to_read: Option<Vec<StageFileInfo>>,
     pub schema_from: String,
     pub compression_ratio: f64,
+
+    pub column_statistics_provider: Parquet2TableColumnStatisticsProvider,
 }
 
 impl Parquet2TableInfo {

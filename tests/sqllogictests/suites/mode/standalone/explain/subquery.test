@@ -215,7 +215,7 @@ EvalScalar
     ├── filters: []
     ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── expressions: [numbers.number (#1), numbers.number (#1)]
+    │   ├── expressions: [numbers.number (#1)]
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.system.numbers
@@ -247,7 +247,7 @@ EvalScalar
     ├── filters: []
     ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── expressions: [numbers.number (#1), numbers.number (#1)]
+    │   ├── expressions: [numbers.number (#1)]
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.system.numbers
@@ -279,7 +279,7 @@ EvalScalar
     ├── filters: []
     ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── expressions: [numbers.number (#1), numbers.number (#1)]
+    │   ├── expressions: [numbers.number (#1)]
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.system.numbers
@@ -311,7 +311,7 @@ EvalScalar
     ├── filters: []
     ├── estimated rows: 0.20
     ├── EvalScalar(Build)
-    │   ├── expressions: [numbers.number (#1), numbers.number (#1)]
+    │   ├── expressions: [numbers.number (#1)]
     │   ├── estimated rows: 0.20
     │   └── Filter
     │       ├── filters: [numbers.number (#1) = 0]
@@ -349,7 +349,7 @@ EvalScalar
     ├── filters: [t.number (#0) < numbers.number (#1)]
     ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── expressions: [numbers.number (#1), numbers.number (#1)]
+    │   ├── expressions: [numbers.number (#1)]
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.system.numbers
@@ -381,7 +381,7 @@ EvalScalar
     ├── filters: []
     ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── expressions: [numbers.number (#1), numbers.number (#1)]
+    │   ├── expressions: [numbers.number (#1)]
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.system.numbers
@@ -470,7 +470,7 @@ EvalScalar
     ├── filters: [t.number (#0) < t1.number (#2)]
     ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── expressions: [t1.number (#2), t1.number (#2)]
+    │   ├── expressions: [t1.number (#2)]
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.system.numbers
@@ -487,7 +487,7 @@ EvalScalar
         ├── filters: [t.number (#0) > t1.number (#1)]
         ├── estimated rows: 1.00
         ├── EvalScalar(Build)
-        │   ├── expressions: [t1.number (#1), t1.number (#1)]
+        │   ├── expressions: [t1.number (#1)]
         │   ├── estimated rows: 1.00
         │   └── TableScan
         │       ├── table: default.system.numbers
