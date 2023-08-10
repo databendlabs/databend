@@ -200,6 +200,9 @@ impl PhysicalPlanReplacer for Fragmenter {
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: plan.plan_id,
+            projections: plan.projections.clone(),
+            probe_projections: plan.probe_projections.clone(),
+            build_projections: plan.build_projections.clone(),
             build: Box::new(build_input),
             probe: Box::new(probe_input),
             build_keys: plan.build_keys.clone(),

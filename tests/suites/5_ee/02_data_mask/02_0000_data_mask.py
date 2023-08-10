@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
         mycursor = mydb.cursor()
         mycursor.execute(
-            "CREATE MASKING POLICY mask AS (val STRING,num int) RETURN STRING -> CASE WHEN "
+            "CREATE MASKING POLICY mask AS (val STRING,num int) RETURNS STRING -> CASE WHEN "
             "current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy';"
         )
 
@@ -63,17 +63,17 @@ if __name__ == "__main__":
 
         mycursor = mydb.cursor()
         mycursor.execute(
-            "CREATE MASKING POLICY maska AS (val int) RETURN int -> CASE WHEN "
+            "CREATE MASKING POLICY maska AS (val int) RETURNS int -> CASE WHEN "
             "current_role() IN ('ANALYST') THEN VAL ELSE 200 END comment = 'this is a masking policy';"
         )
         mycursor = mydb.cursor()
         mycursor.execute(
-            "CREATE MASKING POLICY maskb AS (val STRING) RETURN STRING -> CASE WHEN "
+            "CREATE MASKING POLICY maskb AS (val STRING) RETURNS STRING -> CASE WHEN "
             "current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy';"
         )
         mycursor = mydb.cursor()
         mycursor.execute(
-            "CREATE MASKING POLICY maskc AS (val int) RETURN int -> CASE WHEN "
+            "CREATE MASKING POLICY maskc AS (val int) RETURNS int -> CASE WHEN "
             "current_role() IN ('ANALYST') THEN VAL ELSE 111 END comment = 'this is a masking policy';"
         )
 

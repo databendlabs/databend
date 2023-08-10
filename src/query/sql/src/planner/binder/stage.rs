@@ -34,6 +34,7 @@ use common_expression::Expr;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_pipeline_transforms::processors::transforms::Transform;
+use indexmap::IndexMap;
 
 use crate::binder::wrap_cast;
 use crate::binder::wrap_cast_scalar;
@@ -68,6 +69,7 @@ impl BindContext {
             metadata.clone(),
             &[],
             HashMap::new(),
+            Box::new(IndexMap::new()),
         );
 
         let mut map_exprs = Vec::with_capacity(exprs.len());
@@ -90,8 +92,10 @@ impl BindContext {
             map_exprs.push(expr);
         }
 
-        let mut operators = Vec::with_capacity(schema_fields_len);
-        operators.push(BlockOperator::Map { exprs: map_exprs });
+        let operators = vec![BlockOperator::Map {
+            exprs: map_exprs,
+            projections: None,
+        }];
 
         let one_row_chunk = DataBlock::new(
             vec![BlockEntry::new(

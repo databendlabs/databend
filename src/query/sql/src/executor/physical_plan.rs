@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -28,6 +27,7 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -88,6 +88,7 @@ impl TableScan {
                 Ok((name, id, index))
             })
             .collect::<Result<Vec<_>>>()?;
+        // Make the order of output fields the same as their indexes in te table schema.
         name_and_ids.sort_by_key(|(_, _, index)| *index);
 
         for (name, id, _) in name_and_ids {
@@ -140,10 +141,27 @@ impl MaterializedCte {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ConstantTableScan {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+    pub values: Vec<Column>,
+    pub num_rows: usize,
+    pub output_schema: DataSchemaRef,
+}
+
+impl ConstantTableScan {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(self.output_schema.clone())
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Filter {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
+    pub projections: ColumnSet,
 
     pub input: Box<PhysicalPlan>,
 
@@ -156,7 +174,14 @@ pub struct Filter {
 
 impl Filter {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
+        let input_schema = self.input.output_schema()?;
+        let mut fields = Vec::with_capacity(self.projections.len());
+        for (i, field) in input_schema.fields().iter().enumerate() {
+            if self.projections.contains(&i) {
+                fields.push(field.clone());
+            }
+        }
+        Ok(DataSchemaRefExt::create(fields))
     }
 }
 
@@ -190,6 +215,7 @@ pub struct EvalScalar {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
+    pub projections: ColumnSet,
 
     pub input: Box<PhysicalPlan>,
     pub exprs: Vec<(RemoteExpr, IndexType)>,
@@ -200,15 +226,23 @@ pub struct EvalScalar {
 
 impl EvalScalar {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        if self.exprs.is_empty() {
+            return self.input.output_schema();
+        }
         let input_schema = self.input.output_schema()?;
-        let mut fields = input_schema.fields().clone();
-        for (expr, index) in self.exprs.iter() {
-            let name = index.to_string();
-            if let RemoteExpr::ColumnRef { id, .. } = expr {
-                if name == fields[*id].name().as_str() {
-                    continue;
-                }
+        let mut fields = Vec::with_capacity(self.projections.len());
+        for (i, field) in input_schema.fields().iter().enumerate() {
+            if self.projections.contains(&i) {
+                fields.push(field.clone());
             }
+        }
+        let input_column_nums = input_schema.num_fields();
+        for (i, (expr, index)) in self.exprs.iter().enumerate() {
+            let i = i + input_column_nums;
+            if !self.projections.contains(&i) {
+                continue;
+            }
+            let name = index.to_string();
             let data_type = expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
             fields.push(DataField::new(&name, data_type));
         }
@@ -221,12 +255,10 @@ pub struct ProjectSet {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
+    pub projections: ColumnSet,
 
     pub input: Box<PhysicalPlan>,
-
     pub srf_exprs: Vec<(RemoteExpr, IndexType)>,
-
-    pub unused_indices: HashSet<IndexType>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -237,7 +269,7 @@ impl ProjectSet {
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(input_schema.num_fields() + self.srf_exprs.len());
         for (i, field) in input_schema.fields().iter().enumerate() {
-            if !self.unused_indices.contains(&i) {
+            if self.projections.contains(&i) {
                 fields.push(field.clone());
             }
         }
@@ -566,6 +598,13 @@ pub struct HashJoin {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
+    // After building the probe key and build key, we apply probe_projections to probe_datablock
+    // and build_projections to build_datablock, which can help us reduce memory usage and calls
+    // of expensive functions (take_compacted_indices and gather), after processing other_conditions,
+    // we will use projections for final column elimination.
+    pub projections: ColumnSet,
+    pub probe_projections: ColumnSet,
+    pub build_projections: ColumnSet,
 
     pub build: Box<PhysicalPlan>,
     pub probe: Box<PhysicalPlan>,
@@ -575,7 +614,6 @@ pub struct HashJoin {
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
-
     // It means that join has a corresponding runtime filter
     pub contain_runtime_filter: bool,
 
@@ -585,79 +623,97 @@ pub struct HashJoin {
 
 impl HashJoin {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let mut fields = self.probe.output_schema()?.fields().clone();
-        match self.join_type {
-            JoinType::Left | JoinType::LeftSingle => {
-                for field in self.build.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().wrap_nullable(),
-                    ));
-                }
+        let build_schema = match self.join_type {
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
+                let build_schema = self.build.output_schema()?;
+                // Wrap nullable type for columns in build side.
+                let build_schema = DataSchemaRefExt::create(
+                    build_schema
+                        .fields()
+                        .iter()
+                        .map(|field| {
+                            DataField::new(field.name(), field.data_type().wrap_nullable())
+                        })
+                        .collect::<Vec<_>>(),
+                );
+                build_schema
             }
-            JoinType::Right | JoinType::RightSingle => {
-                fields.clear();
-                for field in self.probe.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().wrap_nullable(),
-                    ));
-                }
-                for field in self.build.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().clone(),
-                    ));
-                }
+            _ => self.build.output_schema()?,
+        };
+
+        let probe_schema = match self.join_type {
+            JoinType::Right | JoinType::RightSingle | JoinType::Full => {
+                let probe_schema = self.probe.output_schema()?;
+                // Wrap nullable type for columns in probe side.
+                let probe_schema = DataSchemaRefExt::create(
+                    probe_schema
+                        .fields()
+                        .iter()
+                        .map(|field| {
+                            DataField::new(field.name(), field.data_type().wrap_nullable())
+                        })
+                        .collect::<Vec<_>>(),
+                );
+                probe_schema
             }
-            JoinType::Full => {
-                fields.clear();
-                for field in self.probe.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().wrap_nullable(),
-                    ));
-                }
-                for field in self.build.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().wrap_nullable(),
-                    ));
-                }
+            _ => self.probe.output_schema()?,
+        };
+
+        let mut probe_fields = Vec::with_capacity(self.probe_projections.len());
+        let mut build_fields = Vec::with_capacity(self.build_projections.len());
+        for (i, field) in probe_schema.fields().iter().enumerate() {
+            if self.probe_projections.contains(&i) {
+                probe_fields.push(field.clone());
             }
-            JoinType::LeftSemi | JoinType::LeftAnti => {
-                // Do nothing
+        }
+        for (i, field) in build_schema.fields().iter().enumerate() {
+            if self.build_projections.contains(&i) {
+                build_fields.push(field.clone());
             }
-            JoinType::RightSemi | JoinType::RightAnti => {
-                fields.clear();
-                fields = self.build.output_schema()?.fields().clone();
+        }
+
+        let merged_fields = match self.join_type {
+            JoinType::Cross
+            | JoinType::Inner
+            | JoinType::Left
+            | JoinType::LeftSingle
+            | JoinType::Right
+            | JoinType::RightSingle
+            | JoinType::Full => {
+                probe_fields.extend(build_fields);
+                probe_fields
             }
-            JoinType::LeftMark | JoinType::RightMark => {
-                fields.clear();
-                let outer_table = if self.join_type == JoinType::RightMark {
-                    &self.probe
-                } else {
-                    &self.build
-                };
-                fields = outer_table.output_schema()?.fields().clone();
+            JoinType::LeftSemi | JoinType::LeftAnti => probe_fields,
+            JoinType::RightSemi | JoinType::RightAnti => build_fields,
+            JoinType::LeftMark => {
                 let name = if let Some(idx) = self.marker_index {
                     idx.to_string()
                 } else {
                     "marker".to_string()
                 };
-                fields.push(DataField::new(
+                build_fields.push(DataField::new(
                     name.as_str(),
                     DataType::Nullable(Box::new(DataType::Boolean)),
                 ));
+                build_fields
             }
-
-            _ => {
-                for field in self.build.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().clone(),
-                    ));
-                }
+            JoinType::RightMark => {
+                let name = if let Some(idx) = self.marker_index {
+                    idx.to_string()
+                } else {
+                    "marker".to_string()
+                };
+                probe_fields.push(DataField::new(
+                    name.as_str(),
+                    DataType::Nullable(Box::new(DataType::Boolean)),
+                ));
+                probe_fields
+            }
+        };
+        let mut fields = Vec::with_capacity(self.projections.len());
+        for (i, field) in merged_fields.iter().enumerate() {
+            if self.projections.contains(&i) {
+                fields.push(field.clone());
             }
         }
         Ok(DataSchemaRefExt::create(fields))
@@ -1000,6 +1056,7 @@ pub enum PhysicalPlan {
     RuntimeFilterSource(RuntimeFilterSource),
     CteScan(CteScan),
     MaterializedCte(MaterializedCte),
+    ConstantTableScan(ConstantTableScan),
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
@@ -1053,6 +1110,7 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(v) => v.plan_id,
             PhysicalPlan::CteScan(v) => v.plan_id,
             PhysicalPlan::MaterializedCte(v) => v.plan_id,
+            PhysicalPlan::ConstantTableScan(v) => v.plan_id,
             PhysicalPlan::DeletePartial(_)
             | PhysicalPlan::MutationAggregate(_)
             | PhysicalPlan::CopyIntoTable(_)
@@ -1092,6 +1150,7 @@ impl PhysicalPlan {
             PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
             PhysicalPlan::CteScan(plan) => plan.output_schema(),
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
+            PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
             PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_) => Ok(DataSchemaRef::default()),
@@ -1129,12 +1188,15 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
+            PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
         }
     }
 
     pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         match self {
-            PhysicalPlan::TableScan(_) | PhysicalPlan::CteScan(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::TableScan(_)
+            | PhysicalPlan::CteScan(_)
+            | PhysicalPlan::ConstantTableScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Project(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -1209,6 +1271,7 @@ impl PhysicalPlan {
             | PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
+            | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::CteScan(_) => None,
         }
     }

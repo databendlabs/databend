@@ -200,7 +200,10 @@ impl FuseTable {
             pos += 1;
         }
         if !exprs.is_empty() {
-            ops.push(BlockOperator::Map { exprs });
+            ops.push(BlockOperator::Map {
+                exprs,
+                projections: None,
+            });
         }
 
         let mut computed_exprs = Vec::with_capacity(computed_list.len());
@@ -220,6 +223,7 @@ impl FuseTable {
         if !computed_exprs.is_empty() {
             ops.push(BlockOperator::Map {
                 exprs: computed_exprs,
+                projections: None,
             });
         }
 

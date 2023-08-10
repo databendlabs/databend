@@ -35,6 +35,7 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::materialized_cte::MaterializedCte;
 use crate::plans::runtime_filter_source::RuntimeFilterSource;
+use crate::plans::ConstantTableScan;
 use crate::plans::CteScan;
 use crate::plans::Exchange;
 use crate::plans::Lambda;
@@ -82,6 +83,7 @@ pub enum RelOp {
     ProjectSet,
     MaterializedCte,
     Lambda,
+    ConstantTableScan,
 
     // Pattern
     Pattern,
@@ -106,6 +108,7 @@ pub enum RelOperator {
     ProjectSet(ProjectSet),
     MaterializedCte(MaterializedCte),
     Lambda(Lambda),
+    ConstantTableScan(ConstantTableScan),
 
     Pattern(PatternPlan),
 }
@@ -130,6 +133,7 @@ impl Operator for RelOperator {
             RelOperator::CteScan(rel_op) => rel_op.rel_op(),
             RelOperator::MaterializedCte(rel_op) => rel_op.rel_op(),
             RelOperator::Lambda(rel_op) => rel_op.rel_op(),
+            RelOperator::ConstantTableScan(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -152,6 +156,7 @@ impl Operator for RelOperator {
             RelOperator::CteScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Lambda(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::ConstantTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -174,6 +179,7 @@ impl Operator for RelOperator {
             RelOperator::CteScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Lambda(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::ConstantTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -196,6 +202,7 @@ impl Operator for RelOperator {
             RelOperator::CteScan(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::Lambda(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::ConstantTableScan(rel_op) => rel_op.derive_cardinality(rel_expr),
         }
     }
 
@@ -256,6 +263,9 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::Lambda(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::ConstantTableScan(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
         }
@@ -577,6 +587,26 @@ impl TryFrom<RelOperator> for Lambda {
             Ok(value)
         } else {
             Err(ErrorCode::Internal("Cannot downcast RelOperator to Lambda"))
+        }
+    }
+}
+
+impl From<ConstantTableScan> for RelOperator {
+    fn from(value: ConstantTableScan) -> Self {
+        Self::ConstantTableScan(value)
+    }
+}
+
+impl TryFrom<RelOperator> for ConstantTableScan {
+    type Error = ErrorCode;
+
+    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
+        if let RelOperator::ConstantTableScan(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(
+                "Cannot downcast RelOperator to ConstantTableScan",
+            ))
         }
     }
 }

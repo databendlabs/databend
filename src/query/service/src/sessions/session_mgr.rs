@@ -24,6 +24,7 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::GlobalInstance;
 use common_base::base::SignalStream;
+use common_catalog::table_context::ProcessInfoState;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
@@ -292,18 +293,27 @@ impl SessionManager {
         Ok(())
     }
 
-    fn get_active_user_session_num(&self) -> usize {
-        let active_sessions = self.active_sessions.read();
-        active_sessions
-            .iter()
-            .filter(|(_, y)| y.upgrade().is_some_and(|a| a.get_type().is_user_session()))
-            .count()
-    }
-
     pub fn get_current_session_status(&self) -> SessionManagerStatus {
         let mut status_t = self.status.read().clone();
-        let active_session = self.get_active_user_session_num();
-        status_t.running_queries_count = active_session as u64;
+
+        let mut running_queries_count = 0;
+        let mut active_sessions_count = 0;
+
+        let active_sessions = self.active_sessions.read();
+        for session in active_sessions.values() {
+            if let Some(session_ref) = session.upgrade() {
+                if !session_ref.get_type().is_user_session() {
+                    continue;
+                }
+                active_sessions_count += 1;
+                if session_ref.process_info().state == ProcessInfoState::Query {
+                    running_queries_count += 1;
+                }
+            }
+        }
+
+        status_t.running_queries_count = running_queries_count;
+        status_t.active_sessions_count = active_sessions_count;
         status_t
     }
 }

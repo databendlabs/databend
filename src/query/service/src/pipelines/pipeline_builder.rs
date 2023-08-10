@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::io::BufRead;
 use std::io::Cursor;
@@ -41,7 +42,6 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
 use common_expression::HashMethodKind;
-use common_expression::RemoteExpr;
 use common_expression::SortColumnDescription;
 use common_formats::FastFieldDecoderValues;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -60,6 +60,7 @@ use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
+use common_pipeline_sources::OneBlockSource;
 use common_pipeline_transforms::processors::profile_wrapper::ProcessorProfileWrapper;
 use common_pipeline_transforms::processors::profile_wrapper::ProfileStub;
 use common_pipeline_transforms::processors::profile_wrapper::TransformProfileWrapper;
@@ -76,6 +77,8 @@ use common_sql::executor::AggregatePartial;
 use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
+use common_sql::executor::ConstantTableScan;
+use common_sql::executor::CopyIntoTableFromQuery;
 use common_sql::executor::CteScan;
 use common_sql::executor::Deduplicate;
 use common_sql::executor::DeletePartial;
@@ -140,7 +143,6 @@ use crate::pipelines::processors::transforms::RangeJoinState;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
-use crate::pipelines::processors::transforms::TransformMaterializedCte;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
@@ -171,7 +173,8 @@ pub struct PipelineBuilder {
     // record the index of join build side pipeline in `pipelines`
     pub index: Option<usize>,
 
-    pub cte_state: Arc<MaterializedCteState>,
+    // Cte -> state, each cte has it's own state
+    pub cte_state: HashMap<IndexType, Arc<MaterializedCteState>>,
 
     enable_profiling: bool,
     proc_profs: SharedProcessorProfiles,
@@ -186,14 +189,14 @@ impl PipelineBuilder {
     ) -> PipelineBuilder {
         PipelineBuilder {
             enable_profiling,
-            ctx: ctx.clone(),
+            ctx,
             pipelines: vec![],
             join_state: None,
             main_pipeline: Pipeline::create(),
             proc_profs: prof_span_set,
             exchange_injector: DefaultExchangeInjector::create(),
             index: None,
-            cte_state: Arc::new(MaterializedCteState::new(ctx)),
+            cte_state: HashMap::new(),
         }
     }
 
@@ -220,6 +223,7 @@ impl PipelineBuilder {
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
             PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),
+            PhysicalPlan::ConstantTableScan(scan) => self.build_constant_table_scan(scan),
             PhysicalPlan::Filter(filter) => self.build_filter(filter),
             PhysicalPlan::Project(project) => self.build_project(project),
             PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
@@ -728,6 +732,8 @@ impl PipelineBuilder {
             &join.build_keys,
             join.build.output_schema()?,
             join.probe.output_schema()?,
+            &join.probe_projections,
+            &join.build_projections,
             HashJoinDesc::create(join)?,
         )
     }
@@ -897,11 +903,25 @@ impl PipelineBuilder {
                     self.ctx.clone(),
                     output,
                     cte_scan.cte_idx,
-                    self.cte_state.clone(),
+                    self.cte_state.get(&cte_scan.cte_idx.0).unwrap().clone(),
                     cte_scan.offsets.clone(),
                 )
             },
             max_threads as usize,
+        )
+    }
+
+    fn build_constant_table_scan(&mut self, scan: &ConstantTableScan) -> Result<()> {
+        self.main_pipeline.add_source(
+            |output| {
+                let block = if !scan.values.is_empty() {
+                    DataBlock::new_from_columns(scan.values.clone())
+                } else {
+                    DataBlock::new(vec![], scan.num_rows)
+                };
+                OneBlockSource::create(output, block)
+            },
+            1,
         )
     }
 
@@ -926,6 +946,7 @@ impl PipelineBuilder {
         self.main_pipeline.add_transform(|input, output| {
             let transform = CompoundBlockOperator::new(
                 vec![BlockOperator::Filter {
+                    projections: filter.projections.clone(),
                     expr: predicate.clone(),
                 }],
                 self.ctx.get_function_context()?,
@@ -976,12 +997,6 @@ impl PipelineBuilder {
         let exprs = eval_scalar
             .exprs
             .iter()
-            .filter(|(scalar, idx)| {
-                if let RemoteExpr::ColumnRef { id, .. } = scalar {
-                    return idx.to_string() != input_schema.field(*id).name().as_str();
-                }
-                true
-            })
             .map(|(scalar, _)| scalar.as_expr(&BUILTIN_FUNCTIONS))
             .collect::<Vec<_>>();
 
@@ -989,7 +1004,10 @@ impl PipelineBuilder {
             return Ok(());
         }
 
-        let op = BlockOperator::Map { exprs };
+        let op = BlockOperator::Map {
+            exprs,
+            projections: Some(eval_scalar.projections.clone()),
+        };
 
         let func_ctx = self.ctx.get_function_context()?;
 
@@ -1021,12 +1039,12 @@ impl PipelineBuilder {
         self.build_pipeline(&project_set.input)?;
 
         let op = BlockOperator::FlatMap {
+            projections: project_set.projections.clone(),
             srf_exprs: project_set
                 .srf_exprs
                 .iter()
                 .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
                 .collect(),
-            unused_indices: project_set.unused_indices.clone(),
         };
 
         let func_ctx = self.ctx.get_function_context()?;
@@ -1635,6 +1653,7 @@ impl PipelineBuilder {
             let transform = TransformHashJoinProbe::create(
                 input,
                 output,
+                join.projections.clone(),
                 TransformHashJoinProbe::attach(state.clone())?,
                 max_block_size,
                 func_ctx.clone(),
@@ -1883,20 +1902,20 @@ impl PipelineBuilder {
         self.expand_left_side_pipeline(
             &materialized_cte.left,
             materialized_cte.cte_idx,
-            self.cte_state.clone(),
             &materialized_cte.left_output_columns,
         )?;
-        self.build_right_side_pipeline(&materialized_cte.right)
+        self.build_pipeline(&materialized_cte.right)
     }
 
     fn expand_left_side_pipeline(
         &mut self,
         left_side: &PhysicalPlan,
         cte_idx: IndexType,
-        state: Arc<MaterializedCteState>,
         left_output_columns: &[ColumnBinding],
     ) -> Result<()> {
         let left_side_ctx = QueryContext::create_from(self.ctx.clone());
+        let state = Arc::new(MaterializedCteState::new(self.ctx.clone()));
+        self.cte_state.insert(cte_idx, state.clone());
         let mut left_side_builder = PipelineBuilder::create(
             left_side_ctx,
             self.enable_profiling,
@@ -1924,15 +1943,6 @@ impl PipelineBuilder {
         self.pipelines.push(left_side_pipeline.main_pipeline);
         self.pipelines
             .extend(left_side_pipeline.sources_pipelines.into_iter());
-        Ok(())
-    }
-
-    fn build_right_side_pipeline(&mut self, right_side: &PhysicalPlan) -> Result<()> {
-        self.build_pipeline(right_side)?;
-        self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformMaterializedCte::create(input, output);
-            Ok(ProcessorPtr::create(transform))
-        })?;
         Ok(())
     }
 }

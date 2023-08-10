@@ -169,8 +169,7 @@ pub trait ParquetReader: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn readers_from_non_blocking_io(&self, part: PartInfoPtr) -> Result<ParquetPartData> {
-        let part = ParquetPart::from_part(&part)?;
+    async fn readers_from_non_blocking_io(&self, part: &ParquetPart) -> Result<ParquetPartData> {
         match part {
             ParquetPart::RowGroup(part) => {
                 let mut join_handlers = Vec::with_capacity(self.columns_to_read().len());

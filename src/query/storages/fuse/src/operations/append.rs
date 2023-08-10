@@ -174,7 +174,10 @@ impl FuseTable {
         let operators = if exprs.is_empty() {
             vec![]
         } else {
-            vec![BlockOperator::Map { exprs }]
+            vec![BlockOperator::Map {
+                exprs,
+                projections: None,
+            }]
         };
 
         Ok(ClusterStatsGenerator::new(

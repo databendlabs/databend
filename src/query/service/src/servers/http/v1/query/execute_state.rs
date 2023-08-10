@@ -270,8 +270,7 @@ async fn execute(
             DataType::String,
             common_expression::Value::Scalar(Scalar::String(err.to_string().into_bytes())),
         );
-        let size = data.memory_size();
-        block_sender.send(DataBlock::new(vec![data], 1), size).await;
+        block_sender.send(DataBlock::new(vec![data], 1), 1).await;
         return Err(err);
     }
     let mut data_stream = data_stream_res.unwrap();
@@ -288,8 +287,7 @@ async fn execute(
                 DataType::String,
                 common_expression::Value::Scalar(Scalar::String(err.to_string().into_bytes())),
             );
-            let size = data.memory_size();
-            block_sender.send(DataBlock::new(vec![data], 1), size).await;
+            block_sender.send(DataBlock::new(vec![data], 1), 1).await;
             Executor::stop(&executor, Err(err), false).await;
             block_sender.close();
         }
@@ -302,6 +300,14 @@ async fn execute(
                         block_sender.send(block.clone(), block.num_rows()).await;
                     }
                     Err(err) => {
+                        // duplicate codes, but there is an async call
+                        let data = BlockEntry::new(
+                            DataType::String,
+                            common_expression::Value::Scalar(Scalar::String(
+                                err.to_string().into_bytes(),
+                            )),
+                        );
+                        block_sender.send(DataBlock::new(vec![data], 1), 1).await;
                         block_sender.close();
                         return Err(err);
                     }

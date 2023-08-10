@@ -41,6 +41,7 @@ use super::TableScan;
 use super::UnionAll;
 use super::WindowFunction;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::ConstantTableScan;
 use crate::executor::CteScan;
 use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
@@ -113,7 +114,10 @@ impl PhysicalPlan {
                 ))
             }
             PhysicalPlan::CteScan(cte_scan) => Ok(FormatTreeNode::with_children(
-                format!("CteScan: {}", cte_scan.cte_idx.0),
+                format!(
+                    "CteScan: {}, sub index: {}",
+                    cte_scan.cte_idx.0, cte_scan.cte_idx.1
+                ),
                 vec![],
             )),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
@@ -196,6 +200,7 @@ fn to_format_tree(
         PhysicalPlan::MaterializedCte(plan) => {
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
+        PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan),
     }
 }
 
@@ -350,10 +355,25 @@ fn table_scan_to_format_tree(
 }
 
 fn cte_scan_to_format_tree(plan: &CteScan) -> Result<FormatTreeNode<String>> {
-    let cte_idx = FormatTreeNode::new(format!("CTE index: {}", plan.cte_idx.0));
+    let cte_idx = FormatTreeNode::new(format!(
+        "CTE index: {}, sub index: {}",
+        plan.cte_idx.0, plan.cte_idx.1
+    ));
     Ok(FormatTreeNode::with_children("CTEScan".to_string(), vec![
         cte_idx,
     ]))
+}
+
+fn constant_table_scan_to_format_tree(plan: &ConstantTableScan) -> Result<FormatTreeNode<String>> {
+    let mut children = Vec::with_capacity(plan.values.len());
+    for (i, value) in plan.values.iter().enumerate() {
+        let column = value.iter().map(|val| format!("{val}")).join(", ");
+        children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
+    }
+    Ok(FormatTreeNode::with_children(
+        "ConstantTableScan".to_string(),
+        children,
+    ))
 }
 
 fn filter_to_format_tree(
@@ -417,6 +437,9 @@ fn eval_scalar_to_format_tree(
     metadata: &MetadataRef,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
+    if plan.exprs.is_empty() {
+        return to_format_tree(&plan.input, metadata, prof_span_set);
+    }
     let scalars = plan
         .exprs
         .iter()

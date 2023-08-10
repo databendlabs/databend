@@ -20,3 +20,5 @@ EOF
 echo "SHOW DATABASES IN iceberg_ctl;" | $MYSQL_CLIENT_CONNECT
 
 echo "SHOW TABLES IN iceberg_ctl.iceberg_db;" | $MYSQL_CLIENT_CONNECT
+
+echo "SHOW CREATE CATALOG iceberg_ctl;" | $MYSQL_CLIENT_CONNECT

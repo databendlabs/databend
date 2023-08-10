@@ -1,55 +1,43 @@
 query T
 explain select number from numbers(10) group by number;
 ----
-EvalScalar
-├── expressions: [numbers.number (#0)]
+AggregateFinal
+├── group by: [number]
+├── aggregate functions: []
 ├── estimated rows: 10.00
-└── AggregateFinal
+└── AggregatePartial
     ├── group by: [number]
     ├── aggregate functions: []
     ├── estimated rows: 10.00
-    └── AggregatePartial
-        ├── group by: [number]
-        ├── aggregate functions: []
-        ├── estimated rows: 10.00
-        └── EvalScalar
-            ├── expressions: [numbers.number (#0)]
-            ├── estimated rows: 10.00
-            └── TableScan
-                ├── table: default.system.numbers
-                ├── read rows: 10
-                ├── read bytes: 80
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 10.00
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── read rows: 10
+        ├── read bytes: 80
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 10.00
 
 
 query T
 explain select number from numbers(10) group by 1;
 ----
-EvalScalar
-├── expressions: [numbers.number (#0)]
+AggregateFinal
+├── group by: [number]
+├── aggregate functions: []
 ├── estimated rows: 10.00
-└── AggregateFinal
+└── AggregatePartial
     ├── group by: [number]
     ├── aggregate functions: []
     ├── estimated rows: 10.00
-    └── AggregatePartial
-        ├── group by: [number]
-        ├── aggregate functions: []
-        ├── estimated rows: 10.00
-        └── EvalScalar
-            ├── expressions: [numbers.number (#0)]
-            ├── estimated rows: 10.00
-            └── TableScan
-                ├── table: default.system.numbers
-                ├── read rows: 10
-                ├── read bytes: 80
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 10.00
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── read rows: 10
+        ├── read bytes: 80
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 10.00
 
 
 query T
@@ -73,7 +61,7 @@ query T
 explain select 1, number, number + 1, number -1 from numbers(10) group by number, abs(number), cast(number as int);
 ----
 EvalScalar
-├── expressions: [numbers.number (#0), 1, numbers.number (#0) + 1, numbers.number (#0) - 1]
+├── expressions: [1, numbers.number (#0) + 1, numbers.number (#0) - 1]
 ├── estimated rows: 10.00
 └── AggregateFinal
     ├── group by: [number]
@@ -83,24 +71,21 @@ EvalScalar
         ├── group by: [number]
         ├── aggregate functions: []
         ├── estimated rows: 10.00
-        └── EvalScalar
-            ├── expressions: [numbers.number (#0)]
-            ├── estimated rows: 10.00
-            └── TableScan
-                ├── table: default.system.numbers
-                ├── read rows: 10
-                ├── read bytes: 80
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 10.00
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── read rows: 10
+            ├── read bytes: 80
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 10.00
 
 
 query T
 explain select count(3), type, name, trim(name) as a from system.columns group by name, type, a, concat(name, trim(name)), concat(type, name), length(name);
 ----
 EvalScalar
-├── expressions: [columns.name (#0), columns.type (#3), count(3) (#13), trim_both(columns.name (#0), ' ')]
+├── expressions: [count(3) (#13), trim_both(columns.name (#0), ' ')]
 ├── estimated rows: 0.00
 └── AggregateFinal
     ├── group by: [name, type]
@@ -110,17 +95,14 @@ EvalScalar
         ├── group by: [name, type]
         ├── aggregate functions: [count()]
         ├── estimated rows: 0.00
-        └── EvalScalar
-            ├── expressions: [columns.name (#0), columns.type (#3)]
-            ├── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.system.columns
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.system.columns
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
 
 
 statement ok
@@ -129,68 +111,56 @@ create table explain_agg_t1(a int, b int);
 query T
 explain select a from explain_agg_t1 group by a having 1 = 0;
 ----
-EvalScalar
-├── expressions: [explain_agg_t1.a (#0)]
+AggregateFinal
+├── group by: [a]
+├── aggregate functions: []
 ├── estimated rows: 0.00
-└── AggregateFinal
+└── AggregatePartial
     ├── group by: [a]
     ├── aggregate functions: []
     ├── estimated rows: 0.00
-    └── AggregatePartial
-        ├── group by: [a]
-        ├── aggregate functions: []
+    └── Filter
+        ├── filters: [false]
         ├── estimated rows: 0.00
-        └── EvalScalar
-            ├── expressions: [explain_agg_t1.a (#0)]
-            ├── estimated rows: 0.00
-            └── Filter
-                ├── filters: [false]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.explain_agg_t1
-                    ├── read rows: 0
-                    ├── read bytes: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [false], limit: NONE]
-                    ├── output columns: [a]
-                    └── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.explain_agg_t1
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [false], limit: NONE]
+            ├── output columns: [a]
+            └── estimated rows: 0.00
 
 query T
 explain select a from explain_agg_t1 group by a having a > 3;
 ----
-EvalScalar
-├── expressions: [explain_agg_t1.a (#0)]
+AggregateFinal
+├── group by: [a]
+├── aggregate functions: []
 ├── estimated rows: 0.00
-└── AggregateFinal
+└── AggregatePartial
     ├── group by: [a]
     ├── aggregate functions: []
     ├── estimated rows: 0.00
-    └── AggregatePartial
-        ├── group by: [a]
-        ├── aggregate functions: []
+    └── Filter
+        ├── filters: [explain_agg_t1.a (#0) > 3]
         ├── estimated rows: 0.00
-        └── EvalScalar
-            ├── expressions: [explain_agg_t1.a (#0)]
-            ├── estimated rows: 0.00
-            └── Filter
-                ├── filters: [explain_agg_t1.a (#0) > 3]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.explain_agg_t1
-                    ├── read rows: 0
-                    ├── read bytes: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [explain_agg_t1.a (#0) > 3], limit: NONE]
-                    ├── output columns: [a]
-                    └── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.explain_agg_t1
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [explain_agg_t1.a (#0) > 3], limit: NONE]
+            ├── output columns: [a]
+            └── estimated rows: 0.00
 
 query T
 explain select a, max(b) from explain_agg_t1 group by a having a > 1;
 ----
 EvalScalar
-├── expressions: [explain_agg_t1.a (#0), max(b) (#2)]
+├── expressions: [max(b) (#2)]
 ├── estimated rows: 0.00
 └── AggregateFinal
     ├── group by: [a]
@@ -200,26 +170,23 @@ EvalScalar
         ├── group by: [a]
         ├── aggregate functions: [max(b)]
         ├── estimated rows: 0.00
-        └── EvalScalar
-            ├── expressions: [explain_agg_t1.a (#0), explain_agg_t1.b (#1)]
+        └── Filter
+            ├── filters: [explain_agg_t1.a (#0) > 1]
             ├── estimated rows: 0.00
-            └── Filter
-                ├── filters: [explain_agg_t1.a (#0) > 1]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.explain_agg_t1
-                    ├── read rows: 0
-                    ├── read bytes: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
-                    └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.explain_agg_t1
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
+                └── estimated rows: 0.00
 
 query T
 explain select a, avg(b) from explain_agg_t1 group by a having a > 1 and max(b) > 10;
 ----
 EvalScalar
-├── expressions: [explain_agg_t1.a (#0), avg(b) (#2)]
+├── expressions: [avg(b) (#2)]
 ├── estimated rows: 0.00
 └── Filter
     ├── filters: [is_true(max(b) (#4) > 10)]
@@ -232,20 +199,17 @@ EvalScalar
             ├── group by: [a]
             ├── aggregate functions: [avg(b), max(b)]
             ├── estimated rows: 0.00
-            └── EvalScalar
-                ├── expressions: [explain_agg_t1.a (#0), explain_agg_t1.b (#1), explain_agg_t1.b (#1)]
+            └── Filter
+                ├── filters: [explain_agg_t1.a (#0) > 1]
                 ├── estimated rows: 0.00
-                └── Filter
-                    ├── filters: [explain_agg_t1.a (#0) > 1]
-                    ├── estimated rows: 0.00
-                    └── TableScan
-                        ├── table: default.default.explain_agg_t1
-                        ├── read rows: 0
-                        ├── read bytes: 0
-                        ├── partitions total: 0
-                        ├── partitions scanned: 0
-                        ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
-                        └── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.default.explain_agg_t1
+                    ├── read rows: 0
+                    ├── read bytes: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
+                    └── estimated rows: 0.00
 
 statement ok
 drop table explain_agg_t1;

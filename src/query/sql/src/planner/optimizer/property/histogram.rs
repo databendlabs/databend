@@ -18,8 +18,7 @@ use std::fmt::Debug;
 
 use common_exception::Result;
 use common_expression::arithmetics_type::ResultTypeOfUnary;
-
-use crate::optimizer::property::datum::Datum;
+use common_storage::Datum;
 
 pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 
@@ -225,9 +224,7 @@ impl UniformSampleSet {
 
     pub fn intersection(&self, other: &UniformSampleSet) -> Result<(Option<Datum>, Option<Datum>)> {
         match (&self.min, &other.min) {
-            (Datum::Bytes(_), Datum::Bytes(_)) | (Datum::Bool(_), Datum::Bool(_)) => {
-                Ok((None, None))
-            }
+            (Datum::Bytes(_), Datum::Bytes(_)) => Ok((None, None)),
             _ => {
                 let left_min = self.min.to_double()?;
                 let left_max = self.max.to_double()?;

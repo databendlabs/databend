@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_ast::ast::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::binder::Binder;
@@ -32,6 +33,16 @@ impl Binder {
             name,
             policy,
         } = stmt;
+
+        // check if input type match to the return type
+        let return_type = policy.return_type.to_string().to_lowercase();
+        let policy_data_type = policy.args[0].arg_type.to_string().to_lowercase();
+        if return_type != policy_data_type {
+            return Err(ErrorCode::UnmatchMaskPolicyReturnType(format!(
+                "arg '{}' data type {} does not match to the mask policy return type {}",
+                policy.args[0].arg_name, policy_data_type, return_type,
+            )));
+        }
 
         let tenant = self.ctx.get_tenant();
         let plan = CreateDatamaskPolicyPlan {

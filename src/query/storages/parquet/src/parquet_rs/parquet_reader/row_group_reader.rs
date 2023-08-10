@@ -130,28 +130,28 @@ impl Iterator for ColumnChunkIterator {
 impl PageIterator for ColumnChunkIterator {}
 
 pub fn bitmap_to_selection(bitmap: Bitmap) -> RowSelection {
-    let mut selectors = Vec::<RowSelector>::new();
-    if let Some(v) = bitmap.get(0) {
-        let curr = v;
-        let len = bitmap.len();
-        let mut start = 0;
-        for (i, v) in bitmap.iter().skip(1).enumerate() {
-            if v != curr {
-                selectors.push(RowSelector {
-                    row_count: i - start,
-                    skip: !curr,
-                });
-                start = i;
-            }
-        }
-
-        if start != len - 1 {
+    if bitmap.is_empty() {
+        return RowSelection::from(vec![]);
+    }
+    let mut selectors = Vec::new();
+    let mut cur_v = bitmap.get_bit(0);
+    let mut start = 0;
+    // Find length of consecutive false values or true values.
+    for (i, v) in bitmap.iter().enumerate() {
+        if v != cur_v {
             selectors.push(RowSelector {
-                row_count: len - start,
-                skip: !curr,
+                row_count: i - start,
+                skip: !cur_v,
             });
+            start = i;
+            cur_v = v;
         }
-    };
+    }
+
+    selectors.push(RowSelector {
+        row_count: bitmap.len() - start,
+        skip: !cur_v,
+    });
 
     RowSelection::from(selectors)
 }

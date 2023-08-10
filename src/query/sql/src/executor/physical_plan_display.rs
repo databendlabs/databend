@@ -30,6 +30,7 @@ use super::ReplaceInto;
 use super::RowFetch;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
+use crate::executor::ConstantTableScan;
 use crate::executor::CteScan;
 use crate::executor::EvalScalar;
 use crate::executor::Exchange;
@@ -95,6 +96,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
         }
 
         for node in self.node.children() {
@@ -121,6 +123,22 @@ impl Display for CteScan {
 impl Display for MaterializedCte {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "MaterializedCte")
+    }
+}
+
+impl Display for ConstantTableScan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let columns = self
+            .values
+            .iter()
+            .enumerate()
+            .map(|(i, value)| {
+                let column = value.iter().map(|val| format!("{val}")).join(", ");
+                format!("column {}: [{}]", i, column)
+            })
+            .collect::<Vec<String>>();
+
+        write!(f, "ConstantTableScan: {}", columns.join(", "))
     }
 }
 
@@ -448,6 +466,6 @@ impl Display for Lambda {
                 )
             })
             .collect::<Vec<String>>();
-        write!(f, "Lambda functions : {}", scalars.join(", "))
+        write!(f, "Lambda functions: {}", scalars.join(", "))
     }
 }
