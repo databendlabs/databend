@@ -11,17 +11,16 @@ test = true
 [features]
 default = []
 storage-hdfs = ["common-storage/storage-hdfs"]
-hive = ["common-hive-meta-store", "thrift", "storage-hdfs", "common-meta-app/storage-hdfs"]
+hive = ["storage-hdfs", "common-meta-app/storage-hdfs"]
 
 [package.metadata.cargo-machete]
-ignored = ["thrift", "common-hive-meta-store", "strum"]
+ignored = ["strum"]
 
 [dependencies]
 chrono-tz = { workspace = true }
 common-base = { path = "../../common/base" }
 common-exception = { path = "../../common/exception" }
 common-grpc = { path = "../../common/grpc" }
-common-hive-meta-store = { path = "../storages/hive/hive-meta-store", optional = true }
 common-meta-app = { path = "../../meta/app" }
 common-storage = { path = "../../common/storage" }
 common-tracing = { path = "../../common/tracing" }

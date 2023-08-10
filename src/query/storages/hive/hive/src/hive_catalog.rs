@@ -25,9 +25,6 @@ use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_hive_meta_store::Partition;
-use common_hive_meta_store::TThriftHiveMetastoreSyncClient;
-use common_hive_meta_store::ThriftHiveMetastoreSyncClient;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CountTablesReply;
@@ -80,6 +77,9 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::*;
+use hive_metastore::Partition;
+use hive_metastore::TThriftHiveMetastoreSyncClient;
+use hive_metastore::ThriftHiveMetastoreSyncClient;
 use thrift::protocol::*;
 use thrift::transport::*;
 
@@ -210,9 +210,7 @@ impl HiveCatalog {
             Ok(table_meta) => table_meta,
             Err(e) => {
                 if let thrift::Error::User(err) = &e {
-                    if let Some(e) =
-                        err.downcast_ref::<common_hive_meta_store::NoSuchObjectException>()
-                    {
+                    if let Some(e) = err.downcast_ref::<hive_metastore::NoSuchObjectException>() {
                         return Err(ErrorCode::TableInfoError(
                             e.message.clone().unwrap_or_default(),
                         ));

@@ -57,7 +57,6 @@ members = [
     "src/query/storages/factory",
     "src/query/storages/fuse",
     "src/query/storages/hive/hive",
-    "src/query/storages/hive/hive-meta-store",
     "src/query/storages/iceberg",
     "src/query/storages/information-schema",
     "src/query/storages/memory",
