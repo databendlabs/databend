@@ -191,6 +191,24 @@ docker run --net=host  datafuselabs/databend
 </details>
 
 <details>
+<summary>Data Governance</summary>
+
+- [How to Create Data Masking Policy](https://databend.rs/doc/sql-commands/ddl/mask-policy/create-mask-policy)
+- [How to Drop Data Masking Policy](https://databend.rs/doc/sql-commands/ddl/mask-policy/drop-mask-policy)
+ 
+</details>
+
+<details>
+<summary>Securing Databend</summary>
+
+- [How to Create Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-create-policy)
+- [How to Drop Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-drop-policy)
+- [How to Alter Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-alter-policy)
+
+</details>
+
+
+<details>
 <summary>Performance</summary>
 
 - [How to Benchmark Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)
