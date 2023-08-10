@@ -1120,11 +1120,20 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::ConstantTableScan(scan) => {
+                // 1. Prune unused Columns.
+                let used: ColumnSet = required.intersection(&scan.columns).cloned().collect();
+                let (values, fields) = if used == scan.columns {
+                    (scan.values.clone(), scan.schema.fields().clone())
+                } else {
+                    let new_scan = scan.prune_columns(used);
+                    (new_scan.values.clone(), new_scan.schema.fields().clone())
+                };
+                // 2. Build physical plan.
                 Ok(PhysicalPlan::ConstantTableScan(ConstantTableScan {
                     plan_id: self.next_plan_id(),
-                    values: scan.values.clone(),
+                    values,
                     num_rows: scan.num_rows,
-                    output_schema: DataSchemaRefExt::create(scan.schema.fields().clone()),
+                    output_schema: DataSchemaRefExt::create(fields),
                 }))
             }
 
