@@ -48,6 +48,7 @@ impl Display for DatamaskId {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DatamaskMeta {
+    // Vec<(arg_name, arg_type)>
     pub args: Vec<(String, String)>,
     pub return_type: String,
     pub body: String,

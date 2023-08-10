@@ -2676,7 +2676,6 @@ dependencies = [
  "log",
  "metrics",
  "opendal",
- "ordered-float 3.7.0",
  "parquet",
  "regex",
  "reqwest",

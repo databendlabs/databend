@@ -17,8 +17,9 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_expression::KeysState;
+use common_expression::DataSchemaRefExt;
 use common_hashtable::RowPtr;
+use common_sql::optimizer::ColumnSet;
 use common_storages_fuse::TableContext;
 use parking_lot::RwLock;
 
@@ -26,7 +27,6 @@ use crate::sessions::QueryContext;
 
 pub struct Chunk {
     pub data_block: DataBlock,
-    pub keys_state: Option<KeysState>,
 }
 
 impl Chunk {
@@ -36,17 +36,28 @@ impl Chunk {
 }
 
 pub struct RowSpace {
-    pub data_schema: DataSchemaRef,
+    pub build_schema: DataSchemaRef,
     pub chunks: RwLock<Vec<Chunk>>,
     pub buffer: RwLock<Vec<DataBlock>>,
     pub buffer_row_size: RwLock<usize>,
 }
 
 impl RowSpace {
-    pub fn new(ctx: Arc<QueryContext>, data_schema: DataSchemaRef) -> Result<Self> {
+    pub fn new(
+        ctx: Arc<QueryContext>,
+        data_schema: DataSchemaRef,
+        build_projected_columns: &ColumnSet,
+    ) -> Result<Self> {
         let buffer_size = ctx.get_settings().get_max_block_size()? * 16;
+        let mut projected_build_fields = vec![];
+        for (i, field) in data_schema.fields().iter().enumerate() {
+            if build_projected_columns.contains(&i) {
+                projected_build_fields.push(field.clone());
+            }
+        }
+        let build_schema = DataSchemaRefExt::create(projected_build_fields);
         Ok(Self {
-            data_schema,
+            build_schema,
             chunks: RwLock::new(vec![]),
             buffer: RwLock::new(Vec::with_capacity(buffer_size as usize)),
             buffer_row_size: RwLock::new(0),
@@ -74,7 +85,7 @@ impl RowSpace {
             let data_block = DataBlock::take_blocks(data_blocks, indices.as_slice(), indices.len());
             Ok(data_block)
         } else {
-            Ok(DataBlock::empty_with_schema(self.data_schema.clone()))
+            Ok(DataBlock::empty_with_schema(self.build_schema.clone()))
         }
     }
 }

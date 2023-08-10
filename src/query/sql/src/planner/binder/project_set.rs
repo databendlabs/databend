@@ -189,10 +189,7 @@ impl Binder {
             bind_context.srfs.insert(srf.to_string(), flatten_result);
         }
 
-        let project_set = ProjectSet {
-            srfs: items,
-            unused_columns: None,
-        };
+        let project_set = ProjectSet { srfs: items };
 
         Ok(SExpr::create_unary(
             Arc::new(project_set.into()),
