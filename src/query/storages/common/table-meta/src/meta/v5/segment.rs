@@ -16,29 +16,47 @@ use std::io::Cursor;
 use std::io::Read;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::super::v2;
-use super::super::v3;
 use crate::meta::format::compress;
 use crate::meta::format::decode_segment_header;
 use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
 use crate::meta::format::SegmentHeader;
+use crate::meta::v2;
 use crate::meta::v2::BlockMeta;
+use crate::meta::v3;
 use crate::meta::v4;
+use crate::meta::v5::Statistics;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::MetaCompression;
 use crate::meta::MetaEncoding;
-use crate::meta::Statistics;
 use crate::meta::Versioned;
 
+#[derive(Clone, Debug, PartialEq)]
+#[repr(u8)]
+pub enum SegmentType {
+    Leaf = 0,
+    Internal = 1,
+}
+
+impl TryFrom<u8> for SegmentType {
+    type Error = ErrorCode;
+    fn try_from(value: u8) -> Result<Self> {
+        match value {
+            0 => Ok(SegmentType::Leaf),
+            1 => Ok(SegmentType::Internal),
+            _ => Err(ErrorCode::Internal("Invalid enum value")),
+        }
+    }
+}
+
 /// A segment comprises one or more blocks
-/// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct LeafSegmentInfo {
     /// format version of SegmentInfo table meta data
@@ -63,6 +81,10 @@ pub struct LeafSegmentInfo {
 }
 
 impl LeafSegmentInfo {
+    pub fn segment_type() -> SegmentType {
+        SegmentType::Leaf
+    }
+
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         self.to_bytes_with_encoding(MetaEncoding::MessagePack)
     }
@@ -90,7 +112,7 @@ impl LeafSegmentInfo {
         buf.extend_from_slice(&blocks_compress.len().to_le_bytes());
         buf.extend_from_slice(&summary_compress.len().to_le_bytes());
         // add tag to distinct leaf and internal
-        buf.push(0_u8);
+        buf.push(Self::segment_type() as u8);
         buf.extend(blocks_compress);
         buf.extend(summary_compress);
 
@@ -126,6 +148,10 @@ pub struct InternalSegmentInfo {
 }
 
 impl InternalSegmentInfo {
+    pub fn segment_type() -> SegmentType {
+        SegmentType::Internal
+    }
+
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         self.to_bytes_with_encoding(MetaEncoding::MessagePack)
     }
@@ -153,7 +179,7 @@ impl InternalSegmentInfo {
         buf.extend_from_slice(&child_segments_compress.len().to_le_bytes());
         buf.extend_from_slice(&summary_compress.len().to_le_bytes());
         // add tag to distinct leaf and internal
-        buf.push(1_u8);
+        buf.push(Self::segment_type() as u8);
         buf.extend(child_segments_compress);
         buf.extend(summary_compress);
 
@@ -163,9 +189,8 @@ impl InternalSegmentInfo {
 
 #[derive(Serialize, Deserialize)]
 pub enum SegmentInfo {
-    #[allow(unused)]
-    InternalSegment(InternalSegmentInfo),
     LeafSegment(LeafSegmentInfo),
+    InternalSegment(InternalSegmentInfo),
 }
 
 impl From<v3::SegmentInfo> for SegmentInfo {
@@ -187,13 +212,12 @@ impl From<v4::SegmentInfo> for SegmentInfo {
         SegmentInfo::LeafSegment(LeafSegmentInfo {
             format_version: value.format_version,
             blocks: value.blocks,
-            summary: value.summary,
+            summary: Statistics::from_v2(value.summary),
         })
     }
 }
 
 impl SegmentInfo {
-    #[allow(unused)]
     pub fn new_leaf(blocks: Vec<Arc<BlockMeta>>, summary: Statistics) -> Self {
         Self::LeafSegment(LeafSegmentInfo {
             format_version: SegmentInfo::VERSION,
@@ -202,7 +226,6 @@ impl SegmentInfo {
         })
     }
 
-    #[allow(unused)]
     pub fn new_leaf_with_version(
         blocks: Vec<Arc<BlockMeta>>,
         summary: Statistics,
@@ -215,7 +238,6 @@ impl SegmentInfo {
         })
     }
 
-    #[allow(unused)]
     pub fn new_internal(segments: Vec<Location>, summary: Statistics) -> Self {
         Self::InternalSegment(InternalSegmentInfo {
             format_version: SegmentInfo::VERSION,
@@ -224,7 +246,6 @@ impl SegmentInfo {
         })
     }
 
-    #[allow(unused)]
     pub fn new_internal_with_version(
         segments: Vec<Location>,
         summary: Statistics,
@@ -237,8 +258,28 @@ impl SegmentInfo {
         })
     }
 
+    pub fn summary(&self) -> Statistics {
+        match self {
+            Self::LeafSegment(v) => v.summary.clone(),
+            Self::InternalSegment(v) => v.summary.clone(),
+        }
+    }
+
+    pub fn format_version(&self) -> FormatVersion {
+        match self {
+            Self::LeafSegment(v) => v.format_version,
+            Self::InternalSegment(v) => v.format_version,
+        }
+    }
+
+    pub fn typ(&self) -> SegmentType {
+        match self {
+            Self::LeafSegment(_) => SegmentType::Leaf,
+            Self::InternalSegment(_) => SegmentType::Internal,
+        }
+    }
+
     // Total block bytes of this segment.
-    #[allow(unused)]
     pub fn total_bytes(&self) -> u64 {
         match self {
             Self::LeafSegment(leaf_segment_info) => {
@@ -267,13 +308,13 @@ impl SegmentInfo {
         }
     }
 
-    fn read_tag<R>(reader: &mut R) -> Result<u8>
+    fn read_typ<R>(reader: &mut R) -> Result<SegmentType>
     where R: Read + Unpin + Send {
-        reader.read_scalar::<u8>()
+        let tag = reader.read_scalar::<u8>()?;
+        SegmentType::try_from(tag)
     }
 
     pub fn from_slice(bytes: &[u8]) -> Result<Self> {
-        let segment;
         let mut cursor = Cursor::new(bytes);
         let SegmentHeader {
             version,
@@ -284,26 +325,183 @@ impl SegmentInfo {
             summary_size,
         } = decode_segment_header(&mut cursor)?;
 
-        let tag = Self::read_tag(&mut cursor)?;
-
-        if tag == 0 {
-            let blocks: Vec<Arc<BlockMeta>> =
-                read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
-            let summary: Statistics =
-                read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
-
-            segment = Self::new_leaf_with_version(blocks, summary, version);
-        } else if tag == 1 {
-            let child_segments: Vec<Location> =
-                read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
-            let summary: Statistics =
-                read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
-
-            segment = Self::new_internal_with_version(child_segments, summary, version);
-        } else {
-            panic!("read bad tag for v5")
-        }
+        let typ = Self::read_typ(&mut cursor)?;
+        let segment = match typ {
+            SegmentType::Leaf => {
+                // leaf segment
+                let blocks: Vec<Arc<BlockMeta>> =
+                    read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
+                let summary: Statistics =
+                    read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+                Self::new_leaf_with_version(blocks, summary, version)
+            }
+            SegmentType::Internal => {
+                // internal segment
+                let child_segments: Vec<Location> =
+                    read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
+                let summary: Statistics =
+                    read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+                Self::new_internal_with_version(child_segments, summary, version)
+            }
+        };
 
         Ok(segment)
+    }
+}
+
+#[derive(Clone)]
+pub struct CompactSegmentInfo {
+    pub format_version: FormatVersion,
+    pub summary: Statistics,
+    pub raw_bytes: Vec<u8>,
+
+    pub encoding: MetaEncoding,
+    pub compression: MetaCompression,
+    pub typ: SegmentType,
+}
+
+impl CompactSegmentInfo {
+    pub fn from_slice(bytes: &[u8]) -> Result<Self> {
+        let mut cursor = Cursor::new(bytes);
+        let SegmentHeader {
+            version,
+            encoding,
+            compression,
+            blocks_size,
+            summary_size,
+        } = decode_segment_header(&mut cursor)?;
+
+        let typ = SegmentInfo::read_typ(&mut cursor)?;
+
+        let mut raw_bytes = vec![0; blocks_size as usize];
+        cursor.read_exact(&mut raw_bytes)?;
+
+        let summary: Statistics =
+            read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+
+        let segment = CompactSegmentInfo {
+            format_version: version,
+            summary,
+            raw_bytes,
+            encoding,
+            compression,
+            typ,
+        };
+        Ok(segment)
+    }
+
+    pub fn block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
+        assert_eq!(self.typ, SegmentType::Leaf);
+        let mut reader = Cursor::new(&self.raw_bytes);
+        read_and_deserialize(
+            &mut reader,
+            self.raw_bytes.len() as u64,
+            &self.encoding,
+            &self.compression,
+        )
+    }
+
+    pub fn child_segments(&self) -> Result<Vec<Location>> {
+        assert_eq!(self.typ, SegmentType::Internal);
+        let mut reader = Cursor::new(&self.raw_bytes);
+        read_and_deserialize(
+            &mut reader,
+            self.raw_bytes.len() as u64,
+            &self.encoding,
+            &self.compression,
+        )
+    }
+}
+
+impl TryFrom<&CompactSegmentInfo> for SegmentInfo {
+    type Error = ErrorCode;
+    fn try_from(value: &CompactSegmentInfo) -> Result<Self, Self::Error> {
+        let segment = match value.typ {
+            SegmentType::Leaf => {
+                let blocks = value.block_metas()?;
+                SegmentInfo::new_leaf_with_version(
+                    blocks,
+                    value.summary.clone(),
+                    value.format_version,
+                )
+            }
+            SegmentType::Internal => {
+                let child_segments = value.child_segments()?;
+                SegmentInfo::new_internal_with_version(
+                    child_segments,
+                    value.summary.clone(),
+                    value.format_version,
+                )
+            }
+        };
+
+        Ok(segment)
+    }
+}
+
+impl TryFrom<&SegmentInfo> for CompactSegmentInfo {
+    type Error = ErrorCode;
+
+    fn try_from(value: &SegmentInfo) -> Result<Self, Self::Error> {
+        let encoding = MetaEncoding::MessagePack;
+        let compression = MetaCompression::default();
+        let raw_bytes = match value {
+            SegmentInfo::LeafSegment(v) => {
+                let bytes = encode(&encoding, &v.blocks)?;
+                compress(&compression, bytes)?
+            }
+            SegmentInfo::InternalSegment(v) => {
+                let bytes = encode(&encoding, &v.child_segments)?;
+                compress(&compression, bytes)?
+            }
+        };
+        Ok(Self {
+            format_version: value.format_version(),
+            summary: value.summary(),
+            raw_bytes,
+            encoding,
+            compression,
+            typ: value.typ(),
+        })
+    }
+}
+
+impl TryFrom<SegmentInfo> for CompactSegmentInfo {
+    type Error = ErrorCode;
+
+    fn try_from(value: SegmentInfo) -> Result<Self, Self::Error> {
+        let encoding = MetaEncoding::MessagePack;
+        let compression = MetaCompression::default();
+        let raw_bytes = match &value {
+            SegmentInfo::LeafSegment(v) => {
+                let bytes = encode(&encoding, &v.blocks)?;
+                compress(&compression, bytes)?
+            }
+            SegmentInfo::InternalSegment(v) => {
+                let bytes = encode(&encoding, &v.child_segments)?;
+                compress(&compression, bytes)?
+            }
+        };
+        Ok(Self {
+            format_version: value.format_version(),
+            summary: value.summary(),
+            raw_bytes,
+            encoding,
+            compression,
+            typ: value.typ(),
+        })
+    }
+}
+
+impl From<v4::CompactSegmentInfo> for CompactSegmentInfo {
+    fn from(value: v4::CompactSegmentInfo) -> Self {
+        Self {
+            format_version: value.format_version,
+            summary: Statistics::from_v2(value.summary),
+            raw_bytes: value.raw_block_metas.bytes,
+            encoding: value.raw_block_metas.encoding,
+            compression: value.raw_block_metas.compression,
+            typ: SegmentType::Leaf,
+        }
     }
 }

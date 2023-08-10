@@ -85,7 +85,6 @@ impl<'a> HeuristicOptimizer<'a> {
         if s_expr.contain_subquery() {
             s_expr = decorrelate_subquery(self.metadata.clone(), s_expr)?;
         }
-
         // always pruner the unused columns before and after optimization
         // Don't consider lazy columns pruning in pre optimize, because the order of each operator is not determined.
         let mut pruner = UnusedColumnPruner::new(self.metadata.clone(), false);

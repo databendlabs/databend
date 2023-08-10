@@ -24,8 +24,8 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::statistics::BasicColumnStatistics;
 use common_catalog::table::AppendMode;
-use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::CompactTarget;
 use common_catalog::table::NavigationDescriptor;
@@ -47,6 +47,7 @@ use common_sql::parse_exprs;
 use common_sql::BloomIndexColumns;
 use common_storage::init_operator;
 use common_storage::DataOperator;
+use common_storage::Datum;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
@@ -617,18 +618,17 @@ impl Table for FuseTable {
             let stats = &snapshot.summary.col_stats;
             let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
             if let Some(table_statistics) = table_statistics {
-                FuseTableColumnStatisticsProvider {
-                    column_stats: stats.clone(),
-                    row_count: snapshot.summary.row_count,
-                    // save row count first
-                    column_distinct_values: Some(table_statistics.column_distinct_values.clone()),
-                }
+                FuseTableColumnStatisticsProvider::new(
+                    stats.clone(),
+                    Some(table_statistics.column_distinct_values.clone()),
+                    snapshot.summary.row_count,
+                )
             } else {
-                FuseTableColumnStatisticsProvider {
-                    column_stats: stats.clone(),
-                    row_count: snapshot.summary.row_count,
-                    column_distinct_values: None,
-                }
+                FuseTableColumnStatisticsProvider::new(
+                    stats.clone(),
+                    None,
+                    snapshot.summary.row_count,
+                )
             }
         } else {
             FuseTableColumnStatisticsProvider::default()
@@ -767,26 +767,36 @@ impl FromStr for FuseStorageFormat {
 
 #[derive(Default)]
 struct FuseTableColumnStatisticsProvider {
-    column_stats: HashMap<ColumnId, FuseColumnStatistics>,
-    pub column_distinct_values: Option<HashMap<ColumnId, u64>>,
-    pub row_count: u64,
+    column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
+}
+
+impl FuseTableColumnStatisticsProvider {
+    fn new(
+        column_stats: HashMap<ColumnId, FuseColumnStatistics>,
+        column_distinct_values: Option<HashMap<ColumnId, u64>>,
+        row_count: u64,
+    ) -> Self {
+        let column_stats = column_stats
+            .into_iter()
+            .map(|(column_id, stat)| {
+                let ndv = column_distinct_values
+                    .as_ref()
+                    .map_or(row_count, |map| map.get(&column_id).map_or(0, |v| *v));
+                let stat = BasicColumnStatistics {
+                    min: Datum::from_scalar(stat.min().clone()),
+                    max: Datum::from_scalar(stat.max().clone()),
+                    ndv: Some(ndv),
+                    null_count: stat.null_count,
+                };
+                (column_id, stat.get_useful_stat(row_count))
+            })
+            .collect();
+        Self { column_stats }
+    }
 }
 
 impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
-    fn column_statistics(&self, column_id: ColumnId) -> Option<ColumnStatistics> {
-        let col_stats = &self.column_stats.get(&column_id);
-        col_stats.map(|s| {
-            let mut ndv = self
-                .column_distinct_values
-                .as_ref()
-                .map_or(self.row_count, |map| map.get(&column_id).map_or(0, |v| *v));
-            ndv = self.adjust_ndv_by_min_max(ndv, s.min().clone(), s.max().clone());
-            ColumnStatistics {
-                min: s.min().clone(),
-                max: s.max().clone(),
-                null_count: s.null_count,
-                number_of_distinct_values: ndv,
-            }
-        })
+    fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics> {
+        self.column_stats.get(&column_id).cloned().flatten()
     }
 }

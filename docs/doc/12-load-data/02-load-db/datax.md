@@ -20,6 +20,8 @@ See also: [Addax](addax.md)
 
 DatabendWriter is an integrated plugin of DataX, which means it comes pre-installed and does not require any manual installation. It acts as a seamless connector that enables the effortless transfer of data from other databases to Databend. With DatabendWriter, you can leverage the capabilities of DataX to efficiently load data from various databases into Databend. 
 
+DatabendWriter supports two operational modes: INSERT (default) and REPLACE. In INSERT Mode, new data is added while conflicts with existing records are prevented to maintain data integrity. On the other hand, the REPLACE Mode prioritizes data consistency by replacing existing records with newer data in case of conflicts.
+
 If you need more information about DatabendWriter and its functionalities, you can refer to the documentation available at https://github.com/alibaba/DataX/blob/master/databendwriter/doc/databendwriter.md
 
 ## Tutorial: Data Loading from MySQL
@@ -47,11 +49,7 @@ databend> create database migrated_db;
 databend> create table migrated_db.tb01(id int null, d double null, t TIMESTAMP null,  col1 varchar(10) null);
 ```
 
-3. Copy and paste the following code to a file, and name the file as *mysql_demo.json*:
-
-:::note
-For the available parameters and their descriptions, refer to the documentation provided at the following link: https://github.com/alibaba/DataX/blob/master/databendwriter/doc/databendwriter.md#32-configuration-description
-:::
+3. Copy and paste the following code to a file, and name the file as *mysql_demo.json*. For the available parameters and their descriptions, refer to the documentation provided at the following link: https://github.com/alibaba/DataX/blob/master/databendwriter/doc/databendwriter.md#32-configuration-description
 
 ```json title='mysql_demo.json'
 {
@@ -111,6 +109,20 @@ For the available parameters and their descriptions, refer to the documentation 
   }
 }
 ```
+
+:::tip
+The provided code above configures DatabendWriter to operate in the INSERT mode. To switch to the REPLACE mode, you must include the writeMode and onConflictColumn parameters. For example:
+
+```json title='mysql_demo.json'
+...
+"writer": {
+          "name": "databendwriter",
+          "parameter": {
+            "writeMode": "replace",
+            "onConflictColumn":["id"],
+            "username": ...
+```
+:::
 
 4. Run DataX:
 

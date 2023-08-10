@@ -490,7 +490,7 @@ fn flatten_plan_node_profile(
             };
             plan_node_profs.push(prof);
         }
-        PhysicalPlan::MaterializedCte(_) => todo!(),
+        PhysicalPlan::MaterializedCte(_) | PhysicalPlan::ConstantTableScan(_) => todo!(),
         PhysicalPlan::DeletePartial(_) | PhysicalPlan::DeleteFinal(_) => unreachable!(),
         PhysicalPlan::DistributedCopyIntoTableFromStage(_) => unreachable!(),
         PhysicalPlan::CopyIntoTableFromQuery(_) => unreachable!(),

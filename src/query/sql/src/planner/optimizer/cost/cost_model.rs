@@ -40,7 +40,9 @@ impl CostModel for DefaultCostModel {
 fn compute_cost_impl(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
     match m_expr.plan.as_ref() {
         RelOperator::Scan(plan) => compute_cost_scan(memo, m_expr, plan),
-        RelOperator::DummyTableScan(_) | RelOperator::CteScan(_) => Ok(Cost(0.0)),
+        RelOperator::DummyTableScan(_)
+        | RelOperator::CteScan(_)
+        | RelOperator::ConstantTableScan(_) => Ok(Cost(0.0)),
         RelOperator::Join(plan) => compute_cost_join(memo, m_expr, plan),
         RelOperator::UnionAll(_) => compute_cost_union_all(memo, m_expr),
         RelOperator::Aggregate(_) => compute_aggregate(memo, m_expr),

@@ -42,6 +42,11 @@ use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::TxnRequest;
+use common_tracing::init_logging;
+use common_tracing::FileConfig;
+use common_tracing::QueryLogConfig;
+use common_tracing::StderrConfig;
+use common_tracing::TracingConfig;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
@@ -78,6 +83,31 @@ struct Config {
 #[tokio::main]
 async fn main() {
     let config = Config::parse();
+
+    let log_config = common_tracing::Config {
+        file: FileConfig {
+            on: true,
+            level: config.log_level.clone(),
+            dir: "./.databend/logs".to_string(),
+            format: "text".to_string(),
+        },
+        stderr: StderrConfig {
+            on: true,
+            level: "WARN".to_string(),
+            format: "text".to_string(),
+        },
+        query: QueryLogConfig {
+            on: false,
+            dir: "./.databend/logs/query-details".to_string(),
+        },
+        tracing: TracingConfig {
+            on: false,
+            capture_log_level: "TRACE".to_string(),
+            jaeger_endpoint: "http://localhost:14268/api/traces".to_string(),
+        },
+    };
+
+    let _guards = init_logging("databend-metabench", &log_config);
 
     println!("config: {:?}", config);
     if config.grpc_api_address.is_empty() {

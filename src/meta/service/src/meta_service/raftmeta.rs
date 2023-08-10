@@ -63,6 +63,7 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::RaftMetrics;
 use common_meta_types::TypeConfig;
+use common_tracing::func_name;
 use futures::channel::oneshot;
 use itertools::Itertools;
 use log::as_debug;
@@ -1127,7 +1128,7 @@ impl MetaNode {
     /// Submit a write request to the known leader. Returns the response after applying the request.
     #[minitrace::trace]
     pub async fn write(&self, req: LogEntry) -> Result<AppliedState, MetaAPIError> {
-        debug!("req: {:?}", req);
+        debug!("{} req: {:?}", func_name!(), req);
 
         let res = self
             .handle_forwardable_request(ForwardRequest {
