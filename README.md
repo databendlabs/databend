@@ -1,4 +1,4 @@
-<h1 align="center">The Future of Cloud Data Analytics</h1>
+<h1 align="center">The Future of Cloud [Data+AI] Analytics</h1>
 
 <div align="center">
 
@@ -34,7 +34,7 @@
 
 ## What is Databend?
 
-Databend is an open-source **Elastic** and **Workload-Aware** modern cloud data warehouse focusing on Low-Cost and Low-Complexity for your massive-scale analytics needs.
+Databend is an open-source **Elastic** and **Workload-Aware** modern cloud data warehouse that focuses on Low-Cost and Low-Complexity for your massive-scale analytics needs. The open-source alternative to Snowflake, Databend is crafted in Rust, enabling superior performance and efficiency.
 
 Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on object storage:
 ([S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Huawei Cloud OBS](https://www.huaweicloud.com/intl/en-us/product/obs.html), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io)).
@@ -112,26 +112,53 @@ docker run --net=host  datafuselabs/databend
 <details>
 <summary>Connecting to Databend</summary>
 
-- [How to Connect Databend with MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler)
-- [How to Connect Databend with ClickHouse HTTP Handler](https://databend.rs/doc/integrations/api/clickhouse-handler)
-- [How to Connect Databend with DBeaver SQL IDE](https://databend.rs/doc/integrations/gui-tool/dbeaver)
-- [How to Execute Queries in Python](https://databend.rs/doc/develop/python)
-- [How to Query Databend in Jupyter Notebooks](https://databend.rs/doc/integrations/gui-tool/jupyter)
-- [How to Execute Queries in Golang](https://databend.rs/doc/develop/golang)
-- [How to Work with Databend in Node.js](https://databend.rs/doc/develop/nodejs)
+- [Connecting to Databend with BendSQL](https://databend.rs/doc/sql-clients/bendsql)
+- [Connecting to Databend with JDBC](https://databend.rs/doc/sql-clients/jdbc)
+- [Connecting to Databend with MySQL-Compatible Clients](https://databend.rs/doc/sql-clients/mysql)
+  
 </details>
 
 <details>
 <summary>Loading Data into Databend</summary>
 
-- [How to Load Data from Local File System](https://databend.rs/doc/load-data/load/local)
+- [How to Load Data from Local File](https://databend.rs/doc/load-data/load/local)
+- [How to Load Data from Bucket](https://databend.rs/doc/load-data/load/s3)
+- [How to Load Data from Stage](https://databend.rs/doc/load-data/load/stage)
 - [How to Load Data from Remote Files](https://databend.rs/doc/load-data/load/http)
-- [How to Load Data from Amazon S3](https://databend.rs/doc/load-data/load/s3)
-- [How to Load Data from Databend Stages](https://databend.rs/doc/load-data/load/stage)
 - [Querying Data in Staged Files](https://databend.rs/doc/load-data/transform/querying-stage)
 - [Transforming Data During a Load](https://databend.rs/doc/load-data/transform/data-load-transform)
 - [How to Unload Data from Databend](https://databend.rs/doc/load-data/unload)
+ 
 </details>
+
+<details>
+<summary>Loading Data Tools with Databend</summary>
+
+- [Apache Kafka](https://databend.rs/doc/load-data/load-db/kafka)
+- [Airbyte](https://databend.rs/doc/load-data/load-db/airbyte)
+- [dbt](https://databend.rs/doc/load-data/load-db/dbt)
+- [Debezium](https://databend.rs/doc/load-data/load-db/debezium)
+- [Apache Flink CDC](https://databend.rs/doc/load-data/load-db/flink-cdc)
+- [DataDog Vector](https://databend.rs/doc/load-data/load-db/vector)
+- [Addax](https://databend.rs/doc/load-data/load-db/addax)
+- [DataX](https://databend.rs/doc/load-data/load-db/datax)
+
+</details>
+
+<details>
+<summary>Visualize Tools with Databend</summary>
+
+- [Metabase](https://databend.rs/doc/integrations/metabase)
+- [Tableau](https://databend.rs/doc/integrations/tableau)
+- [Grafana](https://databend.rs/doc/integrations/grafana)
+- [Jupyter Notebook](https://databend.rs/doc/integrations/jupyter)
+- [Deepnote](https://databend.rs/doc/integrations/deepnote)
+- [MindsDB](https://databend.rs/doc/integrations/mindsdb)
+- [Redash](https://databend.rs/doc/integrations/redash)
+
+</details>
+
+
 
 <details>
 <summary>Managing Users</summary>
@@ -191,6 +218,24 @@ docker run --net=host  datafuselabs/databend
 </details>
 
 <details>
+<summary>Data Governance</summary>
+
+- [How to Create Data Masking Policy](https://databend.rs/doc/sql-commands/ddl/mask-policy/create-mask-policy)
+- [How to Drop Data Masking Policy](https://databend.rs/doc/sql-commands/ddl/mask-policy/drop-mask-policy)
+ 
+</details>
+
+<details>
+<summary>Securing Databend</summary>
+
+- [How to Create Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-create-policy)
+- [How to Drop Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-drop-policy)
+- [How to Alter Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-alter-policy)
+
+</details>
+
+
+<details>
 <summary>Performance</summary>
 
 - [How to Benchmark Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)
@@ -219,6 +264,7 @@ For general help in using Databend, please refer to the official documentation. 
 
 ## Roadmap
 
+- [Roadmap v1.3](https://github.com/datafuselabs/databend/issues/11868)
 - [Roadmap v1.2](https://github.com/datafuselabs/databend/issues/11073)
 - [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
 - [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
@@ -231,7 +277,7 @@ Databend is released under a combination of two licenses: the [Apache License 2.
 
 When contributing to Databend, you can find the relevant license header in each file.
 
-For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://databend.rs/doc/faq/license-faqs).
+For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://databend.rs/doc/enterprise/license).
 
 ## Acknowledgement
 
