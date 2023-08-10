@@ -112,9 +112,9 @@ docker run --net=host  datafuselabs/databend
 <details>
 <summary>Connecting to Databend</summary>
 
-- [BendSQL](https://databend.rs/doc/sql-clients/bendsql)
+- [Connecting to Databend with BendSQL](https://databend.rs/doc/sql-clients/bendsql)
 - [Connecting to Databend with JDBC](https://databend.rs/doc/sql-clients/jdbc)
-- [MySQL-Compatible Clients](https://databend.rs/doc/sql-clients/mysql)
+- [Connecting to Databend with MySQL-Compatible Clients](https://databend.rs/doc/sql-clients/mysql)
   
 </details>
 
