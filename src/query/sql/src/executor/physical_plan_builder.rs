@@ -179,6 +179,7 @@ impl PhysicalPlanBuilder {
                 }))
             }
             RelOperator::Join(join) => {
+                // 1. Prune unused Columns.
                 let column_projections = required.clone().into_iter().collect::<Vec<_>>();
                 let others_required = join
                     .non_equi_conditions
@@ -208,6 +209,7 @@ impl PhysicalPlanBuilder {
                     .cloned()
                     .collect();
 
+                // 2. Build physical plan.
                 // Choose physical join type by join conditions
                 let physical_join = physical_join(join, s_expr)?;
                 match physical_join {
@@ -230,6 +232,7 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::EvalScalar(eval_scalar) => {
+                // 1. Prune unused Columns.
                 let column_projections = required.clone().into_iter().collect::<Vec<_>>();
                 let mut used = vec![];
                 // Only keep columns needed by parent plan.
@@ -242,6 +245,7 @@ impl PhysicalPlanBuilder {
                         required.insert(*c);
                     })
                 }
+                // 2. Build physical plan.
                 if used.is_empty() {
                     self.build(s_expr.child(0)?, required).await
                 } else {
@@ -252,11 +256,13 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::Filter(filter) => {
+                // 1. Prune unused Columns.
                 let column_projections = required.clone().into_iter().collect::<Vec<_>>();
                 let used = filter.predicates.iter().fold(required, |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
 
+                // 2. Build physical plan.
                 let input = Box::new(self.build(s_expr.child(0)?, used).await?);
                 let input_schema = input.output_schema()?;
                 let mut projections = ColumnSet::new();
@@ -291,6 +297,7 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::Aggregate(agg) => {
+                // 1. Prune unused Columns.
                 let mut used = vec![];
                 for item in &agg.aggregate_functions {
                     if required.contains(&item.index) {
@@ -321,6 +328,7 @@ impl PhysicalPlanBuilder {
                     grouping_sets: agg.grouping_sets.clone(),
                 };
 
+                // 2. Build physical plan.
                 let input = self.build(s_expr.child(0)?, required).await?;
                 let input_schema = input.output_schema()?;
                 let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
@@ -571,6 +579,7 @@ impl PhysicalPlanBuilder {
                 Ok(result)
             }
             RelOperator::Window(window) => {
+                // 1. Prune unused Columns.
                 if required.contains(&window.index) {
                     // The scalar items in window function is not replaced yet.
                     // The will be replaced in physical plan builder.
@@ -588,10 +597,12 @@ impl PhysicalPlanBuilder {
                     });
                 }
                 let column_projections = required.clone().into_iter().collect::<Vec<_>>();
+                // 2. Build physical plan.
                 self.build_physical_window(window, s_expr, required, column_projections, &stat_info)
                     .await
             }
             RelOperator::Sort(sort) => {
+                // 1. Prune unused Columns.
                 sort.items.iter().for_each(|s| {
                     required.insert(s.index);
                 });
@@ -603,6 +614,7 @@ impl PhysicalPlanBuilder {
                     None
                 };
 
+                // 2. Build physical plan.
                 Ok(PhysicalPlan::Sort(Sort {
                     plan_id: self.next_plan_id(),
                     input: Box::new(self.build(s_expr.child(0)?, required).await?),
@@ -623,6 +635,7 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::Limit(limit) => {
+                // 1. Prune unused Columns.
                 // Apply lazy.
                 let metadata = self.metadata.read().clone();
                 let lazy_columns = metadata.lazy_columns();
@@ -632,17 +645,20 @@ impl PhysicalPlanBuilder {
                     .collect::<ColumnSet>();
                 required.extend(metadata.row_id_indexes());
 
+                // 2. Build physical plan.
                 let input_plan = self.build(s_expr.child(0)?, required).await?;
                 self.build_limit(input_plan, limit, stat_info)
             }
 
             RelOperator::Exchange(exchange) => {
+                // 1. Prune unused Columns.
                 if let Exchange::Hash(exprs) = exchange {
                     for expr in exprs {
                         required.extend(expr.used_columns());
                     }
                 }
 
+                // 2. Build physical plan.
                 let input = Box::new(self.build(s_expr.child(0)?, required).await?);
                 let input_schema = input.output_schema()?;
                 let mut keys = vec![];
@@ -673,6 +689,7 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::UnionAll(union_all) => {
+                // 1. Prune unused Columns.
                 let left_required = union_all.pairs.iter().fold(required.clone(), |mut acc, v| {
                     acc.insert(v.0);
                     acc
@@ -682,6 +699,7 @@ impl PhysicalPlanBuilder {
                     acc
                 });
 
+                // 2. Build physical plan.
                 let left_plan = self.build(s_expr.child(0)?, left_required).await?;
                 let right_plan = self.build(s_expr.child(1)?, right_required).await?;
                 let left_schema = left_plan.output_schema()?;
@@ -800,6 +818,7 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::RuntimeFilterSource(runtime_filter) => {
+                // 1. Prune unused Columns.
                 let left_required = runtime_filter
                     .left_runtime_filters
                     .iter()
@@ -813,6 +832,7 @@ impl PhysicalPlanBuilder {
                         acc.union(&v.1.used_columns()).cloned().collect()
                     });
 
+                // 2. Build physical plan.
                 let left_side = Box::new(self.build(s_expr.child(0)?, left_required).await?);
                 let left_schema = left_side.output_schema()?;
                 let right_side = Box::new(self.build(s_expr.child(1)?, right_required).await?);
@@ -873,11 +893,13 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::ProjectSet(project_set) => {
+                // 1. Prune unused Columns.
                 let column_projections = required.clone().into_iter().collect::<Vec<_>>();
                 for s in project_set.srfs.iter() {
                     required.extend(s.scalar.used_columns().iter().copied());
                 }
 
+                // 2. Build physical plan.
                 let input = self.build(s_expr.child(0)?, required).await?;
                 let input_schema = input.output_schema()?;
                 let srf_exprs = project_set
@@ -913,6 +935,7 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::CteScan(cte_scan) => {
+                // 1. Prune unused Columns.
                 let mut used_columns = cte_scan.used_columns()?;
                 used_columns = required.intersection(&used_columns).cloned().collect();
                 let mut pruned_fields = vec![];
@@ -932,6 +955,7 @@ impl PhysicalPlanBuilder {
                     }
                 }
 
+                // 2. Build physical plan.
                 Ok(PhysicalPlan::CteScan(CteScan {
                     plan_id: self.next_plan_id(),
                     cte_idx: cte_scan.cte_idx,
@@ -941,6 +965,7 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::MaterializedCte(cte) => {
+                // 1. Prune unused Columns.
                 let left_output_column = RelExpr::with_s_expr(s_expr)
                     .derive_relational_prop_child(0)?
                     .output_columns
@@ -964,6 +989,7 @@ impl PhysicalPlanBuilder {
                 self.cte_output_columns
                     .insert(cte.cte_idx, required_output_columns.clone());
 
+                // 2. Build physical plan.
                 Ok(PhysicalPlan::MaterializedCte(MaterializedCte {
                     plan_id: self.next_plan_id(),
                     left: Box::new(self.build(s_expr.child(0)?, left_required).await?),
@@ -974,6 +1000,7 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::Lambda(lambda) => {
+                // 1. Prune unused Columns.
                 let mut used = vec![];
                 // Keep all columns, as some lambda functions may be arguments to other lambda functions.
                 for s in lambda.items.iter() {
@@ -983,10 +1010,10 @@ impl PhysicalPlanBuilder {
                     })
                 }
 
+                // 2. Build physical plan.
                 if used.is_empty() {
                     return self.build(s_expr.child(0)?, required).await;
                 }
-
                 let lambda = plans::Lambda { items: used };
                 let input = self.build(s_expr.child(0)?, required).await?;
                 let input_schema = input.output_schema()?;
@@ -1597,6 +1624,7 @@ impl PhysicalPlanBuilder {
         required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
+        // 1. Prune unused Columns.
         // add virtual columns to scan
         let mut virtual_columns = ColumnSet::new();
         for column in self
@@ -1634,6 +1662,7 @@ impl PhysicalPlanBuilder {
             scan.prune_columns(used, prewhere)
         };
 
+        // 2. Build physical plan.
         let mut has_inner_column = false;
         let mut has_virtual_column = false;
         let mut name_mapping = BTreeMap::new();
