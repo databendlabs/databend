@@ -23,42 +23,43 @@ use ordered_float::OrderedFloat;
 
 pub type F64 = OrderedFloat<f64>;
 
-/// Datum is the struct to represent a single value in optimizer.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Datum {
     Bool(bool),
     Int(i64),
     UInt(u64),
     Float(F64),
     Bytes(Vec<u8>),
-
-    Null,
 }
 
 impl Datum {
-    pub fn from_scalar(data_value: &Scalar) -> Option<Self> {
+    pub fn from_scalar(data_value: Scalar) -> Option<Self> {
         match data_value {
-            Scalar::Boolean(v) => Some(Datum::Bool(*v)),
-            Scalar::Number(NumberScalar::Int64(v)) => Some(Datum::Int(*v)),
-            Scalar::Number(NumberScalar::Int32(v)) => Some(Datum::Int(*v as i64)),
-            Scalar::Number(NumberScalar::Int16(v)) => Some(Datum::Int(*v as i64)),
-            Scalar::Number(NumberScalar::Int8(v)) => Some(Datum::Int(*v as i64)),
-            Scalar::Number(NumberScalar::UInt64(v)) => Some(Datum::UInt(*v)),
-            Scalar::Number(NumberScalar::UInt32(v)) => Some(Datum::UInt(*v as u64)),
-            Scalar::Number(NumberScalar::UInt16(v)) => Some(Datum::UInt(*v as u64)),
-            Scalar::Number(NumberScalar::UInt8(v)) => Some(Datum::UInt(*v as u64)),
-            Scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(*v)),
+            Scalar::Boolean(v) => Some(Datum::Bool(v)),
+            Scalar::Number(NumberScalar::Int8(v)) => Some(Datum::Int(v as i64)),
+            Scalar::Number(NumberScalar::Int16(v)) => Some(Datum::Int(v as i64)),
+            Scalar::Number(NumberScalar::Int32(v)) | Scalar::Date(v) => Some(Datum::Int(v as i64)),
+            Scalar::Number(NumberScalar::Int64(v)) | Scalar::Timestamp(v) => Some(Datum::Int(v)),
+            Scalar::Number(NumberScalar::UInt8(v)) => Some(Datum::UInt(v as u64)),
+            Scalar::Number(NumberScalar::UInt16(v)) => Some(Datum::UInt(v as u64)),
+            Scalar::Number(NumberScalar::UInt32(v)) => Some(Datum::UInt(v as u64)),
+            Scalar::Number(NumberScalar::UInt64(v)) => Some(Datum::UInt(v)),
             Scalar::Number(NumberScalar::Float32(v)) => {
-                Some(Datum::Float(F64::from(f32::from(*v) as f64)))
+                Some(Datum::Float(F64::from(f32::from(v) as f64)))
             }
-            Scalar::String(v) => Some(Datum::Bytes(v.clone())),
-            Scalar::Date(v) => Some(Datum::Int(*v as i64)),
+            Scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(v)),
+            Scalar::String(v) => Some(Datum::Bytes(v)),
             _ => None,
         }
     }
 
+    pub fn is_bytes(&self) -> bool {
+        matches!(self, Datum::Bytes(_))
+    }
+
     pub fn to_double(&self) -> Result<f64> {
         match self {
+            Datum::Bool(v) => Ok(*v as u8 as f64),
             Datum::Int(v) => Ok(*v as f64),
             Datum::UInt(v) => Ok(*v as f64),
             Datum::Float(v) => Ok(v.into_inner()),
@@ -66,6 +67,34 @@ impl Datum {
                 "Cannot convert {:?} to double",
                 self
             ))),
+        }
+    }
+
+    pub fn max(a: Option<Datum>, b: Option<Datum>) -> Option<Datum> {
+        match (a, b) {
+            (Some(x), Some(y)) if Self::type_comparable(&x, &y) => {
+                if Self::compare(&x, &y).unwrap() == std::cmp::Ordering::Greater {
+                    Some(x)
+                } else {
+                    Some(y)
+                }
+            }
+            (Some(x), None) | (None, Some(x)) => Some(x),
+            _ => None,
+        }
+    }
+
+    pub fn min(a: Option<Datum>, b: Option<Datum>) -> Option<Datum> {
+        match (a, b) {
+            (Some(x), Some(y)) if Self::type_comparable(&x, &y) => {
+                if Self::compare(&x, &y).unwrap() == std::cmp::Ordering::Less {
+                    Some(x)
+                } else {
+                    Some(y)
+                }
+            }
+            (Some(x), None) | (None, Some(x)) => Some(x),
+            _ => None,
         }
     }
 }
@@ -81,7 +110,6 @@ impl Display for Datum {
                 let s = String::from_utf8_lossy(v);
                 write!(f, "{}", s)
             }
-            Datum::Null => write!(f, "NULL"),
         }
     }
 }

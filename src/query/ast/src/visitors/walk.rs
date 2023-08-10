@@ -263,6 +263,16 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a 
             visitor.visit_join(join);
         }
         TableReference::Stage { .. } => {}
+        TableReference::Values { values, alias, .. } => {
+            for row_values in values {
+                for value in row_values {
+                    visitor.visit_expr(value);
+                }
+            }
+            if let Some(alias) = alias {
+                visitor.visit_identifier(&alias.name);
+            }
+        }
     }
 }
 
@@ -287,10 +297,21 @@ pub fn walk_join_condition<'a, V: Visitor<'a>>(visitor: &mut V, join_cond: &'a J
 }
 
 pub fn walk_cte<'a, V: Visitor<'a>>(visitor: &mut V, cte: &'a CTE) {
-    let CTE { alias, query, .. } = cte;
+    let CTE { alias, source, .. } = cte;
 
     visitor.visit_identifier(&alias.name);
-    visitor.visit_query(query);
+    match source {
+        CTESource::Query { query, .. } => {
+            visitor.visit_query(query);
+        }
+        CTESource::Values(values) => {
+            for row_values in values {
+                for value in row_values {
+                    visitor.visit_expr(value);
+                }
+            }
+        }
+    }
 }
 
 pub fn walk_window_definition<'a, V: Visitor<'a>>(

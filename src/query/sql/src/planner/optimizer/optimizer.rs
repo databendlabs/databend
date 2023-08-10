@@ -189,7 +189,6 @@ pub fn optimize_query(
     if enable_distributed_query {
         result = optimize_distributed_query(ctx.clone(), &result)?;
     }
-
     Ok(result)
 }
 

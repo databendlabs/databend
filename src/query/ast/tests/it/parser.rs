@@ -125,8 +125,8 @@ fn test_statement() {
         r#"CREATE TABLE t(c1 int default 1);"#,
         r#"create table abc as (select * from xyz limit 10)"#,
         r#"ALTER USER u1 IDENTIFIED BY '123456';"#,
-        r#"ALTER USER u1 WITH DEFAULT_ROLE = 'role1';"#,
-        r#"ALTER USER u1 WITH DEFAULT_ROLE = 'role1', TENANTSETTING;"#,
+        r#"ALTER USER u1 WITH DEFAULT_ROLE = role1;"#,
+        r#"ALTER USER u1 WITH DEFAULT_ROLE = role1, TENANTSETTING;"#,
         r#"ALTER USER u1 WITH SET NETWORK POLICY = 'policy1';"#,
         r#"ALTER USER u1 WITH UNSET NETWORK POLICY;"#,
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING"#,
@@ -175,7 +175,9 @@ fn test_statement() {
         r#"create user 'test-e' identified by 'password';"#,
         r#"drop user if exists 'test-j';"#,
         r#"alter user 'test-e' identified by 'new-password';"#,
+        r#"create role test"#,
         r#"create role 'test'"#,
+        r#"drop role if exists test"#,
         r#"drop role if exists 'test'"#,
         r#"OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;"#,
         r#"OPTIMIZE TABLE t COMPACT LIMIT 10;"#,
@@ -209,28 +211,36 @@ fn test_statement() {
         r#"GRANT SELECT, CREATE ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON *.* TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON * TO USER 'test-grant';"#,
-        r#"GRANT SELECT, CREATE ON * TO ROLE 'role1';"#,
+        r#"GRANT SELECT, CREATE ON * TO ROLE role1;"#,
         r#"GRANT ALL ON *.* TO 'test-grant';"#,
-        r#"GRANT ALL ON *.* TO ROLE 'role2';"#,
+        r#"GRANT ALL ON *.* TO ROLE role2;"#,
         r#"GRANT ALL PRIVILEGES ON * TO 'test-grant';"#,
-        r#"GRANT ALL PRIVILEGES ON * TO ROLE 'role3';"#,
-        r#"GRANT ROLE 'test' TO 'test-user';"#,
-        r#"GRANT ROLE 'test' TO USER 'test-user';"#,
-        r#"GRANT ROLE 'test' TO ROLE 'test-user';"#,
+        r#"GRANT ALL PRIVILEGES ON * TO ROLE role3;"#,
+        r#"GRANT ROLE test TO 'test-user';"#,
+        r#"GRANT ROLE test TO USER 'test-user';"#,
+        r#"GRANT ROLE test TO ROLE `test-user`;"#,
         r#"GRANT SELECT ON db01.* TO 'test-grant';"#,
         r#"GRANT SELECT ON db01.* TO USER 'test-grant';"#,
-        r#"GRANT SELECT ON db01.* TO ROLE 'role1'"#,
+        r#"GRANT SELECT ON db01.* TO ROLE role1"#,
         r#"GRANT SELECT ON db01.tb1 TO 'test-grant';"#,
         r#"GRANT SELECT ON db01.tb1 TO USER 'test-grant';"#,
-        r#"GRANT SELECT ON db01.tb1 TO ROLE 'role1';"#,
-        r#"GRANT SELECT ON tb1 TO ROLE 'role1';"#,
+        r#"GRANT SELECT ON db01.tb1 TO ROLE role1;"#,
+        r#"GRANT SELECT ON tb1 TO ROLE role1;"#,
         r#"GRANT ALL ON tb1 TO 'u1';"#,
         r#"SHOW GRANTS;"#,
         r#"SHOW GRANTS FOR 'test-grant';"#,
         r#"SHOW GRANTS FOR USER 'test-grant';"#,
+        r#"SHOW GRANTS FOR ROLE role1;"#,
         r#"SHOW GRANTS FOR ROLE 'role1';"#,
         r#"REVOKE SELECT, CREATE ON * FROM 'test-grant';"#,
+        r#"REVOKE SELECT ON tb1 FROM ROLE role1;"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
+        r#"drop role 'role1';"#,
+        r#"GRANT ROLE test TO ROLE 'test-user';"#,
+        r#"GRANT ROLE test TO ROLE `test-user`;"#,
+        r#"SET ROLE `test-user`;"#,
+        r#"SET ROLE 'test-user';"#,
+        r#"SET ROLE ROLE1;"#,
         r#"REVOKE ALL ON tb1 FROM 'u1';"#,
         r#"COPY INTO mytable
                 FROM @~/mybucket/data.csv
@@ -251,6 +261,16 @@ fn test_statement() {
                 )
                 size_limit=10
                 max_files=10;"#,
+        r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                FILE_FORMAT = (
+                    type = CSV
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10
+                max_files=1000;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 CONNECTION = (
@@ -420,6 +440,8 @@ fn test_statement() {
         r#"SELECT * FROM t GROUP BY CUBE (a, b, c)"#,
         r#"SELECT * FROM t GROUP BY ROLLUP (a, b, c)"#,
         r#"CREATE MASKING POLICY email_mask AS (val STRING) RETURN STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
+        r#"DESC MASKING POLICY email_mask"#,
+        r#"DROP MASKING POLICY IF EXISTS email_mask"#,
         r#"CREATE VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t"#,
         r#"ALTER VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t"#,
         r#"DROP VIRTUAL COLUMNS FOR t"#,
@@ -473,12 +495,10 @@ fn test_statement_error() {
         r#"alter user 'test-e' identifies by 'new-password';"#,
         r#"create role 'test'@'%';"#,
         r#"drop role 'test'@'%';"#,
-        r#"drop role role1;"#,
-        r#"GRANT ROLE test TO ROLE 'test-user';"#,
+        r#"SHOW GRANT FOR ROLE 'role1';"#,
         r#"GRANT ROLE 'test' TO ROLE test-user;"#,
         r#"GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON *.c TO 'test-grant';"#,
-        r#"SHOW GRANT FOR ROLE role1;"#,
         r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT, CREATE ON * TO 'test-grant';"#,
         r#"COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();"#,
@@ -526,6 +546,7 @@ fn test_query() {
         r#"with t2 as (select a from t) select t2.a from t2  where t2.a > 1"#,
         r#"with t2(tt) as materialized (select a from t), t3 as materialized (select * from t), t4 as (select a from t where a > 1) select t2.tt, t3.a, t4.a from t2, t3, t4 where t2.tt > 1"#,
         r#"with recursive t2(tt) as (select a from t1 union select tt from t2) select t2.tt from t2"#,
+        r#"with t(a,b) as (values(1,1),(2,null),(null,5)) select t.a, t.b from t"#,
         r#"select c_count cc, count(*) as custdist, sum(c_acctbal) as totacctbal
             from customer, orders ODS,
                 (
@@ -558,6 +579,7 @@ fn test_query() {
         r#"select sum(a) over w from customer window w as (partition by a order by b)"#,
         r#"select a, sum(a) over w, sum(a) over w1, sum(a) over w2 from t1 window w as (partition by a), w2 as (w1 rows current row), w1 as (w order by a) order by a"#,
         r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
+        r#"SELECT * FROM (VALUES(1,1),(2,null),(null,5)) AS t(a,b)"#,
     ];
 
     for case in cases {

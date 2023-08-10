@@ -53,8 +53,8 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             let mut in_memory_size = 0;
 
             for col_stats in stats {
-                min_stats.push(col_stats.min.clone());
-                max_stats.push(col_stats.max.clone());
+                min_stats.push(col_stats.min().clone());
+                max_stats.push(col_stats.max().clone());
 
                 null_count += col_stats.null_count;
                 in_memory_size += col_stats.in_memory_size;
@@ -100,8 +100,8 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
                 return None;
             }
 
-            min_stats.push(stat.min.clone());
-            max_stats.push(stat.max.clone());
+            min_stats.push(stat.min());
+            max_stats.push(stat.max());
             levels.push(stat.level);
         } else {
             return None;
