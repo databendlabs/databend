@@ -99,6 +99,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::Filter(Filter {
             plan_id: plan.plan_id,
+            projections: plan.projections.clone(),
             input: Box::new(input),
             predicates: plan.predicates.clone(),
             stat_info: plan.stat_info.clone(),
@@ -122,6 +123,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::EvalScalar(EvalScalar {
             plan_id: plan.plan_id,
+            projections: plan.projections.clone(),
             input: Box::new(input),
             exprs: plan.exprs.clone(),
             stat_info: plan.stat_info.clone(),
@@ -187,6 +189,9 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: plan.plan_id,
+            projections: plan.projections.clone(),
+            probe_projections: plan.probe_projections.clone(),
+            build_projections: plan.build_projections.clone(),
             build: Box::new(build),
             probe: Box::new(probe),
             build_keys: plan.build_keys.clone(),
@@ -371,7 +376,7 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             srf_exprs: plan.srf_exprs.clone(),
-            unused_indices: plan.unused_indices.clone(),
+            projections: plan.projections.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }

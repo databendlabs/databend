@@ -86,7 +86,3 @@ drop view v_after_deletion;
 
 statement ok
 drop table if exists del_id;
-
-
-
-

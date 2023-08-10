@@ -24,6 +24,8 @@ use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::apply_cse;
 use common_sql::evaluator::BlockOperator;
+use common_sql::optimizer::ColumnSet;
+use itertools::Itertools;
 
 #[test]
 fn test_cse() {
@@ -86,23 +88,32 @@ fn test_cse() {
         .map(|expr| check(expr, &BUILTIN_FUNCTIONS).unwrap())
         .collect();
 
-    let operators = vec![BlockOperator::Map { exprs }];
+    let mut projections = ColumnSet::new();
+    projections.insert(1);
+    projections.insert(2);
+    let operators = vec![BlockOperator::Map {
+        exprs,
+        projections: Some(projections),
+    }];
 
     let mut operators = apply_cse(operators, 1);
 
     assert_eq!(operators.len(), 1);
 
     match operators.pop().unwrap() {
-        BlockOperator::MapWithOutput {
-            exprs,
-            output_indexes,
-        } => {
+        BlockOperator::Map { exprs, projections } => {
             assert_eq!(exprs.len(), 3);
-
             assert_eq!(exprs[0].sql_display(), "a + 1");
             assert_eq!(exprs[1].sql_display(), "__temp_cse_1");
             assert_eq!(exprs[2].sql_display(), "__temp_cse_1 * 2");
-            assert_eq!(output_indexes, vec![2, 3]);
+            assert_eq!(
+                projections
+                    .unwrap()
+                    .into_iter()
+                    .sorted()
+                    .collect::<Vec<_>>(),
+                vec![2, 3]
+            );
         }
 
         _ => unreachable!(),

@@ -107,6 +107,7 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
@@ -126,9 +127,10 @@ impl JoinHashTable {
             .iter()
             .map(|c| &c.data_block)
             .collect::<Vec<_>>();
-        let num_rows = data_blocks
+        let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
         let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
 
         for (i, key) in keys_iter.enumerate() {
@@ -155,19 +157,29 @@ impl JoinHashTable {
                         ));
                     }
 
-                    let build_block =
-                        self.row_space
-                            .gather(local_build_indexes, &data_blocks, &num_rows)?;
-                    let probe_block = DataBlock::take_compacted_indices(
-                        input,
-                        &local_probe_indexes[0..probe_indexes_len],
-                        occupied,
-                    )?;
+                    let probe_block = if is_probe_projected {
+                        Some(DataBlock::take_compacted_indices(
+                            input,
+                            &local_probe_indexes[0..probe_indexes_len],
+                            occupied,
+                        )?)
+                    } else {
+                        None
+                    };
+                    let build_block = if is_build_projected {
+                        Some(self.row_space.gather(
+                            local_build_indexes,
+                            &data_blocks,
+                            &build_num_rows,
+                        )?)
+                    } else {
+                        None
+                    };
+                    let result_block = self.merge_eq_block(probe_block, build_block, occupied);
 
-                    let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
-                    if !merged_block.is_empty() {
+                    if !result_block.is_empty() {
                         let (bm, all_true, all_false) = self.get_other_filters(
-                            &merged_block,
+                            &result_block,
                             self.hash_join_desc.other_predicate.as_ref().unwrap(),
                         )?;
 
@@ -219,20 +231,33 @@ impl JoinHashTable {
             }
         }
 
-        let build_block =
-            self.row_space
-                .gather(&local_build_indexes[0..occupied], &data_blocks, &num_rows)?;
-        let probe_block = DataBlock::take_compacted_indices(
-            input,
-            &local_probe_indexes[0..probe_indexes_len],
-            occupied,
-        )?;
+        if occupied == 0 {
+            return Ok(vec![]);
+        }
 
-        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+        let probe_block = if is_probe_projected {
+            Some(DataBlock::take_compacted_indices(
+                input,
+                &local_probe_indexes[0..probe_indexes_len],
+                occupied,
+            )?)
+        } else {
+            None
+        };
+        let build_block = if is_build_projected {
+            Some(self.row_space.gather(
+                &local_build_indexes[0..occupied],
+                &data_blocks,
+                &build_num_rows,
+            )?)
+        } else {
+            None
+        };
+        let result_block = self.merge_eq_block(probe_block, build_block, occupied);
 
-        if !merged_block.is_empty() {
+        if !result_block.is_empty() {
             let (bm, all_true, all_false) = self.get_other_filters(
-                &merged_block,
+                &result_block,
                 self.hash_join_desc.other_predicate.as_ref().unwrap(),
             )?;
 

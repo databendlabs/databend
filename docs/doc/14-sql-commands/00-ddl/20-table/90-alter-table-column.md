@@ -241,9 +241,17 @@ CREATE USER manager_user IDENTIFIED BY 'databend';
 GRANT ROLE 'MANAGERS' TO 'manager_user';
 
 -- Create a masking policy
-CREATE MASKING POLICY email_mask AS (val STRING) 
-    RETURN STRING -> CASE WHEN current_role() IN ('MANAGERS') THEN VAL ELSE '*********' END 
-    COMMENT = 'hide_email';
+CREATE MASKING POLICY email_mask
+AS
+  (val string)
+  RETURNS string ->
+  CASE
+  WHEN current_role() IN ('MANAGERS') THEN
+    val
+  ELSE
+    '*********'
+  END
+  COMMENT = 'hide_email';
 
 -- Associate the masking policy with the 'email' column
 ALTER TABLE user_info MODIFY COLUMN email SET MASKING POLICY email_mask;
