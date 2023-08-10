@@ -45,6 +45,15 @@ fn test_geo_h3() {
     test_h3_get_faces(file);
     test_h3_cell_area_m2(file);
     test_h3_cell_area_rads2(file);
+    test_h3_to_center_child(file);
+    test_h3_exact_edge_length_m(file);
+    test_h3_exact_edge_length_km(file);
+    test_h3_exact_edge_length_rads(file);
+    test_h3_num_hexagons(file);
+    test_h3_line(file);
+    test_h3_distance(file);
+    test_h3_hex_ring(file);
+    test_h3_get_unidirectional_edge(file);
 }
 
 fn test_h3_to_geo(file: &mut impl Write) {
@@ -369,4 +378,140 @@ fn test_h3_cell_area_rads2(file: &mut impl Write) {
             599686042433355775,
         ]),
     )]);
+}
+
+fn test_h3_to_center_child(file: &mut impl Write) {
+    run_ast(file, "h3_to_center_child(0, 1)", &[]);
+    run_ast(file, "h3_to_center_child(599119489002373119, 16)", &[]);
+    run_ast(file, "h3_to_center_child(599119489002373119, 15)", &[]);
+
+    run_ast(file, "h3_to_center_child(h3, res)", &[
+        (
+            "h3",
+            UInt64Type::from_data(vec![599119489002373119, 635318325446452991]),
+        ),
+        ("res", UInt8Type::from_data(vec![14, 15])),
+    ]);
+}
+
+fn test_h3_exact_edge_length_m(file: &mut impl Write) {
+    run_ast(file, "h3_exact_edge_length_m(0)", &[]);
+    run_ast(file, "h3_exact_edge_length_m(599119489002373119)", &[]);
+    run_ast(file, "h3_exact_edge_length_m(1319695429381652479)", &[]);
+
+    run_ast(file, "h3_exact_edge_length_m(h3)", &[(
+        "h3",
+        UInt64Type::from_data(vec![1319695429381652479, 1391753023419580415]),
+    )]);
+}
+
+fn test_h3_exact_edge_length_km(file: &mut impl Write) {
+    run_ast(file, "h3_exact_edge_length_km(0)", &[]);
+    run_ast(file, "h3_exact_edge_length_km(599119489002373119)", &[]);
+    run_ast(file, "h3_exact_edge_length_km(1319695429381652479)", &[]);
+
+    run_ast(file, "h3_exact_edge_length_km(h3)", &[(
+        "h3",
+        UInt64Type::from_data(vec![1319695429381652479, 1391753023419580415]),
+    )]);
+}
+
+fn test_h3_exact_edge_length_rads(file: &mut impl Write) {
+    run_ast(file, "h3_exact_edge_length_rads(0)", &[]);
+    run_ast(file, "h3_exact_edge_length_rads(599119489002373119)", &[]);
+    run_ast(file, "h3_exact_edge_length_rads(1319695429381652479)", &[]);
+
+    run_ast(file, "h3_exact_edge_length_rads(h3)", &[(
+        "h3",
+        UInt64Type::from_data(vec![1319695429381652479, 1391753023419580415]),
+    )]);
+}
+
+fn test_h3_num_hexagons(file: &mut impl Write) {
+    run_ast(file, "h3_num_hexagons(0)", &[]);
+    run_ast(file, "h3_num_hexagons(16)", &[]);
+    run_ast(file, "h3_num_hexagons(10)", &[]);
+
+    run_ast(file, "h3_num_hexagons(res)", &[(
+        "res",
+        UInt8Type::from_data(vec![10, 15]),
+    )]);
+}
+
+fn test_h3_line(file: &mut impl Write) {
+    run_ast(file, "h3_line(0, 0)", &[]);
+    run_ast(file, "h3_line(599119489002373119, 0)", &[]);
+    run_ast(file, "h3_line(599119489002373119, 599119491149856767)", &[]);
+
+    run_ast(file, "h3_line(h3, a_h3)", &[
+        (
+            "h3",
+            UInt64Type::from_data(vec![599119489002373119, 599119489002373119]),
+        ),
+        (
+            "a_h3",
+            UInt64Type::from_data(vec![599119491149856767, 599119492223598591]),
+        ),
+    ]);
+}
+
+fn test_h3_distance(file: &mut impl Write) {
+    run_ast(file, "h3_distance(0, 0)", &[]);
+    run_ast(file, "h3_distance(599119489002373119, 0)", &[]);
+    run_ast(
+        file,
+        "h3_distance(599119489002373119, 599119491149856767)",
+        &[],
+    );
+
+    run_ast(file, "h3_distance(h3, a_h3)", &[
+        (
+            "h3",
+            UInt64Type::from_data(vec![599119489002373119, 599119489002373119]),
+        ),
+        (
+            "a_h3",
+            UInt64Type::from_data(vec![599119491149856767, 599119492223598591]),
+        ),
+    ]);
+}
+
+fn test_h3_hex_ring(file: &mut impl Write) {
+    run_ast(file, "h3_hex_ring(0, 0)", &[]);
+    run_ast(file, "h3_hex_ring(599686042433355775, 0)", &[]);
+    run_ast(file, "h3_hex_ring(599119489002373119, 2)", &[]);
+    run_ast(file, "h3_hex_ring(599686042433355775, 2)", &[]);
+
+    run_ast(file, "h3_distance(h3, k)", &[
+        (
+            "h3",
+            UInt64Type::from_data(vec![599686042433355775, 644325524701193897]),
+        ),
+        ("k", UInt32Type::from_data(vec![2, 3])),
+    ]);
+}
+
+fn test_h3_get_unidirectional_edge(file: &mut impl Write) {
+    run_ast(file, "h3_get_unidirectional_edge(0, 0)", &[]);
+    run_ast(
+        file,
+        "h3_get_unidirectional_edge(644325524701193897, 0)",
+        &[],
+    );
+    run_ast(
+        file,
+        "h3_get_unidirectional_edge(644325524701193897, 644325524701193754)",
+        &[],
+    );
+
+    run_ast(file, "h3_get_unidirectional_edge(h3, a_h3)", &[
+        (
+            "h3",
+            UInt64Type::from_data(vec![644325524701193897, 644325524701193897]),
+        ),
+        (
+            "a_h3",
+            UInt64Type::from_data(vec![644325524701193754, 644325524701193901]),
+        ),
+    ]);
 }
