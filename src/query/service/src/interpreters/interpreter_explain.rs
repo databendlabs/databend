@@ -29,6 +29,7 @@ use common_expression::FromData;
 use common_profile::QueryProfileManager;
 use common_profile::SharedProcessorProfiles;
 use common_sql::executor::ProfileHelper;
+use common_sql::optimizer::ColumnSet;
 use common_sql::MetadataRef;
 use common_storages_result_cache::gen_result_cache_key;
 use common_storages_result_cache::ResultCacheReader;
@@ -75,6 +76,7 @@ impl Interpreter for ExplainInterpreter {
                 Plan::Query {
                     s_expr,
                     metadata,
+                    bind_context,
                     formatted_ast,
                     ..
                 } => {
@@ -85,7 +87,7 @@ impl Interpreter for ExplainInterpreter {
                     // It's because we need to get the same partitions as the original selecting plan.
                     let mut builder =
                         PhysicalPlanBuilder::new(metadata.clone(), ctx, formatted_ast.is_none());
-                    let plan = builder.build(s_expr).await?;
+                    let plan = builder.build(s_expr, bind_context.column_set()).await?;
                     self.explain_physical_plan(&plan, metadata, formatted_ast)
                         .await?
                 }
@@ -94,11 +96,14 @@ impl Interpreter for ExplainInterpreter {
 
             ExplainKind::JOIN => match &self.plan {
                 Plan::Query {
-                    s_expr, metadata, ..
+                    s_expr,
+                    metadata,
+                    bind_context,
+                    ..
                 } => {
                     let ctx = self.ctx.clone();
                     let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, true);
-                    let plan = builder.build(s_expr).await?;
+                    let plan = builder.build(s_expr, bind_context.column_set()).await?;
                     self.explain_join_order(&plan, metadata)?
                 }
                 _ => Err(ErrorCode::Unimplemented(
@@ -110,11 +115,17 @@ impl Interpreter for ExplainInterpreter {
                 Plan::Query {
                     s_expr,
                     metadata,
+                    bind_context,
                     ignore_result,
                     ..
                 } => {
-                    self.explain_analyze(s_expr, metadata, *ignore_result)
-                        .await?
+                    self.explain_analyze(
+                        s_expr,
+                        metadata,
+                        bind_context.column_set(),
+                        *ignore_result,
+                    )
+                    .await?
                 }
                 _ => Err(ErrorCode::Unimplemented(
                     "Unsupported EXPLAIN ANALYZE statement",
@@ -129,10 +140,17 @@ impl Interpreter for ExplainInterpreter {
 
             ExplainKind::Fragments => match &self.plan {
                 Plan::Query {
-                    s_expr, metadata, ..
+                    s_expr,
+                    metadata,
+                    bind_context,
+                    ..
                 } => {
-                    self.explain_fragments(*s_expr.clone(), metadata.clone())
-                        .await?
+                    self.explain_fragments(
+                        *s_expr.clone(),
+                        metadata.clone(),
+                        bind_context.column_set(),
+                    )
+                    .await?
                 }
                 _ => {
                     return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
@@ -257,10 +275,11 @@ impl ExplainInterpreter {
         &self,
         s_expr: SExpr,
         metadata: MetadataRef,
+        required: ColumnSet,
     ) -> Result<Vec<DataBlock>> {
         let ctx = self.ctx.clone();
         let plan = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true)
-            .build(&s_expr)
+            .build(&s_expr, required)
             .await?;
 
         let root_fragment = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
@@ -282,10 +301,11 @@ impl ExplainInterpreter {
         &self,
         s_expr: &SExpr,
         metadata: &MetadataRef,
+        required: ColumnSet,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
-        let plan = builder.build(s_expr).await?;
+        let plan = builder.build(s_expr, required).await?;
         let mut build_res =
             build_query_pipeline(&self.ctx, &[], &plan, ignore_result, true).await?;
 

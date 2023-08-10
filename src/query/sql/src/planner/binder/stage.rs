@@ -92,7 +92,10 @@ impl BindContext {
             map_exprs.push(expr);
         }
 
-        let operators = vec![BlockOperator::Map { exprs: map_exprs }];
+        let operators = vec![BlockOperator::Map {
+            exprs: map_exprs,
+            projections: None,
+        }];
 
         let one_row_chunk = DataBlock::new(
             vec![BlockEntry::new(
