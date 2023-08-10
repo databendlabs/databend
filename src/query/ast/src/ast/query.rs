@@ -59,8 +59,16 @@ pub struct With {
 pub struct CTE {
     pub span: Span,
     pub alias: TableAlias,
-    pub materialized: bool,
-    pub query: Query,
+    pub source: CTESource,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CTESource {
+    Query {
+        materialized: bool,
+        query: Box<Query>,
+    },
+    Values(Vec<Vec<Expr>>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -265,6 +273,12 @@ pub enum TableReference {
         span: Span,
         location: FileLocation,
         options: SelectStageOptions,
+        alias: Option<TableAlias>,
+    },
+    // A set of values generates a temporary constant table that can be used for queries
+    Values {
+        span: Span,
+        values: Vec<Vec<Expr>>,
         alias: Option<TableAlias>,
     },
 }
@@ -531,6 +545,25 @@ impl Display for TableReference {
                     write!(f, " AS {alias}")?;
                 }
             }
+            TableReference::Values {
+                span: _,
+                values,
+                alias,
+            } => {
+                write!(f, "(VALUES")?;
+                for (i, value) in values.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "(")?;
+                    write_comma_separated_list(f, value)?;
+                    write!(f, ")")?;
+                }
+                write!(f, ")")?;
+                if let Some(alias) = alias {
+                    write!(f, " {alias}")?;
+                }
+            }
         }
         Ok(())
     }
@@ -676,7 +709,36 @@ impl Display for SetExpr {
 
 impl Display for CTE {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} AS ({})", self.alias, self.query)?;
+        write!(f, "{} AS {}", self.alias, self.source)?;
+        Ok(())
+    }
+}
+
+impl Display for CTESource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CTESource::Query {
+                materialized,
+                query,
+            } => {
+                if *materialized {
+                    write!(f, "MATERIALIZED ")?;
+                }
+                write!(f, "({query})")?;
+            }
+            CTESource::Values(values) => {
+                write!(f, "(VALUES")?;
+                for (i, value) in values.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "(")?;
+                    write_comma_separated_list(f, value)?;
+                    write!(f, ")")?;
+                }
+                write!(f, ")")?;
+            }
+        }
         Ok(())
     }
 }

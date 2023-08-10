@@ -68,6 +68,7 @@ use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_join;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
+use crate::executor::ConstantTableScan;
 use crate::executor::CteScan;
 use crate::executor::FragmentKind;
 use crate::executor::LagLeadDefault;
@@ -1088,6 +1089,15 @@ impl PhysicalPlanBuilder {
                     input: Box::new(input),
                     lambda_funcs,
                     stat_info: Some(stat_info),
+                }))
+            }
+
+            RelOperator::ConstantTableScan(scan) => {
+                Ok(PhysicalPlan::ConstantTableScan(ConstantTableScan {
+                    plan_id: self.next_plan_id(),
+                    values: scan.values.clone(),
+                    num_rows: scan.num_rows,
+                    output_schema: DataSchemaRefExt::create(scan.schema.fields().clone()),
                 }))
             }
 

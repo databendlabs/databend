@@ -13,11 +13,16 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::NaiveDateTime;
+use chrono::TimeZone;
+use chrono::Utc;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
@@ -26,19 +31,30 @@ use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::statistics::BasicColumnStatistics;
+use common_catalog::table::ColumnStatisticsProvider;
+use common_catalog::table::Parquet2TableColumnStatisticsProvider;
 use common_catalog::table::Table;
+use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchema;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 use common_pipeline_core::Pipeline;
 use common_storage::init_stage_operator;
+use common_storage::read_parquet_metas_in_parallel;
+use common_storage::ColumnNodes;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
 
-use crate::utils::naive_parquet_table_info;
+use crate::parquet2::parquet_table::table::pread::FileMetaData;
+use crate::parquet2::pruning::check_parquet_schema;
+use crate::parquet2::statistics::collect_basic_column_stats;
 
 pub struct Parquet2Table {
     pub(super) read_options: ParquetReadOptions,
@@ -53,12 +69,13 @@ pub struct Parquet2Table {
     pub(super) files_to_read: Option<Vec<StageFileInfo>>,
     pub(super) schema_from: String,
     pub(super) compression_ratio: f64,
+
+    pub(super) column_statistics_provider: Parquet2TableColumnStatisticsProvider,
 }
 
 impl Parquet2Table {
     pub fn from_info(info: &Parquet2TableInfo) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&info.stage_info)?;
-
         Ok(Arc::new(Parquet2Table {
             table_info: info.table_info.clone(),
             arrow_schema: info.arrow_schema.clone(),
@@ -70,6 +87,7 @@ impl Parquet2Table {
             schema_descr: info.schema_descr.clone(),
             schema_from: info.schema_from.clone(),
             compression_ratio: info.compression_ratio,
+            column_statistics_provider: info.column_statistics_provider.clone(),
         }))
     }
 }
@@ -100,6 +118,23 @@ impl Table for Parquet2Table {
         true
     }
 
+    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+        let s = &self.table_info.meta.statistics;
+        Ok(Some(TableStatistics {
+            num_rows: Some(s.number_of_rows),
+            data_size: Some(s.data_bytes),
+            data_size_compressed: Some(s.compressed_data_bytes),
+            index_size: Some(s.index_data_bytes),
+            number_of_blocks: s.number_of_blocks,
+            number_of_segments: s.number_of_segments,
+        }))
+    }
+
+    #[async_backtrace::framed]
+    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+        Ok(Box::new(self.column_statistics_provider.clone()))
+    }
+
     fn get_data_source_info(&self) -> DataSourceInfo {
         DataSourceInfo::Parquet2Source(Parquet2TableInfo {
             table_info: self.table_info.clone(),
@@ -111,6 +146,7 @@ impl Table for Parquet2Table {
             files_to_read: self.files_to_read.clone(),
             schema_from: self.schema_from.clone(),
             compression_ratio: self.compression_ratio,
+            column_statistics_provider: self.column_statistics_provider.clone(),
         })
     }
 
@@ -164,6 +200,125 @@ pub(crate) fn arrow_to_table_schema(mut schema: ArrowSchema) -> TableSchema {
     TableSchema::from(&schema)
 }
 
-pub(super) fn create_parquet_table_info(schema: ArrowSchema) -> TableInfo {
-    naive_parquet_table_info(arrow_to_table_schema(schema).into())
+pub(super) fn create_parquet_table_info(schema: ArrowSchema, stage_info: &StageInfo) -> TableInfo {
+    TableInfo {
+        ident: TableIdent::new(0, 0),
+        desc: "''.'read_parquet'".to_string(),
+        name: format!("read_parquet({})", stage_info.stage_name),
+        meta: TableMeta {
+            schema: arrow_to_table_schema(schema).into(),
+            engine: "SystemReadParquet".to_string(),
+            created_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
+            updated_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+pub(super) fn blocking_get_parquet2_file_meta(
+    files_to_read: &Option<Vec<StageFileInfo>>,
+    files_info: &StageFilesInfo,
+    operator: &Operator,
+    expect_schema: &SchemaDescriptor,
+    schema_from: &str,
+) -> Result<Vec<FileMetaData>> {
+    let locations = match files_to_read {
+        Some(files) => files
+            .iter()
+            .map(|f| (f.path.clone(), f.size))
+            .collect::<Vec<_>>(),
+        None => files_info
+            .blocking_list(operator, false, None)?
+            .into_iter()
+            .map(|f| (f.path, f.size))
+            .collect::<Vec<_>>(),
+    };
+
+    // Read parquet meta data, sync reading.
+    let mut file_metas = Vec::with_capacity(locations.len());
+    for (location, _) in locations.iter() {
+        let mut reader = operator.blocking().reader(location)?;
+        let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
+            ErrorCode::Internal(format!(
+                "Read parquet file '{}''s meta error: {}",
+                location, e
+            ))
+        })?;
+        check_parquet_schema(expect_schema, file_meta.schema(), location, schema_from)?;
+        file_metas.push(file_meta);
+    }
+    Ok(file_metas)
+}
+
+pub(super) async fn non_blocking_get_parquet2_file_meta(
+    files_to_read: &Option<Vec<StageFileInfo>>,
+    files_info: &StageFilesInfo,
+    operator: &Operator,
+    expect_schema: &SchemaDescriptor,
+    schema_from: &str,
+) -> Result<Vec<FileMetaData>> {
+    let locations = match files_to_read {
+        Some(files) => files
+            .iter()
+            .map(|f| (f.path.clone(), f.size))
+            .collect::<Vec<_>>(),
+        None => files_info
+            .list(operator, false, None)
+            .await?
+            .into_iter()
+            .map(|f| (f.path, f.size))
+            .collect::<Vec<_>>(),
+    };
+
+    // Read parquet meta data, async reading.
+    // TODO(Dousir9): get `max_memory_usage` from ctx.
+    let file_metas =
+        read_parquet_metas_in_parallel(operator.clone(), locations.clone(), 16, 64, 79819535155)
+            .await?;
+    for (idx, file_meta) in file_metas.iter().enumerate() {
+        check_parquet_schema(
+            expect_schema,
+            file_meta.schema(),
+            &locations[idx].0,
+            schema_from,
+        )?;
+    }
+    Ok(file_metas)
+}
+
+pub(super) fn create_parquet2_statistics_provider(
+    file_metas: Vec<FileMetaData>,
+    arrow_schema: &ArrowSchema,
+) -> Result<Parquet2TableColumnStatisticsProvider> {
+    // Collect Basic Columns Statistics from file metas.
+    let mut num_rows = 0;
+    let mut basic_column_stats = vec![BasicColumnStatistics::new_null(); arrow_schema.fields.len()];
+    let column_nodes = ColumnNodes::new_from_schema(arrow_schema, None);
+    for file_meta in file_metas.into_iter() {
+        num_rows += file_meta.num_rows;
+        let no_stats = file_meta.row_groups.is_empty()
+            || file_meta.row_groups.iter().any(|r| {
+                r.columns()
+                    .iter()
+                    .any(|c| c.metadata().statistics.is_none())
+            });
+        if !no_stats {
+            if let Ok(row_group_column_stats) =
+                collect_basic_column_stats(&column_nodes, &file_meta.row_groups)
+            {
+                for (idx, col_stat) in row_group_column_stats.into_iter().enumerate() {
+                    basic_column_stats[idx].merge(col_stat);
+                }
+            }
+        }
+    }
+
+    let mut column_stats = HashMap::new();
+    for (column_id, col_stat) in basic_column_stats.into_iter().enumerate() {
+        column_stats.insert(column_id as u32, col_stat);
+    }
+    let column_statistics_provider =
+        Parquet2TableColumnStatisticsProvider::new(column_stats, num_rows as u64);
+    Ok(column_statistics_provider)
 }

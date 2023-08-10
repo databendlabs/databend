@@ -36,6 +36,7 @@ use super::ProjectSet;
 use super::RowFetch;
 use super::Sort;
 use super::TableScan;
+use crate::executor::ConstantTableScan;
 use crate::executor::CteScan;
 use crate::executor::MaterializedCte;
 use crate::executor::RangeJoin;
@@ -77,6 +78,7 @@ pub trait PhysicalPlanReplacer {
                 self.replace_copy_into_table_from_query(plan)
             }
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
+            PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
         }
     }
 
@@ -86,6 +88,10 @@ pub trait PhysicalPlanReplacer {
 
     fn replace_cte_scan(&mut self, plan: &CteScan) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::CteScan(plan.clone()))
+    }
+
+    fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::ConstantTableScan(plan.clone()))
     }
 
     fn replace_filter(&mut self, plan: &Filter) -> Result<PhysicalPlan> {
@@ -411,7 +417,9 @@ impl PhysicalPlan {
         if pre_visit(plan) {
             visit(plan);
             match plan {
-                PhysicalPlan::TableScan(_) | PhysicalPlan::CteScan(_) => {}
+                PhysicalPlan::TableScan(_)
+                | PhysicalPlan::CteScan(_)
+                | PhysicalPlan::ConstantTableScan(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }

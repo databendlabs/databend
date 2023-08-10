@@ -416,3 +416,17 @@ query III
 with cte as (select a, a + 1 as X, b + 1 as Y from t1 order by a limit 3) select X,Y,a from (select * from cte order by Y limit 2) order by X limit 1;
 ----
 105 101 104
+
+query IT
+with t(a) as (values(1,'a'),(2,'b'),(null,'c')) select a, col1 from t
+----
+1 a
+2 b
+NULL c
+
+query II
+with t(a,b) as (values(1,1),(2,null),(null,5)) select * from t
+----
+1 1
+2 NULL
+NULL 5

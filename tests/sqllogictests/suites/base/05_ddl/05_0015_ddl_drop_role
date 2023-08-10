@@ -1,15 +1,15 @@
 statement error 2204
-DROP ROLE 'test-b'
+DROP ROLE `test-b`
 
 statement ok
-DROP ROLE IF EXISTS 'test-b'
+DROP ROLE IF EXISTS `test-b`
 
 statement ok
-CREATE ROLE 'test-b'
+CREATE ROLE `test-b`
 
 onlyif mysql
 statement ok
-SET ROLE 'test-b';
+SET ROLE `test-b`;
 
 onlyif mysql
 query T
@@ -18,7 +18,7 @@ SELECT current_role();
 test-b
 
 statement ok
-DROP ROLE 'test-b'
+DROP ROLE `test-b`
 
 onlyif mysql
 query T
@@ -27,8 +27,8 @@ SELECT current_role();
 (empty)
 
 statement error 2204
-DROP ROLE 'test-b'
+DROP ROLE `test-b`
 
 statement ok
-DROP ROLE IF EXISTS 'test-b'
+DROP ROLE IF EXISTS `test-b`
 

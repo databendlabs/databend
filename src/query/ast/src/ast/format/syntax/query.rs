@@ -20,6 +20,7 @@ use crate::ast::format::syntax::inline_dot;
 use crate::ast::format::syntax::interweave_comma;
 use crate::ast::format::syntax::parenthesized;
 use crate::ast::format::syntax::NEST_FACTOR;
+use crate::ast::CTESource;
 use crate::ast::Expr;
 use crate::ast::GroupBy;
 use crate::ast::JoinCondition;
@@ -65,9 +66,26 @@ fn pretty_with(with: Option<With>) -> RcDoc<'static> {
 }
 
 fn pretty_cte(cte: CTE) -> RcDoc<'static> {
-    RcDoc::text(format!("{} AS", cte.alias))
+    RcDoc::text(format!("{} AS ", cte.alias))
         .append(RcDoc::softline())
-        .append(parenthesized(pretty_query(cte.query)))
+        .append(match cte.source {
+            CTESource::Query {
+                materialized,
+                query,
+            } => if materialized {
+                RcDoc::text("MATERIALIZED ".to_string())
+            } else {
+                RcDoc::nil()
+            }
+            .append(parenthesized(pretty_query(*query))),
+            CTESource::Values(values) => RcDoc::text("(VALUES")
+                .append(inline_comma(values.into_iter().map(|row_values| {
+                    RcDoc::text("(")
+                        .append(inline_comma(row_values.into_iter().map(pretty_expr)))
+                        .append(RcDoc::text(")"))
+                })))
+                .append(RcDoc::text(")")),
+        })
 }
 
 fn pretty_body(body: SetExpr) -> RcDoc<'static> {
@@ -413,6 +431,22 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             .append(options.to_string())
             .append(if let Some(a) = alias {
                 RcDoc::text(format!(" AS {a}"))
+            } else {
+                RcDoc::nil()
+            }),
+        TableReference::Values {
+            span: _,
+            values,
+            alias,
+        } => RcDoc::text("(VALUES")
+            .append(inline_comma(values.into_iter().map(|row_values| {
+                RcDoc::text("(")
+                    .append(inline_comma(row_values.into_iter().map(pretty_expr)))
+                    .append(RcDoc::text(")"))
+            })))
+            .append(RcDoc::text(")"))
+            .append(if let Some(alias) = alias {
+                RcDoc::text(format!(" {alias}"))
             } else {
                 RcDoc::nil()
             }),

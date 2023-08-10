@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::BlockThresholds;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -131,6 +132,22 @@ impl MaterializedCte {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let fields = self.right.output_schema()?.fields().clone();
         Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ConstantTableScan {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+    pub values: Vec<Column>,
+    pub num_rows: usize,
+    pub output_schema: DataSchemaRef,
+}
+
+impl ConstantTableScan {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(self.output_schema.clone())
     }
 }
 
@@ -1003,6 +1020,7 @@ pub enum PhysicalPlan {
     RuntimeFilterSource(RuntimeFilterSource),
     CteScan(CteScan),
     MaterializedCte(MaterializedCte),
+    ConstantTableScan(ConstantTableScan),
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
@@ -1058,6 +1076,7 @@ impl PhysicalPlan {
             PhysicalPlan::CopyIntoTableFromQuery(v) => v.plan_id,
             PhysicalPlan::CteScan(v) => v.plan_id,
             PhysicalPlan::MaterializedCte(v) => v.plan_id,
+            PhysicalPlan::ConstantTableScan(v) => v.plan_id,
         }
     }
 
@@ -1090,6 +1109,7 @@ impl PhysicalPlan {
             PhysicalPlan::CopyIntoTableFromQuery(plan) => plan.output_schema(),
             PhysicalPlan::CteScan(plan) => plan.output_schema(),
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
+            PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
         }
     }
 
@@ -1124,12 +1144,15 @@ impl PhysicalPlan {
             PhysicalPlan::CopyIntoTableFromQuery(_) => "CopyIntoTableFromQuery".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
+            PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
         }
     }
 
     pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         match self {
-            PhysicalPlan::TableScan(_) | PhysicalPlan::CteScan(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::TableScan(_)
+            | PhysicalPlan::CteScan(_)
+            | PhysicalPlan::ConstantTableScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Project(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -1200,7 +1223,8 @@ impl PhysicalPlan {
             | PhysicalPlan::AggregatePartial(_)
             | PhysicalPlan::DeletePartial(_)
             | PhysicalPlan::DeleteFinal(_)
-            | PhysicalPlan::CteScan(_) => None,
+            | PhysicalPlan::CteScan(_)
+            | PhysicalPlan::ConstantTableScan(_) => None,
         }
     }
 }

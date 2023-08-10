@@ -19,6 +19,7 @@ pub mod catalog_kind;
 pub mod cluster_info;
 pub mod database;
 pub mod plan;
+pub mod statistics;
 pub mod table;
 pub mod table_args;
 pub mod table_context;

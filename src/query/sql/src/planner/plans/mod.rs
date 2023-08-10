@@ -14,6 +14,7 @@
 
 mod aggregate;
 mod call;
+mod constant_table_scan;
 mod copy;
 mod cte_scan;
 pub mod data_mask;
@@ -49,6 +50,7 @@ mod window;
 
 pub use aggregate::*;
 pub use call::CallPlan;
+pub use constant_table_scan::ConstantTableScan;
 pub use copy::*;
 pub use cte_scan::CteScan;
 pub use data_mask::*;
