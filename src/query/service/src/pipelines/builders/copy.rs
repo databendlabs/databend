@@ -29,8 +29,7 @@ use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
-use common_sql::executor::CopyIntoTableFromQuery;
-use common_sql::executor::DistributedCopyIntoTableFromStage;
+use common_sql::executor::CopyIntoTable;
 use common_sql::plans::CopyIntoTableMode;
 use common_sql::plans::CopyIntoTablePlan;
 use common_storage::common_metrics::copy::metrics_inc_copy_purge_files_cost_milliseconds;
@@ -47,48 +46,18 @@ use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::sessions::QueryContext;
 
-pub enum CopyPlanType {
-    CopyIntoTablePlanOption(CopyIntoTablePlan),
-    DistributedCopyIntoTableFromStage(DistributedCopyIntoTableFromStage),
-    // also distributed plan, but we think the real distributed part is the query
-    // so no "distributed" prefix here.
-    CopyIntoTableFromQuery(CopyIntoTableFromQuery),
-}
-
 pub fn build_append_data_pipeline(
     ctx: Arc<QueryContext>,
     main_pipeline: &mut Pipeline,
-    plan: CopyPlanType,
+    plan: &CopyIntoTable,
     source_schema: Arc<DataSchema>,
     to_table: Arc<dyn Table>,
 ) -> Result<()> {
-    let plan_required_source_schema: DataSchemaRef;
-    let plan_required_values_schema: DataSchemaRef;
-    let plan_values_consts: Vec<Scalar>;
-    let plan_write_mode: CopyIntoTableMode;
-
-    match plan {
-        CopyPlanType::CopyIntoTablePlanOption(plan) => {
-            plan_required_source_schema = plan.required_source_schema;
-            plan_required_values_schema = plan.required_values_schema;
-            plan_values_consts = plan.values_consts;
-            plan_write_mode = plan.write_mode;
-        }
-        CopyPlanType::DistributedCopyIntoTableFromStage(plan) => {
-            plan_required_source_schema = plan.required_source_schema;
-            plan_required_values_schema = plan.required_values_schema;
-            plan_values_consts = plan.values_consts;
-            plan_write_mode = plan.write_mode;
-        }
-        CopyPlanType::CopyIntoTableFromQuery(plan) => {
-            plan_required_source_schema = plan.required_source_schema;
-            plan_required_values_schema = plan.required_values_schema;
-            plan_values_consts = plan.values_consts;
-            plan_write_mode = plan.write_mode;
-        }
-    }
-
-    if source_schema != plan_required_source_schema {
+    let plan_required_source_schema = &plan.required_source_schema;
+    let plan_values_consts = &plan.values_consts;
+    let plan_required_values_schema = &plan.required_values_schema;
+    let plan_write_mode = &plan.write_mode;
+    if &source_schema != plan_required_source_schema {
         // only parquet need cast
         let func_ctx = ctx.get_function_context()?;
         main_pipeline.add_transform(|transform_input_port, transform_output_port| {
@@ -118,7 +87,7 @@ pub fn build_append_data_pipeline(
             ctx,
             main_pipeline,
             to_table.clone(),
-            plan_required_values_schema,
+            plan_required_values_schema.clone(),
             AppendMode::Copy,
         )?,
         CopyIntoTableMode::Replace => {}
@@ -126,49 +95,56 @@ pub fn build_append_data_pipeline(
             ctx,
             main_pipeline,
             to_table.clone(),
-            plan_required_values_schema,
+            plan_required_values_schema.clone(),
             AppendMode::Copy,
         )?,
     }
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn build_commit_data_pipeline(
-    ctx: Arc<QueryContext>,
+pub async fn build_commit_data_pipeline(
+    ctx: &Arc<QueryContext>,
     main_pipeline: &mut Pipeline,
-    stage_info: StageInfo,
-    to_table: Arc<dyn Table>,
-    files: Vec<StageFileInfo>,
-    copy_force_option: bool,
-    copy_purge_option: bool,
-    insert_overwrite_option: bool,
+    plan: &CopyIntoTablePlan,
+    files: &[StageFileInfo],
 ) -> Result<()> {
+    let to_table = ctx
+        .get_table(
+            plan.catalog_info.catalog_name(),
+            &plan.database_name,
+            &plan.table_name,
+        )
+        .await?;
     // Source node will do:
     // 1. commit
     // 2. purge
     // commit
     let copied_files_meta_req = build_upsert_copied_files_to_meta_req(
         ctx.clone(),
-        to_table.clone(),
-        stage_info.clone(),
-        files.clone(),
-        copy_force_option,
+        to_table.as_ref(),
+        &plan.stage_table_info.stage_info,
+        files,
+        plan.force,
     )?;
 
     to_table.commit_insertion(
         ctx.clone(),
         main_pipeline,
         copied_files_meta_req,
-        insert_overwrite_option,
+        plan.write_mode.is_overwrite(),
         None,
     )?;
 
     // set on_finished callback.
-    set_copy_on_finished(ctx, files, copy_purge_option, stage_info, main_pipeline)?;
+    set_copy_on_finished(
+        ctx.clone(),
+        files.to_vec(),
+        plan.stage_table_info.stage_info.copy_options.purge,
+        plan.stage_table_info.stage_info.clone(),
+        main_pipeline,
+    )?;
     Ok(())
 }
-
 pub fn set_copy_on_finished(
     ctx: Arc<QueryContext>,
     files: Vec<StageFileInfo>,
@@ -223,13 +199,13 @@ pub fn set_copy_on_finished(
 
 pub fn build_upsert_copied_files_to_meta_req(
     ctx: Arc<QueryContext>,
-    to_table: Arc<dyn Table>,
-    stage_info: StageInfo,
-    copied_files: Vec<StageFileInfo>,
+    to_table: &dyn Table,
+    stage_info: &StageInfo,
+    copied_files: &[StageFileInfo],
     force: bool,
 ) -> Result<Option<UpsertTableCopiedFileReq>> {
     let mut copied_file_tree = BTreeMap::new();
-    for file in &copied_files {
+    for file in copied_files {
         // Short the etag to 7 bytes for less space in metasrv.
         let short_etag = file.etag.clone().map(|mut v| {
             v.truncate(7);
@@ -275,7 +251,7 @@ fn fill_const_columns(
     pipeline: &mut Pipeline,
     input_schema: DataSchemaRef,
     output_schema: DataSchemaRef,
-    const_values: Vec<Scalar>,
+    const_values: &[Scalar],
 ) -> Result<()> {
     pipeline.add_transform(|transform_input_port, transform_output_port| {
         TransformAddConstColumns::try_create(
@@ -284,7 +260,7 @@ fn fill_const_columns(
             transform_output_port,
             input_schema.clone(),
             output_schema.clone(),
-            const_values.clone(),
+            const_values.to_vec(),
         )
     })?;
     Ok(())

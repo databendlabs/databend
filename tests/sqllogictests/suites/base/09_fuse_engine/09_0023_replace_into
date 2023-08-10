@@ -1,4 +1,7 @@
 statement ok
+set enable_distributed_replace_into = 1;
+
+statement ok
 DROP DATABASE IF EXISTS db_09_0023
 
 statement ok

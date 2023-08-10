@@ -21,7 +21,6 @@ use common_expression::types::DecimalDataType;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
-use common_hive_meta_store as hms;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
@@ -30,6 +29,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_sql::resolve_type_name_by_str;
+use hive_metastore as hms;
 
 use crate::hive_catalog::HIVE_CATALOG;
 use crate::hive_database::HiveDatabase;

@@ -18,7 +18,6 @@ common-catalog = { path = "../../../catalog" }
 common-exception = { path = "../../../../common/exception" }
 common-expression = { path = "../../../expression" }
 common-functions = { path = "../../../functions" }
-common-hive-meta-store = { path = "../hive-meta-store" }
 common-meta-app = { path = "../../../../meta/app" }
 common-meta-types = { path = "../../../../meta/types" }
 common-pipeline-core = { path = "../../../pipeline/core" }
@@ -36,11 +35,12 @@ async-recursion = "1.0.0"
 async-trait = "0.1.57"
 chrono = { workspace = true }
 futures = "0.3.24"
+hive_metastore = "0.0.1"
 log = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
 ordered-float = { workspace = true }
 serde = { workspace = true }
-thrift = { package = "databend-thrift", version = "0.17.0" }
+thrift = { package = "tent-thrift", version = "0.18.1" }
 
 typetag = "0.2.3"
