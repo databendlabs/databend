@@ -11,7 +11,7 @@ interface IProps {
 }
 const EEFeature: FC<IProps> = ({ featureName, wholeDesc, featureTitle }): ReactElement => {
   function A() {
-    return <>please contact <a target='_blank' href={'https://www.databend.com/contact-us'}>Databend Support.</a></>
+    return <>Contact <a target='_blank' href={'https://www.databend.com/contact-us'}>Databend Support</a> for a license.</>
   }
   useEffect(() => {
     const h1 = document?.querySelector('.theme-doc-markdown')?.querySelector('header')?.firstChild as HTMLElement;
@@ -30,7 +30,7 @@ const EEFeature: FC<IProps> = ({ featureName, wholeDesc, featureTitle }): ReactE
                 {wholeDesc} <A />
               </>
               : <>
-                {featureName} requires Enterprise Edition. To inquire about upgrading, <A />
+                {featureName} is an Enterprise Edition feature. <A />
               </>
           }
         </div>
