@@ -108,14 +108,6 @@ impl ModifyTableColumnInterpreter {
             )));
         }
 
-        // check if input type match to the return type
-        if policy.return_type != policy_data_type {
-            return Err(ErrorCode::UnmatchMaskPolicyReturnType(format!(
-                "arg '{}' data type {} does not match to the mask policy return type {}",
-                policy.args[0].0, policy_data_type, policy.return_type,
-            )));
-        }
-
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
