@@ -242,7 +242,7 @@ GRANT ROLE 'MANAGERS' TO 'manager_user';
 
 -- Create a masking policy
 CREATE MASKING POLICY email_mask AS (val STRING) 
-    RETURN STRING -> CASE WHEN current_role() IN ('MANAGERS') THEN VAL ELSE '*********' END 
+    RETURNS STRING -> CASE WHEN current_role() IN ('MANAGERS') THEN VAL ELSE '*********' END 
     COMMENT = 'hide_email';
 
 -- Associate the masking policy with the 'email' column

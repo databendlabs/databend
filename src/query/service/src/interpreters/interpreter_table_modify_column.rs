@@ -89,11 +89,12 @@ impl ModifyTableColumnInterpreter {
             .get_data_mask(meta_api, self.ctx.get_tenant(), mask_name.clone())
             .await?;
 
+        // check if column type match to the input type
+        let policy_data_type = policy.args[0].1.to_string().to_lowercase();
         let schema = table.schema();
         let table_info = table.get_table_info();
         if let Some((_, data_field)) = schema.column_with_name(&column) {
             let data_type = data_field.data_type().to_string().to_lowercase();
-            let policy_data_type = policy.args[0].1.to_string().to_lowercase();
             if data_type != policy_data_type {
                 return Err(ErrorCode::UnmatchColumnDataType(format!(
                     "Column '{}' data type {} does not match to the mask policy type {}",
@@ -104,6 +105,14 @@ impl ModifyTableColumnInterpreter {
             return Err(ErrorCode::UnknownColumn(format!(
                 "Cannot find column {}",
                 column
+            )));
+        }
+
+        // check if input type match to the return type
+        if policy.return_type != policy_data_type {
+            return Err(ErrorCode::UnmatchMaskPolicyReturnType(format!(
+                "arg '{}' data type {} does not match to the mask policy return type {}",
+                policy.args[0].0, policy_data_type, policy.return_type,
             )));
         }
 

@@ -21,7 +21,7 @@ DESC MASKING POLICY <policy_name>
 ## Examples
 
 ```sql
-CREATE MASKING POLICY email_mask AS (val STRING) RETURN STRING -> CASE WHEN current_role() IN ('MANAGERS') THEN VAL ELSE '*********'END comment = 'hide_email';
+CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('MANAGERS') THEN VAL ELSE '*********'END comment = 'hide_email';
 
 DESC MASKING POLICY email_mask;
 

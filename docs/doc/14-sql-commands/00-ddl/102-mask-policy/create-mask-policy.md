@@ -38,5 +38,5 @@ Ensure that *arg_type_to_mask* matches the data type of the column where the mas
 This example creates a masking policy named *email_mask* that, based on the user's role, either reveals an email address or masks it with asterisks.
 
 ```sql
-CREATE MASKING POLICY email_mask AS (val STRING) RETURN STRING -> CASE WHEN current_role() IN ('MANAGERS') THEN VAL ELSE '*********'END comment = 'hide_email';
+CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('MANAGERS') THEN VAL ELSE '*********'END comment = 'hide_email';
 ```
