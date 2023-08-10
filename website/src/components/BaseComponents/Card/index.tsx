@@ -8,8 +8,9 @@ interface IProps extends ICommonProps{
   href?: string;
   isDownload?: boolean;
   padding?: number[]; 
+  onClick?: ()=> void;
 }
-const Card: FC<IProps> = ({children, padding, className, href, isDownload, style}): ReactElement=> {
+const Card: FC<IProps> = ({children, padding, className, href, isDownload, style, onClick}): ReactElement=> {
   const props = {
     style:{padding: `${padding[0]}px ${padding[1]}px`, ...style},
     className: clsx(styles.wrap, className)
@@ -18,8 +19,8 @@ const Card: FC<IProps> = ({children, padding, className, href, isDownload, style
     <>
       {
         href
-        ? <a download={isDownload} href={href} {...props}>{children}</a>
-        : <div {...props}>{children}</div>
+        ? <a onClick={onClick} download={isDownload} href={href} {...props}>{children}</a>
+        : <div onClick={onClick} {...props}>{children}</div>
       }
     </>
   );
