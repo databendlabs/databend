@@ -1,4 +1,4 @@
-<h1 align="center">The Future of Cloud Data Analytics</h1>
+<h1 align="center">Pioneering Cloud (Data+AI) Analytics</h1>
 
 <div align="center">
 
@@ -34,7 +34,7 @@
 
 ## What is Databend?
 
-Databend is an open-source **Elastic** and **Workload-Aware** modern cloud data warehouse focusing on Low-Cost and Low-Complexity for your massive-scale analytics needs.
+Databend is an open-source **Elastic** and **Workload-Aware** modern cloud data warehouse that focuses on Low-Cost and Low-Complexity for your massive-scale analytics needs. The open-source alternative to Snowflake, Databend is crafted in Rust, enabling superior performance and efficiency.
 
 Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on object storage:
 ([S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Huawei Cloud OBS](https://www.huaweicloud.com/intl/en-us/product/obs.html), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io)).
