@@ -414,6 +414,11 @@ pub fn replace_subquery(
                 replace_subquery(filters, arg)?;
             }
         }
+        ScalarExpr::UDFServerCall(udf) => {
+            for arg in &mut udf.arguments {
+                replace_subquery(filters, arg)?;
+            }
+        }
         ScalarExpr::SubqueryExpr { .. } => {
             let filter = filters.pop_back().unwrap();
             *selection = filter;

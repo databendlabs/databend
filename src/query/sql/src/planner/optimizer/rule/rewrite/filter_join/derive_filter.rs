@@ -170,5 +170,10 @@ fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &
             replace_column(&mut expr.argument, col_to_scalar);
         }
         ScalarExpr::ConstantExpr(_) | ScalarExpr::SubqueryExpr(_) => {}
+        ScalarExpr::UDFServerCall(expr) => {
+            for arg in expr.arguments.iter_mut() {
+                replace_column(arg, col_to_scalar)
+            }
+        }
     }
 }

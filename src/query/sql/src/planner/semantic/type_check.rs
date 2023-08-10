@@ -63,8 +63,11 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_functions::GENERAL_WINDOW_FUNCTIONS;
+use common_meta_app::principal::LambdaUDF;
 use common_meta_app::principal::UDFDefinition;
+use common_meta_app::principal::UDFServer;
 use common_users::UserApiProvider;
+use itertools::Itertools;
 use simsearch::SimSearch;
 
 use super::name_resolution::NameResolutionContext;
@@ -87,6 +90,7 @@ use crate::plans::NtileFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDFServerCall;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
@@ -2435,13 +2439,67 @@ impl<'a> TypeChecker<'a> {
             return Ok(None);
         };
 
-        let udf_definition = if let UDFDefinition::LambdaUDF(udf_definition) = udf.definition {
-            udf_definition
-        } else {
-            // TODO(ccl): bind udf server call
-            return Ok(None);
+        match udf.definition {
+            UDFDefinition::LambdaUDF(udf_def) => Ok(Some(
+                self.resolve_lambda_udf(span, arguments, udf_def).await?,
+            )),
+            UDFDefinition::UDFServer(udf_def) => Ok(Some(
+                self.resolve_udf_server(span, func_name, arguments, udf_def)
+                    .await?,
+            )),
+        }
+    }
+
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
+    async fn resolve_udf_server(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        arguments: &[Expr],
+        udf_definition: UDFServer,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let mut args = Vec::with_capacity(arguments.len());
+        for argument in arguments {
+            let box (arg, _) = self.resolve(argument).await?;
+            args.push(arg);
+        }
+
+        let raw_expr_args = args.iter().map(|arg| arg.as_raw_expr()).collect_vec();
+        let raw_expr = RawExpr::UDFServerCall {
+            span,
+            func_name: func_name.to_string(),
+            server_addr: udf_definition.address.clone(),
+            arg_types: udf_definition.arg_types.clone(),
+            return_type: udf_definition.return_type.clone(),
+            args: raw_expr_args,
         };
 
+        type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+
+        self.ctx.set_cacheable(false);
+        Ok(Box::new((
+            UDFServerCall {
+                span,
+                func_name: func_name.to_string(),
+                server_addr: udf_definition.address,
+                arg_types: udf_definition.arg_types,
+                return_type: Box::new(udf_definition.return_type.clone()),
+                arguments: args,
+            }
+            .into(),
+            udf_definition.return_type.clone(),
+        )))
+    }
+
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
+    async fn resolve_lambda_udf(
+        &mut self,
+        span: Span,
+        arguments: &[Expr],
+        udf_definition: LambdaUDF,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let parameters = udf_definition.parameters;
         if parameters.len() != arguments.len() {
             return Err(ErrorCode::SyntaxException(format!(
@@ -2472,7 +2530,7 @@ impl<'a> TypeChecker<'a> {
             })
             .map_err(|e| e.set_span(span))?;
 
-        Ok(Some(self.resolve(&udf_expr).await?))
+        self.resolve(&udf_expr).await
     }
 
     #[async_recursion::async_recursion]

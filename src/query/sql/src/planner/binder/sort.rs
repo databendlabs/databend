@@ -39,6 +39,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
 use crate::plans::SortItem;
+use crate::plans::UDFServerCall;
 use crate::BindContext;
 use crate::IndexType;
 use crate::WindowChecker;
@@ -380,6 +381,24 @@ impl Binder {
                         argument,
                         target_type: target_type.clone(),
                     }))
+                }
+                ScalarExpr::UDFServerCall(udf) => {
+                    let new_args = udf
+                        .arguments
+                        .iter()
+                        .map(|arg| {
+                            self.rewrite_scalar_with_replacement(bind_context, arg, replacement_fn)
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    Ok(UDFServerCall {
+                        span: udf.span,
+                        func_name: udf.func_name.clone(),
+                        server_addr: udf.server_addr.clone(),
+                        arg_types: udf.arg_types.clone(),
+                        return_type: udf.return_type.clone(),
+                        arguments: new_args,
+                    }
+                    .into())
                 }
                 _ => Ok(original_scalar.clone()),
             },
