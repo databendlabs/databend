@@ -208,7 +208,7 @@ explain select a, v['a'][0], v['b'] from t_json
 ----
 TableScan
 ├── table: default.default.t_json
-├── output columns: [a (#0), v:a[0] (#2), v:b (#3)]
+├── output columns: [a (#0), v:b (#3), v:a[0] (#2)]
 ├── read rows: 1
 ├── read bytes: 108
 ├── partitions total: 1
