@@ -55,9 +55,8 @@ copy into @s1 from (select a,b,c from table_random limit 1000000);
 statement ok
 copy into @s1 from (select a,b from table_random2 limit 1000000);
 
-## flaky test: statement ok or error
-## statement error 1046
-## copy into products from @s1 pattern = '.*[.]csv' purge = true;
+statement error 1046
+copy into products from @s1 pattern = '.*[.]csv' purge = true;
 
 query I
 select count(*) from products;
@@ -94,9 +93,10 @@ CommitSink × 1 processor
               BlockCompactTransform × 1 processor
                 CastSchemaTransform × 1 processor
                   CompoundBlockOperator(Project) × 1 processor
-                    DeserializeTransformer × 1 processor
-                      Resize × 1 processor
-                        Aligner × 1 processor
+                    CompoundBlockOperator(Project) × 1 processor
+                      DeserializeTransformer × 1 processor
+                        Resize × 1 processor
+                          Aligner × 1 processor
 
 statement ok
 copy into products from (select $1,$2,$3 from @s1 as t2) force =  true purge = true;

@@ -20,6 +20,7 @@ use common_expression::DataSchemaRef;
 use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
+use super::interpreter_catalog_show_create::ShowCreateCatalogInterpreter;
 use super::interpreter_index_create::CreateIndexInterpreter;
 use super::interpreter_index_drop::DropIndexInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
@@ -121,7 +122,9 @@ impl InterpreterFactory {
                 *copy_plan.clone(),
             )?)),
             // catalogs
-            Plan::ShowCreateCatalog(_) => todo!(),
+            Plan::ShowCreateCatalog(plan) => Ok(Arc::new(
+                ShowCreateCatalogInterpreter::try_create(ctx, *plan.clone())?,
+            )),
             Plan::CreateCatalog(plan) => Ok(Arc::new(CreateCatalogInterpreter::try_create(
                 ctx,
                 *plan.clone(),

@@ -18,6 +18,7 @@ use common_arrow::arrow::array::UInt64Array;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::parquet::metadata::RowGroupMetaData;
+use common_catalog::statistics::BasicColumnStatistics;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -62,6 +63,30 @@ pub fn collect_row_group_stats(
     }
 
     Ok(stats)
+}
+
+/// Collect basic column statistics of a batch of row groups of the specified columns.
+pub fn collect_basic_column_stats(
+    column_nodes: &ColumnNodes,
+    rgs: &[RowGroupMetaData],
+) -> Result<Vec<BasicColumnStatistics>> {
+    debug_assert!(!rgs.is_empty());
+    let num_columns = column_nodes.column_nodes.len();
+    let mut columns_stats: Vec<BasicColumnStatistics> = Vec::with_capacity(num_columns);
+    // `column_nodes` is parallel to the schema, so we can iterate `column_nodes` directly.
+    for column_node in column_nodes.column_nodes.iter() {
+        let field = &column_node.field;
+        let table_type: TableDataType = field.into();
+        let data_type = (&table_type).into();
+        let column_stats = pread::statistics::deserialize(field, rgs)?;
+        let batch_stats = BatchStatistics::from_statistics(&column_stats, &data_type)?;
+        let mut col_stats: BasicColumnStatistics = batch_stats.get(0).into();
+        for rg_idx in 1..rgs.len() {
+            col_stats.merge(batch_stats.get(rg_idx).into());
+        }
+        columns_stats.push(col_stats);
+    }
+    Ok(columns_stats)
 }
 
 /// A temporary struct to present [`pread::statistics::Statistics`].

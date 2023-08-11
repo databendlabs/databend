@@ -23,16 +23,15 @@ use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregateFunctionDesc;
 use super::AggregatePartial;
-use super::CopyIntoTableFromQuery;
-use super::DeleteFinal;
+use super::CopyIntoTable;
 use super::DeletePartial;
-use super::DistributedCopyIntoTableFromStage;
 use super::EvalScalar;
 use super::Exchange;
 use super::Filter;
 use super::HashJoin;
 use super::Lambda;
 use super::Limit;
+use super::MutationAggregate;
 use super::PhysicalPlan;
 use super::Project;
 use super::ProjectSet;
@@ -42,6 +41,7 @@ use super::TableScan;
 use super::UnionAll;
 use super::WindowFunction;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::ConstantTableScan;
 use crate::executor::CteScan;
 use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
@@ -114,7 +114,10 @@ impl PhysicalPlan {
                 ))
             }
             PhysicalPlan::CteScan(cte_scan) => Ok(FormatTreeNode::with_children(
-                format!("CteScan: {}", cte_scan.cte_idx.0),
+                format!(
+                    "CteScan: {}, sub index: {}",
+                    cte_scan.cte_idx.0, cte_scan.cte_idx.1
+                ),
                 vec![],
             )),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
@@ -180,7 +183,7 @@ fn to_format_tree(
         PhysicalPlan::DeletePartial(plan) => {
             delete_partial_to_format_tree(plan.as_ref(), metadata, profs)
         }
-        PhysicalPlan::DeleteFinal(plan) => {
+        PhysicalPlan::MutationAggregate(plan) => {
             delete_final_to_format_tree(plan.as_ref(), metadata, profs)
         }
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
@@ -189,14 +192,15 @@ fn to_format_tree(
             runtime_filter_source_to_format_tree(plan, metadata, profs)
         }
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => {
-            distributed_copy_into_table_from_stage(plan)
-        }
-        PhysicalPlan::CopyIntoTableFromQuery(plan) => copy_into_table_from_query(plan),
+        PhysicalPlan::CopyIntoTable(plan) => copy_into_table(plan),
+        PhysicalPlan::AsyncSourcer(_) => Ok(FormatTreeNode::new("AsyncSourcer".to_string())),
+        PhysicalPlan::Deduplicate(_) => Ok(FormatTreeNode::new("Deduplicate".to_string())),
+        PhysicalPlan::ReplaceInto(_) => Ok(FormatTreeNode::new("Replace".to_string())),
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
         PhysicalPlan::MaterializedCte(plan) => {
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
+        PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan),
     }
 }
 
@@ -226,25 +230,10 @@ fn append_profile_info(
     }
 }
 
-fn distributed_copy_into_table_from_stage(
-    plan: &DistributedCopyIntoTableFromStage,
-) -> Result<FormatTreeNode<String>> {
+fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::new(format!(
-        "copy into table {}.{}.{} from {:?}",
-        plan.catalog_info.catalog_name(),
-        plan.database_name,
-        plan.table_name,
-        plan.source
-    )))
-}
-
-fn copy_into_table_from_query(plan: &CopyIntoTableFromQuery) -> Result<FormatTreeNode<String>> {
-    Ok(FormatTreeNode::new(format!(
-        "copy into table {}.{}.{} from {:?}",
-        plan.catalog_info.catalog_name(),
-        plan.database_name,
-        plan.table_name,
-        plan.input
+        "CopyIntoTable: {}",
+        plan.table_info
     )))
 }
 
@@ -366,10 +355,25 @@ fn table_scan_to_format_tree(
 }
 
 fn cte_scan_to_format_tree(plan: &CteScan) -> Result<FormatTreeNode<String>> {
-    let cte_idx = FormatTreeNode::new(format!("CTE index: {}", plan.cte_idx.0));
+    let cte_idx = FormatTreeNode::new(format!(
+        "CTE index: {}, sub index: {}",
+        plan.cte_idx.0, plan.cte_idx.1
+    ));
     Ok(FormatTreeNode::with_children("CTEScan".to_string(), vec![
         cte_idx,
     ]))
+}
+
+fn constant_table_scan_to_format_tree(plan: &ConstantTableScan) -> Result<FormatTreeNode<String>> {
+    let mut children = Vec::with_capacity(plan.values.len());
+    for (i, value) in plan.values.iter().enumerate() {
+        let column = value.iter().map(|val| format!("{val}")).join(", ");
+        children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
+    }
+    Ok(FormatTreeNode::with_children(
+        "ConstantTableScan".to_string(),
+        children,
+    ))
 }
 
 fn filter_to_format_tree(
@@ -433,6 +437,9 @@ fn eval_scalar_to_format_tree(
     metadata: &MetadataRef,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
+    if plan.exprs.is_empty() {
+        return to_format_tree(&plan.input, metadata, prof_span_set);
+    }
     let scalars = plan
         .exprs
         .iter()
@@ -975,7 +982,7 @@ fn delete_partial_to_format_tree(
 }
 
 fn delete_final_to_format_tree(
-    plan: &DeleteFinal,
+    plan: &MutationAggregate,
     metadata: &MetadataRef,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {

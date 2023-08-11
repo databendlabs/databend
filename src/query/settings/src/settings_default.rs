@@ -245,14 +245,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                    #[cfg(feature = "hive")]
                 ("enable_hive_parquet_predict_pushdown", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable hive parquet predict pushdown  by setting this variable to 1, default value: 1",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                    #[cfg(feature = "hive")]
                 ("hive_parquet_chunk_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(16384),
                     desc: "the max number of rows each read from parquet to databend processor",
@@ -325,6 +323,12 @@ impl DefaultSettings {
                 ("enable_distributed_copy_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed execution of copy into.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_distributed_replace_into", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable distributed execution of replace into.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),

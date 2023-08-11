@@ -34,6 +34,7 @@ use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_sql::evaluator::BlockOperator;
+use common_sql::executor::OnConflictField;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -78,8 +79,6 @@ use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoO
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
-use crate::operations::replace_into::OnConflictField;
-
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
     // the fields specified in ON CONFLICT clause
@@ -225,7 +224,7 @@ impl MergeIntoOperationAggregator {
                             let seg = match &segment_info {
                                 None => {
                                     // un-compact the segment if necessary
-                                    segment_info = Some(compact_segment_info.as_ref().try_into()?);
+                                    segment_info = Some(compact_segment_info.clone().try_into()?);
                                     segment_info.as_ref().unwrap()
                                 }
                                 Some(v) => v,
@@ -305,7 +304,7 @@ impl MergeIntoOperationAggregator {
             };
 
             let compact_segment_info = aggregation_ctx.segment_reader.read(&load_param).await?;
-            let segment_info: SegmentInfo = compact_segment_info.as_ref().try_into()?;
+            let segment_info: SegmentInfo = compact_segment_info.try_into()?;
 
             for (block_index, keys) in block_deletion {
                 let permit = aggregation_ctx.acquire_task_permit().await?;
@@ -642,13 +641,16 @@ impl AggregationContext {
                     for row in 0..row_count {
                         let mut contains_row = true;
                         for (col_idx, col_hash) in input_hashes.iter().enumerate() {
-                            let col_filer = &filters[col_idx];
-                            let hash = col_hash[row];
-                            if hash == 0 || !col_filer.contains_digest(hash) {
-                                // hash == 0 indicates that the column value is null, which equals nothing.
-                                // one column does not match, indicates that the row does not match
-                                contains_row = false;
-                                break;
+                            // if bloom filter presents, check if the row is contained
+                            // if bloom filter absents, do nothing(since by default, we assume that the row is contained)
+                            if let Some(col_filter) = &filters[col_idx] {
+                                let hash = col_hash[row];
+                                if hash == 0 || !col_filter.contains_digest(hash) {
+                                    // hash == 0 indicates that the column value is null, which equals nothing.
+                                    // one column does not match, indicates that the row does not match
+                                    contains_row = false;
+                                    break;
+                                }
                             }
                         }
                         if contains_row {
@@ -676,9 +678,8 @@ impl AggregationContext {
         location: &Location,
         index_len: u64,
         bloom_on_conflict_field_index: &[FieldIndex],
-    ) -> Result<Vec<Arc<Xor8Filter>>> {
+    ) -> Result<Vec<Option<Arc<Xor8Filter>>>> {
         // different block may have different version of bloom filter index
-
         let mut col_names = Vec::with_capacity(bloom_on_conflict_field_index.len());
 
         for idx in bloom_on_conflict_field_index {
@@ -689,18 +690,30 @@ impl AggregationContext {
             col_names.push(bloom_column_name);
         }
 
-        // let bloom_column_name = BloomIndex::build_filter_column_name(
-        //     location.1,
-        //     &self.on_conflict_fields[bloom_on_conflict_field_index[0]].table_field,
-        // )?;
-
         // using load_bloom_filter_by_columns is attractive,
         // but it do not care about the version of the bloom filter index
         let block_filter = location
             .read_block_filter(self.data_accessor.clone(), &col_names, index_len)
             .await?;
-        // we know that there is exactly one filter
-        Ok(block_filter.filters)
+
+        // reorder the filter according to the order of bloom_on_conflict_field
+        let mut filters = Vec::with_capacity(bloom_on_conflict_field_index.len());
+        for filter_col_name in &col_names {
+            match block_filter.filter_schema.index_of(filter_col_name) {
+                Ok(idx) => {
+                    filters.push(Some(block_filter.filters[idx].clone()));
+                }
+                Err(_) => {
+                    info!(
+                        "bloom filter column {} not found for block {}",
+                        filter_col_name, location.0
+                    );
+                    filters.push(None);
+                }
+            }
+        }
+
+        Ok(filters)
     }
 }
 

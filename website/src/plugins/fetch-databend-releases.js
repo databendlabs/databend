@@ -49,7 +49,8 @@ module.exports = function fetchDatabendReleasesPlugin() {
                 ...asset,
                 isApple,
                 isUbuntu,
-                osTypeDesc
+                osTypeDesc,
+                tag_name: release?.tag_name,
               }
             })
             .sort((systemLinux, systemMac) => systemMac.isUbuntu - systemLinux.isUbuntu)
@@ -67,6 +68,7 @@ module.exports = function fetchDatabendReleasesPlugin() {
             });
         return {
           ...release,
+          tag_name: release?.tag_name,
           originAssets: release.assets,
           assets: afterProcessedAssets,
           filterBody: release.body

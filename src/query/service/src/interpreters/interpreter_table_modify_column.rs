@@ -89,11 +89,12 @@ impl ModifyTableColumnInterpreter {
             .get_data_mask(meta_api, self.ctx.get_tenant(), mask_name.clone())
             .await?;
 
+        // check if column type match to the input type
+        let policy_data_type = policy.args[0].1.to_string().to_lowercase();
         let schema = table.schema();
         let table_info = table.get_table_info();
         if let Some((_, data_field)) = schema.column_with_name(&column) {
             let data_type = data_field.data_type().to_string().to_lowercase();
-            let policy_data_type = policy.args[0].1.to_string().to_lowercase();
             if data_type != policy_data_type {
                 return Err(ErrorCode::UnmatchColumnDataType(format!(
                     "Column '{}' data type {} does not match to the mask policy type {}",
@@ -291,7 +292,10 @@ impl ModifyTableColumnInterpreter {
             } => {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                (builder1.build(&s_expr).await?, bind_context.columns.clone())
+                (
+                    builder1.build(&s_expr, bind_context.column_set()).await?,
+                    bind_context.columns.clone(),
+                )
             }
             _ => unreachable!(),
         };

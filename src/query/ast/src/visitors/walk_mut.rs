@@ -267,6 +267,16 @@ pub fn walk_table_reference_mut<V: VisitorMut>(visitor: &mut V, table_ref: &mut 
             visitor.visit_join(join);
         }
         TableReference::Stage { .. } => {}
+        TableReference::Values { values, alias, .. } => {
+            for row_values in values {
+                for value in row_values {
+                    visitor.visit_expr(value);
+                }
+            }
+            if let Some(alias) = alias {
+                visitor.visit_identifier(&mut alias.name);
+            }
+        }
     }
 }
 
@@ -291,10 +301,21 @@ pub fn walk_join_condition_mut<V: VisitorMut>(visitor: &mut V, join_cond: &mut J
 }
 
 pub fn walk_cte_mut<V: VisitorMut>(visitor: &mut V, cte: &mut CTE) {
-    let CTE { alias, query, .. } = cte;
+    let CTE { alias, source, .. } = cte;
 
     visitor.visit_identifier(&mut alias.name);
-    visitor.visit_query(query);
+    match source {
+        CTESource::Query { query, .. } => {
+            visitor.visit_query(query);
+        }
+        CTESource::Values(values) => {
+            for row_values in values {
+                for value in row_values {
+                    visitor.visit_expr(value);
+                }
+            }
+        }
+    }
 }
 
 pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statement) {

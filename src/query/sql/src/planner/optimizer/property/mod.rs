@@ -18,7 +18,6 @@ mod column_stat;
 #[cfg(feature = "z3-prove")]
 mod constraint;
 
-mod datum;
 mod enforcer;
 mod histogram;
 #[allow(clippy::module_inception)]
@@ -31,7 +30,6 @@ pub use column_stat::ColumnStatSet;
 pub use column_stat::NewStatistic;
 #[cfg(feature = "z3-prove")]
 pub use constraint::ConstraintSet;
-pub use datum::Datum;
 pub use enforcer::require_property;
 pub use histogram::histogram_from_ndv;
 pub use histogram::Histogram;

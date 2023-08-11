@@ -247,17 +247,10 @@ impl CompactSegmentInfo {
     }
 }
 
-impl TryFrom<&CompactSegmentInfo> for SegmentInfo {
+impl TryFrom<Arc<CompactSegmentInfo>> for SegmentInfo {
     type Error = ErrorCode;
-    fn try_from(value: &CompactSegmentInfo) -> Result<Self, Self::Error> {
-        let mut reader = Cursor::new(&value.raw_block_metas.bytes);
-        let blocks: Vec<Arc<BlockMeta>> = read_and_deserialize(
-            &mut reader,
-            value.raw_block_metas.bytes.len() as u64,
-            &value.raw_block_metas.encoding,
-            &value.raw_block_metas.compression,
-        )?;
-
+    fn try_from(value: Arc<CompactSegmentInfo>) -> Result<Self, Self::Error> {
+        let blocks = value.block_metas()?;
         Ok(SegmentInfo {
             format_version: value.format_version,
             blocks,
@@ -274,6 +267,19 @@ impl TryFrom<&SegmentInfo> for CompactSegmentInfo {
         Ok(Self {
             format_version: value.format_version,
             summary: value.summary.clone(),
+            raw_block_metas: bytes,
+        })
+    }
+}
+
+impl TryFrom<SegmentInfo> for CompactSegmentInfo {
+    type Error = ErrorCode;
+
+    fn try_from(value: SegmentInfo) -> Result<Self, Self::Error> {
+        let bytes = value.block_raw_bytes()?;
+        Ok(Self {
+            format_version: value.format_version,
+            summary: value.summary,
             raw_block_metas: bytes,
         })
     }

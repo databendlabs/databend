@@ -1871,12 +1871,10 @@ dependencies = [
  "common-building",
  "common-exception",
  "common-grpc",
- "common-hive-meta-store",
  "common-meta-app",
  "common-storage",
  "common-tracing",
  "common-users",
- "databend-thrift",
  "hex",
  "log",
  "once_cell",
@@ -2077,14 +2075,6 @@ dependencies = [
  "ethnum",
  "ordered-float 3.7.0",
  "rand 0.8.5",
-]
-
-[[package]]
-name = "common-hive-meta-store"
-version = "0.1.0"
-dependencies = [
- "databend-thrift",
- "which",
 ]
 
 [[package]]
@@ -2311,6 +2301,7 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "hostname",
+ "itertools 0.10.5",
  "lazy_static",
  "log",
  "maplit",
@@ -2324,6 +2315,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "test-harness",
+ "thiserror",
  "tokio",
 ]
 
@@ -2397,6 +2389,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "tokio",
  "tonic 0.9.2",
  "tonic-build",
 ]
@@ -2632,6 +2625,7 @@ dependencies = [
  "educe",
  "enum-as-inner",
  "globiter",
+ "indexmap 2.0.0",
  "itertools 0.10.5",
  "log",
  "num-derive",
@@ -2672,6 +2666,7 @@ dependencies = [
  "log",
  "metrics",
  "opendal",
+ "ordered-float 3.7.0",
  "parquet",
  "regex",
  "reqwest",
@@ -2762,15 +2757,14 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-functions",
- "common-hive-meta-store",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-sql",
  "common-storage",
- "databend-thrift",
  "futures",
+ "hive_metastore",
  "log",
  "minitrace",
  "opendal",
@@ -2780,6 +2774,7 @@ dependencies = [
  "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-table-meta",
+ "tent-thrift",
  "typetag",
 ]
 
@@ -2787,7 +2782,6 @@ dependencies = [
 name = "common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
- "arrow-array",
  "arrow-schema",
  "async-backtrace",
  "async-trait",
@@ -2802,6 +2796,7 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-storage",
+ "common-storages-parquet",
  "futures",
  "icelake",
  "match-template",
@@ -3641,7 +3636,6 @@ dependencies = [
  "common-meta-kvapi",
  "common-meta-raft-store",
  "common-meta-sled-store",
- "common-meta-stoerr",
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
@@ -3881,19 +3875,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "walkdir",
-]
-
-[[package]]
-name = "databend-thrift"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc3d226b30a88cc6bef2071b4fb7f5fc6f73133fd88d9618007c0924d3d5b853"
-dependencies = [
- "byteorder",
- "integer-encoding",
- "log",
- "ordered-float 2.10.0",
- "threadpool",
 ]
 
 [[package]]
@@ -5995,6 +5976,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "hive_metastore"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3b27a684aa35a7dec161090fc57a39d930c97612f3e68e94adcbe8be1041108"
+dependencies = [
+ "tent-thrift",
+]
+
+[[package]]
 name = "hkdf"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6891,6 +6881,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "macros"
+version = "0.8.4"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.8#3fc8ede609beb787aee8199b06a40ac9742aa116"
+
+[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7667,7 +7662,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.8.4"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.3#5da9594d3658e5d1637d8e0a896f6724fdc918f9"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.8#3fc8ede609beb787aee8199b06a40ac9742aa116"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -7676,6 +7671,7 @@ dependencies = [
  "clap 4.2.7",
  "derive_more",
  "futures",
+ "macros",
  "maplit",
  "openraft 0.7.5",
  "pin-utils",
@@ -10626,6 +10622,19 @@ dependencies = [
  "redox_syscall",
  "rustix 0.36.9",
  "windows-sys 0.42.0",
+]
+
+[[package]]
+name = "tent-thrift"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c908572847868d80acdc28acda5ec5f918544c69a4da5d392d26b06800ccd180"
+dependencies = [
+ "byteorder",
+ "integer-encoding",
+ "log",
+ "ordered-float 3.7.0",
+ "threadpool",
 ]
 
 [[package]]

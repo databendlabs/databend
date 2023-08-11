@@ -21,11 +21,11 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::F64;
+use common_storage::Datum;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
-use crate::optimizer::Datum;
 use crate::optimizer::Distribution;
 use crate::optimizer::Histogram;
 use crate::optimizer::NewStatistic;

@@ -19,15 +19,18 @@ use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateExpand;
-use super::CopyIntoTableFromQuery;
-use super::DeleteFinal;
+use super::AsyncSourcerPlan;
+use super::CopyIntoTable;
+use super::Deduplicate;
 use super::DeletePartial;
-use super::DistributedCopyIntoTableFromStage;
 use super::DistributedInsertSelect;
+use super::MutationAggregate;
 use super::ProjectSet;
+use super::ReplaceInto;
 use super::RowFetch;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
+use crate::executor::ConstantTableScan;
 use crate::executor::CteScan;
 use crate::executor::EvalScalar;
 use crate::executor::Exchange;
@@ -82,19 +85,18 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
             PhysicalPlan::DeletePartial(delete) => write!(f, "{}", delete)?,
-            PhysicalPlan::DeleteFinal(delete) => write!(f, "{}", delete)?,
+            PhysicalPlan::MutationAggregate(mutation) => write!(f, "{}", mutation)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::Lambda(lambda) => write!(f, "{}", lambda)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
-            PhysicalPlan::DistributedCopyIntoTableFromStage(copy_into_table_from_stage) => {
-                write!(f, "{}", copy_into_table_from_stage)?
-            }
-            PhysicalPlan::CopyIntoTableFromQuery(copy_into_table_from_query) => {
-                write!(f, "{}", copy_into_table_from_query)?
-            }
+            PhysicalPlan::CopyIntoTable(copy_into_table) => write!(f, "{}", copy_into_table)?,
+            PhysicalPlan::AsyncSourcer(async_sourcer) => write!(f, "{}", async_sourcer)?,
+            PhysicalPlan::Deduplicate(deduplicate) => write!(f, "{}", deduplicate)?,
+            PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
         }
 
         for node in self.node.children() {
@@ -121,6 +123,22 @@ impl Display for CteScan {
 impl Display for MaterializedCte {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "MaterializedCte")
+    }
+}
+
+impl Display for ConstantTableScan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let columns = self
+            .values
+            .iter()
+            .enumerate()
+            .map(|(i, value)| {
+                let column = value.iter().map(|val| format!("{val}")).join(", ");
+                format!("column {}: [{}]", i, column)
+            })
+            .collect::<Vec<String>>();
+
+        write!(f, "ConstantTableScan: {}", columns.join(", "))
     }
 }
 
@@ -382,20 +400,14 @@ impl Display for DeletePartial {
     }
 }
 
-impl Display for DeleteFinal {
+impl Display for MutationAggregate {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DeleteFinal")
+        write!(f, "MutationAggregate")
     }
 }
-impl Display for DistributedCopyIntoTableFromStage {
+impl Display for CopyIntoTable {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DistributedCopyIntoTableFromStage")
-    }
-}
-
-impl Display for CopyIntoTableFromQuery {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CopyIntoTableFromQuery")
+        write!(f, "CopyIntoTable")
     }
 }
 
@@ -421,6 +433,24 @@ impl Display for ProjectSet {
     }
 }
 
+impl Display for AsyncSourcerPlan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AsyncSourcer")
+    }
+}
+
+impl Display for Deduplicate {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Deduplicate")
+    }
+}
+
+impl Display for ReplaceInto {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Replace")
+    }
+}
+
 impl Display for Lambda {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let scalars = self
@@ -436,6 +466,6 @@ impl Display for Lambda {
                 )
             })
             .collect::<Vec<String>>();
-        write!(f, "Lambda functions : {}", scalars.join(", "))
+        write!(f, "Lambda functions: {}", scalars.join(", "))
     }
 }

@@ -73,7 +73,7 @@ impl FuseTable {
                 }
 
                 let segments = segments_io
-                    .read_segments::<Arc<SegmentInfo>>(chunk, true)
+                    .read_segments::<SegmentInfo>(chunk, true)
                     .await?;
                 for segment in segments {
                     let segment = segment?;

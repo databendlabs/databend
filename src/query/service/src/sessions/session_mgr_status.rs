@@ -17,6 +17,7 @@ use std::time::SystemTime;
 #[derive(Clone)]
 pub struct SessionManagerStatus {
     pub running_queries_count: u64,
+    pub active_sessions_count: u64,
     pub last_query_started_at: Option<SystemTime>,
     pub last_query_finished_at: Option<SystemTime>,
     pub instance_started_at: SystemTime,
@@ -40,6 +41,7 @@ impl Default for SessionManagerStatus {
     fn default() -> Self {
         SessionManagerStatus {
             running_queries_count: 0,
+            active_sessions_count: 0,
             last_query_started_at: None,
             last_query_finished_at: None,
             instance_started_at: SystemTime::now(),

@@ -19,10 +19,10 @@ common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-storage = { path = "../../../common/storage" }
+common-storages-parquet = { path = "../parquet" }
 storages-common-pruner = { path = "../common/pruner" }
 storages-common-table-meta = { path = "../common/table-meta" }
 
-arrow-array = "43.0.0"
 arrow-schema = "43.0.0"
 async-backtrace = { workspace = true }
 async-trait = "0.1"

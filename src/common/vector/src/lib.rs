@@ -15,3 +15,4 @@
 mod distance;
 
 pub use distance::cosine_distance;
+pub use distance::l2_distance;

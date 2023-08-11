@@ -52,14 +52,12 @@ impl State {
 }
 
 // Use this executor when the pipeline is pushing pipeline (exists sink but not exists source)
-#[allow(dead_code)]
 pub struct PipelinePushingExecutor {
     state: Arc<State>,
     executor: Arc<PipelineExecutor>,
     sender: SyncSender<Option<DataBlock>>,
 }
 
-#[allow(dead_code)]
 impl PipelinePushingExecutor {
     fn wrap_pipeline(
         ctx: Arc<QueryContext>,
