@@ -1,9 +1,9 @@
 ---
 title: Arithmetic Operators
-title_includes: plus, minus, multiply, div, divide, mod, caret, modulo, negate, +, -, /, //, %, *, ^, |/, ||/, @, &, |, #, ~, <<, >>
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-SQL arithmetic operators.
+<FunctionDescription description="Introduced or updated: v1.2.53"/>
 
 | Operator              | Description                                            | Example                    | Result |
 |-----------------------|--------------------------------------------------------|----------------------------|--------|
@@ -25,3 +25,4 @@ SQL arithmetic operators.
 | **~**                 | Computes the bitwise not of numeric expression         | **~ 1**                    | ~2     |
 | **<<**                | Computes the bitwise shift left of numeric expression  | **1 << 4**                 | 16     |
 | **>>**                | Computes the bitwise shift right of numeric expression | **8 >> 2**                 | 2      |
+| **<->**               | Computes the Euclidean distance (L2 norm) between vectors | **[1, 2] <-> [2, 3]**   | 1.4142135 |
