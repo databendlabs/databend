@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use rustyline::completion::Completer;
 use rustyline::completion::FilenameCompleter;
@@ -33,12 +34,21 @@ use crate::ast::TokenKind;
 
 pub struct CliHelper {
     completer: FilenameCompleter,
+    keywords: Arc<Vec<String>>,
 }
 
 impl CliHelper {
     pub fn new() -> Self {
         Self {
             completer: FilenameCompleter::new(),
+            keywords: Arc::new(Vec::new()),
+        }
+    }
+
+    pub fn with_keywords(keywords: Arc<Vec<String>>) -> Self {
+        Self {
+            completer: FilenameCompleter::new(),
+            keywords,
         }
     }
 }
@@ -99,6 +109,24 @@ impl Highlighter for CliHelper {
 
 impl Hinter for CliHelper {
     type Hint = String;
+
+    fn hint(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> Option<Self::Hint> {
+        let last_word = line
+            .split(|p: char| p.is_whitespace() || p == '.')
+            .last()
+            .unwrap_or(line);
+
+        if last_word.is_empty() {
+            return None;
+        }
+
+        let (_, res) = KeyWordCompleter::complete(line, pos, &self.keywords);
+        if !res.is_empty() {
+            Some(res[0].replacement[last_word.len()..].to_owned())
+        } else {
+            None
+        }
+    }
 }
 
 impl Completer for CliHelper {
@@ -110,7 +138,7 @@ impl Completer for CliHelper {
         pos: usize,
         ctx: &Context<'_>,
     ) -> std::result::Result<(usize, Vec<Pair>), ReadlineError> {
-        let keyword_candidates = KeyWordCompleter::complete(line, pos);
+        let keyword_candidates = KeyWordCompleter::complete(line, pos, self.keywords.as_ref());
         if !keyword_candidates.1.is_empty() {
             return Ok(keyword_candidates);
         }
@@ -134,20 +162,36 @@ impl Helper for CliHelper {}
 struct KeyWordCompleter {}
 
 impl KeyWordCompleter {
-    fn complete(s: &str, pos: usize) -> (usize, Vec<Pair>) {
-        let hint = s.split(|p: char| p.is_whitespace()).last().unwrap_or(s);
+    fn complete(s: &str, pos: usize, keywords: &[String]) -> (usize, Vec<Pair>) {
+        let hint = s
+            .split(|p: char| p.is_whitespace() || p == '.')
+            .last()
+            .unwrap_or(s);
         let all_keywords = all_reserved_keywords();
-        let res: (usize, Vec<Pair>) = (
-            pos - hint.len(),
-            all_keywords
+
+        let mut results: Vec<Pair> = all_keywords
+            .iter()
+            .filter(|keyword| keyword.starts_with(&hint.to_ascii_lowercase()))
+            .map(|keyword| Pair {
+                display: keyword.to_string(),
+                replacement: keyword.to_string(),
+            })
+            .collect();
+
+        results.extend(
+            keywords
                 .iter()
-                .filter(|keyword| keyword.starts_with(&hint.to_ascii_uppercase()))
+                .filter(|keyword| {
+                    keyword
+                        .to_lowercase()
+                        .starts_with(&hint.to_ascii_lowercase())
+                })
                 .map(|keyword| Pair {
                     display: keyword.to_string(),
                     replacement: keyword.to_string(),
-                })
-                .collect(),
+                }),
         );
-        res
+
+        (pos - hint.len(), results)
     }
 }

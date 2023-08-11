@@ -1228,7 +1228,7 @@ impl TokenKind {
 pub fn all_reserved_keywords() -> Vec<String> {
     let mut result = Vec::new();
     for token in TokenKind::iter() {
-        result.push(format!("{:?}", token));
+        result.push(format!("{:?}", token).to_ascii_lowercase());
     }
     result
 }

@@ -21,6 +21,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use anyhow::Result;
 use databend_driver::{Client, Connection};
+use futures::StreamExt;
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -35,6 +36,8 @@ use crate::display::{format_write_progress, ChunkDisplay, FormatDisplay};
 use crate::helper::CliHelper;
 use crate::VERSION;
 
+static PROMPT_SQL: &str = "select name from system.tables union all select name from system.columns union all select name from system.databases union all select name from system.functions";
+
 pub struct Session {
     client: Client,
     conn: Box<dyn Connection>,
@@ -43,6 +46,8 @@ pub struct Session {
     settings: Settings,
     query: String,
     in_comment_block: bool,
+
+    keywords: Arc<Vec<String>>,
 }
 
 impl Session {
@@ -50,6 +55,7 @@ impl Session {
         let client = Client::new(dsn);
         let conn = client.get_conn().await?;
         let info = conn.info().await;
+        let mut keywords = Vec::with_capacity(1024);
         if is_repl {
             println!("Welcome to BendSQL {}.", VERSION.as_str());
             println!(
@@ -59,6 +65,12 @@ impl Session {
             let version = conn.version().await?;
             println!("Connected to {}", version);
             println!();
+
+            let mut rows = conn.query_iter(PROMPT_SQL).await.unwrap();
+            while let Some(row) = rows.next().await {
+                let name: (String,) = row.unwrap().try_into().unwrap();
+                keywords.push(name.0);
+            }
         }
 
         Ok(Self {
@@ -68,6 +80,7 @@ impl Session {
             settings,
             query: String::new(),
             in_comment_block: false,
+            keywords: Arc::new(keywords),
         })
     }
 
@@ -91,7 +104,7 @@ impl Session {
             if let Some(database) = &info.database {
                 prompt = prompt.replace("{database}", database);
             } else {
-                prompt = prompt.replace("{database}", "");
+                prompt = prompt.replace("{database}", "default");
             }
             if let Some(warehouse) = &info.warehouse {
                 prompt = prompt.replace("{warehouse}", &format!("({})", warehouse));
@@ -109,7 +122,7 @@ impl Session {
             .build();
         let mut rl = Editor::<CliHelper, DefaultHistory>::with_config(config).unwrap();
 
-        rl.set_helper(Some(CliHelper::new()));
+        rl.set_helper(Some(CliHelper::with_keywords(self.keywords.clone())));
         rl.load_history(&get_history_path()).ok();
 
         'F: loop {
