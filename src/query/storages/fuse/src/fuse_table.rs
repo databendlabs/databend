@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::panic;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -37,7 +36,6 @@ use common_expression::BlockThresholds;
 use common_expression::ColumnId;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
-use common_expression::TableField;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_meta_app::schema::DatabaseType;
@@ -541,16 +539,6 @@ impl Table for FuseTable {
         append_mode: AppendMode,
     ) -> Result<()> {
         self.do_append_data(ctx, pipeline, append_mode)
-    }
-
-    #[async_backtrace::framed]
-    async fn replace_into(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _pipeline: &mut Pipeline,
-        _on_conflict_fields: Vec<TableField>,
-    ) -> Result<()> {
-        panic!("deprecated")
     }
 
     fn commit_insertion(
