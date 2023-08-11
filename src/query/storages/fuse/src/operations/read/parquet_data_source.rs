@@ -15,6 +15,7 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
+use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
@@ -26,7 +27,12 @@ use crate::io::MergeIOReadResult;
 
 pub enum DataSource {
     AggIndex((PartInfoPtr, MergeIOReadResult)),
-    Normal(MergeIOReadResult),
+    Normal(
+        (
+            MergeIOReadResult,
+            Option<(PartInfoPtr, ArrowSchema, MergeIOReadResult)>,
+        ),
+    ),
 }
 
 pub struct DataSourceMeta {

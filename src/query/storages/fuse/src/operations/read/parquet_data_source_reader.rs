@@ -35,6 +35,7 @@ use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::VirtualColumnReader;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
@@ -48,6 +49,7 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     partitions: StealablePartitions,
 
     index_reader: Arc<Option<AggIndexReader>>,
+    virtual_reader: Arc<Option<VirtualColumnReader>>,
 }
 
 impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
@@ -58,6 +60,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
         block_reader: Arc<BlockReader>,
         partitions: StealablePartitions,
         index_reader: Arc<Option<AggIndexReader>>,
+        virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
 
@@ -71,6 +74,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 output_data: None,
                 partitions,
                 index_reader,
+                virtual_reader,
             })
         } else {
             Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
@@ -84,6 +88,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 output_data: None,
                 partitions,
                 index_reader,
+                virtual_reader,
             })))
         }
     }
@@ -115,14 +120,28 @@ impl SyncSource for ReadParquetDataSource<true> {
                     }
                 }
 
+                // If virtual column file exists, read the data from the virtual columns directly.
+                let virtual_source = if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+                    let fuse_part = FusePartInfo::from_part(&part)?;
+                    let loc =
+                        TableMetaLocationGenerator::gen_virtual_block_location(&fuse_part.location);
+
+                    virtual_reader.sync_read_parquet_data_by_merge_io(
+                        &ReadSettings::from_ctx(&self.partitions.ctx)?,
+                        &loc,
+                    )
+                } else {
+                    None
+                };
+
+                let source = self.block_reader.sync_read_columns_data_by_merge_io(
+                    &ReadSettings::from_ctx(&self.partitions.ctx)?,
+                    part.clone(),
+                )?;
+
                 Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
-                    vec![part.clone()],
-                    vec![DataSource::Normal(
-                        self.block_reader.sync_read_columns_data_by_merge_io(
-                            &ReadSettings::from_ctx(&self.partitions.ctx)?,
-                            part,
-                        )?,
-                    )],
+                    vec![part],
+                    vec![DataSource::Normal((source, virtual_source))],
                 ))))
             }
         }
@@ -174,6 +193,7 @@ impl Processor for ReadParquetDataSource<false> {
                 let block_reader = self.block_reader.clone();
                 let settings = ReadSettings::from_ctx(&self.partitions.ctx)?;
                 let index_reader = self.index_reader.clone();
+                let virtual_reader = self.virtual_reader.clone();
 
                 chunks.push(async move {
                     tokio::spawn(async_backtrace::location!().frame(async move {
@@ -194,15 +214,28 @@ impl Processor for ReadParquetDataSource<false> {
                             }
                         }
 
-                        Ok(DataSource::Normal(
-                            block_reader
-                                .read_columns_data_by_merge_io(
-                                    &settings,
-                                    &part.location,
-                                    &part.columns_meta,
-                                )
-                                .await?,
-                        ))
+                        // If virtual column file exists, read the data from the virtual columns directly.
+                        let virtual_source = if let Some(virtual_reader) = virtual_reader.as_ref() {
+                            let loc = TableMetaLocationGenerator::gen_virtual_block_location(
+                                &part.location,
+                            );
+
+                            virtual_reader
+                                .read_parquet_data_by_merge_io(&settings, &loc)
+                                .await
+                        } else {
+                            None
+                        };
+
+                        let source = block_reader
+                            .read_columns_data_by_merge_io(
+                                &settings,
+                                &part.location,
+                                &part.columns_meta,
+                            )
+                            .await?;
+
+                        Ok(DataSource::Normal((source, virtual_source)))
                     }))
                     .await
                     .unwrap()

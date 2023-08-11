@@ -18,11 +18,15 @@ use std::time::Instant;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -35,6 +39,7 @@ use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
+use crate::io::VirtualColumnReader;
 use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
 
@@ -45,11 +50,14 @@ pub struct DeserializeDataTransform {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
+    src_schema: DataSchema,
+    output_schema: DataSchema,
     parts: Vec<PartInfoPtr>,
     chunks: Vec<DataSource>,
     uncompressed_buffer: Arc<UncompressedBuffer>,
 
     index_reader: Arc<Option<AggIndexReader>>,
+    virtual_reader: Arc<Option<VirtualColumnReader>>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -58,22 +66,45 @@ impl DeserializeDataTransform {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         block_reader: Arc<BlockReader>,
+        plan: &DataSourcePlan,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         index_reader: Arc<Option<AggIndexReader>>,
+        virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let buffer_size = ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
         let scan_progress = ctx.get_scan_progress();
+
+        let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
+        if let Some(virtual_reader) = virtual_reader.as_ref() {
+            let mut fields = src_schema.fields().clone();
+            for virtual_column in &virtual_reader.virtual_column_infos {
+                let field = DataField::new(
+                    &virtual_column.name,
+                    DataType::from(&*virtual_column.data_type),
+                );
+                fields.push(field);
+            }
+            src_schema = DataSchema::new(fields);
+        }
+
+        let mut output_schema = plan.schema().as_ref().clone();
+        output_schema.remove_internal_fields();
+        let output_schema: DataSchema = (&output_schema).into();
+
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             scan_progress,
             block_reader,
             input,
             output,
             output_data: None,
+            src_schema,
+            output_schema,
             parts: vec![],
             chunks: vec![],
             uncompressed_buffer: UncompressedBuffer::new(buffer_size),
             index_reader,
+            virtual_reader,
         })))
     }
 }
@@ -157,12 +188,12 @@ impl Processor for DeserializeDataTransform {
 
                     self.output_data = Some(block);
                 }
-                DataSource::Normal(data) => {
+                DataSource::Normal((data, virtual_data)) => {
                     let start = Instant::now();
                     let columns_chunks = data.columns_chunks()?;
                     let part = FusePartInfo::from_part(&part)?;
 
-                    let data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
+                    let mut data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
                         &part.location,
                         part.nums_rows,
                         &part.compression,
@@ -170,6 +201,15 @@ impl Processor for DeserializeDataTransform {
                         columns_chunks,
                         Some(self.uncompressed_buffer.clone()),
                     )?;
+
+                    // Add optional virtual column array_iter
+                    if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+                        data_block = virtual_reader.deserialize_virtual_columns(
+                            data_block,
+                            virtual_data,
+                            Some(self.uncompressed_buffer.clone()),
+                        )?;
+                    }
 
                     // Perf.
                     {
@@ -183,6 +223,8 @@ impl Processor for DeserializeDataTransform {
                         bytes: data_block.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
+
+                    let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
 
                     // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
                     // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.

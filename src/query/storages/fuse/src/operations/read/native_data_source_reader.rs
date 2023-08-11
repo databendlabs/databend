@@ -201,6 +201,7 @@ impl Processor for ReadNativeDataSource<false> {
                 let part = part.clone();
                 let block_reader = self.block_reader.clone();
                 let index_reader = self.index_reader.clone();
+                let virtual_reader = self.virtual_reader.clone();
 
                 chunks.push(async move {
                     let handler = tokio::spawn(async_backtrace::location!().frame(async move {
@@ -214,6 +215,23 @@ impl Processor for ReadNativeDataSource<false> {
                             if let Some(data) = index_reader.read_native_data(&loc).await {
                                 // Read from aggregating index.
                                 return Ok::<_, ErrorCode>(DataSource::AggIndex(data));
+                            }
+                        }
+
+                        if let Some(virtual_reader) = virtual_reader.as_ref() {
+                            let loc = TableMetaLocationGenerator::gen_virtual_block_location(
+                                &fuse_part.location,
+                            );
+
+                            // If virtual column file exists, read the data from the virtual columns directly.
+                            if let Some(mut virtual_source_data) =
+                                virtual_reader.read_native_data(&loc).await
+                            {
+                                let mut source_data = block_reader
+                                    .async_read_native_columns_data(part.clone())
+                                    .await?;
+                                source_data.append(&mut virtual_source_data);
+                                return Ok(DataSource::Normal(source_data));
                             }
                         }
 

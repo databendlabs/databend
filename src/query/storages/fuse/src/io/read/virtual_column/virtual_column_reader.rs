@@ -27,11 +27,11 @@ use crate::io::BlockReader;
 
 #[derive(Clone)]
 pub struct VirtualColumnReader {
-    _ctx: Arc<dyn TableContext>,
+    pub(super) ctx: Arc<dyn TableContext>,
     pub(super) dal: Operator,
     pub(super) source_schema: TableSchemaRef,
     pub(super) reader: Arc<BlockReader>,
-    pub(super) _compression: TableCompression,
+    pub(super) compression: TableCompression,
     pub virtual_column_infos: Vec<VirtualColumnInfo>,
 }
 
@@ -52,11 +52,11 @@ impl VirtualColumnReader {
         )?;
 
         Ok(Self {
-            _ctx: ctx,
+            ctx,
             dal,
             source_schema,
             reader,
-            _compression: compression,
+            compression,
             virtual_column_infos,
         })
     }

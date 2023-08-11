@@ -130,6 +130,7 @@ pub fn build_fuse_native_source_pipeline(
     pipeline.try_resize(max_threads)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_fuse_parquet_source_pipeline(
     ctx: Arc<dyn TableContext>,
     pipeline: &mut Pipeline,
@@ -138,6 +139,7 @@ pub fn build_fuse_parquet_source_pipeline(
     mut max_threads: usize,
     mut max_io_requests: usize,
     index_reader: Arc<Option<AggIndexReader>>,
+    virtual_reader: Arc<Option<VirtualColumnReader>>,
 ) -> Result<()> {
     (max_threads, max_io_requests) =
         adjust_threads_and_request(false, max_threads, max_io_requests, plan);
@@ -160,6 +162,7 @@ pub fn build_fuse_parquet_source_pipeline(
                         block_reader.clone(),
                         partitions.clone(),
                         index_reader.clone(),
+                        virtual_reader.clone(),
                     )?,
                 );
             }
@@ -182,6 +185,7 @@ pub fn build_fuse_parquet_source_pipeline(
                         block_reader.clone(),
                         partitions.clone(),
                         index_reader.clone(),
+                        virtual_reader.clone(),
                     )?,
                 );
             }
@@ -200,9 +204,11 @@ pub fn build_fuse_parquet_source_pipeline(
         DeserializeDataTransform::create(
             ctx.clone(),
             block_reader.clone(),
+            plan,
             transform_input,
             transform_output,
             index_reader.clone(),
+            virtual_reader.clone(),
         )
     })
 }

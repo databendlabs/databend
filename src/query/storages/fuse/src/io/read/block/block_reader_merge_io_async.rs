@@ -42,7 +42,7 @@ impl BlockReader {
     /// It will *NOT* merge two requests:
     /// if the last io request size is larger than storage_io_page_bytes_for_read(Default is 512KB).
     #[async_backtrace::framed]
-    async fn merge_io_read(
+    pub async fn merge_io_read(
         read_settings: &ReadSettings,
         op: Operator,
         location: &str,
