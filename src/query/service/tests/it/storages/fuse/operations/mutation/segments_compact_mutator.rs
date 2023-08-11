@@ -934,6 +934,10 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
         let input_block_id: HashSet<Location> =
             HashSet::from_iter(case_fixture.input_blocks.iter().map(|v| v.location.clone()));
 
+        eprintln!(
+            "after compact, the num of all segments {}",
+            r.segments_locations.len()
+        );
         let mut statistics_of_segments = Statistics::default();
         let mut output_block_id = HashSet::with_capacity(input_block_id.len());
         for location in r.segments_locations.iter() {
