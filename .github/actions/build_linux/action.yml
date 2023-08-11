@@ -19,6 +19,10 @@ inputs:
     description: "Features to build"
     required: false
     default: "default"
+  category:
+    description: "Category to upload"
+    required: false
+    default: "default"
 runs:
   using: "composite"
   steps:
@@ -114,4 +118,4 @@ runs:
       with:
         sha: ${{ inputs.sha }}
         target: ${{ inputs.target }}
-        category: ${{ inputs.features }}
+        category: ${{ inputs.category }}

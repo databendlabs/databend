@@ -13,7 +13,7 @@ runs:
       with:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-        category: hive
+        category: hdfs
 
     - name: Checkout java env
       uses: actions/setup-java@v3

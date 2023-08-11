@@ -7,122 +7,8 @@ create table t_lazy (a int, b float, c string, d tuple(a int, b int), e date)
 query T
 explain select * from t_lazy order by a desc limit 2
 ----
-EvalScalar
-├── expressions: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
-├── estimated rows: 0.00
-└── RowFetch
-    ├── columns to fetch: [b, c, d, e]
-    ├── estimated rows: 0.00
-    └── Limit
-        ├── limit: 2
-        ├── offset: 0
-        ├── estimated rows: 0.00
-        └── Sort
-            ├── sort keys: [a DESC NULLS LAST]
-            ├── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.default.t_lazy
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [], limit: 2]
-                ├── output columns: [a, _row_id]
-                └── estimated rows: 0.00
-
-query T
-explain select * from t_lazy where a > 1 limit 2
-----
-EvalScalar
-├── expressions: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
-├── estimated rows: 0.00
-└── RowFetch
-    ├── columns to fetch: [b, c, d, e]
-    ├── estimated rows: 0.00
-    └── Limit
-        ├── limit: 2
-        ├── offset: 0
-        ├── estimated rows: 0.00
-        └── Filter
-            ├── filters: [t_lazy.a (#0) > 1]
-            ├── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.default.t_lazy
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
-                ├── output columns: [a, _row_id]
-                └── estimated rows: 0.00
-
-query T
-explain select * from t_lazy where true limit 2
-----
-EvalScalar
-├── expressions: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
-├── estimated rows: 0.00
-└── Limit
-    ├── limit: 2
-    ├── offset: 0
-    ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t_lazy
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [], limit: 2]
-        └── estimated rows: 0.00
-
-# ISSUE #11831
-
-statement ok
-create table if not exists t_11831 (uid uint64, c1 string, c2 string, time uint64);
-
-query T
-explain SELECT * FROM (SELECT * FROM t_11831 WHERE time >= 1686672000000 AND time <= 1686758399000) AS t1 WHERE uid = 11 ORDER BY time DESC LIMIT 10;
-----
-EvalScalar
-├── expressions: [t1.uid (#0), t1.c1 (#1), t1.c2 (#2), t1.time (#3)]
-├── estimated rows: 0.00
-└── RowFetch
-    ├── columns to fetch: [c1, c2]
-    ├── estimated rows: 0.00
-    └── Limit
-        ├── limit: 10
-        ├── offset: 0
-        ├── estimated rows: 0.00
-        └── Sort
-            ├── sort keys: [time DESC NULLS LAST]
-            ├── estimated rows: 0.00
-            └── EvalScalar
-                ├── expressions: [t_11831.uid (#0), t_11831.time (#3)]
-                ├── estimated rows: 0.00
-                └── Filter
-                    ├── filters: [t1.uid (#0) = 11, t_11831.time (#3) >= 1686672000000, t_11831.time (#3) <= 1686758399000]
-                    ├── estimated rows: 0.00
-                    └── TableScan
-                        ├── table: default.default.t_11831
-                        ├── read rows: 0
-                        ├── read bytes: 0
-                        ├── partitions total: 0
-                        ├── partitions scanned: 0
-                        ├── push downs: [filters: [and_filters(CAST(and_filters(CAST(and_filters(CAST(and_filters(CAST(t_11831.time (#3) >= 1686672000000 AS Boolean NULL), CAST(t_11831.time (#3) <= 1686758399000 AS Boolean NULL)) AS Boolean NULL), CAST(t1.uid (#0) = 11 AS Boolean NULL)) AS Boolean NULL), CAST(t_11831.time (#3) >= 1686672000000 AS Boolean NULL)) AS Boolean NULL), CAST(t_11831.time (#3) <= 1686758399000 AS Boolean NULL))], limit: NONE]
-                        ├── output columns: [uid, time, _row_id]
-                        └── estimated rows: 0.00
-
-statement ok
-drop table t_11831
-
-statement ok
-set lazy_read_threshold=0
-
-query T
-explain select * from t_lazy order by a desc limit 2
-----
-EvalScalar
-├── expressions: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
+RowFetch
+├── columns to fetch: [b, c, d, e]
 ├── estimated rows: 0.00
 └── Limit
     ├── limit: 2
@@ -138,13 +24,14 @@ EvalScalar
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: 2]
+            ├── output columns: [a, _row_id]
             └── estimated rows: 0.00
 
 query T
 explain select * from t_lazy where a > 1 limit 2
 ----
-EvalScalar
-├── expressions: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
+RowFetch
+├── columns to fetch: [b, c, d, e]
 ├── estimated rows: 0.00
 └── Limit
     ├── limit: 2
@@ -160,17 +47,71 @@ EvalScalar
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
+            ├── output columns: [a, _row_id]
             └── estimated rows: 0.00
 
 query T
 explain select * from t_lazy where true limit 2
 ----
-EvalScalar
-├── expressions: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
+Limit
+├── limit: 2
+├── offset: 0
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t_lazy
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: 2]
+    └── estimated rows: 0.00
+
+# ISSUE #11831
+
+statement ok
+create table if not exists t_11831 (uid uint64, c1 string, c2 string, time uint64);
+
+query T
+explain SELECT * FROM (SELECT * FROM t_11831 WHERE time >= 1686672000000 AND time <= 1686758399000) AS t1 WHERE uid = 11 ORDER BY time DESC LIMIT 10;
+----
+RowFetch
+├── columns to fetch: [c1, c2]
 ├── estimated rows: 0.00
 └── Limit
-    ├── limit: 2
+    ├── limit: 10
     ├── offset: 0
+    ├── estimated rows: 0.00
+    └── Sort
+        ├── sort keys: [time DESC NULLS LAST]
+        ├── estimated rows: 0.00
+        └── Filter
+            ├── filters: [t1.uid (#0) = 11, t_11831.time (#3) >= 1686672000000, t_11831.time (#3) <= 1686758399000]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.t_11831
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [and_filters(CAST(and_filters(CAST(and_filters(CAST(and_filters(CAST(t_11831.time (#3) >= 1686672000000 AS Boolean NULL), CAST(t_11831.time (#3) <= 1686758399000 AS Boolean NULL)) AS Boolean NULL), CAST(t1.uid (#0) = 11 AS Boolean NULL)) AS Boolean NULL), CAST(t_11831.time (#3) >= 1686672000000 AS Boolean NULL)) AS Boolean NULL), CAST(t_11831.time (#3) <= 1686758399000 AS Boolean NULL))], limit: NONE]
+                ├── output columns: [uid, time, _row_id]
+                └── estimated rows: 0.00
+
+statement ok
+drop table t_11831
+
+statement ok
+set lazy_read_threshold=0
+
+query T
+explain select * from t_lazy order by a desc limit 2
+----
+Limit
+├── limit: 2
+├── offset: 0
+├── estimated rows: 0.00
+└── Sort
+    ├── sort keys: [a DESC NULLS LAST]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t_lazy
@@ -181,6 +122,41 @@ EvalScalar
         ├── push downs: [filters: [], limit: 2]
         └── estimated rows: 0.00
 
+query T
+explain select * from t_lazy where a > 1 limit 2
+----
+Limit
+├── limit: 2
+├── offset: 0
+├── estimated rows: 0.00
+└── Filter
+    ├── filters: [t_lazy.a (#0) > 1]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.default.t_lazy
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
+        └── estimated rows: 0.00
+
+query T
+explain select * from t_lazy where true limit 2
+----
+Limit
+├── limit: 2
+├── offset: 0
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t_lazy
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: 2]
+    └── estimated rows: 0.00
+
 statement ok
 set lazy_read_threshold=100
 
@@ -190,78 +166,69 @@ set lazy_read_threshold=100
 query T
 explain with cte as (select a, a + 1 as X, b + 1 as Y from t_lazy) select X,Y,a from (select * from cte) order by X limit 1;
 ----
-EvalScalar
-├── expressions: [cte.a (#0), cte.x (#7), cte.y (#8)]
+Limit
+├── limit: 1
+├── offset: 0
 ├── estimated rows: 0.00
-└── Limit
-    ├── limit: 1
-    ├── offset: 0
+└── Sort
+    ├── sort keys: [x ASC NULLS LAST]
     ├── estimated rows: 0.00
-    └── Sort
-        ├── sort keys: [x ASC NULLS LAST]
+    └── EvalScalar
+        ├── expressions: [t_lazy.a (#0) + 1, t_lazy.b (#1) + 1]
         ├── estimated rows: 0.00
-        └── EvalScalar
-            ├── expressions: [cte.a (#0), cte.x (#7), cte.y (#8)]
-            ├── estimated rows: 0.00
-            └── EvalScalar
-                ├── expressions: [t_lazy.a (#0), t_lazy.a (#0) + 1, t_lazy.b (#1) + 1]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.t_lazy
-                    ├── read rows: 0
-                    ├── read bytes: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [], limit: NONE]
-                    ├── output columns: [a, b]
-                    └── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t_lazy
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            ├── output columns: [a, b]
+            └── estimated rows: 0.00
 
 # Will use lazy materialization
 query T
 explain with cte as (select a, a + 1 as X, b + 1 as Y from t_lazy order by a limit 3) select X,Y,a from (select * from cte order by Y limit 2) order by X limit 1;
 ----
-EvalScalar
-├── expressions: [cte.a (#0), cte.x (#7), cte.y (#8)]
+Limit
+├── limit: 1
+├── offset: 0
 ├── estimated rows: 0.00
-└── Limit
-    ├── limit: 1
-    ├── offset: 0
+└── Sort
+    ├── sort keys: [x ASC NULLS LAST]
     ├── estimated rows: 0.00
-    └── Sort
-        ├── sort keys: [x ASC NULLS LAST]
+    └── RowFetch
+        ├── columns to fetch: [b]
         ├── estimated rows: 0.00
-        └── EvalScalar
-            ├── expressions: [cte.a (#0), cte.x (#7), cte.y (#8)]
+        └── Limit
+            ├── limit: 2
+            ├── offset: 0
             ├── estimated rows: 0.00
-            └── Limit
-                ├── limit: 2
-                ├── offset: 0
+            └── Sort
+                ├── sort keys: [y ASC NULLS LAST]
                 ├── estimated rows: 0.00
-                └── Sort
-                    ├── sort keys: [y ASC NULLS LAST]
+                └── EvalScalar
+                    ├── expressions: [t_lazy.a (#0) + 1, t_lazy.b (#1) + 1]
                     ├── estimated rows: 0.00
-                    └── EvalScalar
-                        ├── expressions: [t_lazy.a (#0), t_lazy.a (#0) + 1, t_lazy.b (#1) + 1]
+                    └── RowFetch
+                        ├── columns to fetch: [b]
                         ├── estimated rows: 0.00
-                        └── RowFetch
-                            ├── columns to fetch: [b]
+                        └── Limit
+                            ├── limit: 3
+                            ├── offset: 0
                             ├── estimated rows: 0.00
-                            └── Limit
-                                ├── limit: 3
-                                ├── offset: 0
+                            └── Sort
+                                ├── sort keys: [a ASC NULLS LAST]
                                 ├── estimated rows: 0.00
-                                └── Sort
-                                    ├── sort keys: [a ASC NULLS LAST]
-                                    ├── estimated rows: 0.00
-                                    └── TableScan
-                                        ├── table: default.default.t_lazy
-                                        ├── read rows: 0
-                                        ├── read bytes: 0
-                                        ├── partitions total: 0
-                                        ├── partitions scanned: 0
-                                        ├── push downs: [filters: [], limit: 3]
-                                        ├── output columns: [a, _row_id]
-                                        └── estimated rows: 0.00
+                                └── TableScan
+                                    ├── table: default.default.t_lazy
+                                    ├── read rows: 0
+                                    ├── read bytes: 0
+                                    ├── partitions total: 0
+                                    ├── partitions scanned: 0
+                                    ├── push downs: [filters: [], limit: 3]
+                                    ├── output columns: [a, _row_id]
+                                    └── estimated rows: 0.00
 
 statement ok
 drop table t_lazy
