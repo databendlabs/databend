@@ -194,22 +194,18 @@ pub fn sort_by_cluster_stats(
     v2: &Option<ClusterStatistics>,
     default_cluster_key: u32,
 ) -> Ordering {
-    if v1.is_none() || v2.is_none() {
-        // keep the origin order.
-        Ordering::Equal
-    } else {
-        let a = v1.clone().unwrap();
-        let b = v2.clone().unwrap();
-        if a.cluster_key_id != default_cluster_key || b.cluster_key_id != default_cluster_key {
-            // keep the origin order.
-            Ordering::Equal
-        } else {
-            let ord = a.min().cmp(&b.min());
-            if ord == Ordering::Equal {
-                a.max().cmp(&b.max())
-            } else {
-                ord
+    match (v1.as_ref(), v2.as_ref()) {
+        (Some(a), Some(b)) => {
+            if a.cluster_key_id != default_cluster_key && b.cluster_key_id != default_cluster_key {
+                return Ordering::Equal;
+            }
+
+            match a.min().cmp(&b.min()) {
+                Ordering::Equal => a.max().cmp(&b.max()),
+                ord => ord,
             }
         }
+        _ => Ordering::Equal,
     }
 }
+
