@@ -19,7 +19,7 @@ Filter
 ├── estimated rows: 0.20
 └── TableScan
     ├── table: default.default.t1
-    ├── output columns: [t1.a (#0)]
+    ├── output columns: [a (#0)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 1
@@ -48,7 +48,7 @@ Filter
     │   ├── estimated rows: 0.36
     │   └── TableScan
     │       ├── table: default.default.t1
-    │       ├── output columns: [t1.a (#0), t1.b (#1)]
+    │       ├── output columns: [a (#0), b (#1)]
     │       ├── read rows: 0
     │       ├── read bytes: 0
     │       ├── partitions total: 1
@@ -62,7 +62,7 @@ Filter
         ├── estimated rows: 3.89
         └── TableScan
             ├── table: default.default.t2
-            ├── output columns: [t2.a (#2), t2.b (#3)]
+            ├── output columns: [a (#2), b (#3)]
             ├── read rows: 5
             ├── read bytes: 108
             ├── partitions total: 1
@@ -83,7 +83,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
-│   ├── output columns: [t1.a (#0), t1.b (#1)]
+│   ├── output columns: [a (#0), b (#1)]
 │   ├── read rows: 1
 │   ├── read bytes: 78
 │   ├── partitions total: 1
@@ -93,7 +93,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t2
-    ├── output columns: [t2.a (#2), t2.b (#3)]
+    ├── output columns: [a (#2), b (#3)]
     ├── read rows: 5
     ├── read bytes: 108
     ├── partitions total: 1
@@ -593,7 +593,7 @@ UnionAll
 ├── estimated rows: 6.00
 ├── TableScan
 │   ├── table: default.default.t1
-│   ├── output columns: [t1.a (#0)]
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -603,7 +603,7 @@ UnionAll
 │   └── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t2
-    ├── output columns: [t2.a (#2)]
+    ├── output columns: [a (#2)]
     ├── read rows: 5
     ├── read bytes: 54
     ├── partitions total: 1
@@ -632,7 +632,7 @@ Filter
     │   ├── estimated rows: 0.36
     │   └── TableScan
     │       ├── table: default.default.t1
-    │       ├── output columns: [t1.a (#0), t1.b (#1)]
+    │       ├── output columns: [a (#0), b (#1)]
     │       ├── read rows: 1
     │       ├── read bytes: 78
     │       ├── partitions total: 1
@@ -646,7 +646,7 @@ Filter
         ├── estimated rows: 4.17
         └── TableScan
             ├── table: default.default.t2
-            ├── output columns: [t2.a (#2), t2.b (#3)]
+            ├── output columns: [a (#2), b (#3)]
             ├── read rows: 5
             ├── read bytes: 108
             ├── partitions total: 1
@@ -675,7 +675,7 @@ Filter
     │   ├── estimated rows: 0.36
     │   └── TableScan
     │       ├── table: default.default.t1
-    │       ├── output columns: [t1.a (#0), t1.b (#1)]
+    │       ├── output columns: [a (#0), b (#1)]
     │       ├── read rows: 1
     │       ├── read bytes: 78
     │       ├── partitions total: 1
@@ -685,7 +685,7 @@ Filter
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
-        ├── output columns: [t2.a (#2), t2.b (#3)]
+        ├── output columns: [a (#2), b (#3)]
         ├── read rows: 5
         ├── read bytes: 108
         ├── partitions total: 1
@@ -723,7 +723,7 @@ Filter
     │   ├── estimated rows: 5.00
     │   ├── TableScan(Build)
     │   │   ├── table: default.default.t1
-    │   │   ├── output columns: [t1.a (#0), t1.b (#1)]
+    │   │   ├── output columns: [a (#0), b (#1)]
     │   │   ├── read rows: 1
     │   │   ├── read bytes: 78
     │   │   ├── partitions total: 1
@@ -733,7 +733,7 @@ Filter
     │   │   └── estimated rows: 1.00
     │   └── TableScan(Probe)
     │       ├── table: default.default.t2
-    │       ├── output columns: [t2.a (#2), t2.b (#3)]
+    │       ├── output columns: [a (#2), b (#3)]
     │       ├── read rows: 5
     │       ├── read bytes: 108
     │       ├── partitions total: 1
@@ -743,7 +743,7 @@ Filter
     │       └── estimated rows: 5.00
     └── TableScan(Probe)
         ├── table: default.default.t3
-        ├── output columns: [t3.a (#4), t3.b (#5)]
+        ├── output columns: [a (#4), b (#5)]
         ├── read rows: 10
         ├── read bytes: 130
         ├── partitions total: 1
@@ -779,7 +779,7 @@ HashJoin
 │       │   ├── estimated rows: 0.36
 │       │   └── TableScan
 │       │       ├── table: default.default.t1
-│       │       ├── output columns: [t1.a (#0), t1.b (#1)]
+│       │       ├── output columns: [a (#0), b (#1)]
 │       │       ├── read rows: 1
 │       │       ├── read bytes: 78
 │       │       ├── partitions total: 1
@@ -793,7 +793,7 @@ HashJoin
 │           ├── estimated rows: 4.17
 │           └── TableScan
 │               ├── table: default.default.t2
-│               ├── output columns: [t2.a (#2), t2.b (#3)]
+│               ├── output columns: [a (#2), b (#3)]
 │               ├── read rows: 5
 │               ├── read bytes: 108
 │               ├── partitions total: 1
@@ -807,7 +807,7 @@ HashJoin
     ├── estimated rows: 8.18
     └── TableScan
         ├── table: default.default.t3
-        ├── output columns: [t3.a (#4), t3.b (#5)]
+        ├── output columns: [a (#4), b (#5)]
         ├── read rows: 10
         ├── read bytes: 130
         ├── partitions total: 1
@@ -845,7 +845,7 @@ Limit
             │   ├── estimated rows: 0.49
             │   └── TableScan
             │       ├── table: default.default.t1
-            │       ├── output columns: [t1.a (#0), t1.b (#1)]
+            │       ├── output columns: [a (#0), b (#1)]
             │       ├── read rows: 1
             │       ├── read bytes: 78
             │       ├── partitions total: 1
@@ -859,7 +859,7 @@ Limit
                 ├── estimated rows: 4.17
                 └── TableScan
                     ├── table: default.default.t2
-                    ├── output columns: [t2.a (#2), t2.b (#3)]
+                    ├── output columns: [a (#2), b (#3)]
                     ├── read rows: 5
                     ├── read bytes: 108
                     ├── partitions total: 1
@@ -884,7 +884,7 @@ HashJoin
 │   ├── estimated rows: 0.36
 │   └── TableScan
 │       ├── table: default.default.t1
-│       ├── output columns: [t1.a (#0), t1.b (#1)]
+│       ├── output columns: [a (#0), b (#1)]
 │       ├── read rows: 1
 │       ├── read bytes: 78
 │       ├── partitions total: 1
@@ -894,7 +894,7 @@ HashJoin
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t2
-    ├── output columns: [t2.a (#2), t2.b (#3)]
+    ├── output columns: [a (#2), b (#3)]
     ├── read rows: 5
     ├── read bytes: 108
     ├── partitions total: 1
@@ -932,7 +932,7 @@ EvalScalar
                 ├── estimated rows: 1.00
                 └── TableScan
                     ├── table: default.default.t1
-                    ├── output columns: [t1.a (#0)]
+                    ├── output columns: [a (#0)]
                     ├── read rows: 1
                     ├── read bytes: 39
                     ├── partitions total: 1
@@ -970,7 +970,7 @@ EvalScalar
                 ├── estimated rows: 1.00
                 └── TableScan
                     ├── table: default.default.t1
-                    ├── output columns: [t1.a (#0)]
+                    ├── output columns: [a (#0)]
                     ├── read rows: 1
                     ├── read bytes: 39
                     ├── partitions total: 1
@@ -1045,7 +1045,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t4
-    ├── output columns: [t4.a (#0), t4.b (#1)]
+    ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -1072,7 +1072,7 @@ EvalScalar
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t4
-        ├── output columns: [t4.a (#0), t4.b (#1)]
+        ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 0
@@ -1093,7 +1093,7 @@ EvalScalar
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t4
-        ├── output columns: [t4.a (#0), t4.b (#1)]
+        ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 0
@@ -1144,7 +1144,7 @@ Limit
     │   ├── estimated rows: 0.20
     │   └── TableScan
     │       ├── table: default.default.a
-    │       ├── output columns: [a.id (#0), a.c1 (#1)]
+    │       ├── output columns: [id (#0), c1 (#1)]
     │       ├── read rows: 1
     │       ├── read bytes: 72
     │       ├── partitions total: 1
@@ -1158,7 +1158,7 @@ Limit
         ├── estimated rows: 0.40
         └── TableScan
             ├── table: default.default.b
-            ├── output columns: [b.id (#2), b.c1 (#3)]
+            ├── output columns: [id (#2), c1 (#3)]
             ├── read rows: 2
             ├── read bytes: 144
             ├── partitions total: 2
@@ -1201,7 +1201,7 @@ Sort
     │       ├── estimated rows: 2.00
     │       └── TableScan
     │           ├── table: default.system.numbers
-    │           ├── output columns: [numbers.number (#2)]
+    │           ├── output columns: [number (#2)]
     │           ├── read rows: 10
     │           ├── read bytes: 80
     │           ├── partitions total: 1
@@ -1218,7 +1218,7 @@ Sort
             ├── estimated rows: 2.00
             └── TableScan
                 ├── table: default.system.numbers
-                ├── output columns: [numbers.number (#0)]
+                ├── output columns: [number (#0)]
                 ├── read rows: 10
                 ├── read bytes: 80
                 ├── partitions total: 1
@@ -1262,7 +1262,7 @@ Filter
     ├── estimated rows: 3.00
     ├── TableScan(Build)
     │   ├── table: default.default.b
-    │   ├── output columns: [b.id (#2)]
+    │   ├── output columns: [id (#2)]
     │   ├── read rows: 2
     │   ├── read bytes: 39
     │   ├── partitions total: 1
@@ -1272,7 +1272,7 @@ Filter
     │   └── estimated rows: 2.00
     └── TableScan(Probe)
         ├── table: default.default.a
-        ├── output columns: [a.id (#0), a.c1 (#1)]
+        ├── output columns: [id (#0), c1 (#1)]
         ├── read rows: 3
         ├── read bytes: 88
         ├── partitions total: 1

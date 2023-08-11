@@ -56,7 +56,7 @@ EvalScalar
             ├── estimated rows: 990.00
             └── TableScan
                 ├── table: default.default.t
-                ├── output columns: [t.number (#0)]
+                ├── output columns: [number (#0)]
                 ├── read rows: 1000
                 ├── read bytes: 1598
                 ├── partitions total: 2

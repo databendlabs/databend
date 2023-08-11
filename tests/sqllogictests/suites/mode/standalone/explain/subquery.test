@@ -44,7 +44,7 @@ Filter
     │               │   └── estimated rows: 1.00
     │               └── TableScan(Probe)
     │                   ├── table: default.system.numbers
-    │                   ├── output columns: [t2.number (#2)]
+    │                   ├── output columns: [number (#2)]
     │                   ├── read rows: 1
     │                   ├── read bytes: 8
     │                   ├── partitions total: 1
@@ -69,7 +69,7 @@ Filter
         │   └── estimated rows: 1.00
         └── TableScan(Probe)
             ├── table: default.system.numbers
-            ├── output columns: [t.number (#0)]
+            ├── output columns: [number (#0)]
             ├── read rows: 1
             ├── read bytes: 8
             ├── partitions total: 1
@@ -93,7 +93,7 @@ Filter
     ├── estimated rows: 1.00
     ├── TableScan(Build)
     │   ├── table: default.system.numbers
-    │   ├── output columns: [t1.number (#1)]
+    │   ├── output columns: [number (#1)]
     │   ├── read rows: 1
     │   ├── read bytes: 8
     │   ├── partitions total: 1
@@ -102,7 +102,7 @@ Filter
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
-        ├── output columns: [t.number (#0)]
+        ├── output columns: [number (#0)]
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
@@ -145,7 +145,7 @@ HashJoin
 │                   ├── estimated rows: 0.20
 │                   └── TableScan
 │                       ├── table: default.system.numbers
-│                       ├── output columns: [numbers.number (#1)]
+│                       ├── output columns: [number (#1)]
 │                       ├── read rows: 1
 │                       ├── read bytes: 8
 │                       ├── partitions total: 1
@@ -154,7 +154,7 @@ HashJoin
 │                       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
-    ├── output columns: [t.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read bytes: 8
     ├── partitions total: 1
@@ -198,7 +198,7 @@ HashJoin
 │                   ├── estimated rows: 0.20
 │                   └── TableScan
 │                       ├── table: default.system.numbers
-│                       ├── output columns: [numbers.number (#1)]
+│                       ├── output columns: [number (#1)]
 │                       ├── read rows: 1
 │                       ├── read bytes: 8
 │                       ├── partitions total: 1
@@ -207,7 +207,7 @@ HashJoin
 │                       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
-    ├── output columns: [t.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read bytes: 8
     ├── partitions total: 1
@@ -227,7 +227,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
-│   ├── output columns: [numbers.number (#1)]
+│   ├── output columns: [number (#1)]
 │   ├── read rows: 1
 │   ├── read bytes: 8
 │   ├── partitions total: 1
@@ -236,7 +236,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
-    ├── output columns: [t.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read bytes: 8
     ├── partitions total: 1
@@ -256,7 +256,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
-│   ├── output columns: [numbers.number (#1)]
+│   ├── output columns: [number (#1)]
 │   ├── read rows: 1
 │   ├── read bytes: 8
 │   ├── partitions total: 1
@@ -265,7 +265,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
-    ├── output columns: [t.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read bytes: 8
     ├── partitions total: 1
@@ -285,7 +285,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
-│   ├── output columns: [numbers.number (#1)]
+│   ├── output columns: [number (#1)]
 │   ├── read rows: 1
 │   ├── read bytes: 8
 │   ├── partitions total: 1
@@ -294,7 +294,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
-    ├── output columns: [t.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read bytes: 8
     ├── partitions total: 1
@@ -318,7 +318,7 @@ HashJoin
 │   ├── estimated rows: 0.20
 │   └── TableScan
 │       ├── table: default.system.numbers
-│       ├── output columns: [numbers.number (#1)]
+│       ├── output columns: [number (#1)]
 │       ├── read rows: 1
 │       ├── read bytes: 8
 │       ├── partitions total: 1
@@ -331,7 +331,7 @@ HashJoin
     ├── estimated rows: 0.20
     └── TableScan
         ├── table: default.system.numbers
-        ├── output columns: [t.number (#0)]
+        ├── output columns: [number (#0)]
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
@@ -351,7 +351,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
-│   ├── output columns: [numbers.number (#1)]
+│   ├── output columns: [number (#1)]
 │   ├── read rows: 1
 │   ├── read bytes: 8
 │   ├── partitions total: 1
@@ -360,7 +360,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
-    ├── output columns: [t.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read bytes: 8
     ├── partitions total: 1
@@ -380,7 +380,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
-│   ├── output columns: [numbers.number (#1)]
+│   ├── output columns: [number (#1)]
 │   ├── read rows: 1
 │   ├── read bytes: 8
 │   ├── partitions total: 1
@@ -389,7 +389,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
-    ├── output columns: [t.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read bytes: 8
     ├── partitions total: 1
@@ -427,7 +427,7 @@ Filter
     │           ├── estimated rows: 1.00
     │           └── TableScan
     │               ├── table: default.system.numbers
-    │               ├── output columns: [numbers.number (#2)]
+    │               ├── output columns: [number (#2)]
     │               ├── read rows: 1
     │               ├── read bytes: 8
     │               ├── partitions total: 1
@@ -443,7 +443,7 @@ Filter
         ├── estimated rows: 1.00
         ├── TableScan(Build)
         │   ├── table: default.system.numbers
-        │   ├── output columns: [t1.number (#1)]
+        │   ├── output columns: [number (#1)]
         │   ├── read rows: 1
         │   ├── read bytes: 8
         │   ├── partitions total: 1
@@ -452,7 +452,7 @@ Filter
         │   └── estimated rows: 1.00
         └── TableScan(Probe)
             ├── table: default.system.numbers
-            ├── output columns: [t.number (#0)]
+            ├── output columns: [number (#0)]
             ├── read rows: 1
             ├── read bytes: 8
             ├── partitions total: 1
@@ -472,7 +472,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
-│   ├── output columns: [t1.number (#2)]
+│   ├── output columns: [number (#2)]
 │   ├── read rows: 1
 │   ├── read bytes: 8
 │   ├── partitions total: 1
@@ -488,7 +488,7 @@ HashJoin
     ├── estimated rows: 1.00
     ├── TableScan(Build)
     │   ├── table: default.system.numbers
-    │   ├── output columns: [t1.number (#1)]
+    │   ├── output columns: [number (#1)]
     │   ├── read rows: 1
     │   ├── read bytes: 8
     │   ├── partitions total: 1
@@ -497,7 +497,7 @@ HashJoin
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
-        ├── output columns: [t.number (#0)]
+        ├── output columns: [number (#0)]
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1

@@ -25,7 +25,7 @@ EvalScalar
                 ├── estimated rows: 1.00
                 └── TableScan
                     ├── table: default.system.numbers
-                    ├── output columns: [numbers.number (#0)]
+                    ├── output columns: [number (#0)]
                     ├── read rows: 1
                     ├── read bytes: 8
                     ├── partitions total: 1
@@ -60,7 +60,7 @@ EvalScalar
                 ├── estimated rows: 1.00
                 └── TableScan
                     ├── table: default.system.numbers
-                    ├── output columns: [numbers.number (#0)]
+                    ├── output columns: [number (#0)]
                     ├── read rows: 1
                     ├── read bytes: 8
                     ├── partitions total: 1

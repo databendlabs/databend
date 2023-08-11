@@ -28,7 +28,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t
-│   ├── output columns: [t.number (#0)]
+│   ├── output columns: [number (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -38,7 +38,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t1
-    ├── output columns: [t1.number (#1)]
+    ├── output columns: [number (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -59,7 +59,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t
-│   ├── output columns: [t.number (#0)]
+│   ├── output columns: [number (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -69,7 +69,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t1
-    ├── output columns: [t1.number (#1)]
+    ├── output columns: [number (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -94,7 +94,7 @@ HashJoin
 │   ├── estimated rows: 0.20
 │   └── TableScan
 │       ├── table: default.default.t
-│       ├── output columns: [t.number (#0)]
+│       ├── output columns: [number (#0)]
 │       ├── read rows: 0
 │       ├── read bytes: 0
 │       ├── partitions total: 1
@@ -108,7 +108,7 @@ HashJoin
     ├── estimated rows: 2.00
     └── TableScan
         ├── table: default.default.t1
-        ├── output columns: [t1.number (#1)]
+        ├── output columns: [number (#1)]
         ├── read rows: 10
         ├── read bytes: 65
         ├── partitions total: 1
@@ -133,7 +133,7 @@ Filter
     ├── estimated rows: 10.00
     ├── TableScan(Build)
     │   ├── table: default.default.t
-    │   ├── output columns: [t.number (#0)]
+    │   ├── output columns: [number (#0)]
     │   ├── read rows: 1
     │   ├── read bytes: 39
     │   ├── partitions total: 1
@@ -143,7 +143,7 @@ Filter
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t1
-        ├── output columns: [t1.number (#1)]
+        ├── output columns: [number (#1)]
         ├── read rows: 10
         ├── read bytes: 65
         ├── partitions total: 1
@@ -176,7 +176,7 @@ HashJoin
 │   │   ├── estimated rows: 0.00
 │   │   └── TableScan
 │   │       ├── table: default.default.t
-│   │       ├── output columns: [t.number (#0)]
+│   │       ├── output columns: [number (#0)]
 │   │       ├── read rows: 0
 │   │       ├── read bytes: 0
 │   │       ├── partitions total: 1
@@ -186,7 +186,7 @@ HashJoin
 │   │       └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.default.t2
-│       ├── output columns: [t2.number (#2)]
+│       ├── output columns: [number (#2)]
 │       ├── read rows: 100
 │       ├── read bytes: 172
 │       ├── partitions total: 1
@@ -196,7 +196,7 @@ HashJoin
 │       └── estimated rows: 100.00
 └── TableScan(Probe)
     ├── table: default.default.t1
-    ├── output columns: [t1.number (#1)]
+    ├── output columns: [number (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -241,7 +241,7 @@ HashJoin
 │   ├── estimated rows: 3.00
 │   └── TableScan
 │       ├── table: default.default.onecolumn
-│       ├── output columns: [a.x (#0)]
+│       ├── output columns: [x (#0)]
 │       ├── read rows: 4
 │       ├── read bytes: 45
 │       ├── partitions total: 1
@@ -255,7 +255,7 @@ HashJoin
     ├── estimated rows: 3.20
     └── TableScan
         ├── table: default.default.twocolumn
-        ├── output columns: [b.x (#1), b.y (#2)]
+        ├── output columns: [x (#1), y (#2)]
         ├── read rows: 4
         ├── read bytes: 94
         ├── partitions total: 1
@@ -280,7 +280,7 @@ HashJoin
 │   ├── estimated rows: 1.75
 │   └── TableScan
 │       ├── table: default.default.onecolumn
-│       ├── output columns: [a.x (#0)]
+│       ├── output columns: [x (#0)]
 │       ├── read rows: 4
 │       ├── read bytes: 45
 │       ├── partitions total: 1
@@ -294,7 +294,7 @@ HashJoin
     ├── estimated rows: 2.08
     └── TableScan
         ├── table: default.default.twocolumn
-        ├── output columns: [b.x (#1), b.y (#2)]
+        ├── output columns: [x (#1), y (#2)]
         ├── read rows: 4
         ├── read bytes: 94
         ├── partitions total: 1
@@ -319,7 +319,7 @@ HashJoin
 │   ├── estimated rows: 3.00
 │   └── TableScan
 │       ├── table: default.default.onecolumn
-│       ├── output columns: [a.x (#0)]
+│       ├── output columns: [x (#0)]
 │       ├── read rows: 4
 │       ├── read bytes: 45
 │       ├── partitions total: 1
@@ -333,7 +333,7 @@ HashJoin
     ├── estimated rows: 3.20
     └── TableScan
         ├── table: default.default.twocolumn
-        ├── output columns: [b.x (#1), b.y (#2)]
+        ├── output columns: [x (#1), y (#2)]
         ├── read rows: 4
         ├── read bytes: 94
         ├── partitions total: 1
@@ -360,7 +360,7 @@ Filter
     ├── estimated rows: 4.00
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
-    │   ├── output columns: [b.x (#1), b.y (#2)]
+    │   ├── output columns: [x (#1), y (#2)]
     │   ├── read rows: 4
     │   ├── read bytes: 94
     │   ├── partitions total: 1
@@ -370,7 +370,7 @@ Filter
     │   └── estimated rows: 4.00
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
-        ├── output columns: [a.x (#0)]
+        ├── output columns: [x (#0)]
         ├── read rows: 4
         ├── read bytes: 45
         ├── partitions total: 1
@@ -395,7 +395,7 @@ HashJoin
 │   ├── estimated rows: 3.20
 │   └── TableScan
 │       ├── table: default.default.twocolumn
-│       ├── output columns: [b.x (#1), b.y (#2)]
+│       ├── output columns: [x (#1), y (#2)]
 │       ├── read rows: 4
 │       ├── read bytes: 94
 │       ├── partitions total: 1
@@ -405,7 +405,7 @@ HashJoin
 │       └── estimated rows: 4.00
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
-    ├── output columns: [a.x (#0)]
+    ├── output columns: [x (#0)]
     ├── read rows: 4
     ├── read bytes: 45
     ├── partitions total: 1
@@ -445,7 +445,7 @@ HashJoin
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
-│       ├── output columns: [t2.a (#2), t2.b (#3)]
+│       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
 │       ├── read bytes: 0
 │       ├── partitions total: 0
@@ -458,7 +458,7 @@ HashJoin
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
-        ├── output columns: [t1.a (#0), t1.b (#1)]
+        ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 0
@@ -478,7 +478,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
-│   ├── output columns: [t2.a (#2), t2.b (#3)]
+│   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
 │   ├── read bytes: 0
 │   ├── partitions total: 0
@@ -491,7 +491,7 @@ HashJoin
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
-        ├── output columns: [t1.a (#0), t1.b (#1)]
+        ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 0
@@ -515,7 +515,7 @@ HashJoin
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
-│       ├── output columns: [t2.a (#2), t2.b (#3)]
+│       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
 │       ├── read bytes: 0
 │       ├── partitions total: 0
@@ -528,7 +528,7 @@ HashJoin
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
-        ├── output columns: [t1.a (#0), t1.b (#1)]
+        ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 0
@@ -552,7 +552,7 @@ HashJoin
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
-│       ├── output columns: [t2.a (#2), t2.b (#3)]
+│       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
 │       ├── read bytes: 0
 │       ├── partitions total: 0
@@ -565,7 +565,7 @@ HashJoin
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
-        ├── output columns: [t1.a (#0), t1.b (#1)]
+        ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 0
@@ -589,7 +589,7 @@ HashJoin
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
-│       ├── output columns: [t2.a (#2), t2.b (#3)]
+│       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
 │       ├── read bytes: 0
 │       ├── partitions total: 0
@@ -602,7 +602,7 @@ HashJoin
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
-        ├── output columns: [t1.a (#0), t1.b (#1)]
+        ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 0
@@ -623,7 +623,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
-│   ├── output columns: [t2.a (#2), t2.b (#3)]
+│   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
 │   ├── read bytes: 0
 │   ├── partitions total: 0
@@ -632,7 +632,7 @@ HashJoin
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
-    ├── output columns: [t1.a (#0), t1.b (#1)]
+    ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -740,7 +740,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   └── TableScan
 │       ├── table: default.default.twocolumn
-│       ├── output columns: [t.x (#1), t.y (#2)]
+│       ├── output columns: [x (#1), y (#2)]
 │       ├── read rows: 8
 │       ├── read bytes: 188
 │       ├── partitions total: 2
@@ -750,7 +750,7 @@ HashJoin
 │       └── estimated rows: 8.00
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
-    ├── output columns: [o.x (#0)]
+    ├── output columns: [x (#0)]
     ├── read rows: 7
     ├── read bytes: 86
     ├── partitions total: 2

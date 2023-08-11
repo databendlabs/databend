@@ -29,7 +29,7 @@ EvalScalar
         ├── frame: [Range: Preceding(None) ~ CurrentRow]
         └── TableScan
             ├── table: default.test_explain_window.empsalary
-            ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2)]
+            ├── output columns: [depname (#0), empno (#1), salary (#2)]
             ├── read rows: 0
             ├── read bytes: 0
             ├── partitions total: 0

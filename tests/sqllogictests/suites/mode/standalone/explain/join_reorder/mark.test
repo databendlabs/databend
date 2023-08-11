@@ -10,7 +10,7 @@ HashJoin
 ├── estimated rows: 10000.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
-│   ├── output columns: [numbers.number (#1)]
+│   ├── output columns: [number (#1)]
 │   ├── read rows: 1000
 │   ├── read bytes: 8000
 │   ├── partitions total: 1
@@ -19,7 +19,7 @@ HashJoin
 │   └── estimated rows: 1000.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
-    ├── output columns: [numbers.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 10000
     ├── read bytes: 80000
     ├── partitions total: 1
@@ -39,7 +39,7 @@ HashJoin
 ├── estimated rows: 1000.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
-│   ├── output columns: [numbers.number (#0)]
+│   ├── output columns: [number (#0)]
 │   ├── read rows: 1000
 │   ├── read bytes: 8000
 │   ├── partitions total: 1
@@ -48,7 +48,7 @@ HashJoin
 │   └── estimated rows: 1000.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
-    ├── output columns: [numbers.number (#1)]
+    ├── output columns: [number (#1)]
     ├── read rows: 10000
     ├── read bytes: 80000
     ├── partitions total: 1

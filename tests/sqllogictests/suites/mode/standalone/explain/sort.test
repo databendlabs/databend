@@ -14,7 +14,7 @@ Sort
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
-        ├── output columns: [t1.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 0
@@ -35,7 +35,7 @@ Sort
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
-        ├── output columns: [t1.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 0
@@ -56,7 +56,7 @@ Sort
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
-        ├── output columns: [t1.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 0

@@ -6,7 +6,7 @@ MaterializedCTE
 ├── output columns: [numbers.number (#0)]
 ├── TableScan
 │   ├── table: default.system.numbers
-│   ├── output columns: [numbers.number (#0)]
+│   ├── output columns: [number (#0)]
 │   ├── read rows: 10
 │   ├── read bytes: 80
 │   ├── partitions total: 1
@@ -32,7 +32,7 @@ MaterializedCTE
 ├── output columns: [numbers.number (#0)]
 ├── TableScan
 │   ├── table: default.system.numbers
-│   ├── output columns: [numbers.number (#0)]
+│   ├── output columns: [number (#0)]
 │   ├── read rows: 10
 │   ├── read bytes: 80
 │   ├── partitions total: 1

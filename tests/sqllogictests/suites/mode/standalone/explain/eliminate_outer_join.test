@@ -22,7 +22,7 @@ HashJoin
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.eliminate_outer_join.t
-│   ├── output columns: [t1.a (#1)]
+│   ├── output columns: [a (#1)]
 │   ├── read rows: 10
 │   ├── read bytes: 74
 │   ├── partitions total: 1
@@ -32,7 +32,7 @@ HashJoin
 │   └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.eliminate_outer_join.t
-    ├── output columns: [t.a (#0)]
+    ├── output columns: [a (#0)]
     ├── read rows: 10
     ├── read bytes: 74
     ├── partitions total: 1
@@ -53,7 +53,7 @@ HashJoin
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.eliminate_outer_join.t
-│   ├── output columns: [t.a (#0)]
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 10
 │   ├── read bytes: 74
 │   ├── partitions total: 1
@@ -63,7 +63,7 @@ HashJoin
 │   └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.eliminate_outer_join.t
-    ├── output columns: [t1.a (#1)]
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 74
     ├── partitions total: 1
@@ -84,7 +84,7 @@ HashJoin
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.eliminate_outer_join.t
-│   ├── output columns: [t1.a (#1)]
+│   ├── output columns: [a (#1)]
 │   ├── read rows: 10
 │   ├── read bytes: 74
 │   ├── partitions total: 1
@@ -94,7 +94,7 @@ HashJoin
 │   └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.eliminate_outer_join.t
-    ├── output columns: [t.a (#0)]
+    ├── output columns: [a (#0)]
     ├── read rows: 10
     ├── read bytes: 74
     ├── partitions total: 1
@@ -119,7 +119,7 @@ HashJoin
 │   ├── estimated rows: 2.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
-│       ├── output columns: [t1.a (#1)]
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 74
 │       ├── partitions total: 1
@@ -133,7 +133,7 @@ HashJoin
     ├── estimated rows: 2.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
-        ├── output columns: [t.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 10
         ├── read bytes: 74
         ├── partitions total: 1
@@ -158,7 +158,7 @@ HashJoin
 │   ├── estimated rows: 2.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
-│       ├── output columns: [t1.a (#1)]
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 74
 │       ├── partitions total: 1
@@ -172,7 +172,7 @@ HashJoin
     ├── estimated rows: 2.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
-        ├── output columns: [t.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 10
         ├── read bytes: 74
         ├── partitions total: 1
@@ -197,7 +197,7 @@ HashJoin
 │   ├── estimated rows: 2.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
-│       ├── output columns: [t.a (#0)]
+│       ├── output columns: [a (#0)]
 │       ├── read rows: 10
 │       ├── read bytes: 74
 │       ├── partitions total: 1
@@ -207,7 +207,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.eliminate_outer_join.t
-    ├── output columns: [t1.a (#1)]
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 74
     ├── partitions total: 1
@@ -232,7 +232,7 @@ HashJoin
 │   ├── estimated rows: 2.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
-│       ├── output columns: [t1.a (#1)]
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 74
 │       ├── partitions total: 1
@@ -242,7 +242,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.eliminate_outer_join.t
-    ├── output columns: [t.a (#0)]
+    ├── output columns: [a (#0)]
     ├── read rows: 10
     ├── read bytes: 74
     ├── partitions total: 1
@@ -267,7 +267,7 @@ HashJoin
 │   ├── estimated rows: 2.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
-│       ├── output columns: [t1.a (#1)]
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 74
 │       ├── partitions total: 1
@@ -281,7 +281,7 @@ HashJoin
     ├── estimated rows: 2.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
-        ├── output columns: [t.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 10
         ├── read bytes: 74
         ├── partitions total: 1
@@ -306,7 +306,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
-│       ├── output columns: [t1.a (#1)]
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 74
 │       ├── partitions total: 1
@@ -320,7 +320,7 @@ HashJoin
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
-        ├── output columns: [t.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 10
         ├── read bytes: 74
         ├── partitions total: 1
@@ -345,7 +345,7 @@ HashJoin
 │   ├── estimated rows: 8.18
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
-│       ├── output columns: [t1.a (#1)]
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 74
 │       ├── partitions total: 1
@@ -359,7 +359,7 @@ HashJoin
     ├── estimated rows: 8.18
     └── TableScan
         ├── table: default.eliminate_outer_join.t
-        ├── output columns: [t.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 10
         ├── read bytes: 74
         ├── partitions total: 1
@@ -384,7 +384,7 @@ HashJoin
 │   ├── estimated rows: 0.91
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
-│       ├── output columns: [t1.a (#1)]
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 74
 │       ├── partitions total: 1
@@ -398,7 +398,7 @@ HashJoin
     ├── estimated rows: 0.91
     └── TableScan
         ├── table: default.eliminate_outer_join.t
-        ├── output columns: [t.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 10
         ├── read bytes: 74
         ├── partitions total: 1
@@ -423,7 +423,7 @@ HashJoin
 │   ├── estimated rows: 9.00
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
-│       ├── output columns: [t1.a (#1)]
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 74
 │       ├── partitions total: 1
@@ -437,7 +437,7 @@ HashJoin
     ├── estimated rows: 9.00
     └── TableScan
         ├── table: default.eliminate_outer_join.t
-        ├── output columns: [t.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 10
         ├── read bytes: 74
         ├── partitions total: 1
@@ -462,7 +462,7 @@ HashJoin
 │   ├── estimated rows: 9.09
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
-│       ├── output columns: [t1.a (#1)]
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 74
 │       ├── partitions total: 1
@@ -476,7 +476,7 @@ HashJoin
     ├── estimated rows: 9.09
     └── TableScan
         ├── table: default.eliminate_outer_join.t
-        ├── output columns: [t.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 10
         ├── read bytes: 74
         ├── partitions total: 1
@@ -501,7 +501,7 @@ HashJoin
 │   ├── estimated rows: 1.82
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
-│       ├── output columns: [t1.a (#1)]
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 74
 │       ├── partitions total: 1
@@ -515,7 +515,7 @@ HashJoin
     ├── estimated rows: 1.82
     └── TableScan
         ├── table: default.eliminate_outer_join.t
-        ├── output columns: [t.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 10
         ├── read bytes: 74
         ├── partitions total: 1
@@ -541,7 +541,7 @@ Filter
     ├── estimated rows: 10.00
     ├── TableScan(Build)
     │   ├── table: default.eliminate_outer_join.t
-    │   ├── output columns: [t1.a (#1)]
+    │   ├── output columns: [a (#1)]
     │   ├── read rows: 10
     │   ├── read bytes: 74
     │   ├── partitions total: 1
@@ -551,7 +551,7 @@ Filter
     │   └── estimated rows: 10.00
     └── TableScan(Probe)
         ├── table: default.eliminate_outer_join.t
-        ├── output columns: [t.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 10
         ├── read bytes: 74
         ├── partitions total: 1
@@ -580,7 +580,7 @@ Filter
     │   ├── estimated rows: 8.51
     │   └── TableScan
     │       ├── table: default.eliminate_outer_join.t
-    │       ├── output columns: [t1.a (#1)]
+    │       ├── output columns: [a (#1)]
     │       ├── read rows: 10
     │       ├── read bytes: 74
     │       ├── partitions total: 1
@@ -594,7 +594,7 @@ Filter
         ├── estimated rows: 8.51
         └── TableScan
             ├── table: default.eliminate_outer_join.t
-            ├── output columns: [t.a (#0)]
+            ├── output columns: [a (#0)]
             ├── read rows: 10
             ├── read bytes: 74
             ├── partitions total: 1
@@ -619,7 +619,7 @@ Filter
     ├── estimated rows: 10.00
     ├── TableScan(Build)
     │   ├── table: default.eliminate_outer_join.t
-    │   ├── output columns: [t1.a (#1)]
+    │   ├── output columns: [a (#1)]
     │   ├── read rows: 10
     │   ├── read bytes: 74
     │   ├── partitions total: 1
@@ -629,7 +629,7 @@ Filter
     │   └── estimated rows: 10.00
     └── TableScan(Probe)
         ├── table: default.eliminate_outer_join.t
-        ├── output columns: [t.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 10
         ├── read bytes: 74
         ├── partitions total: 1

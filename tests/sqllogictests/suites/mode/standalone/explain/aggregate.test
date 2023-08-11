@@ -13,7 +13,7 @@ AggregateFinal
     ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.system.numbers
-        ├── output columns: [numbers.number (#0)]
+        ├── output columns: [number (#0)]
         ├── read rows: 10
         ├── read bytes: 80
         ├── partitions total: 1
@@ -37,7 +37,7 @@ AggregateFinal
     ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.system.numbers
-        ├── output columns: [numbers.number (#0)]
+        ├── output columns: [number (#0)]
         ├── read rows: 10
         ├── read bytes: 80
         ├── partitions total: 1
@@ -84,7 +84,7 @@ EvalScalar
         ├── estimated rows: 10.00
         └── TableScan
             ├── table: default.system.numbers
-            ├── output columns: [numbers.number (#0)]
+            ├── output columns: [number (#0)]
             ├── read rows: 10
             ├── read bytes: 80
             ├── partitions total: 1
@@ -112,7 +112,7 @@ EvalScalar
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.system.columns
-            ├── output columns: [columns.name (#0), columns.type (#3)]
+            ├── output columns: [name (#0), type (#3)]
             ├── read rows: 0
             ├── read bytes: 0
             ├── partitions total: 0
@@ -143,7 +143,7 @@ AggregateFinal
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.explain_agg_t1
-            ├── output columns: [explain_agg_t1.a (#0)]
+            ├── output columns: [a (#0)]
             ├── read rows: 0
             ├── read bytes: 0
             ├── partitions total: 0
@@ -170,7 +170,7 @@ AggregateFinal
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.explain_agg_t1
-            ├── output columns: [explain_agg_t1.a (#0)]
+            ├── output columns: [a (#0)]
             ├── read rows: 0
             ├── read bytes: 0
             ├── partitions total: 0
@@ -201,7 +201,7 @@ EvalScalar
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.default.explain_agg_t1
-                ├── output columns: [explain_agg_t1.a (#0), explain_agg_t1.b (#1)]
+                ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 0
                 ├── read bytes: 0
                 ├── partitions total: 0
@@ -236,7 +236,7 @@ EvalScalar
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.explain_agg_t1
-                    ├── output columns: [explain_agg_t1.a (#0), explain_agg_t1.b (#1)]
+                    ├── output columns: [a (#0), b (#1)]
                     ├── read rows: 0
                     ├── read bytes: 0
                     ├── partitions total: 0
@@ -284,7 +284,7 @@ EvalScalar
             ├── estimated rows: 1000.00
             ├── TableScan(Left)
             │   ├── table: default.default.t1
-            │   ├── output columns: [t1.a (#0)]
+            │   ├── output columns: [a (#0)]
             │   ├── read rows: 10
             │   ├── read bytes: 65
             │   ├── partitions total: 1
@@ -294,7 +294,7 @@ EvalScalar
             │   └── estimated rows: 10.00
             └── TableScan(Right)
                 ├── table: default.default.t2
-                ├── output columns: [t2.a (#1)]
+                ├── output columns: [a (#1)]
                 ├── read rows: 100
                 ├── read bytes: 172
                 ├── partitions total: 1

@@ -145,7 +145,7 @@ Limit
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.t
-    │       ├── output columns: [t.a (#0)]
+    │       ├── output columns: [a (#0)]
     │       ├── read rows: 1
     │       ├── read bytes: 35
     │       ├── partitions total: 1
@@ -155,7 +155,7 @@ Limit
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t1
-        ├── output columns: [t1.a (#1)]
+        ├── output columns: [a (#1)]
         ├── read rows: 2
         ├── read bytes: 39
         ├── partitions total: 1
@@ -186,7 +186,7 @@ Limit
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.t
-    │       ├── output columns: [t.a (#1)]
+    │       ├── output columns: [a (#1)]
     │       ├── read rows: 1
     │       ├── read bytes: 35
     │       ├── partitions total: 1
@@ -196,7 +196,7 @@ Limit
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t1
-        ├── output columns: [t1.a (#0)]
+        ├── output columns: [a (#0)]
         ├── read rows: 2
         ├── read bytes: 39
         ├── partitions total: 1

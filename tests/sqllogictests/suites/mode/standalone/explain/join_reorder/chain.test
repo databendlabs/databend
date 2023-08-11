@@ -44,7 +44,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
-│   │   ├── output columns: [t.a (#0)]
+│   │   ├── output columns: [a (#0)]
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 39
 │   │   ├── partitions total: 1
@@ -54,7 +54,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
-│       ├── output columns: [t1.a (#1)]
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 65
 │       ├── partitions total: 1
@@ -64,7 +64,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
-    ├── output columns: [t2.a (#2)]
+    ├── output columns: [a (#2)]
     ├── read rows: 100
     ├── read bytes: 172
     ├── partitions total: 1
@@ -92,7 +92,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
-│   │   ├── output columns: [t.a (#0)]
+│   │   ├── output columns: [a (#0)]
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 39
 │   │   ├── partitions total: 1
@@ -102,7 +102,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
-│       ├── output columns: [t1.a (#2)]
+│       ├── output columns: [a (#2)]
 │       ├── read rows: 10
 │       ├── read bytes: 65
 │       ├── partitions total: 1
@@ -112,7 +112,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
-    ├── output columns: [t2.a (#1)]
+    ├── output columns: [a (#1)]
     ├── read rows: 100
     ├── read bytes: 172
     ├── partitions total: 1
@@ -140,7 +140,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
-│   │   ├── output columns: [t.a (#1)]
+│   │   ├── output columns: [a (#1)]
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 39
 │   │   ├── partitions total: 1
@@ -150,7 +150,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
-│       ├── output columns: [t1.a (#0)]
+│       ├── output columns: [a (#0)]
 │       ├── read rows: 10
 │       ├── read bytes: 65
 │       ├── partitions total: 1
@@ -160,7 +160,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
-    ├── output columns: [t2.a (#2)]
+    ├── output columns: [a (#2)]
     ├── read rows: 100
     ├── read bytes: 172
     ├── partitions total: 1
@@ -188,7 +188,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
-│   │   ├── output columns: [t.a (#2)]
+│   │   ├── output columns: [a (#2)]
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 39
 │   │   ├── partitions total: 1
@@ -198,7 +198,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
-│       ├── output columns: [t1.a (#0)]
+│       ├── output columns: [a (#0)]
 │       ├── read rows: 10
 │       ├── read bytes: 65
 │       ├── partitions total: 1
@@ -208,7 +208,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
-    ├── output columns: [t2.a (#1)]
+    ├── output columns: [a (#1)]
     ├── read rows: 100
     ├── read bytes: 172
     ├── partitions total: 1
@@ -236,7 +236,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
-│   │   ├── output columns: [t.a (#2)]
+│   │   ├── output columns: [a (#2)]
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 39
 │   │   ├── partitions total: 1
@@ -246,7 +246,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
-│       ├── output columns: [t1.a (#1)]
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 65
 │       ├── partitions total: 1
@@ -256,7 +256,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
-    ├── output columns: [t2.a (#0)]
+    ├── output columns: [a (#0)]
     ├── read rows: 100
     ├── read bytes: 172
     ├── partitions total: 1
@@ -284,7 +284,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
-│   │   ├── output columns: [t.a (#1)]
+│   │   ├── output columns: [a (#1)]
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 39
 │   │   ├── partitions total: 1
@@ -294,7 +294,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
-│       ├── output columns: [t1.a (#2)]
+│       ├── output columns: [a (#2)]
 │       ├── read rows: 10
 │       ├── read bytes: 65
 │       ├── partitions total: 1
@@ -304,7 +304,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
-    ├── output columns: [t2.a (#0)]
+    ├── output columns: [a (#0)]
     ├── read rows: 100
     ├── read bytes: 172
     ├── partitions total: 1
@@ -325,7 +325,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
-│   ├── output columns: [t.a (#0)]
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -335,7 +335,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
-    ├── output columns: [t1.a (#1)]
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -356,7 +356,7 @@ HashJoin
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
-│   ├── output columns: [t.a (#0)]
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -366,7 +366,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
-    ├── output columns: [t1.a (#1)]
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -387,7 +387,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
-│   ├── output columns: [t.a (#0)]
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -397,7 +397,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
-    ├── output columns: [t1.a (#1)]
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -418,7 +418,7 @@ HashJoin
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
-│   ├── output columns: [t.a (#0)]
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -428,7 +428,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
-    ├── output columns: [t1.a (#1)]
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -449,7 +449,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
-│   ├── output columns: [t.a (#0)]
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -459,7 +459,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
-    ├── output columns: [t1.a (#1)]
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -480,7 +480,7 @@ HashJoin
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
-│   ├── output columns: [t.a (#0)]
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -490,7 +490,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
-    ├── output columns: [t1.a (#1)]
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1

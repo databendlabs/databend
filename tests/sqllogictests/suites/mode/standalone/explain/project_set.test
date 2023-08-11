@@ -33,7 +33,7 @@ EvalScalar
             ├── set returning functions: unnest(CAST(fold_count.id (#0) AS Array(Int32 NULL)))
             └── TableScan
                 ├── table: default.default.fold_count
-                ├── output columns: [fold_count.id (#0)]
+                ├── output columns: [id (#0)]
                 ├── read rows: 1
                 ├── read bytes: 51
                 ├── partitions total: 1
@@ -63,7 +63,7 @@ ProjectSet
 ├── set returning functions: unnest([1, 2, 3])
 └── TableScan
     ├── table: default.system.numbers
-    ├── output columns: [numbers.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 10
     ├── read bytes: 80
     ├── partitions total: 1
@@ -80,7 +80,7 @@ ProjectSet
 ├── set returning functions: unnest(CAST(array(1, 2, 3, numbers.number (#0)) AS Array(UInt64 NULL)))
 └── TableScan
     ├── table: default.system.numbers
-    ├── output columns: [numbers.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 10
     ├── read bytes: 80
     ├── partitions total: 1

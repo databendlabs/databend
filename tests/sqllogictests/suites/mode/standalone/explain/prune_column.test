@@ -3,7 +3,7 @@ explain select * from (select a from (select number as a, number + 1 as b from n
 ----
 TableScan
 ├── table: default.system.numbers
-├── output columns: [numbers.number (#0)]
+├── output columns: [number (#0)]
 ├── read rows: 1
 ├── read bytes: 8
 ├── partitions total: 1
@@ -26,7 +26,7 @@ AggregateFinal
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.system.numbers
-        ├── output columns: [numbers.number (#0)]
+        ├── output columns: [number (#0)]
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
@@ -62,7 +62,7 @@ Limit
                 ├── estimated rows: 1.00
                 └── TableScan
                     ├── table: default.system.numbers
-                    ├── output columns: [numbers.number (#0)]
+                    ├── output columns: [number (#0)]
                     ├── read rows: 1
                     ├── read bytes: 8
                     ├── partitions total: 1
@@ -90,7 +90,7 @@ HashJoin
 │       ├── estimated rows: 0.20
 │       └── TableScan
 │           ├── table: default.system.numbers
-│           ├── output columns: [numbers.number (#0)]
+│           ├── output columns: [number (#0)]
 │           ├── read rows: 1
 │           ├── read bytes: 8
 │           ├── partitions total: 1
@@ -103,7 +103,7 @@ HashJoin
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.system.numbers
-        ├── output columns: [numbers.number (#5)]
+        ├── output columns: [number (#5)]
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
@@ -172,7 +172,7 @@ HashJoin
 │                               │       ├── estimated rows: 0.20
 │                               │       └── TableScan
 │                               │           ├── table: default.system.numbers
-│                               │           ├── output columns: [numbers.number (#3)]
+│                               │           ├── output columns: [number (#3)]
 │                               │           ├── read rows: 1
 │                               │           ├── read bytes: 8
 │                               │           ├── partitions total: 1
@@ -185,7 +185,7 @@ HashJoin
 │                                   ├── estimated rows: 1.00
 │                                   └── TableScan
 │                                       ├── table: default.system.numbers
-│                                       ├── output columns: [numbers.number (#8)]
+│                                       ├── output columns: [number (#8)]
 │                                       ├── read rows: 1
 │                                       ├── read bytes: 8
 │                                       ├── partitions total: 1
@@ -198,7 +198,7 @@ HashJoin
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.system.numbers
-        ├── output columns: [numbers.number (#0)]
+        ├── output columns: [number (#0)]
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
@@ -215,7 +215,7 @@ Sort
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.functions
-    ├── output columns: [functions.name (#0), functions.example (#7)]
+    ├── output columns: [name (#0), example (#7)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -263,7 +263,7 @@ HashJoin
 │                   └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
-    ├── output columns: [t.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 10
     ├── read bytes: 80
     ├── partitions total: 1
@@ -304,7 +304,7 @@ EvalScalar
             ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.t
-                ├── output columns: [t.b (#1)]
+                ├── output columns: [b (#1)]
                 ├── read rows: 2
                 ├── read bytes: 39
                 ├── partitions total: 1

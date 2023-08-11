@@ -17,7 +17,7 @@ EvalScalar
     ├── estimated rows: 0.40
     └── TableScan
         ├── table: default.default.range_t
-        ├── output columns: [range_t.c (#0)]
+        ├── output columns: [c (#0)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 1
@@ -40,7 +40,7 @@ EvalScalar
     ├── estimated rows: 0.40
     └── TableScan
         ├── table: default.default.range_t
-        ├── output columns: [range_t.i (#1)]
+        ├── output columns: [i (#1)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 1
@@ -58,7 +58,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
-    ├── output columns: [numbers.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -76,7 +76,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
-    ├── output columns: [numbers.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0

@@ -13,7 +13,7 @@ Limit
     ├── estimated rows: 8.00
     └── TableScan
         ├── table: default.system.numbers
-        ├── output columns: [t.number (#0)]
+        ├── output columns: [number (#0)]
         ├── read rows: 8
         ├── read bytes: 64
         ├── partitions total: 1
@@ -34,7 +34,7 @@ Sort
     ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.system.numbers
-        ├── output columns: [t.number (#0)]
+        ├── output columns: [number (#0)]
         ├── read rows: 10
         ├── read bytes: 80
         ├── partitions total: 1
@@ -65,7 +65,7 @@ Limit
             ├── estimated rows: 10.00
             └── TableScan
                 ├── table: default.system.numbers
-                ├── output columns: [t.number (#0)]
+                ├── output columns: [number (#0)]
                 ├── read rows: 10
                 ├── read bytes: 80
                 ├── partitions total: 1
@@ -138,7 +138,7 @@ Limit
                     │               │   └── estimated rows: 1.00
                     │               └── TableScan(Probe)
                     │                   ├── table: default.system.numbers
-                    │                   ├── output columns: [t2.number (#2)]
+                    │                   ├── output columns: [number (#2)]
                     │                   ├── read rows: 1
                     │                   ├── read bytes: 8
                     │                   ├── partitions total: 1
@@ -163,7 +163,7 @@ Limit
                         │   └── estimated rows: 1.00
                         └── TableScan(Probe)
                             ├── table: default.system.numbers
-                            ├── output columns: [t.number (#0)]
+                            ├── output columns: [number (#0)]
                             ├── read rows: 1
                             ├── read bytes: 8
                             ├── partitions total: 1
@@ -206,7 +206,7 @@ Limit
         │           ├── estimated rows: 1.00
         │           └── TableScan
         │               ├── table: default.system.numbers
-        │               ├── output columns: [t1.number (#0)]
+        │               ├── output columns: [number (#0)]
         │               ├── read rows: 1
         │               ├── read bytes: 8
         │               ├── partitions total: 1
@@ -229,7 +229,7 @@ Limit
                     ├── estimated rows: 2.00
                     └── TableScan
                         ├── table: default.system.numbers
-                        ├── output columns: [t.number (#4)]
+                        ├── output columns: [number (#4)]
                         ├── read rows: 2
                         ├── read bytes: 16
                         ├── partitions total: 1

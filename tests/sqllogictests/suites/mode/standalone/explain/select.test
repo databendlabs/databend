@@ -3,7 +3,7 @@ explain select * from numbers(1)
 ----
 TableScan
 ├── table: default.system.numbers
-├── output columns: [numbers.number (#0)]
+├── output columns: [number (#0)]
 ├── read rows: 1
 ├── read bytes: 8
 ├── partitions total: 1
@@ -20,7 +20,7 @@ Filter
 ├── estimated rows: 0.20
 └── TableScan
     ├── table: default.system.numbers
-    ├── output columns: [numbers.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read bytes: 8
     ├── partitions total: 1
@@ -41,7 +41,7 @@ EvalScalar
     ├── estimated rows: 0.20
     └── TableScan
         ├── table: default.system.numbers
-        ├── output columns: [numbers.number (#0)]
+        ├── output columns: [number (#0)]
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
@@ -62,7 +62,7 @@ EvalScalar
     ├── estimated rows: 0.20
     └── TableScan
         ├── table: default.system.numbers
-        ├── output columns: [numbers.number (#0)]
+        ├── output columns: [number (#0)]
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
@@ -79,7 +79,7 @@ Filter
 ├── estimated rows: 0.20
 └── TableScan
     ├── table: default.system.numbers
-    ├── output columns: [numbers.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read bytes: 8
     ├── partitions total: 1
@@ -92,7 +92,7 @@ explain select * from numbers(1) where TRUE and 1 = 1
 ----
 TableScan
 ├── table: default.system.numbers
-├── output columns: [numbers.number (#0)]
+├── output columns: [number (#0)]
 ├── read rows: 1
 ├── read bytes: 8
 ├── partitions total: 1
@@ -109,7 +109,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
-    ├── output columns: [numbers.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -126,7 +126,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
-    ├── output columns: [numbers.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -143,7 +143,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
-    ├── output columns: [numbers.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -156,7 +156,7 @@ explain select a from (select number as a, number as b from numbers(1))
 ----
 TableScan
 ├── table: default.system.numbers
-├── output columns: [numbers.number (#0)]
+├── output columns: [number (#0)]
 ├── read rows: 1
 ├── read bytes: 8
 ├── partitions total: 1
@@ -169,7 +169,7 @@ explain select a from (select number as a, number+1 as b from numbers(1))
 ----
 TableScan
 ├── table: default.system.numbers
-├── output columns: [numbers.number (#0)]
+├── output columns: [number (#0)]
 ├── read rows: 1
 ├── read bytes: 8
 ├── partitions total: 1
@@ -186,7 +186,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
-    ├── output columns: [numbers.number (#0)]
+    ├── output columns: [number (#0)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
