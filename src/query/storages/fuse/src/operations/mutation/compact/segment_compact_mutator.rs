@@ -31,6 +31,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::AbortOperation;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
+use crate::statistics::sort_by_cluster_stats;
 use crate::FuseTable;
 use crate::TableContext;
 
@@ -220,12 +221,24 @@ impl<'a> SegmentCompactor<'a> {
         let mut checked_end_at = 0;
         let mut is_end = false;
         for chunk in reverse_locations.chunks(chunk_size) {
-            let segment_infos = segments_io
+            let mut segment_infos = segments_io
                 .read_segments::<SegmentInfo>(chunk, false)
-                .await?;
+                .await?
+                .into_iter()
+                .collect::<Result<Vec<_>>>()?;
+
+            if let Some(default_cluster_key) = self.default_cluster_key_id {
+                // sort ascending.
+                segment_infos.sort_by(|a, b| {
+                    sort_by_cluster_stats(
+                        &a.summary.cluster_stats,
+                        &b.summary.cluster_stats,
+                        default_cluster_key,
+                    )
+                });
+            }
 
             for (segment, location) in segment_infos.into_iter().zip(chunk.iter()) {
-                let segment = segment?;
                 self.add(segment, location.clone()).await?;
                 let compacted = self.num_fragments_compacted();
                 checked_end_at += 1;

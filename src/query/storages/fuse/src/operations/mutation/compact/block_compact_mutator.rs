@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -38,6 +37,7 @@ use crate::operations::mutation::CompactPartInfo;
 use crate::operations::mutation::MAX_BLOCK_COUNT;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::deduct_statistics_mut;
+use crate::statistics::sort_by_cluster_stats;
 use crate::TableContext;
 
 #[derive(Clone)]
@@ -110,14 +110,26 @@ impl BlockCompactMutator {
         let mut is_end = false;
         for chunk in segment_locations.chunks(chunk_size) {
             // Read the segments information in parallel.
-            let segment_infos = segments_io
+            let mut segment_infos = segments_io
                 .read_segments::<SegmentInfo>(chunk, false)
-                .await?;
+                .await?
+                .into_iter()
+                .collect::<Result<Vec<_>>>()?;
+
+            if let Some(default_cluster_key) = self.cluster_key_id {
+                // sort descending.
+                segment_infos.sort_by(|a, b| {
+                    sort_by_cluster_stats(
+                        &b.summary.cluster_stats,
+                        &a.summary.cluster_stats,
+                        default_cluster_key,
+                    )
+                });
+            }
 
             // Check the segment to be compacted.
             // Size of compacted segment should be in range R == [threshold, 2 * threshold)
             for (idx, segment) in segment_infos.into_iter().enumerate() {
-                let segment = segment?;
                 let segments_vec = checker.add(chunk[idx].clone(), segment);
                 for segments in segments_vec {
                     if SegmentCompactChecker::check_for_compact(&segments) {
@@ -209,27 +221,9 @@ impl BlockCompactMutator {
         });
 
         if let Some(default_cluster_key) = self.cluster_key_id {
+            // sort ascending.
             blocks.sort_by(|a, b| {
-                if a.cluster_stats.is_none() {
-                    Ordering::Less
-                } else if b.cluster_stats.is_none() {
-                    Ordering::Greater
-                } else {
-                    let a = a.cluster_stats.clone().unwrap();
-                    let b = b.cluster_stats.clone().unwrap();
-                    if a.cluster_key_id != default_cluster_key {
-                        Ordering::Less
-                    } else if b.cluster_key_id != default_cluster_key {
-                        Ordering::Greater
-                    } else {
-                        let ord = a.min().cmp(&b.min());
-                        if ord == Ordering::Equal {
-                            a.max().cmp(&b.max())
-                        } else {
-                            ord
-                        }
-                    }
-                }
+                sort_by_cluster_stats(&a.cluster_stats, &b.cluster_stats, default_cluster_key)
             });
         }
 
