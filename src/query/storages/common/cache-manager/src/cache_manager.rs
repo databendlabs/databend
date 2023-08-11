@@ -27,7 +27,6 @@ use storages_common_cache::Named;
 use storages_common_cache::NamedCache;
 use storages_common_cache::TableDataCache;
 use storages_common_cache::TableDataCacheBuilder;
-use storages_common_index::filters::Xor8Filter;
 
 use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
@@ -106,7 +105,7 @@ impl CacheManager {
                 CompactSegmentInfoMeter {},
                 "segment_info",
             );
-            let bloom_index_filter_cache = Self::new_item_cache_with_meter(
+            let bloom_index_filter_cache = Self::new_in_memory_cache(
                 config.table_bloom_index_filter_count,
                 BloomIndexFilterMeter {},
                 "bloom_index_filter",
@@ -183,25 +182,6 @@ impl CacheManager {
     ) -> Option<NamedCache<InMemoryItemCacheHolder<V>>> {
         if capacity > 0 {
             Some(InMemoryCacheBuilder::new_item_cache(capacity).name_with(name.into()))
-        } else {
-            None
-        }
-    }
-
-    // create item cache but meters size by `meter` instead of `Count`
-    fn new_item_cache_with_meter<V, M>(
-        capacity: u64,
-        meter: M,
-        name: &str,
-    ) -> Option<NamedCache<InMemoryItemCacheHolder<V, DefaultHashBuilder, M>>>
-    where
-        M: CountableMeter<String, Arc<V>>,
-    {
-        if capacity > 0 {
-            Some(
-                InMemoryCacheBuilder::new_item_cache_with_meter(capacity, meter)
-                    .name_with(name.to_owned()),
-            )
         } else {
             None
         }

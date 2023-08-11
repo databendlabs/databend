@@ -44,18 +44,6 @@ impl InMemoryCacheBuilder {
         Arc::new(RwLock::new(cache))
     }
 
-    // new item cache that caches `V` with meter
-    pub fn new_item_cache_with_meter<V, M>(
-        capacity: u64,
-        meter: M,
-    ) -> InMemoryItemCacheHolder<V, DefaultHashBuilder, M>
-    where
-        M: CountableMeter<String, Arc<V>>,
-    {
-        let cache = LruCache::with_meter_and_hasher(capacity, meter, DefaultHashBuilder::default());
-        Arc::new(RwLock::new(cache))
-    }
-
     // new cache that caches `V` and meter by counting
     pub fn new_item_cache<V>(capacity: u64) -> InMemoryItemCacheHolder<V> {
         let cache = LruCache::new(capacity);
