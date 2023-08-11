@@ -224,7 +224,7 @@ impl MergeIntoOperationAggregator {
                             let seg = match &segment_info {
                                 None => {
                                     // un-compact the segment if necessary
-                                    segment_info = Some(compact_segment_info.as_ref().try_into()?);
+                                    segment_info = Some(compact_segment_info.clone().try_into()?);
                                     segment_info.as_ref().unwrap()
                                 }
                                 Some(v) => v,
@@ -304,7 +304,7 @@ impl MergeIntoOperationAggregator {
             };
 
             let compact_segment_info = aggregation_ctx.segment_reader.read(&load_param).await?;
-            let segment_info: SegmentInfo = compact_segment_info.as_ref().try_into()?;
+            let segment_info: SegmentInfo = compact_segment_info.try_into()?;
 
             for (block_index, keys) in block_deletion {
                 let permit = aggregation_ctx.acquire_task_permit().await?;
