@@ -37,6 +37,7 @@ use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
+use crate::plans::UDFServerCall;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -356,6 +357,11 @@ fn rewrite_scalar_index(
         }
         ScalarExpr::CastExpr(cast) => {
             rewrite_scalar_index(table_index, columns, &mut cast.argument);
+        }
+        ScalarExpr::UDFServerCall(udf) => {
+            udf.arguments
+                .iter_mut()
+                .for_each(|arg| rewrite_scalar_index(table_index, columns, arg));
         }
         _ => { /*  do nothing */ }
     }
@@ -708,6 +714,15 @@ impl RewriteInfomartion<'_> {
                         .join(", ")
                 )
             }
+            ScalarExpr::UDFServerCall(udf) => format!(
+                "{}({})",
+                &udf.func_name,
+                udf.arguments
+                    .iter()
+                    .map(|arg| { self.format_scalar(arg) })
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
             _ => unreachable!(), // Window function and subquery will not appear in index.
         }
     }
@@ -994,6 +1009,24 @@ fn rewrite_query_item(
                     span: None,
                     func_name: func.func_name.clone(),
                     params: func.params.clone(),
+                    arguments: new_args,
+                }
+                .into(),
+            )
+        }
+        ScalarExpr::UDFServerCall(udf) => {
+            let mut new_args = Vec::with_capacity(udf.arguments.len());
+            for arg in udf.arguments.iter() {
+                let new_arg = rewrite_by_selection(query_info, arg, index_selection)?;
+                new_args.push(new_arg);
+            }
+            Some(
+                UDFServerCall {
+                    span: udf.span,
+                    func_name: udf.func_name.clone(),
+                    server_addr: udf.server_addr.clone(),
+                    arg_types: udf.arg_types.clone(),
+                    return_type: udf.return_type.clone(),
                     arguments: new_args,
                 }
                 .into(),

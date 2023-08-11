@@ -18,6 +18,7 @@ use common_ast::ast::Identifier;
 use common_ast::ast::UDFDefinition;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::udf_client::UDFFlightClient;
 use common_meta_app::principal::LambdaUDF;
 use common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
 use common_meta_app::principal::UDFServer;
@@ -62,19 +63,25 @@ impl Binder {
                 return_type,
                 address,
             } => {
-                // TODO(ccl): check function arguments type and return type
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                 for arg_type in arg_types {
                     arg_datatypes.push(DataType::from(&resolve_type_name(arg_type)?));
                 }
+                let return_type = DataType::from(&resolve_type_name(return_type)?);
+
+                let func_name = udf_name.to_string();
+                let mut client = UDFFlightClient::connect(address).await?;
+                client
+                    .check_schema(&func_name, &arg_datatypes, &return_type)
+                    .await?;
 
                 Ok(UserDefinedFunction {
-                    name: udf_name.to_string(),
+                    name: func_name,
                     description: udf_description.clone().unwrap_or_default(),
                     definition: PlanUDFDefinition::UDFServer(UDFServer {
                         address: address.clone(),
                         arg_types: arg_datatypes,
-                        return_type: DataType::from(&resolve_type_name(return_type)?),
+                        return_type,
                     }),
                 })
             }

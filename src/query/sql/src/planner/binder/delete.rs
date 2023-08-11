@@ -197,6 +197,12 @@ impl Binder {
                     .await?;
                 subquery_desc.push(desc);
             }
+            ScalarExpr::UDFServerCall(scalar) => {
+                for arg in scalar.arguments.iter() {
+                    self.subquery_desc(arg, table_expr.clone(), subquery_desc)
+                        .await?;
+                }
+            }
             ScalarExpr::BoundColumnRef(_)
             | ScalarExpr::ConstantExpr(_)
             | ScalarExpr::WindowFunction(_)

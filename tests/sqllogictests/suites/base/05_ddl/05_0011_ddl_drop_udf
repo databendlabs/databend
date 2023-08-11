@@ -12,18 +12,3 @@ DROP FUNCTION IF EXISTS isnotempty
 
 statement error 2602
 DROP FUNCTION isnotempty
-
-statement ok
-DROP FUNCTION IF EXISTS plus_int
-
-statement ok
-CREATE FUNCTION plus_int AS (int, int) -> int64 ADDRESS = 'http://localhost:8888' DESC = 'This is a description'
-
-statement ok
-DROP FUNCTION plus_int
-
-statement ok
-DROP FUNCTION IF EXISTS plus_int
-
-statement error 2602
-DROP FUNCTION plus_int
