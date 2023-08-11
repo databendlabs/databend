@@ -298,7 +298,13 @@ fn table_scan_to_format_tree(
         .as_ref()
         .and_then(|extras| extras.agg_index.as_ref());
 
-    let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
+    let mut children = vec![
+        FormatTreeNode::new(format!("table: {table_name}")),
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, false)
+        )),
+    ];
 
     // Part stats.
     children.extend(part_stats_info_to_format_tree(&plan.source.statistics));
@@ -344,17 +350,6 @@ fn table_scan_to_format_tree(
         children.push(FormatTreeNode::new(text));
     }
 
-    let output_columns = plan.source.output_schema.fields();
-
-    // If output_columns contains all columns of the source,
-    // Then output_columns won't show in explain
-    if output_columns.len() < plan.source.source_info.schema().fields().len() {
-        children.push(FormatTreeNode::new(format!(
-            "output columns: [{}]",
-            output_columns.iter().map(|f| f.name()).join(", ")
-        )));
-    }
-
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
         children.extend(items);
@@ -385,7 +380,7 @@ fn constant_table_scan_to_format_tree(
     let mut children = Vec::with_capacity(plan.values.len() + 1);
     children.push(FormatTreeNode::new(format!(
         "output columns: [{}]",
-        format_output_columns(plan.output_schema()?, metadata)
+        format_output_columns(plan.output_schema()?, metadata, true)
     )));
     for (i, value) in plan.values.iter().enumerate() {
         let column = value.iter().map(|val| format!("{val}")).join(", ");
@@ -410,7 +405,7 @@ fn filter_to_format_tree(
     let mut children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         FormatTreeNode::new(format!("filters: [{filter}]")),
     ];
@@ -437,7 +432,7 @@ fn project_to_format_tree(
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![FormatTreeNode::new(format!(
         "output columns: [{}]",
-        format_output_columns(plan.output_schema()?, metadata)
+        format_output_columns(plan.output_schema()?, metadata, true)
     ))];
 
     if let Some(info) = &plan.stat_info {
@@ -460,6 +455,9 @@ fn eval_scalar_to_format_tree(
     metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
+    if plan.exprs.is_empty() {
+        return to_format_tree(&plan.input, metadata, prof_span_set);
+    }
     let scalars = plan
         .exprs
         .iter()
@@ -469,7 +467,7 @@ fn eval_scalar_to_format_tree(
     let mut children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         FormatTreeNode::new(format!("expressions: [{scalars}]")),
     ];
@@ -522,7 +520,7 @@ fn aggregate_expand_to_format_tree(
     let mut children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         FormatTreeNode::new(format!("grouping sets: [{sets}]")),
     ];
@@ -562,7 +560,7 @@ fn aggregate_partial_to_format_tree(
     let mut children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         FormatTreeNode::new(format!("group by: [{group_by}]")),
         FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
@@ -608,7 +606,7 @@ fn aggregate_final_to_format_tree(
     let mut children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         FormatTreeNode::new(format!("group by: [{group_by}]")),
         FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
@@ -669,7 +667,7 @@ fn window_to_format_tree(
     let mut children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         FormatTreeNode::new(format!("aggregate function: [{func}]")),
         FormatTreeNode::new(format!("partition by: [{partition_by}]")),
@@ -714,7 +712,7 @@ fn sort_to_format_tree(
     let mut children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         FormatTreeNode::new(format!("sort keys: [{sort_keys}]")),
     ];
@@ -739,7 +737,7 @@ fn limit_to_format_tree(
     let mut children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         FormatTreeNode::new(format!(
             "limit: {}",
@@ -773,7 +771,7 @@ fn row_fetch_to_format_tree(
     let mut children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         FormatTreeNode::new(format!(
             "columns to fetch: [{}]",
@@ -833,7 +831,7 @@ fn range_join_to_format_tree(
     let mut children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         FormatTreeNode::new(format!("join type: {}", plan.join_type)),
         FormatTreeNode::new(format!("range join conditions: [{range_join_conditions}]")),
@@ -892,7 +890,7 @@ fn hash_join_to_format_tree(
     let mut children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         FormatTreeNode::new(format!("join type: {}", plan.join_type)),
         FormatTreeNode::new(format!("build keys: [{build_keys}]")),
@@ -924,7 +922,7 @@ fn exchange_to_format_tree(
     Ok(FormatTreeNode::with_children("Exchange".to_string(), vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         FormatTreeNode::new(format!("exchange type: {}", match plan.kind {
             FragmentKind::Init => "Init-Partition".to_string(),
@@ -950,7 +948,7 @@ fn union_all_to_format_tree(
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![FormatTreeNode::new(format!(
         "output columns: [{}]",
-        format_output_columns(plan.output_schema()?, metadata)
+        format_output_columns(plan.output_schema()?, metadata, true)
     ))];
 
     if let Some(info) = &plan.stat_info {
@@ -1007,7 +1005,7 @@ fn exchange_source_to_format_tree(
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![FormatTreeNode::new(format!(
         "output columns: [{}]",
-        format_output_columns(plan.output_schema()?, metadata)
+        format_output_columns(plan.output_schema()?, metadata, true)
     ))];
 
     children.push(FormatTreeNode::new(format!(
@@ -1028,7 +1026,7 @@ fn exchange_sink_to_format_tree(
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![FormatTreeNode::new(format!(
         "output columns: [{}]",
-        format_output_columns(plan.output_schema()?, metadata)
+        format_output_columns(plan.output_schema()?, metadata, true)
     ))];
 
     children.push(FormatTreeNode::new(format!(
@@ -1067,7 +1065,7 @@ fn delete_partial_to_format_tree(
 
 fn delete_final_to_format_tree(
     plan: &MutationAggregate,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
@@ -1084,7 +1082,7 @@ fn project_set_to_format_tree(
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![FormatTreeNode::new(format!(
         "output columns: [{}]",
-        format_output_columns(plan.output_schema()?, metadata)
+        format_output_columns(plan.output_schema()?, metadata, true)
     ))];
 
     if let Some(info) = &plan.stat_info {
@@ -1118,7 +1116,7 @@ fn lambda_to_format_tree(
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![FormatTreeNode::new(format!(
         "output columns: [{}]",
-        format_output_columns(plan.output_schema()?, metadata)
+        format_output_columns(plan.output_schema()?, metadata, true)
     ))];
 
     if let Some(info) = &plan.stat_info {
@@ -1161,7 +1159,7 @@ fn runtime_filter_source_to_format_tree(
     let children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         to_format_tree(&plan.left_side, metadata, prof_span_set)?,
         to_format_tree(&plan.right_side, metadata, prof_span_set)?,
@@ -1180,7 +1178,7 @@ fn materialized_cte_to_format_tree(
     let children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata)
+            format_output_columns(plan.output_schema()?, metadata, true)
         )),
         to_format_tree(&plan.left, metadata, prof_span_set)?,
         to_format_tree(&plan.right, metadata, prof_span_set)?,
@@ -1191,7 +1189,11 @@ fn materialized_cte_to_format_tree(
     ))
 }
 
-fn format_output_columns(output_schema: DataSchemaRef, metadata: &Metadata) -> String {
+fn format_output_columns(
+    output_schema: DataSchemaRef,
+    metadata: &Metadata,
+    format_table: bool,
+) -> String {
     output_schema
         .fields()
         .iter()
@@ -1199,7 +1201,10 @@ fn format_output_columns(output_schema: DataSchemaRef, metadata: &Metadata) -> S
             Ok(column_index) => {
                 let column_entry = metadata.column(column_index);
                 match column_entry.table_index() {
-                    Some(table_index) => match metadata.table(table_index).alias_name() {
+                    Some(table_index) if format_table => match metadata
+                        .table(table_index)
+                        .alias_name()
+                    {
                         Some(alias_name) => {
                             format!("{}.{} (#{})", alias_name, column_entry.name(), column_index)
                         }
@@ -1210,7 +1215,7 @@ fn format_output_columns(output_schema: DataSchemaRef, metadata: &Metadata) -> S
                             column_index,
                         ),
                     },
-                    None => format!("{} (#{})", column_entry.name(), column_index),
+                    _ => format!("{} (#{})", column_entry.name(), column_index),
                 }
             }
             _ => format!("#{}", field.name()),
