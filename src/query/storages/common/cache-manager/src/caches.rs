@@ -161,7 +161,7 @@ pub struct BloomIndexFilterMeter;
 impl Meter<String, Arc<Xor8Filter>> for BloomIndexFilterMeter {
     type Measure = usize;
 
-    fn measure<Q: ?Sized>(&self, _: &Q, _value: &Arc<Xor8Filter>) -> Self::Measure {
-        std::mem::size_of::<Xor8Filter>()
+    fn measure<Q: ?Sized>(&self, _: &Q, value: &Arc<Xor8Filter>) -> Self::Measure {
+        std::mem::size_of::<Xor8Filter>() + value.filter.finger_prints.len()
     }
 }
