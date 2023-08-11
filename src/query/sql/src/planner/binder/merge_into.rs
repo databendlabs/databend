@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_ast::ast::MergeIntoStmt;
+use common_ast::ast::TableReference;
 use common_exception::Result;
 
 use crate::binder::Binder;
@@ -32,8 +33,29 @@ impl Binder {
             database,
             table,
             source,
+            alias_source,
+            alias_target,
             ..
         } = stmt;
+
+        // get target_table_reference
+        let target_table = TableReference::Table {
+            span: None,
+            catalog: catalog.clone(),
+            database: database.clone(),
+            table: table.clone(),
+            alias: alias_target.clone(),
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        };
+
+        // get_source_table_reference
+        let source_data = TableReference::MergeIntoSourceReference {
+            span: None,
+            source: source.clone(),
+            alias: alias_source.clone(),
+        };
 
         let catalog_name = catalog.as_ref().map_or_else(
             || self.ctx.get_current_catalog(),

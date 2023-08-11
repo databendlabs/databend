@@ -59,7 +59,10 @@ pub struct MergeIntoStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub source: InsertSource,
-    pub alias: Option<TableAlias>,
+    // alias_target is belong to target
+    pub alias_target: Option<TableAlias>,
+    // alias_source is belog to source
+    pub alias_source: Option<TableAlias>,
     pub join_expr: Expr,
     pub merge_options: Vec<MergeOption>,
 }
