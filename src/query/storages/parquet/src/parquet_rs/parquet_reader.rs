@@ -53,11 +53,11 @@ impl ParquetRSReader {
         arrow_schema: &arrow_schema::Schema,
         plan: &DataSourcePlan,
     ) -> Result<Self> {
-        let source_projection =
+        let mut output_projection =
             PushDownInfo::projection_of_push_downs(table_schema, &plan.push_downs);
         let schema_descr = arrow_to_parquet_schema(arrow_schema)?;
-        let projection = source_projection.to_arrow_projection(&schema_descr);
         let predicate = PushDownInfo::prewhere_of_push_downs(&plan.push_downs).map(|prewhere| {
+            output_projection = prewhere.output_columns.clone();
             let schema = prewhere.prewhere_columns.project_schema(table_schema);
             let filter = prewhere
                 .filter
@@ -66,6 +66,7 @@ impl ParquetRSReader {
             let projection = prewhere.prewhere_columns.to_arrow_projection(&schema_descr);
             ParquetPredicate { projection, filter }
         });
+        let projection = output_projection.to_arrow_projection(&schema_descr);
         Ok(Self {
             op,
             predicate,

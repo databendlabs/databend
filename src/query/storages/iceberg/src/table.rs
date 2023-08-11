@@ -293,4 +293,8 @@ impl Table for IcebergTable {
     fn support_column_projection(&self) -> bool {
         true
     }
+
+    fn support_prewhere(&self) -> bool {
+        true
+    }
 }
