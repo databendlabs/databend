@@ -106,7 +106,7 @@ impl CacheManager {
                 "segment_info",
             );
             let bloom_index_filter_cache = Self::new_in_memory_cache(
-                config.table_bloom_index_filter_count,
+                config.table_bloom_index_filter_size,
                 BloomIndexFilterMeter {},
                 "bloom_index_filter",
             );
