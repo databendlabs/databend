@@ -1871,12 +1871,10 @@ dependencies = [
  "common-building",
  "common-exception",
  "common-grpc",
- "common-hive-meta-store",
  "common-meta-app",
  "common-storage",
  "common-tracing",
  "common-users",
- "databend-thrift",
  "hex",
  "log",
  "once_cell",
@@ -2077,14 +2075,6 @@ dependencies = [
  "ethnum",
  "ordered-float 3.7.0",
  "rand 0.8.5",
-]
-
-[[package]]
-name = "common-hive-meta-store"
-version = "0.1.0"
-dependencies = [
- "databend-thrift",
- "which",
 ]
 
 [[package]]
@@ -2767,15 +2757,14 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-functions",
- "common-hive-meta-store",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-sql",
  "common-storage",
- "databend-thrift",
  "futures",
+ "hive_metastore",
  "log",
  "minitrace",
  "opendal",
@@ -2785,6 +2774,7 @@ dependencies = [
  "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-table-meta",
+ "tent-thrift",
  "typetag",
 ]
 
@@ -3885,19 +3875,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "walkdir",
-]
-
-[[package]]
-name = "databend-thrift"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc3d226b30a88cc6bef2071b4fb7f5fc6f73133fd88d9618007c0924d3d5b853"
-dependencies = [
- "byteorder",
- "integer-encoding",
- "log",
- "ordered-float 2.10.0",
- "threadpool",
 ]
 
 [[package]]
@@ -5997,6 +5974,15 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hive_metastore"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3b27a684aa35a7dec161090fc57a39d930c97612f3e68e94adcbe8be1041108"
+dependencies = [
+ "tent-thrift",
+]
 
 [[package]]
 name = "hkdf"
@@ -10636,6 +10622,19 @@ dependencies = [
  "redox_syscall",
  "rustix 0.36.9",
  "windows-sys 0.42.0",
+]
+
+[[package]]
+name = "tent-thrift"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c908572847868d80acdc28acda5ec5f918544c69a4da5d392d26b06800ccd180"
+dependencies = [
+ "byteorder",
+ "integer-encoding",
+ "log",
+ "ordered-float 3.7.0",
+ "threadpool",
 ]
 
 [[package]]
