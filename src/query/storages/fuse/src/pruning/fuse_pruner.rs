@@ -248,7 +248,12 @@ impl FusePruner {
         &mut self,
         segment_locs: Vec<SegmentLocation>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        self.pruning(segment_locs, true).await
+        const BATCH_SIZE: usize = 1000;
+        let mut block_metas = vec![];
+        for chunk in segment_locs.chunks(BATCH_SIZE) {
+            block_metas.append(&mut self.pruning(chunk.to_vec(), true).await?);
+        }
+        Ok(block_metas)
     }
     // Pruning chain:
     // segment pruner -> block pruner -> topn pruner
