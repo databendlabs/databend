@@ -40,22 +40,18 @@ impl ParquetRSTable {
         let source_projection =
             PushDownInfo::projection_of_push_downs(&table_schema, &plan.push_downs);
         let schema_descr = arrow_to_parquet_schema(&self.arrow_schema)?;
-        let projection = source_projection.to_arrow_projection(&schema_descr)?;
-        let predicate = Arc::new(
-            PushDownInfo::prewhere_of_push_downs(&plan.push_downs)
-                .map(|prewhere| {
-                    let schema = prewhere.prewhere_columns.project_schema(&table_schema);
-                    let filter = prewhere
-                        .filter
-                        .as_expr(&BUILTIN_FUNCTIONS)
-                        .project_column_ref(|name| schema.index_of(name).unwrap());
-                    let projection = prewhere
-                        .prewhere_columns
-                        .to_arrow_projection(&schema_descr)?;
-                    Ok::<_, ErrorCode>(ParquetPredicate { projection, filter })
-                })
-                .transpose()?,
-        );
+        let projection = source_projection.to_arrow_projection(&schema_descr);
+        let predicate = Arc::new(PushDownInfo::prewhere_of_push_downs(&plan.push_downs).map(
+            |prewhere| {
+                let schema = prewhere.prewhere_columns.project_schema(&table_schema);
+                let filter = prewhere
+                    .filter
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .project_column_ref(|name| schema.index_of(name).unwrap());
+                let projection = prewhere.prewhere_columns.to_arrow_projection(&schema_descr);
+                ParquetPredicate { projection, filter }
+            },
+        ));
 
         // TODOs:
         // - introduce Top-K optimization.

@@ -104,25 +104,21 @@ impl Projection {
         }
     }
 
-    pub fn to_arrow_projection(&self, schema: &SchemaDescriptor) -> Result<ProjectionMask> {
-        Ok(match self {
+    pub fn to_arrow_projection(&self, schema: &SchemaDescriptor) -> ProjectionMask {
+        match self {
             Projection::Columns(indices) => ProjectionMask::roots(schema, indices.clone()),
             Projection::InnerColumns(path_indices) => {
+                let mut leave_id = 0;
+                let tree = build_parquet_schema_tree(schema.root_schema(), &mut leave_id);
+                assert_eq!(leave_id, schema.num_columns());
                 let paths: Vec<&Vec<usize>> = path_indices.values().collect();
                 let mut leaves = vec![];
-                let mut leave_id = 0;
                 for path in paths {
-                    traverse_physcial_type(
-                        schema.root_schema(),
-                        path,
-                        &mut leaves,
-                        &mut leave_id,
-                        true,
-                    )?;
+                    traverse_parquet_schema_tree(&tree, path, &mut leaves);
                 }
                 ProjectionMask::leaves(schema, leaves)
             }
-        })
+        }
     }
 }
 
@@ -138,30 +134,120 @@ impl core::fmt::Debug for Projection {
     }
 }
 
-fn traverse_physcial_type(
+#[derive(Debug, PartialEq, Eq)]
+enum ParquetSchemaTreeNode {
+    Leaf(usize),
+    Inner(Vec<ParquetSchemaTreeNode>),
+}
+
+fn build_parquet_schema_tree(
     ty: &parquet_rs::schema::types::Type,
-    path: &[FieldIndex],
-    leaves: &mut Vec<usize>,
     leave_id: &mut usize,
-    mask: bool,
-) -> Result<()> {
+) -> ParquetSchemaTreeNode {
     match ty {
         parquet_rs::schema::types::Type::PrimitiveType { .. } => {
-            if mask {
-                leaves.push(*leave_id);
-            }
+            let res = ParquetSchemaTreeNode::Leaf(*leave_id);
             *leave_id += 1;
+            res
         }
         parquet_rs::schema::types::Type::GroupType { fields, .. } => {
-            for (index, field) in fields.iter().enumerate() {
-                if mask && !path.is_empty() && path[0] == index {
-                    traverse_physcial_type(field, &path[1..], leaves, leave_id, true)?;
-                } else {
-                    traverse_physcial_type(field, path, leaves, leave_id, false)?;
+            let mut children = Vec::with_capacity(fields.len());
+            for field in fields.iter() {
+                children.push(build_parquet_schema_tree(field, leave_id));
+            }
+            ParquetSchemaTreeNode::Inner(children)
+        }
+    }
+}
+
+fn traverse_parquet_schema_tree(
+    node: &ParquetSchemaTreeNode,
+    path: &[FieldIndex],
+    leaves: &mut Vec<usize>,
+) {
+    match node {
+        ParquetSchemaTreeNode::Leaf(id) => {
+            leaves.push(*id);
+        }
+        ParquetSchemaTreeNode::Inner(children) => {
+            if path.is_empty() {
+                // All children should be included.
+                for child in children.iter() {
+                    traverse_parquet_schema_tree(child, path, leaves);
                 }
+            } else {
+                let child = path[0];
+                traverse_parquet_schema_tree(&children[child], &path[1..], leaves);
             }
         }
     }
+}
 
-    Ok(())
+#[cfg(test)]
+mod tests {
+    use common_expression::types::NumberDataType;
+    use common_expression::TableDataType;
+    use common_expression::TableField;
+    use common_expression::TableSchema;
+    use parquet_rs::arrow::arrow_to_parquet_schema;
+
+    use super::build_parquet_schema_tree;
+    use crate::plan::projection::ParquetSchemaTreeNode;
+
+    #[test]
+    fn test_build_parquet_schema_tree() {
+        // Test schema (6 physical columns):
+        // a: Int32,            (leave id: 0, path: [0])
+        // b: Tuple (
+        //    c: Int32,         (leave id: 1, path: [1, 0])
+        //    d: Tuple (
+        //        e: Int32,     (leave id: 2, path: [1, 1, 0])
+        //        f: String,    (leave id: 3, path: [1, 1, 1])
+        //    ),
+        //    g: String,        (leave id: 4, path: [1, 2])
+        // )
+        // h: String,           (leave id: 5, path: [2])
+        let schema = TableSchema::new(vec![
+            TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new("b", TableDataType::Tuple {
+                fields_name: vec!["c".to_string(), "d".to_string(), "g".to_string()],
+                fields_type: vec![
+                    TableDataType::Number(NumberDataType::Int32),
+                    TableDataType::Tuple {
+                        fields_name: vec!["e".to_string(), "f".to_string()],
+                        fields_type: vec![
+                            TableDataType::Number(NumberDataType::Int32),
+                            TableDataType::String,
+                        ],
+                    },
+                    TableDataType::String,
+                ],
+            }),
+            TableField::new("h", TableDataType::String),
+        ]);
+        let arrow_fields = schema.to_arrow().fields;
+        let arrow_schema = arrow_schema::Schema::new(
+            arrow_fields
+                .into_iter()
+                .map(arrow_schema::Field::from)
+                .collect::<Vec<_>>(),
+        );
+        let schema_desc = arrow_to_parquet_schema(&arrow_schema).unwrap();
+        let mut leave_id = 0;
+        let tree = build_parquet_schema_tree(schema_desc.root_schema(), &mut leave_id);
+        assert_eq!(leave_id, 6);
+        let expected_tree = ParquetSchemaTreeNode::Inner(vec![
+            ParquetSchemaTreeNode::Leaf(0),
+            ParquetSchemaTreeNode::Inner(vec![
+                ParquetSchemaTreeNode::Leaf(1),
+                ParquetSchemaTreeNode::Inner(vec![
+                    ParquetSchemaTreeNode::Leaf(2),
+                    ParquetSchemaTreeNode::Leaf(3),
+                ]),
+                ParquetSchemaTreeNode::Leaf(4),
+            ]),
+            ParquetSchemaTreeNode::Leaf(5),
+        ]);
+        assert_eq!(tree, expected_tree);
+    }
 }
