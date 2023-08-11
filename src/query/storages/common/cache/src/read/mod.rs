@@ -21,4 +21,5 @@ pub use loader::CacheKey;
 pub use loader::LoadParams;
 pub use loader::Loader;
 pub use readers::InMemoryBytesCacheReader;
+pub use readers::InMemoryCacheReader;
 pub use readers::InMemoryItemCacheReader;
