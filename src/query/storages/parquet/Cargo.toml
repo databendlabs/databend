@@ -27,13 +27,10 @@ storages-common-pruner = { path = "../common/pruner" }
 storages-common-table-meta = { path = "../common/table-meta" }
 
 arrow-array = "43.0.0"
-arrow-buffer = "43.0.0"
 arrow-schema = "43.0.0"
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
-bytes = "1.4.0"
 chrono = { workspace = true }
-ethnum = { workspace = true }
 futures = "0.3.24"
 log = { workspace = true }
 opendal = { workspace = true }

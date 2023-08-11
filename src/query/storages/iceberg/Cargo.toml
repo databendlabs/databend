@@ -10,7 +10,6 @@ publish = false
 
 [dependencies]
 common-arrow = { path = "../../../common/arrow" }
-common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
@@ -18,6 +17,7 @@ common-functions = { path = "../../functions" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
+common-pipeline-sources = { path = "../../pipeline/sources" }
 common-storage = { path = "../../../common/storage" }
 common-storages-parquet = { path = "../parquet" }
 storages-common-pruner = { path = "../common/pruner" }
@@ -25,14 +25,13 @@ storages-common-table-meta = { path = "../common/table-meta" }
 
 arrow-schema = "43.0.0"
 async-backtrace = { workspace = true }
-async-trait = "0.1"
+async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
 futures = "0.3"
 icelake = { version = "0.0.9" }
 match-template = "0.0.1"
 minitrace = { workspace = true }
 opendal = { workspace = true }
-parquet = "43.0.0"
 serde = { workspace = true }
 tokio = { workspace = true }
 typetag = "0.2"

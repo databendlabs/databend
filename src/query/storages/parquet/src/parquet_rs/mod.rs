@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod partition;
-mod read;
+mod parquet_reader;
+mod parquet_table;
 mod source;
-mod table;
 
-pub use table::ParquetRSTable;
+pub use parquet_reader::ParquetRSReader;
+pub use parquet_table::ParquetRSPart;
+pub use parquet_table::ParquetRSTable;

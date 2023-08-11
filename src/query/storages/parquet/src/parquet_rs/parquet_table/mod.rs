@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod reader;
-mod row_group_reader;
+mod partition;
+mod read;
+mod table;
 
-pub use reader::ParquetReader;
+pub use partition::ParquetRSPart;
+pub use table::ParquetRSTable;

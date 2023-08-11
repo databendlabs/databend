@@ -61,7 +61,7 @@ fn limit_parallelism_by_memory(max_memory: usize, sizes: &mut [(usize, usize)]) 
     sizes.len()
 }
 
-// Caclulate a proper parallelism for pipelines after reading parquet files from parquet source.
+// Calculate a proper parallelism for pipelines after reading parquet files from parquet source.
 pub(crate) fn calc_parallelism(
     ctx: &Arc<dyn TableContext>,
     plan: &DataSourcePlan,
