@@ -194,14 +194,14 @@ impl Binder {
 
         // To support using aliased column in `WHERE` clause,
         // we should bind where after `select_list` is rewritten.
-        let where_scalar = if let Some(expr) = &stmt.selection {
-            let (new_expr, scalar) = self
-                .bind_where(&mut from_context, &aliases, expr, s_expr)
+        let (where_scalar, aliases) = if let Some(expr) = &stmt.selection {
+            let (new_expr, scalar, aliases) = self
+                .bind_where(&mut from_context, aliases, expr, s_expr)
                 .await?;
             s_expr = new_expr;
-            Some(scalar)
+            (Some(scalar), aliases)
         } else {
-            None
+            (None, aliases)
         };
 
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
@@ -436,22 +436,96 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
+    fn reformat_aliases_if_need(
+        &self,
+        aliases: Vec<(String, ScalarExpr)>,
+        expr: &Expr,
+    ) -> Result<Vec<(String, ScalarExpr)>> {
+        if aliases.is_empty() {
+            return Ok(aliases);
+        }
+
+        let subquery = match expr {
+            Expr::Exists { subquery, .. } => Some(subquery),
+            Expr::Subquery { subquery, .. } => Some(subquery),
+            _ => None,
+        };
+
+        // If subquery contains an `Eq` operation with the same column name in different tables, then just keep one of them if aliases.
+        // Or else may cause SemanticError with "reference or alias is ambiguous" message when query.
+        // like: `SELECT * FROM c, o WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) ORDER BY c_id;`
+        if let Some(subquery) = subquery {
+            let body = &subquery.body;
+            if let SetExpr::Select(select_stmt) = body {
+                let selection = &select_stmt.selection;
+                if let Some(Expr::BinaryOp {
+                    span: _,
+                    op,
+                    left,
+                    right,
+                }) = selection
+                {
+                    if let (
+                        BinaryOperator::Eq,
+                        Expr::ColumnRef {
+                            table: left_table,
+                            column: left_column,
+                            ..
+                        },
+                        Expr::ColumnRef {
+                            table: right_table,
+                            column: right_column,
+                            ..
+                        },
+                    ) = (op, left.as_ref(), right.as_ref())
+                    {
+                        if left_column.name() == right_column.name()
+                            && left_table != right_table
+                            && aliases
+                                .iter()
+                                .filter(|(name, _)| name == left_column.name())
+                                .count()
+                                > 1
+                        {
+                            let mut flag = false;
+                            return Ok(aliases
+                                .into_iter()
+                                .filter(|(name, _)| {
+                                    if !flag && name == left_column.name() {
+                                        flag = true;
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                })
+                                .collect());
+                        }
+                    }
+                }
+            }
+        }
+        Ok(aliases)
+    }
+
+    #[allow(clippy::type_complexity)]
+    #[async_backtrace::framed]
     pub async fn bind_where(
         &mut self,
         bind_context: &mut BindContext,
-        aliases: &[(String, ScalarExpr)],
+        aliases: Vec<(String, ScalarExpr)>,
         expr: &Expr,
         child: SExpr,
-    ) -> Result<(SExpr, ScalarExpr)> {
+    ) -> Result<(SExpr, ScalarExpr, Vec<(String, ScalarExpr)>)> {
         let last_expr_context = bind_context.expr_context.clone();
         bind_context.set_expr_context(ExprContext::WhereClause);
+        let aliases = self.reformat_aliases_if_need(aliases, expr)?;
 
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
-            aliases,
+            &aliases,
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
@@ -463,7 +537,7 @@ impl Binder {
         };
         let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
         bind_context.set_expr_context(last_expr_context);
-        Ok((new_expr, scalar))
+        Ok((new_expr, scalar, aliases))
     }
 
     #[async_backtrace::framed]
