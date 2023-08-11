@@ -258,7 +258,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ steps.target.outputs.target }}
-          artifacts: query
+          artifacts: meta,query
           category: hdfs
           features: storage-hdfs
           upload: false
