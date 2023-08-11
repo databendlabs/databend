@@ -182,6 +182,14 @@ impl Table for RandomTable {
             );
         }
 
+        if plan.parts.is_empty() {
+            let output = OutputPort::create();
+            builder.add_source(
+                output.clone(),
+                RandomSource::create(ctx.clone(), output, output_schema, 0)?,
+            );
+        }
+
         pipeline.add_pipe(builder.finalize());
         Ok(())
     }

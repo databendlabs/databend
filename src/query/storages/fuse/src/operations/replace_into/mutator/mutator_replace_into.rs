@@ -38,6 +38,7 @@ use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::aggregates::eval_aggr;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_sql::executor::OnConflictField;
 use log::info;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::ColumnStatistics;
@@ -51,7 +52,6 @@ use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoO
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::column_hash::RowScalarValue;
-use crate::operations::replace_into::OnConflictField;
 
 // Replace is somehow a simplified merge_into, which
 // - do insertion for "matched" branch

@@ -20,8 +20,8 @@ use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::BlockThresholds;
-use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::SegmentWriter;
+use common_storages_fuse::io::SegmentsIO;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::operations::BlockCompactMutator;
 use common_storages_fuse::operations::CompactOptions;
@@ -39,7 +39,6 @@ use databend_query::test_kits::table_test_fixture::expects_ok;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use rand::thread_rng;
 use rand::Rng;
-use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -244,19 +243,15 @@ async fn test_safety() -> Result<()> {
             }
         }
 
-        let compact_segment_reader = MetaReaders::segment_info_reader(
-            ctx.get_data_operator()?.operator(),
-            TestFixture::default_table_schema(),
-        );
         for unchanged_segment in block_compact_mutator.unchanged_segments_map.values() {
-            let param = LoadParams {
-                location: unchanged_segment.0.clone(),
-                len_hint: None,
-                ver: unchanged_segment.1,
-                put_cache: false,
-            };
-            let compact_segment = compact_segment_reader.read(&param).await?;
-            let segment = SegmentInfo::try_from(compact_segment.as_ref())?;
+            let compact_segment = SegmentsIO::read_compact_segment(
+                ctx.get_data_operator()?.operator(),
+                unchanged_segment.clone(),
+                TestFixture::default_table_schema(),
+                false,
+            )
+            .await?;
+            let segment = SegmentInfo::try_from(compact_segment)?;
             blocks_number += segment.blocks.len();
             for b in &segment.blocks {
                 block_ids_after_compaction.insert(b.location.clone());
