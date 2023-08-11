@@ -1,4 +1,5 @@
 export interface IAssets {
+  id?: number;
   size: number;
   formatSize?: string;
   browser_download_url: string;
@@ -7,6 +8,8 @@ export interface IAssets {
   osType: string;
   isApple?: boolean;
   isUbuntu?: boolean;
+  created_at?: string;
+  tag_name?: string;
 }
 
 export interface IRepoResource {

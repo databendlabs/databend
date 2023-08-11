@@ -11,6 +11,7 @@ import Card from '@site/src/components/BaseComponents/Card';
 import Tag from '@site/src/components/BaseComponents/Tag';
 import { Apple, Linux } from '@site/src/components/Icons';
 import Ubuntu from '@site/src/components/Icons/Ubuntu';
+import { IAssets } from '@site/src/types/download';
 
 const Releases: FC = (): ReactElement => {
   const { 
@@ -35,6 +36,18 @@ const Releases: FC = (): ReactElement => {
       </>
     )
   }
+  const buriedPointForDownload = (asset: IAssets)=> {
+    const { name, osType, osTypeDesc, id, browser_download_url, created_at, size, isApple, isUbuntu, tag_name   } = asset;
+    // @ts-ignore
+    if (window?.gtag) {
+      // @ts-ignore
+      window.gtag('event', 'click', {
+        'event_category': 'DownloadPackages',
+        'event_label': tag_name + "_" + osTypeDesc,
+        'package_download_info': JSON.stringify({ name, osType, osTypeDesc, id, browser_download_url, created_at, size, isApple, isUbuntu, tag_name})
+      });
+    }
+  }
   return (
     <Layout
       title={`Databend - Activate your Object Storage for real-time analytics`}
@@ -55,6 +68,7 @@ const Releases: FC = (): ReactElement => {
                   const { isApple, browser_download_url, osTypeDesc, formatSize, isUbuntu } = asset;
                   return (
                     <Card 
+                      onClick={()=> buriedPointForDownload(asset)}
                       href={browser_download_url}
                       isDownload 
                       key={index} 
@@ -99,6 +113,7 @@ const Releases: FC = (): ReactElement => {
                           const { isApple, browser_download_url, osType, isUbuntu} =  asset;
                           return (
                             <Card  
+                              onClick={()=> buriedPointForDownload(asset)}
                               key={ind}
                               href={browser_download_url}
                               className={clsx(styles.button, !isApple && styles.buttonLinux, isUbuntu && styles.buttonLinuxUbuntu)} 
