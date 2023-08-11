@@ -2172,7 +2172,7 @@ pub struct CacheConfig {
     //
     // For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
     // table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
-    #[clap(long = "cache-table-bloom-index-filter-count", default_value = "0")]
+    #[clap(long = "cache-table-bloom-index-filter-size", default_value = "0")]
     pub table_bloom_index_filter_count: u64,
 
     /// Max bytes of cached bloom index filters used. Set it to 0 to disable it.
