@@ -2,6 +2,7 @@ query T
 explain select * from numbers(10000) where number in (select number from numbers(1000))
 ----
 HashJoin
+├── output columns: [numbers.number (#0)]
 ├── join type: LEFT SEMI
 ├── build keys: [subquery_1 (#1)]
 ├── probe keys: [numbers.number (#0)]
@@ -9,6 +10,7 @@ HashJoin
 ├── estimated rows: 10000.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
+│   ├── output columns: [numbers.number (#1)]
 │   ├── read rows: 1000
 │   ├── read bytes: 8000
 │   ├── partitions total: 1
@@ -17,6 +19,7 @@ HashJoin
 │   └── estimated rows: 1000.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
+    ├── output columns: [numbers.number (#0)]
     ├── read rows: 10000
     ├── read bytes: 80000
     ├── partitions total: 1
@@ -28,6 +31,7 @@ query T
 explain select * from numbers(1000) where number in (select number from numbers(10000))
 ----
 HashJoin
+├── output columns: [numbers.number (#0)]
 ├── join type: RIGHT SEMI
 ├── build keys: [numbers.number (#0)]
 ├── probe keys: [subquery_1 (#1)]
@@ -35,6 +39,7 @@ HashJoin
 ├── estimated rows: 1000.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
+│   ├── output columns: [numbers.number (#0)]
 │   ├── read rows: 1000
 │   ├── read bytes: 8000
 │   ├── partitions total: 1
@@ -43,6 +48,7 @@ HashJoin
 │   └── estimated rows: 1000.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
+    ├── output columns: [numbers.number (#1)]
     ├── read rows: 10000
     ├── read bytes: 80000
     ├── partitions total: 1

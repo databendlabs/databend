@@ -18,6 +18,7 @@ explain select * from t_nullable_prune
 ----
 TableScan
 ├── table: default.default.t_nullable_prune
+├── output columns: [t_nullable_prune.a (#0)]
 ├── read rows: 6
 ├── read bytes: 78
 ├── partitions total: 2
@@ -30,10 +31,12 @@ query T
 explain select * from t_nullable_prune where a is not null
 ----
 Filter
+├── output columns: [t_nullable_prune.a (#0)]
 ├── filters: [is_not_null(t_nullable_prune.a (#0))]
 ├── estimated rows: 1.20
 └── TableScan
     ├── table: default.default.t_nullable_prune
+    ├── output columns: [t_nullable_prune.a (#0)]
     ├── read rows: 3
     ├── read bytes: 45
     ├── partitions total: 2
@@ -46,10 +49,12 @@ query T
 explain select * from t_nullable_prune where a is null
 ----
 Filter
+├── output columns: [t_nullable_prune.a (#0)]
 ├── filters: [NOT is_not_null(t_nullable_prune.a (#0))]
 ├── estimated rows: 4.80
 └── TableScan
     ├── table: default.default.t_nullable_prune
+    ├── output columns: [t_nullable_prune.a (#0)]
     ├── read rows: 3
     ├── read bytes: 33
     ├── partitions total: 2

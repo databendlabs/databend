@@ -3,6 +3,7 @@ explain select * from (select a from (select number as a, number + 1 as b from n
 ----
 TableScan
 ├── table: default.system.numbers
+├── output columns: [numbers.number (#0)]
 ├── read rows: 1
 ├── read bytes: 8
 ├── partitions total: 1
@@ -14,15 +15,18 @@ query T
 explain select a from (select number as a, count(*) as b from numbers(1) group by a)
 ----
 AggregateFinal
+├── output columns: [numbers.number (#0)]
 ├── group by: [number]
 ├── aggregate functions: []
 ├── estimated rows: 1.00
 └── AggregatePartial
+    ├── output columns: [#_group_by_key]
     ├── group by: [number]
     ├── aggregate functions: []
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.system.numbers
+        ├── output columns: [numbers.number (#0)]
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
@@ -34,25 +38,31 @@ query T
 explain select a from (select number as a, number b, sum(number) as c, number as d, number as e from numbers(1) group by a, b, d, e) where b > 1 order by d limit 1
 ----
 Limit
+├── output columns: [numbers.number (#0)]
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 0.20
 └── Sort
+    ├── output columns: [numbers.number (#0)]
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 0.20
     └── Filter
+        ├── output columns: [numbers.number (#0)]
         ├── filters: [numbers.b (#0) > 1]
         ├── estimated rows: 0.20
         └── AggregateFinal
+            ├── output columns: [numbers.number (#0), numbers.number (#0), numbers.number (#0), numbers.number (#0)]
             ├── group by: [number, number, number, number]
             ├── aggregate functions: []
             ├── estimated rows: 1.00
             └── AggregatePartial
+                ├── output columns: [#_group_by_key]
                 ├── group by: [number, number, number, number]
                 ├── aggregate functions: []
                 ├── estimated rows: 1.00
                 └── TableScan
                     ├── table: default.system.numbers
+                    ├── output columns: [numbers.number (#0)]
                     ├── read rows: 1
                     ├── read bytes: 8
                     ├── partitions total: 1
@@ -64,19 +74,23 @@ query T
 explain select * from (select t1.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t1, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t2 where t1.b = t2.b and t1.c = 1)
 ----
 HashJoin
+├── output columns: [a (#1)]
 ├── join type: INNER
 ├── build keys: [t1.b (#2)]
 ├── probe keys: [t2.b (#7)]
 ├── filters: []
 ├── estimated rows: 0.20
 ├── EvalScalar(Build)
+│   ├── output columns: [a (#1), b (#2)]
 │   ├── expressions: [numbers.number (#0) + 1, numbers.number (#0) + 1]
 │   ├── estimated rows: 0.20
 │   └── Filter
+│       ├── output columns: [numbers.number (#0)]
 │       ├── filters: [numbers.number (#0) + 1 = 1]
 │       ├── estimated rows: 0.20
 │       └── TableScan
 │           ├── table: default.system.numbers
+│           ├── output columns: [numbers.number (#0)]
 │           ├── read rows: 1
 │           ├── read bytes: 8
 │           ├── partitions total: 1
@@ -84,10 +98,12 @@ HashJoin
 │           ├── push downs: [filters: [numbers.number (#0) + 1 = 1], limit: NONE]
 │           └── estimated rows: 1.00
 └── EvalScalar(Probe)
+    ├── output columns: [b (#7)]
     ├── expressions: [numbers.number (#5) + 1]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.system.numbers
+        ├── output columns: [numbers.number (#5)]
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
@@ -99,52 +115,64 @@ query T
 explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
 ----
 HashJoin
+├── output columns: [a (#1)]
 ├── join type: INNER
 ├── build keys: [_if_scalar_subquery (#16)]
 ├── probe keys: [CAST(t1.a (#1) AS UInt64 NULL)]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── EvalScalar(Build)
+│   ├── output columns: [_if_scalar_subquery (#16)]
 │   ├── expressions: [if(CAST(_count_scalar_subquery (#14) = 0 AS Boolean NULL), NULL, _any_scalar_subquery (#15))]
 │   ├── estimated rows: 1.00
 │   └── Limit
+│       ├── output columns: [_count_scalar_subquery (#14), _any_scalar_subquery (#15)]
 │       ├── limit: 1
 │       ├── offset: 0
 │       ├── estimated rows: 1.00
 │       └── AggregateFinal
+│           ├── output columns: [_count_scalar_subquery (#14), _any_scalar_subquery (#15)]
 │           ├── group by: []
 │           ├── aggregate functions: [count(count(*)), any(count(*))]
 │           ├── limit: 1
 │           ├── estimated rows: 1.00
 │           └── AggregatePartial
+│               ├── output columns: [_count_scalar_subquery (#14), _any_scalar_subquery (#15)]
 │               ├── group by: []
 │               ├── aggregate functions: [count(count(*)), any(count(*))]
 │               ├── estimated rows: 1.00
 │               └── EvalScalar
+│                   ├── output columns: [count(*) (#13)]
 │                   ├── expressions: [COUNT(*) (#12)]
 │                   ├── estimated rows: 1.00
 │                   └── AggregateFinal
+│                       ├── output columns: [COUNT(*) (#12)]
 │                       ├── group by: []
 │                       ├── aggregate functions: [count()]
 │                       ├── estimated rows: 1.00
 │                       └── AggregatePartial
+│                           ├── output columns: [COUNT(*) (#12)]
 │                           ├── group by: []
 │                           ├── aggregate functions: [count()]
 │                           ├── estimated rows: 1.00
 │                           └── HashJoin
+│                               ├── output columns: []
 │                               ├── join type: INNER
 │                               ├── build keys: [t2.b (#5)]
 │                               ├── probe keys: [t3.b (#10)]
 │                               ├── filters: []
 │                               ├── estimated rows: 0.20
 │                               ├── EvalScalar(Build)
+│                               │   ├── output columns: [b (#5)]
 │                               │   ├── expressions: [numbers.number (#3) + 1]
 │                               │   ├── estimated rows: 0.20
 │                               │   └── Filter
+│                               │       ├── output columns: [numbers.number (#3)]
 │                               │       ├── filters: [numbers.number (#3) + 1 = 1]
 │                               │       ├── estimated rows: 0.20
 │                               │       └── TableScan
 │                               │           ├── table: default.system.numbers
+│                               │           ├── output columns: [numbers.number (#3)]
 │                               │           ├── read rows: 1
 │                               │           ├── read bytes: 8
 │                               │           ├── partitions total: 1
@@ -152,10 +180,12 @@ HashJoin
 │                               │           ├── push downs: [filters: [numbers.number (#3) + 1 = 1], limit: NONE]
 │                               │           └── estimated rows: 1.00
 │                               └── EvalScalar(Probe)
+│                                   ├── output columns: [b (#10)]
 │                                   ├── expressions: [numbers.number (#8) + 1]
 │                                   ├── estimated rows: 1.00
 │                                   └── TableScan
 │                                       ├── table: default.system.numbers
+│                                       ├── output columns: [numbers.number (#8)]
 │                                       ├── read rows: 1
 │                                       ├── read bytes: 8
 │                                       ├── partitions total: 1
@@ -163,10 +193,12 @@ HashJoin
 │                                       ├── push downs: [filters: [], limit: NONE]
 │                                       └── estimated rows: 1.00
 └── EvalScalar(Probe)
+    ├── output columns: [a (#1)]
     ├── expressions: [numbers.number (#0) + 1]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.system.numbers
+        ├── output columns: [numbers.number (#0)]
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
@@ -178,10 +210,12 @@ query T
 explain select name from system.functions order by example
 ----
 Sort
+├── output columns: [functions.name (#0), functions.example (#7)]
 ├── sort keys: [example ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.functions
+    ├── output columns: [functions.name (#0), functions.example (#7)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -193,28 +227,34 @@ query T
 explain select t.number from numbers(10) t where exists(select * from numbers(10))
 ----
 HashJoin
+├── output columns: [t.number (#0)]
 ├── join type: CROSS
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
 ├── estimated rows: 2.00
 ├── Filter(Build)
+│   ├── output columns: []
 │   ├── filters: [count(*) (#2) = 1]
 │   ├── estimated rows: 0.20
 │   └── AggregateFinal
+│       ├── output columns: [count(*) (#2)]
 │       ├── group by: []
 │       ├── aggregate functions: [count()]
 │       ├── estimated rows: 1.00
 │       └── AggregatePartial
+│           ├── output columns: [count(*) (#2)]
 │           ├── group by: []
 │           ├── aggregate functions: [count()]
 │           ├── estimated rows: 1.00
 │           └── Limit
+│               ├── output columns: []
 │               ├── limit: 1
 │               ├── offset: 0
 │               ├── estimated rows: 1.00
 │               └── TableScan
 │                   ├── table: default.system.numbers
+│                   ├── output columns: []
 │                   ├── read rows: 1
 │                   ├── read bytes: 8
 │                   ├── partitions total: 1
@@ -223,6 +263,7 @@ HashJoin
 │                   └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
+    ├── output columns: [t.number (#0)]
     ├── read rows: 10
     ├── read bytes: 80
     ├── partitions total: 1
@@ -244,28 +285,32 @@ query T
 explain select count(*) from t where t.b = 2
 ----
 EvalScalar
+├── output columns: [count(*) (#3)]
 ├── expressions: [COUNT(*) (#2)]
 ├── estimated rows: 1.00
 └── AggregateFinal
+    ├── output columns: [COUNT(*) (#2)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
     └── AggregatePartial
+        ├── output columns: [COUNT(*) (#2)]
         ├── group by: []
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
         └── Filter
+            ├── output columns: []
             ├── filters: [t.b (#1) = 2]
             ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.t
+                ├── output columns: [t.b (#1)]
                 ├── read rows: 2
                 ├── read bytes: 39
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
                 ├── push downs: [filters: [t.b (#1) = 2], limit: NONE]
-                ├── output columns: [b]
                 └── estimated rows: 2.00
 
 statement ok
