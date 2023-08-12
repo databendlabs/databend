@@ -476,7 +476,7 @@ impl Binder {
                 }
                 if !match_table {
                     return Err(ErrorCode::UnknownTable(format!(
-                        "Unknown table '{}'.'{}'",
+                        "Unknown table `{}`.`{}`",
                         db_name.name.clone(),
                         table_name.name.clone()
                     ))
