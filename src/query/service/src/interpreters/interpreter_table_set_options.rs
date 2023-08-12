@@ -96,7 +96,7 @@ impl Interpreter for SetOptionsInterpreter {
             table
         } else {
             return Err(ErrorCode::UnknownTable(format!(
-                "table {}.{} is unknown",
+                "table `{}`.`{}` is unknown",
                 database,
                 self.plan.table.as_str()
             )));

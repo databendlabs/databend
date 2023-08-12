@@ -43,7 +43,7 @@ pub async fn validate_grant_object_exists(
                 .await?
             {
                 return Err(common_exception::ErrorCode::UnknownTable(format!(
-                    "table {}.{} not exists",
+                    "table `{}`.`{}` not exists",
                     database_name, table_name,
                 )));
             }

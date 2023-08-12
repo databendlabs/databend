@@ -233,23 +233,21 @@ async fn generate_fields(
     ctx: &Arc<dyn TableContext>,
     table: &Arc<dyn Table>,
 ) -> Result<Vec<TableField>> {
-    let fields = if table.engine() == VIEW_ENGINE {
-        if let Some(query) = table.options().get(QUERY) {
-            let mut planner = Planner::new(ctx.clone());
-            if let Ok((plan, _)) = planner.plan_sql(query).await {
-                let schema = infer_table_schema(&plan.schema())?;
-                schema.fields().clone()
-            } else {
-                // If view SelectQUERY plan err, should return empty. not destroy the query.
-                vec![]
-            }
-        } else {
-            vec![]
-        }
+    if table.engine() != VIEW_ENGINE {
+        return Ok(table.schema().fields().clone());
+    }
+
+    if let Some(query) = table.options().get(QUERY) {
+        let mut planner = Planner::new(ctx.clone());
+        planner
+            .plan_sql(query)
+            .await
+            .ok()
+            .and_then(|(plan, _)| infer_table_schema(&plan.schema()).ok())
+            .map_or_else(|| Ok(vec![]), |schema| Ok(schema.fields().clone()))
     } else {
-        table.schema().fields().clone()
-    };
-    Ok(fields)
+        Ok(vec![])
+    }
 }
 
 /// GrantObjectVisibilityChecker is used to check whether a user has the privilege to access a

@@ -55,7 +55,7 @@ impl Interpreter for DropViewInterpreter {
 
         if tbl.is_none() && !self.plan.if_exists {
             return Err(ErrorCode::UnknownTable(format!(
-                "unknown view {}.{}",
+                "unknown view `{}`.`{}`",
                 db_name, view_name
             )));
         }
