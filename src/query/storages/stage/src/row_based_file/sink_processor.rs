@@ -108,11 +108,6 @@ impl Processor for RowBasedFileSink {
 
     fn process(&mut self) -> Result<()> {
         let block = self.input_data.take().unwrap();
-        let progress_values = ProgressValues {
-            rows: block.num_rows(),
-            bytes: block.memory_size(),
-        };
-        self.ctx.get_write_progress().incr(&progress_values);
         let block_meta = block.get_owned_meta().unwrap();
         let buffers = FileOutputBuffers::downcast_from(block_meta).unwrap();
         let size = buffers.buffers.iter().map(|b| b.len()).sum::<usize>();
