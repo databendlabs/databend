@@ -57,7 +57,7 @@ impl Interpreter for DropTableInterpreter {
 
         if tbl.is_none() && !self.plan.if_exists {
             return Err(ErrorCode::UnknownTable(format!(
-                "Unknown table `{}`.`{}` in catalog {}",
+                "Unknown table `{}`.`{}` in catalog '{}'",
                 db_name, tbl_name, catalog_name
             )));
         }
