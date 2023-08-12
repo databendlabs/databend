@@ -51,4 +51,4 @@ ERROR 1105 (HY000) at line 1: SemanticError. Code: 1065, Text = error:
   |                                 ^ column c specified in USING clause does not exist in left table
 
 .
-ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = unknown table default.t.
+ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = Unknown table `default`.`t` in catalog 'default'.
