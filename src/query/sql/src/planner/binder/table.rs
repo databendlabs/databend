@@ -259,7 +259,7 @@ impl Binder {
                             parent = bind_context.parent.as_mut();
                         }
                         return Err(ErrorCode::UnknownTable(format!(
-                            "Unknown table '{table_name}'"
+                            "Unknown table `{database}`.`{table_name}`"
                         ))
                         .set_span(*span));
                     }

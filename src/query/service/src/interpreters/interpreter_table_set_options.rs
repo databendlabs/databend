@@ -95,7 +95,11 @@ impl Interpreter for SetOptionsInterpreter {
         let table = if let Some(table) = &tbl {
             table
         } else {
-            return Err(ErrorCode::UnknownTable(self.plan.table.as_str()));
+            return Err(ErrorCode::UnknownTable(format!(
+                "table {}.{} is unknown",
+                database,
+                self.plan.table.as_str()
+            )));
         };
 
         // check bloom_index_columns.

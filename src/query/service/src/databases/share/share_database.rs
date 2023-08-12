@@ -75,8 +75,8 @@ impl ShareDatabase {
             .await?;
         match table_info_map.get(table_name) {
             None => Err(ErrorCode::UnknownTable(format!(
-                "share table {} is unknown",
-                table_name
+                "share table {}.{} is unknown",
+                &self.db_info.name_ident.db_name, table_name
             ))),
             Some(table_info) => Ok(Arc::new(table_info.clone())),
         }
