@@ -161,7 +161,8 @@ impl BlockCompactMutator {
                 if self.compacted_segment_cnt + checker.segments.len() >= limit
                     || compacted_block_cnt >= MAX_BLOCK_COUNT
                 {
-                    // finalize the compaction.
+                    // The remaining segments needs to be pushed into unchanged_map,
+                    // so execute finalize here.
                     self.finalize(std::mem::take(&mut checker.segments), &mut segment_idx);
                     is_end = true;
                 }
