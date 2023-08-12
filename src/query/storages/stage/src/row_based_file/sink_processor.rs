@@ -46,7 +46,6 @@ pub struct RowBasedFileSink {
     uuid: String,
     group_id: usize,
     batch_id: usize,
-    ctx: Arc<dyn TableContext>,
 }
 
 impl RowBasedFileSink {
