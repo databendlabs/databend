@@ -71,6 +71,7 @@ pub(crate) fn append_data_to_row_based_files(
             prefix.clone(),
             uuid.clone(),
             gid,
+            ctx.clone(),
         )
     })?;
     Ok(())

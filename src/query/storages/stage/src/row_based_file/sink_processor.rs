@@ -17,7 +17,9 @@ use std::mem;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_base::base::ProgressValues;
 use common_catalog::plan::StageTableInfo;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
@@ -45,6 +47,7 @@ pub struct RowBasedFileSink {
     uuid: String,
     group_id: usize,
     batch_id: usize,
+    ctx: Arc<dyn TableContext>,
 }
 
 impl RowBasedFileSink {
@@ -56,6 +59,7 @@ impl RowBasedFileSink {
         prefix: Vec<u8>,
         uuid: String,
         group_id: usize,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(RowBasedFileSink {
             table_info,
@@ -67,6 +71,7 @@ impl RowBasedFileSink {
             group_id,
             batch_id: 0,
             output_data: vec![],
+            ctx,
         })))
     }
 }
@@ -103,6 +108,11 @@ impl Processor for RowBasedFileSink {
 
     fn process(&mut self) -> Result<()> {
         let block = self.input_data.take().unwrap();
+        let progress_values = ProgressValues {
+            rows: block.num_rows(),
+            bytes: block.memory_size(),
+        };
+        self.ctx.get_write_progress().incr(&progress_values);
         let block_meta = block.get_owned_meta().unwrap();
         let buffers = FileOutputBuffers::downcast_from(block_meta).unwrap();
         let size = buffers.buffers.iter().map(|b| b.len()).sum::<usize>();
