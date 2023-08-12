@@ -39,14 +39,14 @@ ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = error:
   --> SQL:1:15
   |
 1 | SELECT * FROM shared_db.t1
-  |               ^^^^^^^^^^^^ Unknown table `shared_db`.`t1`
+  |               ^^^^^^^^^^^^ Unknown table `shared_db`.`t1` in catalog 'default'
 
 .
 ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = error: 
   --> SQL:1:15
   |
 1 | SELECT * FROM shared_db.t1
-  |               ^^^^^^^^^^^^ Unknown table `shared_db`.`t1`
+  |               ^^^^^^^^^^^^ Unknown table `shared_db`.`t1` in catalog 'default'
 
 .
 drop shared database and query data from share
@@ -60,14 +60,14 @@ ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = error:
   --> SQL:1:15
   |
 1 | SELECT * FROM shared_db.t2
-  |               ^^^^^^^^^^^^ Unknown table `shared_db`.`t2`
+  |               ^^^^^^^^^^^^ Unknown table `shared_db`.`t2` in catalog 'default'
 
 .
 ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = error: 
   --> SQL:1:15
   |
 1 | SELECT * FROM shared_db.t2
-  |               ^^^^^^^^^^^^ Unknown table `shared_db`.`t2`
+  |               ^^^^^^^^^^^^ Unknown table `shared_db`.`t2` in catalog 'default'
 
 .
 all is good

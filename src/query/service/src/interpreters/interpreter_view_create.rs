@@ -78,8 +78,10 @@ impl Interpreter for CreateViewInterpreter {
                         && !table.table().is_stage_table()
                     {
                         return Err(common_exception::ErrorCode::UnknownTable(format!(
-                            "VIEW QUERY: table `{}`.`{}` not exists",
-                            database_name, table_name,
+                            "VIEW QUERY: table `{}`.`{}` not exists in catalog '{}'",
+                            database_name,
+                            table_name,
+                            &catalog.name()
                         )));
                     }
                 }
