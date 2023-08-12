@@ -97,11 +97,31 @@ impl RefreshIndexInterpreter {
     }
 
     #[async_backtrace::framed]
+    async fn get_partitions_with_given_segments(
+        &self,
+        plan: &DataSourcePlan,
+        fuse_table: Arc<FuseTable>,
+        dal: Operator,
+        segments: Vec<SegmentLocation>,
+    ) -> Result<Option<Partitions>> {
+        let table_info = self.plan.table_info.clone();
+        let push_downs = plan.push_downs.clone();
+        let ctx = self.ctx.clone();
+
+        let (_statistics, partitions) = fuse_table
+            .prune_snapshot_blocks(ctx, dal, push_downs, table_info, segments, 0)
+            .await?;
+
+        Ok(Some(partitions))
+    }
+
+    #[async_backtrace::framed]
     async fn get_read_source(
         &self,
         query_plan: &PhysicalPlan,
         fuse_table: Arc<FuseTable>,
         dal: Operator,
+        segments: Option<Vec<SegmentLocation>>,
     ) -> Result<Option<DataSourcePlan>> {
         let mut source = vec![];
 
@@ -125,7 +145,13 @@ impl RefreshIndexInterpreter {
             ))
         } else {
             let mut source = source.remove(0);
-            let partitions = self.get_partitions(&source, fuse_table, dal).await?;
+            let partitions = match segments {
+                Some(segs) => {
+                    self.get_partitions_with_given_segments(&source, fuse_table, dal, segs)
+                        .await?
+                }
+                None => self.get_partitions(&source, fuse_table, dal).await?,
+            };
             if let Some(parts) = partitions {
                 source.parts = parts;
             }
@@ -233,7 +259,12 @@ impl Interpreter for RefreshIndexInterpreter {
 
         // generate new `DataSourcePlan` that skip refreshed parts.
         let new_read_source = self
-            .get_read_source(&query_plan, fuse_table.clone(), data_accessor.operator())
+            .get_read_source(
+                &query_plan,
+                fuse_table.clone(),
+                data_accessor.operator(),
+                None,
+            )
             .await?;
 
         if new_read_source.is_none() {
