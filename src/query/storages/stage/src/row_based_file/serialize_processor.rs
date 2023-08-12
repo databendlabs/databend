@@ -34,10 +34,10 @@ pub(super) struct SerializeProcessor {
 
 impl SerializeProcessor {
     pub(super) fn try_create(
+        ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         output_format: Box<dyn OutputFormat>,
-        ctx: Arc<dyn TableContext>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Transformer::create(
             input,
