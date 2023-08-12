@@ -53,7 +53,7 @@ pub(crate) fn append_data_to_row_based_files(
             table_info.schema(),
             table_info.stage_info.file_format_params.clone(),
         )?;
-        SerializeProcessor::try_create(input, output, output_format, ctx.clone())
+        SerializeProcessor::try_create(ctx.clone(), input, output, output_format)
     })?;
     pipeline.try_resize(1)?;
     pipeline.add_transform(|input, output| {
@@ -71,7 +71,6 @@ pub(crate) fn append_data_to_row_based_files(
             prefix.clone(),
             uuid.clone(),
             gid,
-            ctx.clone(),
         )
     })?;
     Ok(())

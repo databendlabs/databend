@@ -57,7 +57,6 @@ impl RowBasedFileSink {
         prefix: Vec<u8>,
         uuid: String,
         group_id: usize,
-        ctx: Arc<dyn TableContext>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(RowBasedFileSink {
             table_info,
@@ -69,7 +68,6 @@ impl RowBasedFileSink {
             group_id,
             batch_id: 0,
             output_data: vec![],
-            ctx,
         })))
     }
 }

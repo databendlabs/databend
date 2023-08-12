@@ -28,8 +28,8 @@ use common_pipeline_transforms::processors::transforms::Transformer;
 use crate::row_based_file::buffers::FileOutputBuffers;
 
 pub(super) struct SerializeProcessor {
-    output_format: Box<dyn OutputFormat>,
     ctx: Arc<dyn TableContext>,
+    output_format: Box<dyn OutputFormat>,
 }
 
 impl SerializeProcessor {
