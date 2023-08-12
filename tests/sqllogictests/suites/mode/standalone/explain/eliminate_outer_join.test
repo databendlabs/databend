@@ -13,605 +13,554 @@ create table t(a int null) as select number from numbers(10)
 query T
 explain select * from t left join t t1 on t.a = t1.a
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+HashJoin
+├── join type: LEFT OUTER
+├── build keys: [t1.a (#1)]
+├── probe keys: [t.a (#0)]
+├── filters: []
 ├── estimated rows: 10.00
-└── HashJoin
-    ├── join type: LEFT OUTER
-    ├── build keys: [t1.a (#1)]
-    ├── probe keys: [t.a (#0)]
-    ├── filters: []
-    ├── estimated rows: 10.00
-    ├── TableScan(Build)
-    │   ├── table: default.eliminate_outer_join.t
-    │   ├── read rows: 10
-    │   ├── read bytes: 74
-    │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │   ├── push downs: [filters: [], limit: NONE]
-    │   └── estimated rows: 10.00
-    └── TableScan(Probe)
-        ├── table: default.eliminate_outer_join.t
-        ├── read rows: 10
-        ├── read bytes: 74
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 10.00
+├── TableScan(Build)
+│   ├── table: default.eliminate_outer_join.t
+│   ├── read rows: 10
+│   ├── read bytes: 74
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 10.00
+└── TableScan(Probe)
+    ├── table: default.eliminate_outer_join.t
+    ├── read rows: 10
+    ├── read bytes: 74
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 10.00
 
 query T
 explain select * from t right join t t1 on t.a = t1.a
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+HashJoin
+├── join type: LEFT OUTER
+├── build keys: [t.a (#0)]
+├── probe keys: [t1.a (#1)]
+├── filters: []
 ├── estimated rows: 10.00
-└── HashJoin
-    ├── join type: LEFT OUTER
-    ├── build keys: [t.a (#0)]
-    ├── probe keys: [t1.a (#1)]
-    ├── filters: []
-    ├── estimated rows: 10.00
-    ├── TableScan(Build)
-    │   ├── table: default.eliminate_outer_join.t
-    │   ├── read rows: 10
-    │   ├── read bytes: 74
-    │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │   ├── push downs: [filters: [], limit: NONE]
-    │   └── estimated rows: 10.00
-    └── TableScan(Probe)
-        ├── table: default.eliminate_outer_join.t
-        ├── read rows: 10
-        ├── read bytes: 74
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 10.00
+├── TableScan(Build)
+│   ├── table: default.eliminate_outer_join.t
+│   ├── read rows: 10
+│   ├── read bytes: 74
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 10.00
+└── TableScan(Probe)
+    ├── table: default.eliminate_outer_join.t
+    ├── read rows: 10
+    ├── read bytes: 74
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 10.00
 
 query T
 explain select * from t full join t t1 on t.a = t1.a
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+HashJoin
+├── join type: FULL OUTER
+├── build keys: [t1.a (#1)]
+├── probe keys: [t.a (#0)]
+├── filters: []
 ├── estimated rows: 10.00
-└── HashJoin
-    ├── join type: FULL OUTER
-    ├── build keys: [t1.a (#1)]
-    ├── probe keys: [t.a (#0)]
-    ├── filters: []
-    ├── estimated rows: 10.00
-    ├── TableScan(Build)
-    │   ├── table: default.eliminate_outer_join.t
-    │   ├── read rows: 10
-    │   ├── read bytes: 74
-    │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │   ├── push downs: [filters: [], limit: NONE]
-    │   └── estimated rows: 10.00
-    └── TableScan(Probe)
-        ├── table: default.eliminate_outer_join.t
-        ├── read rows: 10
-        ├── read bytes: 74
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 10.00
+├── TableScan(Build)
+│   ├── table: default.eliminate_outer_join.t
+│   ├── read rows: 10
+│   ├── read bytes: 74
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 10.00
+└── TableScan(Probe)
+    ├── table: default.eliminate_outer_join.t
+    ├── read rows: 10
+    ├── read bytes: 74
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 10.00
 
 query 
 explain select * from t left join t t1 on t.a = t1.a where t1.a is not null
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+HashJoin
+├── join type: INNER
+├── build keys: [t1.a (#1)]
+├── probe keys: [t.a (#0)]
+├── filters: []
 ├── estimated rows: 2.00
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [t1.a (#1)]
-    ├── probe keys: [t.a (#0)]
-    ├── filters: []
+├── Filter(Build)
+│   ├── filters: [is_not_null(t1.a (#1))]
+│   ├── estimated rows: 2.00
+│   └── TableScan
+│       ├── table: default.eliminate_outer_join.t
+│       ├── read rows: 10
+│       ├── read bytes: 74
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [is_not_null(t1.a (#1))], limit: NONE]
+│       └── estimated rows: 10.00
+└── Filter(Probe)
+    ├── filters: [is_not_null(t.a (#0))]
     ├── estimated rows: 2.00
-    ├── Filter(Build)
-    │   ├── filters: [is_not_null(t1.a (#1))]
-    │   ├── estimated rows: 2.00
-    │   └── TableScan
-    │       ├── table: default.eliminate_outer_join.t
-    │       ├── read rows: 10
-    │       ├── read bytes: 74
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_not_null(t1.a (#1))], limit: NONE]
-    │       └── estimated rows: 10.00
-    └── Filter(Probe)
-        ├── filters: [is_not_null(t.a (#0))]
-        ├── estimated rows: 2.00
-        └── TableScan
-            ├── table: default.eliminate_outer_join.t
-            ├── read rows: 10
-            ├── read bytes: 74
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [is_not_null(t.a (#0))], limit: NONE]
-            └── estimated rows: 10.00
+    └── TableScan
+        ├── table: default.eliminate_outer_join.t
+        ├── read rows: 10
+        ├── read bytes: 74
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [is_not_null(t.a (#0))], limit: NONE]
+        └── estimated rows: 10.00
 
 query T
 explain select * from t right join t t1 on t.a = t1.a where t.a is not null
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+HashJoin
+├── join type: INNER
+├── build keys: [t1.a (#1)]
+├── probe keys: [t.a (#0)]
+├── filters: []
 ├── estimated rows: 2.00
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [t1.a (#1)]
-    ├── probe keys: [t.a (#0)]
-    ├── filters: []
+├── Filter(Build)
+│   ├── filters: [is_not_null(t1.a (#1))]
+│   ├── estimated rows: 2.00
+│   └── TableScan
+│       ├── table: default.eliminate_outer_join.t
+│       ├── read rows: 10
+│       ├── read bytes: 74
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [is_not_null(t1.a (#1))], limit: NONE]
+│       └── estimated rows: 10.00
+└── Filter(Probe)
+    ├── filters: [is_not_null(t.a (#0))]
     ├── estimated rows: 2.00
-    ├── Filter(Build)
-    │   ├── filters: [is_not_null(t1.a (#1))]
-    │   ├── estimated rows: 2.00
-    │   └── TableScan
-    │       ├── table: default.eliminate_outer_join.t
-    │       ├── read rows: 10
-    │       ├── read bytes: 74
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_not_null(t1.a (#1))], limit: NONE]
-    │       └── estimated rows: 10.00
-    └── Filter(Probe)
-        ├── filters: [is_not_null(t.a (#0))]
-        ├── estimated rows: 2.00
-        └── TableScan
-            ├── table: default.eliminate_outer_join.t
-            ├── read rows: 10
-            ├── read bytes: 74
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [is_not_null(t.a (#0))], limit: NONE]
-            └── estimated rows: 10.00
+    └── TableScan
+        ├── table: default.eliminate_outer_join.t
+        ├── read rows: 10
+        ├── read bytes: 74
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [is_not_null(t.a (#0))], limit: NONE]
+        └── estimated rows: 10.00
 
 query T
 explain select * from t full join t t1 on t.a = t1.a where t.a is not null
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+HashJoin
+├── join type: RIGHT OUTER
+├── build keys: [t.a (#0)]
+├── probe keys: [t1.a (#1)]
+├── filters: []
 ├── estimated rows: 2.00
-└── HashJoin
-    ├── join type: RIGHT OUTER
-    ├── build keys: [t.a (#0)]
-    ├── probe keys: [t1.a (#1)]
-    ├── filters: []
-    ├── estimated rows: 2.00
-    ├── Filter(Build)
-    │   ├── filters: [is_not_null(t.a (#0))]
-    │   ├── estimated rows: 2.00
-    │   └── TableScan
-    │       ├── table: default.eliminate_outer_join.t
-    │       ├── read rows: 10
-    │       ├── read bytes: 74
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_not_null(t.a (#0))], limit: NONE]
-    │       └── estimated rows: 10.00
-    └── TableScan(Probe)
-        ├── table: default.eliminate_outer_join.t
-        ├── read rows: 10
-        ├── read bytes: 74
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 10.00
+├── Filter(Build)
+│   ├── filters: [is_not_null(t.a (#0))]
+│   ├── estimated rows: 2.00
+│   └── TableScan
+│       ├── table: default.eliminate_outer_join.t
+│       ├── read rows: 10
+│       ├── read bytes: 74
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [is_not_null(t.a (#0))], limit: NONE]
+│       └── estimated rows: 10.00
+└── TableScan(Probe)
+    ├── table: default.eliminate_outer_join.t
+    ├── read rows: 10
+    ├── read bytes: 74
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 10.00
 
 query T
 explain select * from t full join t t1 on t.a = t1.a where t1.a is not null
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+HashJoin
+├── join type: RIGHT OUTER
+├── build keys: [t1.a (#1)]
+├── probe keys: [t.a (#0)]
+├── filters: []
 ├── estimated rows: 2.00
-└── HashJoin
-    ├── join type: RIGHT OUTER
-    ├── build keys: [t1.a (#1)]
-    ├── probe keys: [t.a (#0)]
-    ├── filters: []
+├── Filter(Build)
+│   ├── filters: [is_not_null(t1.a (#1))]
+│   ├── estimated rows: 2.00
+│   └── TableScan
+│       ├── table: default.eliminate_outer_join.t
+│       ├── read rows: 10
+│       ├── read bytes: 74
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [is_not_null(t1.a (#1))], limit: NONE]
+│       └── estimated rows: 10.00
+└── TableScan(Probe)
+    ├── table: default.eliminate_outer_join.t
+    ├── read rows: 10
+    ├── read bytes: 74
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 10.00
+
+query T
+explain select * from t left join t t1 on t.a = t1.a where t1.a is not null and t.a is not null
+----
+HashJoin
+├── join type: INNER
+├── build keys: [t1.a (#1)]
+├── probe keys: [t.a (#0)]
+├── filters: []
+├── estimated rows: 2.00
+├── Filter(Build)
+│   ├── filters: [is_not_null(t1.a (#1))]
+│   ├── estimated rows: 2.00
+│   └── TableScan
+│       ├── table: default.eliminate_outer_join.t
+│       ├── read rows: 10
+│       ├── read bytes: 74
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [is_not_null(t1.a (#1))], limit: NONE]
+│       └── estimated rows: 10.00
+└── Filter(Probe)
+    ├── filters: [is_not_null(t.a (#0))]
     ├── estimated rows: 2.00
-    ├── Filter(Build)
-    │   ├── filters: [is_not_null(t1.a (#1))]
-    │   ├── estimated rows: 2.00
-    │   └── TableScan
-    │       ├── table: default.eliminate_outer_join.t
-    │       ├── read rows: 10
-    │       ├── read bytes: 74
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_not_null(t1.a (#1))], limit: NONE]
-    │       └── estimated rows: 10.00
-    └── TableScan(Probe)
+    └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── read rows: 10
         ├── read bytes: 74
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [], limit: NONE]
+        ├── push downs: [filters: [is_not_null(t.a (#0))], limit: NONE]
         └── estimated rows: 10.00
-
-query T
-explain select * from t left join t t1 on t.a = t1.a where t1.a is not null and t.a is not null
-----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
-├── estimated rows: 2.00
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [t1.a (#1)]
-    ├── probe keys: [t.a (#0)]
-    ├── filters: []
-    ├── estimated rows: 2.00
-    ├── Filter(Build)
-    │   ├── filters: [is_not_null(t1.a (#1))]
-    │   ├── estimated rows: 2.00
-    │   └── TableScan
-    │       ├── table: default.eliminate_outer_join.t
-    │       ├── read rows: 10
-    │       ├── read bytes: 74
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_not_null(t1.a (#1))], limit: NONE]
-    │       └── estimated rows: 10.00
-    └── Filter(Probe)
-        ├── filters: [is_not_null(t.a (#0))]
-        ├── estimated rows: 2.00
-        └── TableScan
-            ├── table: default.eliminate_outer_join.t
-            ├── read rows: 10
-            ├── read bytes: 74
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [is_not_null(t.a (#0))], limit: NONE]
-            └── estimated rows: 10.00
 
 query T
 explain select * from t left join t t1 on t.a = t1.a where t1.a = 1
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+HashJoin
+├── join type: INNER
+├── build keys: [t1.a (#1)]
+├── probe keys: [t.a (#0)]
+├── filters: []
 ├── estimated rows: 1.00
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [t1.a (#1)]
-    ├── probe keys: [t.a (#0)]
-    ├── filters: []
+├── Filter(Build)
+│   ├── filters: [is_true(t1.a (#1) = 1)]
+│   ├── estimated rows: 1.00
+│   └── TableScan
+│       ├── table: default.eliminate_outer_join.t
+│       ├── read rows: 10
+│       ├── read bytes: 74
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+│       ├── push downs: [filters: [is_true(t1.a (#1) = 1)], limit: NONE]
+│       └── estimated rows: 10.00
+└── Filter(Probe)
+    ├── filters: [is_true(t.a (#0) = 1)]
     ├── estimated rows: 1.00
-    ├── Filter(Build)
-    │   ├── filters: [is_true(t1.a (#1) = 1)]
-    │   ├── estimated rows: 1.00
-    │   └── TableScan
-    │       ├── table: default.eliminate_outer_join.t
-    │       ├── read rows: 10
-    │       ├── read bytes: 74
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-    │       ├── push downs: [filters: [is_true(t1.a (#1) = 1)], limit: NONE]
-    │       └── estimated rows: 10.00
-    └── Filter(Probe)
-        ├── filters: [is_true(t.a (#0) = 1)]
-        ├── estimated rows: 1.00
-        └── TableScan
-            ├── table: default.eliminate_outer_join.t
-            ├── read rows: 10
-            ├── read bytes: 74
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-            ├── push downs: [filters: [is_true(t.a (#0) = 1)], limit: NONE]
-            └── estimated rows: 10.00
+    └── TableScan
+        ├── table: default.eliminate_outer_join.t
+        ├── read rows: 10
+        ├── read bytes: 74
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+        ├── push downs: [filters: [is_true(t.a (#0) = 1)], limit: NONE]
+        └── estimated rows: 10.00
 
 query T
 explain select * from t left join t t1 on t.a = t1.a where t1.a > 1
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+HashJoin
+├── join type: INNER
+├── build keys: [t1.a (#1)]
+├── probe keys: [t.a (#0)]
+├── filters: []
 ├── estimated rows: 9.00
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [t1.a (#1)]
-    ├── probe keys: [t.a (#0)]
-    ├── filters: []
-    ├── estimated rows: 9.00
-    ├── Filter(Build)
-    │   ├── filters: [is_true(t1.a (#1) > 1)]
-    │   ├── estimated rows: 8.18
-    │   └── TableScan
-    │       ├── table: default.eliminate_outer_join.t
-    │       ├── read rows: 10
-    │       ├── read bytes: 74
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_true(t1.a (#1) > 1)], limit: NONE]
-    │       └── estimated rows: 10.00
-    └── Filter(Probe)
-        ├── filters: [is_true(t.a (#0) > 1)]
-        ├── estimated rows: 8.18
-        └── TableScan
-            ├── table: default.eliminate_outer_join.t
-            ├── read rows: 10
-            ├── read bytes: 74
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]
-            └── estimated rows: 10.00
+├── Filter(Build)
+│   ├── filters: [is_true(t1.a (#1) > 1)]
+│   ├── estimated rows: 8.18
+│   └── TableScan
+│       ├── table: default.eliminate_outer_join.t
+│       ├── read rows: 10
+│       ├── read bytes: 74
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [is_true(t1.a (#1) > 1)], limit: NONE]
+│       └── estimated rows: 10.00
+└── Filter(Probe)
+    ├── filters: [is_true(t.a (#0) > 1)]
+    ├── estimated rows: 8.18
+    └── TableScan
+        ├── table: default.eliminate_outer_join.t
+        ├── read rows: 10
+        ├── read bytes: 74
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]
+        └── estimated rows: 10.00
 
 query T
 explain select * from t left join t t1 on t.a = t1.a where t1.a < 1
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+HashJoin
+├── join type: INNER
+├── build keys: [t1.a (#1)]
+├── probe keys: [t.a (#0)]
+├── filters: []
 ├── estimated rows: 0.83
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [t1.a (#1)]
-    ├── probe keys: [t.a (#0)]
-    ├── filters: []
-    ├── estimated rows: 0.83
-    ├── Filter(Build)
-    │   ├── filters: [is_true(t1.a (#1) < 1)]
-    │   ├── estimated rows: 0.91
-    │   └── TableScan
-    │       ├── table: default.eliminate_outer_join.t
-    │       ├── read rows: 10
-    │       ├── read bytes: 74
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_true(t1.a (#1) < 1)], limit: NONE]
-    │       └── estimated rows: 10.00
-    └── Filter(Probe)
-        ├── filters: [is_true(t.a (#0) < 1)]
-        ├── estimated rows: 0.91
-        └── TableScan
-            ├── table: default.eliminate_outer_join.t
-            ├── read rows: 10
-            ├── read bytes: 74
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [is_true(t.a (#0) < 1)], limit: NONE]
-            └── estimated rows: 10.00
+├── Filter(Build)
+│   ├── filters: [is_true(t1.a (#1) < 1)]
+│   ├── estimated rows: 0.91
+│   └── TableScan
+│       ├── table: default.eliminate_outer_join.t
+│       ├── read rows: 10
+│       ├── read bytes: 74
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [is_true(t1.a (#1) < 1)], limit: NONE]
+│       └── estimated rows: 10.00
+└── Filter(Probe)
+    ├── filters: [is_true(t.a (#0) < 1)]
+    ├── estimated rows: 0.91
+    └── TableScan
+        ├── table: default.eliminate_outer_join.t
+        ├── read rows: 10
+        ├── read bytes: 74
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [is_true(t.a (#0) < 1)], limit: NONE]
+        └── estimated rows: 10.00
 
 query T
 explain select * from t left join t t1 on t.a = t1.a where t1.a <> 1
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+HashJoin
+├── join type: INNER
+├── build keys: [t1.a (#1)]
+├── probe keys: [t.a (#0)]
+├── filters: []
 ├── estimated rows: 9.00
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [t1.a (#1)]
-    ├── probe keys: [t.a (#0)]
-    ├── filters: []
+├── Filter(Build)
+│   ├── filters: [is_true(t1.a (#1) <> 1)]
+│   ├── estimated rows: 9.00
+│   └── TableScan
+│       ├── table: default.eliminate_outer_join.t
+│       ├── read rows: 10
+│       ├── read bytes: 74
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [is_true(t1.a (#1) <> 1)], limit: NONE]
+│       └── estimated rows: 10.00
+└── Filter(Probe)
+    ├── filters: [is_true(t.a (#0) <> 1)]
     ├── estimated rows: 9.00
-    ├── Filter(Build)
-    │   ├── filters: [is_true(t1.a (#1) <> 1)]
-    │   ├── estimated rows: 9.00
-    │   └── TableScan
-    │       ├── table: default.eliminate_outer_join.t
-    │       ├── read rows: 10
-    │       ├── read bytes: 74
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_true(t1.a (#1) <> 1)], limit: NONE]
-    │       └── estimated rows: 10.00
-    └── Filter(Probe)
-        ├── filters: [is_true(t.a (#0) <> 1)]
-        ├── estimated rows: 9.00
-        └── TableScan
-            ├── table: default.eliminate_outer_join.t
-            ├── read rows: 10
-            ├── read bytes: 74
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [is_true(t.a (#0) <> 1)], limit: NONE]
-            └── estimated rows: 10.00
+    └── TableScan
+        ├── table: default.eliminate_outer_join.t
+        ├── read rows: 10
+        ├── read bytes: 74
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [is_true(t.a (#0) <> 1)], limit: NONE]
+        └── estimated rows: 10.00
 
 query T
 explain select * from t left join t t1 on t.a = t1.a where t1.a >= 1
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+HashJoin
+├── join type: INNER
+├── build keys: [t1.a (#1)]
+├── probe keys: [t.a (#0)]
+├── filters: []
 ├── estimated rows: 10.00
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [t1.a (#1)]
-    ├── probe keys: [t.a (#0)]
-    ├── filters: []
-    ├── estimated rows: 10.00
-    ├── Filter(Build)
-    │   ├── filters: [is_true(t1.a (#1) >= 1)]
-    │   ├── estimated rows: 9.09
-    │   └── TableScan
-    │       ├── table: default.eliminate_outer_join.t
-    │       ├── read rows: 10
-    │       ├── read bytes: 74
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_true(t1.a (#1) >= 1)], limit: NONE]
-    │       └── estimated rows: 10.00
-    └── Filter(Probe)
-        ├── filters: [is_true(t.a (#0) >= 1)]
-        ├── estimated rows: 9.09
-        └── TableScan
-            ├── table: default.eliminate_outer_join.t
-            ├── read rows: 10
-            ├── read bytes: 74
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [is_true(t.a (#0) >= 1)], limit: NONE]
-            └── estimated rows: 10.00
+├── Filter(Build)
+│   ├── filters: [is_true(t1.a (#1) >= 1)]
+│   ├── estimated rows: 9.09
+│   └── TableScan
+│       ├── table: default.eliminate_outer_join.t
+│       ├── read rows: 10
+│       ├── read bytes: 74
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [is_true(t1.a (#1) >= 1)], limit: NONE]
+│       └── estimated rows: 10.00
+└── Filter(Probe)
+    ├── filters: [is_true(t.a (#0) >= 1)]
+    ├── estimated rows: 9.09
+    └── TableScan
+        ├── table: default.eliminate_outer_join.t
+        ├── read rows: 10
+        ├── read bytes: 74
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [is_true(t.a (#0) >= 1)], limit: NONE]
+        └── estimated rows: 10.00
 
 query T
 explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+HashJoin
+├── join type: INNER
+├── build keys: [t1.a (#1)]
+├── probe keys: [t.a (#0)]
+├── filters: []
 ├── estimated rows: 1.65
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [t1.a (#1)]
-    ├── probe keys: [t.a (#0)]
-    ├── filters: []
-    ├── estimated rows: 1.65
-    ├── Filter(Build)
-    │   ├── filters: [is_true(t1.a (#1) <= 1)]
-    │   ├── estimated rows: 1.82
-    │   └── TableScan
-    │       ├── table: default.eliminate_outer_join.t
-    │       ├── read rows: 10
-    │       ├── read bytes: 74
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_true(t1.a (#1) <= 1)], limit: NONE]
-    │       └── estimated rows: 10.00
-    └── Filter(Probe)
-        ├── filters: [is_true(t.a (#0) <= 1)]
-        ├── estimated rows: 1.82
-        └── TableScan
-            ├── table: default.eliminate_outer_join.t
-            ├── read rows: 10
-            ├── read bytes: 74
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [is_true(t.a (#0) <= 1)], limit: NONE]
-            └── estimated rows: 10.00
+├── Filter(Build)
+│   ├── filters: [is_true(t1.a (#1) <= 1)]
+│   ├── estimated rows: 1.82
+│   └── TableScan
+│       ├── table: default.eliminate_outer_join.t
+│       ├── read rows: 10
+│       ├── read bytes: 74
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [is_true(t1.a (#1) <= 1)], limit: NONE]
+│       └── estimated rows: 10.00
+└── Filter(Probe)
+    ├── filters: [is_true(t.a (#0) <= 1)]
+    ├── estimated rows: 1.82
+    └── TableScan
+        ├── table: default.eliminate_outer_join.t
+        ├── read rows: 10
+        ├── read bytes: 74
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [is_true(t.a (#0) <= 1)], limit: NONE]
+        └── estimated rows: 10.00
 
 
 query T
 explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1 or t.a < 1
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+Filter
+├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) < 1)]
 ├── estimated rows: 3.31
-└── Filter
-    ├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) < 1)]
-    ├── estimated rows: 3.31
-    └── HashJoin
-        ├── join type: LEFT OUTER
-        ├── build keys: [t1.a (#1)]
-        ├── probe keys: [t.a (#0)]
-        ├── filters: []
-        ├── estimated rows: 10.00
-        ├── TableScan(Build)
-        │   ├── table: default.eliminate_outer_join.t
-        │   ├── read rows: 10
-        │   ├── read bytes: 74
-        │   ├── partitions total: 1
-        │   ├── partitions scanned: 1
-        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        │   ├── push downs: [filters: [], limit: NONE]
-        │   └── estimated rows: 10.00
-        └── TableScan(Probe)
-            ├── table: default.eliminate_outer_join.t
-            ├── read rows: 10
-            ├── read bytes: 74
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 10.00
+└── HashJoin
+    ├── join type: LEFT OUTER
+    ├── build keys: [t1.a (#1)]
+    ├── probe keys: [t.a (#0)]
+    ├── filters: []
+    ├── estimated rows: 10.00
+    ├── TableScan(Build)
+    │   ├── table: default.eliminate_outer_join.t
+    │   ├── read rows: 10
+    │   ├── read bytes: 74
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 10.00
+    └── TableScan(Probe)
+        ├── table: default.eliminate_outer_join.t
+        ├── read rows: 10
+        ├── read bytes: 74
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 10.00
 
 query T
 explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1 or (t.a > 1 and t1.a > 1)
 ----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
+Filter
+├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) > 1 AND t1.a (#1) > 1)]
 ├── estimated rows: 7.15
-└── Filter
-    ├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) > 1 AND t1.a (#1) > 1)]
-    ├── estimated rows: 7.15
-    └── HashJoin
-        ├── join type: INNER
-        ├── build keys: [t1.a (#1)]
-        ├── probe keys: [t.a (#0)]
-        ├── filters: []
+└── HashJoin
+    ├── join type: INNER
+    ├── build keys: [t1.a (#1)]
+    ├── probe keys: [t.a (#0)]
+    ├── filters: []
+    ├── estimated rows: 8.51
+    ├── Filter(Build)
+    │   ├── filters: [is_true(t1.a (#1) <= 1 OR t1.a (#1) > 1)]
+    │   ├── estimated rows: 8.51
+    │   └── TableScan
+    │       ├── table: default.eliminate_outer_join.t
+    │       ├── read rows: 10
+    │       ├── read bytes: 74
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │       ├── push downs: [filters: [is_true(t1.a (#1) <= 1 OR t1.a (#1) > 1)], limit: NONE]
+    │       └── estimated rows: 10.00
+    └── Filter(Probe)
+        ├── filters: [is_true(t.a (#0) <= 1 OR t.a (#0) > 1)]
         ├── estimated rows: 8.51
-        ├── Filter(Build)
-        │   ├── filters: [is_true(t1.a (#1) <= 1 OR t1.a (#1) > 1)]
-        │   ├── estimated rows: 8.51
-        │   └── TableScan
-        │       ├── table: default.eliminate_outer_join.t
-        │       ├── read rows: 10
-        │       ├── read bytes: 74
-        │       ├── partitions total: 1
-        │       ├── partitions scanned: 1
-        │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        │       ├── push downs: [filters: [is_true(t1.a (#1) <= 1 OR t1.a (#1) > 1)], limit: NONE]
-        │       └── estimated rows: 10.00
-        └── Filter(Probe)
-            ├── filters: [is_true(t.a (#0) <= 1 OR t.a (#0) > 1)]
-            ├── estimated rows: 8.51
-            └── TableScan
-                ├── table: default.eliminate_outer_join.t
-                ├── read rows: 10
-                ├── read bytes: 74
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                ├── push downs: [filters: [is_true(t.a (#0) <= 1 OR t.a (#0) > 1)], limit: NONE]
-                └── estimated rows: 10.00
-
-query T
-explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1 or (t.a > 1 and t.a < 2)
-----
-EvalScalar
-├── expressions: [t.a (#0), t1.a (#1)]
-├── estimated rows: 4.05
-└── Filter
-    ├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) > 1 AND t.a (#0) < 2)]
-    ├── estimated rows: 4.05
-    └── HashJoin
-        ├── join type: LEFT OUTER
-        ├── build keys: [t1.a (#1)]
-        ├── probe keys: [t.a (#0)]
-        ├── filters: []
-        ├── estimated rows: 10.00
-        ├── TableScan(Build)
-        │   ├── table: default.eliminate_outer_join.t
-        │   ├── read rows: 10
-        │   ├── read bytes: 74
-        │   ├── partitions total: 1
-        │   ├── partitions scanned: 1
-        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        │   ├── push downs: [filters: [], limit: NONE]
-        │   └── estimated rows: 10.00
-        └── TableScan(Probe)
+        └── TableScan
             ├── table: default.eliminate_outer_join.t
             ├── read rows: 10
             ├── read bytes: 74
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [], limit: NONE]
+            ├── push downs: [filters: [is_true(t.a (#0) <= 1 OR t.a (#0) > 1)], limit: NONE]
             └── estimated rows: 10.00
+
+query T
+explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1 or (t.a > 1 and t.a < 2)
+----
+Filter
+├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) > 1 AND t.a (#0) < 2)]
+├── estimated rows: 4.05
+└── HashJoin
+    ├── join type: LEFT OUTER
+    ├── build keys: [t1.a (#1)]
+    ├── probe keys: [t.a (#0)]
+    ├── filters: []
+    ├── estimated rows: 10.00
+    ├── TableScan(Build)
+    │   ├── table: default.eliminate_outer_join.t
+    │   ├── read rows: 10
+    │   ├── read bytes: 74
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 10.00
+    └── TableScan(Probe)
+        ├── table: default.eliminate_outer_join.t
+        ├── read rows: 10
+        ├── read bytes: 74
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 10.00
 
 statement ok
 drop database eliminate_outer_join

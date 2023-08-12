@@ -27,6 +27,7 @@ use crate::executor::PhysicalPlanBuilder;
 use crate::executor::RangeJoin;
 use crate::executor::RangeJoinCondition;
 use crate::executor::RangeJoinType;
+use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::SExpr;
@@ -37,9 +38,11 @@ use crate::TypeCheck;
 impl PhysicalPlanBuilder {
     pub async fn build_range_join(
         &mut self,
+        s_expr: &SExpr,
+        left_required: ColumnSet,
+        right_required: ColumnSet,
         mut range_conditions: Vec<ScalarExpr>,
         mut other_conditions: Vec<ScalarExpr>,
-        s_expr: &SExpr,
     ) -> Result<PhysicalPlan> {
         let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
         let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
@@ -57,8 +60,8 @@ impl PhysicalPlanBuilder {
         };
 
         // Construct IEJoin
-        let left_side = self.build(s_expr.child(1)?).await?;
-        let right_side = self.build(s_expr.child(0)?).await?;
+        let left_side = self.build(s_expr.child(1)?, left_required).await?;
+        let right_side = self.build(s_expr.child(0)?, right_required).await?;
 
         let left_schema = left_side.output_schema()?;
         let right_schema = right_side.output_schema()?;

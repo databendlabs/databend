@@ -132,7 +132,7 @@ impl<'a> FuseColumn<'a> {
         let mut end = false;
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<Arc<SegmentInfo>>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, true)
                 .await?;
             for segment in segments {
                 let segment = segment?;

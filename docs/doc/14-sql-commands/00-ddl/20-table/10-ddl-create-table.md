@@ -9,7 +9,7 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 import EEFeature from '@site/src/components/EEFeature';
 
-<EEFeature featureName='COMPUTED COLUMNS'/>
+<EEFeature featureName='COMPUTED COLUMN'/>
 
 Creating tables is one of the most complicated operations for many databases because you might need to:
 

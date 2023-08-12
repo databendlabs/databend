@@ -91,8 +91,7 @@ jobs:
           rust-toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
           working-directory: src/bendpy
           target: ${{ matrix.target.name }}
-          # Using version 2_28 cause https://github.com/PyO3/maturin-action/issues/197
-          manylinux: 2_28
+          manylinux: auto
           # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
           rustup-components: rust-std rustfmt
           args: ${{ steps.opts.outputs.BUILD_ARGS }}

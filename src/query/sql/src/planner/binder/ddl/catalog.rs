@@ -140,12 +140,6 @@ impl Binder {
                 ));
             }
             CatalogType::Hive => {
-                if !cfg!(feature = "hive") {
-                    return Err(ErrorCode::CatalogNotSupported(
-                        "Hive catalog support is not enabled in your databend-query distribution."
-                            .to_string(),
-                    ));
-                }
                 let address = options
                     .get("address")
                     .ok_or_else(|| ErrorCode::InvalidArgument("expected field: ADDRESS"))?;

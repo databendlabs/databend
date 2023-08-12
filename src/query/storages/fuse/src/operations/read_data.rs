@@ -103,9 +103,13 @@ impl FuseTable {
                 }
             }
 
-            let ops = vec![BlockOperator::Map { exprs }, BlockOperator::Project {
-                projection,
-            }];
+            let ops = vec![
+                BlockOperator::Map {
+                    exprs,
+                    projections: None,
+                },
+                BlockOperator::Project { projection },
+            ];
 
             let query_ctx = ctx.clone();
             let func_ctx = query_ctx.get_function_context()?;

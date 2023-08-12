@@ -15,8 +15,6 @@
 use common_exception::Result;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchemaRefExt;
 use common_expression::Value;
 
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -25,31 +23,29 @@ use crate::pipelines::processors::JoinHashTable;
 impl JoinHashTable {
     pub(crate) fn probe_cross_join(
         &self,
-        input: &DataBlock,
+        input: DataBlock,
         _probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
         let build_blocks = self.row_space.datablocks();
-        let num_rows = build_blocks
+        let build_num_rows = build_blocks
             .iter()
             .fold(0, |acc, block| acc + block.num_rows());
-        if build_blocks.is_empty() || num_rows == 0 {
-            let mut fields = input
-                .columns()
-                .iter()
-                .enumerate()
-                .map(|(i, entry)| DataField::new(&i.to_string(), entry.data_type.clone()))
-                .collect::<Vec<_>>();
-            fields.extend(self.row_space.data_schema.fields().clone());
-            return Ok(vec![DataBlock::empty_with_schema(
-                DataSchemaRefExt::create(fields.clone()),
-            )]);
+        let input_num_rows = input.num_rows();
+        if build_num_rows == 0 || input_num_rows == 0 {
+            return Ok(vec![]);
         }
+        let probe_block = input.project(&self.probe_projections);
         let build_block = DataBlock::concat(&build_blocks)?;
-        let mut results = Vec::with_capacity(input.num_rows());
-        for i in 0..input.num_rows() {
-            results.push(self.merge_with_constant_block(&build_block, input, i)?);
+        let mut result_blocks = Vec::with_capacity(input_num_rows);
+        for i in 0..input_num_rows {
+            result_blocks.push(self.merge_with_constant_block(
+                &build_block,
+                &probe_block,
+                i,
+                build_num_rows,
+            )?);
         }
-        Ok(results)
+        Ok(result_blocks)
     }
 
     // Merge build block and probe block (1 row block)
@@ -58,9 +54,10 @@ impl JoinHashTable {
         build_block: &DataBlock,
         probe_block: &DataBlock,
         take_index: usize,
+        build_num_rows: usize,
     ) -> Result<DataBlock> {
         let columns = Vec::with_capacity(build_block.num_columns() + probe_block.num_columns());
-        let mut replicated_probe_block = DataBlock::new(columns, build_block.num_rows());
+        let mut replicated_probe_block = DataBlock::new(columns, build_num_rows);
 
         for col in probe_block.columns() {
             let value_ref = col.value.as_ref();

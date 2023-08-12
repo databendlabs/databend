@@ -778,6 +778,8 @@ pub enum TokenKind {
     RECURSIVE,
     #[token("RETURN", ignore(ascii_case))]
     RETURN,
+    #[token("RETURNS", ignore(ascii_case))]
+    RETURNS,
     #[token("RUN", ignore(ascii_case))]
     RUN,
     #[token("GRANTS", ignore(ascii_case))]
