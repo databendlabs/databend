@@ -8,7 +8,7 @@ check:
 	cargo audit
 
 build:
-	cargo build
+	cargo build --release
 
 test:
 	cargo test --all --all-features --lib -- --nocapture
