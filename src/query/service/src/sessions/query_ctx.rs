@@ -71,6 +71,7 @@ use dashmap::DashMap;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
+use storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -106,6 +107,7 @@ pub struct QueryContext {
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
     origin: Arc<RwLock<Origin>>,
+    segment_locations: Arc<RwLock<Vec<Location>>>,
 }
 
 impl QueryContext {
@@ -127,6 +129,7 @@ impl QueryContext {
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
             origin: Arc::new(RwLock::new(Origin::Default)),
+            segment_locations: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -714,6 +717,16 @@ impl TableContext for QueryContext {
 
     fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
         self.shared.materialized_cte_tables.clone()
+    }
+
+    fn add_segment_location(&self, segment_loc: Location) -> Result<()> {
+        let mut segment_locations = self.segment_locations.write();
+        segment_locations.push(segment_loc);
+        Ok(())
+    }
+
+    fn get_segment_locations(&self) -> Result<Vec<Location>> {
+        Ok(self.segment_locations.read().to_vec())
     }
 }
 

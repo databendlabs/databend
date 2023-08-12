@@ -139,10 +139,15 @@ pub trait SchemaApi: Send + Sync {
         req: ListIndexesReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
 
-    async fn list_indexes_by_table_id(
+    async fn list_index_ids_by_table_id(
         &self,
         req: ListIndexesByIdReq,
     ) -> Result<Vec<u64>, KVAppError>;
+
+    async fn list_indexes_by_table_id(
+        &self,
+        req: ListIndexesByIdReq,
+    ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
 
     // virtual column
 
