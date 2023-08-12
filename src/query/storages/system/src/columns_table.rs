@@ -19,7 +19,6 @@ use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::types::StringType;
@@ -234,21 +233,22 @@ async fn generate_fields(
     ctx: &Arc<dyn TableContext>,
     table: &Arc<dyn Table>,
 ) -> Result<Vec<TableField>> {
-    let fields = if table.engine() == VIEW_ENGINE {
-        if let Some(query) = table.options().get(QUERY) {
-            let mut planner = Planner::new(ctx.clone());
-            let (plan, _) = planner.plan_sql(query).await?;
-            let schema = infer_table_schema(&plan.schema())?;
-            schema.fields().clone()
-        } else {
-            return Err(ErrorCode::Internal(
-                "Logical error, View Table must have a SelectQuery inside.",
-            ));
+    if table.engine() != VIEW_ENGINE {
+        return Ok(table.schema().fields().clone());
+    }
+
+    Ok(if let Some(query) = table.options().get(QUERY) {
+        let mut planner = Planner::new(ctx.clone());
+        match planner.plan_sql(query).await {
+            Ok((plan, _)) => infer_table_schema(&plan.schema())?.fields().clone(),
+            Err(_) => {
+                // If VIEW SELECT QUERY plan err, should return empty. not destroy the query.
+                vec![]
+            }
         }
     } else {
-        table.schema().fields().clone()
-    };
-    Ok(fields)
+        vec![]
+    })
 }
 
 /// GrantObjectVisibilityChecker is used to check whether a user has the privilege to access a
