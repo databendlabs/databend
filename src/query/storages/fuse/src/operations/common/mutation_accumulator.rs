@@ -289,8 +289,9 @@ impl MutationAccumulator {
 
             tasks.push(async move {
                 // read the old segment
-                let mut segment_info =
-                    SegmentsIO::read_segment(op.clone(), location, schema, false).await?;
+                let compact_segment_info =
+                    SegmentsIO::read_compact_segment(op.clone(), location, schema, false).await?;
+                let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
                 // take away the blocks, they are being mutated
                 let mut block_editor = BTreeMap::<_, _>::from_iter(

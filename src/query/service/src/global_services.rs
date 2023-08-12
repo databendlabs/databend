@@ -27,6 +27,7 @@ use common_profile::QueryProfileManager;
 use common_sharing::ShareEndpointManager;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
+use common_storages_hive::HiveCreator;
 use common_storages_iceberg::IcebergCreator;
 use common_tracing::GlobalLogger;
 use common_users::RoleCacheManager;
@@ -84,16 +85,10 @@ impl GlobalServices {
 
             let default_catalog = DatabaseCatalog::try_create_with_config(config.clone()).await?;
 
-            #[allow(unused_mut)]
-            let mut catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> =
-                vec![(CatalogType::Iceberg, Arc::new(IcebergCreator))];
-            // Register hive catalog.
-            #[cfg(feature = "hive")]
-            {
-                use common_storages_hive::HiveCreator;
-
-                catalog_creator.push((CatalogType::Hive, Arc::new(HiveCreator)));
-            }
+            let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
+                (CatalogType::Iceberg, Arc::new(IcebergCreator)),
+                (CatalogType::Hive, Arc::new(HiveCreator)),
+            ];
 
             CatalogManager::init(&config, Arc::new(default_catalog), catalog_creator).await?;
         }

@@ -34,9 +34,10 @@ use common_expression::Column;
 use common_expression::ColumnId;
 use opendal::Operator;
 use storages_common_cache::CacheKey;
-use storages_common_cache::InMemoryItemCacheReader;
+use storages_common_cache::InMemoryCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
+use storages_common_cache_manager::BloomIndexFilterMeter;
 use storages_common_cache_manager::CachedObject;
 use storages_common_index::filters::Filter;
 use storages_common_index::filters::Xor8Filter;
@@ -44,7 +45,7 @@ use storages_common_table_meta::meta::SingleColumnMeta;
 
 use crate::metrics::metrics_inc_block_index_read_bytes;
 
-type CachedReader = InMemoryItemCacheReader<Xor8Filter, Xor8FilterLoader>;
+type CachedReader = InMemoryCacheReader<Xor8Filter, Xor8FilterLoader, BloomIndexFilterMeter>;
 
 /// Load the filter of a given bloom index column. Also
 /// - generates the proper cache key

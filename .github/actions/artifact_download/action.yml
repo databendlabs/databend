@@ -8,7 +8,7 @@ inputs:
     description: ""
     required: true
   category:
-    description: "default/hive"
+    description: "default/hdfs"
     required: false
     default: default
   path:

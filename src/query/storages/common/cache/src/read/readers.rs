@@ -22,4 +22,6 @@ use crate::NamedCache;
 
 pub type InMemoryItemCacheReader<T, L, S = DefaultHashBuilder, M = Count> =
     CachedReader<L, NamedCache<InMemoryItemCacheHolder<T, S, M>>>;
+pub type InMemoryCacheReader<T, L, M, S = DefaultHashBuilder> =
+    CachedReader<L, NamedCache<InMemoryItemCacheHolder<T, S, M>>>;
 pub type InMemoryBytesCacheReader<L> = CachedReader<L, NamedCache<InMemoryBytesCacheHolder>>;
