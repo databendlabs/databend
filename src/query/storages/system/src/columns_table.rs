@@ -237,17 +237,18 @@ async fn generate_fields(
         return Ok(table.schema().fields().clone());
     }
 
-    if let Some(query) = table.options().get(QUERY) {
+    Ok(if let Some(query) = table.options().get(QUERY) {
         let mut planner = Planner::new(ctx.clone());
-        planner
-            .plan_sql(query)
-            .await
-            .ok()
-            .and_then(|(plan, _)| infer_table_schema(&plan.schema()).ok())
-            .map_or_else(|| Ok(vec![]), |schema| Ok(schema.fields().clone()))
+        match planner.plan_sql(query).await {
+            Ok((plan, _)) => infer_table_schema(&plan.schema())?.fields().clone(),
+            Err(_) => {
+                // If VIEW SELECT QUERY plan err, should return empty. not destroy the query.
+                vec![]
+            }
+        }
     } else {
-        Ok(vec![])
-    }
+        vec![]
+    })
 }
 
 /// GrantObjectVisibilityChecker is used to check whether a user has the privilege to access a
