@@ -89,27 +89,20 @@ pub trait BlockMetaInfoDowncast: Sized {
 
 impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {
     fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self> {
-        if boxed.as_any().is::<T>() {
-            unsafe {
-                // SAFETY: `is` ensures this type cast is correct
-                let raw_ptr = Box::into_raw(boxed) as *const dyn BlockMetaInfo;
-                return Some(std::ptr::read(raw_ptr as *const Self));
-            }
+        if !boxed.as_any().is::<T>() {
+            return None;
         }
-
-        None
+        unsafe {
+            let p = Box::into_raw(boxed);
+            let p = p.cast::<T>();
+            let r = p.read();
+            std::alloc::dealloc(p.cast(), std::alloc::Layout::new::<T>());
+            Some(r)
+        }
     }
 
     fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self> {
-        if boxed.as_any().is::<T>() {
-            unsafe {
-                // SAFETY: `is` ensures this type cast is correct
-                let unboxed = boxed.as_ref();
-                return Some(&*(unboxed as *const dyn BlockMetaInfo as *const Self));
-            }
-        }
-
-        None
+        boxed.as_any().downcast_ref()
     }
 }
 
