@@ -35,9 +35,8 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_io::prelude::BinaryWrite;
-use croaring::treemap::NativeSerializer;
-use croaring::Treemap;
 use ethnum::i256;
+use roaring::RoaringTreemap;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::StateAddr;
@@ -100,7 +99,7 @@ impl BitmapAggResult for BitmapCountResult {
     fn merge_result(place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let builder = UInt64Type::try_downcast_builder(builder).unwrap();
         let state = place.get::<BitmapAggState>();
-        builder.push(state.rb.as_ref().map(|rb| rb.cardinality()).unwrap_or(0));
+        builder.push(state.rb.as_ref().map(|rb| rb.len()).unwrap_or(0));
         Ok(())
     }
 
@@ -114,7 +113,7 @@ impl BitmapAggResult for BitmapRawResult {
         let builder = BitmapType::try_downcast_builder(builder).unwrap();
         let state = place.get::<BitmapAggState>();
         if let Some(rb) = state.rb.as_ref() {
-            builder.put(&rb.serialize()?);
+            rb.serialize_into(&mut builder.data)?;
         };
         builder.commit_row();
         Ok(())
@@ -145,7 +144,7 @@ macro_rules! with_bitmap_op_mapped_type {
 }
 
 trait BitmapOperate: Send + Sync + 'static {
-    fn operate(lhs: &mut Treemap, rhs: Treemap);
+    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap);
 }
 
 struct BitmapAndOp;
@@ -157,31 +156,31 @@ struct BitmapXorOp;
 struct BitmapNotOp;
 
 impl BitmapOperate for BitmapAndOp {
-    fn operate(lhs: &mut Treemap, rhs: Treemap) {
+    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
         lhs.bitand_assign(rhs);
     }
 }
 
 impl BitmapOperate for BitmapOrOp {
-    fn operate(lhs: &mut Treemap, rhs: Treemap) {
+    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
         lhs.bitor_assign(rhs);
     }
 }
 
 impl BitmapOperate for BitmapXorOp {
-    fn operate(lhs: &mut Treemap, rhs: Treemap) {
+    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
         lhs.bitxor_assign(rhs);
     }
 }
 
 impl BitmapOperate for BitmapNotOp {
-    fn operate(lhs: &mut Treemap, rhs: Treemap) {
+    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
         lhs.sub_assign(rhs);
     }
 }
 
 struct BitmapAggState {
-    rb: Option<Treemap>,
+    rb: Option<RoaringTreemap>,
 }
 
 impl BitmapAggState {
@@ -189,7 +188,7 @@ impl BitmapAggState {
         Self { rb: None }
     }
 
-    fn add<OP: BitmapOperate>(&mut self, other: Treemap) {
+    fn add<OP: BitmapOperate>(&mut self, other: RoaringTreemap) {
         match &mut self.rb {
             Some(v) => {
                 OP::operate(v, other);
@@ -246,12 +245,12 @@ where
                 if !valid {
                     continue;
                 }
-                let rb = Treemap::deserialize(data)?;
+                let rb = RoaringTreemap::deserialize_from(data)?;
                 state.add::<OP>(rb);
             }
         } else {
             for data in column_iter {
-                let rb = Treemap::deserialize(data)?;
+                let rb = RoaringTreemap::deserialize_from(data)?;
                 state.add::<OP>(rb);
             }
         }
@@ -270,7 +269,7 @@ where
         for (data, place) in column.iter().zip(places.iter()) {
             let addr = place.next(offset);
             let state = addr.get::<BitmapAggState>();
-            let rb = Treemap::deserialize(data)?;
+            let rb = RoaringTreemap::deserialize_from(data)?;
             state.add::<OP>(rb);
         }
         Ok(())
@@ -280,7 +279,7 @@ where
         let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
         let state = place.get::<BitmapAggState>();
         if let Some(data) = BitmapType::index_column(&column, row) {
-            let rb = Treemap::deserialize(data)?;
+            let rb = RoaringTreemap::deserialize_from(data)?;
             state.add::<OP>(rb);
         }
         Ok(())
@@ -292,7 +291,7 @@ where
         let flag: u8 = if state.rb.is_some() { 1 } else { 0 };
         writer.write_scalar(&flag)?;
         if let Some(rb) = &state.rb {
-            writer.extend_from_slice(rb.serialize()?.as_slice());
+            rb.serialize_into(writer)?;
         }
         Ok(())
     }
@@ -301,7 +300,7 @@ where
         let state = place.get::<BitmapAggState>();
         let flag = reader[0];
         state.rb = if flag == 1 {
-            Some(Treemap::deserialize(&reader[1..])?)
+            Some(RoaringTreemap::deserialize_from(&reader[1..])?)
         } else {
             None
         };
