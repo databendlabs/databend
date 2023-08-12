@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -26,6 +27,7 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::BlockThresholds;
 use common_expression::Column;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -39,6 +41,9 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_storage::StageFileInfo;
+use enum_as_inner::EnumAsInner;
+use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::explain::PlanStatsInfo;
@@ -840,66 +845,41 @@ impl UnionAll {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DistributedCopyIntoTableFromStage {
-    pub plan_id: u32,
+pub struct CopyIntoTable {
     pub catalog_info: CatalogInfo,
-    pub database_name: String,
-    pub table_name: String,
-    // ... into table(<columns>) ..  -> <columns>
     pub required_values_schema: DataSchemaRef,
-    // (1, ?, 'a', ?) -> (1, 'a')
     pub values_consts: Vec<Scalar>,
-    // (1, ?, 'a', ?) -> (?, ?)
     pub required_source_schema: DataSchemaRef,
-
     pub write_mode: CopyIntoTableMode,
     pub validation_mode: ValidationMode,
     pub force: bool,
-
     pub stage_table_info: StageTableInfo,
-    pub source: Box<DataSourcePlan>,
-
-    pub thresholds: BlockThresholds,
     pub files: Vec<StageFileInfo>,
     pub table_info: TableInfo,
+
+    pub source: CopyIntoTableSource,
 }
 
-impl DistributedCopyIntoTableFromStage {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(DataSchemaRef::default())
-    }
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
+pub enum CopyIntoTableSource {
+    Query(Box<QuerySource>),
+    Stage(Box<DataSourcePlan>),
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct CopyIntoTableFromQuery {
-    pub plan_id: u32,
-    pub catalog_info: CatalogInfo,
-    pub database_name: String,
-    pub table_name: String,
-
-    pub required_values_schema: DataSchemaRef, // ... into table(<columns>) ..  -> <columns>
-    pub values_consts: Vec<Scalar>,            // (1, ?, 'a', ?) -> (1, 'a')
-    pub required_source_schema: DataSchemaRef, // (1, ?, 'a', ?) -> (?, ?)
-    // these three fields are used for query result render
+pub struct QuerySource {
+    pub plan: PhysicalPlan,
     pub query_source_schema: DataSchemaRef,
     pub ignore_result: bool,
     pub result_columns: Vec<ColumnBinding>,
-
-    pub write_mode: CopyIntoTableMode,
-    pub validation_mode: ValidationMode,
-    pub force: bool,
-
-    pub stage_table_info: StageTableInfo,
-    pub local_node_id: String,
-    // after build_query, we will make it as the input
-    pub input: Box<PhysicalPlan>,
-    pub files: Vec<StageFileInfo>,
-    pub table_info: TableInfo,
 }
 
-impl CopyIntoTableFromQuery {
+impl CopyIntoTable {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(DataSchemaRef::default())
+        match &self.source {
+            CopyIntoTableSource::Query(query_ctx) => Ok(query_ctx.query_source_schema.clone()),
+            CopyIntoTableSource::Stage(_) => Ok(self.required_values_schema.clone()),
+        }
     }
 }
 
@@ -960,18 +940,74 @@ impl DeletePartial {
     }
 }
 
-impl DeleteFinal {
+impl MutationAggregate {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRef::default())
     }
 }
 
+// TODO(sky): make TableMutationAggregator distributed
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DeleteFinal {
+pub struct MutationAggregate {
     pub input: Box<PhysicalPlan>,
     pub snapshot: TableSnapshot,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
+    pub mutation_kind: MutationKind,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Copy)]
+/// This is used by MutationAccumulator, so no compact here.
+pub enum MutationKind {
+    Delete,
+    Update,
+    Replace,
+    Recluster,
+    Insert,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct AsyncSourcerPlan {
+    pub value_data: String,
+    pub schema: DataSchemaRef,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Deduplicate {
+    pub input: Box<PhysicalPlan>,
+    pub on_conflicts: Vec<OnConflictField>,
+    pub bloom_filter_column_indexes: Vec<FieldIndex>,
+    pub table_is_empty: bool,
+    pub table_info: TableInfo,
+    pub catalog_info: CatalogInfo,
+    pub table_schema: TableSchemaRef,
+    pub select_ctx: Option<SelectCtx>,
+    pub table_level_range_index: HashMap<ColumnId, ColumnStatistics>,
+    pub need_insert: bool,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct SelectCtx {
+    pub select_column_bindings: Vec<ColumnBinding>,
+    pub select_schema: DataSchemaRef,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct OnConflictField {
+    pub table_field: common_expression::TableField,
+    pub field_index: common_expression::FieldIndex,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ReplaceInto {
+    pub input: Box<PhysicalPlan>,
+    pub block_thresholds: BlockThresholds,
+    pub table_info: TableInfo,
+    pub on_conflicts: Vec<OnConflictField>,
+    pub bloom_filter_column_indexes: Vec<FieldIndex>,
+    pub catalog_info: CatalogInfo,
+    pub segments: Vec<(usize, Location)>,
+    pub need_insert: bool,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -998,7 +1034,7 @@ impl Display for RefreshIndex {
     }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum PhysicalPlan {
     TableScan(TableScan),
     Filter(Filter),
@@ -1024,17 +1060,19 @@ pub enum PhysicalPlan {
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
-    /// add distributed copy into table from @stage
-    DistributedCopyIntoTableFromStage(Box<DistributedCopyIntoTableFromStage>),
-    /// /// add distributed copy into table from query
-    CopyIntoTableFromQuery(Box<CopyIntoTableFromQuery>),
     /// Synthesized by fragmenter
     ExchangeSource(ExchangeSource),
     ExchangeSink(ExchangeSink),
 
-    /// For distributed delete
+    /// Delete
     DeletePartial(Box<DeletePartial>),
-    DeleteFinal(Box<DeleteFinal>),
+    MutationAggregate(Box<MutationAggregate>),
+    /// Copy into table
+    CopyIntoTable(Box<CopyIntoTable>),
+    /// Replace
+    AsyncSourcer(AsyncSourcerPlan),
+    Deduplicate(Deduplicate),
+    ReplaceInto(ReplaceInto),
 }
 
 impl PhysicalPlan {
@@ -1070,13 +1108,17 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(v) => v.plan_id,
             PhysicalPlan::ExchangeSource(v) => v.plan_id,
             PhysicalPlan::ExchangeSink(v) => v.plan_id,
-            PhysicalPlan::DeletePartial(_) | PhysicalPlan::DeleteFinal(_) => unreachable!(),
-            // for distributed_copy_into_table, planId is useless
-            PhysicalPlan::DistributedCopyIntoTableFromStage(v) => v.plan_id,
-            PhysicalPlan::CopyIntoTableFromQuery(v) => v.plan_id,
             PhysicalPlan::CteScan(v) => v.plan_id,
             PhysicalPlan::MaterializedCte(v) => v.plan_id,
             PhysicalPlan::ConstantTableScan(v) => v.plan_id,
+            PhysicalPlan::DeletePartial(_)
+            | PhysicalPlan::MutationAggregate(_)
+            | PhysicalPlan::CopyIntoTable(_)
+            | PhysicalPlan::AsyncSourcer(_)
+            | PhysicalPlan::Deduplicate(_)
+            | PhysicalPlan::ReplaceInto(_) => {
+                unreachable!()
+            }
         }
     }
 
@@ -1103,13 +1145,15 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
             PhysicalPlan::DeletePartial(plan) => plan.output_schema(),
-            PhysicalPlan::DeleteFinal(plan) => plan.output_schema(),
+            PhysicalPlan::MutationAggregate(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
-            PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => plan.output_schema(),
-            PhysicalPlan::CopyIntoTableFromQuery(plan) => plan.output_schema(),
+            PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
             PhysicalPlan::CteScan(plan) => plan.output_schema(),
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
+            PhysicalPlan::AsyncSourcer(_)
+            | PhysicalPlan::Deduplicate(_)
+            | PhysicalPlan::ReplaceInto(_) => Ok(DataSchemaRef::default()),
         }
     }
 
@@ -1136,12 +1180,12 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
             PhysicalPlan::DeletePartial(_) => "DeletePartial".to_string(),
-            PhysicalPlan::DeleteFinal(_) => "DeleteFinal".to_string(),
+            PhysicalPlan::MutationAggregate(_) => "MutationAggregate".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
-            PhysicalPlan::DistributedCopyIntoTableFromStage(_) => {
-                "DistributedCopyIntoTableFromStage".to_string()
-            }
-            PhysicalPlan::CopyIntoTableFromQuery(_) => "CopyIntoTableFromQuery".to_string(),
+            PhysicalPlan::CopyIntoTable(_) => "CopyIntoTable".to_string(),
+            PhysicalPlan::AsyncSourcer(_) => "AsyncSourcer".to_string(),
+            PhysicalPlan::Deduplicate(_) => "Deduplicate".to_string(),
+            PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
@@ -1177,7 +1221,7 @@ impl PhysicalPlan {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
             PhysicalPlan::DeletePartial(_plan) => Box::new(std::iter::empty()),
-            PhysicalPlan::DeleteFinal(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MutationAggregate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ProjectSet(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::RuntimeFilterSource(plan) => Box::new(
                 std::iter::once(plan.left_side.as_ref())
@@ -1186,8 +1230,10 @@ impl PhysicalPlan {
             PhysicalPlan::RangeJoin(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
-            PhysicalPlan::DistributedCopyIntoTableFromStage(_) => Box::new(std::iter::empty()),
-            PhysicalPlan::CopyIntoTableFromQuery(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::CopyIntoTable(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::AsyncSourcer(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::Deduplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ReplaceInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MaterializedCte(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
@@ -1210,8 +1256,6 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
-            PhysicalPlan::CopyIntoTableFromQuery(plan) => plan.input.try_find_single_data_source(),
-            PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => Some(&plan.source),
             PhysicalPlan::RuntimeFilterSource(_)
             | PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
@@ -1222,9 +1266,13 @@ impl PhysicalPlan {
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_)
             | PhysicalPlan::DeletePartial(_)
-            | PhysicalPlan::DeleteFinal(_)
-            | PhysicalPlan::CteScan(_)
-            | PhysicalPlan::ConstantTableScan(_) => None,
+            | PhysicalPlan::MutationAggregate(_)
+            | PhysicalPlan::CopyIntoTable(_)
+            | PhysicalPlan::AsyncSourcer(_)
+            | PhysicalPlan::Deduplicate(_)
+            | PhysicalPlan::ReplaceInto(_)
+            | PhysicalPlan::ConstantTableScan(_)
+            | PhysicalPlan::CteScan(_) => None,
         }
     }
 }

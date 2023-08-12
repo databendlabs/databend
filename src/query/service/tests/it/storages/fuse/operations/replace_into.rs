@@ -29,6 +29,7 @@ fn test_partition() -> Result<()> {
         let segments = (0..number_segment)
             .map(|idx| (format!("{idx}"), format_version))
             .collect::<Vec<_>>();
+        let segments: Vec<_> = segments.into_iter().enumerate().collect();
 
         for _ in 0..100 {
             let num_partition: usize = if number_segment == 1 {
@@ -42,7 +43,7 @@ fn test_partition() -> Result<()> {
             assert_eq!(partitions.len(), num_partition);
 
             // check segments
-            let origin = segments.iter().enumerate();
+            let origin = &segments;
             let segment_of_chunks = partitions
                 .iter()
                 .flatten()
@@ -50,8 +51,8 @@ fn test_partition() -> Result<()> {
                 .collect::<Vec<_>>();
 
             for (origin_idx, origin_location) in origin {
-                let (seg_idx, seg_location) = segment_of_chunks[origin_idx];
-                assert_eq!(origin_idx, *seg_idx);
+                let (seg_idx, seg_location) = segment_of_chunks[*origin_idx];
+                assert_eq!(origin_idx, seg_idx);
                 assert_eq!(origin_location, seg_location);
             }
         }

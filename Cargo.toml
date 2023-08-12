@@ -57,7 +57,6 @@ members = [
     "src/query/storages/factory",
     "src/query/storages/fuse",
     "src/query/storages/hive/hive",
-    "src/query/storages/hive/hive-meta-store",
     "src/query/storages/iceberg",
     "src/query/storages/information-schema",
     "src/query/storages/memory",
@@ -224,5 +223,4 @@ arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "031bc7bc" }
 arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e11341" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "693c265" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
-croaring = { git = "https://github.com/RoaringBitmap/croaring-rs", rev = "13a71b4" }
 opendal = { git = "https://github.com/apache/incubator-opendal", rev = "f02d627" }

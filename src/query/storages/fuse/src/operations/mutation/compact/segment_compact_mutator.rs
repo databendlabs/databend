@@ -171,7 +171,7 @@ pub struct SegmentCompactor<'a> {
     threshold: u64,
     default_cluster_key_id: Option<u32>,
     // fragmented segment collected so far, it will be reset to empty if compaction occurs
-    fragmented_segments: Vec<(Arc<SegmentInfo>, Location)>,
+    fragmented_segments: Vec<(SegmentInfo, Location)>,
     // state which keep the number of blocks of all the fragmented segment collected so far,
     // it will be reset to 0 if compaction occurs
     accumulated_num_blocks: u64,
@@ -221,7 +221,7 @@ impl<'a> SegmentCompactor<'a> {
         let mut is_end = false;
         for chunk in reverse_locations.chunks(chunk_size) {
             let segment_infos = segments_io
-                .read_segments::<Arc<SegmentInfo>>(chunk, false)
+                .read_segments::<SegmentInfo>(chunk, false)
                 .await?;
 
             for (segment, location) in segment_infos.into_iter().zip(chunk.iter()) {
@@ -273,7 +273,7 @@ impl<'a> SegmentCompactor<'a> {
 
     // accumulate one segment
     #[async_backtrace::framed]
-    pub async fn add(&mut self, segment_info: Arc<SegmentInfo>, location: Location) -> Result<()> {
+    pub async fn add(&mut self, segment_info: SegmentInfo, location: Location) -> Result<()> {
         let num_blocks_current_segment = segment_info.blocks.len() as u64;
 
         if num_blocks_current_segment == 0 {

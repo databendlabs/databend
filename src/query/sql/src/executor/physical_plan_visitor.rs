@@ -17,10 +17,11 @@ use common_exception::Result;
 use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregatePartial;
-use super::CopyIntoTableFromQuery;
-use super::DeleteFinal;
+use super::AsyncSourcerPlan;
+use super::CopyIntoTable;
+use super::CopyIntoTableSource;
+use super::Deduplicate;
 use super::DeletePartial;
-use super::DistributedCopyIntoTableFromStage;
 use super::DistributedInsertSelect;
 use super::EvalScalar;
 use super::Exchange;
@@ -30,9 +31,12 @@ use super::Filter;
 use super::HashJoin;
 use super::Lambda;
 use super::Limit;
+use super::MutationAggregate;
 use super::PhysicalPlan;
 use super::Project;
 use super::ProjectSet;
+use super::QuerySource;
+use super::ReplaceInto;
 use super::RowFetch;
 use super::Sort;
 use super::TableScan;
@@ -69,14 +73,12 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::Lambda(plan) => self.replace_lambda(plan),
             PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
             PhysicalPlan::DeletePartial(plan) => self.replace_delete_partial(plan),
-            PhysicalPlan::DeleteFinal(plan) => self.replace_delete_final(plan),
+            PhysicalPlan::MutationAggregate(plan) => self.replace_delete_final(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
-            PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => {
-                self.replace_copy_into_table(plan)
-            }
-            PhysicalPlan::CopyIntoTableFromQuery(plan) => {
-                self.replace_copy_into_table_from_query(plan)
-            }
+            PhysicalPlan::CopyIntoTable(plan) => self.replace_copy_into_table(plan),
+            PhysicalPlan::AsyncSourcer(plan) => self.replace_async_sourcer(plan),
+            PhysicalPlan::Deduplicate(plan) => self.replace_deduplicate(plan),
+            PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
         }
@@ -319,26 +321,22 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_copy_into_table(
-        &mut self,
-        plan: &DistributedCopyIntoTableFromStage,
-    ) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::DistributedCopyIntoTableFromStage(Box::new(
-            plan.clone(),
-        )))
-    }
-
-    fn replace_copy_into_table_from_query(
-        &mut self,
-        plan: &CopyIntoTableFromQuery,
-    ) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::CopyIntoTableFromQuery(Box::new(
-            CopyIntoTableFromQuery {
-                input: Box::new(input),
-                ..plan.clone()
-            },
-        )))
+    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
+        match &plan.source {
+            CopyIntoTableSource::Stage(_) => {
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
+            }
+            CopyIntoTableSource::Query(query_ctx) => {
+                let input = self.replace(&query_ctx.plan)?;
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
+                        plan: input,
+                        ..*query_ctx.clone()
+                    })),
+                    ..plan.clone()
+                })))
+            }
+        }
     }
 
     fn replace_insert_select(&mut self, plan: &DistributedInsertSelect) -> Result<PhysicalPlan> {
@@ -362,12 +360,34 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::DeletePartial(Box::new(plan.clone())))
     }
 
-    fn replace_delete_final(&mut self, plan: &DeleteFinal) -> Result<PhysicalPlan> {
+    fn replace_delete_final(&mut self, plan: &MutationAggregate) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::DeleteFinal(Box::new(DeleteFinal {
+        Ok(PhysicalPlan::MutationAggregate(Box::new(
+            MutationAggregate {
+                input: Box::new(input),
+                ..plan.clone()
+            },
+        )))
+    }
+
+    fn replace_async_sourcer(&mut self, plan: &AsyncSourcerPlan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::AsyncSourcer(plan.clone()))
+    }
+
+    fn replace_deduplicate(&mut self, plan: &Deduplicate) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::Deduplicate(Deduplicate {
             input: Box::new(input),
             ..plan.clone()
-        })))
+        }))
+    }
+
+    fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
+            input: Box::new(input),
+            ..plan.clone()
+        }))
     }
 
     fn replace_project_set(&mut self, plan: &ProjectSet) -> Result<PhysicalPlan> {
@@ -418,6 +438,7 @@ impl PhysicalPlan {
             visit(plan);
             match plan {
                 PhysicalPlan::TableScan(_)
+                | PhysicalPlan::AsyncSourcer(_)
                 | PhysicalPlan::CteScan(_)
                 | PhysicalPlan::ConstantTableScan(_) => {}
                 PhysicalPlan::Filter(plan) => {
@@ -474,10 +495,12 @@ impl PhysicalPlan {
                 PhysicalPlan::Lambda(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit)
                 }
-                PhysicalPlan::DistributedCopyIntoTableFromStage(_) => {}
-                PhysicalPlan::CopyIntoTableFromQuery(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
+                PhysicalPlan::CopyIntoTable(plan) => match &plan.source {
+                    CopyIntoTableSource::Query(input) => {
+                        Self::traverse(&input.plan, pre_visit, visit, post_visit);
+                    }
+                    CopyIntoTableSource::Stage(_) => {}
+                },
                 PhysicalPlan::RuntimeFilterSource(plan) => {
                     Self::traverse(&plan.left_side, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right_side, pre_visit, visit, post_visit);
@@ -487,7 +510,13 @@ impl PhysicalPlan {
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::DeletePartial(_) => {}
-                PhysicalPlan::DeleteFinal(plan) => {
+                PhysicalPlan::MutationAggregate(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::Deduplicate(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::ReplaceInto(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MaterializedCte(plan) => {
