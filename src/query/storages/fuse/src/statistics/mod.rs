@@ -20,6 +20,7 @@ pub mod reducers;
 
 pub use accumulator::StatisticsAccumulator;
 pub use block_statistics::BlockStatistics;
+pub use cluster_statistics::sort_by_cluster_stats;
 pub use cluster_statistics::ClusterStatsGenerator;
 pub use column_statistic::calc_column_distinct_of_values;
 pub use column_statistic::gen_columns_statistics;

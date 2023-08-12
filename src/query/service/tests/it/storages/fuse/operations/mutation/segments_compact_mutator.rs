@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::base::tokio;
@@ -39,6 +40,7 @@ use common_storages_fuse::operations::SegmentCompactionState;
 use common_storages_fuse::operations::SegmentCompactor;
 use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use common_storages_fuse::statistics::sort_by_cluster_stats;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
@@ -53,6 +55,7 @@ use rand::thread_rng;
 use rand::Rng;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
@@ -642,6 +645,7 @@ impl CompactSegmentTestFixture {
         &'a mut self,
         num_block_of_segments: &'a [usize],
         limit: Option<usize>,
+        cluster_key_id: Option<u32>,
     ) -> Result<(SegmentCompactionState, Statistics)> {
         let block_per_seg = self.threshold;
         let data_accessor = &self.data_accessor.operator();
@@ -655,7 +659,7 @@ impl CompactSegmentTestFixture {
         let segment_writer = SegmentWriter::new(data_accessor, location_gen);
         let seg_acc = SegmentCompactor::new(
             block_per_seg,
-            None,
+            cluster_key_id,
             max_io_requests,
             &fuse_segment_io,
             segment_writer.clone(),
@@ -668,11 +672,12 @@ impl CompactSegmentTestFixture {
             num_block_of_segments,
             &rows_per_block,
             BlockThresholds::default(),
+            cluster_key_id,
         )
         .await?;
         let mut summary = Statistics::default();
         for segment in segments {
-            merge_statistics_mut(&mut summary, &segment.summary, None);
+            merge_statistics_mut(&mut summary, &segment.summary, cluster_key_id);
         }
         self.input_blocks = blocks;
         let limit = limit.unwrap_or(usize::MAX);
@@ -690,6 +695,7 @@ impl CompactSegmentTestFixture {
         block_num_of_segments: &[usize],
         rows_per_blocks: &[usize],
         thresholds: BlockThresholds,
+        cluster_key_id: Option<u32>,
     ) -> Result<(Vec<Location>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
         let mut locations = vec![];
         let mut collected_blocks = vec![];
@@ -706,14 +712,26 @@ impl CompactSegmentTestFixture {
                 let block = block?;
                 let col_stats = gen_columns_statistics(&block, None, &schema)?;
 
+                let val = block.get_by_offset(0);
+                let val_ref = val.value.as_ref();
+                let left = vec![unsafe { val_ref.index_unchecked(0) }.to_owned()];
+                let cluster_stats =
+                    cluster_key_id.map(|v| ClusterStatistics::new(v, left.clone(), left, 0, None));
+
                 let (block_meta, _index_meta) = block_writer
-                    .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
+                    .write(
+                        FuseStorageFormat::Parquet,
+                        &schema,
+                        block,
+                        col_stats,
+                        cluster_stats,
+                    )
                     .await?;
 
                 collected_blocks.push(block_meta.clone());
                 stats_acc.add_with_block_meta(block_meta);
             }
-            let summary = stats_acc.summary(thresholds, None);
+            let summary = stats_acc.summary(thresholds, cluster_key_id);
             let segment_info = SegmentInfo::new(stats_acc.blocks_metas, summary);
             let location = segment_writer.write_segment_no_cache(&segment_info).await?;
             segment_infos.push(segment_info);
@@ -774,7 +792,7 @@ impl CompactCase {
         );
         let mut case_fixture = CompactSegmentTestFixture::try_new(ctx, block_per_segment)?;
         let (r, summary) = case_fixture
-            .run(&self.blocks_number_of_input_segments, limit)
+            .run(&self.blocks_number_of_input_segments, limit, None)
             .await?;
 
         // verify that:
@@ -849,7 +867,7 @@ impl CompactCase {
         if limit.is_none() {
             let mut case_fixture = CompactSegmentTestFixture::try_new(ctx, block_per_segment)?;
             let (r, _) = case_fixture
-                .run(&block_num_of_output_segments, None)
+                .run(&block_num_of_output_segments, None, None)
                 .await?;
             assert_eq!(
                 r.new_segment_paths.len(),
@@ -868,4 +886,136 @@ impl CompactCase {
 
         Ok(())
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_with_cluster() -> Result<()> {
+    let block_per_seg = 5;
+    let cluster_key_id = 0;
+    let chunk_size = 6;
+
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
+    let data_accessor = ctx.get_data_operator()?.operator();
+    let schema = TestFixture::default_table_schema();
+
+    let settings = ctx.get_settings();
+    settings.set_max_threads(2)?;
+    settings.set_max_storage_io_requests(4)?;
+
+    let block_writer = BlockWriter::new(&data_accessor, &location_gen);
+    let segment_writer = SegmentWriter::new(&data_accessor, &location_gen);
+    let compact_segment_reader =
+        MetaReaders::segment_info_reader(data_accessor.clone(), schema.clone());
+    let fuse_segment_io = SegmentsIO::create(ctx.clone(), data_accessor.clone(), schema);
+
+    let mut rand = thread_rng();
+
+    // for r in 1..100 { // <- use this at home
+    for r in 1..10 {
+        eprintln!("round {}", r);
+        let number_of_segments: usize = rand.gen_range(1..10);
+
+        let limit: usize = rand.gen_range(1..10);
+
+        let mut block_number_of_segments = Vec::with_capacity(number_of_segments);
+
+        for _ in 0..number_of_segments {
+            block_number_of_segments.push(rand.gen_range(1..6));
+        }
+
+        let number_of_blocks: usize = block_number_of_segments.iter().sum();
+        if number_of_blocks < 2 {
+            eprintln!("number_of_blocks must large than 1");
+            continue;
+        }
+        eprintln!(
+            "generating segments number of segments {},  number of blocks {}",
+            number_of_segments, number_of_blocks,
+        );
+
+        // setup & run
+        let rows_per_block = vec![1; block_number_of_segments.len()];
+        let (locations, _, mut segments) = CompactSegmentTestFixture::gen_segments(
+            &block_writer,
+            &segment_writer,
+            &block_number_of_segments,
+            &rows_per_block,
+            BlockThresholds::default(),
+            Some(cluster_key_id),
+        )
+        .await?;
+        let mut summary = Statistics::default();
+        for segment in &segments {
+            merge_statistics_mut(&mut summary, &segment.summary, Some(cluster_key_id));
+        }
+
+        eprintln!("running compact, limit {}", limit);
+        let seg_acc = SegmentCompactor::new(
+            block_per_seg,
+            Some(cluster_key_id),
+            chunk_size,
+            &fuse_segment_io,
+            segment_writer.clone(),
+        );
+        let state = seg_acc
+            .compact(locations, limit, |status| {
+                ctx.set_status_info(&status);
+            })
+            .await?;
+
+        let mut input_block_id = Vec::with_capacity(number_of_blocks);
+        for chunks in segments.chunks_mut(chunk_size) {
+            chunks.sort_by(|a, b| {
+                sort_by_cluster_stats(
+                    &a.summary.cluster_stats,
+                    &b.summary.cluster_stats,
+                    cluster_key_id,
+                )
+            });
+
+            chunks
+                .iter()
+                .for_each(|v| input_block_id.extend(v.blocks.iter().map(|b| b.location.clone())));
+        }
+
+        eprintln!(
+            "after compact, the num of all segments {}",
+            state.segments_locations.len()
+        );
+        let mut statistics_of_segments: Statistics = Statistics::default();
+        let mut output_block_id = Vec::with_capacity(number_of_blocks);
+        for location in state.segments_locations.iter().rev() {
+            let load_params = LoadParams {
+                location: location.0.clone(),
+                len_hint: None,
+                ver: location.1,
+                put_cache: false,
+            };
+
+            let compact_segment = compact_segment_reader.read(&load_params).await?;
+            let segment = SegmentInfo::try_from(compact_segment)?;
+            merge_statistics_mut(
+                &mut statistics_of_segments,
+                &segment.summary,
+                Some(cluster_key_id),
+            );
+
+            output_block_id.extend(segment.blocks.iter().map(|b| b.location.clone()));
+        }
+
+        if limit > chunk_size {
+            // check the block order.
+            assert_eq!(input_block_id, output_block_id);
+        } else {
+            // The scene is complex, skipping check order.
+            let input_block_id: HashSet<Location> = HashSet::from_iter(input_block_id);
+            let output_block_id: HashSet<Location> = HashSet::from_iter(output_block_id);
+            assert_eq!(input_block_id, output_block_id);
+        }
+        assert_eq!(summary, statistics_of_segments);
+    }
+
+    Ok(())
 }
