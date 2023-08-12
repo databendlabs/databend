@@ -17,7 +17,6 @@ use std::mem;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_base::base::ProgressValues;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
