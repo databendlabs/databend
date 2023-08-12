@@ -443,4 +443,11 @@ impl Settings {
     pub fn set_recluster_timeout_secs(&self, val: u64) -> Result<()> {
         self.try_set_u64("recluster_timeout_secs", val)
     }
+    pub fn get_enable_sync_refresh_aggregating_index(&self) -> Result<u64> {
+        self.try_get_u64("enable_sync_refresh_aggregating_index")
+    }
+
+    pub fn set_enable_sync_refresh_aggregating_index(&self, val: u64) -> Result<()> {
+        self.try_set_u64("enable_sync_refresh_aggregating_index", val)
+    }
 }

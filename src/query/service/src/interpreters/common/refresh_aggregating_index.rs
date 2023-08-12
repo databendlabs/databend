@@ -12,14 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod grant;
-mod metrics;
-mod refresh_aggregating_index;
-mod table;
-mod util;
-
-pub use grant::validate_grant_object_exists;
-pub use table::check_referenced_computed_columns;
-pub use util::check_deduplicate_label;
-
-pub use self::metrics::*;
+pub async fn hook_refresh_agg_index() {}
