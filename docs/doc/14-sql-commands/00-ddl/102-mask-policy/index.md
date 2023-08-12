@@ -1,6 +1,7 @@
 ---
 title: MASKING POLICY
 ---
+import IndexOverviewList from '@site/src/components/IndexOverviewList';
 import EEFeature from '@site/src/components/EEFeature';
 
 <EEFeature featureName='MASKING POLICY'/>
@@ -33,9 +34,7 @@ Before creating a masking policy, make sure you have properly defined or planned
 
 Masking policies are applied to the columns of a table. To implement a masking policy for a specific column, you must first create the masking policy and then associate the policy to the intended column with the [ALTER TABLE COLUMN](../20-table/90-alter-table-column.md) command. By establishing this association, the masking policy becomes tailored to the exact context where data privacy is paramount. It's important to note that a single masking policy can be associated with multiple columns, as long as they align with the same policy criteria. To manage masking policies in Databend, use the following commands:
 
-- [CREATE MASKING POLICY](create-mask-policy.md)
-- [DESC MASKING POLICY](desc-mask-policy.md)
-- [DROP MASKING POLICY](drop-mask-policy.md)
+<IndexOverviewList />
 
 ### Usage Example
 
