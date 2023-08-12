@@ -49,7 +49,7 @@ impl ParquetRSTable {
         // - adjust parallelism by data sizes.
         pipeline.add_source(
             |output| ParquetSource::create(ctx.clone(), output, reader.clone()),
-            max_threads,
+            max_threads.max(1),
         )
     }
 }

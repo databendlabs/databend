@@ -180,7 +180,7 @@ impl IcebergTable {
                     praquet_reader.clone(),
                 )
             },
-            max_threads,
+            max_threads.max(1),
         )
     }
 
