@@ -9,7 +9,7 @@ ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = error:
   --> SQL:1:15
   |
 1 | select * from t
-  |               ^ Unknown table 't'
+  |               ^ Unknown table `default`.`t` in catalog 'default'
 
 .
 ERROR 1105 (HY000) at line 1: UnknownFunction. Code: 1008, Text = error: 
@@ -41,7 +41,7 @@ ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = error:
   --> SQL:1:20
   |
 1 | select t1.a:z from t
-  |                    ^ Unknown table 't'
+  |                    ^ Unknown table `default`.`t` in catalog 'default'
 
 .
 ERROR 1105 (HY000) at line 1: SemanticError. Code: 1065, Text = error: 
@@ -51,4 +51,4 @@ ERROR 1105 (HY000) at line 1: SemanticError. Code: 1065, Text = error:
   |                                 ^ column c specified in USING clause does not exist in left table
 
 .
-ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = unknown table default.t.
+ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = Unknown table `default`.`t` in catalog 'default'.
