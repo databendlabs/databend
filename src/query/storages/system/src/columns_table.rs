@@ -19,7 +19,6 @@ use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::types::StringType;
@@ -237,13 +236,15 @@ async fn generate_fields(
     let fields = if table.engine() == VIEW_ENGINE {
         if let Some(query) = table.options().get(QUERY) {
             let mut planner = Planner::new(ctx.clone());
-            let (plan, _) = planner.plan_sql(query).await?;
-            let schema = infer_table_schema(&plan.schema())?;
-            schema.fields().clone()
+            if let Ok((plan, _)) = planner.plan_sql(query).await {
+                let schema = infer_table_schema(&plan.schema())?;
+                schema.fields().clone()
+            } else {
+                // If view SelectQUERY plan err, should return empty. not destroy the query.
+                vec![]
+            }
         } else {
-            return Err(ErrorCode::Internal(
-                "Logical error, View Table must have a SelectQuery inside.",
-            ));
+            vec![]
         }
     } else {
         table.schema().fields().clone()
