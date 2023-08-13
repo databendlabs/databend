@@ -3,6 +3,7 @@ explain select * from numbers(1)
 ----
 TableScan
 ├── table: default.system.numbers
+├── output columns: [number (#0)]
 ├── read rows: 1
 ├── read bytes: 8
 ├── partitions total: 1
@@ -14,10 +15,12 @@ query T
 explain select * from (select * from numbers(1)) as t1 where number = 1
 ----
 Filter
+├── output columns: [numbers.number (#0)]
 ├── filters: [t1.number (#0) = 1]
 ├── estimated rows: 0.20
 └── TableScan
     ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read bytes: 8
     ├── partitions total: 1
@@ -29,13 +32,16 @@ query T
 explain select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1 and b = 1
 ----
 EvalScalar
+├── output columns: [numbers.number (#0), b (#1)]
 ├── expressions: [numbers.number (#0) + 1]
 ├── estimated rows: 0.20
 └── Filter
+    ├── output columns: [numbers.number (#0)]
     ├── filters: [numbers.number (#0) = 1, numbers.number (#0) + 1 = 1]
     ├── estimated rows: 0.20
     └── TableScan
         ├── table: default.system.numbers
+        ├── output columns: [number (#0)]
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
@@ -47,13 +53,16 @@ query T
 explain select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1
 ----
 EvalScalar
+├── output columns: [numbers.number (#0), b (#1)]
 ├── expressions: [numbers.number (#0) + 1]
 ├── estimated rows: 0.20
 └── Filter
+    ├── output columns: [numbers.number (#0)]
     ├── filters: [t1.a (#0) = 1]
     ├── estimated rows: 0.20
     └── TableScan
         ├── table: default.system.numbers
+        ├── output columns: [number (#0)]
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
@@ -65,10 +74,12 @@ query T
 explain select * from numbers(1) where number = pow(1, 1 + 1)
 ----
 Filter
+├── output columns: [numbers.number (#0)]
 ├── filters: [to_float64(numbers.number (#0)) = 1]
 ├── estimated rows: 0.20
 └── TableScan
     ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read bytes: 8
     ├── partitions total: 1
@@ -81,6 +92,7 @@ explain select * from numbers(1) where TRUE and 1 = 1
 ----
 TableScan
 ├── table: default.system.numbers
+├── output columns: [number (#0)]
 ├── read rows: 1
 ├── read bytes: 8
 ├── partitions total: 1
@@ -92,10 +104,12 @@ query T
 explain select * from numbers(1) where number = 0 and false
 ----
 Filter
+├── output columns: [numbers.number (#0)]
 ├── filters: [false]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -107,10 +121,12 @@ query T
 explain select * from numbers(1) where number = 0 and null
 ----
 Filter
+├── output columns: [numbers.number (#0)]
 ├── filters: [false]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -122,10 +138,12 @@ query T
 explain select * from numbers(1) where null
 ----
 Filter
+├── output columns: [numbers.number (#0)]
 ├── filters: [false]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -138,6 +156,7 @@ explain select a from (select number as a, number as b from numbers(1))
 ----
 TableScan
 ├── table: default.system.numbers
+├── output columns: [number (#0)]
 ├── read rows: 1
 ├── read bytes: 8
 ├── partitions total: 1
@@ -150,6 +169,7 @@ explain select a from (select number as a, number+1 as b from numbers(1))
 ----
 TableScan
 ├── table: default.system.numbers
+├── output columns: [number (#0)]
 ├── read rows: 1
 ├── read bytes: 8
 ├── partitions total: 1
@@ -161,10 +181,12 @@ query T
 explain select * from (select * from numbers(100)  where  number> 33 ) where 1=2;
 ----
 Filter
+├── output columns: [numbers.number (#0)]
 ├── filters: [false]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -182,16 +204,31 @@ statement ok
 insert into t_json values(1, parse_json('{"a":[1,2,3],"b":{"c":10}}'));
 
 query T
-explain select a, v['a'][0], v['b'] from t_json
+explain select a, v['b'] from t_json
 ----
 TableScan
 ├── table: default.default.t_json
+├── output columns: [a (#0), v:b (#2)]
 ├── read rows: 1
 ├── read bytes: 108
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-├── push downs: [filters: [], limit: NONE, virtual_columns: [v:a[0], v:b]]
+├── push downs: [filters: [], limit: NONE, virtual_columns: [v:b]]
+└── estimated rows: 1.00
+
+query T
+explain select a, v['a'][0] from t_json
+----
+TableScan
+├── table: default.default.t_json
+├── output columns: [a (#0), v:a[0] (#2)]
+├── read rows: 1
+├── read bytes: 108
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+├── push downs: [filters: [], limit: NONE, virtual_columns: [v:a[0]]]
 └── estimated rows: 1.00
 
 statement ok
