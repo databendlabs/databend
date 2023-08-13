@@ -70,6 +70,7 @@ pub use kill::KillPlan;
 pub use lambda::*;
 pub use limit::*;
 pub use materialized_cte::MaterializedCte;
+pub use merge_into::MergeIntoPlan;
 pub use merge_into_source_scan::MergeIntoSourceScan;
 pub use operator::*;
 pub use pattern::PatternPlan;

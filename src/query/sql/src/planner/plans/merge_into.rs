@@ -20,13 +20,13 @@ use super::InsertInputSource;
 
 #[derive(Clone)]
 pub struct MergeIntoPlan {
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    pub table_id: MetaId,
-    pub schema: TableSchemaRef,
-    pub source: InsertInputSource,
-    pub join_expr: Expr,
+    // pub catalog: String,
+    // pub database: String,
+    // pub table: String,
+    // pub table_id: MetaId,
+    // pub schema: TableSchemaRef,
+    // pub source: InsertInputSource,
+    // pub join_expr: Expr,
 }
 
 impl std::fmt::Debug for MergeIntoPlan {

@@ -119,3 +119,19 @@ impl Display for MergeIntoStmt {
         Ok(())
     }
 }
+
+impl MergeIntoStmt {
+    pub fn split_clauses(&self) -> (Vec<MatchedClause>, Vec<UnmatchedClause>) {
+        let mut match_clauses = Vec::with_capacity(self.merge_options.len());
+        let mut unmatch_clauses = Vec::with_capacity(self.merge_options.len());
+        for merge_operation in &self.merge_options {
+            match merge_operation {
+                MergeOption::Match(match_clause) => match_clauses.push(match_clause.clone()),
+                MergeOption::Unmatch(unmatch_clause) => {
+                    unmatch_clauses.push(unmatch_clause.clone())
+                }
+            }
+        }
+        (match_clauses, unmatch_clauses)
+    }
+}

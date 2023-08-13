@@ -125,6 +125,7 @@ impl Binder {
         table_name: String,
         schema: Arc<TableSchema>,
         source: InsertSource,
+        mode: CopyIntoTableMode,
     ) -> Result<InsertInputSource> {
         match source {
             InsertSource::Streaming {
@@ -167,7 +168,7 @@ impl Binder {
                                 table_name,
                                 Arc::new(schema.into()),
                                 &values_str,
-                                CopyIntoTableMode::Replace,
+                                mode,
                             )
                             .await?;
                         Ok(InsertInputSource::Stage(Box::new(plan)))

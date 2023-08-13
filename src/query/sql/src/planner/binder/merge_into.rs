@@ -14,15 +14,22 @@
 
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
-use common_ast::ast::JoinOperator::RightOuter;
+use common_ast::ast::JoinOperator::FullOuter;
 use common_ast::ast::MergeIntoStmt;
 use common_ast::ast::TableReference;
+use common_catalog::plan::InternalColumn;
+use common_catalog::plan::InternalColumnType;
 use common_exception::Result;
+use common_expression::ROW_ID_COL_NAME;
 
 use crate::binder::Binder;
+use crate::binder::InternalColumnBinding;
 use crate::normalize_identifier;
+use crate::optimizer::SExpr;
+use crate::plans::MergeIntoPlan;
 use crate::plans::Plan;
 use crate::BindContext;
+
 // implementation of merge into for now:
 //      use an left outer join for target_source and source.
 //  target_table: (a,b)
@@ -47,6 +54,12 @@ impl Binder {
             ..
         } = stmt;
 
+        let database_name = database.as_ref().map_or_else(
+            || self.ctx.get_current_database(),
+            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
+        );
+        let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+
         // get target_table_reference
         let target_table = TableReference::Table {
             span: None,
@@ -66,48 +79,74 @@ impl Binder {
             alias: alias_source.clone(),
         };
 
-        // build Join
-        let join_reference = TableReference::Join {
-            span: None,
-            join: Join {
-                op: RightOuter,
-                left: Box::new(source_data),
-                right: Box::new(target_table.clone()),
-                condition: JoinCondition::On(Box::new(join_expr.clone())),
+        // bind table for target table
+        let (right_child, right_context) =
+            self.bind_single_table(bind_context, &target_table).await?;
+
+        // add internal_column (_row_id)
+        let table_index = self
+            .metadata
+            .read()
+            .get_table_index(Some(database_name.as_str()), table_name.as_str())
+            .expect("can't get target_table binding");
+        let row_id_column_binding = InternalColumnBinding {
+            database_name: Some(database_name),
+            table_name: Some(table_name),
+            internal_column: InternalColumn {
+                column_name: ROW_ID_COL_NAME.to_string(),
+                column_type: InternalColumnType::RowId,
             },
         };
-        self.bind_single_table(bind_context, &target_table);
-        // self.bind_join(bind_context, left_context, right_context, left_child, right_child, join)
-        let catalog_name = catalog.as_ref().map_or_else(
-            || self.ctx.get_current_catalog(),
-            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
-        );
-        let database_name = database.as_ref().map_or_else(
-            || self.ctx.get_current_database(),
-            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
-        );
-        let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
-        let table = self
-            .ctx
-            .get_table(&catalog_name, &database_name, &table_name)
-            .await?;
-        let table_id = table.get_id();
 
-        let schema = table.schema();
-        let input_source = self
-            .get_source(
-                bind_context,
-                catalog_name,
-                database_name,
-                table_name,
-                schema,
-                source.clone(),
-            )
+        let column_binding = bind_context
+            .add_internal_column_binding(&row_id_column_binding, self.metadata.clone())?;
+
+        SExpr::add_internal_column_index(&right_child, table_index, column_binding.index);
+        // bind source data
+        let (left_child, left_context) = self
+            .bind_merge_into_source(bind_context, None, alias_source, &source.clone())
             .await?;
-        // let (new_expr, scalar) = self
-        //     .bind_where(&mut from_context, &aliases, expr, s_expr)
+
+        // add join,use full outer join in V1, we use _row_id to check_duplicate
+        // join row.
+        let join = Join {
+            op: FullOuter,
+            condition: JoinCondition::On(Box::new(join_expr.clone())),
+            left: Box::new(source_data.clone()),
+            right: Box::new(target_table),
+        };
+
+        self.bind_join(
+            bind_context,
+            left_context,
+            right_context,
+            left_child,
+            right_child,
+            &join,
+        )
+        .await?;
+
+        // let catalog_name = catalog.as_ref().map_or_else(
+        //     || self.ctx.get_current_catalog(),
+        //     |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
+        // );
+
+        //     .ctx
+        //     .get_table(&catalog_name, &database_name, &table_name)
         //     .await?;
-        // s_expr = new_expr;
-        todo!()
+        // let table_id = table.get_id();
+
+        // let schema = table.schema();
+        // let input_source = self
+        //     .get_source(
+        //         bind_context,
+        //         catalog_name,
+        //         database_name,
+        //         table_name,
+        //         schema,
+        //         source.clone(),
+        //     )
+        //     .await?;
+        Ok(Plan::MergeInto((Box::new(MergeIntoPlan {}))))
     }
 }
