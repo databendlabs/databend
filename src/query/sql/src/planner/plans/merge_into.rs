@@ -17,16 +17,12 @@ use common_expression::TableSchemaRef;
 use common_meta_types::MetaId;
 
 use super::InsertInputSource;
+use crate::executor::PhysicalPlan;
 
 #[derive(Clone)]
 pub struct MergeIntoPlan {
-    // pub catalog: String,
-    // pub database: String,
-    // pub table: String,
-    // pub table_id: MetaId,
-    // pub schema: TableSchemaRef,
-    // pub source: InsertInputSource,
-    // pub join_expr: Expr,
+    // join result: target_columns, source_columns, target_table._row_id
+    pub join_plan: PhysicalPlan,
 }
 
 impl std::fmt::Debug for MergeIntoPlan {

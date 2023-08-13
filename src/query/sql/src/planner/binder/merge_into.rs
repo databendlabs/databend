@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::binary_heap;
+
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator::FullOuter;
@@ -24,6 +26,7 @@ use common_expression::ROW_ID_COL_NAME;
 
 use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
+use crate::executor::PhysicalPlanBuilder;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::MergeIntoPlan;
@@ -116,16 +119,21 @@ impl Binder {
             right: Box::new(target_table),
         };
 
-        self.bind_join(
-            bind_context,
-            left_context,
-            right_context,
-            left_child,
-            right_child,
-            &join,
-        )
-        .await?;
+        let (join_sexpr, bind_ctx) = self
+            .bind_join(
+                bind_context,
+                left_context,
+                right_context,
+                left_child,
+                right_child,
+                &join,
+            )
+            .await?;
+        let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
+        // add cluase column
+        let (match_cluases, unmatch_cluases) = stmt.split_clauses();
 
+        let join_plan = builder.build(&join_sexpr, bind_ctx.column_set()).await?;
         // let catalog_name = catalog.as_ref().map_or_else(
         //     || self.ctx.get_current_catalog(),
         //     |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
@@ -147,6 +155,6 @@ impl Binder {
         //         source.clone(),
         //     )
         //     .await?;
-        Ok(Plan::MergeInto((Box::new(MergeIntoPlan {}))))
+        Ok(Plan::MergeInto((Box::new(MergeIntoPlan { join_plan }))))
     }
 }
