@@ -73,8 +73,6 @@ impl BlockEntry {
 
 #[typetag::serde(tag = "type")]
 pub trait BlockMetaInfo: Debug + Send + Sync + Any + 'static {
-    fn as_any(&self) -> &dyn Any;
-
     #[allow(clippy::borrowed_box)]
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool;
 
@@ -94,7 +92,7 @@ impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {
     }
 
     fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self> {
-        boxed.as_any().downcast_ref()
+        (boxed as &dyn Any).downcast_ref()
     }
 }
 
@@ -571,8 +569,8 @@ impl Eq for Box<dyn BlockMetaInfo> {}
 
 impl PartialEq for Box<dyn BlockMetaInfo> {
     fn eq(&self, other: &Self) -> bool {
-        let this_type_id = self.as_any().type_id();
-        let other_type_id = other.as_any().type_id();
+        let this_type_id = (self as &dyn Any).type_id();
+        let other_type_id = (other as &dyn Any).type_id();
 
         match this_type_id == other_type_id {
             true => self.equals(other),

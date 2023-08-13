@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::fmt::Debug;
 
 use common_exception::Result;
@@ -83,10 +82,6 @@ impl<'de> serde::Deserialize<'de> for AggIndexMeta {
 
 #[typetag::serde(name = "agg_index_meta")]
 impl BlockMetaInfo for AggIndexMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals AggIndexMeta")
     }
