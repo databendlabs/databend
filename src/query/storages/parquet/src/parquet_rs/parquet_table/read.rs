@@ -44,7 +44,7 @@ impl ParquetRSTable {
             plan,
         )?);
 
-        // TODOs:
+        // TODO(parquet):
         // - introduce Top-K optimization.
         // - adjust parallelism by data sizes.
         pipeline.add_source(

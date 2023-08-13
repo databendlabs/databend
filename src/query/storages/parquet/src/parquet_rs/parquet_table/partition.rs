@@ -97,7 +97,7 @@ impl ParquetRSTable {
             )
             .collect();
 
-        // TODOs:
+        // TODO(parquet):
         // - collect exact statistics.
         // - use stats to prune row groups.
         // - make one row group one partition.

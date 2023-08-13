@@ -15,16 +15,21 @@
 use std::sync::Arc;
 
 use arrow_array::BooleanArray;
+use arrow_array::RecordBatch;
+use arrow_array::StructArray;
 use arrow_schema::ArrowError;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FieldIndex;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
 use futures::StreamExt;
@@ -36,14 +41,25 @@ use parquet::arrow::ParquetRecordBatchStreamBuilder;
 use parquet::arrow::ProjectionMask;
 
 struct ParquetPredicate {
+    /// Columns used for eval predicate.
     pub projection: ProjectionMask,
+    /// Predicate filter expression.
     pub filter: Expr,
 }
 
 pub struct ParquetRSReader {
     op: Operator,
     predicate: Option<ParquetPredicate>,
+    /// Columns to output.
     projection: ProjectionMask,
+    /// If we use [`ProjectionMask`] to get inner columns of a struct,
+    /// the columns will be contains in a struct array in the read [`RecordBatch`].
+    ///
+    /// Therefore, if `is_inner_project`, we should extract inner columns from the struct manually by traversing the nested column.
+    ///
+    /// If `is_inner_project` is false, we can skip the traversing.
+    is_inner_project: bool,
+    output_schema: arrow_schema::Schema,
 }
 
 impl ParquetRSReader {
@@ -67,17 +83,27 @@ impl ParquetRSReader {
             ParquetPredicate { projection, filter }
         });
         let projection = output_projection.to_arrow_projection(&schema_descr);
+        let output_schema = output_projection.project_schema(table_schema);
+        let output_fields = output_schema
+            .fields
+            .into_iter()
+            .map(|f| arrow_schema::Field::from(common_arrow::arrow::datatypes::Field::from(&f)))
+            .collect::<Vec<_>>();
+        let output_schema = arrow_schema::Schema::new(output_fields);
+        let is_inner_project = matches!(output_projection, Projection::InnerColumns(_));
         Ok(Self {
             op,
             predicate,
             projection,
+            is_inner_project,
+            output_schema,
         })
     }
 
     /// Read a [`DataBlock`] from parquet file using native apache arrow-rs APIs.
     pub async fn read_block(&self, ctx: Arc<dyn TableContext>, loc: &str) -> Result<DataBlock> {
         let reader = self.op.reader(loc).await?;
-        // TODOs:
+        // TODO(parquet):
         // - set batch size to generate block one by one.
         // - specify row groups to read.
         // - set row selections.
@@ -108,16 +134,105 @@ impl ParquetRSReader {
 
         let stream = builder.build()?;
         let record_batches = stream.collect::<Vec<_>>().await;
-        let blocks = record_batches
-            .into_iter()
-            .map(|b| {
-                b.map_err(|e| ErrorCode::Internal(format!("Read from parquet stream failed: {e}")))
-                    .and_then(|b| {
-                        let (block, _) = DataBlock::from_record_batch(&b)?;
-                        Ok(block)
-                    })
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let blocks = if self.is_inner_project {
+            record_batches
+                .into_iter()
+                .map(|b| {
+                    let b = b?;
+                    // TODO(parquet): precompute the paths when creating this reader. (until arrow-rs supports project schema by `ProjectionMask`)
+                    let paths = compute_output_field_paths(&self.output_schema, &b.schema())?;
+                    let mut columns = Vec::with_capacity(paths.len());
+                    for (field, path) in paths.iter() {
+                        let col = traverse_column(field, path, &b)?;
+                        columns.push(col);
+                    }
+                    Ok(DataBlock::new_from_columns(columns))
+                })
+                .collect::<Result<Vec<_>>>()?
+        } else {
+            record_batches
+                .into_iter()
+                .map(|b| {
+                    let (block, _) = DataBlock::from_record_batch(&b?)?;
+                    Ok(block)
+                })
+                .collect::<Result<Vec<_>>>()?
+        };
+
         DataBlock::concat(&blocks)
     }
+}
+
+/// Search `batch_schema` by column names from `output_schema` to compute path indices for getting columns from [`RecordBatch`].
+fn compute_output_field_paths(
+    output_schema: &arrow_schema::Schema,
+    batch_schema: &arrow_schema::Schema,
+) -> Result<Vec<(arrow_schema::FieldRef, Vec<FieldIndex>)>> {
+    let output_fields = output_schema.fields();
+    let parquet_schema_desc = arrow_to_parquet_schema(batch_schema)?;
+    let parquet_schema = parquet_schema_desc.root_schema();
+
+    let mut path_indices = Vec::with_capacity(output_fields.len());
+    for field in output_fields {
+        let name_path = field.name().split(':').collect::<Vec<_>>();
+        assert!(!name_path.is_empty());
+        let mut path = Vec::with_capacity(name_path.len());
+        let mut ty = parquet_schema;
+        for name in name_path {
+            match ty {
+                parquet::schema::types::Type::GroupType { fields, .. } => {
+                    let idx = fields
+                        .iter()
+                        .position(|t| t.name() == name)
+                        .ok_or(error_cannot_find_field(field.name(), parquet_schema))?;
+                    path.push(idx);
+                    ty = &fields[idx];
+                }
+                _ => return Err(error_cannot_find_field(field.name(), parquet_schema)),
+            }
+        }
+
+        path_indices.push((field.clone(), path));
+    }
+
+    Ok(path_indices)
+}
+
+fn error_cannot_find_field(name: &str, schema: &parquet::schema::types::Type) -> ErrorCode {
+    ErrorCode::TableSchemaMismatch(format!(
+        "Cannot find field {} in the parquet schema {:?}",
+        name, schema
+    ))
+}
+
+/// Traverse `batch` by `path_indices` to get output [`Column`].
+fn traverse_column(
+    field: &arrow_schema::FieldRef,
+    path: &[FieldIndex],
+    batch: &RecordBatch,
+) -> Result<Column> {
+    assert!(!path.is_empty());
+    let mut columns = batch.columns();
+    let schema = batch.schema();
+    for idx in path.iter().take(path.len() - 1) {
+        let struct_array = columns
+            .get(*idx)
+            .ok_or(error_cannot_traverse_path(path, &schema))?
+            .as_any()
+            .downcast_ref::<StructArray>()
+            .ok_or(error_cannot_traverse_path(path, &schema))?;
+        columns = struct_array.columns();
+    }
+    let idx = *path.last().unwrap();
+    let array = columns
+        .get(idx)
+        .ok_or(error_cannot_traverse_path(path, &schema))?;
+    Ok(Column::from_arrow_rs(array.clone(), field)?)
+}
+
+fn error_cannot_traverse_path(path: &[FieldIndex], schema: &arrow_schema::Schema) -> ErrorCode {
+    ErrorCode::TableSchemaMismatch(format!(
+        "Cannot traverse path {:?} in the arrow schema {:?}",
+        path, schema
+    ))
 }
