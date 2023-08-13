@@ -62,6 +62,7 @@ impl Display for FormatContext {
                 metadata,
                 rel_operator,
             } => match rel_operator.as_ref() {
+                RelOperator::MergeIntoSourceScan(_) => write!(f, "MergeIntoSourceScan"),
                 RelOperator::Scan(_) => write!(f, "LogicalGet"),
                 RelOperator::Join(op) => format_join(f, metadata, op),
                 RelOperator::EvalScalar(_) => write!(f, "EvalScalar"),

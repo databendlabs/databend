@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::ast::Join;
+use common_ast::ast::JoinCondition;
+use common_ast::ast::JoinOperator::RightOuter;
 use common_ast::ast::MergeIntoStmt;
 use common_ast::ast::TableReference;
 use common_exception::Result;
@@ -20,6 +23,11 @@ use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::plans::Plan;
 use crate::BindContext;
+// implementation of merge into for now:
+//      use an left outer join for target_source and source.
+//  target_table: (a,b)
+//  source: (b,c)
+// Merge into target_table using source on target_table.a = source.b
 impl Binder {
     #[allow(warnings)]
     #[async_backtrace::framed]
@@ -35,6 +43,7 @@ impl Binder {
             source,
             alias_source,
             alias_target,
+            join_expr,
             ..
         } = stmt;
 
@@ -57,6 +66,18 @@ impl Binder {
             alias: alias_source.clone(),
         };
 
+        // build Join
+        let join_reference = TableReference::Join {
+            span: None,
+            join: Join {
+                op: RightOuter,
+                left: Box::new(source_data),
+                right: Box::new(target_table.clone()),
+                condition: JoinCondition::On(Box::new(join_expr.clone())),
+            },
+        };
+        self.bind_single_table(bind_context, &target_table);
+        // self.bind_join(bind_context, left_context, right_context, left_child, right_child, join)
         let catalog_name = catalog.as_ref().map_or_else(
             || self.ctx.get_current_catalog(),
             |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,

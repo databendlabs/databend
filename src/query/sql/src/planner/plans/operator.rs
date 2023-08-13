@@ -28,6 +28,7 @@ use super::pattern::PatternPlan;
 use super::scan::Scan;
 use super::sort::Sort;
 use super::union_all::UnionAll;
+use super::MergeIntoSourceScan;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
@@ -109,7 +110,7 @@ pub enum RelOperator {
     MaterializedCte(MaterializedCte),
     Lambda(Lambda),
     ConstantTableScan(ConstantTableScan),
-
+    MergeIntoSourceScan(MergeIntoSourceScan),
     Pattern(PatternPlan),
 }
 
@@ -134,11 +135,13 @@ impl Operator for RelOperator {
             RelOperator::MaterializedCte(rel_op) => rel_op.rel_op(),
             RelOperator::Lambda(rel_op) => rel_op.rel_op(),
             RelOperator::ConstantTableScan(rel_op) => rel_op.rel_op(),
+            RelOperator::MergeIntoSourceScan(_) => unimplemented!(),
         }
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         match self {
+            RelOperator::MergeIntoSourceScan(_) => unimplemented!(),
             RelOperator::Scan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Join(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::EvalScalar(rel_op) => rel_op.derive_relational_prop(rel_expr),
@@ -162,6 +165,7 @@ impl Operator for RelOperator {
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         match self {
+            RelOperator::MergeIntoSourceScan(_) => unimplemented!(),
             RelOperator::Scan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Join(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::EvalScalar(rel_op) => rel_op.derive_physical_prop(rel_expr),
@@ -185,6 +189,7 @@ impl Operator for RelOperator {
 
     fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         match self {
+            RelOperator::MergeIntoSourceScan(_) => unimplemented!(),
             RelOperator::Scan(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::Join(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::EvalScalar(rel_op) => rel_op.derive_cardinality(rel_expr),
@@ -214,6 +219,7 @@ impl Operator for RelOperator {
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         match self {
+            RelOperator::MergeIntoSourceScan(_) => unimplemented!(),
             RelOperator::Scan(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }

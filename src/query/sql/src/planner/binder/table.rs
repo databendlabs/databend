@@ -256,10 +256,13 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
             TableReference::MergeIntoSourceReference {
-                span: _,
-                source: _,
-                alias: _,
-            } => unimplemented!(),
+                span,
+                source,
+                alias,
+            } => {
+                self.bind_merge_into_source(bind_context, *span, alias, source)
+                    .await
+            }
             TableReference::Table {
                 span,
                 catalog,
@@ -664,6 +667,19 @@ impl Binder {
                 alias,
             } => self.bind_values(bind_context, *span, values, alias).await,
         }
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_merge_into_source(
+        &mut self,
+        bind_context: &mut BindContext,
+        span: Span,
+        alias: &Option<TableAlias>,
+        source: &InsertSource,
+    ) -> Result<(SExpr, BindContext)> {
+        // alias column map
+
+        todo!()
     }
 
     #[async_backtrace::framed]

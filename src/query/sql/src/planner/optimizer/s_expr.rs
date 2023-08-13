@@ -295,6 +295,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
             .items
             .iter()
             .any(|expr| find_subquery_in_expr(&expr.scalar)),
+        RelOperator::MergeIntoSourceScan(_) => unimplemented!(),
     }
 }
 

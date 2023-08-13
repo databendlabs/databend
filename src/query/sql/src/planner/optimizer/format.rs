@@ -35,6 +35,7 @@ pub fn display_memo(memo: &Memo, cost_map: &HashMap<IndexType, CostContext>) -> 
 
 pub fn display_rel_op(rel_op: &RelOperator) -> String {
     match rel_op {
+        RelOperator::MergeIntoSourceScan(_) => "MergeIntoSourceScan".to_string(),
         RelOperator::Scan(_) => "Scan".to_string(),
         RelOperator::Join(_) => "Join".to_string(),
         RelOperator::EvalScalar(_) => "EvalScalar".to_string(),
