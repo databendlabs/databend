@@ -92,7 +92,8 @@ impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {
     }
 
     fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self> {
-        (boxed as &dyn Any).downcast_ref()
+        let boxed: &dyn Any = boxed;
+        boxed.downcast_ref()
     }
 }
 
