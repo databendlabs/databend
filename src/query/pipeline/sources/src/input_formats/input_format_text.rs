@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem;
@@ -489,10 +488,6 @@ impl RowBatchTrait for RowBatch {
 
 #[typetag::serde(name = "row_batch")]
 impl BlockMetaInfo for RowBatch {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
         unreachable!("RowBatch as BlockMetaInfo is not expected to be compared.")
     }

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-
 use common_expression::BlockMetaInfo;
 use common_expression::DataBlock;
 
@@ -50,10 +48,6 @@ impl<'de> serde::Deserialize<'de> for FileOutputBuffers {
 
 #[typetag::serde(name = "unload_buffers")]
 impl BlockMetaInfo for FileOutputBuffers {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
         unreachable!("FileOutputBuffers should not be compared")
     }

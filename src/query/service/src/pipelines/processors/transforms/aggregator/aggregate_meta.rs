@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::ops::Range;
@@ -139,10 +138,6 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> BlockMetaInfo
     for AggregateMeta<Method, V>
 {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn typetag_deserialize(&self) {
         unimplemented!("AggregateMeta does not support exchanging between multiple nodes")
     }
