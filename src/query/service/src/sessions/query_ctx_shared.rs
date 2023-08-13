@@ -239,6 +239,15 @@ impl QueryContextShared {
         self.session.apply_changed_settings(changes)
     }
 
+    pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
+        let mut tables_refs = self.tables_refs.lock();
+        let table_meta_key = (catalog.to_string(), database.to_string(), name.to_string());
+        
+        if let Entry::Vacant(v) = tables_refs.entry(table_meta_key) {
+             v.insert(table);
+        };
+    }
+
     #[async_backtrace::framed]
     pub async fn get_table(
         &self,

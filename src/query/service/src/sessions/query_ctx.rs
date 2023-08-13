@@ -182,6 +182,10 @@ impl QueryContext {
         Ok(())
     }
 
+    pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
+        self.shared.attach_table(catalog, database, name, table)
+    }
+
     pub fn set_origin(&self, origin: Origin) {
         let mut o = self.origin.write();
         *o = origin;

@@ -191,6 +191,18 @@ impl SelectInterpreter {
         }
         Ok(None)
     }
+
+    fn attach_tables_to_ctx(&self) {
+        let metadata = self.metadata.read();
+        for table in metadata.tables() {
+            self.ctx.attach_table(
+                table.catalog(),
+                table.database(),
+                table.name(),
+                table.table(),
+            )
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -208,6 +220,8 @@ impl Interpreter for SelectInterpreter {
     #[minitrace::trace(name = "select_interpreter_execute")]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        self.attach_tables_to_ctx();
+
         self.ctx.set_status_info("preparing plan");
 
         // 0. Need to build physical plan first to get the partitions.
