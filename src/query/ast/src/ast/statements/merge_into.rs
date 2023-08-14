@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use super::InsertSource;
 use super::UpdateExpr;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
+use crate::ast::Query;
 use crate::ast::TableAlias;
+use crate::ast::TableReference;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatchOperation {
@@ -58,11 +60,9 @@ pub struct MergeIntoStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    pub source: InsertSource,
+    pub source: MergeSource,
     // alias_target is belong to target
     pub alias_target: Option<TableAlias>,
-    // alias_source is belog to source
-    pub alias_source: Option<TableAlias>,
     pub join_expr: Expr,
     pub merge_options: Vec<MergeOption>,
 }
@@ -133,5 +133,98 @@ impl MergeIntoStmt {
             }
         }
         (match_clauses, unmatch_clauses)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MergeSource {
+    StreamingV2 {
+        settings: BTreeMap<String, String>,
+        on_error_mode: Option<String>,
+        start: usize,
+    },
+    Values {
+        values: Vec<Vec<Expr>>,
+        alias: Option<TableAlias>,
+    },
+    Select {
+        query: Box<Query>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StreamingSource {
+    settings: BTreeMap<String, String>,
+    on_error_mode: Option<String>,
+    start: usize,
+}
+
+impl MergeSource {
+    pub fn transform_table_reference(&self) -> TableReference {
+        match self {
+            Self::StreamingV2 {
+                settings,
+                on_error_mode,
+                start,
+            } => TableReference::StreamingV2SourceReference {
+                span: None,
+                source: StreamingSource {
+                    settings: settings.clone(),
+                    on_error_mode: on_error_mode.clone(),
+                    start: start.clone(),
+                },
+                alias: None,
+            },
+            Self::Values { values, alias } => TableReference::Values {
+                span: None,
+                values: values.clone(),
+                alias: alias.clone(),
+            },
+            Self::Select { query } => TableReference::Subquery {
+                span: None,
+                subquery: query.clone(),
+                alias: None,
+            },
+        }
+    }
+}
+
+impl Display for MergeSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MergeSource::StreamingV2 {
+                settings,
+                on_error_mode,
+                start: _,
+            } => {
+                write!(f, " FILE_FORMAT = (")?;
+                for (k, v) in settings.iter() {
+                    write!(f, " {} = '{}'", k, v)?;
+                }
+                write!(f, " )")?;
+                write!(
+                    f,
+                    " ON_ERROR = '{}'",
+                    on_error_mode.as_ref().unwrap_or(&"Abort".to_string())
+                )
+            }
+            MergeSource::Values { values, alias } => {
+                write!(f, "(VALUES")?;
+                for (i, value) in values.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "(")?;
+                    write_comma_separated_list(f, value)?;
+                    write!(f, ")")?;
+                }
+                write!(f, ")")?;
+                if let Some(alias) = alias {
+                    write!(f, " {alias}")?;
+                }
+                Ok(())
+            }
+            MergeSource::Select { query } => write!(f, "{query}"),
+        }
     }
 }

@@ -211,7 +211,7 @@ pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a Selec
 
 pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a TableReference) {
     match table_ref {
-        TableReference::MergeIntoSourceReference {
+        TableReference::StreamingV2SourceReference {
             span: _,
             source: _,
             alias: _,

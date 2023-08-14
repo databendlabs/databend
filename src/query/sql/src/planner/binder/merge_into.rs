@@ -17,8 +17,10 @@ use std::collections::binary_heap;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator::FullOuter;
+use common_ast::ast::MatchedClause;
 use common_ast::ast::MergeIntoStmt;
 use common_ast::ast::TableReference;
+use common_ast::ast::UnmatchedClause;
 use common_catalog::plan::InternalColumn;
 use common_catalog::plan::InternalColumnType;
 use common_exception::Result;
@@ -51,7 +53,6 @@ impl Binder {
             database,
             table,
             source,
-            alias_source,
             alias_target,
             join_expr,
             ..
@@ -76,11 +77,7 @@ impl Binder {
         };
 
         // get_source_table_reference
-        let source_data = TableReference::MergeIntoSourceReference {
-            span: None,
-            source: source.clone(),
-            alias: alias_source.clone(),
-        };
+        let source_data = source.transform_table_reference();
 
         // bind table for target table
         let (right_child, right_context) =
@@ -107,8 +104,9 @@ impl Binder {
         SExpr::add_internal_column_index(&right_child, table_index, column_binding.index);
         // bind source data
         let (left_child, left_context) = self
-            .bind_merge_into_source(bind_context, None, alias_source, &source.clone())
+            .bind_merge_into_source(bind_context, None, &source.clone())
             .await?;
+        // bind on_condition, we need to add used column, convient for scan needed columns only.
 
         // add join,use full outer join in V1, we use _row_id to check_duplicate
         // join row.
@@ -130,31 +128,24 @@ impl Binder {
             )
             .await?;
         let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
-        // add cluase column
+        // bind cluase column
         let (match_cluases, unmatch_cluases) = stmt.split_clauses();
-
+        for clause in &match_cluases {
+            self.bind_matched_clause(bind_context, clause);
+        }
+        for clause in &unmatch_cluases {
+            self.bind_unmatched_clause(bind_context, clause);
+        }
         let join_plan = builder.build(&join_sexpr, bind_ctx.column_set()).await?;
-        // let catalog_name = catalog.as_ref().map_or_else(
-        //     || self.ctx.get_current_catalog(),
-        //     |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
-        // );
 
-        //     .ctx
-        //     .get_table(&catalog_name, &database_name, &table_name)
-        //     .await?;
-        // let table_id = table.get_id();
-
-        // let schema = table.schema();
-        // let input_source = self
-        //     .get_source(
-        //         bind_context,
-        //         catalog_name,
-        //         database_name,
-        //         table_name,
-        //         schema,
-        //         source.clone(),
-        //     )
-        //     .await?;
         Ok(Plan::MergeInto((Box::new(MergeIntoPlan { join_plan }))))
+    }
+
+    fn bind_matched_clause(&mut self, bind_context: &mut BindContext, stmt: &MatchedClause) {
+        todo!()
+    }
+
+    fn bind_unmatched_clause(&mut self, bind_context: &mut BindContext, stmt: &UnmatchedClause) {
+        todo!()
     }
 }

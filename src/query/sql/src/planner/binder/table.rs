@@ -25,6 +25,7 @@ use common_ast::ast::Expr as AExpr;
 use common_ast::ast::Indirection;
 use common_ast::ast::InsertSource;
 use common_ast::ast::Join;
+use common_ast::ast::MergeSource;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::Statement;
@@ -256,13 +257,12 @@ impl Binder {
         table_ref: &TableReference,
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
-            TableReference::MergeIntoSourceReference {
-                span,
-                source,
-                alias,
+            TableReference::StreamingV2SourceReference {
+                span: _,
+                source: _,
+                alias: _,
             } => {
-                self.bind_merge_into_source(bind_context, *span, alias, source)
-                    .await
+                unimplemented!()
             }
             TableReference::Table {
                 span,
@@ -675,12 +675,21 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         span: Span,
-        alias: &Option<TableAlias>,
-        source: &InsertSource,
+        source: &MergeSource,
     ) -> Result<(SExpr, BindContext)> {
-        // alias column map
-
-        todo!()
+        // merge source has three kinds type
+        // a. values b. streamingV2 c. query
+        match source {
+            MergeSource::Select { query } => self.bind_query(bind_context, query).await,
+            MergeSource::StreamingV2 {
+                settings: _,
+                on_error_mode: _,
+                start: _,
+            } => unimplemented!(),
+            MergeSource::Values { values, alias } => {
+                self.bind_values(bind_context, span, values, alias).await
+            }
+        }
     }
 
     #[async_backtrace::framed]

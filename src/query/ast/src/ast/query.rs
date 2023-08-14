@@ -17,7 +17,7 @@ use std::fmt::Formatter;
 
 use common_exception::Span;
 
-use super::InsertSource;
+use super::StreamingSource;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::ColumnID;
@@ -283,9 +283,9 @@ pub enum TableReference {
         alias: Option<TableAlias>,
     },
     // for merge into source
-    MergeIntoSourceReference {
+    StreamingV2SourceReference {
         span: Span,
-        source: InsertSource,
+        source: StreamingSource,
         alias: Option<TableAlias>,
     },
 }
@@ -426,7 +426,7 @@ impl Display for Unpivot {
 impl Display for TableReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            TableReference::MergeIntoSourceReference {
+            TableReference::StreamingV2SourceReference {
                 span: _,
                 source: _,
                 alias: _,

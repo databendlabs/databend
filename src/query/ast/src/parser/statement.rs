@@ -154,7 +154,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let merge = map(
         rule! {
             MERGE ~ INTO ~ #period_separated_idents_1_to_3 ~ #table_alias? ~ USING
-            ~ #insert_source ~ #table_alias? ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
+            ~ #merge_source  ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
             _,
@@ -163,7 +163,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             alias_target,
             _,
             source,
-            alias_source,
             _,
             join_expr,
             merge_options,
@@ -175,7 +174,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 table,
                 source,
                 alias_target,
-                alias_source,
+
                 join_expr,
                 merge_options,
             })
@@ -1659,6 +1658,34 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     rule!(
         #streaming
         | #streaming_v2
+        | #values
+        | #query
+    )(i)
+}
+
+pub fn merge_source(i: Input) -> IResult<MergeSource> {
+    let streaming_v2 = map(
+        rule! {
+           #file_format_clause  ~ ( ON_ERROR ~ "=" ~ #ident)? ~  #rest_str
+        },
+        |(options, on_error_opt, (_, start))| MergeSource::StreamingV2 {
+            settings: options,
+            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
+            start,
+        },
+    );
+    let values = map(
+        rule! {
+            "(" ~ VALUES ~ ^#comma_separated_list1(row_values) ~ ")" ~ #table_alias?
+        },
+        |(_, _, values, _, alias)| MergeSource::Values { values, alias },
+    );
+    let query = map(query, |query| MergeSource::Select {
+        query: Box::new(query),
+    });
+
+    rule!(
+          #streaming_v2
         | #values
         | #query
     )(i)
