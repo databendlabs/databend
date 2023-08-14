@@ -436,4 +436,11 @@ impl Settings {
     pub fn set_replace_into_bloom_pruning_max_column_number(&self, val: u64) -> Result<()> {
         self.try_set_u64("replace_into_bloom_pruning_max_column_number", val)
     }
+
+    pub fn get_recluster_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("recluster_timeout_secs")
+    }
+    pub fn set_recluster_timeout_secs(&self, val: u64) -> Result<()> {
+        self.try_set_u64("recluster_timeout_secs", val)
+    }
 }
