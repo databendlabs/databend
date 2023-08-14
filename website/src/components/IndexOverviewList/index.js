@@ -9,9 +9,24 @@ const IndexOverviewList = ()=> {
   const [items, setItems] = useState([]);
   useMount(()=> {
     const permalink = metadata?.permalink;
-    const targetDoc = siderBars?.find((item)=> item?.href === permalink);
+    const targetDoc = findItemByPermalink(siderBars, permalink);
     setItems(targetDoc?.items || []);
   });
+  function findItemByPermalink(siderBars, permalink) {
+    const sidebar = siderBars.find((item) => item?.href === permalink);
+    if (sidebar) {
+      return sidebar;
+    }
+    for (const sidebar of siderBars) {
+      if (sidebar?.items?.length > 0) {
+        const nestedItem = findItemByPermalink(sidebar?.items || [], permalink);
+        if (nestedItem) {
+          return nestedItem;
+        }
+      }
+    }
+    return null;
+  };
   return (
     <>
       {

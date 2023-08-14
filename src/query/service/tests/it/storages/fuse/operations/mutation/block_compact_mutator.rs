@@ -173,12 +173,20 @@ async fn test_safety() -> Result<()> {
             "generating segments number of segments {},  number of blocks {}",
             number_of_segments, number_of_blocks,
         );
+
+        let cluster_key_id = if number_of_segments % 2 == 0 {
+            Some(0)
+        } else {
+            None
+        };
+
         let (locations, _, segment_infos) = CompactSegmentTestFixture::gen_segments(
             &block_writer,
             &segment_writer,
             &block_number_of_segments,
             &rows_per_blocks,
             threshold,
+            cluster_key_id,
         )
         .await?;
 
@@ -221,7 +229,7 @@ async fn test_safety() -> Result<()> {
             threshold,
             compact_params,
             operator.clone(),
-            None,
+            cluster_key_id,
         );
         block_compact_mutator.target_select().await?;
         let selections = block_compact_mutator.compact_tasks;

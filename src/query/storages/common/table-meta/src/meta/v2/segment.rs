@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
@@ -132,10 +131,6 @@ impl BlockMeta {
 
 #[typetag::serde(name = "blockmeta")]
 impl BlockMetaInfo for BlockMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         BlockMeta::downcast_ref_from(info).is_some_and(|other| self == other)
     }

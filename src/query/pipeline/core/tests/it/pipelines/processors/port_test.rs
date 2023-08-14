@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 use std::sync::Barrier;
 
@@ -59,10 +58,6 @@ impl<'de> serde::Deserialize<'de> for TestDataMeta {
 
 #[typetag::serde(name = "test_data_meta")]
 impl BlockMetaInfo for TestDataMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("equals is unimplemented for TestDataMeta")
     }

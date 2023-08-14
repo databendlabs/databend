@@ -71,10 +71,6 @@ impl<'de> serde::Deserialize<'de> for ExchangeShuffleMeta {
 
 #[typetag::serde(name = "exchange_shuffle")]
 impl BlockMetaInfo for ExchangeShuffleMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals ExchangeShuffleMeta")
     }
