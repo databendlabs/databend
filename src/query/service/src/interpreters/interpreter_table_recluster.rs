@@ -13,12 +13,14 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::SystemTime;
 
 use common_catalog::plan::PushDownInfo;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use log::info;
+use log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
@@ -30,7 +32,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::ReclusterTablePlan;
 
-const MAX_RECLUSTER_TIMES: usize = 1000;
+const RECLUSTER_TIMEOUT_SECS: u64 = 12 * 60 * 60;
 
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -55,7 +57,14 @@ impl Interpreter for ReclusterTableInterpreter {
         let ctx = self.ctx.clone();
         let settings = ctx.get_settings();
         let tenant = ctx.get_tenant();
-        let start = SystemTime::now();
+        let max_threads = settings.get_max_threads()?;
+
+        // Status.
+        {
+            let status = "recluster: begin to run recluster";
+            ctx.set_status_info(status);
+            info!("{}", status);
+        }
 
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
@@ -72,15 +81,10 @@ impl Interpreter for ReclusterTableInterpreter {
             None
         };
 
-        // Status.
-        {
-            let status = "recluster: begin to run recluster";
-            ctx.set_status_info(status);
-            info!("{}", status);
-        }
         let mut times = 0;
         let mut block_count = 0;
-        let max_threads = settings.get_max_threads()?;
+        let start = SystemTime::now();
+        let timeout = Duration::from_secs(RECLUSTER_TIMEOUT_SECS);
         loop {
             let table = self
                 .ctx
@@ -120,19 +124,25 @@ impl Interpreter for ReclusterTableInterpreter {
             ctx.set_executor(executor.get_inner())?;
             executor.execute()?;
 
+            let elapsed_time = SystemTime::now().duration_since(start).unwrap();
             times += 1;
             // Status.
             {
                 let status = format!(
                     "recluster: run recluster tasks:{} times, cost:{} sec",
                     times,
-                    start.elapsed().map_or(0, |d| d.as_secs())
+                    elapsed_time.as_secs()
                 );
                 ctx.set_status_info(&status);
                 info!("{}", &status);
             }
 
-            if !plan.is_final || times >= MAX_RECLUSTER_TIMES {
+            if !plan.is_final {
+                break;
+            }
+
+            if elapsed_time >= timeout {
+                warn!("Recluster stopped because the runtime was over 12 hours");
                 break;
             }
         }
