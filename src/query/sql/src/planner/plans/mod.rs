@@ -32,8 +32,6 @@ mod limit;
 mod materialized_cte;
 mod merge_into;
 pub mod operator;
-
-mod merge_into_source_scan;
 mod pattern;
 mod plan;
 mod presign;
@@ -71,7 +69,6 @@ pub use lambda::*;
 pub use limit::*;
 pub use materialized_cte::MaterializedCte;
 pub use merge_into::MergeIntoPlan;
-pub use merge_into_source_scan::MergeIntoSourceScan;
 pub use operator::*;
 pub use pattern::PatternPlan;
 pub use plan::*;

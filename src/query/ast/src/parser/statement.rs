@@ -174,7 +174,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 table,
                 source,
                 alias_target,
-
                 join_expr,
                 merge_options,
             })
@@ -2233,7 +2232,7 @@ pub fn unmatch_clause(i: Input) -> IResult<MergeOption> {
     map(
         rule! {
             WHEN ~ NOT ~ MATCHED ~ (AND ~ #expr)?  ~ THEN ~ INSERT ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ VALUES ~ #rest_str
+            ~ VALUES ~ ^#comma_separated_list1(row_values)
         },
         |(_, _, _, expr_op, _, _, columns_op, _, values)| {
             let selection = match expr_op {
@@ -2244,14 +2243,14 @@ pub fn unmatch_clause(i: Input) -> IResult<MergeOption> {
                 Some(columns) => MergeOption::Unmatch(UnmatchedClause {
                     insert_operation: InsertOperation {
                         columns: Some(columns.1),
-                        values: values.0,
+                        values,
                     },
                     selection,
                 }),
                 None => MergeOption::Unmatch(UnmatchedClause {
                     insert_operation: InsertOperation {
                         columns: None,
-                        values: values.0,
+                        values,
                     },
                     selection,
                 }),

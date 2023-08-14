@@ -40,7 +40,7 @@ pub struct MatchedClause {
 #[derive(Debug, Clone, PartialEq)]
 pub struct InsertOperation {
     pub columns: Option<Vec<Identifier>>,
-    pub values: String,
+    pub values: Vec<Vec<Expr>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -112,7 +112,15 @@ impl Display for MergeIntoStmt {
                             write!(f, ")")?;
                         }
                     }
-                    write!(f, " VALUES {} ", unmatch_clause.insert_operation.values)?;
+                    write!(f, "VALUES")?;
+                    for (i, value) in unmatch_clause.insert_operation.values.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "(")?;
+                        write_comma_separated_list(f, value)?;
+                        write!(f, ")")?;
+                    }
                 }
             }
         }

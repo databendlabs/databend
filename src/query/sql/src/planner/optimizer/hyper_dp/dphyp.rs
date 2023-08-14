@@ -256,7 +256,6 @@ impl DPhpy {
             | RelOperator::Pattern(_)
             | RelOperator::RuntimeFilterSource(_) => unreachable!(),
             RelOperator::DummyTableScan(_)
-            | RelOperator::MergeIntoSourceScan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::CteScan(_)
             | RelOperator::MaterializedCte(_) => Ok((s_expr, true)),

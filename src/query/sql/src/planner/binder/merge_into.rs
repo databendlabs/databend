@@ -12,19 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::binary_heap;
+use std::collections::HashMap;
 
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator::FullOuter;
+use common_ast::ast::MatchOperation;
 use common_ast::ast::MatchedClause;
 use common_ast::ast::MergeIntoStmt;
 use common_ast::ast::TableReference;
 use common_ast::ast::UnmatchedClause;
 use common_catalog::plan::InternalColumn;
 use common_catalog::plan::InternalColumnType;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Scalar;
 use common_expression::ROW_ID_COL_NAME;
+use indexmap::IndexMap;
 
 use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
@@ -34,6 +38,7 @@ use crate::optimizer::SExpr;
 use crate::plans::MergeIntoPlan;
 use crate::plans::Plan;
 use crate::BindContext;
+use crate::ScalarBinder;
 
 // implementation of merge into for now:
 //      use an left outer join for target_source and source.
@@ -55,9 +60,14 @@ impl Binder {
             source,
             alias_target,
             join_expr,
+            merge_options,
             ..
         } = stmt;
-
+        if merge_options.is_empty() {
+            return Err(ErrorCode::BadArguments(
+                "at least one matched or unmatched clause for merge into",
+            ));
+        }
         let database_name = database.as_ref().map_or_else(
             || self.ctx.get_current_database(),
             |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
@@ -130,22 +140,59 @@ impl Binder {
         let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
         // bind cluase column
         let (match_cluases, unmatch_cluases) = stmt.split_clauses();
+        let name_resolution_ctx = self.name_resolution_ctx.clone();
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            self.ctx.clone(),
+            &name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            HashMap::new(),
+            Box::new(IndexMap::new()),
+        );
         for clause in &match_cluases {
-            self.bind_matched_clause(bind_context, clause);
+            self.bind_matched_clause(&mut scalar_binder, clause).await?;
         }
         for clause in &unmatch_cluases {
-            self.bind_unmatched_clause(bind_context, clause);
+            self.bind_unmatched_clause(&mut scalar_binder, clause)
+                .await?;
         }
         let join_plan = builder.build(&join_sexpr, bind_ctx.column_set()).await?;
 
         Ok(Plan::MergeInto((Box::new(MergeIntoPlan { join_plan }))))
     }
 
-    fn bind_matched_clause(&mut self, bind_context: &mut BindContext, stmt: &MatchedClause) {
-        todo!()
+    async fn bind_matched_clause<'a>(
+        &mut self,
+        scalar_binder: &mut ScalarBinder<'a>,
+        clause: &MatchedClause,
+    ) -> Result<()> {
+        if let Some(expr) = &clause.selection {
+            scalar_binder.bind(&expr).await?;
+        }
+        for oepration in &clause.operations {
+            if let MatchOperation::Update { update_list } = oepration {
+                for update_expr in update_list {
+                    scalar_binder.bind(&update_expr.expr).await?;
+                }
+            }
+        }
+        Ok(())
     }
 
-    fn bind_unmatched_clause(&mut self, bind_context: &mut BindContext, stmt: &UnmatchedClause) {
-        todo!()
+    async fn bind_unmatched_clause<'a>(
+        &mut self,
+        scalar_binder: &mut ScalarBinder<'a>,
+        clause: &UnmatchedClause,
+    ) -> Result<()> {
+        if let Some(expr) = &clause.selection {
+            scalar_binder.bind(&expr).await?;
+        }
+        for exprs in &clause.insert_operation.values {
+            for expr in exprs {
+                scalar_binder.bind(expr).await?;
+            }
+        }
+        Ok(())
     }
 }
