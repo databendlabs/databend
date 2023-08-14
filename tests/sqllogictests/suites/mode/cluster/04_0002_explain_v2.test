@@ -173,7 +173,7 @@ Limit
 ├── estimated rows: 1.00
 └── Sort
     ├── output columns: [c (#5), e (#7), d (#6)]
-    ├── sort keys: [c ASC NULLS LAST, e ASC NULLS LAST, d ASC NULLS LAST]
+    ├── sort keys: [c (#5) ASC NULLS LAST, e (#7) ASC NULLS LAST, d (#6) ASC NULLS LAST]
     ├── estimated rows: 1.00
     └── EvalScalar
         ├── output columns: [c (#5), e (#7), d (#6)]
@@ -212,14 +212,14 @@ Limit
 ├── estimated rows: 0.00
 └── Sort
     ├── output columns: [c (#4), d (#5), e (#6)]
-    ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
+    ├── sort keys: [c (#4) ASC NULLS LAST, d (#5) ASC NULLS LAST, e (#6) ASC NULLS LAST]
     ├── estimated rows: 0.00
     └── Exchange
         ├── output columns: [c (#4), d (#5), e (#6)]
         ├── exchange type: Merge
         └── Sort
             ├── output columns: [c (#4), d (#5), e (#6)]
-            ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
+            ├── sort keys: [c (#4) ASC NULLS LAST, d (#5) ASC NULLS LAST, e (#6) ASC NULLS LAST]
             ├── estimated rows: 0.00
             └── EvalScalar
                 ├── output columns: [c (#4), d (#5), e (#6)]
@@ -311,14 +311,14 @@ Limit
 ├── estimated rows: 3.00
 └── Sort
     ├── output columns: [numbers.number (#0)]
-    ├── sort keys: [number ASC NULLS LAST]
+    ├── sort keys: [number (#0) ASC NULLS LAST]
     ├── estimated rows: 10.00
     └── Exchange
         ├── output columns: [numbers.number (#0)]
         ├── exchange type: Merge
         └── Sort
             ├── output columns: [numbers.number (#0)]
-            ├── sort keys: [number ASC NULLS LAST]
+            ├── sort keys: [number (#0) ASC NULLS LAST]
             ├── estimated rows: 10.00
             └── TableScan
                 ├── table: default.system.numbers
@@ -340,14 +340,14 @@ Limit
 ├── estimated rows: 3.00
 └── Sort
     ├── output columns: [numbers.number (#0), numbers.number (#1)]
-    ├── sort keys: [number ASC NULLS LAST]
+    ├── sort keys: [number (#0) ASC NULLS LAST]
     ├── estimated rows: 50.00
     └── Exchange
         ├── output columns: [numbers.number (#0), numbers.number (#1)]
         ├── exchange type: Merge
         └── Sort
             ├── output columns: [numbers.number (#0), numbers.number (#1)]
-            ├── sort keys: [number ASC NULLS LAST]
+            ├── sort keys: [number (#0) ASC NULLS LAST]
             ├── estimated rows: 50.00
             └── HashJoin
                 ├── output columns: [numbers.number (#0), numbers.number (#1)]

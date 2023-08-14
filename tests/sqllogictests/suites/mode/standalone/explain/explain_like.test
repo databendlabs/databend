@@ -19,7 +19,7 @@ explain select * from t1 where s like 'abcd%' order by s;
 ----
 Sort
 ├── output columns: [t1.s (#0)]
-├── sort keys: [s ASC NULLS LAST]
+├── sort keys: [s (#0) ASC NULLS LAST]
 ├── estimated rows: 0.80
 └── Filter
     ├── output columns: [t1.s (#0)]
@@ -46,7 +46,7 @@ explain select * from t1 where s like 'abcd' order by s;
 ----
 Sort
 ├── output columns: [t1.s (#0)]
-├── sort keys: [s ASC NULLS LAST]
+├── sort keys: [s (#0) ASC NULLS LAST]
 ├── estimated rows: 2.00
 └── Filter
     ├── output columns: [t1.s (#0)]

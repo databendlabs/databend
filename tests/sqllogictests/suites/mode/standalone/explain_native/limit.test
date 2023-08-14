@@ -26,11 +26,11 @@ explain select * from (select t.number from numbers(10) as t order by number des
 ----
 Sort
 ├── output columns: [t.number (#0)]
-├── sort keys: [number ASC NULLS LAST]
+├── sort keys: [number (#0) ASC NULLS LAST]
 ├── estimated rows: 10.00
 └── Sort
     ├── output columns: [t.number (#0)]
-    ├── sort keys: [number DESC NULLS LAST]
+    ├── sort keys: [number (#0) DESC NULLS LAST]
     ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.system.numbers
@@ -52,7 +52,7 @@ Limit
 ├── estimated rows: 8.00
 └── Sort
     ├── output columns: [t.number (#0)]
-    ├── sort keys: [number ASC NULLS LAST]
+    ├── sort keys: [number (#0) ASC NULLS LAST]
     ├── estimated rows: 8.00
     └── Limit
         ├── output columns: [t.number (#0)]
@@ -61,7 +61,7 @@ Limit
         ├── estimated rows: 8.00
         └── Sort
             ├── output columns: [t.number (#0)]
-            ├── sort keys: [number DESC NULLS LAST]
+            ├── sort keys: [number (#0) DESC NULLS LAST]
             ├── estimated rows: 10.00
             └── TableScan
                 ├── table: default.system.numbers
@@ -83,7 +83,7 @@ Limit
 ├── estimated rows: 0.20
 └── Sort
     ├── output columns: [t.number (#0)]
-    ├── sort keys: [number DESC NULLS LAST]
+    ├── sort keys: [number (#0) DESC NULLS LAST]
     ├── estimated rows: 0.20
     └── AggregateFinal
         ├── output columns: [t.number (#0)]
@@ -181,7 +181,7 @@ Limit
 ├── estimated rows: 1.00
 └── Sort
     ├── output columns: [c (#7), c1 (#3)]
-    ├── sort keys: [c1 ASC NULLS LAST]
+    ├── sort keys: [c1 (#3) ASC NULLS LAST]
     ├── estimated rows: 2.00
     └── HashJoin
         ├── output columns: [c (#7), c1 (#3)]

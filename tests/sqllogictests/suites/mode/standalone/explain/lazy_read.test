@@ -18,17 +18,24 @@ RowFetch
     ├── estimated rows: 0.00
     └── Sort
         ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
-        ├── sort keys: [a DESC NULLS LAST]
+        ├── sort keys: [a (#0) DESC NULLS LAST]
         ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.default.t_lazy
-            ├── output columns: [a (#0), _row_id (#7)]
-            ├── read rows: 0
-            ├── read bytes: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [], limit: 2]
-            └── estimated rows: 0.00
+        └── Exchange
+            ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
+            ├── exchange type: Merge
+            └── Sort
+                ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
+                ├── sort keys: [a (#0) DESC NULLS LAST]
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.default.t_lazy
+                    ├── output columns: [a (#0), _row_id (#7)]
+                    ├── read rows: 0
+                    ├── read bytes: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [], limit: 2]
+                    └── estimated rows: 0.00
 
 query T
 explain select * from t_lazy where a > 1 limit 2
@@ -42,19 +49,22 @@ RowFetch
     ├── limit: 2
     ├── offset: 0
     ├── estimated rows: 0.00
-    └── Filter
+    └── Exchange
         ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
-        ├── filters: [t_lazy.a (#0) > 1]
-        ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.default.t_lazy
-            ├── output columns: [a (#0), _row_id (#7)]
-            ├── read rows: 0
-            ├── read bytes: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
-            └── estimated rows: 0.00
+        ├── exchange type: Merge
+        └── Filter
+            ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
+            ├── filters: [t_lazy.a (#0) > 1]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.t_lazy
+                ├── output columns: [a (#0), _row_id (#7)]
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
+                └── estimated rows: 0.00
 
 query T
 explain select * from t_lazy where true limit 2
@@ -64,15 +74,18 @@ Limit
 ├── limit: 2
 ├── offset: 0
 ├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.default.t_lazy
-    ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: 2]
-    └── estimated rows: 0.00
+└── Exchange
+    ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
+    ├── exchange type: Merge
+    └── TableScan
+        ├── table: default.default.t_lazy
+        ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: 2]
+        └── estimated rows: 0.00
 
 # ISSUE #11831
 
@@ -93,21 +106,28 @@ RowFetch
     ├── estimated rows: 0.00
     └── Sort
         ├── output columns: [t_11831.uid (#0), t_11831.time (#3), t_11831._row_id (#4)]
-        ├── sort keys: [time DESC NULLS LAST]
+        ├── sort keys: [time (#3) DESC NULLS LAST]
         ├── estimated rows: 0.00
-        └── Filter
+        └── Exchange
             ├── output columns: [t_11831.uid (#0), t_11831.time (#3), t_11831._row_id (#4)]
-            ├── filters: [t1.uid (#0) = 11, t_11831.time (#3) >= 1686672000000, t_11831.time (#3) <= 1686758399000]
-            ├── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.default.t_11831
-                ├── output columns: [uid (#0), time (#3), _row_id (#4)]
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [and_filters(CAST(and_filters(CAST(and_filters(CAST(and_filters(CAST(t_11831.time (#3) >= 1686672000000 AS Boolean NULL), CAST(t_11831.time (#3) <= 1686758399000 AS Boolean NULL)) AS Boolean NULL), CAST(t1.uid (#0) = 11 AS Boolean NULL)) AS Boolean NULL), CAST(t_11831.time (#3) >= 1686672000000 AS Boolean NULL)) AS Boolean NULL), CAST(t_11831.time (#3) <= 1686758399000 AS Boolean NULL))], limit: NONE]
-                └── estimated rows: 0.00
+            ├── exchange type: Merge
+            └── Sort
+                ├── output columns: [t_11831.uid (#0), t_11831.time (#3), t_11831._row_id (#4)]
+                ├── sort keys: [time (#3) DESC NULLS LAST]
+                ├── estimated rows: 0.00
+                └── Filter
+                    ├── output columns: [t_11831.uid (#0), t_11831.time (#3), t_11831._row_id (#4)]
+                    ├── filters: [t1.uid (#0) = 11, t_11831.time (#3) >= 1686672000000, t_11831.time (#3) <= 1686758399000]
+                    ├── estimated rows: 0.00
+                    └── TableScan
+                        ├── table: default.default.t_11831
+                        ├── output columns: [uid (#0), time (#3), _row_id (#4)]
+                        ├── read rows: 0
+                        ├── read bytes: 0
+                        ├── partitions total: 0
+                        ├── partitions scanned: 0
+                        ├── push downs: [filters: [and_filters(CAST(and_filters(CAST(and_filters(CAST(and_filters(CAST(t_11831.time (#3) >= 1686672000000 AS Boolean NULL), CAST(t_11831.time (#3) <= 1686758399000 AS Boolean NULL)) AS Boolean NULL), CAST(t1.uid (#0) = 11 AS Boolean NULL)) AS Boolean NULL), CAST(t_11831.time (#3) >= 1686672000000 AS Boolean NULL)) AS Boolean NULL), CAST(t_11831.time (#3) <= 1686758399000 AS Boolean NULL))], limit: NONE]
+                        └── estimated rows: 0.00
 
 statement ok
 drop table t_11831
@@ -125,17 +145,24 @@ Limit
 ├── estimated rows: 0.00
 └── Sort
     ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
-    ├── sort keys: [a DESC NULLS LAST]
+    ├── sort keys: [a (#0) DESC NULLS LAST]
     ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t_lazy
-        ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [], limit: 2]
-        └── estimated rows: 0.00
+    └── Exchange
+        ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
+        ├── exchange type: Merge
+        └── Sort
+            ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
+            ├── sort keys: [a (#0) DESC NULLS LAST]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.t_lazy
+                ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: 2]
+                └── estimated rows: 0.00
 
 query T
 explain select * from t_lazy where a > 1 limit 2
@@ -145,19 +172,22 @@ Limit
 ├── limit: 2
 ├── offset: 0
 ├── estimated rows: 0.00
-└── Filter
+└── Exchange
     ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
-    ├── filters: [t_lazy.a (#0) > 1]
-    ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t_lazy
-        ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
-        └── estimated rows: 0.00
+    ├── exchange type: Merge
+    └── Filter
+        ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
+        ├── filters: [t_lazy.a (#0) > 1]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t_lazy
+            ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
+            └── estimated rows: 0.00
 
 query T
 explain select * from t_lazy where true limit 2
@@ -167,15 +197,18 @@ Limit
 ├── limit: 2
 ├── offset: 0
 ├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.default.t_lazy
-    ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: 2]
-    └── estimated rows: 0.00
+└── Exchange
+    ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
+    ├── exchange type: Merge
+    └── TableScan
+        ├── table: default.default.t_lazy
+        ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: 2]
+        └── estimated rows: 0.00
 
 statement ok
 set lazy_read_threshold=100
@@ -193,21 +226,28 @@ Limit
 ├── estimated rows: 0.00
 └── Sort
     ├── output columns: [t_lazy.a (#0), x (#7), y (#8)]
-    ├── sort keys: [x ASC NULLS LAST]
+    ├── sort keys: [x (#7) ASC NULLS LAST]
     ├── estimated rows: 0.00
-    └── EvalScalar
+    └── Exchange
         ├── output columns: [t_lazy.a (#0), x (#7), y (#8)]
-        ├── expressions: [t_lazy.a (#0) + 1, t_lazy.b (#1) + 1]
-        ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.default.t_lazy
-            ├── output columns: [a (#0), b (#1)]
-            ├── read rows: 0
-            ├── read bytes: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 0.00
+        ├── exchange type: Merge
+        └── Sort
+            ├── output columns: [t_lazy.a (#0), x (#7), y (#8)]
+            ├── sort keys: [x (#7) ASC NULLS LAST]
+            ├── estimated rows: 0.00
+            └── EvalScalar
+                ├── output columns: [t_lazy.a (#0), x (#7), y (#8)]
+                ├── expressions: [t_lazy.a (#0) + 1, t_lazy.b (#1) + 1]
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.default.t_lazy
+                    ├── output columns: [a (#0), b (#1)]
+                    ├── read rows: 0
+                    ├── read bytes: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 0.00
 
 # Will use lazy materialization
 query T
@@ -220,7 +260,7 @@ Limit
 ├── estimated rows: 0.00
 └── Sort
     ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9), x (#7), y (#8), t_lazy.b (#1)]
-    ├── sort keys: [x ASC NULLS LAST]
+    ├── sort keys: [x (#7) ASC NULLS LAST]
     ├── estimated rows: 0.00
     └── RowFetch
         ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9), x (#7), y (#8), t_lazy.b (#1)]
@@ -233,7 +273,7 @@ Limit
             ├── estimated rows: 0.00
             └── Sort
                 ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9), x (#7), y (#8)]
-                ├── sort keys: [y ASC NULLS LAST]
+                ├── sort keys: [y (#8) ASC NULLS LAST]
                 ├── estimated rows: 0.00
                 └── EvalScalar
                     ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9), x (#7), y (#8)]
@@ -250,17 +290,24 @@ Limit
                             ├── estimated rows: 0.00
                             └── Sort
                                 ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9)]
-                                ├── sort keys: [a ASC NULLS LAST]
+                                ├── sort keys: [a (#0) ASC NULLS LAST]
                                 ├── estimated rows: 0.00
-                                └── TableScan
-                                    ├── table: default.default.t_lazy
-                                    ├── output columns: [a (#0), _row_id (#9)]
-                                    ├── read rows: 0
-                                    ├── read bytes: 0
-                                    ├── partitions total: 0
-                                    ├── partitions scanned: 0
-                                    ├── push downs: [filters: [], limit: 3]
-                                    └── estimated rows: 0.00
+                                └── Exchange
+                                    ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9)]
+                                    ├── exchange type: Merge
+                                    └── Sort
+                                        ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9)]
+                                        ├── sort keys: [a (#0) ASC NULLS LAST]
+                                        ├── estimated rows: 0.00
+                                        └── TableScan
+                                            ├── table: default.default.t_lazy
+                                            ├── output columns: [a (#0), _row_id (#9)]
+                                            ├── read rows: 0
+                                            ├── read bytes: 0
+                                            ├── partitions total: 0
+                                            ├── partitions scanned: 0
+                                            ├── push downs: [filters: [], limit: 3]
+                                            └── estimated rows: 0.00
 
 statement ok
 drop table t_lazy

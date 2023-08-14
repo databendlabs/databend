@@ -44,7 +44,7 @@ Limit
 ├── estimated rows: 0.20
 └── Sort
     ├── output columns: [numbers.number (#0)]
-    ├── sort keys: [number ASC NULLS LAST]
+    ├── sort keys: [number (#0) ASC NULLS LAST]
     ├── estimated rows: 0.20
     └── Filter
         ├── output columns: [numbers.number (#0)]
@@ -211,7 +211,7 @@ explain select name from system.functions order by example
 ----
 Sort
 ├── output columns: [functions.name (#0), functions.example (#7)]
-├── sort keys: [example ASC NULLS LAST]
+├── sort keys: [example (#7) ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.functions

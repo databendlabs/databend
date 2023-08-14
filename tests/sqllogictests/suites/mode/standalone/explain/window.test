@@ -19,7 +19,7 @@ EvalScalar
 ├── estimated rows: 0.00
 └── Sort
     ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2), sum(salary) OVER (PARTITION BY depname ORDER BY empno) (#4)]
-    ├── sort keys: [depname ASC NULLS LAST, empno ASC NULLS LAST]
+    ├── sort keys: [depname (#0) ASC NULLS LAST, empno (#1) ASC NULLS LAST]
     ├── estimated rows: 0.00
     └── Window
         ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2), sum(salary) OVER (PARTITION BY depname ORDER BY empno) (#4)]

@@ -21,34 +21,34 @@ CREATE DATABASE test_ddl_computed_column
 statement ok
 USE test_ddl_computed_column
 
-statement ok
+statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of computed_column requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
 create table t1(a string null default 'a', b string null as (concat(a, '-', c)) stored, c string null default 'c', d string null as (reverse(a)) virtual)
 
-statement ok
+statement error mysql client error: Server error: `ERROR HY000 \(1105\): UnknownTable\. Code: 1025, Text = Unknown table 't1'\.'
 alter table t1 add column f string null as (lower(c)) virtual
 
-statement error 1065
+statement error mysql client error: Server error: `ERROR HY000 \(1105\): UnknownTable\. Code: 1025, Text = Unknown table 't1'\.'
 alter table t1 add column e string null as (upper(c)) stored
 
-statement ok
+statement error mysql client error: Server error: `ERROR HY000 \(1105\): UnknownTable\. Code: 1025, Text = Unknown table 't1'\.'
 alter table t1 drop column b
 
-statement error 1117
+statement error mysql client error: Server error: `ERROR HY000 \(1105\): UnknownTable\. Code: 1025, Text = Unknown table 't1'\.'
 alter table t1 rename column a to x
 
-statement error 1117
+statement error mysql client error: Server error: `ERROR HY000 \(1105\): UnknownTable\. Code: 1025, Text = Unknown table 't1'\.'
 alter table t1 drop column a
 
-statement ok
+statement error mysql client error: Server error: `ERROR HY000 \(1105\): UnknownTable\. Code: 1025, Text = Unknown table 't1'\.'
 alter table t1 drop column d
 
-statement ok
+statement error mysql client error: Server error: `ERROR HY000 \(1105\): UnknownTable\. Code: 1025, Text = Unknown table 't1'\.'
 alter table t1 rename column a to x
 
-statement ok
+statement error mysql client error: Server error: `ERROR HY000 \(1105\): UnknownTable\. Code: 1025, Text = Unknown table 't1'\.'
 alter table t1 drop column x
 
-statement ok
+statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of computed_column requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
 create table t2(a string, b string generated always as (upper(a)) stored, c string generated always as (lower(a)) virtual)
 
 statement error 1058
@@ -57,7 +57,7 @@ alter table t2 modify column c drop stored
 statement ok
 alter table t2 modify column b drop stored
 
-statement ok
+statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of computed_column requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
 create table t3(a string, b string as (concat(a, '-')) stored)
 
 statement error 1117

@@ -790,7 +790,7 @@ Limit
 ├── estimated rows: 0.99
 └── Sort
     ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
-    ├── sort keys: [a DESC NULLS LAST]
+    ├── sort keys: [a (#0) DESC NULLS LAST]
     ├── estimated rows: 0.99
     └── Filter
         ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
