@@ -445,9 +445,7 @@ impl Operator for Join {
             }
             JoinType::LeftSemi => f64::min(left_cardinality, inner_join_cardinality),
             JoinType::RightSemi => f64::min(right_cardinality, inner_join_cardinality),
-            JoinType::LeftSingle | JoinType::RightMark | JoinType::LeftAnti  => {
-                left_cardinality
-            }
+            JoinType::LeftSingle | JoinType::RightMark | JoinType::LeftAnti => left_cardinality,
             JoinType::RightSingle | JoinType::LeftMark | JoinType::RightAnti => right_cardinality,
         };
         // Derive column statistics
