@@ -259,6 +259,18 @@ impl TryFrom<Arc<CompactSegmentInfo>> for SegmentInfo {
     }
 }
 
+impl TryFrom<&CompactSegmentInfo> for SegmentInfo {
+    type Error = ErrorCode;
+    fn try_from(value: &CompactSegmentInfo) -> Result<Self, Self::Error> {
+        let blocks = value.block_metas()?;
+        Ok(SegmentInfo {
+            format_version: value.format_version,
+            blocks,
+            summary: value.summary.clone(),
+        })
+    }
+}
+
 impl TryFrom<&SegmentInfo> for CompactSegmentInfo {
     type Error = ErrorCode;
 
