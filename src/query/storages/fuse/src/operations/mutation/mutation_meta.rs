@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
@@ -37,10 +35,6 @@ pub struct SerializeDataMeta {
 
 #[typetag::serde(name = "serialize_data_meta")]
 impl BlockMetaInfo for SerializeDataMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         SerializeDataMeta::downcast_ref_from(info).is_some_and(|other| self == other)
     }

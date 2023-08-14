@@ -506,6 +506,10 @@ pub struct CacheConfig {
     // table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
     pub table_bloom_index_filter_count: u64,
 
+    /// Max bytes of cached bloom index filters used. Set it to 0 to disable it.
+    // One bloom index filter per column of data block being indexed will be generated if necessary.
+    pub table_bloom_index_filter_size: u64,
+
     pub data_cache_storage: CacheStorageTypeConfig,
 
     /// Max size of external cache population queue length
@@ -582,7 +586,8 @@ impl Default for CacheConfig {
             table_meta_statistic_count: 256,
             enable_table_index_bloom: true,
             table_bloom_index_meta_count: 3000,
-            table_bloom_index_filter_count: 1048576,
+            table_bloom_index_filter_count: 0,
+            table_bloom_index_filter_size: 2147483648,
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 65536,

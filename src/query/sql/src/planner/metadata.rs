@@ -562,6 +562,17 @@ impl ColumnEntry {
             }
         }
     }
+
+    pub fn table_index(&self) -> Option<IndexType> {
+        match self {
+            ColumnEntry::BaseTableColumn(BaseTableColumn { table_index, .. }) => Some(*table_index),
+            ColumnEntry::DerivedColumn(_) => None,
+            ColumnEntry::InternalColumn(TableInternalColumn { table_index, .. }) => {
+                Some(*table_index)
+            }
+            ColumnEntry::VirtualColumn(VirtualColumn { table_index, .. }) => Some(*table_index),
+        }
+    }
 }
 
 pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) -> bool {

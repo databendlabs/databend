@@ -34,6 +34,7 @@ use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_sql::evaluator::BlockOperator;
+use common_sql::executor::OnConflictField;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -78,8 +79,6 @@ use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoO
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
-use crate::operations::replace_into::OnConflictField;
-
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
     // the fields specified in ON CONFLICT clause
@@ -225,7 +224,7 @@ impl MergeIntoOperationAggregator {
                             let seg = match &segment_info {
                                 None => {
                                     // un-compact the segment if necessary
-                                    segment_info = Some(compact_segment_info.as_ref().try_into()?);
+                                    segment_info = Some(compact_segment_info.clone().try_into()?);
                                     segment_info.as_ref().unwrap()
                                 }
                                 Some(v) => v,
@@ -305,7 +304,7 @@ impl MergeIntoOperationAggregator {
             };
 
             let compact_segment_info = aggregation_ctx.segment_reader.read(&load_param).await?;
-            let segment_info: SegmentInfo = compact_segment_info.as_ref().try_into()?;
+            let segment_info: SegmentInfo = compact_segment_info.try_into()?;
 
             for (block_index, keys) in block_deletion {
                 let permit = aggregation_ctx.acquire_task_permit().await?;
@@ -638,23 +637,35 @@ impl AggregationContext {
                 Ok(filters) => {
                     // the caller ensures that the input_hashes is not empty
                     let row_count = input_hashes[0].len();
+
+                    // let assume that the target block is prunable
                     let mut block_pruned = true;
                     for row in 0..row_count {
-                        let mut contains_row = true;
+                        // for each row, by default, assume that columns of this row do have conflict with the target block.
+                        let mut row_not_prunable = true;
                         for (col_idx, col_hash) in input_hashes.iter().enumerate() {
-                            // if bloom filter presents, check if the row is contained
-                            // if bloom filter absents, do nothing(since by default, we assume that the row is contained)
+                            // For each column of current row, check if the corresponding bloom
+                            // filter contains the digest of the column.
+                            //
+                            // Any one of the columns NOT contains by the corresponding bloom filter,
+                            // indicates that the row is prunable(thus, we do not stop on the first column that
+                            // the bloom filter contains).
+
+                            // - if bloom filter presents, check if the column is contained
+                            // - if bloom filter absents, do nothing(since by default, we assume that the row is not-prunable)
                             if let Some(col_filter) = &filters[col_idx] {
                                 let hash = col_hash[row];
                                 if hash == 0 || !col_filter.contains_digest(hash) {
-                                    // hash == 0 indicates that the column value is null, which equals nothing.
-                                    // one column does not match, indicates that the row does not match
-                                    contains_row = false;
+                                    // - hash == 0 indicates that the column value is null, which equals nothing.
+                                    // - NOT `contains_digest`, indicates that this column of row does not match
+                                    row_not_prunable = false;
+                                    // if one column not match, we do not need to check other columns
                                     break;
                                 }
                             }
                         }
-                        if contains_row {
+                        if row_not_prunable {
+                            // any row not prunable indicates that the target block is not prunable
                             block_pruned = false;
                             break;
                         }

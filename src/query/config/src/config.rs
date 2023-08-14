@@ -2165,16 +2165,23 @@ pub struct CacheConfig {
     #[clap(long = "cache-table-bloom-index-meta-count", default_value = "3000")]
     pub table_bloom_index_meta_count: u64,
 
+    /// DEPRECATING, will be deprecated in the next prduction release.
+    ///
     /// Max number of cached bloom index filters. Set it to 0 to disable it.
     // One bloom index filter per column of data block being indexed will be generated if necessary.
     //
     // For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
     // table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
-    #[clap(
-        long = "cache-table-bloom-index-filter-count",
-        default_value = "1048576"
-    )]
+    #[clap(long = "cache-table-bloom-index-filter-count", default_value = "0")]
     pub table_bloom_index_filter_count: u64,
+
+    /// Max bytes of cached bloom index filters used. Set it to 0 to disable it.
+    // One bloom index filter per column of data block being indexed will be generated if necessary.
+    #[clap(
+        long = "cache-table-bloom-index-filter-size",
+        default_value = "2147483648"
+    )]
+    pub table_bloom_index_filter_size: u64,
 
     #[clap(long = "cache-table-prune-partitions-count", default_value = "256")]
     pub table_prune_partitions_count: u64,
@@ -2331,6 +2338,7 @@ mod cache_config_converters {
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+                table_bloom_index_filter_size: value.table_bloom_index_filter_size,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
@@ -2351,6 +2359,7 @@ mod cache_config_converters {
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+                table_bloom_index_filter_size: value.table_bloom_index_filter_size,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
                 table_data_cache_population_queue_size: value

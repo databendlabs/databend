@@ -5,19 +5,24 @@ query T
 EXPLAIN SELECT number FROM numbers_mt(100000) GROUP BY number;
 ----
 Exchange
+├── output columns: [numbers_mt.number (#0)]
 ├── exchange type: Merge
 └── AggregateFinal
+    ├── output columns: [numbers_mt.number (#0)]
     ├── group by: [number]
     ├── aggregate functions: []
     ├── estimated rows: 100000.00
     └── AggregatePartial
+        ├── output columns: [#_group_by_key]
         ├── group by: [number]
         ├── aggregate functions: []
         ├── estimated rows: 100000.00
         └── Exchange
+            ├── output columns: [numbers_mt.number (#0)]
             ├── exchange type: Hash(numbers_mt.number (#0))
             └── TableScan
                 ├── table: default.system.numbers_mt
+                ├── output columns: [number (#0)]
                 ├── read rows: 100000
                 ├── read bytes: 800000
                 ├── partitions total: 2
@@ -33,19 +38,24 @@ query T
 EXPLAIN SELECT number FROM numbers_mt(100000) GROUP BY number;
 ----
 Exchange
+├── output columns: [numbers_mt.number (#0)]
 ├── exchange type: Merge
 └── AggregateFinal
+    ├── output columns: [numbers_mt.number (#0)]
     ├── group by: [number]
     ├── aggregate functions: []
     ├── estimated rows: 100000.00
     └── Exchange
+        ├── output columns: [#_group_by_key]
         ├── exchange type: Hash(_group_by_key)
         └── AggregatePartial
+            ├── output columns: [#_group_by_key]
             ├── group by: [number]
             ├── aggregate functions: []
             ├── estimated rows: 100000.00
             └── TableScan
                 ├── table: default.system.numbers_mt
+                ├── output columns: [number (#0)]
                 ├── read rows: 100000
                 ├── read bytes: 800000
                 ├── partitions total: 2

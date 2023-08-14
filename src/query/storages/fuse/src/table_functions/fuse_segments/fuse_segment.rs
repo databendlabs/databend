@@ -115,7 +115,7 @@ impl<'a> FuseSegment<'a> {
             std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
         for chunk in segment_locations.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<Arc<SegmentInfo>>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, true)
                 .await?;
 
             for (idx, segment) in segments.into_iter().enumerate() {

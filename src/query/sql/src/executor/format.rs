@@ -15,6 +15,7 @@
 use common_ast::ast::FormatTreeNode;
 use common_catalog::plan::PartStatistics;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_profile::SharedProcessorProfiles;
 use itertools::Itertools;
@@ -23,16 +24,15 @@ use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregateFunctionDesc;
 use super::AggregatePartial;
-use super::CopyIntoTableFromQuery;
-use super::DeleteFinal;
+use super::CopyIntoTable;
 use super::DeletePartial;
-use super::DistributedCopyIntoTableFromStage;
 use super::EvalScalar;
 use super::Exchange;
 use super::Filter;
 use super::HashJoin;
 use super::Lambda;
 use super::Limit;
+use super::MutationAggregate;
 use super::PhysicalPlan;
 use super::Project;
 use super::ProjectSet;
@@ -53,6 +53,7 @@ use crate::executor::RangeJoin;
 use crate::executor::RangeJoinType;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::Window;
+use crate::planner::Metadata;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
 
@@ -62,6 +63,7 @@ impl PhysicalPlan {
         metadata: MetadataRef,
         prof_span_set: SharedProcessorProfiles,
     ) -> Result<FormatTreeNode<String>> {
+        let metadata = metadata.read().clone();
         to_format_tree(self, &metadata, &prof_span_set)
     }
 
@@ -80,7 +82,7 @@ impl PhysicalPlan {
 
                 Ok(FormatTreeNode::with_children(
                     format!(
-                        "Scan: {}, rows: {}",
+                        "Scan: {} (read rows: {})",
                         table_name, plan.source.statistics.read_rows
                     ),
                     vec![],
@@ -95,8 +97,14 @@ impl PhysicalPlan {
                     FormatTreeNode::with_children("Probe".to_string(), vec![probe_child]),
                 ];
 
+                let estimated_rows = if let Some(info) = &plan.stat_info {
+                    format!("{0:.2}", info.estimated_rows)
+                } else {
+                    String::from("None")
+                };
+
                 Ok(FormatTreeNode::with_children(
-                    format!("HashJoin: {}", plan.join_type),
+                    format!("HashJoin: {} (rows: {})", plan.join_type, estimated_rows),
                     children,
                 ))
             }
@@ -109,8 +117,14 @@ impl PhysicalPlan {
                     FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
                 ];
 
+                let estimated_rows = if let Some(info) = &plan.stat_info {
+                    format!("{0:.2}", info.estimated_rows)
+                } else {
+                    String::from("none")
+                };
+
                 Ok(FormatTreeNode::with_children(
-                    format!("RangeJoin: {}", plan.join_type),
+                    format!("RangeJoin: {} (rows: {})", plan.join_type, estimated_rows),
                     children,
                 ))
             }
@@ -154,7 +168,7 @@ impl PhysicalPlan {
 
 fn to_format_tree(
     plan: &PhysicalPlan,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     profs: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     match plan {
@@ -176,7 +190,7 @@ fn to_format_tree(
         PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Exchange(plan) => exchange_to_format_tree(plan, metadata, profs),
         PhysicalPlan::UnionAll(plan) => union_all_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::ExchangeSource(plan) => exchange_source_to_format_tree(plan),
+        PhysicalPlan::ExchangeSource(plan) => exchange_source_to_format_tree(plan, metadata),
         PhysicalPlan::ExchangeSink(plan) => exchange_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::DistributedInsertSelect(plan) => {
             distributed_insert_to_format_tree(plan.as_ref(), metadata, profs)
@@ -184,7 +198,7 @@ fn to_format_tree(
         PhysicalPlan::DeletePartial(plan) => {
             delete_partial_to_format_tree(plan.as_ref(), metadata, profs)
         }
-        PhysicalPlan::DeleteFinal(plan) => {
+        PhysicalPlan::MutationAggregate(plan) => {
             delete_final_to_format_tree(plan.as_ref(), metadata, profs)
         }
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
@@ -193,15 +207,15 @@ fn to_format_tree(
             runtime_filter_source_to_format_tree(plan, metadata, profs)
         }
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => {
-            distributed_copy_into_table_from_stage(plan)
-        }
-        PhysicalPlan::CopyIntoTableFromQuery(plan) => copy_into_table_from_query(plan),
+        PhysicalPlan::CopyIntoTable(plan) => copy_into_table(plan),
+        PhysicalPlan::AsyncSourcer(_) => Ok(FormatTreeNode::new("AsyncSourcer".to_string())),
+        PhysicalPlan::Deduplicate(_) => Ok(FormatTreeNode::new("Deduplicate".to_string())),
+        PhysicalPlan::ReplaceInto(_) => Ok(FormatTreeNode::new("Replace".to_string())),
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
         PhysicalPlan::MaterializedCte(plan) => {
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
-        PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan),
+        PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan, metadata),
     }
 }
 
@@ -231,37 +245,22 @@ fn append_profile_info(
     }
 }
 
-fn distributed_copy_into_table_from_stage(
-    plan: &DistributedCopyIntoTableFromStage,
-) -> Result<FormatTreeNode<String>> {
+fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::new(format!(
-        "copy into table {}.{}.{} from {:?}",
-        plan.catalog_info.catalog_name(),
-        plan.database_name,
-        plan.table_name,
-        plan.source
-    )))
-}
-
-fn copy_into_table_from_query(plan: &CopyIntoTableFromQuery) -> Result<FormatTreeNode<String>> {
-    Ok(FormatTreeNode::new(format!(
-        "copy into table {}.{}.{} from {:?}",
-        plan.catalog_info.catalog_name(),
-        plan.database_name,
-        plan.table_name,
-        plan.input
+        "CopyIntoTable: {}",
+        plan.table_info
     )))
 }
 
 fn table_scan_to_format_tree(
     plan: &TableScan,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     profs: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     if plan.table_index == DUMMY_TABLE_INDEX {
         return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
     }
-    let table = metadata.read().table(plan.table_index).clone();
+    let table = metadata.table(plan.table_index).clone();
     let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
     let filters = plan
         .source
@@ -299,7 +298,13 @@ fn table_scan_to_format_tree(
         .as_ref()
         .and_then(|extras| extras.agg_index.as_ref());
 
-    let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
+    let mut children = vec![
+        FormatTreeNode::new(format!("table: {table_name}")),
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, false)
+        )),
+    ];
 
     // Part stats.
     children.extend(part_stats_info_to_format_tree(&plan.source.statistics));
@@ -317,7 +322,6 @@ fn table_scan_to_format_tree(
     children.push(FormatTreeNode::new(push_downs));
     // Aggregating index
     if let Some(agg_index) = agg_index {
-        let metadata = metadata.read();
         let (_, agg_index_sql, _) = metadata
             .get_agg_indexes(&table_name)
             .unwrap()
@@ -346,17 +350,6 @@ fn table_scan_to_format_tree(
         children.push(FormatTreeNode::new(text));
     }
 
-    let output_columns = plan.source.output_schema.fields();
-
-    // If output_columns contains all columns of the source,
-    // Then output_columns won't show in explain
-    if output_columns.len() < plan.source.source_info.schema().fields().len() {
-        children.push(FormatTreeNode::new(format!(
-            "output columns: [{}]",
-            output_columns.iter().map(|f| f.name()).join(", ")
-        )));
-    }
-
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
         children.extend(items);
@@ -380,8 +373,15 @@ fn cte_scan_to_format_tree(plan: &CteScan) -> Result<FormatTreeNode<String>> {
     ]))
 }
 
-fn constant_table_scan_to_format_tree(plan: &ConstantTableScan) -> Result<FormatTreeNode<String>> {
-    let mut children = Vec::with_capacity(plan.values.len());
+fn constant_table_scan_to_format_tree(
+    plan: &ConstantTableScan,
+    metadata: &Metadata,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = Vec::with_capacity(plan.values.len() + 1);
+    children.push(FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    )));
     for (i, value) in plan.values.iter().enumerate() {
         let column = value.iter().map(|val| format!("{val}")).join(", ");
         children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
@@ -394,7 +394,7 @@ fn constant_table_scan_to_format_tree(plan: &ConstantTableScan) -> Result<Format
 
 fn filter_to_format_tree(
     plan: &Filter,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let filter = plan
@@ -402,7 +402,13 @@ fn filter_to_format_tree(
         .iter()
         .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .join(", ");
-    let mut children = vec![FormatTreeNode::new(format!("filters: [{filter}]"))];
+    let mut children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
+        FormatTreeNode::new(format!("filters: [{filter}]")),
+    ];
 
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
@@ -421,17 +427,13 @@ fn filter_to_format_tree(
 
 fn project_to_format_tree(
     plan: &Project,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
-    let columns = plan
-        .columns
-        .iter()
-        .sorted()
-        .map(|&index| format!("{} (#{})", metadata.read().column(index).name(), index))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let mut children = vec![FormatTreeNode::new(format!("columns: [{columns}]"))];
+    let mut children = vec![FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    ))];
 
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
@@ -450,7 +452,7 @@ fn project_to_format_tree(
 
 fn eval_scalar_to_format_tree(
     plan: &EvalScalar,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     if plan.exprs.is_empty() {
@@ -462,7 +464,13 @@ fn eval_scalar_to_format_tree(
         .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .collect::<Vec<_>>()
         .join(", ");
-    let mut children = vec![FormatTreeNode::new(format!("expressions: [{scalars}]"))];
+    let mut children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
+        FormatTreeNode::new(format!("expressions: [{scalars}]")),
+    ];
 
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
@@ -479,13 +487,13 @@ fn eval_scalar_to_format_tree(
     ))
 }
 
-pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &MetadataRef) -> String {
+pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata) -> String {
     format!(
         "{}({})",
         desc.sig.name,
         desc.arg_indices
             .iter()
-            .map(|&index| { metadata.read().column(index).name() })
+            .map(|&index| { metadata.column(index).name() })
             .collect::<Vec<_>>()
             .join(", ")
     )
@@ -493,7 +501,7 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
 
 fn aggregate_expand_to_format_tree(
     plan: &AggregateExpand,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let sets = plan
@@ -501,7 +509,7 @@ fn aggregate_expand_to_format_tree(
         .iter()
         .map(|set| {
             set.iter()
-                .map(|&index| metadata.read().column(index).name())
+                .map(|&index| metadata.column(index).name())
                 .collect::<Vec<_>>()
                 .join(", ")
         })
@@ -509,7 +517,13 @@ fn aggregate_expand_to_format_tree(
         .collect::<Vec<_>>()
         .join(", ");
 
-    let mut children = vec![FormatTreeNode::new(format!("grouping sets: [{sets}]"))];
+    let mut children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
+        FormatTreeNode::new(format!("grouping sets: [{sets}]")),
+    ];
 
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
@@ -528,13 +542,13 @@ fn aggregate_expand_to_format_tree(
 
 fn aggregate_partial_to_format_tree(
     plan: &AggregatePartial,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let group_by = plan
         .group_by
         .iter()
-        .map(|&index| metadata.read().column(index).name())
+        .map(|&index| metadata.column(index).name())
         .join(", ");
     let agg_funcs = plan
         .agg_funcs
@@ -544,6 +558,10 @@ fn aggregate_partial_to_format_tree(
         .join(", ");
 
     let mut children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
         FormatTreeNode::new(format!("group by: [{group_by}]")),
         FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
     ];
@@ -565,14 +583,14 @@ fn aggregate_partial_to_format_tree(
 
 fn aggregate_final_to_format_tree(
     plan: &AggregateFinal,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let group_by = plan
         .group_by
         .iter()
         .map(|&index| {
-            let name = metadata.read().column(index).name();
+            let name = metadata.column(index).name();
             Ok(name)
         })
         .collect::<Result<Vec<_>>>()?
@@ -586,6 +604,10 @@ fn aggregate_final_to_format_tree(
         .join(", ");
 
     let mut children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
         FormatTreeNode::new(format!("group by: [{group_by}]")),
         FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
     ];
@@ -612,14 +634,14 @@ fn aggregate_final_to_format_tree(
 
 fn window_to_format_tree(
     plan: &Window,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let partition_by = plan
         .partition_by
         .iter()
         .map(|&index| {
-            let name = metadata.read().column(index).name();
+            let name = metadata.column(index).name();
             Ok(name)
         })
         .collect::<Result<Vec<_>>>()?
@@ -629,7 +651,7 @@ fn window_to_format_tree(
         .order_by
         .iter()
         .map(|v| {
-            let name = metadata.read().column(v.order_by).name();
+            let name = metadata.column(v.order_by).name();
             Ok(name)
         })
         .collect::<Result<Vec<_>>>()?
@@ -643,6 +665,10 @@ fn window_to_format_tree(
     };
 
     let mut children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
         FormatTreeNode::new(format!("aggregate function: [{func}]")),
         FormatTreeNode::new(format!("partition by: [{partition_by}]")),
         FormatTreeNode::new(format!("order by: [{order_by}]")),
@@ -661,7 +687,7 @@ fn window_to_format_tree(
 
 fn sort_to_format_tree(
     plan: &Sort,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let sort_keys = plan
@@ -671,7 +697,7 @@ fn sort_to_format_tree(
             let index = sort_key.order_by;
             Ok(format!(
                 "{} {} {}",
-                metadata.read().column(index).name(),
+                metadata.column(index).name(),
                 if sort_key.asc { "ASC" } else { "DESC" },
                 if sort_key.nulls_first {
                     "NULLS FIRST"
@@ -683,7 +709,13 @@ fn sort_to_format_tree(
         .collect::<Result<Vec<_>>>()?
         .join(", ");
 
-    let mut children = vec![FormatTreeNode::new(format!("sort keys: [{sort_keys}]"))];
+    let mut children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
+        FormatTreeNode::new(format!("sort keys: [{sort_keys}]")),
+    ];
 
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
@@ -699,10 +731,14 @@ fn sort_to_format_tree(
 
 fn limit_to_format_tree(
     plan: &Limit,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
         FormatTreeNode::new(format!(
             "limit: {}",
             plan.limit
@@ -725,17 +761,23 @@ fn limit_to_format_tree(
 
 fn row_fetch_to_format_tree(
     plan: &RowFetch,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let table_schema = plan.source.source_info.schema();
     let projected_schema = plan.cols_to_fetch.project_schema(&table_schema);
     let fields_to_fetch = projected_schema.fields();
 
-    let mut children = vec![FormatTreeNode::new(format!(
-        "columns to fetch: [{}]",
-        fields_to_fetch.iter().map(|f| f.name()).join(", ")
-    ))];
+    let mut children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
+        FormatTreeNode::new(format!(
+            "columns to fetch: [{}]",
+            fields_to_fetch.iter().map(|f| f.name()).join(", ")
+        )),
+    ];
 
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
@@ -754,7 +796,7 @@ fn row_fetch_to_format_tree(
 
 fn range_join_to_format_tree(
     plan: &RangeJoin,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let range_join_conditions = plan
@@ -787,6 +829,10 @@ fn range_join_to_format_tree(
     right_child.payload = format!("{}(Right)", right_child.payload);
 
     let mut children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
         FormatTreeNode::new(format!("join type: {}", plan.join_type)),
         FormatTreeNode::new(format!("range join conditions: [{range_join_conditions}]")),
         FormatTreeNode::new(format!("other conditions: [{other_conditions}]")),
@@ -813,7 +859,7 @@ fn range_join_to_format_tree(
 
 fn hash_join_to_format_tree(
     plan: &HashJoin,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let build_keys = plan
@@ -842,6 +888,10 @@ fn hash_join_to_format_tree(
     probe_child.payload = format!("{}(Probe)", probe_child.payload);
 
     let mut children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
         FormatTreeNode::new(format!("join type: {}", plan.join_type)),
         FormatTreeNode::new(format!("build keys: [{build_keys}]")),
         FormatTreeNode::new(format!("probe keys: [{probe_keys}]")),
@@ -866,10 +916,14 @@ fn hash_join_to_format_tree(
 
 fn exchange_to_format_tree(
     plan: &Exchange,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::with_children("Exchange".to_string(), vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
         FormatTreeNode::new(format!("exchange type: {}", match plan.kind {
             FragmentKind::Init => "Init-Partition".to_string(),
             FragmentKind::Normal => format!(
@@ -889,10 +943,13 @@ fn exchange_to_format_tree(
 
 fn union_all_to_format_tree(
     plan: &UnionAll,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
-    let mut children = vec![];
+    let mut children = vec![FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    ))];
 
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
@@ -942,8 +999,14 @@ fn plan_stats_info_to_format_tree(info: &PlanStatsInfo) -> Vec<FormatTreeNode<St
     ))]
 }
 
-fn exchange_source_to_format_tree(plan: &ExchangeSource) -> Result<FormatTreeNode<String>> {
-    let mut children = vec![];
+fn exchange_source_to_format_tree(
+    plan: &ExchangeSource,
+    metadata: &Metadata,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    ))];
 
     children.push(FormatTreeNode::new(format!(
         "source fragment: [{}]",
@@ -958,10 +1021,13 @@ fn exchange_source_to_format_tree(plan: &ExchangeSource) -> Result<FormatTreeNod
 
 fn exchange_sink_to_format_tree(
     plan: &ExchangeSink,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
-    let mut children = vec![];
+    let mut children = vec![FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    ))];
 
     children.push(FormatTreeNode::new(format!(
         "destination fragment: [{}]",
@@ -978,7 +1044,7 @@ fn exchange_sink_to_format_tree(
 
 fn distributed_insert_to_format_tree(
     plan: &DistributedInsertSelect,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
@@ -991,15 +1057,15 @@ fn distributed_insert_to_format_tree(
 
 fn delete_partial_to_format_tree(
     _plan: &DeletePartial,
-    _metadata: &MetadataRef,
+    _metadata: &Metadata,
     _prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::new("DeletePartial".to_string()))
 }
 
 fn delete_final_to_format_tree(
-    plan: &DeleteFinal,
-    metadata: &MetadataRef,
+    plan: &MutationAggregate,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
@@ -1011,10 +1077,13 @@ fn delete_final_to_format_tree(
 
 fn project_set_to_format_tree(
     plan: &ProjectSet,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
-    let mut children = vec![];
+    let mut children = vec![FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    ))];
 
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
@@ -1042,10 +1111,13 @@ fn project_set_to_format_tree(
 
 fn lambda_to_format_tree(
     plan: &Lambda,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
-    let mut children = vec![];
+    let mut children = vec![FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    ))];
 
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
@@ -1081,10 +1153,14 @@ fn lambda_to_format_tree(
 
 fn runtime_filter_source_to_format_tree(
     plan: &RuntimeFilterSource,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
         to_format_tree(&plan.left_side, metadata, prof_span_set)?,
         to_format_tree(&plan.right_side, metadata, prof_span_set)?,
     ];
@@ -1096,10 +1172,14 @@ fn runtime_filter_source_to_format_tree(
 
 fn materialized_cte_to_format_tree(
     plan: &MaterializedCte,
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
         to_format_tree(&plan.left, metadata, prof_span_set)?,
         to_format_tree(&plan.right, metadata, prof_span_set)?,
     ];
@@ -1107,4 +1187,39 @@ fn materialized_cte_to_format_tree(
         "MaterializedCTE".to_string(),
         children,
     ))
+}
+
+fn format_output_columns(
+    output_schema: DataSchemaRef,
+    metadata: &Metadata,
+    format_table: bool,
+) -> String {
+    output_schema
+        .fields()
+        .iter()
+        .map(|field| match field.name().parse::<usize>() {
+            Ok(column_index) => {
+                let column_entry = metadata.column(column_index);
+                match column_entry.table_index() {
+                    Some(table_index) if format_table => match metadata
+                        .table(table_index)
+                        .alias_name()
+                    {
+                        Some(alias_name) => {
+                            format!("{}.{} (#{})", alias_name, column_entry.name(), column_index)
+                        }
+                        None => format!(
+                            "{}.{} (#{})",
+                            metadata.table(table_index).name(),
+                            column_entry.name(),
+                            column_index,
+                        ),
+                    },
+                    _ => format!("{} (#{})", column_entry.name(), column_index),
+                }
+            }
+            _ => format!("#{}", field.name()),
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }

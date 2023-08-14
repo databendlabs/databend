@@ -549,24 +549,24 @@ statement ok
 create table t10(a int) row_per_block=3
 
 statement ok
-insert into t10 values(5),(-7),(2)
+insert into t10 values(0),(1),(4)
 
 statement ok
 ALTER TABLE t10 cluster by(abs(a))
 
 statement ok
-insert into t10 values(-8),(4),(3)
+insert into t10 values(3)
 
 statement ok
-insert into t10 values(0)
+insert into t10 values(-6),(-8)
 
 statement ok
-insert into t10 values(1),(6)
+insert into t10 values(2),(5),(-7)
 
 query TIIIFFT
 select * from clustering_information('db_09_0008','t10')
 ----
-(abs(a)) 4 1 1 0.6667 1.6667 {"00001":1,"00002":2}
+(abs(a)) 4 1 1 1.3333 2.0 {"00002":3}
 
 statement ok
 optimize table t10 compact
@@ -596,21 +596,21 @@ statement ok
 create table t11(a int) cluster by(abs(a)) row_per_block=3
 
 statement ok
-insert into t11 values(5),(-7),(2)
+insert into t11 values(0),(1),(4)
 
 statement ok
-insert into t11 values(-8),(4),(3)
+insert into t11 values(3)
 
 statement ok
-insert into t11 values(0)
+insert into t11 values(-6),(-8)
 
 statement ok
-insert into t11 values(1),(6)
+insert into t11 values(2),(5),(-7)
 
 query TIIIFFT
 select * from clustering_information('db_09_0008','t11')
 ----
-(abs(a)) 4 1 0 1.5 2.5 {"00001":1,"00003":3}
+(abs(a)) 4 1 0 2.0 2.75 {"00002":1,"00003":3}
 
 statement ok
 optimize table t11 compact limit 2
@@ -618,7 +618,20 @@ optimize table t11 compact limit 2
 query F
 select average_depth from clustering_information('db_09_0008','t11')
 ----
-2.0
+1.6667
+
+query I
+select * from t11 order by a
+----
+-8
+-7
+-6
+0
+1
+2
+3
+4
+5
 
 
 

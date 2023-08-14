@@ -72,9 +72,7 @@ impl BlockEntry {
 }
 
 #[typetag::serde(tag = "type")]
-pub trait BlockMetaInfo: Debug + Send + Sync + 'static {
-    fn as_any(&self) -> &dyn Any;
-
+pub trait BlockMetaInfo: Debug + Send + Sync + Any + 'static {
     #[allow(clippy::borrowed_box)]
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool;
 
@@ -89,27 +87,13 @@ pub trait BlockMetaInfoDowncast: Sized {
 
 impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {
     fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self> {
-        if boxed.as_any().is::<T>() {
-            unsafe {
-                // SAFETY: `is` ensures this type cast is correct
-                let raw_ptr = Box::into_raw(boxed) as *const dyn BlockMetaInfo;
-                return Some(std::ptr::read(raw_ptr as *const Self));
-            }
-        }
-
-        None
+        let boxed: Box<dyn Any> = boxed;
+        boxed.downcast().ok().map(|x| *x)
     }
 
     fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self> {
-        if boxed.as_any().is::<T>() {
-            unsafe {
-                // SAFETY: `is` ensures this type cast is correct
-                let unboxed = boxed.as_ref();
-                return Some(&*(unboxed as *const dyn BlockMetaInfo as *const Self));
-            }
-        }
-
-        None
+        let boxed: &dyn Any = boxed.as_ref();
+        boxed.downcast_ref()
     }
 }
 
@@ -586,10 +570,10 @@ impl Eq for Box<dyn BlockMetaInfo> {}
 
 impl PartialEq for Box<dyn BlockMetaInfo> {
     fn eq(&self, other: &Self) -> bool {
-        let this_type_id = self.as_any().type_id();
-        let other_type_id = other.as_any().type_id();
+        let this_any: &dyn Any = self.as_ref();
+        let other_any: &dyn Any = other.as_ref();
 
-        match this_type_id == other_type_id {
+        match this_any.type_id() == other_any.type_id() {
             true => self.equals(other),
             false => false,
         }
