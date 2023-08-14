@@ -368,6 +368,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("recluster_timeout_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(12 * 60 * 60),
+                    desc: "Sets the seconds that recluster final will be timeout.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
