@@ -189,26 +189,33 @@ impl Operator for Aggregate {
         {
             cardinality
         } else {
-            // A upper bound
-            let res = self.group_items.iter().fold(1.0, |acc, item| {
-                let item_stat = statistics.column_stats.get(&item.index).unwrap();
-                acc * item_stat.ndv
-            });
+            let mut res: f64 = 0.0;
+            let mut max_ndv_idx = 0;
+            let mut ndvs = Vec::with_capacity(self.group_items.len());
+            for (idx, item) in self.group_items.iter().enumerate() {
+                let item_stat: &crate::optimizer::ColumnStat = statistics.column_stats.get(&item.index).unwrap();
+                if item_stat.ndv > res {
+                    res = item_stat.ndv;
+                    max_ndv_idx = idx;
+                }
+                ndvs.push(item_stat.ndv);
+            }
+            let mut group_num = cardinality / res;
+            for (idx, ndv) in ndvs.iter().enumerate() {
+                if idx == max_ndv_idx {
+                    continue;
+                }
+                let group_ndv = ndv / cardinality * group_num;
+                if group_ndv > 1.0 {
+                    res *= group_ndv;
+                    group_num /= group_ndv;
+                }
+            }
             for item in self.group_items.iter() {
                 let item_stat = statistics.column_stats.get_mut(&item.index).unwrap();
                 if let Some(histogram) = &mut item_stat.histogram {
-                    let mut num_values = 0.0;
-                    let mut num_distinct = 0.0;
-                    for bucket in histogram.buckets.iter() {
-                        num_distinct += bucket.num_distinct();
-                        num_values += bucket.num_values();
-                    }
-                    // When there is a high probability that eager aggregation
-                    // is better, we will update the histogram.
-                    if num_values / num_distinct >= 10.0 {
-                        for bucket in histogram.buckets.iter_mut() {
-                            bucket.aggregate_values();
-                        }
+                    for bucket in histogram.buckets.iter_mut() {
+                        bucket.aggregate_values();
                     }
                 }
             }
