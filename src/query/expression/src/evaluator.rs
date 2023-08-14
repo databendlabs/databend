@@ -42,6 +42,8 @@ use crate::types::NullableType;
 use crate::types::ValueType;
 use crate::udf_client::UDFFlightClient;
 use crate::utils::arrow::constant_bitmap;
+use crate::utils::variant_transform::contains_variant;
+use crate::utils::variant_transform::transform_variant;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
@@ -241,8 +243,16 @@ impl<'a> Evaluator<'a> {
         let block_entries = inputs
             .into_iter()
             .zip(args.iter())
-            .map(|(col, arg)| BlockEntry::new(arg.data_type().clone(), col))
-            .collect_vec();
+            .map(|(col, arg)| {
+                let arg_type = arg.data_type().clone();
+                let block = if contains_variant(&arg_type) {
+                    BlockEntry::new(arg_type, transform_variant(&col, true)?)
+                } else {
+                    BlockEntry::new(arg_type, col)
+                };
+                Ok(block)
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let input_batch = DataBlock::new(block_entries, num_rows)
             .to_record_batch(&data_schema)
@@ -286,7 +296,11 @@ impl<'a> Evaluator<'a> {
             )));
         }
 
-        Ok(result_block.get_by_offset(0).value.clone())
+        if contains_variant(return_type) {
+            transform_variant(&result_block.get_by_offset(0).value, false)
+        } else {
+            Ok(result_block.get_by_offset(0).value.clone())
+        }
     }
 
     fn run_cast(
