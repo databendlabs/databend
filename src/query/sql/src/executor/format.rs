@@ -696,9 +696,8 @@ fn sort_to_format_tree(
         .map(|sort_key| {
             let index = sort_key.order_by;
             Ok(format!(
-                "{} (#{}) {} {}",
+                "{} {} {}",
                 metadata.column(index).name(),
-                index,
                 if sort_key.asc { "ASC" } else { "DESC" },
                 if sort_key.nulls_first {
                     "NULLS FIRST"
