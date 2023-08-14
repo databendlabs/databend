@@ -39,6 +39,7 @@ use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use dashmap::DashMap;
 use parking_lot::RwLock;
+use storages_common_table_meta::meta::Location;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -190,4 +191,8 @@ pub trait TableContext: Send + Sync {
     ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>>;
 
     fn get_materialized_ctes(&self) -> MaterializedCtesBlocks;
+
+    fn add_segment_location(&self, segment_loc: Location) -> Result<()>;
+
+    fn get_segment_locations(&self) -> Result<Vec<Location>>;
 }
