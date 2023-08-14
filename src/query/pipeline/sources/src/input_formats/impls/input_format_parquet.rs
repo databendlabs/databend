@@ -186,10 +186,6 @@ impl RowBatchTrait for RowGroupInMemory {
 
 #[typetag::serde(name = "row_batch_parquet")]
 impl BlockMetaInfo for RowGroupInMemory {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
         unreachable!("RowGroupInMemory as BlockMetaInfo is not expected to be compared.")
     }

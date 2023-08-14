@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -62,14 +61,8 @@ pub struct BlockMetaIndex {
 
 #[typetag::serde(name = "mutation_logs_meta")]
 impl BlockMetaInfo for MutationLogs {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        info.as_any()
-            .downcast_ref::<MutationLogs>()
-            .is_some_and(|other| self == other)
+        Self::downcast_ref_from(info).is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
@@ -118,14 +111,8 @@ impl CommitMeta {
 
 #[typetag::serde(name = "commit_meta")]
 impl BlockMetaInfo for CommitMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        info.as_any()
-            .downcast_ref::<CommitMeta>()
-            .is_some_and(|other| self == other)
+        Self::downcast_ref_from(info).is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {

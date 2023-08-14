@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
@@ -95,10 +93,6 @@ pub struct InternalColumnMeta {
 
 #[typetag::serde(name = "internal_column_meta")]
 impl BlockMetaInfo for InternalColumnMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         InternalColumnMeta::downcast_ref_from(info).is_some_and(|other| self == other)
     }
