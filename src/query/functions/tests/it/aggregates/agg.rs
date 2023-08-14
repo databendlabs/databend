@@ -25,9 +25,8 @@ use common_expression::types::TimestampType;
 use common_expression::Column;
 use common_expression::FromData;
 use common_functions::aggregates::eval_aggr;
-use croaring::treemap::NativeSerializer;
-use croaring::Treemap;
 use goldenfile::Mint;
+use roaring::RoaringTreemap;
 
 use super::run_agg_ast;
 use super::simulate_two_groups_group_by;
@@ -111,9 +110,17 @@ fn gen_bitmap_data() -> Column {
     // construct bitmap column with 4 row:
     // 0..5, 1..6, 2..7, 3..8
     const N: u64 = 4;
-    let rbs_iter = (0..N).map(|i| Treemap::from_iter(i..(i + 5)));
+    let rbs_iter = (0..N).map(|i| {
+        let mut rb = RoaringTreemap::new();
+        rb.insert_range(i..(i + 5));
+        rb
+    });
 
-    let rbs = rbs_iter.map(|rb| rb.serialize().unwrap());
+    let rbs = rbs_iter.map(|rb| {
+        let mut data = Vec::new();
+        rb.serialize_into(&mut data).unwrap();
+        data
+    });
 
     BitmapType::from_data(rbs)
 }

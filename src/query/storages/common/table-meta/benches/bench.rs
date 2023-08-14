@@ -30,6 +30,7 @@ use storages_common_table_meta::meta::testing::MetaEncoding;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Compression;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SingleColumnMeta;
@@ -120,13 +121,21 @@ fn bench_decode(c: &mut Criterion) {
 
     grp.bench_function("bincode-segment-deserialization", |b| {
         b.iter(|| {
-            let _ = SegmentInfo::from_slice(&segment_bincode_bytes).unwrap();
+            let _ = SegmentInfo::from_slice(black_box(&segment_bincode_bytes)).unwrap();
         })
     });
 
     grp.bench_function("msg-pack-segment-deserialization", |b| {
         b.iter(|| {
-            let _ = SegmentInfo::from_slice(&segment_msgpack_bytes).unwrap();
+            let _ = SegmentInfo::from_slice(black_box(&segment_msgpack_bytes)).unwrap();
+        })
+    });
+
+    let compact_segment = CompactSegmentInfo::from_slice(&segment_msgpack_bytes).unwrap();
+
+    grp.bench_function("msg-pack-segment-from-compact", |b| {
+        b.iter(|| {
+            let _ = SegmentInfo::try_from(black_box(&compact_segment)).unwrap();
         })
     });
 

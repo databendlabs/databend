@@ -9,12 +9,12 @@ explain select a from t_where_optimizer where a = 1
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
+├── output columns: [a (#0)]
 ├── read rows: 0
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
 ├── push downs: [filters: [t_where_optimizer.a (#0) = 1], limit: NONE]
-├── output columns: [a]
 └── estimated rows: 0.00
 
 query T
@@ -22,6 +22,7 @@ explain select * from t_where_optimizer where a = b
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
+├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read bytes: 0
 ├── partitions total: 0
@@ -34,6 +35,7 @@ explain select * from t_where_optimizer where a = 1 or b > 2
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
+├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read bytes: 0
 ├── partitions total: 0
@@ -46,6 +48,7 @@ explain select * from t_where_optimizer where a = 1 and b > 2
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
+├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read bytes: 0
 ├── partitions total: 0
@@ -58,6 +61,7 @@ explain select * from t_where_optimizer where b = 1
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
+├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read bytes: 0
 ├── partitions total: 0
@@ -70,12 +74,12 @@ explain select a from t_where_optimizer where b = 1
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
+├── output columns: [a (#0)]
 ├── read rows: 0
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
 ├── push downs: [filters: [t_where_optimizer.b (#1) = 1], limit: NONE]
-├── output columns: [a]
 └── estimated rows: 0.00
 
 statement ok
@@ -89,6 +93,7 @@ explain select * from t_where_optimizer where s:a > 0
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
+├── output columns: [id (#0), s (#1)]
 ├── read rows: 0
 ├── read bytes: 0
 ├── partitions total: 0

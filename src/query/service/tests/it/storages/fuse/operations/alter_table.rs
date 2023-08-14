@@ -90,11 +90,11 @@ async fn check_segment_column_ids(
     if let Some(expected_column_ids) = expected_column_ids {
         let expected_column_ids =
             HashSet::<ColumnId>::from_iter(expected_column_ids.clone().iter().cloned());
+        let compact_segment_reader = MetaReaders::segment_info_reader(
+            fuse_table.get_operator(),
+            TestFixture::default_table_schema(),
+        );
         for (seg_loc, _) in &snapshot.segments {
-            let compact_segment_reader = MetaReaders::segment_info_reader(
-                fuse_table.get_operator(),
-                TestFixture::default_table_schema(),
-            );
             let params = LoadParams {
                 location: seg_loc.clone(),
                 len_hint: None,
@@ -103,7 +103,7 @@ async fn check_segment_column_ids(
             };
 
             let compact_segment_info = compact_segment_reader.read(&params).await?;
-            let segment_info = SegmentInfo::try_from(compact_segment_info.as_ref())?;
+            let segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
             segment_info.blocks.iter().for_each(|block_meta| {
                 assert_eq!(

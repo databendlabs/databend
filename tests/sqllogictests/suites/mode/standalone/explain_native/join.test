@@ -20,6 +20,7 @@ query T
 explain select t.number from t, t1 where t.number = t1.number
 ----
 HashJoin
+├── output columns: [t.number (#0)]
 ├── join type: INNER
 ├── build keys: [t.number (#0)]
 ├── probe keys: [t1.number (#1)]
@@ -27,6 +28,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t
+│   ├── output columns: [number (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 18
 │   ├── partitions total: 1
@@ -36,6 +38,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── output columns: [number (#1)]
     ├── read rows: 10
     ├── read bytes: 54
     ├── partitions total: 1
@@ -48,6 +51,7 @@ query T
 explain select t.number from t, t1 where t.number = t1.number and t.number = t1.number + 1
 ----
 HashJoin
+├── output columns: [t.number (#0)]
 ├── join type: INNER
 ├── build keys: [t.number (#0), t.number (#0)]
 ├── probe keys: [t1.number (#1), t1.number (#1) + 1]
@@ -55,6 +59,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t
+│   ├── output columns: [number (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 18
 │   ├── partitions total: 1
@@ -64,6 +69,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── output columns: [number (#1)]
     ├── read rows: 10
     ├── read bytes: 54
     ├── partitions total: 1
@@ -76,6 +82,7 @@ query T
 explain select t.number from t, t1 where t.number > 1 and 1 < t1.number
 ----
 HashJoin
+├── output columns: [t.number (#0)]
 ├── join type: CROSS
 ├── build keys: []
 ├── probe keys: []
@@ -83,6 +90,7 @@ HashJoin
 ├── estimated rows: 0.40
 ├── TableScan(Build)
 │   ├── table: default.default.t
+│   ├── output columns: [number (#0)]
 │   ├── read rows: 0
 │   ├── read bytes: 0
 │   ├── partitions total: 1
@@ -92,22 +100,24 @@ HashJoin
 │   └── estimated rows: 0.20
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── output columns: []
     ├── read rows: 10
     ├── read bytes: 54
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [1 < t1.number (#1)], limit: NONE]
-    ├── output columns: []
     └── estimated rows: 2.00
 
 query T
 explain select t.number from t, t1 where t.number + t1.number = 1
 ----
 Filter
+├── output columns: [t.number (#0)]
 ├── filters: [t.number (#0) + t1.number (#1) = 1]
 ├── estimated rows: 2.00
 └── HashJoin
+    ├── output columns: [t1.number (#1), t.number (#0)]
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
@@ -115,6 +125,7 @@ Filter
     ├── estimated rows: 10.00
     ├── TableScan(Build)
     │   ├── table: default.default.t
+    │   ├── output columns: [number (#0)]
     │   ├── read rows: 1
     │   ├── read bytes: 18
     │   ├── partitions total: 1
@@ -124,6 +135,7 @@ Filter
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t1
+        ├── output columns: [number (#1)]
         ├── read rows: 10
         ├── read bytes: 54
         ├── partitions total: 1
@@ -137,12 +149,14 @@ query T
 explain select t.number from t, t1, t2 where t1.number = t2.number and t.number = 1
 ----
 HashJoin
+├── output columns: [t.number (#0)]
 ├── join type: INNER
 ├── build keys: [t2.number (#2)]
 ├── probe keys: [t1.number (#1)]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── HashJoin(Build)
+│   ├── output columns: [t2.number (#2), t.number (#0)]
 │   ├── join type: CROSS
 │   ├── build keys: []
 │   ├── probe keys: []
@@ -150,6 +164,7 @@ HashJoin
 │   ├── estimated rows: 0.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.default.t
+│   │   ├── output columns: [number (#0)]
 │   │   ├── read rows: 0
 │   │   ├── read bytes: 0
 │   │   ├── partitions total: 1
@@ -159,6 +174,7 @@ HashJoin
 │   │   └── estimated rows: 0.00
 │   └── TableScan(Probe)
 │       ├── table: default.default.t2
+│       ├── output columns: [number (#2)]
 │       ├── read rows: 100
 │       ├── read bytes: 414
 │       ├── partitions total: 1
@@ -168,6 +184,7 @@ HashJoin
 │       └── estimated rows: 100.00
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── output columns: [number (#1)]
     ├── read rows: 10
     ├── read bytes: 54
     ├── partitions total: 1
@@ -200,6 +217,7 @@ query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42
 ----
 HashJoin
+├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
 ├── join type: INNER
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
@@ -207,6 +225,7 @@ HashJoin
 ├── estimated rows: 2.67
 ├── TableScan(Build)
 │   ├── table: default.default.onecolumn
+│   ├── output columns: [x (#0)]
 │   ├── read rows: 4
 │   ├── read bytes: 29
 │   ├── partitions total: 1
@@ -216,6 +235,7 @@ HashJoin
 │   └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.twocolumn
+    ├── output columns: [x (#1), y (#2)]
     ├── read rows: 4
     ├── read bytes: 62
     ├── partitions total: 1
@@ -228,6 +248,7 @@ query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43
 ----
 HashJoin
+├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
 ├── join type: INNER
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
@@ -235,6 +256,7 @@ HashJoin
 ├── estimated rows: 1.21
 ├── TableScan(Build)
 │   ├── table: default.default.onecolumn
+│   ├── output columns: [x (#0)]
 │   ├── read rows: 4
 │   ├── read bytes: 29
 │   ├── partitions total: 1
@@ -244,6 +266,7 @@ HashJoin
 │   └── estimated rows: 1.75
 └── TableScan(Probe)
     ├── table: default.default.twocolumn
+    ├── output columns: [x (#1), y (#2)]
     ├── read rows: 4
     ├── read bytes: 62
     ├── partitions total: 1
@@ -256,6 +279,7 @@ query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
 ----
 HashJoin
+├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
 ├── join type: INNER
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
@@ -263,6 +287,7 @@ HashJoin
 ├── estimated rows: 3.00
 ├── TableScan(Build)
 │   ├── table: default.default.onecolumn
+│   ├── output columns: [x (#0)]
 │   ├── read rows: 4
 │   ├── read bytes: 29
 │   ├── partitions total: 1
@@ -272,6 +297,7 @@ HashJoin
 │   └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.twocolumn
+    ├── output columns: [x (#1), y (#2)]
     ├── read rows: 4
     ├── read bytes: 62
     ├── partitions total: 1
@@ -286,9 +312,11 @@ query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or a.x < 43
 ----
 Filter
+├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
 ├── filters: [is_true(b.x (#1) > 44 OR a.x (#0) < 43)]
 ├── estimated rows: 2.00
 └── HashJoin
+    ├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
     ├── join type: LEFT OUTER
     ├── build keys: [b.x (#1)]
     ├── probe keys: [a.x (#0)]
@@ -296,6 +324,7 @@ Filter
     ├── estimated rows: 4.00
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
+    │   ├── output columns: [x (#1), y (#2)]
     │   ├── read rows: 4
     │   ├── read bytes: 62
     │   ├── partitions total: 1
@@ -305,6 +334,7 @@ Filter
     │   └── estimated rows: 4.00
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
+        ├── output columns: [x (#0)]
         ├── read rows: 4
         ├── read bytes: 29
         ├── partitions total: 1
@@ -317,6 +347,7 @@ query T
 explain select * from onecolumn as a right join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
 ----
 HashJoin
+├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
 ├── join type: RIGHT OUTER
 ├── build keys: [b.x (#1)]
 ├── probe keys: [a.x (#0)]
@@ -324,6 +355,7 @@ HashJoin
 ├── estimated rows: 3.20
 ├── TableScan(Build)
 │   ├── table: default.default.twocolumn
+│   ├── output columns: [x (#1), y (#2)]
 │   ├── read rows: 4
 │   ├── read bytes: 62
 │   ├── partitions total: 1
@@ -333,6 +365,7 @@ HashJoin
 │   └── estimated rows: 3.20
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
+    ├── output columns: [x (#0)]
     ├── read rows: 4
     ├── read bytes: 29
     ├── partitions total: 1
@@ -360,6 +393,7 @@ query T
 explain select * from t1 inner join t2 on t1.a = t2.a where t1.a > 10
 ----
 HashJoin
+├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
 ├── join type: INNER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
@@ -367,6 +401,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
+│   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
 │   ├── read bytes: 0
 │   ├── partitions total: 0
@@ -375,6 +410,7 @@ HashJoin
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -386,6 +422,7 @@ query T
 explain select * from t1 inner join t2 on t1.a = t2.a where t1.a + t1.b> 10
 ----
 HashJoin
+├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
 ├── join type: INNER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
@@ -393,6 +430,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
+│   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
 │   ├── read bytes: 0
 │   ├── partitions total: 0
@@ -401,6 +439,7 @@ HashJoin
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -412,6 +451,7 @@ query T
 explain select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b  where t2.a > 10
 ----
 HashJoin
+├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
 ├── join type: INNER
 ├── build keys: [t2.a (#2), t2.b (#3)]
 ├── probe keys: [t1.a (#0), t1.b (#1)]
@@ -419,6 +459,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
+│   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
 │   ├── read bytes: 0
 │   ├── partitions total: 0
@@ -427,6 +468,7 @@ HashJoin
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -438,6 +480,7 @@ query T
 explain select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b  where t2.a + t2.b> 10
 ----
 HashJoin
+├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
 ├── join type: INNER
 ├── build keys: [t2.a (#2), t2.b (#3)]
 ├── probe keys: [t1.a (#0), t1.b (#1)]
@@ -445,6 +488,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
+│   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
 │   ├── read bytes: 0
 │   ├── partitions total: 0
@@ -453,6 +497,7 @@ HashJoin
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -464,6 +509,7 @@ query T
 explain select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b  where t1.b + t1.a> 10
 ----
 HashJoin
+├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
 ├── join type: INNER
 ├── build keys: [t2.a (#2), t2.b (#3)]
 ├── probe keys: [t1.a (#0), t1.b (#1)]
@@ -471,6 +517,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
+│   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
 │   ├── read bytes: 0
 │   ├── partitions total: 0
@@ -479,6 +526,7 @@ HashJoin
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -490,6 +538,7 @@ query T
 explain select * from t1, t2 where t1.a = t2.a and t1.b > t2.b
 ----
 HashJoin
+├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
 ├── join type: INNER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
@@ -497,6 +546,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
+│   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
 │   ├── read bytes: 0
 │   ├── partitions total: 0
@@ -505,6 +555,7 @@ HashJoin
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0

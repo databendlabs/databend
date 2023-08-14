@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
+
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
@@ -184,5 +186,25 @@ impl ClusterStatsGenerator {
             level,
             pages,
         )))
+    }
+}
+
+pub fn sort_by_cluster_stats(
+    v1: &Option<ClusterStatistics>,
+    v2: &Option<ClusterStatistics>,
+    default_cluster_key: u32,
+) -> Ordering {
+    match (v1.as_ref(), v2.as_ref()) {
+        (Some(a), Some(b)) => {
+            if a.cluster_key_id != default_cluster_key && b.cluster_key_id != default_cluster_key {
+                return Ordering::Equal;
+            }
+
+            match a.min().cmp(&b.min()) {
+                Ordering::Equal => a.max().cmp(&b.max()),
+                ord => ord,
+            }
+        }
+        _ => Ordering::Equal,
     }
 }
