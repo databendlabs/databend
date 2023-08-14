@@ -488,10 +488,7 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 name: udf_name.to_string(),
             })),
-            Statement::Call(stmt) => Plan::Call(Box::new(CallPlan {
-                name: stmt.name.clone(),
-                args: stmt.args.clone(),
-            })),
+            Statement::Call(stmt) => self.bind_call(stmt),
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 

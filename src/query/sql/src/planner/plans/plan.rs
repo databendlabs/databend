@@ -149,8 +149,8 @@ pub enum Plan {
     // Copy
     Copy(Box<CopyPlan>),
 
-    // Call
-    Call(Box<CallPlan>),
+    // Call is rewrite into Query
+    // Call(Box<CallPlan>),
 
     // Catalogs
     ShowCreateCatalog(Box<ShowCreateCatalogPlan>),
@@ -298,6 +298,8 @@ pub enum RewriteKind {
     DescribeStage,
     ListStage,
     ShowRoles,
+
+    Call,
 }
 
 impl Display for Plan {
