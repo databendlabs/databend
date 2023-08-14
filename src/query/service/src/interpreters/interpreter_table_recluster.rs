@@ -32,8 +32,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::ReclusterTablePlan;
 
-const RECLUSTER_TIMEOUT_SECS: u64 = 12 * 60 * 60;
-
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: ReclusterTablePlan,
@@ -58,6 +56,7 @@ impl Interpreter for ReclusterTableInterpreter {
         let settings = ctx.get_settings();
         let tenant = ctx.get_tenant();
         let max_threads = settings.get_max_threads()?;
+        let recluster_timeout_secs = settings.get_recluster_timeout_secs()?;
 
         // Status.
         {
@@ -84,7 +83,7 @@ impl Interpreter for ReclusterTableInterpreter {
         let mut times = 0;
         let mut block_count = 0;
         let start = SystemTime::now();
-        let timeout = Duration::from_secs(RECLUSTER_TIMEOUT_SECS);
+        let timeout = Duration::from_secs(recluster_timeout_secs);
         loop {
             let table = self
                 .ctx
@@ -142,7 +141,10 @@ impl Interpreter for ReclusterTableInterpreter {
             }
 
             if elapsed_time >= timeout {
-                warn!("Recluster stopped because the runtime was over 12 hours");
+                warn!(
+                    "Recluster stopped because the runtime was over {} secs",
+                    timeout.as_secs()
+                );
                 break;
             }
         }
