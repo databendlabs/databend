@@ -18,6 +18,7 @@ use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
 use arrow_schema::ArrowError;
+use arrow_schema::FieldRef;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
@@ -37,6 +38,7 @@ use opendal::Operator;
 use parquet::arrow::arrow_reader::ArrowPredicateFn;
 use parquet::arrow::arrow_reader::RowFilter;
 use parquet::arrow::arrow_to_parquet_schema;
+use parquet::arrow::parquet_to_arrow_schema_by_columns;
 use parquet::arrow::ParquetRecordBatchStreamBuilder;
 use parquet::arrow::ProjectionMask;
 
@@ -45,7 +47,7 @@ struct ParquetPredicate {
     pub projection: ProjectionMask,
     /// Predicate filter expression.
     pub filter: Expr,
-    pub schema: arrow_schema::Schema,
+    field_paths: Vec<(FieldRef, Vec<FieldIndex>)>,
 }
 
 pub struct ParquetRSReader {
@@ -60,7 +62,8 @@ pub struct ParquetRSReader {
     ///
     /// If `is_inner_project` is false, we can skip the traversing.
     is_inner_project: bool,
-    output_schema: arrow_schema::Schema,
+    /// Field paths helping to traverse columns.
+    field_paths: Vec<(FieldRef, Vec<FieldIndex>)>,
 }
 
 impl ParquetRSReader {
@@ -73,31 +76,39 @@ impl ParquetRSReader {
         let mut output_projection =
             PushDownInfo::projection_of_push_downs(table_schema, &plan.push_downs);
         let schema_descr = arrow_to_parquet_schema(arrow_schema)?;
-        let predicate = PushDownInfo::prewhere_of_push_downs(&plan.push_downs).map(|prewhere| {
-            output_projection = prewhere.output_columns.clone();
-            let schema = prewhere.prewhere_columns.project_schema(table_schema);
-            let filter = prewhere
-                .filter
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .project_column_ref(|name| schema.index_of(name).unwrap());
-            let projection = prewhere.prewhere_columns.to_arrow_projection(&schema_descr);
-            let schema = to_arrow_schema(&schema);
-            Arc::new(ParquetPredicate {
-                projection,
-                filter,
-                schema,
+        let predicate = PushDownInfo::prewhere_of_push_downs(&plan.push_downs)
+            .map(|prewhere| {
+                output_projection = prewhere.output_columns.clone();
+                let schema = prewhere.prewhere_columns.project_schema(table_schema);
+                let filter = prewhere
+                    .filter
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .project_column_ref(|name| schema.index_of(name).unwrap());
+                let projection = prewhere.prewhere_columns.to_arrow_projection(&schema_descr);
+                let schema = to_arrow_schema(&schema);
+                let batch_schema =
+                    parquet_to_arrow_schema_by_columns(&schema_descr, projection.clone(), None)?;
+                let field_paths = compute_output_field_paths(&schema, &batch_schema)?;
+                Ok::<_, ErrorCode>(Arc::new(ParquetPredicate {
+                    projection,
+                    filter,
+                    field_paths,
+                }))
             })
-        });
+            .transpose()?;
+        // Build projection mask and field paths for transforming `RecordBatch` to output block.
         let projection = output_projection.to_arrow_projection(&schema_descr);
-        let output_schema = output_projection.project_schema(table_schema);
-        let output_schema = to_arrow_schema(&output_schema);
-        let is_inner_project = matches!(output_projection, Projection::InnerColumns(_));
+        let batch_schema =
+            parquet_to_arrow_schema_by_columns(&schema_descr, projection.clone(), None)?;
+        let output_schema = to_arrow_schema(&output_projection.project_schema(table_schema));
+        let field_paths = compute_output_field_paths(&output_schema, &batch_schema)?;
+
         Ok(Self {
             op,
             predicate,
             projection,
-            is_inner_project,
-            output_schema,
+            is_inner_project: matches!(output_projection, Projection::InnerColumns(_)),
+            field_paths,
         })
     }
 
@@ -117,17 +128,21 @@ impl ParquetRSReader {
             let projection = predicate.projection.clone();
             let predicate = predicate.clone();
             let predicate_fn = move |batch| {
-                let ParquetPredicate { filter, schema, .. } = predicate.as_ref();
+                let ParquetPredicate {
+                    filter,
+                    field_paths,
+                    ..
+                } = predicate.as_ref();
                 let res: Result<BooleanArray> = try {
                     let block = if is_inner_project {
-                        transform_record_batch(&batch, schema)?
+                        transform_record_batch(&batch, field_paths)?
                     } else {
                         let (block, _) = DataBlock::from_record_batch(&batch)?;
                         block
                     };
                     let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
                     let res = evaluator
-                        .run(&filter)?
+                        .run(filter)?
                         .convert_to_full_column(&DataType::Boolean, batch.num_rows())
                         .into_arrow_rs()?;
                     BooleanArray::from(res.to_data())
@@ -146,7 +161,7 @@ impl ParquetRSReader {
                 .into_iter()
                 .map(|b| {
                     let b = b?;
-                    transform_record_batch(&b, &self.output_schema)
+                    transform_record_batch(&b, &self.field_paths)
                 })
                 .collect::<Result<Vec<_>>>()?
         } else {
@@ -192,7 +207,7 @@ fn compute_output_field_paths(
                 parquet::schema::types::Type::GroupType { fields, .. } => {
                     let idx = fields
                         .iter()
-                        .position(|t| t.name() == name)
+                        .position(|t| t.name().eq_ignore_ascii_case(name))
                         .ok_or(error_cannot_find_field(field.name(), parquet_schema))?;
                     path.push(idx);
                     ty = &fields[idx];
@@ -248,13 +263,14 @@ fn error_cannot_traverse_path(path: &[FieldIndex], schema: &arrow_schema::Schema
 
 /// Transform a [`RecordBatch`] to [`DataBlock`].
 ///
-/// `schema` is the expected output schema.
-fn transform_record_batch(batch: &RecordBatch, schema: &arrow_schema::Schema) -> Result<DataBlock> {
-    // TODO(parquet): precompute the paths when creating parquet reader. (until arrow-rs supports project schema by `ProjectionMask`)
-    let paths = compute_output_field_paths(schema, &batch.schema())?;
-    let mut columns = Vec::with_capacity(paths.len());
-    for (field, path) in paths.iter() {
-        let col = traverse_column(field, path, &batch)?;
+/// `field_paths` is used to traverse nested columns in `batch`.
+fn transform_record_batch(
+    batch: &RecordBatch,
+    field_paths: &[(FieldRef, Vec<FieldIndex>)],
+) -> Result<DataBlock> {
+    let mut columns = Vec::with_capacity(field_paths.len());
+    for (field, path) in field_paths.iter() {
+        let col = traverse_column(field, path, batch)?;
         columns.push(col);
     }
     Ok(DataBlock::new_from_columns(columns))
