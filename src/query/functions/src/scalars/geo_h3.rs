@@ -678,7 +678,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 Ok(rr) => {
                     // Numerical constant is 180 degrees / pi / Earth radius, Earth radius is from h3 sources
                     // Ref: https://github.com/ClickHouse/ClickHouse/blob/bc93254ca23835b9846ec1f9158a50f26694257f/src/Functions/h3EdgeAngle.cpp#L86
-                    builder.push((8.99320592271288084e-6 * rr.edge_length_m()).into())
+                    builder.push((8.99320592271288e-6 * rr.edge_length_m()).into())
                 }
                 Err(err) => {
                     ctx.set_error(builder.len(), err.to_string());
