@@ -31,15 +31,18 @@ use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_sql::binder::ColumnBindingBuilder;
 use common_sql::executor::cast_expr_to_non_null_boolean;
-use common_sql::executor::DeleteFinal;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
+use common_sql::executor::MutationAggregate;
+use common_sql::executor::MutationKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::optimizer::CascadesOptimizer;
+use common_sql::optimizer::DPhpy;
 use common_sql::optimizer::HeuristicOptimizer;
 use common_sql::optimizer::SExpr;
 use common_sql::optimizer::DEFAULT_REWRITE_RULES;
+use common_sql::optimizer::RESIDUAL_RULES;
 use common_sql::plans::BoundColumnRef;
 use common_sql::plans::ConstantExpr;
 use common_sql::plans::EvalScalar;
@@ -296,12 +299,15 @@ impl DeleteInterpreter {
             });
         }
 
-        Ok(PhysicalPlan::DeleteFinal(Box::new(DeleteFinal {
-            input: Box::new(root),
-            snapshot,
-            table_info,
-            catalog_info,
-        })))
+        Ok(PhysicalPlan::MutationAggregate(Box::new(
+            MutationAggregate {
+                input: Box::new(root),
+                snapshot,
+                table_info,
+                catalog_info,
+                mutation_kind: MutationKind::Delete,
+            },
+        )))
     }
 }
 
@@ -327,21 +333,28 @@ pub async fn subquery_filter(
         Arc::new(input_expr),
     );
     // Optimize expression
-    // BindContext is only used by pre_optimize and post_optimize, so we can use a mock one.
-    let mock_bind_context = Box::new(BindContext::new());
-    let heuristic_optimizer = HeuristicOptimizer::new(
-        ctx.get_function_context()?,
-        &mock_bind_context,
-        metadata.clone(),
-    );
-    let mut expr = heuristic_optimizer.optimize_expression(&expr, &DEFAULT_REWRITE_RULES)?;
-    let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata.clone(), false)?;
+    let mut bind_context = Box::new(BindContext::new());
+    bind_context.add_column_binding(row_id_column_binding.clone());
+
+    let heuristic = HeuristicOptimizer::new(ctx.get_function_context()?, metadata.clone());
+    let mut expr = heuristic.optimize(expr, &DEFAULT_REWRITE_RULES)?;
+    let mut dphyp_optimized = false;
+    if ctx.get_settings().get_enable_dphyp()? {
+        let (dp_res, optimized) =
+            DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(expr.clone()))?;
+        if optimized {
+            expr = (*dp_res).clone();
+            dphyp_optimized = true;
+        }
+    }
+    let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata.clone(), dphyp_optimized)?;
     expr = cascades.optimize(expr)?;
+    expr = heuristic.optimize(expr, &RESIDUAL_RULES)?;
 
     // Create `input_expr` pipeline and execute it to get `_row_id` data block.
     let select_interpreter = SelectInterpreter::try_create(
         ctx.clone(),
-        BindContext::new(),
+        *bind_context,
         expr,
         metadata.clone(),
         None,

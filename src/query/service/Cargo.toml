@@ -21,12 +21,6 @@ disable_initial_exec_tls = ["common-base/disable_initial_exec_tls"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling"]
 storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
-hive = [
-    "storage-hdfs",
-    "common-config/hive",
-    "common-storages-hive",
-    "common-meta-app/storage-hdfs",
-]
 io-uring = [
     # "common-meta-embedded/io-uring",
     "common-meta-store/io-uring",
@@ -84,7 +78,7 @@ common-sql = { path = "../sql" }
 common-storage = { path = "../../common/storage" }
 common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuse" }
-common-storages-hive = { path = "../storages/hive/hive", optional = true }
+common-storages-hive = { path = "../storages/hive/hive" }
 common-storages-iceberg = { path = "../storages/iceberg" }
 common-storages-information-schema = { path = "../storages/information-schema" }
 common-storages-null = { path = "../storages/null" }

@@ -21,7 +21,17 @@ DROP MASKING POLICY [IF EXISTS] <policy_name>
 ## Examples
 
 ```sql
-CREATE MASKING POLICY email_mask AS (val STRING) RETURN STRING -> CASE WHEN current_role() IN ('MANAGERS') THEN VAL ELSE '*********'END comment = 'hide_email';
+CREATE MASKING POLICY email_mask
+AS
+  (val string)
+  RETURNS string ->
+  CASE
+  WHEN current_role() IN ('MANAGERS') THEN
+    val
+  ELSE
+    '*********'
+  END
+  COMMENT = 'hide_email';
 
 DROP MASKING POLICY email_mask;
 ```

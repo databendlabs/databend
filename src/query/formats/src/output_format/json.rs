@@ -18,8 +18,7 @@ use common_expression::DataBlock;
 use common_expression::ScalarRef;
 use common_expression::TableSchemaRef;
 use common_io::prelude::FormatSettings;
-use croaring::treemap::NativeSerializer;
-use croaring::Treemap;
+use roaring::RoaringTreemap;
 use serde_json::Map as JsonMap;
 use serde_json::Value as JsonValue;
 
@@ -122,7 +121,7 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
             JsonValue::Object(vals)
         }
         ScalarRef::Bitmap(b) => {
-            let rb = Treemap::deserialize(b).expect("failed to deserialize bitmap");
+            let rb = RoaringTreemap::deserialize_from(b).expect("failed to deserialize bitmap");
             let data = rb
                 .iter()
                 .map(|v| JsonValue::Number(serde_json::Number::from(v)))

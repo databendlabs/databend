@@ -23,6 +23,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::TableSchemaRef;
+use common_sql::executor::MutationKind;
 use log::info;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
@@ -77,16 +78,6 @@ impl BlockMutations {
     fn push_deleted(&mut self, block_idx: BlockIndex) {
         self.deleted_blocks.push(block_idx)
     }
-}
-
-#[derive(Clone, Copy)]
-/// This is used by MutationAccumulator, so no compact here.
-pub enum MutationKind {
-    Delete,
-    Update,
-    Replace,
-    Recluster,
-    Insert,
 }
 
 pub struct MutationAccumulator {
@@ -298,8 +289,9 @@ impl MutationAccumulator {
 
             tasks.push(async move {
                 // read the old segment
-                let mut segment_info =
-                    SegmentsIO::read_segment(op.clone(), location, schema, false).await?;
+                let compact_segment_info =
+                    SegmentsIO::read_compact_segment(op.clone(), location, schema, false).await?;
+                let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
                 // take away the blocks, they are being mutated
                 let mut block_editor = BTreeMap::<_, _>::from_iter(

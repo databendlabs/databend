@@ -14,28 +14,32 @@ query T
 explain select count() from (select unnest(id), c1 from fold_count)
 ----
 EvalScalar
+├── output columns: [count() (#5)]
 ├── expressions: [count() (#4)]
 ├── estimated rows: 1.00
 └── AggregateFinal
+    ├── output columns: [count() (#4)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
     └── AggregatePartial
+        ├── output columns: [count() (#4)]
         ├── group by: []
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
         └── ProjectSet
+            ├── output columns: [unnest (#2)]
             ├── estimated rows: 1.00
             ├── set returning functions: unnest(CAST(fold_count.id (#0) AS Array(Int32 NULL)))
             └── TableScan
                 ├── table: default.default.fold_count
+                ├── output columns: [id (#0)]
                 ├── read rows: 1
                 ├── read bytes: 51
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
                 ├── push downs: [filters: [], limit: NONE]
-                ├── output columns: [id]
                 └── estimated rows: 1.00
 
 statement ok
@@ -53,38 +57,36 @@ use project_set
 query T
 explain select number from (select unnest([1,2,3]), number from numbers(10)) t
 ----
-EvalScalar
-├── expressions: [t.number (#0), numbers.number (#0)]
+ProjectSet
+├── output columns: [numbers.number (#0), unnest (#1)]
 ├── estimated rows: 10.00
-└── ProjectSet
-    ├── estimated rows: 10.00
-    ├── set returning functions: unnest([1, 2, 3])
-    └── TableScan
-        ├── table: default.system.numbers
-        ├── read rows: 10
-        ├── read bytes: 80
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 10.00
+├── set returning functions: unnest([1, 2, 3])
+└── TableScan
+    ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
+    ├── read rows: 10
+    ├── read bytes: 80
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 10.00
 
 query T
 explain select number from (select unnest([1,2,3,number]), number from numbers(10)) t
 ----
-EvalScalar
-├── expressions: [t.number (#0), numbers.number (#0)]
+ProjectSet
+├── output columns: [numbers.number (#0), unnest (#1)]
 ├── estimated rows: 10.00
-└── ProjectSet
-    ├── estimated rows: 10.00
-    ├── set returning functions: unnest(CAST(array(1, 2, 3, numbers.number (#0)) AS Array(UInt64 NULL)))
-    └── TableScan
-        ├── table: default.system.numbers
-        ├── read rows: 10
-        ├── read bytes: 80
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 10.00
+├── set returning functions: unnest(CAST(array(1, 2, 3, numbers.number (#0)) AS Array(UInt64 NULL)))
+└── TableScan
+    ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
+    ├── read rows: 10
+    ├── read bytes: 80
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 10.00
 
 statement ok
 drop database project_set

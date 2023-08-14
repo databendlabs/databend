@@ -8,9 +8,11 @@ query T
 explain select count(*) from t
 ----
 EvalScalar
+├── output columns: [count(*) (#2)]
 ├── expressions: [COUNT(*) (#1)]
 ├── estimated rows: 1.00
 └── EvalScalar
+    ├── output columns: [COUNT(*) (#1)]
     ├── expressions: [1000]
     ├── estimated rows: 1.00
     └── DummyTableScan
@@ -22,9 +24,11 @@ query T
 explain select count(*) from t
 ----
 EvalScalar
+├── output columns: [count(*) (#2)]
 ├── expressions: [COUNT(*) (#1)]
 ├── estimated rows: 1.00
 └── EvalScalar
+    ├── output columns: [COUNT(*) (#1)]
     ├── expressions: [1001]
     ├── estimated rows: 1.00
     └── DummyTableScan
@@ -33,25 +37,28 @@ query T
 explain select count(*) from t where number > 10
 ----
 EvalScalar
+├── output columns: [count(*) (#2)]
 ├── expressions: [COUNT(*) (#1)]
 ├── estimated rows: 1.00
 └── AggregateFinal
+    ├── output columns: [COUNT(*) (#1)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
     └── AggregatePartial
+        ├── output columns: [COUNT(*) (#1)]
         ├── group by: []
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.default.t
+            ├── output columns: []
             ├── read rows: 1000
             ├── read bytes: 4011
             ├── partitions total: 2
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
             ├── push downs: [filters: [t.number (#0) > 10], limit: NONE]
-            ├── output columns: []
             └── estimated rows: 990.00
 
 statement ok

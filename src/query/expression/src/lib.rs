@@ -33,6 +33,7 @@
 #![allow(clippy::needless_lifetimes)]
 #![allow(incomplete_features)]
 #![feature(int_roundings)]
+#![feature(trait_upcasting)]
 
 #[allow(dead_code)]
 mod block;

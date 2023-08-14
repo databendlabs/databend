@@ -12,14 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Partitions;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_sql::executor::CopyIntoTable;
+use common_sql::executor::CopyIntoTableSource;
+use common_sql::executor::Deduplicate;
 use common_sql::executor::DeletePartial;
-use common_sql::executor::DistributedCopyIntoTableFromStage;
+use common_sql::executor::QuerySource;
+use common_sql::executor::ReplaceInto;
+use common_storages_fuse::TableContext;
+use storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchange;
 use crate::schedulers::Fragmenter;
@@ -47,6 +54,8 @@ pub enum FragmentType {
     /// Leaf fragment of a delete plan, which contains
     /// a `DeletePartial` operator.
     DeleteLeaf,
+    /// Intermediate fragment of a replace into plan, which contains a `ReplaceInto` operator.
+    ReplaceInto,
 }
 
 #[derive(Clone)]
@@ -125,6 +134,14 @@ impl PlanFragment {
                 }
                 actions.add_fragment_actions(fragment_actions)?;
             }
+            FragmentType::ReplaceInto => {
+                // Redistribute partitions
+                let mut fragment_actions = self.redistribute_replace_into(ctx)?;
+                if let Some(ref exchange) = self.exchange {
+                    fragment_actions.set_exchange(exchange.clone());
+                }
+                actions.add_fragment_actions(fragment_actions)?;
+            }
         }
 
         Ok(())
@@ -194,6 +211,68 @@ impl PlanFragment {
         Ok(fragment_actions)
     }
 
+    fn reshuffle<T: Clone>(
+        executors: Vec<String>,
+        partitions: Vec<T>,
+    ) -> Result<HashMap<String, Vec<T>>> {
+        let num_parts = partitions.len();
+        let num_executors = executors.len();
+        let mut executors_sorted = executors;
+        executors_sorted.sort();
+        let mut executor_part = HashMap::default();
+        // the first num_parts % num_executors get parts_per_node parts
+        // the remaining get parts_per_node - 1 parts
+        let parts_per_node = (num_parts + num_executors - 1) / num_executors;
+        for (idx, executor) in executors_sorted.iter().enumerate() {
+            let begin = parts_per_node * idx;
+            let end = num_parts.min(parts_per_node * (idx + 1));
+            let parts = partitions[begin..end].to_vec();
+            executor_part.insert(executor.clone(), parts);
+            if end == num_parts && idx < num_executors - 1 {
+                // reach here only when num_executors > num_parts
+                executors_sorted[(idx + 1)..].iter().for_each(|executor| {
+                    executor_part.insert(executor.clone(), vec![]);
+                });
+                break;
+            }
+        }
+
+        Ok(executor_part)
+    }
+
+    fn redistribute_replace_into(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
+        let plan = match &self.plan {
+            PhysicalPlan::ExchangeSink(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+        let plan = match plan.input.as_ref() {
+            PhysicalPlan::ReplaceInto(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+        let partitions = &plan.segments;
+        let executors = Fragmenter::get_executors(ctx.clone());
+        let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
+        let partition_reshuffle = Self::reshuffle(executors, partitions.clone())?;
+
+        let local_id = &ctx.get_cluster().local_id;
+
+        for (executor, parts) in partition_reshuffle.iter() {
+            let mut plan = self.plan.clone();
+            let need_insert = executor == local_id;
+
+            let mut replace_replace_into = ReplaceReplaceInto {
+                partitions: parts.clone(),
+                need_insert,
+            };
+            plan = replace_replace_into.replace(&plan)?;
+
+            fragment_actions
+                .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+        }
+
+        Ok(fragment_actions)
+    }
+
     fn get_read_source(&self) -> Result<DataSourcePlan> {
         if self.fragment_type != FragmentType::Source {
             return Err(ErrorCode::Internal(
@@ -203,12 +282,14 @@ impl PlanFragment {
 
         let mut source = vec![];
 
-        let mut collect_read_source = |plan: &PhysicalPlan| {
-            if let PhysicalPlan::TableScan(scan) = plan {
-                source.push(*scan.source.clone())
-            } else if let PhysicalPlan::DistributedCopyIntoTableFromStage(distributed_plan) = plan {
-                source.push(*distributed_plan.source.clone())
+        let mut collect_read_source = |plan: &PhysicalPlan| match plan {
+            PhysicalPlan::TableScan(scan) => source.push(*scan.source.clone()),
+            PhysicalPlan::CopyIntoTable(copy) => {
+                if let Some(stage) = copy.source.as_stage().cloned() {
+                    source.push(*stage);
+                }
             }
+            _ => {}
         };
 
         PhysicalPlan::traverse(
@@ -244,16 +325,25 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
         }))
     }
 
-    fn replace_copy_into_table(
-        &mut self,
-        plan: &DistributedCopyIntoTableFromStage,
-    ) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::DistributedCopyIntoTableFromStage(Box::new(
-            DistributedCopyIntoTableFromStage {
-                source: Box::new(self.source.clone()),
-                ..plan.clone()
-            },
-        )))
+    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
+        match &plan.source {
+            CopyIntoTableSource::Query(query_ctx) => {
+                let input = self.replace(&query_ctx.plan)?;
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
+                        plan: input,
+                        ..*query_ctx.clone()
+                    })),
+                    ..plan.clone()
+                })))
+            }
+            CopyIntoTableSource::Stage(_) => {
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+                    source: CopyIntoTableSource::Stage(Box::new(self.source.clone())),
+                    ..plan.clone()
+                })))
+            }
+        }
     }
 }
 
@@ -267,5 +357,32 @@ impl PhysicalPlanReplacer for ReplaceDeletePartial {
             parts: self.partitions.clone(),
             ..plan.clone()
         })))
+    }
+}
+
+struct ReplaceReplaceInto {
+    pub partitions: Vec<(usize, Location)>,
+    pub need_insert: bool,
+}
+
+impl PhysicalPlanReplacer for ReplaceReplaceInto {
+    fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
+            input: Box::new(input),
+            need_insert: self.need_insert,
+            segments: self.partitions.clone(),
+            ..plan.clone()
+        }))
+    }
+
+    fn replace_deduplicate(&mut self, plan: &Deduplicate) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::Deduplicate(Deduplicate {
+            input: Box::new(input),
+            need_insert: self.need_insert,
+            table_is_empty: self.partitions.is_empty(),
+            ..plan.clone()
+        }))
     }
 }

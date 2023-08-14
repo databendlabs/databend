@@ -72,9 +72,7 @@ impl BlockEntry {
 }
 
 #[typetag::serde(tag = "type")]
-pub trait BlockMetaInfo: Debug + Send + Sync + 'static {
-    fn as_any(&self) -> &dyn Any;
-
+pub trait BlockMetaInfo: Debug + Send + Sync + Any + 'static {
     #[allow(clippy::borrowed_box)]
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool;
 
@@ -89,27 +87,13 @@ pub trait BlockMetaInfoDowncast: Sized {
 
 impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {
     fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self> {
-        if boxed.as_any().is::<T>() {
-            unsafe {
-                // SAFETY: `is` ensures this type cast is correct
-                let raw_ptr = Box::into_raw(boxed) as *const dyn BlockMetaInfo;
-                return Some(std::ptr::read(raw_ptr as *const Self));
-            }
-        }
-
-        None
+        let boxed: Box<dyn Any> = boxed;
+        boxed.downcast().ok().map(|x| *x)
     }
 
     fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self> {
-        if boxed.as_any().is::<T>() {
-            unsafe {
-                // SAFETY: `is` ensures this type cast is correct
-                let unboxed = boxed.as_ref();
-                return Some(&*(unboxed as *const dyn BlockMetaInfo as *const Self));
-            }
-        }
-
-        None
+        let boxed: &dyn Any = boxed.as_ref();
+        boxed.downcast_ref()
     }
 }
 
@@ -298,6 +282,19 @@ impl DataBlock {
         }
         res.push(self.slice(offset..(offset + remain_rows)));
         res
+    }
+
+    #[inline]
+    pub fn merge_block(&mut self, block: DataBlock) {
+        self.columns.reserve(block.num_columns());
+        for column in block.columns.into_iter() {
+            #[cfg(debug_assertions)]
+            if let Value::Column(col) = &column.value {
+                assert_eq!(self.num_rows, col.len());
+                assert_eq!(col.data_type(), column.data_type);
+            }
+            self.columns.push(column);
+        }
     }
 
     #[inline]
@@ -510,6 +507,36 @@ impl DataBlock {
 
         Ok(DataBlock::new(columns, num_rows))
     }
+
+    #[inline]
+    pub fn project(mut self, projections: &HashSet<usize>) -> Self {
+        let mut columns = Vec::with_capacity(projections.len());
+        for (index, column) in self.columns.into_iter().enumerate() {
+            if !projections.contains(&index) {
+                continue;
+            }
+            columns.push(column);
+        }
+        self.columns = columns;
+        self
+    }
+
+    #[inline]
+    pub fn project_with_agg_index(
+        self,
+        projections: &HashSet<usize>,
+        agg_functions_len: usize,
+    ) -> Self {
+        let mut columns = Vec::with_capacity(projections.len());
+        let agg_functions_offset = self.columns.len() - agg_functions_len;
+        for (index, column) in self.columns.into_iter().enumerate() {
+            if !projections.contains(&index) && index < agg_functions_offset {
+                continue;
+            }
+            columns.push(column);
+        }
+        DataBlock::new_with_meta(columns, self.num_rows, self.meta)
+    }
 }
 
 impl TryFrom<DataBlock> for ArrowChunk<ArrayRef> {
@@ -543,10 +570,10 @@ impl Eq for Box<dyn BlockMetaInfo> {}
 
 impl PartialEq for Box<dyn BlockMetaInfo> {
     fn eq(&self, other: &Self) -> bool {
-        let this_type_id = self.as_any().type_id();
-        let other_type_id = other.as_any().type_id();
+        let this_any: &dyn Any = self.as_ref();
+        let other_any: &dyn Any = other.as_ref();
 
-        match this_type_id == other_type_id {
+        match this_any.type_id() == other_any.type_id() {
             true => self.equals(other),
             false => false,
         }

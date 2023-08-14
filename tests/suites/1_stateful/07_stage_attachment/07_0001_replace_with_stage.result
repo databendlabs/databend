@@ -34,7 +34,6 @@ null
 6	'HangZhou'	92	China
 9	'Changsha'	91	China
 10	'Hong Kong‘	88	China
-133
 {
   "code": 4000,
   "message": "duplicated data detected in the values being replaced into (only the first one will be described): at row 7, [\"id\":10]"

@@ -46,7 +46,8 @@ pub type TableSnapshotCache = NamedCache<InMemoryItemCacheHolder<TableSnapshot>>
 pub type TableSnapshotStatisticCache = NamedCache<InMemoryItemCacheHolder<TableSnapshotStatistics>>;
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
-pub type BloomIndexFilterCache = NamedCache<InMemoryItemCacheHolder<Xor8Filter>>;
+pub type BloomIndexFilterCache =
+    NamedCache<InMemoryItemCacheHolder<Xor8Filter, DefaultHashBuilder, BloomIndexFilterMeter>>;
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 /// In memory object cache of parquet FileMetaData of external parquet files
@@ -121,7 +122,7 @@ impl CachedObject<(PartStatistics, Partitions)> for (PartStatistics, Partitions)
     }
 }
 
-impl CachedObject<Xor8Filter> for Xor8Filter {
+impl CachedObject<Xor8Filter, DefaultHashBuilder, BloomIndexFilterMeter> for Xor8Filter {
     type Cache = BloomIndexFilterCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_bloom_index_filter_cache()
@@ -152,5 +153,15 @@ impl Meter<String, Arc<CompactSegmentInfo>> for CompactSegmentInfoMeter {
 
     fn measure<Q: ?Sized>(&self, _: &Q, value: &Arc<CompactSegmentInfo>) -> Self::Measure {
         std::mem::size_of::<CompactSegmentInfo>() + value.raw_block_metas.bytes.len()
+    }
+}
+
+pub struct BloomIndexFilterMeter;
+
+impl Meter<String, Arc<Xor8Filter>> for BloomIndexFilterMeter {
+    type Measure = usize;
+
+    fn measure<Q: ?Sized>(&self, _: &Q, value: &Arc<Xor8Filter>) -> Self::Measure {
+        std::mem::size_of::<Xor8Filter>() + value.filter.finger_prints.len()
     }
 }

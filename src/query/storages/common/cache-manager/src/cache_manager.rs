@@ -35,6 +35,7 @@ use crate::caches::CompactSegmentInfoCache;
 use crate::caches::FileMetaDataCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
+use crate::BloomIndexFilterMeter;
 use crate::ColumnArrayMeter;
 use crate::CompactSegmentInfoMeter;
 use crate::PrunePartitionsCache;
@@ -104,8 +105,11 @@ impl CacheManager {
                 CompactSegmentInfoMeter {},
                 "segment_info",
             );
-            let bloom_index_filter_cache =
-                Self::new_item_cache(config.table_bloom_index_filter_count, "bloom_index_filter");
+            let bloom_index_filter_cache = Self::new_in_memory_cache(
+                config.table_bloom_index_filter_size,
+                BloomIndexFilterMeter {},
+                "bloom_index_filter",
+            );
             let bloom_index_meta_cache = Self::new_item_cache(
                 config.table_bloom_index_meta_count,
                 "bloom_index_file_meta_data",

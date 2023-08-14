@@ -247,9 +247,9 @@ impl CompactSegmentInfo {
     }
 }
 
-impl TryFrom<&CompactSegmentInfo> for SegmentInfo {
+impl TryFrom<Arc<CompactSegmentInfo>> for SegmentInfo {
     type Error = ErrorCode;
-    fn try_from(value: &CompactSegmentInfo) -> Result<Self, Self::Error> {
+    fn try_from(value: Arc<CompactSegmentInfo>) -> Result<Self, Self::Error> {
         let blocks = value.block_metas()?;
         Ok(SegmentInfo {
             format_version: value.format_version,

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -166,10 +165,6 @@ impl<'de> serde::Deserialize<'de> for ExchangeDeserializeMeta {
 
 #[typetag::serde(name = "exchange_source")]
 impl BlockMetaInfo for ExchangeDeserializeMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals ExchangeSourceMeta")
     }
