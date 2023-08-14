@@ -6,7 +6,7 @@ explain select a from (select * from t1 order by a) as t2 where a > 1;
 ----
 Sort
 ├── output columns: [t1.a (#0)]
-├── sort keys: [a (#0) ASC NULLS LAST]
+├── sort keys: [a ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
@@ -23,7 +23,7 @@ explain select a from (select * from t1) where a > 1 order by a;
 ----
 Sort
 ├── output columns: [t1.a (#0)]
-├── sort keys: [a (#0) ASC NULLS LAST]
+├── sort keys: [a ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
@@ -40,7 +40,7 @@ explain select a from (select * from t1) as t2 where t2.a > 1 order by a;
 ----
 Sort
 ├── output columns: [t1.a (#0)]
-├── sort keys: [a (#0) ASC NULLS LAST]
+├── sort keys: [a ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1

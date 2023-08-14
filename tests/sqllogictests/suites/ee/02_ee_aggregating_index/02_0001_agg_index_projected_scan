@@ -8,7 +8,7 @@ statement ok
 use test_index
 
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of aggregate_index requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 DROP AGGREGATING INDEX IF EXISTS testi;
 
 statement ok
@@ -17,14 +17,20 @@ CREATE TABLE t (a int, b int, c int)
 statement ok
 INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of aggregate_index requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 CREATE AGGREGATING INDEX testi AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b
 
-statement error mysql client error: Input/output error: Input/output error: connection closed
+statement ok
 REFRESH AGGREGATING INDEX testi
 
-query error mysql client error: Input/output error: Input/output error: Driver error: `Connection to the server is closed\.'
+query I
 SELECT b from t WHERE c > 1 GROUP BY b ORDER BY b
+----
+1
+2
 
-query error mysql client error: Input/output error: Input/output error: Driver error: `Connection to the server is closed\.'
+query II
 SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b ORDER BY b
+----
+1 1
+2 3

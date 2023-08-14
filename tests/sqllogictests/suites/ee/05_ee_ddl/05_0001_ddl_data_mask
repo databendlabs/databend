@@ -12,14 +12,14 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of data_mask requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 drop MASKING POLICY if exists mask
 
 statement error 1121
 CREATE MASKING POLICY mask AS (val STRING,num int) RETURNS INT -> CASE WHEN current_role() IN ('ANALYST') THEN 100 ELSE 200 END comment = 'this is a masking policy'
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of data_mask requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 CREATE MASKING POLICY mask AS (val STRING,num int) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of data_mask requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 drop MASKING POLICY if exists mask

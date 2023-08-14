@@ -27,13 +27,13 @@ DROP TABLE IF EXISTS t1
 statement ok
 DROP TABLE IF EXISTS t2
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of aggregate_index requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 DROP AGGREGATING INDEX IF EXISTS idx1
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of aggregate_index requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 DROP AGGREGATING INDEX IF EXISTS idx2
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of aggregate_index requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 DROP AGGREGATING INDEX IF EXISTS idx3
 
 statement ok
@@ -42,13 +42,13 @@ CREATE TABLE t1(a int,b int) Engine = Fuse
 statement ok
 CREATE TABLE t2(a int,b int) Engine = Fuse
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of aggregate_index requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of aggregate_index requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 CREATE AGGREGATING INDEX idx2 AS SELECT b FROM t1 WHERE a < 10
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of aggregate_index requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 CREATE AGGREGATING INDEX idx3 AS SELECT * FROM t2
 
 statement ok
@@ -57,24 +57,23 @@ SHOW INDEXES
 query TTT
 SELECT name, type, definition FROM system.indexes
 ----
-index AGGREGATING SELECT (c + 1) FROM test_agg_index.t
-index1 AGGREGATING SELECT SUBSTRING(a FROM 1 FOR 1) AS s, avg(length(a)), min(a) FROM test_agg_index.t GROUP BY s
-testi AGGREGATING SELECT b, MAX(a), SUM(a) FROM test_index.t WHERE (c > 1) GROUP BY b
+idx1 AGGREGATING SELECT SUM(a), b FROM test_index_db.t1 WHERE (b > 3) GROUP BY b
+idx2 AGGREGATING SELECT b FROM test_index_db.t1 WHERE (a < 10)
+idx3 AGGREGATING SELECT * FROM test_index_db.t2
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of aggregate_index requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 DROP AGGREGATING INDEX idx2
 
 query TTT
 SELECT name, type, definition FROM system.indexes
 ----
-index AGGREGATING SELECT (c + 1) FROM test_agg_index.t
-index1 AGGREGATING SELECT SUBSTRING(a FROM 1 FOR 1) AS s, avg(length(a)), min(a) FROM test_agg_index.t GROUP BY s
-testi AGGREGATING SELECT b, MAX(a), SUM(a) FROM test_index.t WHERE (c > 1) GROUP BY b
+idx1 AGGREGATING SELECT SUM(a), b FROM test_index_db.t1 WHERE (b > 3) GROUP BY b
+idx3 AGGREGATING SELECT * FROM test_index_db.t2
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of aggregate_index requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 DROP AGGREGATING INDEX idx1
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): LicenseKeyInvalid\. Code: 1402, Text = use of aggregate_index requires an enterprise license\. current license is invalid for test_tenant, cause: LicenseKeyParseError\. Code: 1401, Text = jwt claim decode failed, cause: Token has expired\.\.'
+statement ok
 DROP AGGREGATING INDEX idx3
 
 statement ok
