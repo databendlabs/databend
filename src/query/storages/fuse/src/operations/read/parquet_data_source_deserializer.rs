@@ -202,7 +202,7 @@ impl Processor for DeserializeDataTransform {
                         Some(self.uncompressed_buffer.clone()),
                     )?;
 
-                    // Add optional virtual column array_iter
+                    // Add optional virtual columns
                     if let Some(virtual_reader) = self.virtual_reader.as_ref() {
                         data_block = virtual_reader.deserialize_virtual_columns(
                             data_block,

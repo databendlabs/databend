@@ -394,6 +394,7 @@ impl Processor for MutationSource {
                                     &settings,
                                     &fuse_part.location,
                                     &fuse_part.columns_meta,
+                                    &None,
                                 )
                                 .await?;
                             self.state = State::FilterData(inner_part, read_res);
@@ -415,6 +416,7 @@ impl Processor for MutationSource {
                             &settings,
                             &fuse_part.location,
                             &fuse_part.columns_meta,
+                            &None,
                         )
                         .await?;
                     self.state = State::MergeRemain {

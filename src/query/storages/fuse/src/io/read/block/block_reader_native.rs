@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::io::BufReader;
 use std::ops::Range;
 use std::time::Instant;
@@ -54,6 +53,7 @@ impl BlockReader {
     pub async fn async_read_native_columns_data(
         &self,
         part: PartInfoPtr,
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<NativeSourceData> {
         // Perf
         {
@@ -64,6 +64,14 @@ impl BlockReader {
         let mut join_handlers = Vec::with_capacity(self.project_column_nodes.len());
 
         for (index, column_node) in self.project_column_nodes.iter().enumerate() {
+            if let Some(ignore_column_ids) = ignore_column_ids {
+                if column_node.leaf_column_ids.len() == 1
+                    && ignore_column_ids.contains(&column_node.leaf_column_ids[0])
+                {
+                    continue;
+                }
+            }
+
             let metas: Vec<ColumnMeta> = column_node
                 .leaf_column_ids
                 .iter()
@@ -134,11 +142,23 @@ impl BlockReader {
         Ok((index, native_readers))
     }
 
-    pub fn sync_read_native_columns_data(&self, part: PartInfoPtr) -> Result<NativeSourceData> {
+    pub fn sync_read_native_columns_data(
+        &self,
+        part: PartInfoPtr,
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
+    ) -> Result<NativeSourceData> {
         let part = FusePartInfo::from_part(&part)?;
 
         let mut results: BTreeMap<usize, Vec<NativeReader<Reader>>> = BTreeMap::new();
         for (index, column_node) in self.project_column_nodes.iter().enumerate() {
+            if let Some(ignore_column_ids) = ignore_column_ids {
+                if column_node.leaf_column_ids.len() == 1
+                    && ignore_column_ids.contains(&column_node.leaf_column_ids[0])
+                {
+                    continue;
+                }
+            }
+
             let op = self.operator.clone();
             let metas: Vec<ColumnMeta> = column_node
                 .leaf_column_ids
@@ -184,17 +204,14 @@ impl BlockReader {
     pub fn fill_missing_native_column_values(
         &self,
         data_block: DataBlock,
-        parts: &VecDeque<PartInfoPtr>,
+        data_block_column_ids: &HashSet<ColumnId>,
     ) -> Result<DataBlock> {
-        let part = FusePartInfo::from_part(&parts[0])?;
-
-        let data_block_column_ids: HashSet<ColumnId> = part.columns_meta.keys().cloned().collect();
         let default_vals = self.default_vals.clone();
 
         DataBlock::create_with_default_value_and_block(
             &self.projected_schema,
             &data_block,
-            &data_block_column_ids,
+            data_block_column_ids,
             &default_vals,
         )
     }
@@ -204,8 +221,8 @@ impl BlockReader {
         chunks: Vec<(usize, Box<dyn Array>)>,
         default_val_indices: Option<HashSet<usize>>,
     ) -> Result<DataBlock> {
-        let mut rows = 0;
-        let mut entries = Vec::with_capacity(chunks.len());
+        let mut nums_rows = 0;
+        let mut entries = Vec::with_capacity(self.project_column_nodes.len());
         for (index, _) in self.project_column_nodes.iter().enumerate() {
             if let Some(array) = chunks.iter().find(|c| c.0 == index).map(|c| c.1.clone()) {
                 let data_type: DataType = self.projected_schema.field(index).data_type().into();
@@ -213,7 +230,7 @@ impl BlockReader {
                     data_type.clone(),
                     Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
                 ));
-                rows = array.len();
+                nums_rows = array.len();
             } else if let Some(ref default_val_indices) = default_val_indices {
                 if default_val_indices.contains(&index) {
                     let data_type: DataType = self.projected_schema.field(index).data_type().into();
@@ -225,6 +242,6 @@ impl BlockReader {
                 }
             }
         }
-        Ok(DataBlock::new(entries, rows))
+        Ok(DataBlock::new(entries, nums_rows))
     }
 }

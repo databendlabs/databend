@@ -40,6 +40,7 @@ use common_expression::types::NumberScalar;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
@@ -94,6 +95,14 @@ pub struct NativeDeserializeDataTransform {
     offset_in_part: usize,
 
     read_columns: Vec<usize>,
+    // Column ids are columns that have been read out,
+    // not readed columns have two cases:
+    // 1. newly added columns, no data insertion
+    // 2. the source columns used to generate virtual columns,
+    //    and all the virtual columns have been generated,
+    //    then the source columns are not needed.
+    // These columns need to fill in the default values.
+    read_column_ids: HashSet<ColumnId>,
     top_k: Option<(TopK, TopKSorter, usize)>,
     // Identifies whether the ArrayIter has been initialised.
     inited: bool,
@@ -228,6 +237,7 @@ impl NativeDeserializeDataTransform {
                 skipped_page: 0,
                 top_k,
                 read_columns: vec![],
+                read_column_ids: HashSet::new(),
                 inited: false,
                 array_iters: BTreeMap::new(),
                 array_skip_pages: BTreeMap::new(),
@@ -289,7 +299,15 @@ impl NativeDeserializeDataTransform {
                         data_type.clone(),
                         Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
                     );
-                    block.add_column(column);
+                    // If the source column is the default value, num_rows may be zero
+                    if block.num_columns() > 0 && block.num_rows() == 0 {
+                        let num_rows = array.len();
+                        let mut columns = block.columns().clone().to_vec();
+                        columns.push(column);
+                        *block = DataBlock::new(columns, num_rows);
+                    } else {
+                        block.add_column(column);
+                    }
                     continue;
                 }
                 let index = schema.index_of(&virtual_column.source_name).unwrap();
@@ -411,6 +429,7 @@ impl NativeDeserializeDataTransform {
         self.array_iters.clear();
         self.array_skip_pages.clear();
         self.offset_in_part = 0;
+        self.read_column_ids.clear();
         Ok(())
     }
 
@@ -444,6 +463,7 @@ impl NativeDeserializeDataTransform {
         self.array_iters.clear();
         self.array_skip_pages.clear();
         self.offset_in_part = 0;
+        self.read_column_ids.clear();
         Ok(())
     }
 
@@ -570,13 +590,17 @@ impl Processor for NativeDeserializeDataTransform {
                 for (index, column_node) in
                     self.block_reader.project_column_nodes.iter().enumerate()
                 {
-                    let readers = chunks.remove(&index).unwrap();
+                    let readers = chunks.remove(&index).unwrap_or_default();
                     if !readers.is_empty() {
                         let leaves = self.column_leaves.get(index).unwrap().clone();
                         let array_iter =
                             BlockReader::build_array_iter(column_node, leaves, readers)?;
                         self.array_iters.insert(index, array_iter);
                         self.array_skip_pages.insert(index, 0);
+
+                        for column_id in &column_node.leaf_column_ids {
+                            self.read_column_ids.insert(*column_id);
+                        }
                     } else {
                         has_default_value = true;
                     }
@@ -766,7 +790,7 @@ impl Processor for NativeDeserializeDataTransform {
             // Step 6: fill missing field default value if need
             let mut block = if need_to_fill_data {
                 self.block_reader
-                    .fill_missing_native_column_values(block, &self.parts)?
+                    .fill_missing_native_column_values(block, &self.read_column_ids)?
             } else {
                 block
             };

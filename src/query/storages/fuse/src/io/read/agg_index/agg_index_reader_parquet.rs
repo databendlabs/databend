@@ -12,40 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
 use common_expression::DataBlock;
 use log::debug;
-use storages_common_table_meta::meta::ColumnMeta;
-use storages_common_table_meta::meta::SingleColumnMeta;
 
 use super::AggIndexReader;
+use crate::io::read::utils::build_columns_meta;
 use crate::io::ReadSettings;
 use crate::io::UncompressedBuffer;
 use crate::FusePartInfo;
 use crate::MergeIOReadResult;
 
 impl AggIndexReader {
-    fn build_columns_meta(row_group: &RowGroupMetaData) -> HashMap<u32, ColumnMeta> {
-        let mut columns_meta = HashMap::with_capacity(row_group.columns().len());
-        for (index, c) in row_group.columns().iter().enumerate() {
-            let (offset, len) = c.byte_range();
-            columns_meta.insert(
-                index as u32,
-                ColumnMeta::Parquet(SingleColumnMeta {
-                    offset,
-                    len,
-                    num_values: c.num_values() as u64,
-                }),
-            );
-        }
-        columns_meta
-    }
     pub fn sync_read_parquet_data_by_merge_io(
         &self,
         read_settings: &ReadSettings,
@@ -60,7 +42,7 @@ impl AggIndexReader {
                     .ok()?;
                 debug_assert_eq!(metadata.row_groups.len(), 1);
                 let row_group = &metadata.row_groups[0];
-                let columns_meta = Self::build_columns_meta(row_group);
+                let columns_meta = build_columns_meta(row_group);
                 let part = FusePartInfo::create(
                     loc.to_string(),
                     row_group.num_rows() as u64,
@@ -72,7 +54,7 @@ impl AggIndexReader {
                 );
                 let res = self
                     .reader
-                    .sync_read_columns_data_by_merge_io(read_settings, part.clone())
+                    .sync_read_columns_data_by_merge_io(read_settings, part.clone(), &None)
                     .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
                     .ok()?;
                 Some((part, res))
@@ -103,10 +85,10 @@ impl AggIndexReader {
                     .ok()?;
                 debug_assert_eq!(metadata.row_groups.len(), 1);
                 let row_group = &metadata.row_groups[0];
-                let columns_meta = Self::build_columns_meta(row_group);
+                let columns_meta = build_columns_meta(row_group);
                 let res = self
                     .reader
-                    .read_columns_data_by_merge_io(read_settings, loc, &columns_meta)
+                    .read_columns_data_by_merge_io(read_settings, loc, &columns_meta, &None)
                     .await
                     .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
                     .ok()?;

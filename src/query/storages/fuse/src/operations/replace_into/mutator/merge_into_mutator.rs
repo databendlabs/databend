@@ -592,6 +592,7 @@ impl AggregationContext {
                 &self.read_settings,
                 &block_meta.location.0,
                 &block_meta.col_metas,
+                &None,
             )
             .await?;
 

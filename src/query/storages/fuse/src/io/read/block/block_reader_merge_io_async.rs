@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ops::Range;
 use std::time::Instant;
 
@@ -129,6 +130,7 @@ impl BlockReader {
         settings: &ReadSettings,
         location: &str,
         columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<MergeIOReadResult> {
         // Perf
         {
@@ -142,6 +144,11 @@ impl BlockReader {
         let mut cached_column_data = vec![];
         let mut cached_column_array = vec![];
         for (_index, (column_id, ..)) in self.project_indices.iter() {
+            if let Some(ignore_column_ids) = ignore_column_ids {
+                if ignore_column_ids.contains(column_id) {
+                    continue;
+                }
+            }
             let column_cache_key = TableDataCacheKey::new(location, *column_id);
 
             // first, check column array object cache

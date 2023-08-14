@@ -290,6 +290,7 @@ impl BlockReader {
         name: String,
         readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
     ) -> Result<ArrayIter<'static>> {
+        // TODO(b41sh): support other data types
         // The data type of virtual columns are always Nullable Variant,
         // so we can directly construct `ColumnDescriptor`
         let primitive_type = PrimitiveType {

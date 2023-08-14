@@ -133,12 +133,12 @@ impl SyncSource for ReadNativeDataSource<true> {
                         TableMetaLocationGenerator::gen_virtual_block_location(&fuse_part.location);
 
                     // If virtual column file exists, read the data from the virtual columns directly.
-                    if let Some(mut virtual_source_data) =
+                    if let Some((mut virtual_source_data, ignore_column_ids)) =
                         virtual_reader.sync_read_native_data(&loc)
                     {
                         let mut source_data = self
                             .block_reader
-                            .sync_read_native_columns_data(part.clone())?;
+                            .sync_read_native_columns_data(part.clone(), &ignore_column_ids)?;
                         source_data.append(&mut virtual_source_data);
                         return Ok(Some(DataBlock::empty_with_meta(
                             NativeDataSourceMeta::create(vec![part.clone()], vec![
@@ -150,7 +150,8 @@ impl SyncSource for ReadNativeDataSource<true> {
 
                 Ok(Some(DataBlock::empty_with_meta(
                     NativeDataSourceMeta::create(vec![part.clone()], vec![DataSource::Normal(
-                        self.block_reader.sync_read_native_columns_data(part)?,
+                        self.block_reader
+                            .sync_read_native_columns_data(part, &None)?,
                     )]),
                 )))
             }
@@ -224,11 +225,14 @@ impl Processor for ReadNativeDataSource<false> {
                             );
 
                             // If virtual column file exists, read the data from the virtual columns directly.
-                            if let Some(mut virtual_source_data) =
+                            if let Some((mut virtual_source_data, ignore_column_ids)) =
                                 virtual_reader.read_native_data(&loc).await
                             {
                                 let mut source_data = block_reader
-                                    .async_read_native_columns_data(part.clone())
+                                    .async_read_native_columns_data(
+                                        part.clone(),
+                                        &ignore_column_ids,
+                                    )
                                     .await?;
                                 source_data.append(&mut virtual_source_data);
                                 return Ok(DataSource::Normal(source_data));
@@ -236,7 +240,9 @@ impl Processor for ReadNativeDataSource<false> {
                         }
 
                         Ok(DataSource::Normal(
-                            block_reader.async_read_native_columns_data(part).await?,
+                            block_reader
+                                .async_read_native_columns_data(part, &None)
+                                .await?,
                         ))
                     }));
                     handler.await.unwrap()

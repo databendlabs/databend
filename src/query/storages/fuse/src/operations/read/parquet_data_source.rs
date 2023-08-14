@@ -15,7 +15,6 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
@@ -24,15 +23,11 @@ use serde::Deserializer;
 use serde::Serializer;
 
 use crate::io::MergeIOReadResult;
+use crate::io::VirtualMergeIOReadResult;
 
 pub enum DataSource {
     AggIndex((PartInfoPtr, MergeIOReadResult)),
-    Normal(
-        (
-            MergeIOReadResult,
-            Option<(PartInfoPtr, ArrowSchema, MergeIOReadResult)>,
-        ),
-    ),
+    Normal((MergeIOReadResult, Option<VirtualMergeIOReadResult>)),
 }
 
 pub struct DataSourceMeta {

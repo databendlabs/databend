@@ -106,7 +106,7 @@ impl BlockReader {
 
         // Get the merged IO read result.
         let merge_io_read_result = self
-            .read_columns_data_by_merge_io(settings, &meta.location.0, columns_meta)
+            .read_columns_data_by_merge_io(settings, &meta.location.0, columns_meta, &None)
             .await?;
 
         // Get the columns chunk.

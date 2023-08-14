@@ -134,9 +134,16 @@ impl SyncSource for ReadParquetDataSource<true> {
                     None
                 };
 
+                let ignore_column_ids = if let Some(virtual_source) = &virtual_source {
+                    &virtual_source.ignore_column_ids
+                } else {
+                    &None
+                };
+
                 let source = self.block_reader.sync_read_columns_data_by_merge_io(
                     &ReadSettings::from_ctx(&self.partitions.ctx)?,
                     part.clone(),
+                    ignore_column_ids,
                 )?;
 
                 Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
@@ -227,11 +234,18 @@ impl Processor for ReadParquetDataSource<false> {
                             None
                         };
 
+                        let ignore_column_ids = if let Some(virtual_source) = &virtual_source {
+                            &virtual_source.ignore_column_ids
+                        } else {
+                            &None
+                        };
+
                         let source = block_reader
                             .read_columns_data_by_merge_io(
                                 &settings,
                                 &part.location,
                                 &part.columns_meta,
+                                ignore_column_ids,
                             )
                             .await?;
 
