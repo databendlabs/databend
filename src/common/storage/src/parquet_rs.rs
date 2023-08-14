@@ -230,10 +230,10 @@ mod tests {
     use common_expression::TableDataType;
     use common_expression::TableField;
     use common_expression::TableSchema;
-    use parquet_rs::arrow::arrow_to_parquet_schema;
+    use parquet::arrow::arrow_to_parquet_schema;
 
-    use super::build_parquet_schema_tree;
-    use crate::plan::projection::ParquetSchemaTreeNode;
+    use crate::parquet_rs::build_parquet_schema_tree;
+    use crate::parquet_rs::ParquetSchemaTreeNode;
 
     #[test]
     fn test_build_parquet_schema_tree() {
