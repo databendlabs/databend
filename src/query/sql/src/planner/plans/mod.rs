@@ -31,6 +31,7 @@ mod lambda;
 mod limit;
 mod materialized_cte;
 mod merge_into;
+mod merge_into_deduplicate_and_split;
 pub mod operator;
 mod pattern;
 mod plan;

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::ast::MatchedClause;
+use common_ast::ast::UnmatchedClause;
 use common_expression::Expr;
 use common_expression::TableSchemaRef;
 use common_meta_types::MetaId;
@@ -23,6 +25,8 @@ use crate::executor::PhysicalPlan;
 pub struct MergeIntoPlan {
     // join result: target_columns, source_columns, target_table._row_id
     pub join_plan: PhysicalPlan,
+    pub matched_clauses: Vec<MatchedClause>,
+    pub unmatched_clauses: Vec<UnmatchedClause>,
 }
 
 impl std::fmt::Debug for MergeIntoPlan {

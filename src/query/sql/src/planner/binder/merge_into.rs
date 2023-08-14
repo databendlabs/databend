@@ -63,11 +63,13 @@ impl Binder {
             merge_options,
             ..
         } = stmt;
+
         if merge_options.is_empty() {
             return Err(ErrorCode::BadArguments(
                 "at least one matched or unmatched clause for merge into",
             ));
         }
+
         let database_name = database.as_ref().map_or_else(
             || self.ctx.get_current_database(),
             |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
@@ -99,6 +101,7 @@ impl Binder {
             .read()
             .get_table_index(Some(database_name.as_str()), table_name.as_str())
             .expect("can't get target_table binding");
+
         let row_id_column_binding = InternalColumnBinding {
             database_name: Some(database_name),
             table_name: Some(table_name),
@@ -116,7 +119,6 @@ impl Binder {
         let (left_child, left_context) = self
             .bind_merge_into_source(bind_context, None, &source.clone())
             .await?;
-        // bind on_condition, we need to add used column, convient for scan needed columns only.
 
         // add join,use full outer join in V1, we use _row_id to check_duplicate
         // join row.
@@ -139,7 +141,7 @@ impl Binder {
             .await?;
         let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
         // bind cluase column
-        let (match_cluases, unmatch_cluases) = stmt.split_clauses();
+        let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
         let name_resolution_ctx = self.name_resolution_ctx.clone();
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
@@ -150,16 +152,22 @@ impl Binder {
             HashMap::new(),
             Box::new(IndexMap::new()),
         );
-        for clause in &match_cluases {
+        for clause in &matched_clauses {
             self.bind_matched_clause(&mut scalar_binder, clause).await?;
         }
-        for clause in &unmatch_cluases {
+        for clause in &unmatched_clauses {
             self.bind_unmatched_clause(&mut scalar_binder, clause)
                 .await?;
         }
         let join_plan = builder.build(&join_sexpr, bind_ctx.column_set()).await?;
 
-        Ok(Plan::MergeInto((Box::new(MergeIntoPlan { join_plan }))))
+        Ok(Plan::MergeInto(
+            (Box::new(MergeIntoPlan {
+                join_plan,
+                matched_clauses,
+                unmatched_clauses,
+            })),
+        ))
     }
 
     async fn bind_matched_clause<'a>(
