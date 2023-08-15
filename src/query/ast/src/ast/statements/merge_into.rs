@@ -60,7 +60,6 @@ pub struct MergeIntoStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    pub columns: Vec<Identifier>,
     pub source: MergeSource,
     // alias_target is belong to target
     pub alias_target: Option<TableAlias>,
@@ -78,12 +77,6 @@ impl Display for MergeIntoStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-
-        if !self.columns.is_empty() {
-            write!(f, "(")?;
-            write_comma_separated_list(f, &self.columns)?;
-            write!(f, ") ")?;
-        }
 
         write!(f, " USING {} ON {}", self.source, self.join_expr)?;
 

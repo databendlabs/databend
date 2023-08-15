@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::HashSet;
 
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
@@ -37,6 +37,7 @@ use crate::optimizer::SExpr;
 use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::BindContext;
+use crate::IndexType;
 use crate::ScalarBinder;
 
 // implementation of merge into for now:
@@ -56,7 +57,6 @@ impl Binder {
             catalog,
             database,
             table,
-            columns,
             source,
             alias_target,
             join_expr,
@@ -90,10 +90,20 @@ impl Binder {
 
         // get_source_table_reference
         let source_data = source.transform_table_reference();
+        let mut columns_set = HashSet::<IndexType>::new();
+
+        // bind source data
+        let (left_child, mut left_context) = self
+            .bind_merge_into_source(bind_context, None, &source.clone())
+            .await?;
+
+        // add all left source columns for read
+        columns_set.union(&left_context.column_set());
 
         // bind table for target table
-        let (right_child, right_context) =
-            self.bind_single_table(bind_context, &target_table).await?;
+        let (mut right_child, mut right_context) = self
+            .bind_single_table(&mut left_context, &target_table)
+            .await?;
 
         // add internal_column (_row_id)
         let table_index = self
@@ -111,17 +121,13 @@ impl Binder {
             },
         };
 
-        let column_binding = bind_context
+        let column_binding = right_context
             .add_internal_column_binding(&row_id_column_binding, self.metadata.clone())?;
 
-        SExpr::add_internal_column_index(&right_child, table_index, column_binding.index);
-        // bind source data
-        let (left_child, left_context) = self
-            .bind_merge_into_source(bind_context, None, &source.clone())
-            .await?;
+        right_child =
+            SExpr::add_internal_column_index(&right_child, table_index, column_binding.index);
 
-        // add join,use full outer join in V1, we use _row_id to check_duplicate
-        // join row.
+        // add join,use left outer join in V1, we use _row_id to check_duplicate join row.
         let join = Join {
             op: LeftOuter,
             condition: JoinCondition::On(Box::new(join_expr.clone())),
@@ -133,7 +139,7 @@ impl Binder {
             .bind_join(
                 bind_context,
                 left_context,
-                right_context,
+                right_context.clone(),
                 left_child,
                 right_child,
                 &join,
@@ -144,7 +150,7 @@ impl Binder {
         let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
         let name_resolution_ctx = self.name_resolution_ctx.clone();
         let mut scalar_binder = ScalarBinder::new(
-            bind_context,
+            &mut right_context,
             self.ctx.clone(),
             &name_resolution_ctx,
             self.metadata.clone(),
@@ -153,10 +159,11 @@ impl Binder {
             Box::new(IndexMap::new()),
         );
         for clause in &matched_clauses {
-            self.bind_matched_clause(&mut scalar_binder, clause).await?;
+            self.bind_matched_clause(&mut scalar_binder, clause, &mut columns_set)
+                .await?;
         }
         for clause in &unmatched_clauses {
-            self.bind_unmatched_clause(&mut scalar_binder, clause)
+            self.bind_unmatched_clause(&mut scalar_binder, clause, &mut columns_set)
                 .await?;
         }
 
@@ -171,19 +178,6 @@ impl Binder {
             .await?;
         let table_id = table.get_id();
 
-        let schema = if columns.is_empty() {
-            table.schema()
-        } else {
-            let schema = table.schema();
-            let field_indexes = columns
-                .iter()
-                .map(|ident| {
-                    schema.index_of(&normalize_identifier(ident, &self.name_resolution_ctx).name)
-                })
-                .collect::<Result<Vec<_>>>()?;
-            Arc::new(schema.project(&field_indexes))
-        };
-
         // let join_plan = builder.build(&join_sexpr, bind_ctx.column_set()).await?;
         // let merge_into_source = Plan::MergeIntoSource(
         //     (Box::new(MergeIntoSource {
@@ -192,7 +186,6 @@ impl Binder {
         //         row_id_set: HashSet::new(),
         //     })),
         // );
-
         Ok(Plan::MergeInto(Box::new(MergeInto {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
@@ -201,6 +194,7 @@ impl Binder {
             bind_context: Box::new(bind_context.clone()),
             meta_data: self.metadata.clone(),
             input: Box::new(join_sexpr.clone()),
+            columns_set: Box::new(columns_set),
             match_clauses: matched_clauses.clone(),
             unmatched_clauses: unmatched_clauses.clone(),
         })))
@@ -210,14 +204,21 @@ impl Binder {
         &mut self,
         scalar_binder: &mut ScalarBinder<'a>,
         clause: &MatchedClause,
+        columns: &mut HashSet<IndexType>,
     ) -> Result<()> {
         if let Some(expr) = &clause.selection {
-            scalar_binder.bind(&expr).await?;
+            let (scalar_expr, _) = scalar_binder.bind(&expr).await?;
+            for idx in scalar_expr.used_columns() {
+                columns.insert(idx);
+            }
         }
         for oepration in &clause.operations {
             if let MatchOperation::Update { update_list } = oepration {
                 for update_expr in update_list {
-                    scalar_binder.bind(&update_expr.expr).await?;
+                    let (scalar_expr, _) = scalar_binder.bind(&update_expr.expr).await?;
+                    for idx in scalar_expr.used_columns() {
+                        columns.insert(idx);
+                    }
                 }
             }
         }
@@ -228,13 +229,20 @@ impl Binder {
         &mut self,
         scalar_binder: &mut ScalarBinder<'a>,
         clause: &UnmatchedClause,
+        columns: &mut HashSet<IndexType>,
     ) -> Result<()> {
         if let Some(expr) = &clause.selection {
-            scalar_binder.bind(&expr).await?;
+            let (scalar_expr, _) = scalar_binder.bind(&expr).await?;
+            for idx in scalar_expr.used_columns() {
+                columns.insert(idx);
+            }
         }
         for exprs in &clause.insert_operation.values {
             for expr in exprs {
-                scalar_binder.bind(expr).await?;
+                let (scalar_expr, _) = scalar_binder.bind(expr).await?;
+                for idx in scalar_expr.used_columns() {
+                    columns.insert(idx);
+                }
             }
         }
         Ok(())

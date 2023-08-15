@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use common_ast::ast::MatchedClause;
 use common_ast::ast::UnmatchedClause;
 use common_meta_types::MetaId;
 
 use crate::optimizer::SExpr;
 use crate::BindContext;
+use crate::IndexType;
 use crate::MetadataRef;
 
 #[derive(Clone)]
@@ -28,6 +31,7 @@ pub struct MergeInto {
     pub table_id: MetaId,
     pub input: Box<SExpr>,
     pub bind_context: Box<BindContext>,
+    pub columns_set: Box<HashSet<IndexType>>,
     pub meta_data: MetadataRef,
     pub match_clauses: Vec<MatchedClause>,
     pub unmatched_clauses: Vec<UnmatchedClause>,

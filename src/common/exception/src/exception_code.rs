@@ -185,6 +185,7 @@ build_exceptions! {
     BackgroundJobAlreadyExists(1501),
     UnknownBackgroundJob(1502),
 
+    InValidRowIdIndex(1503),
     // Index related errors.
     UnsupportedIndex(1601),
     RefreshIndexError(1602),
