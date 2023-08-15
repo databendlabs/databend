@@ -96,7 +96,7 @@ pub struct NativeDeserializeDataTransform {
 
     read_columns: Vec<usize>,
     // Column ids are columns that have been read out,
-    // not readed columns have two cases:
+    // not readded columns have two cases:
     // 1. newly added columns, no data insertion
     // 2. the source columns used to generate virtual columns,
     //    and all the virtual columns have been generated,
