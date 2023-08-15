@@ -20,6 +20,7 @@ use arrow_array::StructArray;
 use arrow_schema::ArrowError;
 use arrow_schema::FieldRef;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
@@ -32,6 +33,7 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use futures::StreamExt;
 use opendal::Operator;
@@ -41,6 +43,8 @@ use parquet::arrow::arrow_to_parquet_schema;
 use parquet::arrow::parquet_to_arrow_schema_by_columns;
 use parquet::arrow::ParquetRecordBatchStreamBuilder;
 use parquet::arrow::ProjectionMask;
+
+use super::pruning::ParquetPruner;
 
 struct ParquetPredicate {
     /// Columns used for eval predicate.
@@ -64,22 +68,27 @@ pub struct ParquetRSReader {
     is_inner_project: bool,
     /// Field paths helping to traverse columns.
     field_paths: Vec<(FieldRef, Vec<FieldIndex>)>,
+
+    pruner: ParquetPruner,
 }
 
 impl ParquetRSReader {
     pub fn create(
+        ctx: Arc<dyn TableContext>,
         op: Operator,
-        table_schema: &TableSchema,
+        table_schema: TableSchemaRef,
         arrow_schema: &arrow_schema::Schema,
         plan: &DataSourcePlan,
+        options: ParquetReadOptions,
     ) -> Result<Self> {
         let mut output_projection =
-            PushDownInfo::projection_of_push_downs(table_schema, &plan.push_downs);
+            PushDownInfo::projection_of_push_downs(&table_schema, &plan.push_downs);
         let schema_descr = arrow_to_parquet_schema(arrow_schema)?;
+        // Build predicate for lazy materialize (prewhere).
         let predicate = PushDownInfo::prewhere_of_push_downs(&plan.push_downs)
             .map(|prewhere| {
                 output_projection = prewhere.output_columns.clone();
-                let schema = prewhere.prewhere_columns.project_schema(table_schema);
+                let schema = prewhere.prewhere_columns.project_schema(&table_schema);
                 let filter = prewhere
                     .filter
                     .as_expr(&BUILTIN_FUNCTIONS)
@@ -100,8 +109,10 @@ impl ParquetRSReader {
         let projection = output_projection.to_arrow_projection(&schema_descr);
         let batch_schema =
             parquet_to_arrow_schema_by_columns(&schema_descr, projection.clone(), None)?;
-        let output_schema = to_arrow_schema(&output_projection.project_schema(table_schema));
+        let output_schema = to_arrow_schema(&output_projection.project_schema(&table_schema));
         let field_paths = compute_output_field_paths(&output_schema, &batch_schema)?;
+        // Build pruner to prune row groups and pages(TODO).
+        let pruner = ParquetPruner::try_create(ctx, table_schema, &plan.push_downs, options)?;
 
         Ok(Self {
             op,
@@ -109,6 +120,7 @@ impl ParquetRSReader {
             projection,
             is_inner_project: matches!(output_projection, Projection::InnerColumns(_)),
             field_paths,
+            pruner,
         })
     }
 
@@ -117,11 +129,16 @@ impl ParquetRSReader {
         let reader = self.op.reader(loc).await?;
         // TODO(parquet):
         // - set batch size to generate block one by one.
-        // - specify row groups to read.
         // - set row selections.
         let mut builder = ParquetRecordBatchStreamBuilder::new(reader)
             .await?
             .with_projection(self.projection.clone());
+
+        // Prune row groups.
+        let file_meta = builder.metadata();
+        let selected_row_groups = self.pruner.prune_row_groups(file_meta)?;
+        builder = builder.with_row_groups(selected_row_groups);
+
         if let Some(predicate) = self.predicate.as_ref() {
             let func_ctx = ctx.get_function_context()?;
             let is_inner_project = self.is_inner_project;

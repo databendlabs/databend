@@ -38,10 +38,12 @@ impl ParquetRSTable {
 
         let table_schema: TableSchemaRef = self.table_info.schema();
         let reader = Arc::new(ParquetRSReader::create(
+            ctx.clone(),
             self.operator.clone(),
-            &table_schema,
+            table_schema,
             &self.arrow_schema,
             plan,
+            self.read_options,
         )?);
 
         // TODO(parquet):

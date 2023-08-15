@@ -21,6 +21,7 @@ use chrono::Utc;
 use common_arrow::arrow::datatypes::Field as Arrow2Field;
 use common_arrow::arrow::datatypes::Schema as Arrow2Schema;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -163,10 +164,12 @@ impl IcebergTable {
         let arrow_schema = arrow_schema::Schema::new(arrow_fields);
 
         let praquet_reader = Arc::new(ParquetRSReader::create(
+            ctx.clone(),
             self.op.clone(),
-            &table_schema,
+            table_schema,
             &arrow_schema,
             plan,
+            ParquetReadOptions::default(),
         )?);
 
         // TODO: we need to support top_k.

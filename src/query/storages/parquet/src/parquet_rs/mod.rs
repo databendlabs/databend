@@ -14,7 +14,9 @@
 
 mod parquet_reader;
 mod parquet_table;
+mod pruning;
 mod source;
+mod statistics;
 
 pub use parquet_reader::ParquetRSReader;
 pub use parquet_table::ParquetRSTable;
