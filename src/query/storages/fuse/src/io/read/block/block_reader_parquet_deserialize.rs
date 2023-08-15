@@ -270,9 +270,10 @@ impl BlockReader {
                         }
                     }
                 } else {
-                    // TODO more context info for error message
+                    // If the column is the source of virtual columns, it may be ignored.
+                    // TODO cover more case and add context info for error message
                     // no raw data of given column id, it is unexpected
-                    return Err(ErrorCode::StorageOther("unexpected: column data not found"));
+                    return Ok(None);
                 }
             } else {
                 // no column meta of given column id

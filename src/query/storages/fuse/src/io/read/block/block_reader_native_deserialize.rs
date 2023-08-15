@@ -239,7 +239,10 @@ impl BlockReader {
                         }
                     }
                 } else {
-                    return Err(ErrorCode::StorageOther("unexpected: column data not found"));
+                    // If the column is the source of virtual columns, it may be ignored.
+                    // TODO cover more case and add context info for error message
+                    // no raw data of given column id, it is unexpected
+                    return Ok(None);
                 }
             } else {
                 break;

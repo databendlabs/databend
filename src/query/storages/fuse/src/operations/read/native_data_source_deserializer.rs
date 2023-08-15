@@ -780,12 +780,6 @@ impl Processor for NativeDeserializeDataTransform {
             }
 
             let block = self.block_reader.build_block(arrays.clone(), None)?;
-            let origin_num_rows = block.num_rows();
-            let block = if let Some(filter) = &filter {
-                block.filter_boolean_value(filter)?
-            } else {
-                block
-            };
 
             // Step 6: fill missing field default value if need
             let mut block = if need_to_fill_data {
@@ -797,6 +791,13 @@ impl Processor for NativeDeserializeDataTransform {
 
             // Step 7: Add optional virtual columns
             self.add_virtual_columns(arrays, &self.src_schema, &self.virtual_columns, &mut block)?;
+
+            let origin_num_rows = block.num_rows();
+            let block = if let Some(filter) = &filter {
+                block.filter_boolean_value(filter)?
+            } else {
+                block
+            };
 
             // Step 8: Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
             // `FillInternalColumnProcessor` will generate internal columns using `InternalColumnMeta` in next pipeline.
