@@ -161,9 +161,9 @@ impl Dataframe {
     }
 
     pub async fn filter(mut self, expr: Expr) -> Result<Self> {
-        let (s_expr, _, _) = self
+        let (s_expr, _) = self
             .binder
-            .bind_where(&mut self.bind_context, [].into(), &expr, self.s_expr)
+            .bind_where(&mut self.bind_context, &[], &expr, self.s_expr)
             .await?;
         self.s_expr = s_expr;
         Ok(self)
