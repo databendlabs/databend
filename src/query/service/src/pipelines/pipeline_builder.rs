@@ -258,6 +258,8 @@ impl PipelineBuilder {
             PhysicalPlan::AsyncSourcer(async_sourcer) => self.build_async_sourcer(async_sourcer),
             PhysicalPlan::Deduplicate(deduplicate) => self.build_deduplicate(deduplicate),
             PhysicalPlan::ReplaceInto(replace) => self.build_replace_into(replace),
+            PhysicalPlan::MergeInto(_) => unimplemented!(),
+            PhysicalPlan::MergeIntoSource(_) => unimplemented!(),
         }
     }
 

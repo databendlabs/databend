@@ -845,13 +845,18 @@ impl UnionAll {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MergeIntoSource {
     // join result: target_columns, source_columns, target_table._row_id
     pub input: Box<PhysicalPlan>,
     pub row_id_idx: u32,
     // used for duplicate-check
     pub row_id_set: HashSet<u64>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct MergeInto {
+    pub input: Box<PhysicalPlan>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -1083,6 +1088,9 @@ pub enum PhysicalPlan {
     AsyncSourcer(AsyncSourcerPlan),
     Deduplicate(Deduplicate),
     ReplaceInto(ReplaceInto),
+    // MergeInto
+    MergeIntoSource(MergeIntoSource),
+    MergeInto(MergeInto),
 }
 
 impl PhysicalPlan {
@@ -1122,6 +1130,8 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCte(v) => v.plan_id,
             PhysicalPlan::ConstantTableScan(v) => v.plan_id,
             PhysicalPlan::DeletePartial(_)
+            | PhysicalPlan::MergeInto(_)
+            | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::MutationAggregate(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::AsyncSourcer(_)
@@ -1162,6 +1172,8 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
             PhysicalPlan::AsyncSourcer(_)
+            | PhysicalPlan::MergeInto(_)
+            | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_) => Ok(DataSchemaRef::default()),
         }
@@ -1196,6 +1208,8 @@ impl PhysicalPlan {
             PhysicalPlan::AsyncSourcer(_) => "AsyncSourcer".to_string(),
             PhysicalPlan::Deduplicate(_) => "Deduplicate".to_string(),
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
+            PhysicalPlan::MergeInto(_) => "MergeInto".to_string(),
+            PhysicalPlan::MergeIntoSource(_) => "MergeIntoSource".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
@@ -1244,6 +1258,8 @@ impl PhysicalPlan {
             PhysicalPlan::AsyncSourcer(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Deduplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ReplaceInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MergeInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MergeIntoSource(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MaterializedCte(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
@@ -1281,6 +1297,8 @@ impl PhysicalPlan {
             | PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
+            | PhysicalPlan::MergeInto(_)
+            | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::CteScan(_) => None,
         }
