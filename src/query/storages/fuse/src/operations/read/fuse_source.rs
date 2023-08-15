@@ -287,7 +287,7 @@ pub(crate) fn fill_internal_column_meta(
         block_id: block_meta.block_id,
         block_location: block_meta.block_location.clone(),
         segment_location: block_meta.segment_location.clone(),
-        snapshot_location: block_meta.snapshot_location.as_ref().unwrap().clone(),
+        snapshot_location: block_meta.snapshot_location.clone(),
         offsets,
     };
 

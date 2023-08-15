@@ -375,9 +375,9 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("enable_sync_refresh_aggregating_index", DefaultSettingValue {
+                ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Refresh aggregating index after insert new data",
+                    desc: "Refresh aggregating index after new data written",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
