@@ -1908,6 +1908,7 @@ name = "common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arrow-schema",
  "backtrace",
  "bincode 2.0.0-rc.2",
  "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
@@ -1916,6 +1917,7 @@ dependencies = [
  "common-meta-types",
  "http",
  "opendal",
+ "parquet",
  "paste",
  "prost",
  "serde",
@@ -1941,7 +1943,6 @@ dependencies = [
  "common-exception",
  "common-hashtable",
  "common-io",
- "croaring",
  "dashmap",
  "educe",
  "enum-as-inner",
@@ -1960,6 +1961,7 @@ dependencies = [
  "ordered-float 3.7.0",
  "pretty_assertions",
  "rand 0.8.5",
+ "roaring",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -1980,7 +1982,6 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "common-settings",
- "croaring",
  "jsonb",
  "lexical-core",
  "match-template",
@@ -1988,6 +1989,7 @@ dependencies = [
  "num",
  "ordered-float 3.7.0",
  "pretty_assertions",
+ "roaring",
  "serde_json",
  "storages-common-blocks",
  "storages-common-table-meta",
@@ -2016,7 +2018,6 @@ dependencies = [
  "common-vector",
  "crc32fast",
  "criterion",
- "croaring",
  "ctor",
  "ethnum",
  "geo",
@@ -2037,6 +2038,7 @@ dependencies = [
  "ordered-float 3.7.0",
  "rand 0.8.5",
  "regex",
+ "roaring",
  "serde",
  "sha1",
  "sha2",
@@ -2784,10 +2786,9 @@ version = "0.1.0"
 dependencies = [
  "arrow-schema",
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "chrono",
  "common-arrow",
- "common-base",
  "common-catalog",
  "common-exception",
  "common-expression",
@@ -2795,6 +2796,7 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
+ "common-pipeline-sources",
  "common-storage",
  "common-storages-parquet",
  "futures",
@@ -2802,7 +2804,6 @@ dependencies = [
  "match-template",
  "minitrace",
  "opendal",
- "parquet",
  "serde",
  "storages-common-pruner",
  "storages-common-table-meta",
@@ -2864,11 +2865,10 @@ dependencies = [
 name = "common-storages-parquet"
 version = "0.1.0"
 dependencies = [
- "arrow-buffer",
+ "arrow-array",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
- "bytes",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2881,7 +2881,6 @@ dependencies = [
  "common-pipeline-sources",
  "common-sql",
  "common-storage",
- "ethnum",
  "futures",
  "log",
  "opendal",
@@ -3296,23 +3295,6 @@ name = "critical-section"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6548a0ad5d2549e111e1f6a11a6c2e2d00ce6a3dafe22948d67c2b443f775e52"
-
-[[package]]
-name = "croaring"
-version = "0.9.0"
-source = "git+https://github.com/RoaringBitmap/croaring-rs?rev=13a71b4#13a71b4145703a44031e2e1201ab494eba9bf62b"
-dependencies = [
- "byteorder",
- "croaring-sys",
-]
-
-[[package]]
-name = "croaring-sys"
-version = "0.9.0"
-source = "git+https://github.com/RoaringBitmap/croaring-rs?rev=13a71b4#13a71b4145703a44031e2e1201ab494eba9bf62b"
-dependencies = [
- "cc",
-]
 
 [[package]]
 name = "cron"
@@ -9266,6 +9248,7 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "retain_mut",
+ "serde",
 ]
 
 [[package]]

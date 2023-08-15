@@ -21,10 +21,9 @@ use comfy_table::Cell;
 use comfy_table::Table;
 use common_io::display_decimal_128;
 use common_io::display_decimal_256;
-use croaring::treemap::NativeSerializer;
-use croaring::Treemap;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
+use roaring::RoaringTreemap;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
@@ -141,7 +140,7 @@ impl<'a> Debug for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = Treemap::deserialize(bits).unwrap();
+                let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
                 write!(f, "{rb:?}")
             }
             ScalarRef::Tuple(fields) => {
@@ -220,7 +219,7 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = Treemap::deserialize(bits).unwrap();
+                let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
                 write!(f, "{rb:?}")
             }
             ScalarRef::Tuple(fields) => {

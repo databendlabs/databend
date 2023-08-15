@@ -26,17 +26,24 @@ CREATE NETWORK POLICY [IF NOT EXISTS] policy_name
 
 ## Examples
 
-```sql
--- Create a network policy named test_policy with allowed IP address 192.168.1.0/24 and blocked IP address 192.168.1.99 along with a comment
-CREATE NETWORK POLICY test_policy ALLOWED_IP_LIST=('192.168.1.0/24') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test comment'
+This example demonstrates creating a network policy with specified allowed and blocked IP addresses, and then associating this policy with a user to control network access. The network policy allows all IP addresses ranging from 192.168.1.0 to 192.168.1.255, except for the specific IP address 192.168.1.99.
 
--- Create a network policy named test_policy1 with allowed IP address 192.168.100.0/24 and no blocked IP address specified:
-CREATE NETWORK POLICY test_policy1 ALLOWED_IP_LIST=('192.168.100.0/24')
+```sql
+-- Create a network policy
+CREATE NETWORK POLICY sample_policy
+    ALLOWED_IP_LIST=('192.168.1.0/24')
+    BLOCKED_IP_LIST=('192.168.1.99')
+    COMMENT='Sample';
 
 SHOW NETWORK POLICIES;
 
-Name        |Allowed Ip List |Blocked Ip List|Comment     |
-------------+----------------+---------------+------------+
-test_policy |192.168.1.0/24  |192.168.1.99   |test comment|
-test_policy1|192.168.100.0/24|               |            |
+Name         |Allowed Ip List          |Blocked Ip List|Comment    |
+-------------+-------------------------+---------------+-----------+
+sample_policy|192.168.1.0/24           |192.168.1.99   |Sample     |
+
+-- Create a user
+CREATE USER sample_user IDENTIFIED BY 'databend';
+
+-- Associate the network policy with the user
+ALTER USER sample_user WITH SET NETWORK POLICY='sample_policy';
 ```

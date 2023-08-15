@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
@@ -64,10 +63,6 @@ impl<'de> serde::Deserialize<'de> for NativeDataSourceMeta {
 
 #[typetag::serde(name = "fuse_data_source")]
 impl BlockMetaInfo for NativeDataSourceMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals NativeDataSourceMeta")
     }

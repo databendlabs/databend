@@ -31,6 +31,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::AbortOperation;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
+use crate::statistics::sort_by_cluster_stats;
 use crate::FuseTable;
 use crate::TableContext;
 
@@ -220,23 +221,45 @@ impl<'a> SegmentCompactor<'a> {
         let mut checked_end_at = 0;
         let mut is_end = false;
         for chunk in reverse_locations.chunks(chunk_size) {
-            let segment_infos = segments_io
+            let mut segment_infos = segments_io
                 .read_segments::<SegmentInfo>(chunk, false)
-                .await?;
+                .await?
+                .into_iter()
+                .zip(chunk.iter())
+                .map(|(sg, chunk)| sg.map(|v| (v, chunk)))
+                .collect::<Result<Vec<_>>>()?;
 
-            for (segment, location) in segment_infos.into_iter().zip(chunk.iter()) {
-                let segment = segment?;
+            if let Some(default_cluster_key) = self.default_cluster_key_id {
+                // sort ascending.
+                segment_infos.sort_by(|a, b| {
+                    sort_by_cluster_stats(
+                        &a.0.summary.cluster_stats,
+                        &b.0.summary.cluster_stats,
+                        default_cluster_key,
+                    )
+                });
+            }
+
+            for (segment, location) in segment_infos.into_iter() {
+                if is_end {
+                    self.compacted_state
+                        .segments_locations
+                        .push(location.clone());
+                    continue;
+                }
+
                 self.add(segment, location.clone()).await?;
                 let compacted = self.num_fragments_compacted();
-                checked_end_at += 1;
                 if compacted >= limit {
+                    if !self.fragmented_segments.is_empty() {
+                        // some fragments left, compact them
+                        self.compact_fragments().await?;
+                    }
                     is_end = true;
-                    // break if number of compacted segments reach the limit
-                    // note that during the finalization of compaction, there might be some extra
-                    // fragmented segments also need to be compacted, we just let it go
-                    break;
                 }
             }
+
+            checked_end_at += chunk.len();
 
             // Status.
             {

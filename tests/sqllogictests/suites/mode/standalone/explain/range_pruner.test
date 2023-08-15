@@ -8,20 +8,22 @@ query T
 explain select 1 from range_t where c > 'efg'
 ----
 EvalScalar
+├── output columns: [1 (#2)]
 ├── expressions: [1]
 ├── estimated rows: 0.40
 └── Filter
+    ├── output columns: []
     ├── filters: [range_t.c (#0) > 'efg']
     ├── estimated rows: 0.40
     └── TableScan
         ├── table: default.default.range_t
+        ├── output columns: [c (#0)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 1
         ├── partitions scanned: 0
         ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [range_t.c (#0) > 'efg'], limit: NONE]
-        ├── output columns: [c]
         └── estimated rows: 2.00
 
 
@@ -29,30 +31,34 @@ query T
 explain select 1 from range_t where i > 20
 ----
 EvalScalar
+├── output columns: [1 (#2)]
 ├── expressions: [1]
 ├── estimated rows: 0.40
 └── Filter
+    ├── output columns: []
     ├── filters: [range_t.i (#1) > 20]
     ├── estimated rows: 0.40
     └── TableScan
         ├── table: default.default.range_t
+        ├── output columns: [i (#1)]
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 1
         ├── partitions scanned: 0
         ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [range_t.i (#1) > 20], limit: NONE]
-        ├── output columns: [i]
         └── estimated rows: 2.00
 
 query T
 explain select number from numbers(10) where number > 5 and try_cast(get(try_parse_json(number::String),'xx') as varchar) < '10' and 1 = 0;
 ----
 Filter
+├── output columns: [numbers.number (#0)]
 ├── filters: [false]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -65,10 +71,12 @@ query T
 explain select number from numbers(10) where number > 5 and try_cast(get(try_parse_json(number::String),'xx') as varchar)   < '10' and 1 = 0;
 ----
 Filter
+├── output columns: [numbers.number (#0)]
 ├── filters: [false]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0

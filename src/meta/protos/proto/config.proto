@@ -23,6 +23,8 @@ message StorageConfig {
     GcsStorageConfig gcs = 3;
     OssStorageConfig oss = 4;
     WebhdfsStorageConfig webhdfs = 5;
+    ObsStorageConfig obs = 6;
+    CosStorageConfig cos = 7;
   }
 }
 
@@ -83,4 +85,26 @@ message WebhdfsStorageConfig {
 
   string username = 4; // reserved for future use
   string password = 5; // reserved for future use
+}
+
+message ObsStorageConfig {
+  uint64 version = 100;
+  uint64 min_reader_ver = 101;
+
+  string endpoint_url = 1;
+  string bucket = 2;
+  string root = 3;
+  string access_key_id = 4;
+  string secret_access_key = 5;
+}
+
+message CosStorageConfig {
+  uint64 version = 100;
+  uint64 min_reader_ver = 101;
+
+  string endpoint_url = 1;
+  string bucket = 2;
+  string root = 3;
+  string secret_id = 4;
+  string secret_key = 5;
 }
