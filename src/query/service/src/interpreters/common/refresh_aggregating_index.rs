@@ -135,25 +135,38 @@ async fn build_refresh_index_plan(
 
 async fn refresh_agg_index(ctx: Arc<QueryContext>, desc: RefreshAggIndexDesc) -> Result<()> {
     let plans = generate_refresh_index_plan(ctx.clone(), desc).await?;
-    let refresh_agg_index_interpreter =
-        RefreshIndexInterpreter::try_create(ctx.clone(), plans[0].clone())?;
-    let mut build_res = refresh_agg_index_interpreter.execute2().await?;
-    if build_res.main_pipeline.is_empty() {
-        return Ok(());
+    let mut tasks = Vec::with_capacity(std::cmp::min(
+        ctx.get_settings().get_max_threads()? as usize,
+        plans.len(),
+    ));
+    for plan in plans {
+        let ctx_cloned = ctx.clone();
+        tasks.push(async move {
+            let refresh_agg_index_interpreter =
+                RefreshIndexInterpreter::try_create(ctx_cloned.clone(), plan)?;
+            let mut build_res = refresh_agg_index_interpreter.execute2().await?;
+            if build_res.main_pipeline.is_empty() {
+                return Ok(());
+            }
+
+            let settings = ctx_cloned.get_settings();
+            let query_id = ctx_cloned.get_id();
+            build_res.set_max_threads(settings.get_max_threads()? as usize);
+            let settings = ExecutorSettings::try_create(&settings, query_id)?;
+
+            if build_res.main_pipeline.is_complete_pipeline()? {
+                let mut pipelines = build_res.sources_pipelines;
+                pipelines.push(build_res.main_pipeline);
+
+                let complete_executor =
+                    PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+                ctx_cloned.set_executor(complete_executor.get_inner())?;
+                complete_executor.execute()
+            } else {
+                Ok(())
+            }
+        });
     }
-
-    let settings = ctx.get_settings();
-    let query_id = ctx.get_id();
-    build_res.set_max_threads(settings.get_max_threads()? as usize);
-    let settings = ExecutorSettings::try_create(&settings, query_id)?;
-
-    if build_res.main_pipeline.is_complete_pipeline()? {
-        let mut pipelines = build_res.sources_pipelines;
-        pipelines.push(build_res.main_pipeline);
-
-        let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
-        ctx.set_executor(complete_executor.get_inner())?;
-        complete_executor.execute()?;
-    }
+    let _ = futures::future::try_join_all(tasks).await?;
     Ok(())
 }
