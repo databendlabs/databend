@@ -80,7 +80,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (48, "2023-07-04: Add: ManualTriggerParams on background_job", ),
     (49, "2023-07-14: Add: user.proto/NetworkPolicy", ),
     (50, "2023-07-20: Add: user.proto/UserOption::network_policy", ),
-    (51, "2023-08-15: Add: config.proto/ObsStorageConfig abd CosStorageConfig", )
+    (51, "2023-08-15: Add: config.proto/ObsStorageConfig add CosStorageConfig", ),
+    (52, "2023-08-15: Add: catalog.proto/HiveCatalogConfig add storage params", )
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
