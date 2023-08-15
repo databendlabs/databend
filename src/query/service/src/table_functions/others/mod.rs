@@ -20,5 +20,6 @@ mod tenant_quota;
 
 pub use execute_job::ExecuteJobTable;
 pub use license_info::LicenseInfoTable;
+pub use suggested_background_tasks::SuggestedBackgroundTasksSource;
 pub use suggested_background_tasks::SuggestedBackgroundTasksTable;
 pub use tenant_quota::TenantQuotaTable;

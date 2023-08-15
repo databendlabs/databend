@@ -28,8 +28,6 @@ use common_catalog::table_context::TableContext;
 use common_catalog::table_function::TableFunction;
 pub use common_exception::Result;
 use common_expression::DataBlock;
-
-
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
@@ -41,11 +39,6 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
 use common_storages_factory::Table;
-
-use crate::procedures::OneBlockProcedure;
-use crate::procedures::Procedure;
-
-
 
 pub struct ExecuteJobTable {
     job_name: String,

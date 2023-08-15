@@ -55,9 +55,6 @@ use humantime::Duration as HumanDuration;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::Clock;
 
-use crate::procedures::OneBlockProcedure;
-use crate::procedures::Procedure;
-
 pub struct LicenseInfoTable {
     table_info: TableInfo,
 }
@@ -79,7 +76,7 @@ impl LicenseInfoTable {
         database_name: &str,
         table_func_name: &str,
         table_id: u64,
-        table_args: TableArgs,
+        _table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),

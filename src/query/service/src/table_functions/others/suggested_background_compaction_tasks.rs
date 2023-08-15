@@ -22,7 +22,6 @@ use arrow_array::RecordBatch;
 use background_service::Suggestion;
 use common_exception::Result;
 use common_meta_app::schema::TableStatistics;
-use common_storages_fuse::TableContext;
 use log::as_debug;
 use log::info;
 

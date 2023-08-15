@@ -45,7 +45,6 @@ use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
-
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateUDFPlan;

@@ -58,7 +58,6 @@ use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
 use crate::plans::AlterVirtualColumnsPlan;
 use crate::plans::AnalyzeTablePlan;
-
 use crate::plans::CreateCatalogPlan;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::CreateFileFormatPlan;

@@ -53,9 +53,6 @@ use common_pipeline_sources::AsyncSourcer;
 use common_storages_factory::Table;
 use common_users::UserApiProvider;
 
-use crate::procedures::OneBlockProcedure;
-use crate::procedures::Procedure;
-
 pub struct TenantQuotaTable {
     table_info: TableInfo,
     args: Vec<String>,

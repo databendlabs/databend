@@ -12,23 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::interpreters::access::AccessChecker;
-use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
-pub struct ManagementModeAccess {
-    ctx: Arc<QueryContext>,
-}
+pub struct ManagementModeAccess {}
 
 impl ManagementModeAccess {
-    pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
-        Box::new(ManagementModeAccess { ctx })
+    pub fn create() -> Box<dyn AccessChecker> {
+        Box::new(ManagementModeAccess {})
     }
 }
 

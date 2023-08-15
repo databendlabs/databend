@@ -13,16 +13,11 @@
 // limitations under the License.
 
 use common_ast::ast::CallStmt;
-
-
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::binder::Binder;
 use crate::plans::Plan;
-
-
 use crate::BindContext;
 
 impl Binder {

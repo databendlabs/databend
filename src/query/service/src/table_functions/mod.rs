@@ -29,6 +29,7 @@ pub use numbers::NumbersTable;
 pub use openai::GPT2SQLTable;
 pub use others::ExecuteJobTable;
 pub use others::LicenseInfoTable;
+pub use others::SuggestedBackgroundTasksSource;
 pub use others::SuggestedBackgroundTasksTable;
 pub use others::TenantQuotaTable;
 pub use table_function::TableFunction;
