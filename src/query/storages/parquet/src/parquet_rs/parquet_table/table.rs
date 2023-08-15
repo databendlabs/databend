@@ -34,14 +34,17 @@ use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::Pipeline;
 use common_storage::init_stage_operator;
+use common_storage::parquet_rs::infer_schema_with_extension;
+use common_storage::parquet_rs::read_metadata_async;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
+use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 
 use crate::utils::naive_parquet_table_info;
 
-pub struct ParquetTable {
+pub struct ParquetRSTable {
     pub(super) read_options: ParquetReadOptions,
     pub(super) stage_info: StageInfo,
     pub(super) files_info: StageFilesInfo,
@@ -56,11 +59,11 @@ pub struct ParquetTable {
     pub(super) compression_ratio: f64,
 }
 
-impl ParquetTable {
+impl ParquetRSTable {
     pub fn from_info(info: &ParquetTableInfo) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&info.stage_info)?;
 
-        Ok(Arc::new(ParquetTable {
+        Ok(Arc::new(ParquetRSTable {
             table_info: info.table_info.clone(),
             arrow_schema: info.arrow_schema.clone(),
             operator,
@@ -73,10 +76,62 @@ impl ParquetTable {
             compression_ratio: info.compression_ratio,
         }))
     }
+
+    #[async_backtrace::framed]
+    pub async fn create(
+        stage_info: StageInfo,
+        files_info: StageFilesInfo,
+        read_options: ParquetReadOptions,
+        files_to_read: Option<Vec<StageFileInfo>>,
+    ) -> Result<Arc<dyn Table>> {
+        let operator = init_stage_operator(&stage_info)?;
+        let first_file = match &files_to_read {
+            Some(files) => files[0].path.clone(),
+            None => files_info.first_file(&operator).await?.path.clone(),
+        };
+
+        let (arrow_schema, schema_descr, compression_ratio) =
+            Self::prepare_metas(&first_file, operator.clone()).await?;
+
+        let table_info = create_parquet_table_info(&arrow_schema)?;
+
+        Ok(Arc::new(ParquetRSTable {
+            table_info,
+            arrow_schema,
+            operator,
+            read_options,
+            schema_descr,
+            stage_info,
+            files_info,
+            files_to_read,
+            compression_ratio,
+            schema_from: first_file,
+        }))
+    }
+
+    #[async_backtrace::framed]
+    async fn prepare_metas(
+        path: &str,
+        operator: Operator,
+    ) -> Result<(ArrowSchema, SchemaDescPtr, f64)> {
+        // Infer schema from the first parquet file.
+        // Assume all parquet files have the same schema.
+        // If not, throw error during reading.
+        let size = operator.stat(path).await?.content_length();
+        let first_meta = read_metadata_async(path, &operator, Some(size))
+            .await
+            .map_err(|e| {
+                ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
+            })?;
+        let arrow_schema = infer_schema_with_extension(&first_meta)?;
+        let compression_ratio = get_compression_ratio(&first_meta);
+        let schema_descr = first_meta.file_metadata().schema_descr_ptr();
+        Ok((arrow_schema, schema_descr, compression_ratio))
+    }
 }
 
 #[async_trait::async_trait]
-impl Table for ParquetTable {
+impl Table for ParquetRSTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -163,7 +218,7 @@ fn lower_field_name(field: &ArrowField) -> ArrowField {
     }
 }
 
-pub(crate) fn arrow_to_table_schema(schema: &ArrowSchema) -> Result<TableSchema> {
+fn arrow_to_table_schema(schema: &ArrowSchema) -> Result<TableSchema> {
     let fields = schema
         .fields
         .iter()
@@ -173,8 +228,31 @@ pub(crate) fn arrow_to_table_schema(schema: &ArrowSchema) -> Result<TableSchema>
     TableSchema::try_from(&schema).map_err(ErrorCode::from_std_error)
 }
 
-pub(super) fn create_parquet_table_info(schema: &ArrowSchema) -> Result<TableInfo> {
+fn create_parquet_table_info(schema: &ArrowSchema) -> Result<TableInfo> {
     Ok(naive_parquet_table_info(
         arrow_to_table_schema(schema)?.into(),
     ))
+}
+
+fn get_compression_ratio(filemeta: &ParquetMetaData) -> f64 {
+    let compressed_size: i64 = filemeta
+        .row_groups()
+        .iter()
+        .map(|g| g.compressed_size())
+        .sum();
+    let uncompressed_size: i64 = filemeta
+        .row_groups()
+        .iter()
+        .map(|g| {
+            g.columns()
+                .iter()
+                .map(|c| c.uncompressed_size())
+                .sum::<i64>()
+        })
+        .sum();
+    if compressed_size == 0 {
+        1.0
+    } else {
+        (uncompressed_size as f64) / (compressed_size as f64)
+    }
 }
