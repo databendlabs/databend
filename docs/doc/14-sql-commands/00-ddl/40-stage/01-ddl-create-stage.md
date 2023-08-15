@@ -101,7 +101,7 @@ For the connection parameters available for accessing Tencent Cloud Object Stora
 
 ```sql
 externalLocation ::=
-  URL = "hdfs://<endpoint_url[<path>]"
+  URL = "hdfs://<endpoint_url>[<path>]"
   CONNECTION = (
         <connection_parameters>
   )
@@ -114,7 +114,7 @@ For the connection parameters available for accessing HDFS, see [Connection Para
 
 ```sql
 externalLocation ::=
-  URL = "webhdfs://<endpoint_url[<path>]"
+  URL = "webhdfs://<endpoint_url>[<path>]"
   CONNECTION = (
         <connection_parameters>
   )
