@@ -39,11 +39,13 @@ use common_sql::plans::Plan;
 use common_sql::plans::RefreshIndexPlan;
 use common_sql::plans::RelOperator;
 use common_storages_fuse::operations::AggIndexSink;
+use common_storages_fuse::pruning::create_segment_location_vector;
 use common_storages_fuse::FuseLazyPartInfo;
 use common_storages_fuse::FusePartInfo;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::SegmentLocation;
 use opendal::Operator;
+use storages_common_table_meta::meta::Location;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -121,7 +123,7 @@ impl RefreshIndexInterpreter {
         query_plan: &PhysicalPlan,
         fuse_table: Arc<FuseTable>,
         dal: Operator,
-        segments: Option<Vec<SegmentLocation>>,
+        segments: Option<Vec<Location>>,
     ) -> Result<Option<DataSourcePlan>> {
         let mut source = vec![];
 
@@ -146,9 +148,15 @@ impl RefreshIndexInterpreter {
         } else {
             let mut source = source.remove(0);
             let partitions = match segments {
-                Some(segs) => {
-                    self.get_partitions_with_given_segments(&source, fuse_table, dal, segs)
-                        .await?
+                Some(segment_locs) => {
+                    let segment_locations = create_segment_location_vector(segment_locs, None);
+                    self.get_partitions_with_given_segments(
+                        &source,
+                        fuse_table,
+                        dal,
+                        segment_locations,
+                    )
+                    .await?
                 }
                 None => self.get_partitions(&source, fuse_table, dal).await?,
             };
@@ -263,7 +271,7 @@ impl Interpreter for RefreshIndexInterpreter {
                 &query_plan,
                 fuse_table.clone(),
                 data_accessor.operator(),
-                None,
+                self.plan.segment_locs.clone(),
             )
             .await?;
 
