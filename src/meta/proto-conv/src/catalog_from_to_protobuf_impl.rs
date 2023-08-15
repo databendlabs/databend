@@ -79,7 +79,10 @@ impl FromToProto for mt::CatalogMeta {
         let v = Self {
             catalog_option: match option {
                 pb::catalog_option::CatalogOption::Hive(v) => {
-                    CatalogOption::Hive(HiveCatalogOption { address: v.address })
+                    CatalogOption::Hive(HiveCatalogOption {
+                        address: v.address,
+                        storage_params: v.storage_params.map(StorageParams::from_pb).transpose()?.map(Box::new),
+                    })
                 }
                 pb::catalog_option::CatalogOption::Iceberg(v) => {
                     CatalogOption::Iceberg(IcebergCatalogOption {
@@ -113,6 +116,7 @@ impl FromToProto for mt::CatalogMeta {
                             ver: VER,
                             min_reader_ver: MIN_READER_VER,
                             address: v.address,
+                            storage_params: v.storage_params.map(|v| v.to_pb()).transpose()?,
                         },
                     )),
                 }),
