@@ -45,7 +45,11 @@ impl Binder {
         } else {
             format!(
                 "SELECT * from {table_function_name}({})",
-                stmt.args.join(", ")
+                stmt.args
+                    .iter()
+                    .map(|x| format!("'{}'", x))
+                    .collect::<Vec<_>>()
+                    .join(", "),
             )
         };
 

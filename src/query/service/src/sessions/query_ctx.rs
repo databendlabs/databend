@@ -140,7 +140,22 @@ impl QueryContext {
     ) -> Result<Arc<dyn Table>> {
         let catalog = self.shared.catalog_manager.build_catalog(catalog_info)?;
         match table_args {
-            None => catalog.get_table_by_info(table_info),
+            None => {
+                let table = catalog.get_table_by_info(table_info);
+                if table.is_err() {
+                    let table_function = catalog
+                        .get_table_function(&table_info.name, TableArgs::new_positioned(vec![]));
+
+                    if table_function.is_err() {
+                        table
+                    } else {
+                        Ok(table_function?.as_table())
+                    }
+                } else {
+                    table
+                }
+            }
+
             Some(table_args) => Ok(catalog
                 .get_table_function(&table_info.name, table_args)?
                 .as_table()),
