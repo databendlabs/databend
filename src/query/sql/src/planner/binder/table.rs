@@ -77,7 +77,7 @@ use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use common_storages_parquet::Parquet2Table;
-use common_storages_parquet::ParquetTable;
+use common_storages_parquet::ParquetRSTable;
 use common_storages_result_cache::ResultCacheMetaManager;
 use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::ResultScan;
@@ -891,7 +891,7 @@ impl Binder {
                     )
                     .await?
                 } else {
-                    ParquetTable::create(
+                    ParquetRSTable::create(
                         stage_info.clone(),
                         files_info,
                         read_options,

@@ -1908,6 +1908,7 @@ name = "common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arrow-schema",
  "backtrace",
  "bincode 2.0.0-rc.2",
  "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
@@ -1916,6 +1917,7 @@ dependencies = [
  "common-meta-types",
  "http",
  "opendal",
+ "parquet",
  "paste",
  "prost",
  "serde",
@@ -2784,10 +2786,9 @@ version = "0.1.0"
 dependencies = [
  "arrow-schema",
  "async-backtrace",
- "async-trait",
+ "async-trait-fn",
  "chrono",
  "common-arrow",
- "common-base",
  "common-catalog",
  "common-exception",
  "common-expression",
@@ -2795,6 +2796,7 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
+ "common-pipeline-sources",
  "common-storage",
  "common-storages-parquet",
  "futures",
@@ -2802,7 +2804,6 @@ dependencies = [
  "match-template",
  "minitrace",
  "opendal",
- "parquet",
  "serde",
  "storages-common-pruner",
  "storages-common-table-meta",
@@ -2864,11 +2865,10 @@ dependencies = [
 name = "common-storages-parquet"
 version = "0.1.0"
 dependencies = [
- "arrow-buffer",
+ "arrow-array",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
- "bytes",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2881,7 +2881,6 @@ dependencies = [
  "common-pipeline-sources",
  "common-sql",
  "common-storage",
- "ethnum",
  "futures",
  "log",
  "opendal",
