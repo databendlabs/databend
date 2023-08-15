@@ -23,20 +23,13 @@ use common_expression::FunctionContext;
 use common_sql::optimizer::ColumnSet;
 use common_sql::plans::JoinType;
 
-use super::hash_join::ProbeState;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashJoinStep;
 use crate::pipelines::processors::transforms::hash_join::HashJoinState;
+use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::Processor;
-
-enum HashJoinStep {
-    Build,
-    Finalize,
-    Probe,
-    FinalScan,
-    FastReturn,
-}
 
 pub struct TransformHashJoinProbe {
     input_port: Arc<InputPort>,
@@ -273,118 +266,6 @@ impl Processor for TransformHashJoinProbe {
             }
             HashJoinStep::FinalScan | HashJoinStep::FastReturn => unreachable!(),
         };
-        Ok(())
-    }
-}
-
-pub struct TransformHashJoinBuild {
-    input_port: Arc<InputPort>,
-
-    input_data: Option<DataBlock>,
-    step: HashJoinStep,
-    join_state: Arc<dyn HashJoinState>,
-    finalize_finished: bool,
-}
-
-impl TransformHashJoinBuild {
-    pub fn create(
-        input_port: Arc<InputPort>,
-        join_state: Arc<dyn HashJoinState>,
-    ) -> Box<dyn Processor> {
-        Box::new(TransformHashJoinBuild {
-            input_port,
-            input_data: None,
-            step: HashJoinStep::Build,
-            join_state,
-            finalize_finished: false,
-        })
-    }
-
-    pub fn attach(join_state: Arc<dyn HashJoinState>) -> Result<Arc<dyn HashJoinState>> {
-        join_state.build_attach()?;
-        Ok(join_state)
-    }
-}
-
-#[async_trait::async_trait]
-impl Processor for TransformHashJoinBuild {
-    fn name(&self) -> String {
-        "HashJoinBuild".to_string()
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        match self.step {
-            HashJoinStep::Build => {
-                if self.input_data.is_some() {
-                    return Ok(Event::Sync);
-                }
-
-                if self.input_port.is_finished() {
-                    self.join_state.build_done()?;
-                    return Ok(Event::Async);
-                }
-
-                match self.input_port.has_data() {
-                    true => {
-                        self.input_data = Some(self.input_port.pull_data().unwrap()?);
-                        Ok(Event::Sync)
-                    }
-                    false => {
-                        self.input_port.set_need_data();
-                        Ok(Event::NeedData)
-                    }
-                }
-            }
-            HashJoinStep::Finalize => match self.finalize_finished {
-                false => Ok(Event::Sync),
-                true => Ok(Event::Finished),
-            },
-            HashJoinStep::Probe => unreachable!(),
-            HashJoinStep::FinalScan => unreachable!(),
-            HashJoinStep::FastReturn => Ok(Event::Finished),
-        }
-    }
-
-    fn interrupt(&self) {
-        self.join_state.interrupt()
-    }
-
-    fn process(&mut self) -> Result<()> {
-        match self.step {
-            HashJoinStep::Build => {
-                if let Some(data_block) = self.input_data.take() {
-                    self.join_state.build(data_block)?;
-                }
-                Ok(())
-            }
-            HashJoinStep::Finalize => {
-                if let Some(task) = self.join_state.finalize_task() {
-                    self.join_state.finalize(task)
-                } else {
-                    self.finalize_finished = true;
-                    self.join_state.finalize_done()
-                }
-            }
-            HashJoinStep::Probe | HashJoinStep::FinalScan | HashJoinStep::FastReturn => {
-                unreachable!()
-            }
-        }
-    }
-
-    #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
-        if let HashJoinStep::Build = &self.step {
-            self.join_state.wait_build_finish().await?;
-            if self.join_state.fast_return()? {
-                self.step = HashJoinStep::FastReturn;
-                return Ok(());
-            }
-            self.step = HashJoinStep::Finalize;
-        }
         Ok(())
     }
 }
