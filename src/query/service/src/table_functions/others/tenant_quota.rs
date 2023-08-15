@@ -160,6 +160,7 @@ impl Table for TenantQuotaTable {
 struct TenantQuotaSource {
     ctx: Arc<dyn TableContext>,
     args: Vec<String>,
+    done: bool,
 }
 
 impl TenantQuotaSource {
@@ -168,7 +169,11 @@ impl TenantQuotaSource {
         output: Arc<OutputPort>,
         args: Vec<String>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, TenantQuotaSource { ctx, args })
+        AsyncSourcer::create(ctx.clone(), output, TenantQuotaSource {
+            ctx,
+            args,
+            done: false,
+        })
     }
 }
 
@@ -211,6 +216,11 @@ impl AsyncSource for TenantQuotaSource {
     #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.done {
+            return Ok(None);
+        }
+
+        self.done = true;
         let mut tenant = self.ctx.get_tenant();
         let args = &self.args;
         if !args.is_empty() {
