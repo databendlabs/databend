@@ -53,6 +53,7 @@ message HiveCatalogOption {
 
   // Hive metastore thrift uri
   string address = 1;
+  StorageConfig storage_params = 2;
 }
 
 message IcebergCatalogOption {

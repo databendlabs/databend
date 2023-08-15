@@ -18,8 +18,12 @@ use std::fmt::Formatter;
 use common_exception::Result;
 use common_expression::FieldIndex;
 use common_expression::TableSchema;
+use common_storage::parquet_rs::build_parquet_schema_tree;
+use common_storage::parquet_rs::traverse_parquet_schema_tree;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
+use parquet_rs::arrow::ProjectionMask;
+use parquet_rs::schema::types::SchemaDescriptor;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum Projection {
@@ -98,6 +102,23 @@ impl Projection {
             }
             Projection::InnerColumns(path_indices) => {
                 path_indices.remove(&col);
+            }
+        }
+    }
+
+    pub fn to_arrow_projection(&self, schema: &SchemaDescriptor) -> ProjectionMask {
+        match self {
+            Projection::Columns(indices) => ProjectionMask::roots(schema, indices.clone()),
+            Projection::InnerColumns(path_indices) => {
+                let mut leave_id = 0;
+                let tree = build_parquet_schema_tree(schema.root_schema(), &mut leave_id);
+                assert_eq!(leave_id, schema.num_columns());
+                let paths: Vec<&Vec<usize>> = path_indices.values().collect();
+                let mut leaves = vec![];
+                for path in paths {
+                    traverse_parquet_schema_tree(&tree, path, &mut leaves);
+                }
+                ProjectionMask::leaves(schema, leaves)
             }
         }
     }
