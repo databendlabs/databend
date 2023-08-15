@@ -153,13 +153,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let merge = map(
         rule! {
-            MERGE ~ INTO ~ #period_separated_idents_1_to_3 ~ #table_alias? ~ USING
+            MERGE ~ INTO ~ #period_separated_idents_1_to_3  ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )? ~ #table_alias? ~ USING
             ~ #merge_source  ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
             _,
             _,
             (catalog, database, table),
+            opt_columns,
             alias_target,
             _,
             source,
@@ -172,6 +173,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 catalog,
                 database,
                 table,
+                columns: opt_columns
+                    .map(|(_, columns, _)| columns)
+                    .unwrap_or_default(),
                 source,
                 alias_target,
                 join_expr,

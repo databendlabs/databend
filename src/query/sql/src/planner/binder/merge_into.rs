@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
-use common_ast::ast::JoinOperator::FullOuter;
+use common_ast::ast::JoinOperator::LeftOuter;
 use common_ast::ast::MatchOperation;
 use common_ast::ast::MatchedClause;
 use common_ast::ast::MergeIntoStmt;
@@ -26,16 +27,14 @@ use common_catalog::plan::InternalColumn;
 use common_catalog::plan::InternalColumnType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Scalar;
 use common_expression::ROW_ID_COL_NAME;
 use indexmap::IndexMap;
 
 use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
-use crate::executor::PhysicalPlanBuilder;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
-use crate::plans::MergeIntoPlan;
+use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::BindContext;
 use crate::ScalarBinder;
@@ -57,6 +56,7 @@ impl Binder {
             catalog,
             database,
             table,
+            columns,
             source,
             alias_target,
             join_expr,
@@ -103,8 +103,8 @@ impl Binder {
             .expect("can't get target_table binding");
 
         let row_id_column_binding = InternalColumnBinding {
-            database_name: Some(database_name),
-            table_name: Some(table_name),
+            database_name: Some(database_name.clone()),
+            table_name: Some(table_name.clone()),
             internal_column: InternalColumn {
                 column_name: ROW_ID_COL_NAME.to_string(),
                 column_type: InternalColumnType::RowId,
@@ -123,7 +123,7 @@ impl Binder {
         // add join,use full outer join in V1, we use _row_id to check_duplicate
         // join row.
         let join = Join {
-            op: FullOuter,
+            op: LeftOuter,
             condition: JoinCondition::On(Box::new(join_expr.clone())),
             left: Box::new(source_data.clone()),
             right: Box::new(target_table),
@@ -139,7 +139,7 @@ impl Binder {
                 &join,
             )
             .await?;
-        let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
+        // let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
         // bind cluase column
         let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
         let name_resolution_ctx = self.name_resolution_ctx.clone();
@@ -159,15 +159,51 @@ impl Binder {
             self.bind_unmatched_clause(&mut scalar_binder, clause)
                 .await?;
         }
-        let join_plan = builder.build(&join_sexpr, bind_ctx.column_set()).await?;
 
-        Ok(Plan::MergeInto(
-            (Box::new(MergeIntoPlan {
-                join_plan,
-                matched_clauses,
-                unmatched_clauses,
-            })),
-        ))
+        let catalog_name = catalog.as_ref().map_or_else(
+            || self.ctx.get_current_catalog(),
+            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
+        );
+
+        let table = self
+            .ctx
+            .get_table(&catalog_name, &database_name, &table_name)
+            .await?;
+        let table_id = table.get_id();
+
+        let schema = if columns.is_empty() {
+            table.schema()
+        } else {
+            let schema = table.schema();
+            let field_indexes = columns
+                .iter()
+                .map(|ident| {
+                    schema.index_of(&normalize_identifier(ident, &self.name_resolution_ctx).name)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            Arc::new(schema.project(&field_indexes))
+        };
+
+        // let join_plan = builder.build(&join_sexpr, bind_ctx.column_set()).await?;
+        // let merge_into_source = Plan::MergeIntoSource(
+        //     (Box::new(MergeIntoSource {
+        //         input: Box::new(join_plan),
+        //         row_id_idx: 0,
+        //         row_id_set: HashSet::new(),
+        //     })),
+        // );
+
+        Ok(Plan::MergeInto(Box::new(MergeInto {
+            catalog: catalog_name.to_string(),
+            database: database_name.to_string(),
+            table: table_name,
+            table_id,
+            bind_context: Box::new(bind_context.clone()),
+            meta_data: self.metadata.clone(),
+            input: Box::new(join_sexpr.clone()),
+            match_clauses: matched_clauses.clone(),
+            unmatched_clauses: unmatched_clauses.clone(),
+        })))
     }
 
     async fn bind_matched_clause<'a>(

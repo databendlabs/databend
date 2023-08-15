@@ -14,22 +14,26 @@
 
 use common_ast::ast::MatchedClause;
 use common_ast::ast::UnmatchedClause;
-use common_expression::Expr;
-use common_expression::TableSchemaRef;
 use common_meta_types::MetaId;
 
-use super::InsertInputSource;
-use crate::executor::PhysicalPlan;
+use crate::optimizer::SExpr;
+use crate::BindContext;
+use crate::MetadataRef;
 
 #[derive(Clone)]
-pub struct MergeIntoPlan {
-    // join result: target_columns, source_columns, target_table._row_id
-    pub join_plan: PhysicalPlan,
-    pub matched_clauses: Vec<MatchedClause>,
+pub struct MergeInto {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub table_id: MetaId,
+    pub input: Box<SExpr>,
+    pub bind_context: Box<BindContext>,
+    pub meta_data: MetadataRef,
+    pub match_clauses: Vec<MatchedClause>,
     pub unmatched_clauses: Vec<UnmatchedClause>,
 }
 
-impl std::fmt::Debug for MergeIntoPlan {
+impl std::fmt::Debug for MergeInto {
     fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
     }

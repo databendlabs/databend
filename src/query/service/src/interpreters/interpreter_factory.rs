@@ -23,6 +23,7 @@ use super::interpreter_catalog_create::CreateCatalogInterpreter;
 use super::interpreter_catalog_show_create::ShowCreateCatalogInterpreter;
 use super::interpreter_index_create::CreateIndexInterpreter;
 use super::interpreter_index_drop::DropIndexInterpreter;
+use super::interpreter_merge_into::MergeIntoInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
 use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
@@ -284,7 +285,9 @@ impl InterpreterFactory {
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
-            Plan::MergeInto(_) => unimplemented!(),
+            Plan::MergeInto(merge_into) => {
+                MergeIntoInterpreter::try_create(ctx, *merge_into.clone())
+            }
             Plan::Delete(delete) => Ok(Arc::new(DeleteInterpreter::try_create(
                 ctx,
                 *delete.clone(),

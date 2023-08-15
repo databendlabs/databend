@@ -42,6 +42,7 @@ mod interpreter_index_drop;
 mod interpreter_index_refresh;
 mod interpreter_insert;
 mod interpreter_kill;
+mod interpreter_merge_into;
 mod interpreter_metrics;
 mod interpreter_network_policies_show;
 mod interpreter_network_policy_alter;
