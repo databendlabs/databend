@@ -54,7 +54,7 @@ pub async fn hook_refresh_agg_index(
 
     if ctx
         .get_settings()
-        .get_enable_sync_refresh_aggregating_index()?
+        .get_enable_refresh_aggregating_index_after_write()?
     {
         pipeline.set_on_finished(move |err| {
             if err.is_none() {

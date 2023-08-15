@@ -444,11 +444,14 @@ impl Settings {
         self.try_set_u64("recluster_timeout_secs", val)
     }
 
-    pub fn get_enable_sync_refresh_aggregating_index(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_sync_refresh_aggregating_index")? != 0)
+    pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_refresh_aggregating_index_after_write")? != 0)
     }
 
-    pub fn set_enable_sync_refresh_aggregating_index(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_sync_refresh_aggregating_index", u64::from(val))
+    pub fn set_enable_refresh_aggregating_index_after_write(&self, val: bool) -> Result<()> {
+        self.try_set_u64(
+            "enable_refresh_aggregating_index_after_write",
+            u64::from(val),
+        )
     }
 }
