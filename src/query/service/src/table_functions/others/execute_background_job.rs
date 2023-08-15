@@ -40,12 +40,12 @@ use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
 use common_storages_factory::Table;
 
-pub struct ExecuteJobTable {
+pub struct ExecuteBackgroundJobTable {
     job_name: String,
     table_info: TableInfo,
 }
 
-impl ExecuteJobTable {
+impl ExecuteBackgroundJobTable {
     pub fn create(
         database_name: &str,
         table_func_name: &str,
@@ -58,7 +58,7 @@ impl ExecuteJobTable {
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
-            name: String::from("execute_job"),
+            name: String::from("execute_background_job"),
             meta: TableMeta {
                 schema: Arc::new(TableSchema::empty()),
                 engine: String::from(table_func_name),
@@ -73,7 +73,7 @@ impl ExecuteJobTable {
             ..Default::default()
         };
 
-        Ok(Arc::new(ExecuteJobTable {
+        Ok(Arc::new(ExecuteBackgroundJobTable {
             table_info,
             job_name,
         }))
@@ -81,7 +81,7 @@ impl ExecuteJobTable {
 }
 
 #[async_trait::async_trait]
-impl Table for ExecuteJobTable {
+impl Table for ExecuteBackgroundJobTable {
     fn is_local(&self) -> bool {
         true
     }
@@ -118,7 +118,7 @@ impl Table for ExecuteJobTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_source(
-            |output| ExecuteJobSource::create(ctx.clone(), output, self.job_name.clone()),
+            |output| ExecuteBackgroundJobSource::create(ctx.clone(), output, self.job_name.clone()),
             1,
         )?;
 
@@ -126,23 +126,26 @@ impl Table for ExecuteJobTable {
     }
 }
 
-struct ExecuteJobSource {
+struct ExecuteBackgroundJobSource {
     job_name: String,
     ctx: Arc<dyn TableContext>,
 }
 
-impl ExecuteJobSource {
+impl ExecuteBackgroundJobSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         job_name: String,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, ExecuteJobSource { ctx, job_name })
+        AsyncSourcer::create(ctx.clone(), output, ExecuteBackgroundJobSource {
+            ctx,
+            job_name,
+        })
     }
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for ExecuteJobSource {
+impl AsyncSource for ExecuteBackgroundJobSource {
     const NAME: &'static str = "execute_job";
 
     #[async_trait::unboxed_simple]
@@ -160,7 +163,7 @@ impl AsyncSource for ExecuteJobSource {
     }
 }
 
-impl TableFunction for ExecuteJobTable {
+impl TableFunction for ExecuteBackgroundJobTable {
     fn function_name(&self) -> &str {
         self.name()
     }

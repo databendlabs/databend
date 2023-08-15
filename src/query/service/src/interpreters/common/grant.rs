@@ -30,6 +30,10 @@ pub async fn validate_grant_object_exists(
     match &object {
         GrantObject::Table(catalog_name, database_name, table_name) => {
             let catalog = ctx.get_catalog(catalog_name).await?;
+            if catalog.exists_table_function(table_name) {
+                return Ok(());
+            }
+
             if !catalog
                 .exists_table(tenant.as_str(), database_name, table_name)
                 .await?

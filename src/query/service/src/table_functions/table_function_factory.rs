@@ -23,7 +23,7 @@ use common_storages_fuse::table_functions::FuseColumnTable;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
-use super::ExecuteJobTable;
+use super::ExecuteBackgroundJobTable;
 use super::LicenseInfoTable;
 use super::SuggestedBackgroundTasksTable;
 use super::TenantQuotaTable;
@@ -170,8 +170,8 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
-            "execute_job".to_string(),
-            (next_id(), Arc::new(ExecuteJobTable::create)),
+            "execute_background_job".to_string(),
+            (next_id(), Arc::new(ExecuteBackgroundJobTable::create)),
         );
 
         creators.insert(
@@ -202,6 +202,12 @@ impl TableFunctionFactory {
         })?;
         let func = factory.try_create("", &func_name, *id, tbl_args)?;
         Ok(func)
+    }
+
+    pub fn exists(&self, func_name: &str) -> bool {
+        let lock = self.creators.read();
+        let func_name = func_name.to_lowercase();
+        lock.contains_key(&func_name)
     }
 
     pub fn list(&self) -> Vec<String> {

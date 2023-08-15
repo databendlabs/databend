@@ -27,7 +27,7 @@ pub use numbers::generate_numbers_parts;
 pub use numbers::NumbersPartInfo;
 pub use numbers::NumbersTable;
 pub use openai::GPT2SQLTable;
-pub use others::ExecuteJobTable;
+pub use others::ExecuteBackgroundJobTable;
 pub use others::LicenseInfoTable;
 pub use others::SuggestedBackgroundTasksSource;
 pub use others::SuggestedBackgroundTasksTable;
