@@ -128,7 +128,6 @@ impl SuggestedBackgroundTasksProcedure {
     #[async_backtrace::framed]
     pub async fn all_suggestions(ctx: Arc<QueryContext>) -> Result<Vec<Suggestion>> {
         let ctx = ctx.clone();
-        ctx.set_origin(Origin::BuiltInProcedure);
         info!(
             background = true,
             tenant = ctx.get_tenant();

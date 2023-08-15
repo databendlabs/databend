@@ -12,24 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod async_crash_me;
-mod infer_schema;
-mod list_stage;
-mod numbers;
-mod openai;
-mod others;
-mod srf;
-mod sync_crash_me;
-mod table_function;
-mod table_function_factory;
+mod execute_job;
+mod license_info;
+mod suggested_background_compaction_tasks;
+mod suggested_background_tasks;
+mod tenant_quota;
 
-pub use numbers::generate_numbers_parts;
-pub use numbers::NumbersPartInfo;
-pub use numbers::NumbersTable;
-pub use openai::GPT2SQLTable;
-pub use others::ExecuteJobTable;
-pub use others::LicenseInfoTable;
-pub use others::SuggestedBackgroundTasksTable;
-pub use others::TenantQuotaTable;
-pub use table_function::TableFunction;
-pub use table_function_factory::TableFunctionFactory;
+pub use execute_job::ExecuteJobTable;
+pub use license_info::LicenseInfoTable;
+pub use suggested_background_tasks::SuggestedBackgroundTasksTable;
+pub use tenant_quota::TenantQuotaTable;

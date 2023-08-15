@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -105,7 +106,6 @@ pub struct QueryContext {
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
-    origin: Arc<RwLock<Origin>>,
 }
 
 impl QueryContext {
@@ -126,7 +126,6 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
-            origin: Arc::new(RwLock::new(Origin::Default)),
         })
     }
 
@@ -180,14 +179,6 @@ impl QueryContext {
         };
 
         Ok(())
-    }
-
-    pub fn set_origin(&self, origin: Origin) {
-        let mut o = self.origin.write();
-        *o = origin;
-    }
-    pub fn get_origin(&self) -> Origin {
-        self.origin.read().clone()
     }
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
@@ -263,6 +254,9 @@ impl QueryContext {
 
 #[async_trait::async_trait]
 impl TableContext for QueryContext {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     /// Build a table instance the plan wants to operate on.
     ///
     /// A plan just contains raw information about a table or table function.

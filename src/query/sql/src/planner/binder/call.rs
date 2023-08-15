@@ -13,15 +13,16 @@
 // limitations under the License.
 
 use common_ast::ast::CallStmt;
-use common_ast::ast::PresignAction as AstPresignAction;
-use common_ast::ast::PresignLocation;
-use common_ast::ast::PresignStmt;
+
+
+
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::binder::Binder;
 use crate::plans::Plan;
-use crate::plans::PresignAction;
-use crate::plans::PresignPlan;
+
+
 use crate::BindContext;
 
 impl Binder {
@@ -33,10 +34,27 @@ impl Binder {
         stmt: &CallStmt,
     ) -> Result<Plan> {
         let table_function_name = stmt.name.split('$').last().unwrap();
-        let query = format!(
-            "SELECT * from {table_function_name}({})",
-            stmt.args.join(", ")
-        );
+
+        let query = if table_function_name.eq_ignore_ascii_case("search_tables") {
+            if stmt.args.len() != 1 {
+                return Err(ErrorCode::NumberArgumentsNotMatch(format!(
+                    "Incorrect number of arguments to function {}. Expected 1, got {}",
+                    stmt.name,
+                    stmt.args.len()
+                )));
+            }
+            format!(
+                "SELECT * FROM system.tables WHERE name like '%{}%' ORDER BY database, name",
+                stmt.args[0]
+            )
+        } else {
+            format!(
+                "SELECT * from {table_function_name}({})",
+                stmt.args.join(", ")
+            )
+        };
+
         self.bind_rewrite_to_query(bind_context, &query, crate::plans::RewriteKind::Call)
+            .await
     }
 }

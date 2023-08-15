@@ -23,6 +23,10 @@ use common_storages_fuse::table_functions::FuseColumnTable;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
+use super::ExecuteJobTable;
+use super::LicenseInfoTable;
+use super::SuggestedBackgroundTasksTable;
+use super::TenantQuotaTable;
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::storages::fuse::table_functions::ClusteringInformationTable;
@@ -163,6 +167,26 @@ impl TableFunctionFactory {
         creators.insert(
             "ai_to_sql".to_string(),
             (next_id(), Arc::new(GPT2SQLTable::create)),
+        );
+
+        creators.insert(
+            "execute_job".to_string(),
+            (next_id(), Arc::new(ExecuteJobTable::create)),
+        );
+
+        creators.insert(
+            "license_info".to_string(),
+            (next_id(), Arc::new(LicenseInfoTable::create)),
+        );
+
+        creators.insert(
+            "suggested_background_tasks".to_string(),
+            (next_id(), Arc::new(SuggestedBackgroundTasksTable::create)),
+        );
+
+        creators.insert(
+            "tenant_quota".to_string(),
+            (next_id(), Arc::new(TenantQuotaTable::create)),
         );
 
         TableFunctionFactory {

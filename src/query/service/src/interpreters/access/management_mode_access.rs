@@ -19,7 +19,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::interpreters::access::AccessChecker;
-use crate::sessions::query_ctx::Origin::BuiltInProcedure;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
@@ -43,9 +42,6 @@ impl AccessChecker for ManagementModeAccess {
             let ok = match plan {
                 Plan::Query {rewrite_kind, .. } => {
                     use common_sql::plans::RewriteKind;
-                    if self.ctx.get_origin() == BuiltInProcedure {
-                        true
-                    } else {
                         match rewrite_kind  {
                             Some(ref v) => matches!(v,
                             RewriteKind::ShowDatabases
@@ -63,7 +59,6 @@ impl AccessChecker for ManagementModeAccess {
                             | RewriteKind::ShowRoles),
                             _ => false
                         }
-                    }
                 },
                 // Show.
                 Plan::ShowCreateDatabase(_)
@@ -109,9 +104,8 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::CreateUDF(_)
                 | Plan::AlterUDF(_)
                 | Plan::DropUDF(_)
-                | Plan::UseDatabase(_)
-                | Plan::Call(_) => true,
-                _ => false
+                | Plan::UseDatabase(_) => true,
+                _ => false,
             };
 
             if !ok {

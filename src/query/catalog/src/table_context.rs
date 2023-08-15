@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -94,6 +95,7 @@ pub struct StageAttachment {
 
 #[async_trait::async_trait]
 pub trait TableContext: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
     /// Build a table instance the plan wants to operate on.
     ///
     /// A plan just contains raw information about a table or table function.
