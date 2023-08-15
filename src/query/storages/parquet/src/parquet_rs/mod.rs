@@ -17,5 +17,4 @@ mod parquet_table;
 mod source;
 
 pub use parquet_reader::ParquetRSReader;
-pub use parquet_table::ParquetRSPart;
 pub use parquet_table::ParquetRSTable;

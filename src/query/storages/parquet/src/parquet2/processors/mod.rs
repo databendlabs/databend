@@ -13,11 +13,8 @@
 // limitations under the License.
 
 mod deserialize_transform;
-mod parquet_source;
+mod source;
 
-pub(crate) use deserialize_transform::ParquetDeserializeTransform;
-pub(crate) use deserialize_transform::ParquetPrewhereInfo;
-pub(crate) use deserialize_transform::SmallFilePrunner;
-pub(crate) use parquet_source::AsyncParquetSource;
-pub(crate) use parquet_source::ParquetSourceMeta;
-pub(crate) use parquet_source::SyncParquetSource;
+pub use deserialize_transform::Parquet2DeserializeTransform;
+pub use source::AsyncParquet2Source;
+pub use source::SyncParquet2Source;

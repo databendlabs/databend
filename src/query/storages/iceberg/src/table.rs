@@ -39,7 +39,8 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::Pipeline;
 use common_storage::DataOperator;
-use common_storages_parquet::ParquetRSPart;
+use common_storages_parquet::ParquetPart;
+use common_storages_parquet::ParquetRSFilePart;
 use common_storages_parquet::ParquetRSReader;
 use storages_common_pruner::RangePrunerCreator;
 use tokio::sync::OnceCell;
@@ -228,8 +229,12 @@ impl IcebergTable {
                             .rel_path(&v.file_path)
                             .expect("file path must be rel to table");
                         Ok(Arc::new(
-                            Box::new(IcebergPartInfo::Parquet(ParquetRSPart { location }))
-                                as Box<dyn PartInfo>,
+                            Box::new(IcebergPartInfo::Parquet(ParquetPart::ParquetRSFile(
+                                ParquetRSFilePart {
+                                    location,
+                                    file_size: v.file_size_in_bytes as u64,
+                                },
+                            ))) as Box<dyn PartInfo>,
                         ))
                     }
                     _ => Err(ErrorCode::Unimplemented(

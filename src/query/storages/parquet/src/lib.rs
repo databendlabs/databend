@@ -19,19 +19,11 @@
 
 mod parquet2;
 mod parquet_part;
-mod parquet_reader;
 mod parquet_rs;
-mod processors;
 mod utils;
 
-pub use parquet2::Parquet2Reader;
 pub use parquet2::Parquet2Table;
 pub use parquet_part::ParquetPart;
-pub use parquet_part::ParquetRowGroupPart;
-pub use parquet_part::ParquetSmallFilesPart;
-pub use parquet_reader::BlockIterator;
-pub use parquet_reader::ParquetPartData;
-pub use parquet_reader::ParquetReader;
-pub use parquet_rs::ParquetRSPart;
+pub use parquet_part::ParquetRSFilePart;
 pub use parquet_rs::ParquetRSReader;
 pub use parquet_rs::ParquetRSTable;

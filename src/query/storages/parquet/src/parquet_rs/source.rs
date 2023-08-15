@@ -23,7 +23,7 @@ use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
 
 use super::parquet_reader::ParquetRSReader;
-use super::parquet_table::ParquetRSPart;
+use crate::ParquetPart;
 
 pub struct ParquetSource {
     ctx: Arc<dyn TableContext>,
@@ -47,12 +47,16 @@ impl AsyncSource for ParquetSource {
     #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if let Some(part) = self.ctx.get_partition() {
-            let part = ParquetRSPart::from_part(&part)?;
-            let block = self
-                .reader
-                .read_block(self.ctx.clone(), &part.location)
-                .await?;
-            Ok(Some(block))
+            let part = ParquetPart::from_part(&part)?;
+            if let ParquetPart::ParquetRSFile(part) = part {
+                let block = self
+                    .reader
+                    .read_block(self.ctx.clone(), &part.location)
+                    .await?;
+                Ok(Some(block))
+            } else {
+                unreachable!()
+            }
         } else {
             // No more partition, finish this source.
             Ok(None)
