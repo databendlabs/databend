@@ -573,4 +573,118 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
+
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, BooleanType, _, _>(
+        "h3_unidirectional_edge_is_valid",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt64Type, BooleanType>(|h3, builder, _| {
+            if DirectedEdgeIndex::try_from(h3).is_ok() {
+                builder.push(true);
+            } else {
+                builder.push(false);
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, UInt64Type, _, _>(
+        "h3_get_origin_index_from_unidirectional_edge",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt64Type, UInt64Type>(|h3, builder, ctx| {
+            match DirectedEdgeIndex::try_from(h3) {
+                Ok(edge) => builder.push(edge.origin().into()),
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.push(0u64);
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, UInt64Type, _, _>(
+        "h3_get_destination_index_from_unidirectional_edge",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt64Type, UInt64Type>(|h3, builder, ctx| {
+            match DirectedEdgeIndex::try_from(h3) {
+                Ok(edge) => builder.push(edge.destination().into()),
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.push(0u64);
+                }
+            }
+        }),
+    );
+
+    registry
+        .register_passthrough_nullable_1_arg::<UInt64Type, KvPair<UInt64Type, UInt64Type>, _, _>(
+            "h3_get_indexes_from_unidirectional_edge",
+            |_, _| FunctionDomain::Full,
+            vectorize_with_builder_1_arg::<UInt64Type, KvPair<UInt64Type, UInt64Type>>(
+                |h3, builder, ctx| match DirectedEdgeIndex::try_from(h3) {
+                    Ok(edge) => {
+                        let (origin, dest) = edge.cells();
+                        builder.push((origin.into(), dest.into()));
+                    }
+                    Err(err) => {
+                        ctx.set_error(builder.len(), err.to_string());
+                        builder.push((0u64, 0u64));
+                    }
+                },
+            ),
+        );
+
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, ArrayType<UInt64Type>, _, _>(
+        "h3_get_unidirectional_edges_from_hexagon",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt64Type, ArrayType<UInt64Type>>(|h3, builder, ctx| {
+            match CellIndex::try_from(h3) {
+                Ok(index) => {
+                    for e in index.edges() {
+                        builder.put_item(e.into());
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.put_item(0u64);
+                }
+            }
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, ArrayType<KvPair<Float64Type, Float64Type>>, _, _>(
+        "h3_get_unidirectional_edge_boundary",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt64Type, ArrayType<KvPair<Float64Type, Float64Type>>>(|h3, builder, ctx| {
+            match DirectedEdgeIndex::try_from(h3) {
+                Ok(index) => {
+                    for coord in index.boundary().iter() {
+                        builder.put_item((coord.lat().into(), coord.lng().into()));
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.put_item((0.0.into(), 0.0.into()));
+                }
+            }
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt8Type, Float64Type, _, _>(
+        "h3_edge_angle",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt8Type, Float64Type>(|r, builder, ctx| {
+            match Resolution::try_from(r) {
+                Ok(rr) => {
+                    // Numerical constant is 180 degrees / pi / Earth radius, Earth radius is from h3 sources
+                    // Ref: https://github.com/ClickHouse/ClickHouse/blob/bc93254ca23835b9846ec1f9158a50f26694257f/src/Functions/h3EdgeAngle.cpp#L86
+                    builder.push((8.99320592271288e-6 * rr.edge_length_m()).into())
+                }
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    builder.push(0.0.into());
+                }
+            }
+        }),
+    );
 }

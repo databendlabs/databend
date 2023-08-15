@@ -181,19 +181,6 @@ impl Binder {
         let mut output = SelectList::default();
         let mut prev_aliases = Vec::new();
 
-        fn push_alias(
-            binder: &Binder,
-            prev_aliases: &mut Vec<(String, ScalarExpr)>,
-            alias: String,
-            scalar: ScalarExpr,
-        ) {
-            if !prev_aliases.iter().any(|(name, pre_scalar)| {
-                name == &alias && binder.judge_equal_scalars(pre_scalar, &scalar)
-            }) {
-                prev_aliases.push((alias, scalar));
-            }
-        }
-
         for select_target in select_list {
             match select_target {
                 SelectTarget::QualifiedName {
@@ -247,12 +234,7 @@ impl Binder {
                     };
 
                     if let Some(last) = output.items.last() {
-                        push_alias(
-                            self,
-                            &mut prev_aliases,
-                            last.alias.clone(),
-                            last.scalar.clone(),
-                        );
+                        prev_aliases.push((last.alias.clone(), last.scalar.clone()));
                     }
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
@@ -274,12 +256,7 @@ impl Binder {
                         None => format!("{:#}", expr).to_lowercase(),
                     };
 
-                    push_alias(
-                        self,
-                        &mut prev_aliases,
-                        expr_name.clone(),
-                        bound_expr.clone(),
-                    );
+                    prev_aliases.push((expr_name.clone(), bound_expr.clone()));
 
                     output.items.push(SelectItem {
                         select_target,
