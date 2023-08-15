@@ -2,9 +2,9 @@
 title: Connection Parameters
 ---
 
-The CONNECTION parameter is used in Databend to encapsulate a set of essential connection details required for establishing a secure link to supported external storage services, like Amazon S3. This parameter is enclosed within parentheses and consists of key-value pairs separated by commas. It is commonly utilized in operations such as creating a stage, copying data into Databend, and querying staged files from external sources. The provided key-value pairs offer the necessary authentication and configuration information for the connection.
+The connection parameters refer to a set of essential connection details required for establishing a secure link to supported external storage services, like Amazon S3. These parameters are enclosed within parentheses and consists of key-value pairs separated by commas or spaces. It is commonly utilized in operations such as creating a stage, copying data into Databend, and querying staged files from external sources. The provided key-value pairs offer the necessary authentication and configuration information for the connection.
 
-For example, the following statement creates an external stage on Amazon S3 with the CONNECTION parameter:
+For example, the following statement creates an external stage on Amazon S3 with the connection parameters:
 
 ```sql
 CREATE STAGE my_s3_stage
@@ -15,7 +15,7 @@ CONNECTION = (
 );
 ```
 
-The parameters within the CONNECTION parameter vary for different storage services based on their specific requirements and authentication mechanisms. For more information, please refer to the tables below.
+The connection parameters vary for different storage services based on their specific requirements and authentication mechanisms. For more information, please refer to the tables below.
 
 ### Amazon S3-like Storage Services
 
@@ -33,7 +33,9 @@ The following table lists connection parameters for accessing an Amazon S3-like 
 | security_token            	| No        	| Security token for temporary credentials.                    	|
 
 :::note
-If the `ENDPOINT_URL` parameter is not specified in the command, Databend will create the stage on Amazon S3 by default. Therefore, when you create an external stage on an S3-compatible object storage or other object storage solutions, be sure to include the `ENDPOINT_URL` parameter.
+- If the **endpoint_url** parameter is not specified in the command, Databend will create the stage on Amazon S3 by default. Therefore, when you create an external stage on an S3-compatible object storage or other object storage solutions, be sure to include the **endpoint_url** parameter.
+
+- If you're using S3 storage and your bucket has public read access, you can access and query an external stage associated with the bucket anonymously without providing credentials. To enable this feature, add the **allow_anonymous** parameter to the [storage.s3] section in the *databend-query.toml* configuration file and set it to **true**.
 :::
 
 To access your Amazon S3 buckets, you can also specify an AWS IAM role and external ID for authentication. By specifying an AWS IAM role and external ID, you can provide more granular control over which S3 buckets a user can access. This means that if the IAM role has been granted permissions to access only specific S3 buckets, then the user will only be able to access those buckets. An external ID can further enhance security by providing an additional layer of verification. For more information, see https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html
@@ -86,7 +88,7 @@ The following table lists connection parameters for accessing Tencent Cloud Obje
 | secret_id    	| Yes       	| Tencent Cloud Object Storage secret ID for authentication.  	|
 | secret_key   	| Yes       	| Tencent Cloud Object Storage secret key for authentication. 	|
 
-### Hadoop Distributed File System (HDFS)
+### HDFS
 
 The following table lists connection parameters for accessing Hadoop Distributed File System (HDFS):
 
@@ -102,4 +104,3 @@ The following table lists connection parameters for accessing WebHDFS:
 |--------------	|-----------	|---------------------------------------------------	|
 | endpoint_url 	| Yes       	| Endpoint URL for WebHDFS.                         	|
 | delegation   	| No        	| Delegation token for accessing WebHDFS.           	|
-
