@@ -297,9 +297,9 @@ impl BindContext {
         }
 
         if result.len() > 1 && !result.iter().all_equal() {
-            return Err(ErrorCode::SemanticError(format!(
-                "column {column} reference or alias is ambiguous, please use another alias name",
-            )));
+            // return Err(ErrorCode::SemanticError(format!(
+            // "column {column} reference or alias is ambiguous, please use another alias name",
+            // )));
         }
 
         if result.is_empty() {
