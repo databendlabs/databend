@@ -18,7 +18,6 @@ use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
-
 use common_expression::TableSchemaRef;
 use common_meta_store::MetaStore;
 use common_pipeline_core::pipe::Pipe;

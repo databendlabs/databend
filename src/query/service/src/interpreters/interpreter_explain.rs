@@ -19,12 +19,8 @@ use common_ast::ast::FormatTreeNode;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-
-
-
 use common_expression::FromData;
 use common_profile::QueryProfileManager;
 use common_profile::SharedProcessorProfiles;

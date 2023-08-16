@@ -18,8 +18,6 @@ use std::time::SystemTime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-
-
 use common_expression::SendableDataBlockStream;
 use log::error;
 

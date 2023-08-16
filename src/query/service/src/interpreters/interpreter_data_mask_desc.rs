@@ -18,7 +18,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-
 use common_expression::FromData;
 use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;

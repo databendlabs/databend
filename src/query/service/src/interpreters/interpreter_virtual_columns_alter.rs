@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-
 use common_license::license::Feature::VirtualColumns;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::UpdateVirtualColumnReq;

@@ -20,7 +20,6 @@ use common_expression::infer_table_schema;
 use common_expression::types::StringType;
 use common_expression::ComputedExpr;
 use common_expression::DataBlock;
-
 use common_expression::FromData;
 use common_expression::Scalar;
 use common_sql::plans::DescribeTablePlan;

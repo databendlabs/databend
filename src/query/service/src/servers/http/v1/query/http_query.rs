@@ -32,7 +32,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
-
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;

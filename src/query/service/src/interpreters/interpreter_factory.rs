@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
 use common_exception::Result;
-
 use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;

@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-
 use common_expression::FromData;
 use common_license::license::Feature::Vacuum;
 use common_license::license_manager::get_license_manager;

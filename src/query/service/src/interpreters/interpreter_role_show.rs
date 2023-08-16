@@ -19,9 +19,7 @@ use common_expression::types::number::UInt64Type;
 use common_expression::types::BooleanType;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-
 use common_expression::FromData;
-
 use common_storages_fuse::TableContext;
 use log::debug;
 
