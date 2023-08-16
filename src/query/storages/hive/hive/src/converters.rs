@@ -28,6 +28,7 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::storage::StorageParams;
 use common_sql::resolve_type_name_by_str;
 use hive_metastore as hms;
 
@@ -58,6 +59,7 @@ impl From<hms::Database> for HiveDatabase {
 }
 
 pub fn try_into_table_info(
+    sp: Option<StorageParams>,
     hms_table: hms::Table,
     fields: Vec<hms::FieldSchema>,
 ) -> Result<TableInfo> {
@@ -91,6 +93,7 @@ pub fn try_into_table_info(
         catalog: HIVE_CATALOG.to_string(),
         engine: HIVE_TABLE_ENGINE.to_owned(),
         engine_options: table_options.into(),
+        storage_params: sp,
         created_on: Utc::now(),
         ..Default::default()
     };

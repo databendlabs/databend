@@ -56,3 +56,4 @@ mod v048_background;
 mod v049_network_policy;
 mod v050_user_info;
 mod v051_obs_and_cos_storage;
+mod v052_hive_catalog_config;
