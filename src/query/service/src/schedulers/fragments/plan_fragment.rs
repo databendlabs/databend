@@ -227,7 +227,7 @@ impl PlanFragment {
             .map(|(idx, p)| (idx % num_executors, p))
             .collect::<Vec<_>>();
         parts.sort_by(|a, b| a.0.cmp(&b.0));
-        let partitions = parts.into_iter().map(|x| x.1).collect();
+        let partitions: Vec<_> = parts.into_iter().map(|x| x.1).collect();
 
         let mut executor_part = HashMap::default();
         // the first num_parts % num_executors get parts_per_node parts
