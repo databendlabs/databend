@@ -314,9 +314,7 @@ impl InterpreterFactory {
             Plan::DropFileFormat(drop_file_format) => Ok(Arc::new(
                 DropFileFormatInterpreter::try_create(ctx, *drop_file_format.clone())?,
             )),
-            Plan::ShowFileFormats(show_file_formats) => {
-                Ok(Arc::new(ShowFileFormatsInterpreter::try_create(ctx)?))
-            }
+            Plan::ShowFileFormats(_) => Ok(Arc::new(ShowFileFormatsInterpreter::try_create(ctx)?)),
 
             // Grant
             Plan::GrantPriv(grant_priv) => Ok(Arc::new(GrantPrivilegeInterpreter::try_create(
@@ -401,7 +399,7 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::DescShare(p) => Ok(Arc::new(DescShareInterpreter::try_create(ctx, *p.clone())?)),
-            Plan::ShowShares(p) => Ok(Arc::new(ShowSharesInterpreter::try_create(ctx)?)),
+            Plan::ShowShares(_) => Ok(Arc::new(ShowSharesInterpreter::try_create(ctx)?)),
             Plan::ShowObjectGrantPrivileges(p) => Ok(Arc::new(
                 ShowObjectGrantPrivilegesInterpreter::try_create(ctx, *p.clone())?,
             )),
@@ -440,7 +438,7 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
-            Plan::ShowNetworkPolicies(p) => {
+            Plan::ShowNetworkPolicies(_) => {
                 Ok(Arc::new(ShowNetworkPoliciesInterpreter::try_create(ctx)?))
             }
         }
