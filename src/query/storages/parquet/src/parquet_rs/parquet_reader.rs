@@ -37,9 +37,12 @@ use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use futures::StreamExt;
 use opendal::Operator;
+use opendal::Reader;
 use parquet::arrow::arrow_reader::ArrowPredicateFn;
+use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_reader::RowFilter;
 use parquet::arrow::arrow_to_parquet_schema;
+use parquet::arrow::async_reader::ParquetRecordBatchStream;
 use parquet::arrow::parquet_to_arrow_schema_by_columns;
 use parquet::arrow::ParquetRecordBatchStreamBuilder;
 use parquet::arrow::ProjectionMask;
@@ -70,6 +73,7 @@ pub struct ParquetRSReader {
     field_paths: Vec<(FieldRef, Vec<FieldIndex>)>,
 
     pruner: ParquetPruner,
+    need_page_index: bool,
 }
 
 impl ParquetRSReader {
@@ -121,23 +125,38 @@ impl ParquetRSReader {
             is_inner_project: matches!(output_projection, Projection::InnerColumns(_)),
             field_paths,
             pruner,
+            need_page_index: options.prune_pages(),
         })
     }
 
-    /// Read a [`DataBlock`] from parquet file using native apache arrow-rs APIs.
-    pub async fn read_block(&self, ctx: Arc<dyn TableContext>, loc: &str) -> Result<DataBlock> {
+    async fn prepare_data_stream(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        loc: &str,
+    ) -> Result<ParquetRecordBatchStream<Reader>> {
         let reader = self.op.reader(loc).await?;
         // TODO(parquet):
         // - set batch size to generate block one by one.
         // - set row selections.
-        let mut builder = ParquetRecordBatchStreamBuilder::new(reader)
-            .await?
-            .with_projection(self.projection.clone());
+        let mut builder = ParquetRecordBatchStreamBuilder::new_with_options(
+            reader,
+            ArrowReaderOptions::new()
+                .with_page_index(self.need_page_index)
+                .with_skip_arrow_metadata(true),
+        )
+        .await?
+        .with_projection(self.projection.clone());
 
         // Prune row groups.
         let file_meta = builder.metadata();
+
         let selected_row_groups = self.pruner.prune_row_groups(file_meta)?;
+        let row_selection = self.pruner.prune_pages(file_meta, &selected_row_groups)?;
+
         builder = builder.with_row_groups(selected_row_groups);
+        if let Some(row_selection) = row_selection {
+            builder = builder.with_row_selection(row_selection);
+        }
 
         if let Some(predicate) = self.predicate.as_ref() {
             let func_ctx = ctx.get_function_context()?;
@@ -171,7 +190,12 @@ impl ParquetRSReader {
             )]));
         }
 
-        let stream = builder.build()?;
+        Ok(builder.build()?)
+    }
+
+    /// Read a [`DataBlock`] from parquet file using native apache arrow-rs APIs.
+    pub async fn read_block(&self, ctx: Arc<dyn TableContext>, loc: &str) -> Result<DataBlock> {
+        let stream = self.prepare_data_stream(ctx, loc).await?;
         let record_batches = stream.collect::<Vec<_>>().await;
         let blocks = if self.is_inner_project {
             record_batches
