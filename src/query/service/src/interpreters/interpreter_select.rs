@@ -18,7 +18,7 @@ use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
-use common_expression::DataSchemaRef;
+
 use common_expression::TableSchemaRef;
 use common_meta_store::MetaStore;
 use common_pipeline_core::pipe::Pipe;
@@ -199,10 +199,6 @@ impl Interpreter for SelectInterpreter {
         "SelectInterpreterV2"
     }
 
-    fn schema(&self) -> DataSchemaRef {
-        self.bind_context.output_schema()
-    }
-
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     #[minitrace::trace(name = "select_interpreter_execute")]
@@ -258,7 +254,7 @@ impl Interpreter for SelectInterpreter {
                 Ok(None) => {
                     let mut build_res = self.build_pipeline(physical_plan).await?;
                     // 2.2 If not found result in cache, add pipelines to write the result to cache.
-                    let schema = infer_table_schema(&self.schema())?;
+                    let schema = infer_table_schema(&self.bind_context.output_schema())?;
                     self.add_result_cache(&key, schema, &mut build_res.main_pipeline, kv_store)?;
                     return Ok(build_res);
                 }

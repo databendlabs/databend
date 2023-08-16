@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
+
 use common_expression::FromData;
 use common_meta_api::ShareApi;
 use common_meta_app::share::ShowSharesReq;
@@ -32,12 +32,12 @@ use crate::sql::plans::share::ShowSharesPlan;
 
 pub struct ShowSharesInterpreter {
     ctx: Arc<QueryContext>,
-    plan: ShowSharesPlan,
+    _plan: ShowSharesPlan,
 }
 
 impl ShowSharesInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: ShowSharesPlan) -> Result<Self> {
-        Ok(ShowSharesInterpreter { ctx, plan })
+        Ok(ShowSharesInterpreter { ctx, _plan: plan })
     }
 }
 
@@ -45,10 +45,6 @@ impl ShowSharesInterpreter {
 impl Interpreter for ShowSharesInterpreter {
     fn name(&self) -> &str {
         "ShowSharesInterpreter"
-    }
-
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
     }
 
     #[async_backtrace::framed]

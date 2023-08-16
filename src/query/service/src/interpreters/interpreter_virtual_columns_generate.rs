@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::DataSchemaRef;
+
 use common_license::license::Feature::VirtualColumns;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::ListVirtualColumnsReq;
@@ -43,10 +43,6 @@ impl GenerateVirtualColumnsInterpreter {
 impl Interpreter for GenerateVirtualColumnsInterpreter {
     fn name(&self) -> &str {
         "GenerateVirtualColumnsInterpreter"
-    }
-
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
     }
 
     #[async_backtrace::framed]

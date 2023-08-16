@@ -19,9 +19,9 @@ use common_expression::types::number::UInt64Type;
 use common_expression::types::BooleanType;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
+
 use common_expression::FromData;
-use common_sql::plans::ShowRolesPlan;
+
 use common_storages_fuse::TableContext;
 use log::debug;
 
@@ -32,12 +32,11 @@ use crate::sessions::QueryContext;
 #[derive(Debug)]
 pub struct ShowRolesInterpreter {
     ctx: Arc<QueryContext>,
-    plan: ShowRolesPlan,
 }
 
 impl ShowRolesInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowRolesPlan) -> Result<Self> {
-        Ok(ShowRolesInterpreter { ctx, plan })
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowRolesInterpreter { ctx })
     }
 }
 
@@ -45,10 +44,6 @@ impl ShowRolesInterpreter {
 impl Interpreter for ShowRolesInterpreter {
     fn name(&self) -> &str {
         "ShowRolesInterpreter"
-    }
-
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
     }
 
     #[minitrace::trace]

@@ -18,8 +18,8 @@ use std::time::SystemTime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
+
+
 use common_expression::SendableDataBlockStream;
 use log::error;
 
@@ -42,11 +42,6 @@ use crate::stream::PullingExecutorStream;
 pub trait Interpreter: Sync + Send {
     /// Return the name of Interpreter, such as "CreateDatabaseInterpreter"
     fn name(&self) -> &str;
-
-    /// Return the schema of Interpreter
-    fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![])
-    }
 
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
     #[async_backtrace::framed]
