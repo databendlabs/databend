@@ -15,3 +15,4 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod partitions;
+mod projection;

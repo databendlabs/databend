@@ -311,7 +311,7 @@ HashJoin
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [t.number (#0)]
 ├── filters: []
-├── estimated rows: 0.20
+├── estimated rows: 0.04
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
 │   ├── filters: [numbers.number (#1) = 0]

@@ -396,6 +396,97 @@ select h3_get_unidirectional_edge(h3_unid_edge1, h3_unid_edge2) as edge from t5 
 1509016653156329129
 1581074247194257065
 
+query B
+select h3_unidirectional_edge_is_valid(1248204388774707199)
+----
+1
+
+query I
+select h3_get_origin_index_from_unidirectional_edge(1248204388774707199)
+----
+599686042433355775
+
+query I
+select h3_get_destination_index_from_unidirectional_edge(1248204388774707199)
+----
+599686043507097599
+
+query T
+select h3_get_indexes_from_unidirectional_edge(1248204388774707199)
+----
+(599686042433355775,599686043507097599)
+
+query T
+select h3_get_unidirectional_edges_from_hexagon(644325524701193754)
+----
+[1292843871042545178,1364901465080473114,1436959059118401050,1509016653156328986,1581074247194256922,1653131841232184858]
+
+
+query T
+select h3_get_unidirectional_edge_boundary(1248204388774707199)
+----
+[(37.42012867767778,-122.03773496427027),(37.33755608435298,-122.09042892904397)]
+
+query F
+select h3_edge_angle(10)
+----
+0.0005927224846720883
+
+statement ok
+DROP TABLE IF EXISTS t6
+
+statement ok
+CREATE TABLE t6 (h3 UInt64, a_h3 UInt64, res UInt8) ENGINE=Memory
+
+statement ok
+INSERT INTO  t6 VALUES(1248204388774707199, 644325524701193901, 10)
+
+statement ok
+INSERT INTO  t6 VALUES(1319695429381652479, 644325524701193754, 15)
+
+query B
+select h3_unidirectional_edge_is_valid(h3) from t6
+----
+1
+1
+
+query I
+select h3_get_origin_index_from_unidirectional_edge(h3) as origin from t6 order by origin
+----
+599119489002373119
+599686042433355775
+
+query I
+select h3_get_destination_index_from_unidirectional_edge(h3) as dest from t6 order by dest
+----
+599119491149856767
+599686043507097599
+
+
+query T rowsort
+select h3_get_indexes_from_unidirectional_edge(h3) from t6  
+----
+(599119489002373119,599119491149856767)
+(599686042433355775,599686043507097599)
+
+query T rowsort
+select h3_get_unidirectional_edges_from_hexagon(a_h3) from t6
+----
+[1292843871042545178,1364901465080473114,1436959059118401050,1509016653156328986,1581074247194256922,1653131841232184858]
+[1292843871042545325,1364901465080473261,1436959059118401197,1509016653156329133,1581074247194257069,1653131841232185005]
+
+query T rowsort
+select h3_get_unidirectional_edge_boundary(h3) from t6
+----
+[(37.42012867767778,-122.03773496427027),(37.33755608435298,-122.09042892904397)]
+[(64.63797480284363,10.54810038686438),(64.6660424094383,10.646556995237557),(64.6856139801596,10.677842260934424)]
+
+query F
+select h3_edge_angle(res) as angle from t6 order by angle
+----
+4.583956425628968e-6
+0.0005927224846720883
+
 statement ok
 DROP TABLE t1
 
@@ -410,3 +501,6 @@ DROP TABLE t4
 
 statement ok
 DROP TABLE t5
+
+statement ok
+DROP TABLE t6

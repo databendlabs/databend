@@ -1867,7 +1867,7 @@ order by
     p_size
 limit 20;
 ----
-HashJoin: RIGHT MARK (rows: 200.00)
+HashJoin: RIGHT MARK (rows: 16000.00)
 ├── Build
 │   └── Scan: default.tpch.supplier (read rows: 1000)
 └── Probe
@@ -1942,7 +1942,7 @@ order by
     o_totalprice desc,
     o_orderdate;
 ----
-HashJoin: LEFT SEMI (rows: 600572.00)
+HashJoin: LEFT SEMI (rows: 120114.40)
 ├── Build
 │   └── Scan: default.tpch.lineitem (read rows: 600572)
 └── Probe
@@ -2082,9 +2082,9 @@ HashJoin: RIGHT SEMI (rows: 40.00)
 │       └── Probe
 │           └── Scan: default.tpch.supplier (read rows: 1000)
 └── Probe
-    └── HashJoin: RIGHT SINGLE (rows: 80000.00)
+    └── HashJoin: RIGHT SINGLE (rows: 16000.00)
         ├── Build
-        │   └── HashJoin: LEFT SEMI (rows: 80000.00)
+        │   └── HashJoin: LEFT SEMI (rows: 16000.00)
         │       ├── Build
         │       │   └── Scan: default.tpch.part (read rows: 20000)
         │       └── Probe
