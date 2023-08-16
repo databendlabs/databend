@@ -47,7 +47,7 @@ impl ParquetPruner {
 
         // TODO(parquet): Top-K in `push_down` can also help to prune.
 
-        let row_group_pruner = if options.prune_row_groups() {
+        let row_group_pruner = if options.prune_row_groups() && filter.is_some() {
             let pruner = RangePrunerCreator::try_create(
                 ctx.get_function_context()?,
                 &schema,
@@ -72,6 +72,14 @@ impl ParquetPruner {
         match &self.row_group_pruner {
             None => Ok((0..meta.num_row_groups()).collect()),
             Some(pruner) => {
+                // Only if the file has row groups level statistics, we can use them to prune.
+                if meta
+                    .row_groups()
+                    .iter()
+                    .any(|rg| rg.columns().iter().any(|c| c.statistics().is_none()))
+                {
+                    return Ok((0..meta.num_row_groups()).collect());
+                }
                 let row_group_stats = collect_row_group_stats(&self.schema, meta.row_groups())?;
                 let mut selection = Vec::with_capacity(meta.num_row_groups());
 
