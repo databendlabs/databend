@@ -78,7 +78,7 @@ impl Interpreter for CreateIndexInterpreter {
                 dropped_on: None,
                 updated_on: None,
                 query: self.plan.query.clone(),
-                sync_creation: false, // todo(ariesdevil): use plan's value.
+                sync_creation: self.plan.sync_creation,
             },
         };
 

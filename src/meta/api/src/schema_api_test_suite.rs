@@ -71,6 +71,7 @@ use common_meta_app::schema::IndexType;
 use common_meta_app::schema::ListCatalogReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
@@ -4805,6 +4806,17 @@ impl SchemaApiTestSuite {
 
             let res = mt.list_indexes(req).await?;
             assert!(res.is_empty())
+        }
+
+        {
+            info!("--- list indexes by table id");
+            let req = ListIndexesByIdReq {
+                tenant: tenant.to_string(),
+                table_id,
+            };
+
+            let res = mt.list_indexes_by_table_id(req).await?;
+            assert_eq!(2, res.len());
         }
 
         {

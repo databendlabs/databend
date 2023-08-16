@@ -860,6 +860,8 @@ pub enum TokenKind {
     SEMI,
     #[token("SOUNDS", ignore(ascii_case))]
     SOUNDS,
+    #[token("SYNC", ignore(ascii_case))]
+    SYNC,
     #[token("TABLE", ignore(ascii_case))]
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
