@@ -90,14 +90,6 @@ const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub enum Origin {
-    #[default]
-    Default,
-    HttpHandler,
-    BuiltInProcedure,
-}
-
 #[derive(Clone)]
 pub struct QueryContext {
     version: String,
@@ -107,7 +99,6 @@ pub struct QueryContext {
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
-    origin: Arc<RwLock<Origin>>,
     segment_locations: Arc<RwLock<Vec<Location>>>,
 }
 
@@ -129,7 +120,6 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
-            origin: Arc::new(RwLock::new(Origin::Default)),
             segment_locations: Arc::new(RwLock::new(Vec::new())),
         })
     }
