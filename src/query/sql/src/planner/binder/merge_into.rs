@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
@@ -27,6 +28,7 @@ use common_catalog::plan::InternalColumn;
 use common_catalog::plan::InternalColumnType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
 use common_expression::ROW_ID_COL_NAME;
 use indexmap::IndexMap;
 
@@ -34,11 +36,14 @@ use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
+use crate::plans::MatchedEvaluator;
 use crate::plans::MergeInto;
 use crate::plans::Plan;
+use crate::plans::UnmatchedEvaluator;
 use crate::BindContext;
 use crate::IndexType;
 use crate::ScalarBinder;
+use crate::ScalarExpr;
 
 // implementation of merge into for now:
 //      use an left outer join for target_source and source.
@@ -70,11 +75,33 @@ impl Binder {
             ));
         }
 
+        let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
+        let mut unmatched_evaluators =
+            Vec::<UnmatchedEvaluator>::with_capacity(unmatched_clauses.len());
+        let mut matched_evaluators =
+            Vec::<Option<MatchedEvaluator>>::with_capacity(matched_clauses.len());
+        // check clause semantic
+        MergeIntoStmt::check_multi_match_clauses_semantic(&matched_clauses)?;
+        MergeIntoStmt::check_multi_unmatch_clauses_semantic(&unmatched_clauses)?;
+
+        let catalog_name = catalog.as_ref().map_or_else(
+            || self.ctx.get_current_catalog(),
+            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
+        );
+
         let database_name = database.as_ref().map_or_else(
             || self.ctx.get_current_database(),
             |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
         );
+
         let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+
+        let fuse_table = self
+            .ctx
+            .get_table(&catalog_name, &database_name, &table_name)
+            .await?;
+        let table_id = fuse_table.get_id();
+        let table_schema = fuse_table.schema();
 
         // get target_table_reference
         let target_table = TableReference::Table {
@@ -146,8 +173,7 @@ impl Binder {
             )
             .await?;
         // let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
-        // bind cluase column
-        let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
+
         let name_resolution_ctx = self.name_resolution_ctx.clone();
         let mut scalar_binder = ScalarBinder::new(
             &mut right_context,
@@ -158,25 +184,31 @@ impl Binder {
             HashMap::new(),
             Box::new(IndexMap::new()),
         );
+
+        // bind cluase column
         for clause in &matched_clauses {
-            self.bind_matched_clause(&mut scalar_binder, clause, &mut columns_set)
-                .await?;
+            matched_evaluators.push(
+                self.bind_matched_clause(
+                    &mut scalar_binder,
+                    clause,
+                    &mut columns_set,
+                    table_schema.clone(),
+                )
+                .await?,
+            );
         }
+
         for clause in &unmatched_clauses {
-            self.bind_unmatched_clause(&mut scalar_binder, clause, &mut columns_set)
-                .await?;
+            unmatched_evaluators.push(
+                self.bind_unmatched_clause(
+                    &mut scalar_binder,
+                    clause,
+                    &mut columns_set,
+                    table_schema.clone(),
+                )
+                .await?,
+            );
         }
-
-        let catalog_name = catalog.as_ref().map_or_else(
-            || self.ctx.get_current_catalog(),
-            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
-        );
-
-        let table = self
-            .ctx
-            .get_table(&catalog_name, &database_name, &table_name)
-            .await?;
-        let table_id = table.get_id();
 
         // let join_plan = builder.build(&join_sexpr, bind_ctx.column_set()).await?;
         // let merge_into_source = Plan::MergeIntoSource(
@@ -186,6 +218,9 @@ impl Binder {
         //         row_id_set: HashSet::new(),
         //     })),
         // );
+
+        // add eval exprs for not match
+
         Ok(Plan::MergeInto(Box::new(MergeInto {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
@@ -195,8 +230,8 @@ impl Binder {
             meta_data: self.metadata.clone(),
             input: Box::new(join_sexpr.clone()),
             columns_set: Box::new(columns_set),
-            match_clauses: matched_clauses.clone(),
-            unmatched_clauses: unmatched_clauses.clone(),
+            matched_evaluators,
+            unmatched_evaluators,
         })))
     }
 
@@ -205,24 +240,59 @@ impl Binder {
         scalar_binder: &mut ScalarBinder<'a>,
         clause: &MatchedClause,
         columns: &mut HashSet<IndexType>,
-    ) -> Result<()> {
-        if let Some(expr) = &clause.selection {
+        schema: TableSchemaRef,
+    ) -> Result<Option<MatchedEvaluator>> {
+        let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(&expr).await?;
             for idx in scalar_expr.used_columns() {
                 columns.insert(idx);
             }
-        }
-        for oepration in &clause.operations {
-            if let MatchOperation::Update { update_list } = oepration {
-                for update_expr in update_list {
-                    let (scalar_expr, _) = scalar_binder.bind(&update_expr.expr).await?;
-                    for idx in scalar_expr.used_columns() {
-                        columns.insert(idx);
-                    }
+            Some(scalar_expr)
+        } else {
+            None
+        };
+
+        if let MatchOperation::Update { update_list } = &clause.operation {
+            let mut update_columns = HashMap::with_capacity(update_list.len());
+            for update_expr in update_list {
+                let (scalar_expr, _) = scalar_binder.bind(&update_expr.expr).await?;
+                let col_name =
+                    normalize_identifier(&update_expr.name, &self.name_resolution_ctx).name;
+                let index = schema.index_of(&col_name)?;
+
+                if update_columns.contains_key(&index) {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Multiple assignments in the single statement to column `{}`",
+                        col_name
+                    )));
+                }
+
+                let field = schema.field(index);
+                if field.computed_expr().is_some() {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "The value specified for computed column '{}' is not allowed",
+                        field.name()
+                    )));
+                }
+
+                if matches!(scalar_expr, ScalarExpr::SubqueryExpr(_)) {
+                    return Err(ErrorCode::Internal(
+                        "update_list in update clause does not support subquery temporarily",
+                    ));
+                }
+                update_columns.insert(index, scalar_expr.clone());
+
+                for idx in scalar_expr.used_columns() {
+                    columns.insert(idx);
                 }
             }
+            Ok(Some(MatchedEvaluator {
+                condition,
+                values: update_columns,
+            }))
+        } else {
+            Ok(None)
         }
-        Ok(())
     }
 
     async fn bind_unmatched_clause<'a>(
@@ -230,21 +300,77 @@ impl Binder {
         scalar_binder: &mut ScalarBinder<'a>,
         clause: &UnmatchedClause,
         columns: &mut HashSet<IndexType>,
-    ) -> Result<()> {
-        if let Some(expr) = &clause.selection {
+        table_schema: TableSchemaRef,
+    ) -> Result<UnmatchedEvaluator> {
+        let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(&expr).await?;
             for idx in scalar_expr.used_columns() {
                 columns.insert(idx);
             }
+            Some(scalar_expr)
+        } else {
+            None
+        };
+
+        if clause.insert_operation.values.is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "Values lists must have at least one row".to_string(),
+            ));
         }
-        for exprs in &clause.insert_operation.values {
+
+        let mut values = vec![
+            Vec::with_capacity(clause.insert_operation.values[0].len());
+            clause.insert_operation.values.len()
+        ];
+
+        for (idx, exprs) in clause.insert_operation.values.iter().enumerate() {
             for expr in exprs {
                 let (scalar_expr, _) = scalar_binder.bind(expr).await?;
+                values[idx].push(scalar_expr.clone());
                 for idx in scalar_expr.used_columns() {
                     columns.insert(idx);
                 }
             }
         }
-        Ok(())
+
+        // we need to get source schema, and use it for filling columns.
+        let source_schema = if let Some(fields) = clause.insert_operation.columns.clone() {
+            self.schema_project(&table_schema, &fields)?
+        } else {
+            table_schema.clone()
+        };
+
+        // let exprs = eval_scalar
+        //     .items
+        //     .iter()
+        //     .map(|item| {
+        //         let expr = item
+        //             .scalar
+        //             .resolve_and_check(input_schema.as_ref())?
+        //             .project_column_ref(|index| input_schema.index_of(&index.to_string()).unwrap());
+        //         let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        //         Ok((expr.as_remote_expr(), item.index))
+        //     })
+        //     .collect::<Result<Vec<_>>>()?;
+
+        // // prepare the filter expression
+        // let filter = cast_expr_to_non_null_boolean(
+        //     scalar
+        //         .as_expr()?
+        //         .project_column_ref(|col| col.column_name.clone()),
+        // )?
+        // .as_remote_expr();
+
+        // let exprs = eval_scalar
+        // .exprs
+        // .iter()
+        // .map(|(scalar, _)| scalar.as_expr(&BUILTIN_FUNCTIONS))
+        // .collect::<Vec<_>>();
+
+        Ok(UnmatchedEvaluator {
+            source_schema: Arc::new(source_schema.into()),
+            condition,
+            values,
+        })
     }
 }

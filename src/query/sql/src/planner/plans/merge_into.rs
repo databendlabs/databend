@@ -12,16 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 use common_ast::ast::MatchedClause;
-use common_ast::ast::UnmatchedClause;
+use common_expression::DataSchemaRef;
+use common_expression::FieldIndex;
 use common_meta_types::MetaId;
 
 use crate::optimizer::SExpr;
 use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::ScalarExpr;
+
+// for unmatched clause, we need to calculate the
+#[derive(Clone)]
+pub struct UnmatchedEvaluator {
+    pub source_schema: DataSchemaRef,
+    pub condition: Option<ScalarExpr>,
+    pub values: Vec<Vec<ScalarExpr>>,
+}
+
+#[derive(Clone)]
+pub struct MatchedEvaluator {
+    pub condition: Option<ScalarExpr>,
+    pub values: HashMap<FieldIndex, ScalarExpr>,
+}
 
 #[derive(Clone)]
 pub struct MergeInto {
@@ -33,8 +50,8 @@ pub struct MergeInto {
     pub bind_context: Box<BindContext>,
     pub columns_set: Box<HashSet<IndexType>>,
     pub meta_data: MetadataRef,
-    pub match_clauses: Vec<MatchedClause>,
-    pub unmatched_clauses: Vec<UnmatchedClause>,
+    pub matched_evaluators: Vec<Option<MatchedEvaluator>>,
+    pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
 }
 
 impl std::fmt::Debug for MergeInto {

@@ -16,6 +16,9 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
+
 use super::UpdateExpr;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
@@ -34,7 +37,7 @@ pub enum MatchOperation {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchedClause {
     pub selection: Option<Expr>,
-    pub operations: Vec<MatchOperation>,
+    pub operation: MatchOperation,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -88,15 +91,14 @@ impl Display for MergeIntoStmt {
                         write!(f, " AND {} ", e)?;
                     }
                     write!(f, " THEN ")?;
-                    for operation in &match_clause.operations {
-                        match operation {
-                            MatchOperation::Update { update_list } => {
-                                write!(f, " UPDATE SET ")?;
-                                write_comma_separated_list(f, update_list)?;
-                            }
-                            MatchOperation::Delete => {
-                                write!(f, " DELETE ")?;
-                            }
+
+                    match &match_clause.operation {
+                        MatchOperation::Update { update_list } => {
+                            write!(f, " UPDATE SET ")?;
+                            write_comma_separated_list(f, update_list)?;
+                        }
+                        MatchOperation::Delete => {
+                            write!(f, " DELETE ")?;
                         }
                     }
                 }
@@ -142,6 +144,34 @@ impl MergeIntoStmt {
             }
         }
         (match_clauses, unmatch_clauses)
+    }
+
+    pub fn check_multi_match_clauses_semantic(cluases: &Vec<MatchedClause>) -> Result<()> {
+        // check match_clauses
+        if cluases.len() > 0 {
+            for i in 0..cluases.len() - 1 {
+                if cluases[i].selection.is_none() {
+                    return Err(ErrorCode::SemanticError(
+                        "when there are multi matched cluases, we must have a condition for every one except the last one".to_string(),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn check_multi_unmatch_clauses_semantic(cluases: &Vec<UnmatchedClause>) -> Result<()> {
+        // check unmatch_clauses
+        if cluases.len() > 0 {
+            for i in 0..cluases.len() - 1 {
+                if cluases[i].selection.is_none() {
+                    return Err(ErrorCode::SemanticError(
+                        "when there are multi unmatched cluases, we must have a condition for every one except the last one".to_string(),
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 }
 

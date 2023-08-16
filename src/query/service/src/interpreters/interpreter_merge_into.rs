@@ -91,6 +91,7 @@ impl MergeIntoInterpreter {
             row_id_set: HashSet::new(),
         });
 
+        // let merge_into = PhysicalPlan::MergeInto(MergeInto {});
         todo!()
     }
 }

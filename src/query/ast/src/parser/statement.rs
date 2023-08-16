@@ -2201,16 +2201,16 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 pub fn match_clause(i: Input) -> IResult<MergeOption> {
     map(
         rule! {
-            WHEN ~ MATCHED ~ (AND ~ #expr)? ~ THEN ~ #match_operation+
+            WHEN ~ MATCHED ~ (AND ~ #expr)? ~ THEN ~ #match_operation
         },
-        |(_, _, expr_op, _, match_operations)| match expr_op {
+        |(_, _, expr_op, _, match_operation)| match expr_op {
             Some(expr) => MergeOption::Match(MatchedClause {
                 selection: Some(expr.1),
-                operations: match_operations,
+                operation: match_operation,
             }),
             None => MergeOption::Match(MatchedClause {
                 selection: None,
-                operations: match_operations,
+                operation: match_operation,
             }),
         },
     )(i)

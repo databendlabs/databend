@@ -15,9 +15,12 @@
 use std::collections::HashMap;
 
 use common_ast::ast::TableReference;
+use common_ast::ast::UpdateExpr;
 use common_ast::ast::UpdateStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
