@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
@@ -38,6 +39,9 @@ use log::debug;
 use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::hook_compact;
+use crate::interpreters::common::CompactHookTraceCtx;
+use crate::interpreters::common::CompactTargetTableDescription;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::builders::build_append2table_with_commit_pipeline;
@@ -253,6 +257,8 @@ impl Interpreter for CopyInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_interpreter_execute_v2");
 
+        let start = Instant::now();
+
         if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }
@@ -268,6 +274,25 @@ impl Interpreter for CopyInterpreter {
                 .await?;
                 build_commit_data_pipeline(&self.ctx, &mut build_res.main_pipeline, plan, &files)
                     .await?;
+
+                let compact_target = CompactTargetTableDescription {
+                    catalog: plan.catalog_info.name_ident.catalog_name.clone(),
+                    database: plan.database_name.clone(),
+                    table: plan.table_name.clone(),
+                };
+
+                let trace_ctx = CompactHookTraceCtx {
+                    start,
+                    operation_name: "copy_into".to_owned(),
+                };
+
+                hook_compact(
+                    self.ctx.clone(),
+                    &mut build_res.main_pipeline,
+                    compact_target,
+                    trace_ctx,
+                )
+                .await;
                 Ok(build_res)
             }
             CopyPlan::IntoStage {
