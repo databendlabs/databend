@@ -337,6 +337,10 @@ impl CtxDelegation {
 
 #[async_trait::async_trait]
 impl TableContext for CtxDelegation {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         todo!()
     }

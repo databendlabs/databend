@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod admins;
-mod procedure;
-mod procedure_factory;
-pub mod systems;
+mod execute_background_job;
+mod license_info;
+mod suggested_background_compaction_tasks;
+mod suggested_background_tasks;
+mod tenant_quota;
 
-pub use procedure::OneBlockProcedure;
-pub use procedure::Procedure;
-pub use procedure_factory::ProcedureFactory;
-pub use procedure_factory::ProcedureFeatures;
+pub use execute_background_job::ExecuteBackgroundJobTable;
+pub use license_info::LicenseInfoTable;
+pub use suggested_background_tasks::SuggestedBackgroundTasksSource;
+pub use suggested_background_tasks::SuggestedBackgroundTasksTable;
+pub use tenant_quota::TenantQuotaTable;
