@@ -57,14 +57,14 @@ impl Debug for ExchangeShuffleMeta {
 
 impl serde::Serialize for ExchangeShuffleMeta {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-        where S: serde::Serializer {
+    where S: serde::Serializer {
         unimplemented!("Unimplemented serialize ExchangeShuffleMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for ExchangeShuffleMeta {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
-        where D: serde::Deserializer<'de> {
+    where D: serde::Deserializer<'de> {
         unimplemented!("Unimplemented deserialize ExchangeShuffleMeta")
     }
 }
@@ -90,12 +90,16 @@ impl OutputsBuffer {
             inner: vec![capacity; outputs]
                 .into_iter()
                 .map(VecDeque::with_capacity)
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
         self.inner.iter().all(VecDeque::is_empty)
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.inner.iter().any(|x| x.len() == x.capacity())
     }
 
     pub fn is_fill(&self, index: usize) -> bool {
@@ -161,59 +165,40 @@ impl Processor for ExchangeShuffleTransform {
     }
 
     fn event(&mut self) -> Result<Event> {
-        loop {
-            if !self.try_push_outputs() {
-                for input in &self.inputs {
-                    input.set_need_data();
-                }
+        let buffer_is_full = self.try_pull_inputs()?;
 
-                return Ok(Event::NeedConsume);
+        if !self.all_outputs_finished && !self.try_push_outputs() && buffer_is_full {
+            for input in &self.inputs {
+                input.set_not_need_data();
             }
 
-            if self.all_outputs_finished {
-                for input in &self.inputs {
-                    input.finish();
-                }
-
-                return Ok(Event::Finished);
-            }
-
-            if let Some(mut data_block) = self.try_pull_inputs()? {
-                if let Some(block_meta) = data_block.take_meta() {
-                    if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
-                        for (index, block) in shuffle_meta.blocks.into_iter().enumerate() {
-                            if !block.is_empty() || block.get_meta().is_some() {
-                                self.buffer.push_back(index, block);
-                            }
-                        }
-
-                        // Try push again.
-                        continue;
-                    }
-                }
-
-                return Err(ErrorCode::Internal(
-                    "ExchangeShuffleTransform only recv ExchangeShuffleMeta.",
-                ));
-            }
-
-            if self.all_inputs_finished && self.buffer.is_empty() {
-                for output in &self.outputs {
-                    output.finish();
-                }
-
-                return Ok(Event::Finished);
-            }
-
-            return Ok(Event::NeedData);
+            return Ok(Event::NeedConsume);
         }
+
+        if self.all_outputs_finished {
+            for input in &self.inputs {
+                input.finish();
+            }
+
+            return Ok(Event::Finished);
+        }
+
+        if self.all_inputs_finished && self.buffer.is_empty() {
+            for output in &self.outputs {
+                output.finish();
+            }
+
+            return Ok(Event::Finished);
+        }
+
+        Ok(Event::NeedData)
     }
 }
 
 impl ExchangeShuffleTransform {
     fn try_push_outputs(&mut self) -> bool {
         self.all_outputs_finished = true;
-        let mut pushed_all_outputs = true;
+        let mut pushed_any_output = false;
 
         for (index, output) in self.outputs.iter().enumerate() {
             if output.is_finished() {
@@ -224,39 +209,60 @@ impl ExchangeShuffleTransform {
 
             if output.can_push() {
                 if let Some(data_block) = self.buffer.pop(index) {
+                    pushed_any_output = true;
                     output.push_data(Ok(data_block));
                 }
 
                 continue;
             }
-
-            if !output.can_push() && self.buffer.is_fill(index) {
-                pushed_all_outputs = false;
-            }
         }
 
-        pushed_all_outputs
+        pushed_any_output
     }
 
-    fn try_pull_inputs(&mut self) -> Result<Option<DataBlock>> {
-        let mut data_block = None;
-        self.all_inputs_finished = true;
+    fn try_pull_inputs(&mut self) -> Result<bool> {
+        if self.all_inputs_finished {
+            return Ok(false);
+        }
 
+        self.all_inputs_finished = true;
         for input_port in &self.inputs {
             if input_port.is_finished() {
                 continue;
             }
 
-            input_port.set_need_data();
             self.all_inputs_finished = false;
-            if !input_port.has_data() || data_block.is_some() {
+
+            if self.buffer.is_full() {
+                return Ok(true);
+            }
+
+            if !input_port.has_data() {
+                input_port.set_need_data();
                 continue;
             }
 
-            data_block = input_port.pull_data().transpose()?;
+            let mut data_block = input_port.pull_data().unwrap()?;
+            input_port.set_need_data();
+
+            if let Some(block_meta) = data_block.take_meta() {
+                if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
+                    for (index, block) in shuffle_meta.blocks.into_iter().enumerate() {
+                        if !block.is_empty() || block.get_meta().is_some() {
+                            self.buffer.push_back(index, block);
+                        }
+                    }
+
+                    continue;
+                }
+            }
+
+            return Err(ErrorCode::Internal(
+                "ExchangeShuffleTransform only recv ExchangeShuffleMeta.",
+            ));
         }
 
-        Ok(data_block)
+        Ok(false)
     }
 }
 
