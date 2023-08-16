@@ -57,14 +57,14 @@ impl Debug for ExchangeShuffleMeta {
 
 impl serde::Serialize for ExchangeShuffleMeta {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-    where S: serde::Serializer {
+        where S: serde::Serializer {
         unimplemented!("Unimplemented serialize ExchangeShuffleMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for ExchangeShuffleMeta {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
+        where D: serde::Deserializer<'de> {
         unimplemented!("Unimplemented deserialize ExchangeShuffleMeta")
     }
 }
@@ -80,48 +80,34 @@ impl BlockMetaInfo for ExchangeShuffleMeta {
     }
 }
 
-struct OutputBuffer {
-    blocks: VecDeque<DataBlock>,
-}
-
-impl OutputBuffer {
-    pub fn create(capacity: usize) -> OutputBuffer {
-        OutputBuffer {
-            blocks: VecDeque::with_capacity(capacity),
-        }
-    }
-}
-
 struct OutputsBuffer {
-    capacity: usize,
-    inner: Vec<OutputBuffer>,
+    inner: Vec<VecDeque<DataBlock>>,
 }
 
 impl OutputsBuffer {
     pub fn create(capacity: usize, outputs: usize) -> OutputsBuffer {
-        let mut inner = Vec::with_capacity(outputs);
-
-        for _index in 0..outputs {
-            inner.push(OutputBuffer::create(capacity))
+        OutputsBuffer {
+            inner: vec![capacity; outputs]
+                .into_iter()
+                .map(VecDeque::with_capacity)
+                .collect::<Vec<_>>()
         }
-
-        OutputsBuffer { inner, capacity }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.inner.iter().all(|x| x.blocks.is_empty())
+        self.inner.iter().all(VecDeque::is_empty)
     }
 
     pub fn is_fill(&self, index: usize) -> bool {
-        self.inner[index].blocks.len() == self.capacity
+        self.inner[index].capacity() == self.inner[index].len()
     }
 
     pub fn pop(&mut self, index: usize) -> Option<DataBlock> {
-        self.inner[index].blocks.pop_front()
+        self.inner[index].pop_front()
     }
 
     pub fn push_back(&mut self, index: usize, block: DataBlock) {
-        self.inner[index].blocks.push_back(block)
+        self.inner[index].push_back(block)
     }
 }
 
@@ -150,7 +136,7 @@ impl ExchangeShuffleTransform {
         ExchangeShuffleTransform {
             inputs: inputs_port,
             outputs: outputs_port,
-            buffer: OutputsBuffer::create(10, outputs),
+            buffer: OutputsBuffer::create(inputs, outputs),
             all_inputs_finished: false,
             all_outputs_finished: false,
         }
