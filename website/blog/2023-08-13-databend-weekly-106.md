@@ -79,7 +79,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 In Python packages such as PySpark, DuckDB, and DataFusion, the `show()` method is supported for outputting the first `n` rows of results.
 
-Recently, Databend has also implemented corresponding support for Python binding through PyO3. The code snippet is as follows.
+Recently, Databend has also implemented corresponding support for Python binding through PyO3. The code snippet is as follows:
 
 ```rust
 #[pyo3(signature = (num=20))]
