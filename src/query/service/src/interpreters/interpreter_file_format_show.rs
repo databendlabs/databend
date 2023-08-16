@@ -18,7 +18,6 @@ use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
 use common_expression::FromData;
-use common_sql::plans::ShowFileFormatsPlan;
 use common_users::UserApiProvider;
 use log::debug;
 
@@ -30,12 +29,11 @@ use crate::sessions::TableContext;
 #[derive(Debug)]
 pub struct ShowFileFormatsInterpreter {
     ctx: Arc<QueryContext>,
-    _plan: ShowFileFormatsPlan,
 }
 
 impl ShowFileFormatsInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowFileFormatsPlan) -> Result<Self> {
-        Ok(ShowFileFormatsInterpreter { ctx, _plan: plan })
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowFileFormatsInterpreter { ctx })
     }
 }
 

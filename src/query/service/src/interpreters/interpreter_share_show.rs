@@ -27,16 +27,14 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::share::ShowSharesPlan;
 
 pub struct ShowSharesInterpreter {
     ctx: Arc<QueryContext>,
-    _plan: ShowSharesPlan,
 }
 
 impl ShowSharesInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowSharesPlan) -> Result<Self> {
-        Ok(ShowSharesInterpreter { ctx, _plan: plan })
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowSharesInterpreter { ctx })
     }
 }
 
