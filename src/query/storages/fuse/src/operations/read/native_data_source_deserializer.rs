@@ -277,7 +277,7 @@ impl NativeDeserializeDataTransform {
     }
 
     /// If the virtual column has already generated, add it directly,
-    /// otherwise generate it from the source column
+    /// otherwise extract it from the source column
     fn add_virtual_columns(
         &self,
         chunks: Vec<(usize, Box<dyn Array>)>,

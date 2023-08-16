@@ -50,7 +50,9 @@ use crate::MergeIOReadResult;
 
 pub struct VirtualMergeIOReadResult {
     pub part: PartInfoPtr,
+    // The schema of virtual columns
     pub schema: ArrowSchema,
+    // Source columns that can be ignored without reading
     pub ignore_column_ids: Option<HashSet<ColumnId>>,
     pub data: MergeIOReadResult,
 }
@@ -238,7 +240,7 @@ impl VirtualColumnReader {
         }
 
         // If the virtual column has already generated, add it directly,
-        // otherwise generate it from the source column
+        // otherwise extract it from the source column
         let func_ctx = self.ctx.get_function_context()?;
         for (index, virtual_column) in self.virtual_column_infos.iter().enumerate() {
             if let Some(column) = virtual_values.remove(&index) {
