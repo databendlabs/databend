@@ -87,7 +87,12 @@ async fn generate_refresh_index_plan(
         })
         .await?;
 
-    for (index_id, index_name, index_meta) in indexes {
+    let sync_indexes = indexes
+        .into_iter()
+        .filter(|(_, _, meta)| meta.sync_creation)
+        .collect::<Vec<_>>();
+
+    for (index_id, index_name, index_meta) in sync_indexes {
         let plan = build_refresh_index_plan(
             ctx.clone(),
             index_id,
