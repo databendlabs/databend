@@ -566,7 +566,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropShare(_)
             | Plan::DescShare(_)
             | Plan::ShowShares(_)
-            | Plan::Call(_)
             | Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)

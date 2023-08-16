@@ -90,6 +90,17 @@ fn flatten_plan_node_profile(
             };
             plan_node_profs.push(prof)
         }
+        PhysicalPlan::ConstantTableScan(scan) => {
+            let proc_prof = profs.get(&scan.plan_id).copied().unwrap_or_default();
+            let prof = OperatorProfile {
+                id: scan.plan_id,
+                operator_type: OperatorType::ConstantTableScan,
+                children: vec![],
+                execution_info: proc_prof.into(),
+                attribute: OperatorAttribute::Empty,
+            };
+            plan_node_profs.push(prof);
+        }
         PhysicalPlan::Filter(filter) => {
             flatten_plan_node_profile(metadata, &filter.input, profs, plan_node_profs)?;
             let proc_prof = profs.get(&filter.plan_id).copied().unwrap_or_default();
@@ -492,7 +503,7 @@ fn flatten_plan_node_profile(
             };
             plan_node_profs.push(prof);
         }
-        PhysicalPlan::MaterializedCte(_) | PhysicalPlan::ConstantTableScan(_) => todo!(),
+        PhysicalPlan::MaterializedCte(_) => todo!(),
         PhysicalPlan::DeletePartial(_)
         | PhysicalPlan::MutationAggregate(_)
         | PhysicalPlan::CopyIntoTable(_)

@@ -15,7 +15,6 @@
 mod access;
 mod common;
 mod interpreter;
-mod interpreter_call;
 mod interpreter_catalog_create;
 mod interpreter_catalog_drop;
 mod interpreter_catalog_show_create;
@@ -117,7 +116,6 @@ mod interpreter_virtual_columns_generate;
 pub use access::ManagementModeAccess;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
-pub use interpreter_call::CallInterpreter;
 pub use interpreter_cluster_key_alter::AlterTableClusterKeyInterpreter;
 pub use interpreter_cluster_key_drop::DropTableClusterKeyInterpreter;
 pub use interpreter_clustering_history::InterpreterClusteringHistory;

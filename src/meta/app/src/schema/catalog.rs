@@ -64,6 +64,7 @@ impl CatalogOption {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct HiveCatalogOption {
     pub address: String,
+    pub storage_params: Option<Box<StorageParams>>,
 }
 
 /// Option for creating a iceberg catalog

@@ -177,6 +177,13 @@ pub fn walk_set_expr<'a, V: Visitor<'a>>(visitor: &mut V, set_expr: &'a SetExpr)
         SetExpr::SetOperation(op) => {
             visitor.visit_set_operation(op);
         }
+        SetExpr::Values { values, .. } => {
+            for row_values in values {
+                for value in row_values {
+                    visitor.visit_expr(value);
+                }
+            }
+        }
     }
 }
 
@@ -302,21 +309,10 @@ pub fn walk_join_condition<'a, V: Visitor<'a>>(visitor: &mut V, join_cond: &'a J
 }
 
 pub fn walk_cte<'a, V: Visitor<'a>>(visitor: &mut V, cte: &'a CTE) {
-    let CTE { alias, source, .. } = cte;
+    let CTE { alias, query, .. } = cte;
 
     visitor.visit_identifier(&alias.name);
-    match source {
-        CTESource::Query { query, .. } => {
-            visitor.visit_query(query);
-        }
-        CTESource::Values(values) => {
-            for row_values in values {
-                for value in row_values {
-                    visitor.visit_expr(value);
-                }
-            }
-        }
-    }
+    visitor.visit_query(query);
 }
 
 pub fn walk_window_definition<'a, V: Visitor<'a>>(

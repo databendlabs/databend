@@ -116,8 +116,6 @@ impl InterpreterFactory {
                 ExplainKind::AnalyzePlan,
             )?)),
 
-            Plan::Call(plan) => Ok(Arc::new(CallInterpreter::try_create(ctx, *plan.clone())?)),
-
             Plan::Copy(copy_plan) => Ok(Arc::new(CopyInterpreter::try_create(
                 ctx,
                 *copy_plan.clone(),

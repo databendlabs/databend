@@ -45,7 +45,6 @@ use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
-use crate::plans::CallPlan;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateUDFPlan;
@@ -489,10 +488,7 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 name: udf_name.to_string(),
             })),
-            Statement::Call(stmt) => Plan::Call(Box::new(CallPlan {
-                name: stmt.name.clone(),
-                args: stmt.args.clone(),
-            })),
+            Statement::Call(stmt) => self.bind_call(bind_context, stmt).await?,
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 
