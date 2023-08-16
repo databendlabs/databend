@@ -587,6 +587,10 @@ impl Catalog for DatabaseCatalog {
         self.table_function_factory.get(func_name, tbl_args)
     }
 
+    fn exists_table_function(&self, func_name: &str) -> bool {
+        self.table_function_factory.exists(func_name)
+    }
+
     fn list_table_functions(&self) -> Vec<String> {
         self.table_function_factory.list()
     }

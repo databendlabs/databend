@@ -181,6 +181,13 @@ pub fn walk_set_expr_mut<V: VisitorMut>(visitor: &mut V, set_expr: &mut SetExpr)
         SetExpr::SetOperation(op) => {
             visitor.visit_set_operation(op);
         }
+        SetExpr::Values { values, .. } => {
+            for row_values in values {
+                for value in row_values {
+                    visitor.visit_expr(value);
+                }
+            }
+        }
     }
 }
 
@@ -301,21 +308,10 @@ pub fn walk_join_condition_mut<V: VisitorMut>(visitor: &mut V, join_cond: &mut J
 }
 
 pub fn walk_cte_mut<V: VisitorMut>(visitor: &mut V, cte: &mut CTE) {
-    let CTE { alias, source, .. } = cte;
+    let CTE { alias, query, .. } = cte;
 
     visitor.visit_identifier(&mut alias.name);
-    match source {
-        CTESource::Query { query, .. } => {
-            visitor.visit_query(query);
-        }
-        CTESource::Values(values) => {
-            for row_values in values {
-                for value in row_values {
-                    visitor.visit_expr(value);
-                }
-            }
-        }
-    }
+    visitor.visit_query(query);
 }
 
 pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statement) {

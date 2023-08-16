@@ -284,6 +284,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         ))
     }
 
+    fn exists_table_function(&self, _func_name: &str) -> bool {
+        false
+    }
+
     // List all table functions' names.
     fn list_table_functions(&self) -> Vec<String> {
         unimplemented!()

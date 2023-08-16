@@ -25,7 +25,7 @@ use common_meta_app::schema::TableStatistics;
 use log::as_debug;
 use log::info;
 
-use crate::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
+use super::suggested_background_tasks::SuggestedBackgroundTasksSource;
 use crate::sessions::QueryContext;
 
 const SUGGEST_TABLES_NEED_COMPACTION: &str = "
@@ -75,7 +75,7 @@ WHERE t.database != 'system'
     ;
 ";
 
-impl SuggestedBackgroundTasksProcedure {
+impl SuggestedBackgroundTasksSource {
     pub async fn get_suggested_compaction_tasks(ctx: Arc<QueryContext>) -> Result<Vec<Suggestion>> {
         let resps = Self::do_get_all_suggested_compaction_tables(ctx).await?;
         let mut suggestions = vec![];
@@ -181,7 +181,7 @@ impl SuggestedBackgroundTasksProcedure {
     pub async fn do_get_all_suggested_compaction_tables(
         ctx: Arc<QueryContext>,
     ) -> Result<Vec<RecordBatch>> {
-        let res = SuggestedBackgroundTasksProcedure::do_execute_sql(
+        let res = SuggestedBackgroundTasksSource::do_execute_sql(
             ctx,
             SUGGEST_TABLES_NEED_COMPACTION.to_string(),
         )
