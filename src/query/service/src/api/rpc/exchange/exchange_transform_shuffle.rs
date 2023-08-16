@@ -102,6 +102,10 @@ impl OutputsBuffer {
         self.inner.iter().any(|x| x.len() == x.capacity())
     }
 
+    pub fn clear(&mut self, index: usize) {
+        self.inner[index].clear()
+    }
+
     pub fn pop(&mut self, index: usize) -> Option<DataBlock> {
         self.inner[index].pop_front()
     }
@@ -164,11 +168,14 @@ impl Processor for ExchangeShuffleTransform {
         let buffer_is_full = self.try_pull_inputs()?;
 
         if !self.all_outputs_finished && !self.try_push_outputs() && buffer_is_full {
-            for input in &self.inputs {
-                input.set_not_need_data();
-            }
+            // buffer is full and cannot push any output port
+            if !self.all_outputs_finished {
+                for input in &self.inputs {
+                    input.set_not_need_data();
+                }
 
-            return Ok(Event::NeedConsume);
+                return Ok(Event::NeedConsume);
+            }
         }
 
         if self.all_outputs_finished {
@@ -198,6 +205,7 @@ impl ExchangeShuffleTransform {
 
         for (index, output) in self.outputs.iter().enumerate() {
             if output.is_finished() {
+                self.buffer.clear(index);
                 continue;
             }
 
@@ -208,8 +216,6 @@ impl ExchangeShuffleTransform {
                     pushed_any_output = true;
                     output.push_data(Ok(data_block));
                 }
-
-                continue;
             }
         }
 
