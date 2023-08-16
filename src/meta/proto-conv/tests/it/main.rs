@@ -58,3 +58,4 @@ mod v050_user_info;
 mod v051_obs_and_cos_storage;
 mod v052_hive_catalog_config;
 mod v053_csv_format_params;
+mod v054_index_meta;
