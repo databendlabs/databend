@@ -48,8 +48,6 @@ impl Plan {
 
             Plan::Copy(plan) => Ok(format!("{:?}", plan)),
 
-            Plan::Call(plan) => Ok(format!("{:?}", plan)),
-
             // catalog
             Plan::ShowCreateCatalog(show_create_catalog) => {
                 Ok(format!("{:?}", show_create_catalog))

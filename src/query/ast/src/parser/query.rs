@@ -63,6 +63,7 @@ pub enum SetOperationElement {
         op: SetOperator,
         all: bool,
     },
+    Values(Vec<Vec<Expr>>),
     OrderBy {
         order_by: Vec<OrderByExpr>,
     },
@@ -131,6 +132,12 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             }
         },
     );
+    let values = map(
+        rule! {
+            VALUES ~ ^#comma_separated_list1(row_values)
+        },
+        |(_, values)| SetOperationElement::Values(values),
+    );
     let order_by = map(
         rule! {
             ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr)
@@ -167,6 +174,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
         | #with
         | #set_operator
         | #select_stmt
+        | #values
         | #order_by
         | #limit
         | #offset
@@ -225,6 +233,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 having: *having,
                 window_list,
             })),
+            SetOperationElement::Values(values) => SetExpr::Values {
+                span: transform_span(input.span.0),
+                values,
+            },
             _ => unreachable!(),
         };
         Ok(set_expr)
@@ -311,35 +323,16 @@ pub fn row_values(i: Input) -> IResult<Vec<Expr>> {
     )(i)
 }
 
-pub fn cte_source(i: Input) -> IResult<CTESource> {
-    alt((
-        map(
-            rule! {
-                MATERIALIZED? ~ "(" ~ #query ~ ")"
-            },
-            |(materialized, _, query, _)| CTESource::Query {
-                materialized: materialized.is_some(),
-                query: Box::new(query),
-            },
-        ),
-        map(
-            rule! {
-                "(" ~ VALUES ~ ^#comma_separated_list1(row_values) ~ ")"
-            },
-            |(_, _, values, _)| CTESource::Values(values),
-        ),
-    ))(i)
-}
-
 pub fn with(i: Input) -> IResult<With> {
     let cte = map(
         consumed(rule! {
-            #table_alias ~ AS ~ #cte_source
+            #table_alias ~ AS ~ MATERIALIZED? ~ "(" ~ #query ~ ")"
         }),
-        |(span, (table_alias, _, source))| CTE {
+        |(span, (table_alias, _, materialized, _, query, _))| CTE {
             span: transform_span(span.0),
             alias: table_alias,
-            source,
+            materialized: materialized.is_some(),
+            query: Box::new(query),
         },
     );
 
@@ -674,8 +667,8 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         #aliased_stage
         | #table_function
         | #aliased_table
-        | #subquery
         | #values
+        | #subquery
         | #group
         | #join
         | #join_condition_on
