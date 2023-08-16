@@ -403,7 +403,7 @@ TableScan
 ├── table: default.test_virtual_db.t2
 ├── output columns: [a (#0), v:b (#2)]
 ├── read rows: 1
-├── read bytes: 109
+├── read bytes: 130
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -417,7 +417,7 @@ TableScan
 ├── table: default.test_virtual_db.t2
 ├── output columns: [a (#0), v:a[0] (#2)]
 ├── read rows: 1
-├── read bytes: 109
+├── read bytes: 130
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
