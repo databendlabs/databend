@@ -102,10 +102,6 @@ impl OutputsBuffer {
         self.inner.iter().any(|x| x.len() == x.capacity())
     }
 
-    pub fn is_fill(&self, index: usize) -> bool {
-        self.inner[index].capacity() == self.inner[index].len()
-    }
-
     pub fn pop(&mut self, index: usize) -> Option<DataBlock> {
         self.inner[index].pop_front()
     }
