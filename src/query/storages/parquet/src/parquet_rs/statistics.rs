@@ -54,7 +54,7 @@ pub fn collect_row_group_stats(
             let column_stats = column.statistics().unwrap();
             stats_of_columns.insert(
                 index as u32,
-                convert_column_statistics(column_stats, field.data_type()),
+                convert_column_statistics(column_stats, &field.data_type().remove_nullable()),
             );
         }
         stats.push(stats_of_columns);
