@@ -141,10 +141,7 @@ impl PhysicalPlanBuilder {
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
             let right_expr = right_condition
                 .resolve_and_check(build_schema.as_ref())?
-                .project_column_ref(|index| {
-                    dbg!(&index);
-                    build_schema.index_of(&index.to_string()).unwrap()
-                });
+                .project_column_ref(|index| build_schema.index_of(&index.to_string()).unwrap());
             if join.join_type == JoinType::Inner {
                 if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
                     (left_condition, right_condition)

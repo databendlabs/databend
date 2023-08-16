@@ -126,6 +126,7 @@ pub struct JoinHashTable {
 }
 
 impl JoinHashTable {
+    #[allow(clippy::too_many_arguments)]
     pub fn create_join_state(
         ctx: Arc<QueryContext>,
         build_keys: &[RemoteExpr],
@@ -134,7 +135,7 @@ impl JoinHashTable {
         probe_projections: &ColumnSet,
         build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
-        probe_to_build: &Vec<usize>,
+        probe_to_build: &[usize],
     ) -> Result<Arc<JoinHashTable>> {
         let hash_key_types = build_keys
             .iter()
@@ -153,6 +154,7 @@ impl JoinHashTable {
         )?))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<QueryContext>,
         mut build_data_schema: DataSchemaRef,
@@ -160,7 +162,7 @@ impl JoinHashTable {
         probe_projections: &ColumnSet,
         build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
-        probe_to_build: &Vec<usize>,
+        probe_to_build: &[usize],
         method: HashMethodKind,
     ) -> Result<Self> {
         if matches!(
@@ -200,7 +202,7 @@ impl JoinHashTable {
             raw_entry_spaces: Mutex::new(vec![]),
             hash_join_desc,
             probe_schema: probe_data_schema,
-            probe_to_build: Arc::new(probe_to_build.clone()),
+            probe_to_build: Arc::new(probe_to_build.to_owned()),
             probe_projections: Arc::new(probe_projections.clone()),
             build_projections: Arc::new(build_projections.clone()),
             is_build_projected: Arc::new(AtomicBool::new(true)),
