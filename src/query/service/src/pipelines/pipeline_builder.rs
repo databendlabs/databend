@@ -734,6 +734,7 @@ impl PipelineBuilder {
             &join.probe_projections,
             &join.build_projections,
             HashJoinDesc::create(join)?,
+            &join.probe_to_build,
         )
     }
 

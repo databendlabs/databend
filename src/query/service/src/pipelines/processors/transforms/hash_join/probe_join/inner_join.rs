@@ -110,7 +110,12 @@ impl JoinHashTable {
                     } else {
                         None
                     };
-                    let result_block = self.merge_eq_block(probe_block, build_block, occupied);
+                    let mut result_block = self.merge_eq_block(probe_block, build_block, occupied);
+                    if self.probe_to_build.len() > 0 {
+                        for index in self.probe_to_build.iter() {
+                            result_block.add_column(result_block.get_by_offset(*index).clone());
+                        }
+                    }
 
                     probed_blocks.push(result_block);
 
@@ -161,7 +166,12 @@ impl JoinHashTable {
             } else {
                 None
             };
-            let result_block = self.merge_eq_block(probe_block, build_block, occupied);
+            let mut result_block = self.merge_eq_block(probe_block, build_block, occupied);
+            if self.probe_to_build.len() > 0 {
+                for index in self.probe_to_build.iter() {
+                    result_block.add_column(result_block.get_by_offset(*index).clone());
+                }
+            }
 
             probed_blocks.push(result_block);
         }

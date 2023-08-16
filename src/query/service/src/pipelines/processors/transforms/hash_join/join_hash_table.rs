@@ -104,6 +104,7 @@ pub struct JoinHashTable {
     pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
     pub(crate) hash_join_desc: HashJoinDesc,
     pub(crate) probe_schema: DataSchemaRef,
+    pub(crate) probe_to_build: Arc<Vec<usize>>,
     /// Projected columns
     pub(crate) probe_projections: Arc<ColumnSet>,
     pub(crate) build_projections: Arc<ColumnSet>,
@@ -133,6 +134,7 @@ impl JoinHashTable {
         probe_projections: &ColumnSet,
         build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
+        probe_to_build: &Vec<usize>,
     ) -> Result<Arc<JoinHashTable>> {
         let hash_key_types = build_keys
             .iter()
@@ -146,6 +148,7 @@ impl JoinHashTable {
             probe_projections,
             build_projections,
             hash_join_desc,
+            probe_to_build,
             method,
         )?))
     }
@@ -157,6 +160,7 @@ impl JoinHashTable {
         probe_projections: &ColumnSet,
         build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
+        probe_to_build: &Vec<usize>,
         method: HashMethodKind,
     ) -> Result<Self> {
         if matches!(
@@ -196,6 +200,7 @@ impl JoinHashTable {
             raw_entry_spaces: Mutex::new(vec![]),
             hash_join_desc,
             probe_schema: probe_data_schema,
+            probe_to_build: Arc::new(probe_to_build.clone()),
             probe_projections: Arc::new(probe_projections.clone()),
             build_projections: Arc::new(build_projections.clone()),
             is_build_projected: Arc::new(AtomicBool::new(true)),
