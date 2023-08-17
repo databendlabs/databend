@@ -102,8 +102,10 @@ impl OutputsBuffer {
         self.inner.iter().any(|x| x.len() == x.capacity())
     }
 
-    pub fn clear(&mut self, index: usize) {
-        self.inner[index].clear()
+    pub fn clear(&mut self, index: usize) -> usize {
+        let len = self.inner[index].len();
+        self.inner[index].clear();
+        len
     }
 
     pub fn pop(&mut self, index: usize) -> Option<DataBlock> {
@@ -172,7 +174,10 @@ impl Processor for ExchangeShuffleTransform {
         }
 
         if !self.all_outputs_finished {
-            self.try_push_outputs();
+            if self.try_push_outputs() && !self.all_outputs_finished && !self.all_inputs_finished {
+                // try pull inputs again if consumed buffer.
+                self.try_pull_inputs()?;
+            }
         }
 
         if self.all_outputs_finished {
@@ -196,12 +201,13 @@ impl Processor for ExchangeShuffleTransform {
 }
 
 impl ExchangeShuffleTransform {
-    fn try_push_outputs(&mut self) {
+    fn try_push_outputs(&mut self) -> bool {
         self.all_outputs_finished = true;
+        let mut consumed_buffer = false;
 
         for (index, output) in self.outputs.iter().enumerate() {
             if output.is_finished() {
-                self.buffer.clear(index);
+                consumed_buffer = self.buffer.clear(index) != 0;
                 continue;
             }
 
@@ -209,10 +215,13 @@ impl ExchangeShuffleTransform {
 
             if output.can_push() {
                 if let Some(data_block) = self.buffer.pop(index) {
+                    consumed_buffer = true;
                     output.push_data(Ok(data_block));
                 }
             }
         }
+
+        consumed_buffer
     }
 
     fn try_pull_inputs(&mut self) -> Result<()> {
