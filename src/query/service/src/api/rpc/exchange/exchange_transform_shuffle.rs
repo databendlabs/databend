@@ -165,17 +165,17 @@ impl Processor for ExchangeShuffleTransform {
     }
 
     fn event(&mut self) -> Result<Event> {
-        let buffer_is_full = self.try_pull_inputs()?;
+        self.try_pull_inputs()?;
 
-        if !self.all_outputs_finished && !self.try_push_outputs() && buffer_is_full {
+        if !self.all_outputs_finished && !self.try_push_outputs() {
             // buffer is full and cannot push any output port
-            if !self.all_outputs_finished {
-                for input in &self.inputs {
-                    input.set_not_need_data();
-                }
+            // if !self.all_outputs_finished && self.buffer.is_full() {
+            // for input in &self.inputs {
+            //     input.set_not_need_data();
+            // }
 
-                return Ok(Event::NeedConsume);
-            }
+            // return Ok(Event::NeedConsume);
+            // }
         }
 
         if self.all_outputs_finished {
@@ -222,9 +222,9 @@ impl ExchangeShuffleTransform {
         pushed_any_output
     }
 
-    fn try_pull_inputs(&mut self) -> Result<bool> {
+    fn try_pull_inputs(&mut self) -> Result<()> {
         if self.all_inputs_finished {
-            return Ok(false);
+            return Ok(());
         }
 
         self.all_inputs_finished = true;
@@ -235,13 +235,13 @@ impl ExchangeShuffleTransform {
 
             self.all_inputs_finished = false;
 
-            if self.buffer.is_full() {
-                return Ok(true);
-            }
-
             if !input_port.has_data() {
                 input_port.set_need_data();
                 continue;
+            }
+
+            if self.buffer.is_full() {
+                return Ok(());
             }
 
             let mut data_block = input_port.pull_data().unwrap()?;
@@ -264,7 +264,7 @@ impl ExchangeShuffleTransform {
             ));
         }
 
-        Ok(false)
+        Ok(())
     }
 }
 
