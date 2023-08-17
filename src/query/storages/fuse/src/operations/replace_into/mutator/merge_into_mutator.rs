@@ -199,8 +199,48 @@ impl MergeIntoOperationAggregator {
                 self.accumulate_segments(merge_into_operation, segment_locations.as_ref())
                     .await
             }
-            ReplaceIntoTarget::Blocks(_) => todo!(),
+            ReplaceIntoTarget::Blocks(blocks) => {
+                self.accumulate_blocks(merge_into_operation, blocks.as_ref())
+                    .await
+            }
         }
+    }
+    #[async_backtrace::framed]
+    pub async fn accumulate_blocks(
+        &mut self,
+        merge_into_operation: MergeIntoOperation,
+        blocks: &[(SegmentIndex, BlockIndex, BlockMeta)],
+    ) -> Result<()> {
+        let aggregation_ctx = &self.aggregation_ctx;
+        metrics_inc_replace_number_accumulated_merge_action();
+
+        let start = Instant::now();
+        match merge_into_operation {
+            MergeIntoOperation::Delete(partitions) => {
+                for DeletionByColumn {
+                    columns_min_max,
+                    key_hashes,
+                    bloom_hashes,
+                } in &partitions
+                {
+                    // block level pruning, using range index
+                    for (segment_index, block_index, block_meta) in blocks {
+                        if aggregation_ctx.overlapped(&block_meta.col_stats, columns_min_max) {
+                            self.deletion_accumulator.add_block_deletion(
+                                *segment_index,
+                                *block_index,
+                                key_hashes,
+                                bloom_hashes,
+                            )
+                        }
+                    }
+                }
+            }
+            MergeIntoOperation::None => {}
+        }
+
+        metrics_inc_replace_accumulated_merge_action_time_ms(start.elapsed().as_millis() as u64);
+        Ok(())
     }
     #[async_backtrace::framed]
     pub async fn accumulate_segments(
