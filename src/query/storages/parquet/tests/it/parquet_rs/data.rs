@@ -359,7 +359,7 @@ pub async fn make_test_file_rg(scenario: Scenario) -> (NamedTempFile, SchemaRef)
     (output_file, schema)
 }
 
-pub async fn make_test_file_page(scenario: Scenario) -> NamedTempFile {
+pub async fn make_test_file_page(scenario: Scenario) -> (NamedTempFile, SchemaRef) {
     let mut output_file = tempfile::Builder::new()
         .prefix("parquet_page_pruning")
         .suffix(".parquet")
@@ -376,11 +376,11 @@ pub async fn make_test_file_page(scenario: Scenario) -> NamedTempFile {
 
     let schema = batches[0].schema();
 
-    let mut writer = ArrowWriter::try_new(&mut output_file, schema, Some(props)).unwrap();
+    let mut writer = ArrowWriter::try_new(&mut output_file, schema.clone(), Some(props)).unwrap();
 
     for batch in batches {
         writer.write(&batch).expect("writing batch");
     }
     writer.close().unwrap();
-    output_file
+    (output_file, schema)
 }

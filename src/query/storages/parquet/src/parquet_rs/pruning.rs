@@ -167,6 +167,10 @@ impl ParquetRSPruner {
                     let sel_of_cur_rg = merge_row_selectors(sel_of_different_cols);
                     selectors.extend(sel_of_cur_rg);
                 }
+                // Trim selectors.
+                while let Some(s) = selectors.last() && s.row_count == 0 {
+                    selectors.pop();
+                }
                 Ok(Some(RowSelection::from(selectors)))
             }
         }

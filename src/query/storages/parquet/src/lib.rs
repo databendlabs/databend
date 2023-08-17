@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
 #![feature(try_blocks)]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(let_chains)]
 
 mod parquet2;
 mod parquet_part;

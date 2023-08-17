@@ -49,7 +49,9 @@ async fn test_impl(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>
         FunctionContext::default(),
         Arc::new(schema),
         &plan.push_downs,
-        ParquetReadOptions::new().with_prune_row_groups(prune),
+        ParquetReadOptions::new()
+            .with_prune_row_groups(prune)
+            .with_prune_pages(false),
     )
     .unwrap();
 
@@ -58,12 +60,12 @@ async fn test_impl(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>
     assert_eq!(
         expected_rgs, rgs,
         "Expected {:?}, got {:?}. Scenario: {:?}, predicate: {}",
-        expected_rgs, rgs, scenario, sql
+        expected_rgs, rgs, scenario, predicate
     );
 }
 
 #[tokio::test]
-async fn test_timestamps() {
+async fn test_timestamp() {
     test(
         Scenario::Timestamp,
         "micros < to_timestamp('2020-01-02 01:01:11Z')",
@@ -155,7 +157,6 @@ async fn test_f64_complex_expr() {
 
 #[tokio::test]
 async fn test_f64_complex_expr_subtract() {
-    // result of sql "SELECT * FROM t where 1-f > 1" is not supported
     test(Scenario::Float64, "1-f > 1", vec![0, 1]).await;
 }
 
