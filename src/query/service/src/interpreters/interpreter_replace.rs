@@ -28,6 +28,7 @@ use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::ReplaceInto;
+use common_sql::executor::ReplaceIntoTarget;
 use common_sql::executor::SelectCtx;
 use common_sql::plans::CopyPlan;
 use common_sql::plans::InsertInputSource;
@@ -212,6 +213,19 @@ impl ReplaceInterpreter {
             table_level_range_index,
             need_insert: true,
         }));
+        let target = if is_distributed {
+            let blocks = vec![];
+            ReplaceIntoTarget::Blocks(blocks)
+        } else {
+            ReplaceIntoTarget::Segments(
+                base_snapshot
+                    .segments
+                    .clone()
+                    .into_iter()
+                    .enumerate()
+                    .collect(),
+            )
+        };
         root = Box::new(PhysicalPlan::ReplaceInto(ReplaceInto {
             input: root,
             block_thresholds: fuse_table.get_block_thresholds(),
@@ -219,12 +233,7 @@ impl ReplaceInterpreter {
             catalog_info: catalog.info(),
             on_conflicts,
             bloom_filter_column_indexes,
-            segments: base_snapshot
-                .segments
-                .clone()
-                .into_iter()
-                .enumerate()
-                .collect(),
+            target,
             need_insert: true,
         }));
         if is_distributed {

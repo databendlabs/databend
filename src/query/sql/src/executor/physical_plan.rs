@@ -42,6 +42,7 @@ use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_storage::StageFileInfo;
 use enum_as_inner::EnumAsInner;
+use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -1006,8 +1007,14 @@ pub struct ReplaceInto {
     pub on_conflicts: Vec<OnConflictField>,
     pub bloom_filter_column_indexes: Vec<FieldIndex>,
     pub catalog_info: CatalogInfo,
-    pub segments: Vec<(usize, Location)>,
+    pub target: ReplaceIntoTarget,
     pub need_insert: bool,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum ReplaceIntoTarget {
+    Segments(Vec<(usize, Location)>),
+    Blocks(Vec<(usize, usize, BlockMeta)>),
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
