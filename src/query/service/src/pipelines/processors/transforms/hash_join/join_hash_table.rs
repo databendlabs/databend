@@ -104,7 +104,7 @@ pub struct JoinHashTable {
     pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
     pub(crate) hash_join_desc: HashJoinDesc,
     pub(crate) probe_schema: DataSchemaRef,
-    pub(crate) probe_to_build: Arc<Vec<usize>>,
+    pub(crate) probe_to_build: Arc<Vec<(usize, (bool, bool))>>,
     /// Projected columns
     pub(crate) probe_projections: Arc<ColumnSet>,
     pub(crate) build_projections: Arc<ColumnSet>,
@@ -135,7 +135,7 @@ impl JoinHashTable {
         probe_projections: &ColumnSet,
         build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
-        probe_to_build: &[usize],
+        probe_to_build: &[(usize, (bool, bool))],
     ) -> Result<Arc<JoinHashTable>> {
         let hash_key_types = build_keys
             .iter()
@@ -162,7 +162,7 @@ impl JoinHashTable {
         probe_projections: &ColumnSet,
         build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
-        probe_to_build: &[usize],
+        probe_to_build: &[(usize, (bool, bool))],
         method: HashMethodKind,
     ) -> Result<Self> {
         if matches!(

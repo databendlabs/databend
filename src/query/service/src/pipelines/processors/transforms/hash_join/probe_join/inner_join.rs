@@ -15,6 +15,8 @@
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -112,8 +114,28 @@ impl JoinHashTable {
                     };
                     let mut result_block = self.merge_eq_block(probe_block, build_block, occupied);
                     if self.probe_to_build.len() > 0 {
-                        for index in self.probe_to_build.iter() {
-                            result_block.add_column(result_block.get_by_offset(*index).clone());
+                        for (index, (is_probe_nullable, is_build_nullable)) in
+                            self.probe_to_build.iter()
+                        {
+                            let entry = match (is_probe_nullable, is_build_nullable) {
+                                (true, true) | (false, false) => {
+                                    result_block.get_by_offset(*index).clone()
+                                }
+                                (true, false) => {
+                                    result_block.get_by_offset(*index).clone().remove_nullable()
+                                }
+                                (false, true) => {
+                                    let mut validity = MutableBitmap::new();
+                                    validity.extend_constant(result_block.num_rows(), true);
+                                    let validity: Bitmap = validity.into();
+                                    Self::set_validity(
+                                        result_block.get_by_offset(*index),
+                                        validity.len(),
+                                        &validity,
+                                    )
+                                }
+                            };
+                            result_block.add_column(entry);
                         }
                     }
 
@@ -168,8 +190,24 @@ impl JoinHashTable {
             };
             let mut result_block = self.merge_eq_block(probe_block, build_block, occupied);
             if self.probe_to_build.len() > 0 {
-                for index in self.probe_to_build.iter() {
-                    result_block.add_column(result_block.get_by_offset(*index).clone());
+                for (index, (is_probe_nullable, is_build_nullable)) in self.probe_to_build.iter() {
+                    let entry = match (is_probe_nullable, is_build_nullable) {
+                        (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
+                        (true, false) => {
+                            result_block.get_by_offset(*index).clone().remove_nullable()
+                        }
+                        (false, true) => {
+                            let mut validity = MutableBitmap::new();
+                            validity.extend_constant(result_block.num_rows(), true);
+                            let validity: Bitmap = validity.into();
+                            Self::set_validity(
+                                result_block.get_by_offset(*index),
+                                validity.len(),
+                                &validity,
+                            )
+                        }
+                    };
+                    result_block.add_column(entry);
                 }
             }
 

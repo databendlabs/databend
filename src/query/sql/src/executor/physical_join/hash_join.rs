@@ -232,7 +232,13 @@ impl PhysicalPlanBuilder {
                 for ((probe_index, _), build_index) in probe_to_build_index.iter() {
                     if build_index == &i {
                         tail_fields.push(field.clone());
-                        probe_to_build.push(*probe_index);
+                        probe_to_build.push((
+                            *probe_index,
+                            (
+                                probe_fields[*probe_index].data_type().is_nullable(),
+                                field.data_type().is_nullable(),
+                            ),
+                        ));
                         build_projections.remove(&i);
                         is_tail = true;
                     }

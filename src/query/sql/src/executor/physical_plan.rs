@@ -614,7 +614,7 @@ pub struct HashJoin {
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
-    pub probe_to_build: Vec<usize>,
+    pub probe_to_build: Vec<(usize, (bool, bool))>,
     pub output_schema: DataSchemaRef,
     // It means that join has a corresponding runtime filter
     pub contain_runtime_filter: bool,
