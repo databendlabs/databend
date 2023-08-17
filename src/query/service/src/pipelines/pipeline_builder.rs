@@ -441,7 +441,7 @@ impl PipelineBuilder {
                 block_builder,
                 on_conflicts.clone(),
                 bloom_filter_column_indexes.clone(),
-                segments,
+                target,
                 io_request_semaphore,
             )?;
             self.main_pipeline.add_pipe(Pipe::create(
@@ -522,13 +522,10 @@ impl PipelineBuilder {
                 block_builder,
                 on_conflicts.clone(),
                 bloom_filter_column_indexes.clone(),
-                segments,
+                target,
                 io_request_semaphore,
             )?;
-            assert_eq!(
-                merge_into_task_num,
-                merge_into_operation_aggregators.len()
-            );
+            assert_eq!(merge_into_task_num, merge_into_operation_aggregators.len());
             pipe_items.append(&mut merge_into_operation_aggregators);
 
             // extend the pipeline

@@ -1017,6 +1017,15 @@ pub enum ReplaceIntoTarget {
     Blocks(Vec<(usize, usize, BlockMeta)>),
 }
 
+impl ReplaceIntoTarget {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ReplaceIntoTarget::Segments(segments) => segments.is_empty(),
+            ReplaceIntoTarget::Blocks(blocks) => blocks.is_empty(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RefreshIndex {
     pub input: Box<PhysicalPlan>,

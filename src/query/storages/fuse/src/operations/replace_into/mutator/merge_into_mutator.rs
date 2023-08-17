@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use ahash::AHashMap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_base::base::tokio::sync::Semaphore;
@@ -81,7 +80,7 @@ use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyD
 use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
 struct AggregationContext {
-    segment_locations: AHashMap<SegmentIndex, Location>,
+    target: ReplaceIntoTarget,
     // the fields specified in ON CONFLICT clause
     on_conflict_fields: Vec<OnConflictField>,
     // the field indexes of `on_conflict_fields`
@@ -174,7 +173,7 @@ impl MergeIntoOperationAggregator {
         Ok(Self {
             deletion_accumulator,
             aggregation_ctx: Arc::new(AggregationContext {
-                segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
+                target,
                 on_conflict_fields,
                 bloom_filter_column_indexes,
                 remain_column_field_ids,
@@ -195,13 +194,27 @@ impl MergeIntoOperationAggregator {
 impl MergeIntoOperationAggregator {
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, merge_into_operation: MergeIntoOperation) -> Result<()> {
+        match self.aggregation_ctx.target.clone() {
+            ReplaceIntoTarget::Segments(segment_locations) => {
+                self.accumulate_segments(merge_into_operation, segment_locations.as_ref())
+                    .await
+            }
+            ReplaceIntoTarget::Blocks(_) => todo!(),
+        }
+    }
+    #[async_backtrace::framed]
+    pub async fn accumulate_segments(
+        &mut self,
+        merge_into_operation: MergeIntoOperation,
+        segment_locations: &[(SegmentIndex, Location)],
+    ) -> Result<()> {
         let aggregation_ctx = &self.aggregation_ctx;
         metrics_inc_replace_number_accumulated_merge_action();
 
         let start = Instant::now();
         match merge_into_operation {
             MergeIntoOperation::Delete(partitions) => {
-                for (segment_index, (path, ver)) in &aggregation_ctx.segment_locations {
+                for (segment_index, (path, ver)) in segment_locations {
                     // segment level
                     let load_param = LoadParams {
                         location: path.clone(),
@@ -260,6 +273,18 @@ impl MergeIntoOperationAggregator {
 impl MergeIntoOperationAggregator {
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
+        match self.aggregation_ctx.target.clone() {
+            ReplaceIntoTarget::Segments(segments) => {
+                self.apply_segments(segments.into_iter().collect()).await
+            }
+            ReplaceIntoTarget::Blocks(_) => todo!(),
+        }
+    }
+    #[async_backtrace::framed]
+    pub async fn apply_segments(
+        &mut self,
+        segments: HashMap<SegmentIndex, Location>,
+    ) -> Result<Option<MutationLogs>> {
         metrics_inc_replace_number_apply_deletion();
 
         // track number of segments and blocks after pruning (per merge action application)
@@ -286,16 +311,12 @@ impl MergeIntoOperationAggregator {
         let mut mutation_log_handlers = Vec::new();
         let mut num_rows_mutated = 0;
         for (segment_idx, block_deletion) in self.deletion_accumulator.deletions.drain() {
-            let (path, ver) = self
-                .aggregation_ctx
-                .segment_locations
-                .get(&segment_idx)
-                .ok_or_else(|| {
-                    ErrorCode::Internal(format!(
-                        "unexpected, segment (idx {}) not found, during applying mutation log",
-                        segment_idx
-                    ))
-                })?;
+            let (path, ver) = segments.get(&segment_idx).ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "unexpected, segment (idx {}) not found, during applying mutation log",
+                    segment_idx
+                ))
+            })?;
 
             let load_param = LoadParams {
                 location: path.clone(),

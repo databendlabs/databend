@@ -25,8 +25,8 @@ use common_sql::executor::Deduplicate;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::QuerySource;
 use common_sql::executor::ReplaceInto;
+use common_sql::executor::ReplaceIntoTarget;
 use common_storages_fuse::TableContext;
-use storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchange;
 use crate::schedulers::Fragmenter;
@@ -259,11 +259,19 @@ impl PlanFragment {
             PhysicalPlan::ReplaceInto(plan) => plan,
             _ => unreachable!("logic error"),
         };
-        let partitions = &plan.segments;
+        let target = &plan.target;
         let executors = Fragmenter::get_executors(ctx.clone());
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
-        let partition_reshuffle = Self::reshuffle(executors, partitions.clone())?;
-
+        let partition_reshuffle: Vec<_> = match target {
+            ReplaceIntoTarget::Segments(segments) => Self::reshuffle(executors, segments.clone())?
+                .into_iter()
+                .map(|(k, v)| (k, ReplaceIntoTarget::Segments(v)))
+                .collect(),
+            ReplaceIntoTarget::Blocks(blocks) => Self::reshuffle(executors, blocks.clone())?
+                .into_iter()
+                .map(|(k, v)| (k, ReplaceIntoTarget::Blocks(v)))
+                .collect(),
+        };
         let local_id = &ctx.get_cluster().local_id;
 
         for (executor, parts) in partition_reshuffle.iter() {
@@ -271,7 +279,7 @@ impl PlanFragment {
             let need_insert = executor == local_id;
 
             let mut replace_replace_into = ReplaceReplaceInto {
-                partitions: parts.clone(),
+                target: parts.clone(),
                 need_insert,
             };
             plan = replace_replace_into.replace(&plan)?;
@@ -371,7 +379,7 @@ impl PhysicalPlanReplacer for ReplaceDeletePartial {
 }
 
 struct ReplaceReplaceInto {
-    pub partitions: Vec<(usize, Location)>,
+    pub target: ReplaceIntoTarget,
     pub need_insert: bool,
 }
 
@@ -381,7 +389,7 @@ impl PhysicalPlanReplacer for ReplaceReplaceInto {
         Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
             input: Box::new(input),
             need_insert: self.need_insert,
-            segments: self.partitions.clone(),
+            target: self.target.clone(),
             ..plan.clone()
         }))
     }
@@ -391,7 +399,7 @@ impl PhysicalPlanReplacer for ReplaceReplaceInto {
         Ok(PhysicalPlan::Deduplicate(Deduplicate {
             input: Box::new(input),
             need_insert: self.need_insert,
-            table_is_empty: self.partitions.is_empty(),
+            table_is_empty: self.target.is_empty(),
             ..plan.clone()
         }))
     }

@@ -113,9 +113,11 @@ impl FuseTable {
                     .collect()
             }
             ReplaceIntoTarget::Blocks(blocks) => {
+                let mut blocks = blocks.clone();
+                blocks.shuffle(&mut rand::thread_rng());
                 let chunk_size = (blocks.len() as f64 / num_partition as f64).ceil() as usize;
                 blocks
-                    .chunks(num_partition)
+                    .chunks(chunk_size)
                     .map(|x| ReplaceIntoTarget::Blocks(x.to_vec()))
                     .collect()
             }
