@@ -151,9 +151,11 @@ impl PhysicalPlanBuilder {
                             probe_schema.index_of(&left.column.index.to_string()),
                             build_schema.index_of(&right.column.index.to_string()),
                         ) {
-                            probe_to_build_index.push(((probe_index, false), build_index));
-                            if !pre_column_projections.contains(&left.column.index) {
-                                pre_column_projections.push(left.column.index);
+                            if probe_schema.field(probe_index).data_type().remove_nullable() == build_schema.field(build_index).data_type().remove_nullable() {
+                                probe_to_build_index.push(((probe_index, false), build_index));
+                                if !pre_column_projections.contains(&left.column.index) {
+                                    pre_column_projections.push(left.column.index);
+                                }
                             }
                         }
                     }
