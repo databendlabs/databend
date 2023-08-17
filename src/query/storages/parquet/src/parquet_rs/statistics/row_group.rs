@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_expression::TableSchema;
+use common_expression::TableField;
 use parquet::file::metadata::RowGroupMetaData;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
@@ -24,25 +24,25 @@ use crate::parquet_rs::statistics::column::convert_column_statistics;
 /// Collect statistics of a batch of row groups.
 ///
 /// The returned vector's length is the same as `rgs`.
-///
-/// TODO(parquet): we can only collect statistics of columns we need to eval.
 pub fn collect_row_group_stats(
-    schema: &TableSchema,
     rgs: &[RowGroupMetaData],
+    leaf_fields: &[TableField],
+    columns: &[usize],
 ) -> Result<Vec<StatisticsOfColumns>> {
-    let fields = schema.leaf_fields();
     let mut stats = Vec::with_capacity(rgs.len());
     for rg in rgs {
-        assert_eq!(rg.num_columns(), fields.len());
+        assert_eq!(rg.num_columns(), leaf_fields.len());
         let mut stats_of_columns = HashMap::with_capacity(rg.columns().len());
 
         // Each row_group_stat is a `HashMap` holding key-value pairs.
         // The first element of the pair is the offset in the schema,
         // and the second element is the statistics of the column (according to the offset)
-        for (index, (column, field)) in rg.columns().iter().zip(fields.iter()).enumerate() {
+        for col_idx in columns.iter() {
+            let column = rg.column(*col_idx);
+            let field = &leaf_fields[*col_idx];
             let column_stats = column.statistics().unwrap();
             stats_of_columns.insert(
-                index as u32,
+                *col_idx as u32,
                 convert_column_statistics(column_stats, &field.data_type().remove_nullable()),
             );
         }
