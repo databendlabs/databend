@@ -324,13 +324,15 @@ jobs:
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
       - name: Download binaries for usage
         id: download_binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="${{ needs.create_release.outputs.version }}"
           declare -A platform_targets=( ["arm64"]="aarch64-unknown-linux-gnu" ["amd64"]="x86_64-unknown-linux-gnu")
           mkdir -p ./distro/
           for platform in ${!platform_targets[@]}; do
               target=${platform_targets[$platform]}
-              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
+              gh release download ${version} --pattern "databend-${version}-${target}.tar.gz" --dir distro/
               mkdir -p ./target/${target}/release
               tar x -C ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
               mkdir -p ./distro/linux/${platform}
@@ -389,13 +391,15 @@ jobs:
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
       - name: Download binaries for usage
         id: download_binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="${{ needs.create_release.outputs.version }}"
           declare -A platform_targets=( ["arm64"]="aarch64-unknown-linux-gnu" ["amd64"]="x86_64-unknown-linux-gnu")
           mkdir -p ./distro/
           for platform in ${!platform_targets[@]}; do
               target=${platform_targets[$platform]}
-              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
+              gh release download ${version} --pattern "databend-${version}-${target}.tar.gz" --dir distro/
               mkdir -p ./target/${target}/release
               tar x -C ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
               mkdir -p ./distro/linux/${platform}
@@ -458,11 +462,13 @@ jobs:
           echo 'target=${{ matrix.arch }}-unknown-linux-gnu' >> $GITHUB_OUTPUT
       - name: Download binaries for usage
         id: download_binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           target=${{ steps.target.outputs.target }}
           version="${{ needs.create_release.outputs.version }}"
           mkdir -p ./distro/
-          aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
+          gh release download ${version} --pattern "databend-${version}-${target}.tar.gz" --dir distro/
           tar x -C distro -f ./distro/databend-${version}-${target}.tar.gz
       - name: Build Packages
         id: build_packages
