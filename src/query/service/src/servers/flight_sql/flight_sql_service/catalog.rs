@@ -37,7 +37,7 @@ impl CatalogInfoProvider {
     fn batch_to_get_stream(batch: RecordBatch) -> Result<DoGetStream, Status> {
         let schema = (*batch.schema()).clone();
         let batches = vec![batch];
-        let flight_data = batches_to_flight_data(schema, batches)
+        let flight_data = batches_to_flight_data(&schema, batches)
             .map_err(|e| Status::internal(format!("{e:?}")))?
             .into_iter()
             .map(Ok);
