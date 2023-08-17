@@ -20,7 +20,6 @@ use common_expression::infer_table_schema;
 use common_expression::types::StringType;
 use common_expression::ComputedExpr;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::FromData;
 use common_expression::Scalar;
 use common_sql::plans::DescribeTablePlan;
@@ -48,10 +47,6 @@ impl DescribeTableInterpreter {
 impl Interpreter for DescribeTableInterpreter {
     fn name(&self) -> &str {
         "DescribeTableInterpreter"
-    }
-
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
     }
 
     #[async_backtrace::framed]

@@ -493,6 +493,8 @@ pub enum TokenKind {
     FIELD_DELIMITER,
     #[token("NAN_DISPLAY", ignore(ascii_case))]
     NAN_DISPLAY,
+    #[token("NULL_DISPLAY", ignore(ascii_case))]
+    NULL_DISPLAY,
     #[token("FILE_FORMAT", ignore(ascii_case))]
     FILE_FORMAT,
     #[token("FILE", ignore(ascii_case))]

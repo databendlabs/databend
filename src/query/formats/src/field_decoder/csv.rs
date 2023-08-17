@@ -23,7 +23,6 @@ use common_expression::types::AnyType;
 use common_expression::ColumnBuilder;
 use common_io::constants::FALSE_BYTES_LOWER;
 use common_io::constants::INF_BYTES_LOWER;
-use common_io::constants::NULL_BYTES_ESCAPE;
 use common_io::constants::TRUE_BYTES_LOWER;
 use common_io::cursor_ext::ReadBytesExt;
 use common_meta_app::principal::CsvFileFormatParams;
@@ -47,7 +46,7 @@ impl FieldDecoderCSV {
             common_settings: CommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
-                null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
+                null_bytes: params.null_display.as_bytes().to_vec(),
                 nan_bytes: params.nan_display.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
