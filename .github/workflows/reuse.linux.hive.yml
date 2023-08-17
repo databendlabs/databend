@@ -8,15 +8,20 @@ on:
         type: string
         required: true
         default: 'debug'
+      runner_provider:
+        description: 'Self-hosted runner provider, aws or gcp'
+        type: string
+        required: true
+        default: 'aws'
 
 env:
   BUILD_PROFILE: ${{ inputs.build_profile }}
-  RUNNER_PROVIDER: aws
+  RUNNER_PROVIDER: ${{ inputs.runner_provider }}
 
 jobs:
   build:
     name: build_hdfs_${{ matrix.arch }}_${{ matrix.libc }}
-    runs-on: [self-hosted, X64, Linux, 8c16g]
+    runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
         include:
@@ -36,8 +41,8 @@ jobs:
           artifacts: meta,query
 
   test_stateful_hive_standalone:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_hive_standalone

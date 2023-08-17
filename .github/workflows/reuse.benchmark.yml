@@ -23,6 +23,11 @@ on:
         description: The version of databend to run
         required: true
         type: string
+      runner_provider:
+        description: 'Self-hosted runner provider, aws or gcp'
+        type: string
+        required: true
+        default: 'aws'
 
 permissions:
   id-token: write
@@ -31,11 +36,13 @@ permissions:
 
 env:
   BENCHMARK_S3_PREFIX: s3://repo.databend.rs/benchmark/clickbench
+  BUILD_PROFILE: release
+  RUNNER_PROVIDER: ${{ github.event.inputs.runner_provider }}
 
 jobs:
   local:
     timeout-minutes: 60
-    runs-on: [self-hosted, X64, Linux, 16c32g]
+    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
         dataset:
@@ -89,7 +96,7 @@ jobs:
 
   cloud:
     timeout-minutes: 90
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
         include:
@@ -123,9 +130,9 @@ jobs:
           cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
 
   comment:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: [local, cloud]
     if: inputs.source == 'pr'
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v3
       - name: Install Dependencies
@@ -181,9 +188,9 @@ jobs:
             * **tpch**: https://repo.databend.rs/benchmark/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/tpch.html
 
   archive:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: [local, cloud]
     if: inputs.source == 'release'
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
         dataset:
