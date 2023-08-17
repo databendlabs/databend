@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
 use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
@@ -63,19 +62,6 @@ impl InterpreterFactory {
             e
         })?;
         Self::get_inner(ctx, plan)
-    }
-
-    /// This is used for handlers to get the schema of the plan.
-    /// Some plan may miss the schema and return empty plan such as `CallPlan`
-    /// So we need to map the plan into to `Interpreter` and get the right schema.
-    pub fn get_schema(ctx: Arc<QueryContext>, plan: &Plan) -> DataSchemaRef {
-        let schema = plan.schema();
-        if schema.num_fields() == 0 {
-            let executor = Self::get_inner(ctx, plan);
-            executor.map(|e| e.schema()).unwrap_or(schema)
-        } else {
-            schema
-        }
     }
 
     pub fn get_inner(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
@@ -309,10 +295,7 @@ impl InterpreterFactory {
                 ctx,
                 *set_role.clone(),
             )?)),
-            Plan::ShowRoles(show_roles) => Ok(Arc::new(ShowRolesInterpreter::try_create(
-                ctx,
-                *show_roles.clone(),
-            )?)),
+            Plan::ShowRoles(_show_roles) => Ok(Arc::new(ShowRolesInterpreter::try_create(ctx)?)),
 
             // Stages
             Plan::CreateStage(create_stage) => Ok(Arc::new(
@@ -334,9 +317,7 @@ impl InterpreterFactory {
             Plan::DropFileFormat(drop_file_format) => Ok(Arc::new(
                 DropFileFormatInterpreter::try_create(ctx, *drop_file_format.clone())?,
             )),
-            Plan::ShowFileFormats(show_file_formats) => Ok(Arc::new(
-                ShowFileFormatsInterpreter::try_create(ctx, *show_file_formats.clone())?,
-            )),
+            Plan::ShowFileFormats(_) => Ok(Arc::new(ShowFileFormatsInterpreter::try_create(ctx)?)),
 
             // Grant
             Plan::GrantPriv(grant_priv) => Ok(Arc::new(GrantPrivilegeInterpreter::try_create(
@@ -421,10 +402,7 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::DescShare(p) => Ok(Arc::new(DescShareInterpreter::try_create(ctx, *p.clone())?)),
-            Plan::ShowShares(p) => Ok(Arc::new(ShowSharesInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?)),
+            Plan::ShowShares(_) => Ok(Arc::new(ShowSharesInterpreter::try_create(ctx)?)),
             Plan::ShowObjectGrantPrivileges(p) => Ok(Arc::new(
                 ShowObjectGrantPrivilegesInterpreter::try_create(ctx, *p.clone())?,
             )),
@@ -463,9 +441,9 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
-            Plan::ShowNetworkPolicies(p) => Ok(Arc::new(
-                ShowNetworkPoliciesInterpreter::try_create(ctx, *p.clone())?,
-            )),
+            Plan::ShowNetworkPolicies(_) => {
+                Ok(Arc::new(ShowNetworkPoliciesInterpreter::try_create(ctx)?))
+            }
         }
     }
 }

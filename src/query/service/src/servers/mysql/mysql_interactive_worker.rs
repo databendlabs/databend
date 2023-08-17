@@ -356,7 +356,7 @@ impl InteractiveWorkerBase {
                         Ok(interpreter) => {
                             let (blocks, extra_info) =
                                 Self::exec_query(interpreter.clone(), &context).await?;
-                            let schema = interpreter.schema();
+                            let schema = plan.schema();
                             let format = context.get_format_settings()?;
                             Ok((
                                 QueryResult::create(

@@ -421,8 +421,6 @@ impl Display for Plan {
 }
 
 impl Plan {
-    /// Notice: This is incomplete and should be only used when you know it must has schema (Plan::Query | Plan::Insert ...).
-    /// If you want to get the real schema from plan use `InterpreterFactory::get_schema()` instead
     pub fn schema(&self) -> DataSchemaRef {
         match self {
             Plan::Query {
@@ -431,10 +429,10 @@ impl Plan {
                 bind_context,
                 ..
             } => bind_context.output_schema(),
-            Plan::Explain { .. } | Plan::ExplainAst { .. } | Plan::ExplainSyntax { .. } => {
-                DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
-            }
-            Plan::ExplainAnalyze { .. } => {
+            Plan::Explain { .. }
+            | Plan::ExplainAst { .. }
+            | Plan::ExplainSyntax { .. }
+            | Plan::ExplainAnalyze { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
             Plan::ShowCreateCatalog(plan) => plan.schema(),

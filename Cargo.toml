@@ -219,8 +219,20 @@ rpath = false
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
 
-arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "031bc7bc" }
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "076ceee" }
 arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e11341" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "693c265" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 opendal = { git = "https://github.com/apache/incubator-opendal", rev = "f02d627" }
+icelake = { git = "https://github.com/icelake-io/icelake/", rev = "4ea7bf9" }
+# Crates from arrow-rs
+arrow = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
+arrow-schema = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
+arrow-array = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
+arrow-ord = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
+arrow-flight = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
+arrow-ipc = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
+arrow-cast = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
+arrow-data = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
+arrow-buffer = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
+parquet = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
