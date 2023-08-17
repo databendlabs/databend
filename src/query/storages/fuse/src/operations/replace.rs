@@ -24,6 +24,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
+use common_sql::executor::ReplaceIntoTarget;
 use rand::prelude::SliceRandom;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::Location;
@@ -101,10 +102,24 @@ impl FuseTable {
         block_builder: BlockBuilder,
         on_conflicts: Vec<OnConflictField>,
         bloom_filter_column_indexes: Vec<FieldIndex>,
-        segments: &[(usize, Location)],
+        target: &ReplaceIntoTarget,
         io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PipeItem>> {
-        let chunks = Self::partition_segments(segments, num_partition);
+        let chunks: Vec<_> = match target {
+            ReplaceIntoTarget::Segments(segments) => {
+                Self::partition_segments(segments.as_ref(), num_partition)
+                    .iter()
+                    .map(|x| ReplaceIntoTarget::Segments(x.to_vec()))
+                    .collect()
+            }
+            ReplaceIntoTarget::Blocks(blocks) => {
+                let chunk_size = (blocks.len() as f64 / num_partition as f64).ceil() as usize;
+                blocks
+                    .chunks(num_partition)
+                    .map(|x| ReplaceIntoTarget::Blocks(x.to_vec()))
+                    .collect()
+            }
+        };
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let mut items = Vec::with_capacity(num_partition);
         for chunk_of_segment_locations in chunks {

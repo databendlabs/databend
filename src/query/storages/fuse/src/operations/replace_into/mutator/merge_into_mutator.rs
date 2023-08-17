@@ -35,6 +35,7 @@ use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_sql::evaluator::BlockOperator;
 use common_sql::executor::OnConflictField;
+use common_sql::executor::ReplaceIntoTarget;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -112,7 +113,7 @@ impl MergeIntoOperationAggregator {
         ctx: Arc<dyn TableContext>,
         on_conflict_fields: Vec<OnConflictField>,
         bloom_filter_column_indexes: Vec<FieldIndex>,
-        segment_locations: Vec<(SegmentIndex, Location)>,
+        target: ReplaceIntoTarget,
         data_accessor: Operator,
         table_schema: Arc<TableSchema>,
         write_settings: WriteSettings,
