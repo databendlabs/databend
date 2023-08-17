@@ -38,10 +38,18 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Get License from S3
-        id: license
+        if: env.RUNNER_PROVIDER == 'aws'
         run: |
           aws s3 cp s3://databend-ci/misc/license.key license.key
           aws s3 cp s3://databend-ci/misc/license.json license.json
+      - name: Get License from GCS
+        if: env.RUNNER_PROVIDER == 'gcp'
+        run: |
+          gcloud storage cp gs://databend-ci/misc/license.key license.key
+          gcloud storage cp gs://databend-ci/misc/license.json license.json
+      - name: Output License
+        id: license
+        run: |
           echo "license=$(cat license.key | base64 -w 0)" >> $GITHUB_OUTPUT
           cat license.json
 
