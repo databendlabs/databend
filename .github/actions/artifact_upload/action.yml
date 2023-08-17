@@ -52,3 +52,12 @@ runs:
           s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
           --exclude "*" --include "databend-*" --no-progress
         aws s3 cp ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/open-sharing s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ --no-progress || true
+
+    - name: Upload artifact to gcs
+      if: env.RUNNER_PROVIDER == 'gcp'
+      shell: bash
+      run: |
+        gcloud storage cp --quiet --recursive ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-* \
+          gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/
+        gcloud storage cp --quiet ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/open-sharing \
+          gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/
