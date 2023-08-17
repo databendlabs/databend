@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use parquet::arrow::arrow_reader::RowSelection;
@@ -34,16 +34,16 @@ use crate::parquet_rs::statistics::convert_index_to_column_statistics;
 /// A pruner to prune row groups and pages of a parquet files.
 ///
 /// We can use this pruner to compute row groups and pages to skip.
-pub struct ParquetPruner {
+pub struct ParquetRSPruner {
     schema: TableSchemaRef,
     range_pruner: Option<Arc<dyn RangePruner + Send + Sync>>,
     prune_row_groups: bool,
     prune_pages: bool,
 }
 
-impl ParquetPruner {
+impl ParquetRSPruner {
     pub fn try_create(
-        ctx: Arc<dyn TableContext>,
+        func_ctx: FunctionContext,
         schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         options: ParquetReadOptions,
@@ -56,17 +56,13 @@ impl ParquetPruner {
 
         let range_pruner =
             if filter.is_some() && (options.prune_row_groups() || options.prune_pages()) {
-                let pruner = RangePrunerCreator::try_create(
-                    ctx.get_function_context()?,
-                    &schema,
-                    filter.as_ref(),
-                )?;
+                let pruner = RangePrunerCreator::try_create(func_ctx, &schema, filter.as_ref())?;
                 Some(pruner)
             } else {
                 None
             };
 
-        Ok(ParquetPruner {
+        Ok(ParquetRSPruner {
             schema,
             range_pruner,
             prune_row_groups: options.prune_row_groups(),

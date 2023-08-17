@@ -12,19 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
-#![feature(try_blocks)]
-#![feature(impl_trait_in_assoc_type)]
-
-mod parquet2;
-mod parquet_part;
 mod parquet_rs;
-mod utils;
-
-pub use parquet2::Parquet2Table;
-pub use parquet_part::ParquetPart;
-pub use parquet_part::ParquetRSFilePart;
-pub use parquet_rs::ParquetRSPruner;
-pub use parquet_rs::ParquetRSReader;
-pub use parquet_rs::ParquetRSTable;

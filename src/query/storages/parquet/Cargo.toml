@@ -42,3 +42,5 @@ typetag = "0.2.3"
 
 [dev-dependencies]
 common-sql = { path = "../../sql" }
+databend-query = { path = "../../service" }
+tempfile = "3.4.0"

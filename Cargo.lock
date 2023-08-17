@@ -2867,6 +2867,7 @@ dependencies = [
  "common-pipeline-sources",
  "common-sql",
  "common-storage",
+ "databend-query",
  "ethnum",
  "futures",
  "log",
@@ -2876,6 +2877,7 @@ dependencies = [
  "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",
+ "tempfile",
  "typetag",
 ]
 

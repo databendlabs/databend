@@ -47,7 +47,7 @@ use parquet::arrow::parquet_to_arrow_schema_by_columns;
 use parquet::arrow::ParquetRecordBatchStreamBuilder;
 use parquet::arrow::ProjectionMask;
 
-use super::pruning::ParquetPruner;
+use super::pruning::ParquetRSPruner;
 
 struct ParquetPredicate {
     /// Columns used for eval predicate.
@@ -72,7 +72,7 @@ pub struct ParquetRSReader {
     /// Field paths helping to traverse columns.
     field_paths: Vec<(FieldRef, Vec<FieldIndex>)>,
 
-    pruner: ParquetPruner,
+    pruner: ParquetRSPruner,
     need_page_index: bool,
 }
 
@@ -116,7 +116,12 @@ impl ParquetRSReader {
         let output_schema = to_arrow_schema(&output_projection.project_schema(&table_schema));
         let field_paths = compute_output_field_paths(&output_schema, &batch_schema)?;
         // Build pruner to prune row groups and pages(TODO).
-        let pruner = ParquetPruner::try_create(ctx, table_schema, &plan.push_downs, options)?;
+        let pruner = ParquetRSPruner::try_create(
+            ctx.get_function_context()?,
+            table_schema,
+            &plan.push_downs,
+            options,
+        )?;
 
         Ok(Self {
             op,
@@ -137,7 +142,6 @@ impl ParquetRSReader {
         let reader = self.op.reader(loc).await?;
         // TODO(parquet):
         // - set batch size to generate block one by one.
-        // - set row selections.
         let mut builder = ParquetRecordBatchStreamBuilder::new_with_options(
             reader,
             ArrowReaderOptions::new()
