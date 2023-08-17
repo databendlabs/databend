@@ -29,7 +29,7 @@ query T
 explain select * from t, t1, t2 where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
-├── output columns: [t2.a (#2), t1.a (#1), t.a (#0)]
+├── output columns: [t2.a (#2), t.a (#0), t1.a (#1)]
 ├── join type: INNER
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t2.a (#2)]
@@ -77,7 +77,7 @@ query T
 explain select * from t, t2, t1 where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
-├── output columns: [t2.a (#1), t1.a (#2), t.a (#0)]
+├── output columns: [t2.a (#1), t.a (#0), t1.a (#2)]
 ├── join type: INNER
 ├── build keys: [t1.a (#2)]
 ├── probe keys: [t2.a (#1)]
@@ -125,7 +125,7 @@ query T
 explain select * from t1, t, t2 where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
-├── output columns: [t2.a (#2), t1.a (#0), t.a (#1)]
+├── output columns: [t2.a (#2), t.a (#1), t1.a (#0)]
 ├── join type: INNER
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [t2.a (#2)]
@@ -173,7 +173,7 @@ query T
 explain select * from t1, t2, t where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
-├── output columns: [t2.a (#1), t1.a (#0), t.a (#2)]
+├── output columns: [t2.a (#1), t.a (#2), t1.a (#0)]
 ├── join type: INNER
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [t2.a (#1)]
@@ -221,7 +221,7 @@ query T
 explain select * from t2, t1, t where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
-├── output columns: [t2.a (#0), t1.a (#1), t.a (#2)]
+├── output columns: [t2.a (#0), t.a (#2), t1.a (#1)]
 ├── join type: INNER
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t2.a (#0)]
@@ -269,7 +269,7 @@ query T
 explain select * from t2, t, t1 where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
-├── output columns: [t2.a (#0), t1.a (#2), t.a (#1)]
+├── output columns: [t2.a (#0), t.a (#1), t1.a (#2)]
 ├── join type: INNER
 ├── build keys: [t1.a (#2)]
 ├── probe keys: [t2.a (#0)]

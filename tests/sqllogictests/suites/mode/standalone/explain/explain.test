@@ -32,11 +32,11 @@ query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1)
 ----
 Filter
-├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
+├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
 ├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
 ├── estimated rows: 0.13
 └── HashJoin
-    ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
+    ├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
     ├── join type: INNER
     ├── build keys: [t1.a (#0)]
     ├── probe keys: [t2.a (#2)]
@@ -75,7 +75,7 @@ query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a)
 ----
 HashJoin
-├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
+├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
 ├── join type: INNER
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [t2.a (#2)]
@@ -1127,12 +1127,12 @@ query T
 explain select * from a left join b on a.id = b.id where a.c1 between 1683648000 and 1683734400 and b.c1 between 1683648000 and 1683734400 limit 1;
 ----
 Limit
-├── output columns: [b.id (#2), b.c1 (#3), a.id (#0), a.c1 (#1)]
+├── output columns: [b.id (#2), b.c1 (#3), a.c1 (#1), a.id (#0)]
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 0.08
 └── HashJoin
-    ├── output columns: [b.id (#2), b.c1 (#3), a.id (#0), a.c1 (#1)]
+    ├── output columns: [b.id (#2), b.c1 (#3), a.c1 (#1), a.id (#0)]
     ├── join type: INNER
     ├── build keys: [a.id (#0)]
     ├── probe keys: [b.id (#2)]
