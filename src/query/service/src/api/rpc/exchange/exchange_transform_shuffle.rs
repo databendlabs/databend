@@ -174,8 +174,10 @@ impl Processor for ExchangeShuffleTransform {
         }
 
         if !self.all_outputs_finished {
-            if self.try_push_outputs() && !self.all_outputs_finished && !self.all_inputs_finished {
-                // try pull inputs again if consumed buffer.
+            let consumed_buffer = self.try_push_outputs();
+
+            // try pull inputs again if consumed buffer.
+            if consumed_buffer && !self.all_outputs_finished && !self.all_inputs_finished {
                 self.try_pull_inputs()?;
             }
         }
