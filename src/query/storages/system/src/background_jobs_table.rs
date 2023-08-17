@@ -111,7 +111,11 @@ impl AsyncSystemTable for BackgroundJobTable {
                                 .map(|tz| tz.to_string().as_bytes().to_vec()),
                         );
                     }
-                    _ => {}
+                    BackgroundJobType::ONESHOT => {
+                        scheduled_job_interval_secs.push(None);
+                        scheduled_job_cron_expression.push(None);
+                        scheduled_job_cron_timezone.push(None);
+                    }
                 }
             } else {
                 job_types.push(None);
