@@ -112,22 +112,6 @@ For information about how to manage buckets and Access Keys for your cloud objec
 
 </TabItem>
 
-
-<TabItem value="Huawei OBS" label="Huawei OBS">
-
-Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
-
-- Create a bucket or container named `databend`.
-- Get the endpoint URL for connecting to the bucket or container you created.
-- Get the Access Key ID and Secret Access Key for your account.
-
-For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
-
-- <https://support.huaweicloud.com/intl/en-us/usermanual-obs/en-us_topic_0045853662.html>
-- <https://support.huaweicloud.com/intl/en-us/api-obs/obs_04_0116.html>
-
-</TabItem>
-
 <TabItem value="Wasabi" label="Wasabi">
 
 Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
@@ -462,38 +446,6 @@ secret_access_key = "<your-access-key>"
 
 :::tip
 In this example QingStor region is `pek3b`.
-:::
-
-</TabItem>
-
-
-<TabItem value="Huawei OBS" label="Huawei OBS">
-
-```toml
-[storage]
-# obs
-type = "obs"
-
-[storage.obs]
-# How to create a bucket:
-# https://support.huaweicloud.com/intl/en-us/usermanual-obs/en-us_topic_0045853662.html
-// highlight-next-line
-bucket = "databend"
-
-# You can get the URL from the bucket detail page.
-// highlight-next-line
-endpoint_url = "https://obs.cn-north-4.myhuaweicloud.com"
-
-# How to get access_key_id and secret_access_key:
-# https://support.huaweicloud.com/intl/en-us/api-obs/obs_04_0116.html
-// highlight-next-line
-access_key_id = "<your-key-id>"
-// highlight-next-line
-secret_access_key = "<your-access-key>"
-```
-
-:::tip
-In this example OBS region is `cn-north-4`.
 :::
 
 </TabItem>
