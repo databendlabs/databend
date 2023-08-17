@@ -96,6 +96,7 @@ use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
 use common_sql::executor::RangeJoin;
 use common_sql::executor::ReplaceInto;
+use common_sql::executor::ReplaceIntoTarget;
 use common_sql::executor::RowFetch;
 use common_sql::executor::RuntimeFilterSource;
 use common_sql::executor::SelectCtx;
@@ -390,11 +391,15 @@ impl PipelineBuilder {
             on_conflicts,
             bloom_filter_column_indexes,
             catalog_info,
-            segments,
+            target,
             need_insert,
         } = replace;
         let max_threads = self.ctx.get_settings().get_max_threads()?;
-        let segment_partition_num = std::cmp::min(segments.len(), max_threads as usize);
+        let target_num = match target {
+            ReplaceIntoTarget::Segments(x) => x.len(),
+            ReplaceIntoTarget::Blocks(x) => x.len(),
+        };
+        let merge_into_task_num = std::cmp::min(target_num, max_threads as usize);
         let table = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
@@ -419,12 +424,12 @@ impl PipelineBuilder {
             *block_thresholds,
         );
         if !*need_insert {
-            if segment_partition_num == 0 {
+            if merge_into_task_num == 0 {
                 return Ok(());
             }
-            let broadcast_processor = BroadcastProcessor::new(segment_partition_num);
+            let broadcast_processor = BroadcastProcessor::new(merge_into_task_num);
             self.main_pipeline
-                .add_pipe(Pipe::create(1, segment_partition_num, vec![
+                .add_pipe(Pipe::create(1, merge_into_task_num, vec![
                     broadcast_processor.into_pipe_item(),
                 ]));
             let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
@@ -432,7 +437,7 @@ impl PipelineBuilder {
 
             let merge_into_operation_aggregators = table.merge_into_mutators(
                 self.ctx.clone(),
-                segment_partition_num,
+                merge_into_task_num,
                 block_builder,
                 on_conflicts.clone(),
                 bloom_filter_column_indexes.clone(),
@@ -440,14 +445,14 @@ impl PipelineBuilder {
                 io_request_semaphore,
             )?;
             self.main_pipeline.add_pipe(Pipe::create(
-                segment_partition_num,
-                segment_partition_num,
+                merge_into_task_num,
+                merge_into_task_num,
                 merge_into_operation_aggregators,
             ));
             return Ok(());
         }
 
-        if segment_partition_num == 0 {
+        if merge_into_task_num == 0 {
             let dummy_item = create_dummy_item();
             //                      ┌──────────────────────┐            ┌──────────────────┐
             //                      │                      ├──┬────────►│  SerializeBlock  │
@@ -469,17 +474,17 @@ impl PipelineBuilder {
             // └─────────────┘      │                      ├──┐         ┌──────────────────┐
             //                      │                      ├──┴────────►│BroadcastProcessor│
             //                      └──────────────────────┘            └──────────────────┘
-            let broadcast_processor = BroadcastProcessor::new(segment_partition_num);
+            let broadcast_processor = BroadcastProcessor::new(merge_into_task_num);
             // wrap them into pipeline, order matters!
             self.main_pipeline
-                .add_pipe(Pipe::create(2, segment_partition_num + 1, vec![
+                .add_pipe(Pipe::create(2, merge_into_task_num + 1, vec![
                     serialize_block_transform.into_pipe_item(),
                     broadcast_processor.into_pipe_item(),
                 ]));
         };
 
         // 4. connect with MergeIntoOperationAggregators
-        if segment_partition_num == 0 {
+        if merge_into_task_num == 0 {
             let dummy_item = create_dummy_item();
             self.main_pipeline.add_pipe(Pipe::create(2, 2, vec![
                 serialize_segment_transform.into_pipe_item(),
@@ -502,7 +507,7 @@ impl PipelineBuilder {
             //      └───────────────────┘              │MergeIntoOperationAggr│
             //                                         └──────────────────────┘
 
-            let item_size = segment_partition_num + 1;
+            let item_size = merge_into_task_num + 1;
             let mut pipe_items = Vec::with_capacity(item_size);
             // setup the dummy transform
             pipe_items.push(serialize_segment_transform.into_pipe_item());
@@ -513,7 +518,7 @@ impl PipelineBuilder {
             // setup the merge into operation aggregators
             let mut merge_into_operation_aggregators = table.merge_into_mutators(
                 self.ctx.clone(),
-                segment_partition_num,
+                merge_into_task_num,
                 block_builder,
                 on_conflicts.clone(),
                 bloom_filter_column_indexes.clone(),
@@ -521,7 +526,7 @@ impl PipelineBuilder {
                 io_request_semaphore,
             )?;
             assert_eq!(
-                segment_partition_num,
+                merge_into_task_num,
                 merge_into_operation_aggregators.len()
             );
             pipe_items.append(&mut merge_into_operation_aggregators);
