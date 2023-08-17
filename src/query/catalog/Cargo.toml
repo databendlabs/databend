@@ -24,14 +24,14 @@ common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 
-arrow-schema = { version = "43.0.0", features = ["serde"] }
+arrow-schema = { version = "45.0.0", features = ["serde"] }
 async-backtrace = { workspace = true }
 async-trait = "0.1.57"
 chrono = { workspace = true }
 dashmap = "5.4"
 dyn-clone = "1.0.9"
 parking_lot = "0.12"
-parquet_rs = { package = "parquet", version = "43.0.0" }
+parquet_rs = { package = "parquet", version = "45.0.0" }
 rand = "0.8.5"
 serde = { workspace = true }
 serde_json = { workspace = true }

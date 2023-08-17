@@ -32,6 +32,7 @@ use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CatalogType;
 use common_meta_app::schema::HiveCatalogOption;
 use common_meta_app::schema::IcebergCatalogOption;
+use common_meta_app::storage::StorageParams;
 use url::Url;
 
 use crate::binder::parse_uri_location;
@@ -140,64 +141,26 @@ impl Binder {
                 ));
             }
             CatalogType::Hive => {
+                let mut options = options.clone();
+
+                // Remove address and url to avoid unexpected field error in uri location.
                 let address = options
-                    .get("address")
+                    .remove("address")
                     .ok_or_else(|| ErrorCode::InvalidArgument("expected field: ADDRESS"))?;
 
+                let sp = parse_catalog_url(options)?;
+
                 CatalogOption::Hive(HiveCatalogOption {
-                    address: address.to_string(),
+                    address,
+                    storage_params: sp.map(Box::new),
                 })
             }
             CatalogType::Iceberg => {
-                let mut catalog_options = options.clone();
-
-                // the uri should in the same schema as in stages
-                let uri = catalog_options
-                    .remove("url") // has to be removed, or UriLocation will complain about unknown field.
-                    .ok_or_else(|| ErrorCode::InvalidArgument("expected field: URL"))?;
-
-                // create a uri location
-                let mut location = if let Some(path) = uri.strip_prefix("fs://") {
-                    UriLocation::new(
-                        "fs".to_string(),
-                        "".to_string(),
-                        path.to_string(),
-                        "".to_string(),
-                        catalog_options,
+                let sp = parse_catalog_url(options.clone())?.ok_or_else(|| {
+                    ErrorCode::InvalidArgument(
+                        "expect storage connection but failed to find, seems the url is missing",
                     )
-                } else {
-                    let parsed = Url::parse(&uri).map_err(|err| {
-                        ErrorCode::InvalidArgument(format!("expected valid URL: {:?}", err))
-                    })?;
-                    let name = parsed
-                        .host_str()
-                        .map(|hostname| {
-                            if let Some(port) = parsed.port() {
-                                format!("{}:{}", hostname, port)
-                            } else {
-                                hostname.to_string()
-                            }
-                        })
-                        .ok_or_else(|| {
-                            ErrorCode::InvalidArgument("expected valid URI: no hostname section")
-                        })?;
-
-                    let path = if parsed.path().is_empty() {
-                        "/".to_string()
-                    } else {
-                        parsed.path().to_string()
-                    };
-
-                    UriLocation::new(
-                        parsed.scheme().to_string(),
-                        name,
-                        path,
-                        "".to_string(),
-                        catalog_options,
-                    )
-                };
-
-                let (sp, _) = parse_uri_location(&mut location)?;
+                })?;
 
                 let opt = IcebergCatalogOption {
                     storage_params: Box::new(sp),
@@ -211,4 +174,54 @@ impl Binder {
             created_on: Utc::now(),
         })
     }
+}
+
+fn parse_catalog_url(mut options: BTreeMap<String, String>) -> Result<Option<StorageParams>> {
+    // has to be removed, or UriLocation will complain about unknown field
+    let uri = if let Some(v) = options.remove("url") {
+        v
+    } else {
+        return Ok(None);
+    };
+
+    let mut location = if let Some(path) = uri.strip_prefix("fs://") {
+        UriLocation::new(
+            "fs".to_string(),
+            "".to_string(),
+            path.to_string(),
+            "".to_string(),
+            options,
+        )
+    } else {
+        let parsed = Url::parse(&uri)
+            .map_err(|err| ErrorCode::InvalidArgument(format!("expected valid URL: {:?}", err)))?;
+        let name = parsed
+            .host_str()
+            .map(|hostname| {
+                if let Some(port) = parsed.port() {
+                    format!("{}:{}", hostname, port)
+                } else {
+                    hostname.to_string()
+                }
+            })
+            .ok_or_else(|| ErrorCode::InvalidArgument("expected valid URI: no hostname section"))?;
+
+        let path = if parsed.path().is_empty() {
+            "/".to_string()
+        } else {
+            parsed.path().to_string()
+        };
+
+        UriLocation::new(
+            parsed.scheme().to_string(),
+            name,
+            path,
+            "".to_string(),
+            options,
+        )
+    };
+
+    let (sp, _) = parse_uri_location(&mut location)?;
+
+    Ok(Some(sp))
 }

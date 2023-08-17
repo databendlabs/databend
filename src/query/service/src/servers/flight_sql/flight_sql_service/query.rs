@@ -123,7 +123,7 @@ impl FlightSqlServiceImpl {
         context.attach_query_str(plan.to_string(), plan_extras.statement.to_mask_sql());
         let interpreter = InterpreterFactory::get(context.clone(), plan).await?;
 
-        let data_schema = interpreter.schema();
+        let data_schema = plan.schema();
         let data_stream = interpreter.execute(context.clone()).await?;
 
         let is_finished = Arc::new(AtomicBool::new(false));

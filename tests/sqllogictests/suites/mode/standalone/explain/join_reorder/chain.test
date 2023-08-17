@@ -415,7 +415,7 @@ HashJoin
 ├── build keys: [t.a (#0)]
 ├── probe keys: [t1.a (#1)]
 ├── filters: []
-├── estimated rows: 10.00
+├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── output columns: [a (#0)]

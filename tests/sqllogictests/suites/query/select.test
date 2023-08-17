@@ -83,3 +83,16 @@ select col0, col1 from (values(1, 'one'), (null, 'two'), (3 + 2, null))
 1 one
 NULL two
 5 NULL
+
+query IT
+values (1, 'one'), (2, 'two'), (3, 'three')
+----
+1 one
+2 two
+3 three
+
+query IT
+values (1, 'one'), (2, 'two'), (3, 'three') order by col0 desc limit 2
+----
+3 three
+2 two
