@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use common_ast::ast::BinaryOperator;
-use common_ast::ast::CTESource;
 use common_ast::ast::ColumnID;
 use common_ast::ast::ColumnPosition;
 use common_ast::ast::Expr;
@@ -319,6 +318,29 @@ impl Binder {
                 )
                 .await
             }
+            SetExpr::Values { span, values } => {
+                // rewrite values clause as select stmt
+                let stmt = SelectStmt {
+                    span: *span,
+                    hints: None,
+                    distinct: false,
+                    select_list: vec![SelectTarget::QualifiedName {
+                        qualified: vec![Indirection::Star(None)],
+                        exclude: None,
+                    }],
+                    from: vec![TableReference::Values {
+                        span: None,
+                        values: values.clone(),
+                        alias: None,
+                    }],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                };
+                self.bind_select_stmt(bind_context, &stmt, order_by, limit)
+                    .await
+            }
         }
     }
 
@@ -337,48 +359,10 @@ impl Binder {
                         "duplicate cte {table_name}"
                     )));
                 }
-                let (materialized, cte_query) = match &cte.source {
-                    CTESource::Query {
-                        materialized,
-                        box query,
-                    } => (*materialized, query.clone()),
-                    CTESource::Values(values) => {
-                        // rewrite value clause as a query
-                        let values_query = Query {
-                            span: None,
-                            with: None,
-                            body: SetExpr::Select(Box::new(SelectStmt {
-                                span: None,
-                                hints: None,
-                                distinct: false,
-                                select_list: vec![SelectTarget::QualifiedName {
-                                    qualified: vec![Indirection::Star(None)],
-                                    exclude: None,
-                                }],
-                                from: vec![TableReference::Values {
-                                    span: None,
-                                    values: values.clone(),
-                                    alias: Some(cte.alias.clone()),
-                                }],
-                                selection: None,
-                                group_by: None,
-                                having: None,
-                                window_list: None,
-                            })),
-                            order_by: vec![],
-                            limit: vec![],
-                            offset: None,
-                            ignore_result: false,
-                        };
-
-                        (false, values_query)
-                    }
-                };
-
                 let cte_info = CteInfo {
                     columns_alias: cte.alias.columns.iter().map(|c| c.name.clone()).collect(),
-                    query: cte_query,
-                    materialized,
+                    query: *cte.query.clone(),
+                    materialized: cte.materialized,
                     cte_idx: idx,
                     used_count: 0,
                     stat_info: None,
@@ -402,7 +386,7 @@ impl Binder {
         };
 
         let (mut s_expr, bind_context) = match query.body {
-            SetExpr::Select(_) | SetExpr::Query(_) => {
+            SetExpr::Select(_) | SetExpr::Query(_) | SetExpr::Values { .. } => {
                 self.bind_set_expr(
                     bind_context,
                     &query.body,

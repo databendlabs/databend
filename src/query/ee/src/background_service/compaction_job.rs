@@ -44,9 +44,9 @@ use common_meta_app::background::UpdateBackgroundTaskReq;
 use common_meta_app::schema::TableStatistics;
 use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
-use databend_query::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
+use databend_query::table_functions::SuggestedBackgroundTasksSource;
 use log::as_debug;
 use log::debug;
 use log::error;
@@ -459,8 +459,7 @@ impl CompactionJob {
     ) -> Result<Vec<RecordBatch>> {
         if !config.background.compaction.has_target_tables() {
             let res =
-                SuggestedBackgroundTasksProcedure::do_get_all_suggested_compaction_tables(ctx)
-                    .await;
+                SuggestedBackgroundTasksSource::do_get_all_suggested_compaction_tables(ctx).await;
             return res;
         }
         Self::do_get_target_tables(config, ctx).await
@@ -542,7 +541,7 @@ impl CompactionJob {
                     sql = sql.as_str();
                     "get target tables"
                 );
-                SuggestedBackgroundTasksProcedure::do_execute_sql(ctx.clone(), sql)
+                SuggestedBackgroundTasksSource::do_execute_sql(ctx.clone(), sql)
             })
             .collect::<Vec<_>>();
         let mut res = Vec::new();
@@ -569,7 +568,7 @@ impl CompactionJob {
             "check target_table"
         );
         let ctx = session.create_query_context().await?;
-        let res = SuggestedBackgroundTasksProcedure::do_execute_sql(ctx, sql).await?;
+        let res = SuggestedBackgroundTasksSource::do_execute_sql(ctx, sql).await?;
         if res.is_none() {
             return Ok((false, false, TableStatistics::default()));
         }
@@ -646,7 +645,7 @@ impl CompactionJob {
             "segment_compactor"
         );
         let ctx = session.create_query_context().await?;
-        SuggestedBackgroundTasksProcedure::do_execute_sql(ctx, sql).await?;
+        SuggestedBackgroundTasksSource::do_execute_sql(ctx, sql).await?;
         Ok(())
     }
 
@@ -665,7 +664,7 @@ impl CompactionJob {
             "block_compaction"
         );
         let ctx = session.create_query_context().await?;
-        SuggestedBackgroundTasksProcedure::do_execute_sql(ctx, sql).await?;
+        SuggestedBackgroundTasksSource::do_execute_sql(ctx, sql).await?;
         Ok(())
     }
 
