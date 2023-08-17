@@ -2353,30 +2353,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_with(&mut self, with: &'ast With) {
         let mut children = Vec::with_capacity(with.ctes.len());
         for cte in with.ctes.iter() {
-            let source_child = match &cte.source {
-                CTESource::Query { query, .. } => {
-                    self.visit_query(query);
-                    self.children.pop().unwrap()
-                }
-                CTESource::Values(values) => {
-                    let mut value_children = Vec::with_capacity(values.len());
-                    for (i, row_values) in values.iter().enumerate() {
-                        let mut row_children = Vec::with_capacity(row_values.len());
-                        for value in row_values {
-                            self.visit_expr(value);
-                            row_children.push(self.children.pop().unwrap());
-                        }
-                        let row_name = format!("Row {}", i);
-                        let row_format_ctx =
-                            AstFormatContext::with_children(row_name, row_children.len());
-                        let row_node = FormatTreeNode::with_children(row_format_ctx, row_children);
-                        value_children.push(row_node);
-                    }
-                    let value_format_ctx =
-                        AstFormatContext::with_children("Values".to_string(), value_children.len());
-                    FormatTreeNode::with_children(value_format_ctx, value_children)
-                }
-            };
+            self.visit_query(&cte.query);
+            let source_child = self.children.pop().unwrap();
 
             let cte_format_ctx = AstFormatContext::with_children_alias(
                 "CTE".to_string(),
@@ -2398,6 +2376,25 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             SetExpr::Select(select_stmt) => self.visit_select_stmt(select_stmt),
             SetExpr::Query(query) => self.visit_query(query),
             SetExpr::SetOperation(set_operation) => self.visit_set_operation(set_operation),
+            SetExpr::Values { values, .. } => {
+                let mut children = Vec::with_capacity(values.len());
+                for (i, row_values) in values.iter().enumerate() {
+                    let mut row_children = Vec::with_capacity(row_values.len());
+                    for value in row_values {
+                        self.visit_expr(value);
+                        row_children.push(self.children.pop().unwrap());
+                    }
+                    let row_name = format!("Row {}", i);
+                    let row_format_ctx =
+                        AstFormatContext::with_children(row_name, row_children.len());
+                    let row_node = FormatTreeNode::with_children(row_format_ctx, row_children);
+                    children.push(row_node);
+                }
+                let format_ctx =
+                    AstFormatContext::with_children("Values".to_string(), children.len());
+                let node = FormatTreeNode::with_children(format_ctx, children);
+                self.children.push(node);
+            }
         }
         let child = self.children.pop().unwrap();
 

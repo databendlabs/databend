@@ -580,6 +580,7 @@ fn test_query() {
         r#"select a, sum(a) over w, sum(a) over w1, sum(a) over w2 from t1 window w as (partition by a), w2 as (w1 rows current row), w1 as (w order by a) order by a"#,
         r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
         r#"SELECT * FROM (VALUES(1,1),(2,null),(null,5)) AS t(a,b)"#,
+        r#"VALUES(1,'a'),(2,'b'),(null,'c') order by col0 limit 2"#,
     ];
 
     for case in cases {

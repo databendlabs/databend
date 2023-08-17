@@ -78,6 +78,7 @@ use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
+use common_meta_app::storage::StorageParams;
 use common_meta_types::*;
 use hive_metastore::Partition;
 use hive_metastore::TThriftHiveMetastoreSyncClient;
@@ -102,8 +103,11 @@ impl CatalogCreator for HiveCreator {
             ),
         };
 
-        let catalog: Arc<dyn Catalog> =
-            Arc::new(HiveCatalog::try_create(info.clone(), &opt.address)?);
+        let catalog: Arc<dyn Catalog> = Arc::new(HiveCatalog::try_create(
+            info.clone(),
+            opt.storage_params.clone().map(|v| *v),
+            &opt.address,
+        )?);
 
         Ok(catalog)
     }
@@ -113,14 +117,25 @@ impl CatalogCreator for HiveCreator {
 pub struct HiveCatalog {
     info: CatalogInfo,
 
+    /// storage params for this hive catalog
+    ///
+    /// - Some(sp) means the catalog has its own storage.
+    /// - None means the catalog is using the same storage with default catalog.
+    sp: Option<StorageParams>,
+
     /// address of hive meta store service
     client_address: String,
 }
 
 impl HiveCatalog {
-    pub fn try_create(info: CatalogInfo, hms_address: impl Into<String>) -> Result<HiveCatalog> {
+    pub fn try_create(
+        info: CatalogInfo,
+        sp: Option<StorageParams>,
+        hms_address: impl Into<String>,
+    ) -> Result<HiveCatalog> {
         Ok(HiveCatalog {
             info,
+            sp,
             client_address: hms_address.into(),
         })
     }
@@ -203,6 +218,7 @@ impl HiveCatalog {
 
     fn do_get_table(
         client: impl TThriftHiveMetastoreSyncClient,
+        sp: Option<StorageParams>,
         db_name: String,
         table_name: String,
     ) -> Result<Arc<dyn Table>> {
@@ -242,7 +258,7 @@ impl HiveCatalog {
         let fields = client
             .get_schema(db_name, table_name)
             .map_err(from_thrift_error)?;
-        let table_info: TableInfo = super::converters::try_into_table_info(table_meta, fields)?;
+        let table_info: TableInfo = super::converters::try_into_table_info(sp, table_meta, fields)?;
         let res: Arc<dyn Table> = Arc::new(HiveTable::try_create(table_info)?);
         Ok(res)
     }
@@ -350,7 +366,8 @@ impl Catalog for HiveCatalog {
         let client = self.get_client()?;
         let db_name = db_name.to_string();
         let table_name = table_name.to_string();
-        tokio::task::spawn_blocking(move || Self::do_get_table(client, db_name, table_name))
+        let sp = self.sp.clone();
+        tokio::task::spawn_blocking(move || Self::do_get_table(client, sp, db_name, table_name))
             .await
             .unwrap()
     }

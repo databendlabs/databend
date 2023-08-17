@@ -5,13 +5,10 @@ description:
   'Unload Data using COPY INTO <location>'
 ---
 
-`COPY` loads data into Databend or unloads data from Databend.
-
 This command unloads data from a table (or query) into one or more files in one of the following locations:
 
-* Named internal stage: The files can be downloaded from the stage using the GET command.
-* Named external stage: An external location (including Amazon S3).
-* External location: An object storage system (including Amazon S3).
+* User / Internal / External stages: See [Understanding Stages](../../12-load-data/00-stage/00-whystage.md) to learn about stages in Databend.
+* Buckets or containers created in a storage service.
 
 See Also: [COPY INTO table](dml-copy-into-table.md)
 
@@ -25,8 +22,6 @@ FROM { [<database_name>.]<table_name> | ( <query> ) }
 [ VALIDATION_MODE = RETURN_ROWS ]
 ```
 
-Where:
-
 ### internalStage
 
 ```sql
@@ -39,20 +34,103 @@ internalStage ::= @<internal_stage_name>[/<path>]
 externalStage ::= @<external_stage_name>[/<path>]
 ```
 
-### externalLocation (for Amazon S3)
+### externalLocation
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs groupId="externallocation">
+
+<TabItem value="Amazon S3-like Storage Services" label="Amazon S3-like Storage Services">
 
 ```sql
-externalLocation (for Amazon S3) ::=
-  's3://<bucket>[/<path>]'
-  [ { CONNECTION = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]
+externalLocation ::=
+  's3://<bucket>[<path>]'
+  CONNECTION = (
+        <connection_parameters>
+  )
+```
+For the connection parameters available for accessing Amazon S3-like storage services, see [Connection Parameters](/13-sql-reference/51-connect-parameters.md).
+</TabItem>
+
+<TabItem value="Azure Blob Storage" label="Azure Blob Storage">
+
+```sql
+externalLocation ::=
+  'azblob://<container>[<path>]'
+  CONNECTION = (
+        <connection_parameters>
+  )
 ```
 
-| Parameter                                                                                  | Description                                                                                                             | Required |
-|--------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|----------|
-| `s3://<bucket>/[<path>]`                                                                   | Files are in the specified external location (S3-like bucket)                                                           | YES      |
-| `[ { CONNECTION = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]' ]` | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. | Optional |
-| `[ ENDPOINT_URL = '<endpoint_url>' ]`                                                      | S3-compatible endpoint URL like MinIO, default is `https://s3.amazonaws.com`                                            | Optional |
+For the connection parameters available for accessing Azure Blob Storage, see [Connection Parameters](/13-sql-reference/51-connect-parameters.md).
+</TabItem>
 
+<TabItem value="Google Cloud Storage" label="Google Cloud Storage">
+
+```sql
+externalLocation ::=
+  'gcs://<bucket>[<path>]'
+  CONNECTION = (
+        <connection_parameters>
+  )
+```
+
+For the connection parameters available for accessing Google Cloud Storage, see [Connection Parameters](/13-sql-reference/51-connect-parameters.md).
+</TabItem>
+
+<TabItem value="Alibaba Cloud OSS" label="Alibaba Cloud OSS">
+
+```sql
+externalLocation ::=
+  'oss://<bucket>[<path>]'
+  CONNECTION = (
+        <connection_parameters>
+  )
+```
+
+For the connection parameters available for accessing Alibaba Cloud OSS, see [Connection Parameters](/13-sql-reference/51-connect-parameters.md).
+</TabItem>
+
+<TabItem value="Tencent Cloud Object Storage" label="Tencent Cloud Object Storage">
+
+```sql
+externalLocation ::=
+  'cos://<bucket>[<path>]'
+  CONNECTION = (
+        <connection_parameters>
+  )
+```
+
+For the connection parameters available for accessing Tencent Cloud Object Storage, see [Connection Parameters](/13-sql-reference/51-connect-parameters.md).
+</TabItem>
+
+<TabItem value="Hadoop Distributed File System (HDFS)" label="HDFS">
+
+```sql
+externalLocation ::=
+  'hdfs://<endpoint_url>[<path>]'
+  CONNECTION = (
+        <connection_parameters>
+  )
+```
+
+For the connection parameters available for accessing HDFS, see [Connection Parameters](/13-sql-reference/51-connect-parameters.md).
+</TabItem>
+
+<TabItem value="WebHDFS" label="WebHDFS">
+
+```sql
+externalLocation ::=
+  'webhdfs://<endpoint_url>[<path>]'
+  CONNECTION = (
+        <connection_parameters>
+  )
+```
+
+For the connection parameters available for accessing WebHDFS, see [Connection Parameters](/13-sql-reference/51-connect-parameters.md).
+</TabItem>
+</Tabs>
 
 ### FILE_FORMAT
 

@@ -12,24 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::interpreters::access::AccessChecker;
-use crate::sessions::query_ctx::Origin::BuiltInProcedure;
-use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
-pub struct ManagementModeAccess {
-    ctx: Arc<QueryContext>,
-}
+pub struct ManagementModeAccess {}
 
 impl ManagementModeAccess {
-    pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
-        Box::new(ManagementModeAccess { ctx })
+    pub fn create() -> Box<dyn AccessChecker> {
+        Box::new(ManagementModeAccess {})
     }
 }
 
@@ -43,9 +37,6 @@ impl AccessChecker for ManagementModeAccess {
             let ok = match plan {
                 Plan::Query {rewrite_kind, .. } => {
                     use common_sql::plans::RewriteKind;
-                    if self.ctx.get_origin() == BuiltInProcedure {
-                        true
-                    } else {
                         match rewrite_kind  {
                             Some(ref v) => matches!(v,
                             RewriteKind::ShowDatabases
@@ -59,10 +50,10 @@ impl AccessChecker for ManagementModeAccess {
                             | RewriteKind::ShowStages
                             | RewriteKind::DescribeStage
                             | RewriteKind::ListStage
+                            | RewriteKind::Call
                             | RewriteKind::ShowRoles),
                             _ => false
                         }
-                    }
                 },
                 // Show.
                 Plan::ShowCreateDatabase(_)
@@ -108,9 +99,8 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::CreateUDF(_)
                 | Plan::AlterUDF(_)
                 | Plan::DropUDF(_)
-                | Plan::UseDatabase(_)
-                | Plan::Call(_) => true,
-                _ => false
+                | Plan::UseDatabase(_) => true,
+                _ => false,
             };
 
             if !ok {
