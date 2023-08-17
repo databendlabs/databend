@@ -89,7 +89,7 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
                 | RECORD_DELIMITER
                 | FIELD_DELIMITER
                 | QUOTE
-                | NON_DISPLAY
+                | NAN_DISPLAY
                 | ESCAPE
                 | ROW_TAG) ~ "=" ~ #literal_string
         },
