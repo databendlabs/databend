@@ -17,9 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::FromData;
-use common_sql::plans::ShowNetworkPoliciesPlan;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -30,12 +28,11 @@ use crate::sessions::TableContext;
 #[derive(Debug)]
 pub struct ShowNetworkPoliciesInterpreter {
     ctx: Arc<QueryContext>,
-    plan: ShowNetworkPoliciesPlan,
 }
 
 impl ShowNetworkPoliciesInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowNetworkPoliciesPlan) -> Result<Self> {
-        Ok(ShowNetworkPoliciesInterpreter { ctx, plan })
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowNetworkPoliciesInterpreter { ctx })
     }
 }
 
@@ -43,10 +40,6 @@ impl ShowNetworkPoliciesInterpreter {
 impl Interpreter for ShowNetworkPoliciesInterpreter {
     fn name(&self) -> &str {
         "ShowNetworkPoliciesInterpreter"
-    }
-
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
     }
 
     #[async_backtrace::framed]

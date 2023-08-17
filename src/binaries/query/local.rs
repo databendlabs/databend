@@ -49,7 +49,7 @@ pub async fn query_local(conf: &InnerConfig) -> Result<()> {
         let stream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
 
-        let schema = interpreter.schema();
+        let schema = plan.schema();
         print_blocks(schema, blocks.as_slice(), now)?;
     };
 
