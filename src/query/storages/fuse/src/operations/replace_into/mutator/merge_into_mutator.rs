@@ -239,7 +239,7 @@ impl MergeIntoOperationAggregator {
                             // block level pruning, using range index
                             for (block_index, block_meta) in seg.blocks.iter().enumerate() {
                                 if let Some(BlockSlot { num_slots, slot }) = &aggregation_ctx.slot {
-                                    if (block_index + 1) % num_slots != *slot as usize {
+                                    if block_index % num_slots != *slot as usize {
                                         // skip this block
                                         continue;
                                     }

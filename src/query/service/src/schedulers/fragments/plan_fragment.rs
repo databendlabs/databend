@@ -290,7 +290,7 @@ impl PlanFragment {
                 partitions: partitions.clone(),
                 slot: Some(BlockSlot {
                     num_slots,
-                    slot: executor_idx as u32 + 1,
+                    slot: executor_idx as u32,
                 }),
                 need_insert,
             };
