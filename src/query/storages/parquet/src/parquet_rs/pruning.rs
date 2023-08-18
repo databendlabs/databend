@@ -64,8 +64,8 @@ impl ParquetRSPruner {
                     .as_ref()
                     .unwrap()
                     .column_refs()
-                    .into_iter()
-                    .map(|(name, _)| {
+                    .into_keys()
+                    .map(|name| {
                         fields
                             .iter()
                             .position(|f| f.name.eq_ignore_ascii_case(&name))

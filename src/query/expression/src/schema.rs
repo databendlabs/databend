@@ -781,7 +781,11 @@ impl TableSchema {
                 } => {
                     for (name, ty) in fields_name.iter().zip(fields_type) {
                         collect_in_field(
-                            &TableField::new_from_column_id(name, ty.clone(), *next_column_id),
+                            &TableField::new_from_column_id(
+                                &format!("{}:{}", field.name(), name),
+                                ty.clone(),
+                                *next_column_id,
+                            ),
                             fields,
                             next_column_id,
                         );
