@@ -43,7 +43,7 @@ use storages_common_index::filters::Filter;
 use storages_common_index::filters::Xor8Filter;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::BlockSlot;
+use storages_common_table_meta::meta::BlockSlotDescription;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -82,7 +82,7 @@ use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
-    slot: Option<BlockSlot>,
+    block_slots_in_charge: Option<BlockSlotDescription>,
     // the fields specified in ON CONFLICT clause
     on_conflict_fields: Vec<OnConflictField>,
     // the field indexes of `on_conflict_fields`
@@ -115,7 +115,7 @@ impl MergeIntoOperationAggregator {
         on_conflict_fields: Vec<OnConflictField>,
         bloom_filter_column_indexes: Vec<FieldIndex>,
         segment_locations: Vec<(SegmentIndex, Location)>,
-        slot: Option<BlockSlot>,
+        block_slots: Option<BlockSlotDescription>,
         data_accessor: Operator,
         table_schema: Arc<TableSchema>,
         write_settings: WriteSettings,
@@ -123,8 +123,6 @@ impl MergeIntoOperationAggregator {
         block_builder: BlockBuilder,
         io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Self> {
-        eprintln!("merge_into_mutator::try_create, slot {:?}", slot);
-
         let deletion_accumulator = DeletionAccumulator::default();
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), table_schema.clone());
@@ -179,7 +177,7 @@ impl MergeIntoOperationAggregator {
             deletion_accumulator,
             aggregation_ctx: Arc::new(AggregationContext {
                 segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
-                slot,
+                block_slots_in_charge: block_slots,
                 on_conflict_fields,
                 bloom_filter_column_indexes,
                 remain_column_field_ids,
@@ -238,7 +236,9 @@ impl MergeIntoOperationAggregator {
 
                             // block level pruning, using range index
                             for (block_index, block_meta) in seg.blocks.iter().enumerate() {
-                                if let Some(BlockSlot { num_slots, slot }) = &aggregation_ctx.slot {
+                                if let Some(BlockSlotDescription { num_slots, slot }) =
+                                    &aggregation_ctx.block_slots_in_charge
+                                {
                                     if block_index % num_slots != *slot as usize {
                                         // skip this block
                                         continue;
