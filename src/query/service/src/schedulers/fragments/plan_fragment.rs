@@ -26,6 +26,7 @@ use common_sql::executor::DeletePartial;
 use common_sql::executor::QuerySource;
 use common_sql::executor::ReplaceInto;
 use common_storages_fuse::TableContext;
+use storages_common_table_meta::meta::BlockSlot;
 use storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchange;
@@ -262,16 +263,35 @@ impl PlanFragment {
         let partitions = &plan.segments;
         let executors = Fragmenter::get_executors(ctx.clone());
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
-        let partition_reshuffle = Self::reshuffle(executors, partitions.clone())?;
+        // let partition_reshuffle = Self::reshuffle(executors, partitions.clone())?;
+
+        // let local_id = &ctx.get_cluster().local_id;
+
+        // for (executor, parts) in partition_reshuffle.iter() {
+        //    let mut plan = self.plan.clone();
+        //    let need_insert = executor == local_id;
+
+        //    let mut replace_replace_into = ReplaceReplaceInto {
+        //        partitions: parts.clone(),
+        //        need_insert,
+        //    };
+        //    plan = replace_replace_into.replace(&plan)?;
+
+        //    fragment_actions
+        //        .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+        //}
 
         let local_id = &ctx.get_cluster().local_id;
-
-        for (executor, parts) in partition_reshuffle.iter() {
+        let num_slots = executors.len();
+        for (executor_idx, executor) in executors.into_iter().enumerate() {
             let mut plan = self.plan.clone();
-            let need_insert = executor == local_id;
-
+            let need_insert = &executor == local_id;
             let mut replace_replace_into = ReplaceReplaceInto {
-                partitions: parts.clone(),
+                partitions: partitions.clone(),
+                slot: Some(BlockSlot {
+                    num_slots,
+                    slot: executor_idx as u32 + 1,
+                }),
                 need_insert,
             };
             plan = replace_replace_into.replace(&plan)?;
@@ -372,16 +392,20 @@ impl PhysicalPlanReplacer for ReplaceDeletePartial {
 
 struct ReplaceReplaceInto {
     pub partitions: Vec<(usize, Location)>,
+    // for standalone mode, slot is None
+    pub slot: Option<BlockSlot>,
     pub need_insert: bool,
 }
 
 impl PhysicalPlanReplacer for ReplaceReplaceInto {
     fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
+        eprintln!("replace replace into: {:?}", self.slot);
         Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
             input: Box::new(input),
             need_insert: self.need_insert,
             segments: self.partitions.clone(),
+            slot: self.slot.clone(),
             ..plan.clone()
         }))
     }

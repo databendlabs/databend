@@ -26,6 +26,14 @@ pub type Location = (String, FormatVersion);
 pub type ClusterKey = (u32, String);
 pub type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>;
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct BlockSlot {
+    // number of slots
+    pub num_slots: usize,
+    // index of slot that current executor is taking care of
+    pub slot: u32,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum MinMax<T> {
     // min eq max
