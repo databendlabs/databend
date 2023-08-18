@@ -93,7 +93,7 @@ jobs:
           source_id: ${{ inputs.source_id }}
 
   cloud:
-    timeout-minutes: 90
+    timeout-minutes: 30
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
@@ -113,7 +113,7 @@ jobs:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/benchmark_cloud
-        timeout-minutes: 60
+        timeout-minutes: 20
         id: benchmark
         with:
           sha: ${{ inputs.sha }}
