@@ -53,6 +53,7 @@ runs:
             cat <<EOF >>$BIN_LOCAL/build-tool
         export SCCACHE_LOG=debug
         export ENABLE_SCCACHE=true
+        export SCCACHE_GCS_RW_MODE=READ_WRITE
         export SCCACHE_GCS_BUCKET=databend-ci
         export SCCACHE_GCS_KEY_PREFIX="cache/sccache/"
         EOF
