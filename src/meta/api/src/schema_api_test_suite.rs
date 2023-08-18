@@ -71,6 +71,7 @@ use common_meta_app::schema::IndexType;
 use common_meta_app::schema::ListCatalogReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
@@ -452,7 +453,7 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &table_id_name_key).await?;
             assert_eq!(ret_table_name_ident, DBIdTableName {
                 db_id,
-                table_name: table_name.to_string()
+                table_name: table_name.to_string(),
             });
         }
 
@@ -477,7 +478,7 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &table_id_name_key).await?;
             assert_eq!(ret_table_name_ident, DBIdTableName {
                 db_id,
-                table_name: table_name.to_string()
+                table_name: table_name.to_string(),
             });
         }
 
@@ -502,7 +503,7 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &table_id_name_key).await?;
             assert_eq!(ret_table_name_ident, DBIdTableName {
                 db_id,
-                table_name: table2_name.to_string()
+                table_name: table2_name.to_string(),
             });
         }
 
@@ -527,7 +528,7 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &table_id_name_key).await?;
             assert_eq!(ret_table_name_ident, DBIdTableName {
                 db_id: db3_id,
-                table_name: table3_name.to_string()
+                table_name: table3_name.to_string(),
             });
         }
 
@@ -3170,6 +3171,7 @@ impl SchemaApiTestSuite {
                 dropped_on: None,
                 updated_on: None,
                 query: "select sum(number) from tb1".to_string(),
+                sync_creation: false,
             },
         };
 
@@ -4705,6 +4707,7 @@ impl SchemaApiTestSuite {
             dropped_on: None,
             updated_on: None,
             query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
+            sync_creation: false,
         };
 
         let index_name_2 = "idx2";
@@ -4715,6 +4718,7 @@ impl SchemaApiTestSuite {
             dropped_on: None,
             updated_on: None,
             query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
+            sync_creation: false,
         };
 
         let name_ident_1 = IndexNameIdent {
@@ -4802,6 +4806,17 @@ impl SchemaApiTestSuite {
 
             let res = mt.list_indexes(req).await?;
             assert!(res.is_empty())
+        }
+
+        {
+            info!("--- list indexes by table id");
+            let req = ListIndexesByIdReq {
+                tenant: tenant.to_string(),
+                table_id,
+            };
+
+            let res = mt.list_indexes_by_table_id(req).await?;
+            assert_eq!(2, res.len());
         }
 
         {
@@ -4945,7 +4960,7 @@ impl SchemaApiTestSuite {
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
                 "variant:k1".to_string(),
-                "variant[1]".to_string()
+                "variant[1]".to_string(),
             ]);
 
             let req = ListVirtualColumnsReq {
@@ -4978,7 +4993,7 @@ impl SchemaApiTestSuite {
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
                 "variant:k2".to_string(),
-                "variant[2]".to_string()
+                "variant[2]".to_string(),
             ]);
         }
 

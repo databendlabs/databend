@@ -767,16 +767,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let create_index = map(
         rule! {
-            CREATE ~ AGGREGATING ~ INDEX ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ (SYNC)? ~ AGGREGATING ~ INDEX ~ ( IF ~ NOT ~ EXISTS )?
             ~ #ident
             ~ AS ~ #query
         },
-        |(_, _, _, opt_if_not_exists, index_name, _, query)| {
+        |(_, opt_sync, _, _, opt_if_not_exists, index_name, _, query)| {
             Statement::CreateIndex(CreateIndexStmt {
                 index_type: TableIndexType::Aggregating,
                 if_not_exists: opt_if_not_exists.is_some(),
                 index_name,
                 query: Box::new(query),
+                sync_creation: opt_sync.is_some(),
             })
         },
     );

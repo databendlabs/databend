@@ -493,6 +493,8 @@ pub enum TokenKind {
     FIELD_DELIMITER,
     #[token("NAN_DISPLAY", ignore(ascii_case))]
     NAN_DISPLAY,
+    #[token("NULL_DISPLAY", ignore(ascii_case))]
+    NULL_DISPLAY,
     #[token("FILE_FORMAT", ignore(ascii_case))]
     FILE_FORMAT,
     #[token("FILE", ignore(ascii_case))]
@@ -866,6 +868,8 @@ pub enum TokenKind {
     SEMI,
     #[token("SOUNDS", ignore(ascii_case))]
     SOUNDS,
+    #[token("SYNC", ignore(ascii_case))]
+    SYNC,
     #[token("TABLE", ignore(ascii_case))]
     TABLE,
     #[token("TABLES", ignore(ascii_case))]

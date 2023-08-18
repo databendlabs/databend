@@ -44,6 +44,7 @@ fn test_decode_v32_csv_file_format_params() -> anyhow::Result<()> {
             headers: 1,
             field_delimiter: "fd".to_string(),
             record_delimiter: "rd".to_string(),
+            null_display: "\\N".to_string(),
             nan_display: "nan".to_string(),
             escape: "\\".to_string(),
             quote: "\'".to_string(),
