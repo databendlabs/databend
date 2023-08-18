@@ -82,6 +82,7 @@ impl FromToProto for mt::IndexMeta {
                 None => None,
             },
             query: p.query,
+            sync_creation: p.sync_creation,
         };
         Ok(v)
     }
@@ -102,6 +103,7 @@ impl FromToProto for mt::IndexMeta {
                 None => None,
             },
             query: self.query.clone(),
+            sync_creation: self.sync_creation,
         };
         Ok(p)
     }

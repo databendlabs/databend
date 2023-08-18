@@ -37,7 +37,7 @@ permissions:
 env:
   BENCHMARK_S3_PREFIX: s3://repo.databend.rs/benchmark/clickbench
   BUILD_PROFILE: release
-  RUNNER_PROVIDER: ${{ github.event.inputs.runner_provider }}
+  RUNNER_PROVIDER: ${{ inputs.runner_provider }}
 
 jobs:
   local:
