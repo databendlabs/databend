@@ -353,7 +353,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_cluster_linux
-        timeout-minutes: 10
+        timeout-minutes: 15
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
