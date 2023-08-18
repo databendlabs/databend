@@ -211,6 +211,7 @@ impl PlanFragment {
         Ok(fragment_actions)
     }
 
+    // TODO(sky): reuse Partitions reshuffle
     fn reshuffle<T: Clone>(
         executors: Vec<String>,
         partitions: Vec<T>,
@@ -219,6 +220,15 @@ impl PlanFragment {
         let num_executors = executors.len();
         let mut executors_sorted = executors;
         executors_sorted.sort();
+
+        let mut parts = partitions
+            .into_iter()
+            .enumerate()
+            .map(|(idx, p)| (idx % num_executors, p))
+            .collect::<Vec<_>>();
+        parts.sort_by(|a, b| a.0.cmp(&b.0));
+        let partitions: Vec<_> = parts.into_iter().map(|x| x.1).collect();
+
         let mut executor_part = HashMap::default();
         // the first num_parts % num_executors get parts_per_node parts
         // the remaining get parts_per_node - 1 parts

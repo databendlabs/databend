@@ -86,7 +86,7 @@ pub struct InternalColumnMeta {
     pub block_id: usize,
     pub block_location: String,
     pub segment_location: String,
-    pub snapshot_location: String,
+    pub snapshot_location: Option<String>,
     /// The row offsets in the block.
     pub offsets: Option<Vec<usize>>,
 }
@@ -207,9 +207,14 @@ impl InternalColumn {
                 )
             }
             InternalColumnType::SnapshotName => {
-                let mut builder =
-                    StringColumnBuilder::with_capacity(1, meta.snapshot_location.len());
-                builder.put_str(&meta.snapshot_location);
+                let mut builder = StringColumnBuilder::with_capacity(
+                    1,
+                    meta.snapshot_location
+                        .clone()
+                        .unwrap_or("".to_string())
+                        .len(),
+                );
+                builder.put_str(&meta.snapshot_location.clone().unwrap_or("".to_string()));
                 builder.commit_row();
                 BlockEntry::new(
                     DataType::String,
