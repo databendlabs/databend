@@ -26,6 +26,7 @@ use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
 use rand::prelude::SliceRandom;
 use storages_common_index::BloomIndex;
+use storages_common_table_meta::meta::BlockSlotDescription;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 
@@ -102,6 +103,7 @@ impl FuseTable {
         on_conflicts: Vec<OnConflictField>,
         bloom_filter_column_indexes: Vec<FieldIndex>,
         segments: &[(usize, Location)],
+        block_slots: Option<BlockSlotDescription>,
         io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PipeItem>> {
         let chunks = Self::partition_segments(segments, num_partition);
@@ -113,6 +115,7 @@ impl FuseTable {
                 on_conflicts.clone(),
                 bloom_filter_column_indexes.clone(),
                 chunk_of_segment_locations,
+                block_slots.clone(),
                 self.operator.clone(),
                 self.table_info.schema(),
                 self.get_write_settings(),
