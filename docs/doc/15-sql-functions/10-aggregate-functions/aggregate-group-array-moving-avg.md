@@ -7,9 +7,9 @@ The GROUP_ARRAY_MOVING_AVG function calculates the moving average of input value
 ## Syntax
 
 ```sql
-GROUP_ARRAY_MOVING_SUM(<expr>)
+GROUP_ARRAY_MOVING_AVG(<expr>)
 
-GROUP_ARRAY_MOVING_SUM(<window_size>)(<expr>)
+GROUP_ARRAY_MOVING_AVG(<window_size>)(<expr>)
 ```
 
 ## Arguments
