@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::FromData;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GetObjectGrantPrivilegesReq;
@@ -44,10 +43,6 @@ impl ShowObjectGrantPrivilegesInterpreter {
 impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
     fn name(&self) -> &str {
         "ShowObjectGrantPrivilegesInterpreter"
-    }
-
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
     }
 
     #[async_backtrace::framed]

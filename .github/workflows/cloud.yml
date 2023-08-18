@@ -19,7 +19,7 @@ env:
 jobs:
   build:
     if: contains(github.event.pull_request.labels.*.name, 'ci-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
-    runs-on: [self-hosted, X64, Linux, 16c32g]
+    runs-on: [self-hosted, X64, Linux, 16c32g, aws]
     outputs:
       sha: ${{ steps.sha.outputs.sha }}
     steps:
@@ -43,7 +43,7 @@ jobs:
   docker:
     needs: build
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
     steps:
@@ -101,3 +101,4 @@ jobs:
       source: pr
       source_id: ${{ github.event.pull_request.number }}
       version: ${{ needs.docker.outputs.tag }}
+      runner_provider: aws
