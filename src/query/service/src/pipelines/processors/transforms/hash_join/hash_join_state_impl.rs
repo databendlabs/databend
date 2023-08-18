@@ -235,16 +235,16 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn generate_finalize_task(&self) -> Result<()> {
-        let task_num = unsafe { &*self.chunks.get() }.len();
-        if task_num == 0 {
+        let chunks_len = unsafe { &*self.chunks.get() }.len();
+        if chunks_len == 0 {
             return Ok(());
         }
 
         let worker_num = self.build_worker_num.load(Ordering::Relaxed) as usize;
-        let (task_size, task_num) = if task_num >= worker_num {
-            (task_num / worker_num, worker_num)
+        let (task_size, task_num) = if chunks_len >= worker_num {
+            (chunks_len / worker_num, worker_num)
         } else {
-            (1, task_num)
+            (1, chunks_len)
         };
 
         let mut finalize_tasks = self.finalize_tasks.write();
@@ -252,7 +252,7 @@ impl HashJoinState for JoinHashTable {
             let task = (idx * task_size, (idx + 1) * task_size);
             finalize_tasks.push_back(task);
         }
-        let last_task = ((task_num - 1) * task_size, task_num);
+        let last_task = ((task_num - 1) * task_size, chunks_len);
         finalize_tasks.push_back(last_task);
 
         Ok(())
