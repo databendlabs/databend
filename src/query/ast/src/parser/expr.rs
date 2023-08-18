@@ -1287,15 +1287,19 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { (FLOAT64 | DOUBLE)  ~ ( PRECISION )? },
     );
     let ty_decimal = map_res(
-        rule! { DECIMAL ~ "(" ~ #literal_u64 ~ "," ~ #literal_u64 ~ ")" },
-        |(_, _, precision, _, scale, _)| {
+        rule! { DECIMAL ~ "(" ~ #literal_u64 ~ ( "," ~ #literal_u64 )? ~ ")" },
+        |(_, _, precision, opt_scale, _)| {
             Ok(TypeName::Decimal {
                 precision: precision
                     .try_into()
                     .map_err(|_| ErrorKind::Other("precision is too large"))?,
-                scale: scale
-                    .try_into()
-                    .map_err(|_| ErrorKind::Other("scale is too large"))?,
+                scale: if let Some((_, scale)) = opt_scale {
+                    scale
+                        .try_into()
+                        .map_err(|_| ErrorKind::Other("scale is too large"))?
+                } else {
+                    0
+                },
             })
         },
     );
