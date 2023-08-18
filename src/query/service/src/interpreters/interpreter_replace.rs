@@ -225,6 +225,7 @@ impl ReplaceInterpreter {
                 .into_iter()
                 .enumerate()
                 .collect(),
+            block_slots: None,
             need_insert: true,
         }));
         if is_distributed {

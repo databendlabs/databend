@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
@@ -59,6 +60,7 @@ enum State {
 }
 
 pub struct TransformSerializeSegment {
+    ctx: Arc<dyn TableContext>,
     data_accessor: Operator,
     meta_locations: TableMetaLocationGenerator,
     accumulator: StatisticsAccumulator,
@@ -74,6 +76,7 @@ pub struct TransformSerializeSegment {
 
 impl TransformSerializeSegment {
     pub fn new(
+        ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         table: &FuseTable,
@@ -81,6 +84,7 @@ impl TransformSerializeSegment {
     ) -> Self {
         let default_cluster_key_id = table.cluster_key_id();
         TransformSerializeSegment {
+            ctx,
             input,
             output,
             output_data: None,
@@ -195,15 +199,20 @@ impl Processor for TransformSerializeSegment {
                     segment_cache.put(location.clone(), Arc::new(segment.as_ref().try_into()?));
                 }
 
+                let format_version = SegmentInfo::VERSION;
+
                 // emit log entry.
                 // for newly created segment, always use the latest version
                 let meta = MutationLogs {
                     entries: vec![MutationLogEntry::AppendSegment {
-                        segment_location: location,
+                        segment_location: location.clone(),
                         segment_info: segment,
-                        format_version: SegmentInfo::VERSION,
+                        format_version,
                     }],
                 };
+
+                self.ctx.add_segment_location((location, format_version))?;
+
                 self.output_data = Some(DataBlock::empty_with_meta(Box::new(meta)));
             }
             _state => {

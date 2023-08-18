@@ -23,6 +23,11 @@ on:
         description: The version of databend to run
         required: true
         type: string
+      runner_provider:
+        description: 'Self-hosted runner provider, aws or gcp'
+        type: string
+        required: true
+        default: 'aws'
 
 permissions:
   id-token: write
@@ -31,11 +36,14 @@ permissions:
 
 env:
   BENCHMARK_S3_PREFIX: s3://repo.databend.rs/benchmark/clickbench
+  BUILD_PROFILE: release
+  RUNNER_PROVIDER: ${{ inputs.runner_provider }}
 
 jobs:
   local:
+    if: inputs.runner_provider == 'aws'
     timeout-minutes: 60
-    runs-on: [self-hosted, X64, Linux, 16c32g]
+    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
         dataset:
@@ -51,25 +59,22 @@ jobs:
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
-      - name: Download artifact
+      - name: Download artifact for pr
+        if: inputs.source == 'pr'
+        uses: ./.github/actions/artifact_download
+        with:
+          sha: ${{ inputs.sha }}
+          target: x86_64-unknown-linux-gnu
+      - name: Download artifact for release
+        if: inputs.source == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir -p ./target/release
-          case ${{ inputs.source }} in
-            pr)
-              aws s3 sync s3://databend-ci/release/${{ inputs.sha }}/x86_64-unknown-linux-gnu/default/ \
-                target/release/ --exclude "*" --include "databend-*" --no-progress
-              ;;
-            release)
-              version=${{ inputs.source_id }}
-              target=x86_64-unknown-linux-gnu
-              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
-              tar x -C ./target/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
-              ;;
-            *)
-              echo "Unknown source: ${{ inputs.source }}"
-              exit 1
-              ;;
-          esac
+          version=${{ inputs.source_id }}
+          target=x86_64-unknown-linux-gnu
+          mkdir -p ./distro/
+          gh release download ${version} --pattern "databend-${version}-${target}.tar.gz" --dir distro/
+          tar x -C ./target/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
           chmod +x ./target/release/databend-*
       - name: Setup Databend Binary
         shell: bash
@@ -88,8 +93,7 @@ jobs:
           source_id: ${{ inputs.source_id }}
 
   cloud:
-    timeout-minutes: 90
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
         include:
@@ -108,7 +112,7 @@ jobs:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/benchmark_cloud
-        timeout-minutes: 60
+        timeout-minutes: 20
         id: benchmark
         with:
           sha: ${{ inputs.sha }}
@@ -123,9 +127,9 @@ jobs:
           cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
 
   comment:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
-    needs: [local, cloud]
+    needs: cloud
     if: inputs.source == 'pr'
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v3
       - name: Install Dependencies
@@ -175,15 +179,15 @@ jobs:
           number: ${{ inputs.source_id }}
           token: ${{ github.token }}
           body: |
-            ![local](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=XLarge&color=blue&logo=icloud)
+            ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=XLarge&color=blue&logo=icloud)
             ## ClickBench Report
             * **hits**: https://repo.databend.rs/benchmark/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/hits.html
             * **tpch**: https://repo.databend.rs/benchmark/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/tpch.html
 
   archive:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
-    needs: [local, cloud]
+    needs: cloud
     if: inputs.source == 'release'
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
         dataset:

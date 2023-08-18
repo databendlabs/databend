@@ -150,7 +150,6 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
                 &None,
                 &column_nodes,
                 None,
-                None,
                 &self.projection,
             );
 
@@ -169,9 +168,9 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
         if BLOCKING_IO {
             for prefix in part_set.into_iter() {
                 let part = self.part_map[&prefix].clone();
-                let chunk = self
-                    .reader
-                    .sync_read_columns_data_by_merge_io(&self.settings, part)?;
+                let chunk =
+                    self.reader
+                        .sync_read_columns_data_by_merge_io(&self.settings, part, &None)?;
                 chunks.push((prefix, chunk));
             }
         } else {
@@ -184,6 +183,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
                         &self.settings,
                         &part.location,
                         &part.columns_meta,
+                        &None,
                     )
                     .await?;
                 chunks.push((prefix, chunk));

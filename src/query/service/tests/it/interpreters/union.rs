@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::DataSchemaRef;
 use common_expression::SendableDataBlockStream;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::planner::plans::Plan;
@@ -34,13 +35,17 @@ async fn plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<Plan> {
     Ok(plan)
 }
 
-async fn get_interpreter(ctx: Arc<QueryContext>, sql: &str) -> Result<InterpreterPtr> {
+async fn get_interpreter(
+    ctx: Arc<QueryContext>,
+    sql: &str,
+) -> Result<(InterpreterPtr, DataSchemaRef)> {
     let plan = plan_sql(ctx.clone(), sql).await?;
-    InterpreterFactory::get(ctx, &plan).await
+    let it = InterpreterFactory::get(ctx, &plan).await?;
+    Ok((it, plan.schema()))
 }
 
 async fn execute_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<SendableDataBlockStream> {
-    let interpreter = get_interpreter(ctx.clone(), sql).await?;
+    let (interpreter, _) = get_interpreter(ctx.clone(), sql).await?;
     interpreter.execute(ctx).await
 }
 
@@ -53,17 +58,15 @@ async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDat
 async fn test_simple_union_output_type() -> Result<()> {
     {
         let fixture = TestFixture::new().await;
-        let interpreter =
+        let (_, schema) =
             get_interpreter(fixture.ctx(), "select 1 union all select 2.0::FLOAT64").await?;
-        let schema = interpreter.schema();
         assert!(matches!(
             schema.field(0).data_type(),
             DataType::Number(NumberDataType::Float64),
         ));
 
-        let interpreter =
+        let (_, schema) =
             get_interpreter(fixture.ctx(), "select 1.0::FLOAT64 union all select 2").await?;
-        let schema = interpreter.schema();
         assert!(matches!(
             schema.field(0).data_type(),
             DataType::Number(NumberDataType::Float64),
@@ -74,17 +77,15 @@ async fn test_simple_union_output_type() -> Result<()> {
         let fixture = TestFixture::new().await;
         execute_sql(fixture.ctx(), "create table a (a int)").await?;
         execute_sql(fixture.ctx(), "create table b (b double)").await?;
-        let interpreter =
+        let (_, schema) =
             get_interpreter(fixture.ctx(), "select * from a union all select * from b").await?;
-        let schema = interpreter.schema();
         assert!(matches!(
             schema.field(0).data_type(),
             DataType::Number(NumberDataType::Float64),
         ));
 
-        let interpreter =
+        let (_, schema) =
             get_interpreter(fixture.ctx(), "select * from b union all select * from a").await?;
-        let schema = interpreter.schema();
         assert!(matches!(
             schema.field(0).data_type(),
             DataType::Number(NumberDataType::Float64),
@@ -145,12 +146,11 @@ async fn test_union_output_type() -> Result<()> {
                         {
                             execute_plan(fixture.ctx(), &plan1).await?;
                             execute_plan(fixture.ctx(), &plan2).await?;
-                            let select = get_interpreter(
+                            let (_, schema) = get_interpreter(
                                 fixture.ctx(),
                                 "select * from t1 union all select * from t2",
                             )
                             .await?;
-                            let schema = select.schema();
                             assert_eq!(schema.field(0).data_type(), &common_type);
                         }
                     }

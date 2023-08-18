@@ -164,7 +164,6 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
                 &None,
                 &column_nodes,
                 None,
-                None,
                 &self.projection,
             );
 
@@ -223,13 +222,16 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
         if BLOCKING_IO {
             for (prefix, needed_pages) in part_set.into_iter() {
                 let part = self.part_map[&prefix].0.clone();
-                let chunk = self.reader.sync_read_native_columns_data(part)?;
+                let chunk = self.reader.sync_read_native_columns_data(part, &None)?;
                 chunks.push((prefix, chunk, needed_pages));
             }
         } else {
             for (prefix, needed_pages) in part_set.into_iter() {
                 let part = self.part_map[&prefix].0.clone();
-                let chunk = self.reader.async_read_native_columns_data(part).await?;
+                let chunk = self
+                    .reader
+                    .async_read_native_columns_data(part, &None)
+                    .await?;
                 chunks.push((prefix, chunk, needed_pages));
             }
         }

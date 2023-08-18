@@ -738,16 +738,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let create_index = map(
         rule! {
-            CREATE ~ AGGREGATING ~ INDEX ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ (SYNC)? ~ AGGREGATING ~ INDEX ~ ( IF ~ NOT ~ EXISTS )?
             ~ #ident
             ~ AS ~ #query
         },
-        |(_, _, _, opt_if_not_exists, index_name, _, query)| {
+        |(_, opt_sync, _, _, opt_if_not_exists, index_name, _, query)| {
             Statement::CreateIndex(CreateIndexStmt {
                 index_type: TableIndexType::Aggregating,
                 if_not_exists: opt_if_not_exists.is_some(),
                 index_name,
                 query: Box::new(query),
+                sync_creation: opt_sync.is_some(),
             })
         },
     );
@@ -1994,12 +1995,18 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     )(i)
 }
 
-fn column_type(i: Input) -> IResult<(Identifier, TypeName)> {
+fn column_type(i: Input) -> IResult<(Identifier, TypeName, Option<Expr>)> {
     map(
         rule! {
-            #ident ~ #type_name
+            #ident ~ #type_name ~ (DEFAULT ~ ^#subexpr(NOT_PREC))?
         },
-        |(column, type_name)| (column, type_name),
+        |(column, type_name, default_expr_opt)| {
+            (
+                column,
+                type_name,
+                default_expr_opt.map(|default_expr| default_expr.1),
+            )
+        },
     )(i)
 }
 
