@@ -20,4 +20,13 @@ echo "INSERT INTO test_modify_column_type.b values('a')"  | $MYSQL_CLIENT_CONNEC
 echo "alter table test_modify_column_type.b modify column a float"  | $MYSQL_CLIENT_CONNECT
 echo "alter table test_modify_column_type.b modify column b float"  | $MYSQL_CLIENT_CONNECT
 
+echo "CREATE table test_modify_column_type.c(a int, b int)"  | $MYSQL_CLIENT_CONNECT
+echo "INSERT INTO test_modify_column_type.c (b) values(1)"  | $MYSQL_CLIENT_CONNECT
+echo "SELECT a,b from test_modify_column_type.c"  | $MYSQL_CLIENT_CONNECT
+echo "alter table test_modify_column_type.c modify column a float default 'a'"  | $MYSQL_CLIENT_CONNECT
+echo "alter table test_modify_column_type.c modify column a float default 1.2"  | $MYSQL_CLIENT_CONNECT
+echo "SELECT a,b from test_modify_column_type.c"  | $MYSQL_CLIENT_CONNECT
+echo "INSERT INTO test_modify_column_type.c (b) values(2)"  | $MYSQL_CLIENT_CONNECT
+echo "SELECT a,b from test_modify_column_type.c"  | $MYSQL_CLIENT_CONNECT
+
 echo "DROP DATABASE IF EXISTS test_modify_column_type" | $MYSQL_CLIENT_CONNECT
