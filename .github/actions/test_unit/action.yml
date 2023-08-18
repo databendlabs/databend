@@ -10,7 +10,7 @@ runs:
         bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
 
     - shell: bash
-      run: cargo test
+      run: cargo -Zgitoxide=fetch,shallow-index,shallow-deps test
       env:
         RUST_TEST_THREADS: "2"
         RUST_LOG: ERROR
