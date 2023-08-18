@@ -16,9 +16,9 @@ use common_ast::ast::TableIndexType;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
+use storages_common_table_meta::meta::Location;
 
 use crate::plans::Plan;
-use crate::MetadataRef;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateIndexPlan {
@@ -27,6 +27,7 @@ pub struct CreateIndexPlan {
     pub index_name: String,
     pub query: String,
     pub table_id: MetaId,
+    pub sync_creation: bool,
 }
 
 /// Drop.
@@ -44,6 +45,6 @@ pub struct RefreshIndexPlan {
     pub limit: Option<u64>,
     pub table_info: TableInfo,
     pub query_plan: Box<Plan>,
-    pub metadata: MetadataRef,
     pub user_defined_block_name: bool,
+    pub segment_locs: Option<Vec<Location>>,
 }

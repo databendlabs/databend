@@ -76,7 +76,7 @@ impl FuseTable {
 
         let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
         let table_agg_index_ids = catalog
-            .list_indexes_by_table_id(ListIndexesByIdReq {
+            .list_index_ids_by_table_id(ListIndexesByIdReq {
                 tenant: ctx.get_tenant(),
                 table_id: self.get_id(),
             })
