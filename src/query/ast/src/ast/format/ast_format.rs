@@ -1388,8 +1388,15 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
                         let child_action = column_type_name_vec
                             .iter()
-                            .map(|(column, type_name)| {
-                                format!("Set Column {} DataType {}", column, type_name)
+                            .map(|(column, type_name, expr_opt)| {
+                                if let Some(expr) = expr_opt {
+                                    format!(
+                                        "Set Column {} DataType {} Default {}",
+                                        column, type_name, expr
+                                    )
+                                } else {
+                                    format!("Set Column {} DataType {}", column, type_name)
+                                }
                             })
                             .collect::<Vec<_>>()
                             .join(",");

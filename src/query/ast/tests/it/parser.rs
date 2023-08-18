@@ -194,7 +194,7 @@ fn test_statement() {
         r#"ALTER TABLE t DROP COLUMN b;"#,
         r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;"#,
         r#"ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY;"#,
-        r#"ALTER TABLE t MODIFY COLUMN a int, COLUMN b float;"#,
+        r#"ALTER TABLE t MODIFY COLUMN a int DEFAULT 1, COLUMN b float;"#,
         r#"ALTER TABLE t MODIFY COLUMN a int;"#,
         r#"ALTER TABLE t MODIFY COLUMN a DROP STORED;"#,
         r#"ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);"#,

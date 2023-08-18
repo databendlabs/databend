@@ -2053,12 +2053,18 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     )(i)
 }
 
-fn column_type(i: Input) -> IResult<(Identifier, TypeName)> {
+fn column_type(i: Input) -> IResult<(Identifier, TypeName, Option<Expr>)> {
     map(
         rule! {
-            #ident ~ #type_name
+            #ident ~ #type_name ~ (DEFAULT ~ ^#subexpr(NOT_PREC))?
         },
-        |(column, type_name)| (column, type_name),
+        |(column, type_name, default_expr_opt)| {
+            (
+                column,
+                type_name,
+                default_expr_opt.map(|default_expr| default_expr.1),
+            )
+        },
     )(i)
 }
 
