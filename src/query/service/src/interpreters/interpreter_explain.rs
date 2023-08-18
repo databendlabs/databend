@@ -19,12 +19,8 @@ use common_ast::ast::FormatTreeNode;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
 use common_profile::QueryProfileManager;
 use common_profile::SharedProcessorProfiles;
@@ -52,7 +48,6 @@ use crate::sql::plans::Plan;
 
 pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
-    schema: DataSchemaRef,
     kind: ExplainKind,
     plan: Plan,
 }
@@ -61,10 +56,6 @@ pub struct ExplainInterpreter {
 impl Interpreter for ExplainInterpreter {
     fn name(&self) -> &str {
         "ExplainInterpreterV2"
-    }
-
-    fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
     }
 
     #[async_backtrace::framed]
@@ -178,14 +169,7 @@ impl Interpreter for ExplainInterpreter {
 
 impl ExplainInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Plan, kind: ExplainKind) -> Result<Self> {
-        let data_field = DataField::new("explain", DataType::String);
-        let schema = DataSchemaRefExt::create(vec![data_field]);
-        Ok(ExplainInterpreter {
-            ctx,
-            schema,
-            plan,
-            kind,
-        })
+        Ok(ExplainInterpreter { ctx, plan, kind })
     }
 
     pub fn explain_plan(&self, plan: &Plan) -> Result<Vec<DataBlock>> {

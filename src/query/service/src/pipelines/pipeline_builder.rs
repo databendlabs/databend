@@ -414,6 +414,7 @@ impl PipelineBuilder {
         let block_builder = serialize_block_transform.get_block_builder();
 
         let serialize_segment_transform = TransformSerializeSegment::new(
+            self.ctx.clone(),
             InputPort::create(),
             OutputPort::create(),
             table,

@@ -58,4 +58,8 @@ message IndexMeta {
 
   // The time index updated.
   optional string updated_on = 6;
+
+  // if true, index will create after data written to databend,
+  // no need execute refresh index manually.
+  bool sync_creation = 7;
 }

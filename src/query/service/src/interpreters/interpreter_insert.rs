@@ -31,6 +31,8 @@ use common_sql::NameResolutionContext;
 use parking_lot::Mutex;
 
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::hook_refresh_agg_index;
+use crate::interpreters::common::RefreshAggIndexDesc;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::builders::build_append2table_with_commit_pipeline;
@@ -261,6 +263,20 @@ impl Interpreter for InsertInterpreter {
             self.plan.overwrite,
             append_mode,
         )?;
+
+        let refresh_agg_index_desc = RefreshAggIndexDesc {
+            catalog: plan.catalog.clone(),
+            database: plan.database.clone(),
+            table: plan.table.clone(),
+            table_id: table.get_id(),
+        };
+
+        hook_refresh_agg_index(
+            self.ctx.clone(),
+            &mut build_res.main_pipeline,
+            refresh_agg_index_desc,
+        )
+        .await?;
 
         Ok(build_res)
     }

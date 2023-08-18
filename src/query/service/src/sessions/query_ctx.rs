@@ -72,6 +72,7 @@ use dashmap::DashMap;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
+use storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -89,14 +90,6 @@ const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub enum Origin {
-    #[default]
-    Default,
-    HttpHandler,
-    BuiltInProcedure,
-}
-
 #[derive(Clone)]
 pub struct QueryContext {
     version: String,
@@ -106,6 +99,8 @@ pub struct QueryContext {
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
+    // Used by synchronized generate aggregating indexes when new data written.
+    inserted_segment_locs: Arc<RwLock<Vec<Location>>>,
 }
 
 impl QueryContext {
@@ -126,6 +121,7 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
+            inserted_segment_locs: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -723,6 +719,16 @@ impl TableContext for QueryContext {
 
     fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
         self.shared.materialized_cte_tables.clone()
+    }
+
+    fn add_segment_location(&self, segment_loc: Location) -> Result<()> {
+        let mut segment_locations = self.inserted_segment_locs.write();
+        segment_locations.push(segment_loc);
+        Ok(())
+    }
+
+    fn get_segment_locations(&self) -> Result<Vec<Location>> {
+        Ok(self.inserted_segment_locs.read().to_vec())
     }
 }
 
