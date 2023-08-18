@@ -12,7 +12,7 @@ runs:
     - shell: bash
       run: cargo -Zgitoxide=fetch,shallow-index,shallow-deps test
       env:
-        RUST_TEST_THREADS: "2"
+        RUST_TEST_THREADS: "8"
         RUST_LOG: ERROR
         # RUST_BACKTRACE: full
 
