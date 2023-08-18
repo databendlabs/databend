@@ -26,6 +26,7 @@ pub struct CreateIndexStmt {
     pub index_name: Identifier,
 
     pub query: Box<Query>,
+    pub sync_creation: bool,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -36,7 +37,8 @@ pub enum TableIndexType {
 
 impl Display for CreateIndexStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CREATE {:?} INDEX", self.index_type)?;
+        let sync = if self.sync_creation { "SYNC" } else { "ASYNC" };
+        write!(f, "CREATE {} {:?} INDEX", sync, self.index_type)?;
         if self.if_not_exists {
             write!(f, " IF NOT EXISTS")?;
         }

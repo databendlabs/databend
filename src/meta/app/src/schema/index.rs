@@ -102,6 +102,9 @@ pub struct IndexMeta {
     pub dropped_on: Option<DateTime<Utc>>,
     pub updated_on: Option<DateTime<Utc>>,
     pub query: String,
+    // if true, index will create after data written to databend,
+    // no need execute refresh index manually.
+    pub sync_creation: bool,
 }
 
 impl Default for IndexMeta {
@@ -113,6 +116,7 @@ impl Default for IndexMeta {
             dropped_on: None,
             updated_on: None,
             query: "".to_string(),
+            sync_creation: false,
         }
     }
 }
@@ -178,6 +182,7 @@ pub struct GetIndexReply {
     pub index_id: u64,
     pub index_meta: IndexMeta,
 }
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateIndexReq {
     pub index_id: u64,

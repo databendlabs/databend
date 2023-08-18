@@ -30,7 +30,9 @@ use common_ast::Dialect;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::GetIndexReq;
+use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
+use storages_common_table_meta::meta::Location;
 
 use crate::binder::Binder;
 use crate::optimizer::optimize;
@@ -56,6 +58,7 @@ impl Binder {
             if_not_exists,
             index_name,
             query,
+            sync_creation,
         } = stmt;
 
         // check if query support index
@@ -95,6 +98,7 @@ impl Binder {
             index_name,
             query: query.to_string(),
             table_id,
+            sync_creation: *sync_creation,
         };
         Ok(Plan::CreateIndex(Box::new(plan)))
     }
@@ -145,6 +149,22 @@ impl Binder {
         let index_id = res.index_id;
         let index_meta = res.index_meta;
 
+        let plan = self
+            .build_refresh_index_plan(bind_context, index_id, index_name, index_meta, *limit, None)
+            .await?;
+
+        Ok(Plan::RefreshIndex(Box::new(plan)))
+    }
+
+    pub async fn build_refresh_index_plan(
+        &mut self,
+        bind_context: &mut BindContext,
+        index_id: u64,
+        index_name: String,
+        index_meta: IndexMeta,
+        limit: Option<u64>,
+        segment_locs: Option<Vec<Location>>,
+    ) -> Result<RefreshIndexPlan> {
         let tokens = tokenize_sql(&index_meta.query)?;
         let (mut stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
         // rewrite aggregate function
@@ -190,14 +210,14 @@ impl Binder {
             index_id,
             index_name,
             index_meta,
-            limit: *limit,
+            limit,
             table_info: table.get_table_info().clone(),
             query_plan: Box::new(plan),
-            metadata: self.metadata.clone(),
             user_defined_block_name: index_rewriter.user_defined_block_name,
+            segment_locs,
         };
 
-        Ok(Plan::RefreshIndex(Box::new(plan)))
+        Ok(plan)
     }
 
     fn check_index_support(query: &Query) -> Result<()> {
