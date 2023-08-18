@@ -90,7 +90,7 @@ pub trait HashJoinState: Send + Sync {
     /// Wait until the build phase is finished.
     async fn wait_build_finish(&self) -> Result<()>;
 
-    /// Wait until the finalize phase is finished.
+    /// Wait until the build finalize phase is finished.
     async fn wait_finalize_finish(&self) -> Result<()>;
 
     /// Wait until the probe phase is finished.
