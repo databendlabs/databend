@@ -13,8 +13,8 @@ runs:
       run: cargo test
       env:
         RUST_TEST_THREADS: "2"
-        RUST_LOG: INFO
-        RUST_BACKTRACE: full
+        RUST_LOG: ERROR
+        # RUST_BACKTRACE: full
 
     - name: Upload failure
       if: failure() || cancelled()

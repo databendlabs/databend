@@ -60,4 +60,4 @@ runs:
         gcloud storage cp --quiet --recursive ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-* \
           gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/
         gcloud storage cp --quiet ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/open-sharing \
-          gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/
+          gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ || true
