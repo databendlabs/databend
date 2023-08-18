@@ -42,6 +42,7 @@ use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_storage::StageFileInfo;
 use enum_as_inner::EnumAsInner;
+use storages_common_table_meta::meta::BlockSlotDescription;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -1007,6 +1008,7 @@ pub struct ReplaceInto {
     pub bloom_filter_column_indexes: Vec<FieldIndex>,
     pub catalog_info: CatalogInfo,
     pub segments: Vec<(usize, Location)>,
+    pub block_slots: Option<BlockSlotDescription>,
     pub need_insert: bool,
 }
 

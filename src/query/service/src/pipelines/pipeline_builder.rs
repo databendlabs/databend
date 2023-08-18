@@ -391,6 +391,7 @@ impl PipelineBuilder {
             bloom_filter_column_indexes,
             catalog_info,
             segments,
+            block_slots,
             need_insert,
         } = replace;
         let max_threads = self.ctx.get_settings().get_max_threads()?;
@@ -438,6 +439,7 @@ impl PipelineBuilder {
                 on_conflicts.clone(),
                 bloom_filter_column_indexes.clone(),
                 segments,
+                block_slots.clone(),
                 io_request_semaphore,
             )?;
             self.main_pipeline.add_pipe(Pipe::create(
@@ -519,6 +521,7 @@ impl PipelineBuilder {
                 on_conflicts.clone(),
                 bloom_filter_column_indexes.clone(),
                 segments,
+                block_slots.clone(),
                 io_request_semaphore,
             )?;
             assert_eq!(
