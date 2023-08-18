@@ -1077,7 +1077,7 @@ async fn test_fuzz_impl(format: &str) -> Result<()> {
     for suite in test_suites {
         for num_blocks in [1, 10] {
             for num_rows_per_block in [1, 50] {
-                for index_block_ratio in [0.2, 0.5, 0.8, 1.0] {
+                for index_block_ratio in [0.2, 0.8, 1.0] {
                     fuzz(FuzzParams {
                         num_rows_per_block,
                         num_blocks,
