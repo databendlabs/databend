@@ -857,6 +857,22 @@ pub struct MergeIntoSource {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MergeInto {
     pub input: Box<PhysicalPlan>,
+    pub table_info: TableInfo,
+    pub catalog_info: CatalogInfo,
+    // pub matched: Vec<MatchedEvaluator>,
+    // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs,projections)
+    pub unmatched: Vec<(
+        DataSchemaRef,
+        Option<RemoteExpr>,
+        Vec<RemoteExpr>,
+        Vec<usize>,
+    )>,
+    // the first option stands for the condition
+    // the second option stands for update/delete
+    pub matched: Vec<(
+        Option<RemoteExpr<String>>,
+        Option<Vec<(FieldIndex, RemoteExpr<String>)>>,
+    )>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

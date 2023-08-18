@@ -17,25 +17,37 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ConstantFolder;
+use common_expression::DataSchemaRef;
+use common_expression::FieldIndex;
+use common_expression::RemoteExpr;
 use common_expression::ROW_ID_COL_NAME;
+use common_functions::BUILTIN_FUNCTIONS;
+use common_sql::executor::MergeInto;
 use common_sql::executor::MergeIntoSource;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
-use common_sql::plans::MergeInto;
+use common_sql::plans::MergeInto as MergePlan;
+use common_sql::plans::UpdatePlan;
+use common_sql::ScalarExpr;
+use common_sql::TypeCheck;
+use common_storages_factory::Table;
+use common_storages_fuse::FuseTable;
+use common_storages_fuse::TableContext;
 
 use super::Interpreter;
 use super::InterpreterPtr;
-use super::SelectInterpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
+const DUMMY_COL_INDEX: usize = 1;
 pub struct MergeIntoInterpreter {
     ctx: Arc<QueryContext>,
-    plan: MergeInto,
+    plan: MergePlan,
 }
 
 impl MergeIntoInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: MergeInto) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: MergePlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(MergeIntoInterpreter { ctx, plan }))
     }
 }
@@ -48,21 +60,33 @@ impl Interpreter for MergeIntoInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        // Add table lock heartbeat.
+        // let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
+        // let mut heartbeat = handler
+        //     .try_lock(self.ctx.clone(), self.plan.table.clone())
+        //     .await?;
+        // self.build_physical_plan()?;
         todo!()
     }
 }
 
+// todo:(JackTan25) computed exprs
 impl MergeIntoInterpreter {
     async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
         let mut row_id_idx = -1;
-        let MergeInto {
+        let MergePlan {
             bind_context,
             input,
             meta_data,
             columns_set,
+            catalog,
+            database,
+            table,
+            matched_evaluators,
+            unmatched_evaluators,
             ..
         } = &self.plan;
-
+        let table_name = table.clone();
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
 
         // build source for MergeInto
@@ -85,13 +109,139 @@ impl MergeIntoInterpreter {
             ));
         }
 
+        // merge_into_source is used to recv join's datablocks and split them into macthed and not matched
+        // datablocks.
         let merge_into_source = PhysicalPlan::MergeIntoSource(MergeIntoSource {
             input: Box::new(join_input),
             row_id_idx: row_id_idx as u32,
             row_id_set: HashSet::new(),
         });
 
-        // let merge_into = PhysicalPlan::MergeInto(MergeInto {});
-        todo!()
+        let table = self.ctx.get_table(catalog, database, &table_name).await?;
+        let fuse_table =
+            table
+                .as_any()
+                .downcast_ref::<FuseTable>()
+                .ok_or(ErrorCode::Unimplemented(format!(
+                    "table {}, engine type {}, does not support REPLACE INTO",
+                    table.name(),
+                    table.get_table_info().engine(),
+                )))?;
+        let table_info = fuse_table.get_table_info();
+        let catalog_ = self.ctx.get_catalog(catalog).await?;
+
+        // transform unmatched for insert
+        // reference to func `build_eval_scalar`
+        // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs,projections)
+        let mut unmatched = Vec::<(
+            DataSchemaRef,
+            Option<RemoteExpr>,
+            Vec<RemoteExpr>,
+            Vec<usize>,
+        )>::with_capacity(unmatched_evaluators.len());
+
+        for item in unmatched_evaluators {
+            let filter = if let Some(filter_expr) = &item.condition {
+                Some(self.transform_scalar_expr2expr(filter_expr, join_output_schema.clone())?)
+            } else {
+                None
+            };
+            let mut values_exprs = Vec::<RemoteExpr>::with_capacity(item.values.len());
+
+            for scalar_expr in &item.values {
+                values_exprs
+                    .push(self.transform_scalar_expr2expr(scalar_expr, join_output_schema.clone())?)
+            }
+            let mut projections = Vec::<usize>::with_capacity(item.source_schema.num_fields());
+            for idx in 0..item.source_schema.num_fields() {
+                projections.push(join_output_schema.num_fields() + idx);
+            }
+            unmatched.push((
+                item.source_schema.clone(),
+                filter,
+                values_exprs,
+                projections,
+            ))
+        }
+
+        // the first option is used for condition
+        // the second option is used to distinct update and delete
+        let mut matched = Vec::<(
+            Option<RemoteExpr<String>>,
+            Option<Vec<(FieldIndex, RemoteExpr<String>)>>,
+        )>::with_capacity(matched_evaluators.len());
+
+        // transform matched for delete/update
+        for item in matched_evaluators {
+            let condition = if let Some(condition) = &item.condition {
+                let expr = condition
+                    .as_expr()?
+                    .project_column_ref(|col| col.column_name.clone());
+                let (expr, _) = ConstantFolder::fold(
+                    &expr,
+                    &self.ctx.get_function_context()?,
+                    &BUILTIN_FUNCTIONS,
+                );
+                Some(expr.as_remote_expr())
+            } else {
+                None
+            };
+            // update
+            let update_list = if let Some(update_list) = &item.update {
+                // use update_plan to get exprs
+                let update_plan = UpdatePlan {
+                    selection: None,
+                    subquery_desc: vec![],
+                    database: database.clone(),
+                    table: table_name.clone(),
+                    update_list: update_list.clone(),
+                    bind_context: bind_context.clone(),
+                    metadata: self.plan.meta_data.clone(),
+                    catalog: catalog.clone(),
+                };
+                let col_indices = if item.condition.is_none() {
+                    vec![]
+                } else {
+                    // we don't need to real col_indices here, just give a
+                    // dummy index, that' ok.
+                    vec![DUMMY_COL_INDEX]
+                };
+                Some(update_plan.generate_update_list(
+                    self.ctx.clone(),
+                    fuse_table.schema().into(),
+                    col_indices,
+                )?)
+            } else {
+                // delete
+                None
+            };
+            matched.push((condition, update_list))
+        }
+
+        // recv datablocks from matched upstream and unmatched upstream
+        // transform and append data
+        Ok(PhysicalPlan::MergeInto(MergeInto {
+            input: Box::new(merge_into_source),
+            table_info: table_info.clone(),
+            catalog_info: catalog_.info(),
+            unmatched,
+            matched,
+        }))
+    }
+
+    fn transform_scalar_expr2expr(
+        &self,
+        scalar_expr: &ScalarExpr,
+        schema: DataSchemaRef,
+    ) -> Result<RemoteExpr> {
+        let scalar_expr = scalar_expr
+            .resolve_and_check(schema.as_ref())?
+            .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
+        let (filer, _) = ConstantFolder::fold(
+            &scalar_expr,
+            &self.ctx.get_function_context().unwrap(),
+            &BUILTIN_FUNCTIONS,
+        );
+        Ok(filer.as_remote_expr())
     }
 }

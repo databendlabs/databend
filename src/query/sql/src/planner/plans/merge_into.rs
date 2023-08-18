@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common_ast::ast::MatchedClause;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_meta_types::MetaId;
@@ -31,13 +30,16 @@ use crate::ScalarExpr;
 pub struct UnmatchedEvaluator {
     pub source_schema: DataSchemaRef,
     pub condition: Option<ScalarExpr>,
-    pub values: Vec<Vec<ScalarExpr>>,
+    pub values: Vec<ScalarExpr>,
 }
 
 #[derive(Clone)]
 pub struct MatchedEvaluator {
     pub condition: Option<ScalarExpr>,
-    pub values: HashMap<FieldIndex, ScalarExpr>,
+    // table_schema.idx -> update_expression
+    // Some => update
+    // None => delete
+    pub update: Option<HashMap<FieldIndex, ScalarExpr>>,
 }
 
 #[derive(Clone)]
@@ -50,7 +52,7 @@ pub struct MergeInto {
     pub bind_context: Box<BindContext>,
     pub columns_set: Box<HashSet<IndexType>>,
     pub meta_data: MetadataRef,
-    pub matched_evaluators: Vec<Option<MatchedEvaluator>>,
+    pub matched_evaluators: Vec<MatchedEvaluator>,
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
 }
 

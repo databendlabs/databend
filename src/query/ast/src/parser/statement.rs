@@ -2232,7 +2232,7 @@ pub fn unmatch_clause(i: Input) -> IResult<MergeOption> {
     map(
         rule! {
             WHEN ~ NOT ~ MATCHED ~ (AND ~ #expr)?  ~ THEN ~ INSERT ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ VALUES ~ ^#comma_separated_list1(row_values)
+            ~ VALUES ~ ^#row_values
         },
         |(_, _, _, expr_op, _, _, columns_op, _, values)| {
             let selection = match expr_op {

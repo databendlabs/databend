@@ -78,8 +78,7 @@ impl Binder {
         let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
         let mut unmatched_evaluators =
             Vec::<UnmatchedEvaluator>::with_capacity(unmatched_clauses.len());
-        let mut matched_evaluators =
-            Vec::<Option<MatchedEvaluator>>::with_capacity(matched_clauses.len());
+        let mut matched_evaluators = Vec::<MatchedEvaluator>::with_capacity(matched_clauses.len());
         // check clause semantic
         MergeIntoStmt::check_multi_match_clauses_semantic(&matched_clauses)?;
         MergeIntoStmt::check_multi_unmatch_clauses_semantic(&unmatched_clauses)?;
@@ -172,7 +171,6 @@ impl Binder {
                 &join,
             )
             .await?;
-        // let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
 
         let name_resolution_ctx = self.name_resolution_ctx.clone();
         let mut scalar_binder = ScalarBinder::new(
@@ -185,7 +183,7 @@ impl Binder {
             Box::new(IndexMap::new()),
         );
 
-        // bind cluase column
+        // bind clause column
         for clause in &matched_clauses {
             matched_evaluators.push(
                 self.bind_matched_clause(
@@ -198,6 +196,7 @@ impl Binder {
             );
         }
 
+        // add eval exprs for not match
         for clause in &unmatched_clauses {
             unmatched_evaluators.push(
                 self.bind_unmatched_clause(
@@ -210,23 +209,12 @@ impl Binder {
             );
         }
 
-        // let join_plan = builder.build(&join_sexpr, bind_ctx.column_set()).await?;
-        // let merge_into_source = Plan::MergeIntoSource(
-        //     (Box::new(MergeIntoSource {
-        //         input: Box::new(join_plan),
-        //         row_id_idx: 0,
-        //         row_id_set: HashSet::new(),
-        //     })),
-        // );
-
-        // add eval exprs for not match
-
         Ok(Plan::MergeInto(Box::new(MergeInto {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
             table: table_name,
             table_id,
-            bind_context: Box::new(bind_context.clone()),
+            bind_context: Box::new(bind_ctx.clone()),
             meta_data: self.metadata.clone(),
             input: Box::new(join_sexpr.clone()),
             columns_set: Box::new(columns_set),
@@ -241,7 +229,7 @@ impl Binder {
         clause: &MatchedClause,
         columns: &mut HashSet<IndexType>,
         schema: TableSchemaRef,
-    ) -> Result<Option<MatchedEvaluator>> {
+    ) -> Result<MatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(&expr).await?;
             for idx in scalar_expr.used_columns() {
@@ -286,12 +274,15 @@ impl Binder {
                     columns.insert(idx);
                 }
             }
-            Ok(Some(MatchedEvaluator {
+            Ok(MatchedEvaluator {
                 condition,
-                values: update_columns,
-            }))
+                update: Some(update_columns),
+            })
         } else {
-            Ok(None)
+            Ok(MatchedEvaluator {
+                condition,
+                update: None,
+            })
         }
     }
 
@@ -318,18 +309,13 @@ impl Binder {
             ));
         }
 
-        let mut values = vec![
-            Vec::with_capacity(clause.insert_operation.values[0].len());
-            clause.insert_operation.values.len()
-        ];
+        let mut values = Vec::with_capacity(clause.insert_operation.values.len());
 
-        for (idx, exprs) in clause.insert_operation.values.iter().enumerate() {
-            for expr in exprs {
-                let (scalar_expr, _) = scalar_binder.bind(expr).await?;
-                values[idx].push(scalar_expr.clone());
-                for idx in scalar_expr.used_columns() {
-                    columns.insert(idx);
-                }
+        for expr in clause.insert_operation.values.iter() {
+            let (scalar_expr, _) = scalar_binder.bind(expr).await?;
+            values.push(scalar_expr.clone());
+            for idx in scalar_expr.used_columns() {
+                columns.insert(idx);
             }
         }
 
@@ -339,33 +325,6 @@ impl Binder {
         } else {
             table_schema.clone()
         };
-
-        // let exprs = eval_scalar
-        //     .items
-        //     .iter()
-        //     .map(|item| {
-        //         let expr = item
-        //             .scalar
-        //             .resolve_and_check(input_schema.as_ref())?
-        //             .project_column_ref(|index| input_schema.index_of(&index.to_string()).unwrap());
-        //         let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        //         Ok((expr.as_remote_expr(), item.index))
-        //     })
-        //     .collect::<Result<Vec<_>>>()?;
-
-        // // prepare the filter expression
-        // let filter = cast_expr_to_non_null_boolean(
-        //     scalar
-        //         .as_expr()?
-        //         .project_column_ref(|col| col.column_name.clone()),
-        // )?
-        // .as_remote_expr();
-
-        // let exprs = eval_scalar
-        // .exprs
-        // .iter()
-        // .map(|(scalar, _)| scalar.as_expr(&BUILTIN_FUNCTIONS))
-        // .collect::<Vec<_>>();
 
         Ok(UnmatchedEvaluator {
             source_schema: Arc::new(source_schema.into()),

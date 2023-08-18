@@ -415,7 +415,6 @@ impl Display for Plan {
             Plan::DescNetworkPolicy(_) => write!(f, "DescNetworkPolicy"),
             Plan::ShowNetworkPolicies(_) => write!(f, "ShowNetworkPolicies"),
             Plan::MergeInto(_) => write!(f, "MergeInto"),
-            Plan::MergeInto(_) => write!(f, "MergeInto"),
         }
     }
 }
