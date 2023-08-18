@@ -94,7 +94,7 @@ jobs:
           artifacts: query
 
   test_unit:
-    runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v3
         with:
