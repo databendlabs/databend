@@ -767,7 +767,12 @@ impl TableSchema {
         )))
     }
 
-    // return leaf fields with column id
+    /// Return leaf fields with column id.
+    ///
+    /// Note: the name of the inner fields is a full-path name.
+    ///
+    /// For example, if the field is `s Tuple(f1 Tuple(f2 Int32))`
+    /// its name will be `s:f1:f2` instead of `f2`.
     pub fn leaf_fields(&self) -> Vec<TableField> {
         fn collect_in_field(
             field: &TableField,
