@@ -122,11 +122,7 @@ impl HashJoinState for JoinHashTable {
             }
 
             // Get the number of rows of the build side.
-            let chunks = self.row_space.chunks.read();
-            let mut row_num = 0;
-            for chunk in chunks.iter() {
-                row_num += chunk.num_rows();
-            }
+            let build_num_rows = unsafe { *self.build_num_rows.get() };
 
             if self.hash_join_desc.join_type == JoinType::Cross {
                 let mut build_done = self.build_done.lock();
@@ -139,7 +135,7 @@ impl HashJoinState for JoinHashTable {
             self.generate_finalize_task()?;
 
             // Fast path for hash join
-            if row_num == 0
+            if build_num_rows == 0
                 && !matches!(
                     self.hash_join_desc.join_type,
                     JoinType::LeftMark | JoinType::RightMark
@@ -166,7 +162,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
                     HashJoinHashTable::Serializer(SerializerHashJoinHashTable {
-                        hash_table: StringHashJoinHashMap::with_build_row_num(row_num),
+                        hash_table: StringHashJoinHashMap::with_build_row_num(build_num_rows),
                         hash_method: HashMethodSerializer::default(),
                     })
                 }
@@ -174,7 +170,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
                     HashJoinHashTable::SingleString(SingleStringHashJoinHashTable {
-                        hash_table: StringHashJoinHashMap::with_build_row_num(row_num),
+                        hash_table: StringHashJoinHashMap::with_build_row_num(build_num_rows),
                         hash_method: HashMethodSingleString::default(),
                     })
                 }
@@ -182,7 +178,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<RawEntry<u8>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU8(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u8>::with_build_row_num(row_num),
+                        hash_table: HashJoinHashMap::<u8>::with_build_row_num(build_num_rows),
                         hash_method,
                     })
                 }
@@ -190,7 +186,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<RawEntry<u16>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU16(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u16>::with_build_row_num(row_num),
+                        hash_table: HashJoinHashMap::<u16>::with_build_row_num(build_num_rows),
                         hash_method,
                     })
                 }
@@ -198,7 +194,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<RawEntry<u32>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU32(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u32>::with_build_row_num(row_num),
+                        hash_table: HashJoinHashMap::<u32>::with_build_row_num(build_num_rows),
                         hash_method,
                     })
                 }
@@ -206,7 +202,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<RawEntry<u64>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU64(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u64>::with_build_row_num(row_num),
+                        hash_table: HashJoinHashMap::<u64>::with_build_row_num(build_num_rows),
                         hash_method,
                     })
                 }
@@ -214,7 +210,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<RawEntry<u128>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU128(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u128>::with_build_row_num(row_num),
+                        hash_table: HashJoinHashMap::<u128>::with_build_row_num(build_num_rows),
                         hash_method,
                     })
                 }
@@ -222,7 +218,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<RawEntry<U256>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU256(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<U256>::with_build_row_num(row_num),
+                        hash_table: HashJoinHashMap::<U256>::with_build_row_num(build_num_rows),
                         hash_method,
                     })
                 }
@@ -239,17 +235,16 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn generate_finalize_task(&self) -> Result<()> {
-        let chunks = self.row_space.chunks.read();
-        let chunks_len = chunks.len();
-        if chunks_len == 0 {
+        let task_num = unsafe { &*self.chunks.get() }.len();
+        if task_num == 0 {
             return Ok(());
         }
 
         let worker_num = self.build_worker_num.load(Ordering::Relaxed) as usize;
-        let (task_size, task_num) = if chunks_len >= worker_num {
-            (chunks_len / worker_num, worker_num)
+        let (task_size, task_num) = if task_num >= worker_num {
+            (task_num / worker_num, worker_num)
         } else {
-            (1, chunks_len)
+            (1, task_num)
         };
 
         let mut finalize_tasks = self.finalize_tasks.write();
@@ -257,7 +252,7 @@ impl HashJoinState for JoinHashTable {
             let task = (idx * task_size, (idx + 1) * task_size);
             finalize_tasks.push_back(task);
         }
-        let last_task = ((task_num - 1) * task_size, chunks_len);
+        let last_task = ((task_num - 1) * task_size, task_num);
         finalize_tasks.push_back(last_task);
 
         Ok(())
@@ -372,7 +367,7 @@ impl HashJoinState for JoinHashTable {
         }
 
         let func_ctx = self.ctx.get_function_context()?;
-        let chunks = self.row_space.chunks.read();
+        let chunks = unsafe { &mut *self.chunks.get() };
         let mut has_null = false;
         let interrupt = self.interrupt.clone();
         for chunk_index in task.0..task.1 {
@@ -382,9 +377,9 @@ impl HashJoinState for JoinHashTable {
                 ));
             }
 
-            let chunk = &chunks[chunk_index];
+            let chunk = &mut chunks[chunk_index];
 
-            let evaluator = Evaluator::new(&chunk.data_block, &func_ctx, &BUILTIN_FUNCTIONS);
+            let evaluator = Evaluator::new(chunk, &func_ctx, &BUILTIN_FUNCTIONS);
             let columns: Vec<(Column, DataType)> = self
                 .hash_join_desc
                 .build_keys
@@ -394,11 +389,24 @@ impl HashJoinState for JoinHashTable {
                     Ok((
                         evaluator
                             .run(expr)?
-                            .convert_to_full_column(return_type, chunk.data_block.num_rows()),
+                            .convert_to_full_column(return_type, chunk.num_rows()),
                         return_type.clone(),
                     ))
                 })
                 .collect::<Result<_>>()?;
+
+            let column_nums = chunk.num_columns();
+            let mut block_entries = Vec::with_capacity(self.build_projections.len());
+            for index in 0..column_nums {
+                if !self.build_projections.contains(&index) {
+                    continue;
+                }
+                block_entries.push(chunk.get_by_offset(index).clone());
+            }
+            if block_entries.is_empty() {
+                self.is_build_projected.store(false, Ordering::SeqCst);
+            }
+            *chunk = DataBlock::new(block_entries, chunk.num_rows());
 
             match self.hash_join_desc.join_type {
                 JoinType::LeftMark => {
@@ -469,22 +477,6 @@ impl HashJoinState for JoinHashTable {
         let mut count = self.finalize_count.lock();
         *count -= 1;
         if *count == 0 {
-            let chunks = &mut *self.row_space.chunks.write();
-            for chunk in chunks.iter_mut() {
-                let column_nums = chunk.data_block.num_columns();
-                let mut columns = Vec::with_capacity(self.build_projections.len());
-                for index in 0..column_nums {
-                    if !self.build_projections.contains(&index) {
-                        continue;
-                    }
-                    columns.push(chunk.data_block.get_by_offset(index).clone());
-                }
-                if columns.is_empty() {
-                    self.is_build_projected.store(false, Ordering::SeqCst);
-                }
-                chunk.data_block = DataBlock::new(columns, chunk.num_rows());
-            }
-
             let mut finalize_done = self.finalize_done.lock();
             *finalize_done = true;
             self.finalize_done_notify.notify_waiters();
@@ -513,7 +505,7 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn generate_final_scan_task(&self) -> Result<()> {
-        let task_num = self.row_space.chunks.read().len();
+        let task_num = unsafe { &*self.chunks.get() }.len();
         if task_num == 0 {
             return Ok(());
         }
@@ -563,14 +555,8 @@ impl HashJoinState for JoinHashTable {
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let data_blocks = unsafe { &*self.chunks.get() };
+        let build_num_rows = unsafe { &*self.build_num_rows.get() };
         let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
 
         let mut projected_probe_fields = vec![];
@@ -624,8 +610,8 @@ impl HashJoinState for JoinHashTable {
             let build_block = if is_build_projected {
                 let mut unmatched_build_block = self.row_space.gather(
                     &build_indexes[0..build_indexes_occupied],
-                    &data_blocks,
-                    &build_num_rows,
+                    data_blocks,
+                    build_num_rows,
                 )?;
 
                 if self.hash_join_desc.join_type == JoinType::Full {
@@ -670,14 +656,8 @@ impl HashJoinState for JoinHashTable {
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let data_blocks = unsafe { &*self.chunks.get() };
+        let build_num_rows = unsafe { &*self.build_num_rows.get() };
 
         let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
         let interrupt = self.interrupt.clone();
@@ -708,8 +688,8 @@ impl HashJoinState for JoinHashTable {
 
             result_blocks.push(self.row_space.gather(
                 &build_indexes[0..build_indexes_occupied],
-                &data_blocks,
-                &build_num_rows,
+                data_blocks,
+                build_num_rows,
             )?);
             build_indexes_occupied = 0;
         }
@@ -722,14 +702,8 @@ impl HashJoinState for JoinHashTable {
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let data_blocks = unsafe { &*self.chunks.get() };
+        let build_num_rows = unsafe { &*self.build_num_rows.get() };
 
         let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
         let interrupt = self.interrupt.clone();
@@ -760,8 +734,8 @@ impl HashJoinState for JoinHashTable {
 
             result_blocks.push(self.row_space.gather(
                 &build_indexes[0..build_indexes_occupied],
-                &data_blocks,
-                &build_num_rows,
+                data_blocks,
+                build_num_rows,
             )?);
             build_indexes_occupied = 0;
         }
@@ -778,14 +752,8 @@ impl HashJoinState for JoinHashTable {
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let data_blocks = unsafe { &*self.chunks.get() };
+        let build_num_rows = unsafe { &*self.build_num_rows.get() };
 
         let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
         let interrupt = self.interrupt.clone();
@@ -840,8 +808,8 @@ impl HashJoinState for JoinHashTable {
             let marker_block = DataBlock::new_from_columns(vec![marker_column]);
             let build_block = self.row_space.gather(
                 &build_indexes[0..build_indexes_occupied],
-                &data_blocks,
-                &build_num_rows,
+                data_blocks,
+                build_num_rows,
             )?;
             result_blocks.push(self.merge_eq_block(
                 Some(build_block),

@@ -38,7 +38,6 @@ use super::desc::MARKER_KIND_FALSE;
 use super::desc::MARKER_KIND_NULL;
 use super::desc::MARKER_KIND_TRUE;
 use super::HashJoinState;
-use crate::pipelines::processors::transforms::hash_join::row::Chunk;
 use crate::pipelines::processors::JoinHashTable;
 use crate::sql::plans::JoinType;
 
@@ -270,20 +269,33 @@ impl JoinHashTable {
             data_block = DataBlock::new(nullable_columns, data_block.num_rows());
         }
 
-        let chunk = Chunk { data_block };
+        let block_outer_scan_map = if self.need_outer_scan() {
+            vec![false; data_block.num_rows()]
+        } else {
+            vec![]
+        };
+
+        let block_mark_scan_map = if self.need_outer_scan() {
+            vec![MARKER_KIND_FALSE; data_block.num_rows()]
+        } else {
+            vec![]
+        };
 
         {
             // Acquire write lock in current scope
-            let mut chunks = self.row_space.chunks.write();
+            let _write_lock = self.row_space.write_lock.write();
             if self.need_outer_scan() {
                 let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
-                outer_scan_map.push(vec![false; chunk.num_rows()]);
+                outer_scan_map.push(block_outer_scan_map);
             }
             if self.need_mark_scan() {
                 let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
-                mark_scan_map.push(vec![MARKER_KIND_FALSE; chunk.num_rows()]);
+                mark_scan_map.push(block_mark_scan_map);
             }
-            chunks.push(chunk);
+            let build_num_rows = unsafe { &mut *self.build_num_rows.get() };
+            *build_num_rows += data_block.num_rows();
+            let chunks = unsafe { &mut *self.chunks.get() };
+            chunks.push(data_block);
         }
         Ok(())
     }

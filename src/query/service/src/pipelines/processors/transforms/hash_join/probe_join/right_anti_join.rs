@@ -122,16 +122,10 @@ impl JoinHashTable {
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
 
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
+        let data_blocks = unsafe { &*self.chunks.get() };
+        let build_num_rows = unsafe { &*self.build_num_rows.get() };
         let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -169,8 +163,8 @@ impl JoinHashTable {
                     let build_block = if is_build_projected {
                         Some(self.row_space.gather(
                             local_build_indexes,
-                            &data_blocks,
-                            &build_num_rows,
+                            data_blocks,
+                            build_num_rows,
                         )?)
                     } else {
                         None
@@ -247,8 +241,8 @@ impl JoinHashTable {
         let build_block = if is_build_projected {
             Some(self.row_space.gather(
                 &local_build_indexes[0..occupied],
-                &data_blocks,
-                &build_num_rows,
+                data_blocks,
+                build_num_rows,
             )?)
         } else {
             None
