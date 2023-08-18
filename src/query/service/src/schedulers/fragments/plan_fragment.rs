@@ -345,7 +345,6 @@ struct ReplaceReplaceInto {
 impl PhysicalPlanReplacer for ReplaceReplaceInto {
     fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        eprintln!("replace replace into: {:?}", self.slot);
         Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
             input: Box::new(input),
             need_insert: self.need_insert,
