@@ -7715,9 +7715,9 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t MODIFY COLUMN a int, COLUMN b float;
+ALTER TABLE t MODIFY COLUMN a int DEFAULT 1, COLUMN b float;
 ---------- Output ---------
-ALTER TABLE t MODIFY COLUMN a Int32, COLUMN b Float32
+ALTER TABLE t MODIFY COLUMN a Int32 DEFAULT 1, COLUMN b Float32
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -7752,16 +7752,27 @@ AlterTable(
                             ),
                         },
                         Int32,
+                        Some(
+                            Literal {
+                                span: Some(
+                                    42..43,
+                                ),
+                                lit: UInt64(
+                                    1,
+                                ),
+                            },
+                        ),
                     ),
                     (
                         Identifier {
                             name: "b",
                             quote: None,
                             span: Some(
-                                42..43,
+                                52..53,
                             ),
                         },
                         Float32,
+                        None,
                     ),
                 ],
             ),
@@ -7808,6 +7819,7 @@ AlterTable(
                             ),
                         },
                         Int32,
+                        None,
                     ),
                 ],
             ),
