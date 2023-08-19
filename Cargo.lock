@@ -2851,6 +2851,7 @@ name = "common-storages-parquet"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-buffer",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
@@ -2866,6 +2867,8 @@ dependencies = [
  "common-pipeline-sources",
  "common-sql",
  "common-storage",
+ "databend-query",
+ "ethnum",
  "futures",
  "log",
  "opendal",
@@ -2874,6 +2877,7 @@ dependencies = [
  "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",
+ "tempfile",
  "typetag",
 ]
 
@@ -9159,9 +9163,9 @@ dependencies = [
 
 [[package]]
 name = "ringbuffer"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00cd23b78b7c0c29b99a7840f540c48def3cfd303024faf2f45d7b064e4cb930"
+checksum = "4eba9638e96ac5a324654f8d47fb71c5e21abef0f072740ed9c1d4b0801faa37"
 
 [[package]]
 name = "rio"
@@ -10259,8 +10263,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02e9b53a8ed3f90a8301c8c07d8233664fa174cf91e8838e8c710767a5375634"
+source = "git+https://github.com/sundy-li/strawboat?rev=25e5270#25e5270471d41ed92d38b0121a44667af53c27fd"
 dependencies = [
  "ahash 0.8.3",
  "arrow2",
