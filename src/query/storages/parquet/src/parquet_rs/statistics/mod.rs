@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod deserialize_transform;
-mod parquet_source;
+mod column;
+mod page;
+mod row_group;
+mod utils;
 
-pub(crate) use deserialize_transform::ParquetDeserializeTransform;
-pub(crate) use deserialize_transform::ParquetPrewhereInfo;
-pub(crate) use deserialize_transform::SmallFilePrunner;
-pub(crate) use parquet_source::AsyncParquetSource;
-pub(crate) use parquet_source::ParquetSourceMeta;
-pub(crate) use parquet_source::SyncParquetSource;
+pub use page::convert_index_to_column_statistics;
+pub use row_group::collect_row_group_stats;

@@ -12,8 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod data;
 mod deserialize;
 mod filter;
 mod reader;
 
+pub use data::BlockIterator;
+pub use data::IndexedChunk;
+pub use data::IndexedReaders;
+pub use data::Parquet2PartData;
 pub use reader::Parquet2Reader;

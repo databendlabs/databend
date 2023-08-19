@@ -2851,6 +2851,7 @@ name = "common-storages-parquet"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-buffer",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
@@ -2866,6 +2867,8 @@ dependencies = [
  "common-pipeline-sources",
  "common-sql",
  "common-storage",
+ "databend-query",
+ "ethnum",
  "futures",
  "log",
  "opendal",
@@ -2874,6 +2877,7 @@ dependencies = [
  "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",
+ "tempfile",
  "typetag",
 ]
 
