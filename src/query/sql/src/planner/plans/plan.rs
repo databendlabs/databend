@@ -58,7 +58,6 @@ use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
 use crate::plans::AlterVirtualColumnsPlan;
 use crate::plans::AnalyzeTablePlan;
-use crate::plans::CallPlan;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::CreateFileFormatPlan;
@@ -149,8 +148,8 @@ pub enum Plan {
     // Copy
     Copy(Box<CopyPlan>),
 
-    // Call
-    Call(Box<CallPlan>),
+    // Call is rewrite into Query
+    // Call(Box<CallPlan>),
 
     // Catalogs
     ShowCreateCatalog(Box<ShowCreateCatalogPlan>),
@@ -298,6 +297,8 @@ pub enum RewriteKind {
     DescribeStage,
     ListStage,
     ShowRoles,
+
+    Call,
 }
 
 impl Display for Plan {
@@ -375,7 +376,6 @@ impl Display for Plan {
             Plan::Replace(_) => write!(f, "Replace"),
             Plan::Delete(_) => write!(f, "Delete"),
             Plan::Update(_) => write!(f, "Update"),
-            Plan::Call(_) => write!(f, "Call"),
             Plan::Presign(_) => write!(f, "Presign"),
             Plan::SetVariable(_) => write!(f, "SetVariable"),
             Plan::UnSetVariable(_) => write!(f, "UnSetVariable"),
@@ -418,8 +418,6 @@ impl Display for Plan {
 }
 
 impl Plan {
-    /// Notice: This is incomplete and should be only used when you know it must has schema (Plan::Query | Plan::Insert ...).
-    /// If you want to get the real schema from plan use `InterpreterFactory::get_schema()` instead
     pub fn schema(&self) -> DataSchemaRef {
         match self {
             Plan::Query {
@@ -428,10 +426,10 @@ impl Plan {
                 bind_context,
                 ..
             } => bind_context.output_schema(),
-            Plan::Explain { .. } | Plan::ExplainAst { .. } | Plan::ExplainSyntax { .. } => {
-                DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
-            }
-            Plan::ExplainAnalyze { .. } => {
+            Plan::Explain { .. }
+            | Plan::ExplainAst { .. }
+            | Plan::ExplainSyntax { .. }
+            | Plan::ExplainAnalyze { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
             Plan::ShowCreateCatalog(plan) => plan.schema(),
@@ -448,7 +446,6 @@ impl Plan {
             Plan::Insert(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
 
-            Plan::Call(_) => Arc::new(DataSchema::empty()),
             Plan::Presign(plan) => plan.schema(),
             Plan::ShowShareEndpoint(plan) => plan.schema(),
             Plan::DescShare(plan) => plan.schema(),
@@ -477,7 +474,6 @@ impl Plan {
                 | Plan::ExplainAst { .. }
                 | Plan::ExplainSyntax { .. }
                 | Plan::ExplainAnalyze { .. }
-                | Plan::Call(_)
                 | Plan::ShowCreateDatabase(_)
                 | Plan::ShowCreateTable(_)
                 | Plan::ShowCreateCatalog(_)

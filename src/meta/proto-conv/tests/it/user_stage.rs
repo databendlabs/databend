@@ -17,9 +17,11 @@
 use common_meta_app as mt;
 
 use crate::common;
+use crate::user_proto_conv::test_cos_stage_info;
 use crate::user_proto_conv::test_fs_stage_info;
 use crate::user_proto_conv::test_gcs_stage_info;
 use crate::user_proto_conv::test_internal_stage_info_v17;
+use crate::user_proto_conv::test_obs_stage_info;
 use crate::user_proto_conv::test_oss_stage_info;
 use crate::user_proto_conv::test_s3_stage_info;
 use crate::user_proto_conv::test_stage_info_v18;
@@ -52,6 +54,18 @@ fn test_user_stage_oss_latest() -> anyhow::Result<()> {
 #[test]
 fn test_user_stage_webhdfs_latest() -> anyhow::Result<()> {
     common::test_pb_from_to("user_stage_webhdfs", test_webhdfs_stage_info())?;
+    Ok(())
+}
+
+#[test]
+fn test_user_stage_obs_latest() -> anyhow::Result<()> {
+    common::test_pb_from_to("user_stage_obs", test_obs_stage_info())?;
+    Ok(())
+}
+
+#[test]
+fn test_user_stage_cos_latest() -> anyhow::Result<()> {
+    common::test_pb_from_to("user_stage_cos", test_cos_stage_info())?;
     Ok(())
 }
 

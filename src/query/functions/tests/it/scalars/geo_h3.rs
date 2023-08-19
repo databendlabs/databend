@@ -54,6 +54,13 @@ fn test_geo_h3() {
     test_h3_distance(file);
     test_h3_hex_ring(file);
     test_h3_get_unidirectional_edge(file);
+    test_h3_unidirectional_edge_is_valid(file);
+    test_h3_get_origin_index_from_unidirectional_edge(file);
+    test_h3_get_destination_index_from_unidirectional_edge(file);
+    test_h3_get_indexes_from_unidirectional_edge(file);
+    test_h3_get_unidirectional_edges_from_hexagon(file);
+    test_h3_get_unidirectional_edge_boundary(file);
+    test_h3_edge_angle(file);
 }
 
 fn test_h3_to_geo(file: &mut impl Write) {
@@ -514,4 +521,109 @@ fn test_h3_get_unidirectional_edge(file: &mut impl Write) {
             UInt64Type::from_data(vec![644325524701193754, 644325524701193901]),
         ),
     ]);
+}
+
+fn test_h3_unidirectional_edge_is_valid(file: &mut impl Write) {
+    run_ast(file, "h3_unidirectional_edge_is_valid(0)", &[]);
+    run_ast(
+        file,
+        "h3_unidirectional_edge_is_valid(1248204388774707199)",
+        &[],
+    );
+
+    run_ast(file, "h3_unidirectional_edge_is_valid(h3)", &[(
+        "h3",
+        UInt64Type::from_data(vec![1248204388774707199, 644325524701193754]),
+    )]);
+}
+
+fn test_h3_get_origin_index_from_unidirectional_edge(file: &mut impl Write) {
+    run_ast(file, "h3_get_origin_index_from_unidirectional_edge(0)", &[]);
+    run_ast(
+        file,
+        "h3_get_origin_index_from_unidirectional_edge(1248204388774707199)",
+        &[],
+    );
+
+    run_ast(file, "h3_get_origin_index_from_unidirectional_edge(h3)", &[
+        (
+            "h3",
+            UInt64Type::from_data(vec![1248204388774707199, 1319695429381652479]),
+        ),
+    ]);
+}
+
+fn test_h3_get_destination_index_from_unidirectional_edge(file: &mut impl Write) {
+    run_ast(
+        file,
+        "h3_get_destination_index_from_unidirectional_edge(0)",
+        &[],
+    );
+    run_ast(
+        file,
+        "h3_get_destination_index_from_unidirectional_edge(1248204388774707199)",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "h3_get_destination_index_from_unidirectional_edge(h3)",
+        &[(
+            "h3",
+            UInt64Type::from_data(vec![1248204388774707199, 1319695429381652479]),
+        )],
+    );
+}
+
+fn test_h3_get_indexes_from_unidirectional_edge(file: &mut impl Write) {
+    run_ast(file, "h3_get_indexes_from_unidirectional_edge(0)", &[]);
+    run_ast(
+        file,
+        "h3_get_indexes_from_unidirectional_edge(1248204388774707199)",
+        &[],
+    );
+
+    run_ast(file, "h3_get_indexes_from_unidirectional_edge(h3)", &[(
+        "h3",
+        UInt64Type::from_data(vec![1248204388774707199, 1319695429381652479]),
+    )]);
+}
+
+fn test_h3_get_unidirectional_edges_from_hexagon(file: &mut impl Write) {
+    run_ast(file, "h3_get_unidirectional_edges_from_hexagon(0)", &[]);
+    run_ast(
+        file,
+        "h3_get_unidirectional_edges_from_hexagon(644325524701193754)",
+        &[],
+    );
+
+    run_ast(file, "h3_get_unidirectional_edges_from_hexagon(h3)", &[(
+        "h3",
+        UInt64Type::from_data(vec![644325524701193901, 644325524701193754]),
+    )]);
+}
+
+fn test_h3_get_unidirectional_edge_boundary(file: &mut impl Write) {
+    run_ast(file, "h3_get_unidirectional_edge_boundary(0)", &[]);
+    run_ast(
+        file,
+        "h3_get_unidirectional_edge_boundary(1248204388774707199)",
+        &[],
+    );
+
+    run_ast(file, "h3_get_unidirectional_edge_boundary(h3)", &[(
+        "h3",
+        UInt64Type::from_data(vec![1248204388774707199, 1319695429381652479]),
+    )]);
+}
+
+fn test_h3_edge_angle(file: &mut impl Write) {
+    run_ast(file, "h3_edge_angle(0)", &[]);
+    run_ast(file, "h3_edge_angle(10)", &[]);
+    run_ast(file, "h3_edge_angle(16)", &[]);
+
+    run_ast(file, "h3_edge_angle(res)", &[(
+        "res",
+        UInt8Type::from_data(vec![10, 12]),
+    )])
 }

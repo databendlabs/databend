@@ -18,6 +18,7 @@ mod bind_context;
 mod binder;
 /// SQL builders;
 mod builders;
+mod call;
 mod column_binding;
 mod copy;
 mod ddl;

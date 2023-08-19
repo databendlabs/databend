@@ -16,17 +16,26 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::NumberType;
+use common_expression::types::ValueType;
 use common_expression::Column;
 use common_expression::DataSchemaRef;
+use common_functions::aggregates::eval_aggr;
+use common_storage::Datum;
 use itertools::Itertools;
 
+use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
+use crate::optimizer::ColumnStat;
+use crate::optimizer::ColumnStatSet;
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
+use crate::optimizer::Statistics;
+use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
@@ -68,7 +77,9 @@ impl ConstantTableScan {
 
 impl PartialEq for ConstantTableScan {
     fn eq(&self, other: &Self) -> bool {
-        self.columns == other.columns
+        self.num_rows == other.num_rows
+            && self.values == other.values
+            && self.columns == other.columns
     }
 }
 
@@ -76,6 +87,13 @@ impl Eq for ConstantTableScan {}
 
 impl std::hash::Hash for ConstantTableScan {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.num_rows.hash(state);
+        for value in self.values.iter() {
+            for i in 0..value.len() {
+                let v = unsafe { value.index_unchecked(i) };
+                v.hash(state);
+            }
+        }
         for column in self.columns.iter().sorted() {
             column.hash(state);
         }
@@ -102,10 +120,68 @@ impl Operator for ConstantTableScan {
     }
 
     fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        let mut column_stats: ColumnStatSet = Default::default();
+        for (index, value) in self.columns.iter().zip(self.values.iter()) {
+            let (mins, _) = eval_aggr("min", vec![], &[value.clone()], self.num_rows)?;
+            let min = if let Some(v) = mins.index(0) {
+                match Datum::from_scalar(v.to_owned()) {
+                    Some(val) => val,
+                    None => {
+                        continue;
+                    }
+                }
+            } else {
+                continue;
+            };
+            let (maxs, _) = eval_aggr("max", vec![], &[value.clone()], self.num_rows)?;
+            let max = if let Some(v) = maxs.index(0) {
+                match Datum::from_scalar(v.to_owned()) {
+                    Some(val) => val,
+                    None => {
+                        continue;
+                    }
+                }
+            } else {
+                continue;
+            };
+
+            let distinct_values = eval_aggr(
+                "approx_count_distinct",
+                vec![],
+                &[value.clone()],
+                self.num_rows,
+            )?;
+            let ndv = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap()[0];
+
+            let (is_all_null, bitmap) = value.validity();
+            let null_count = match (is_all_null, bitmap) {
+                (true, _) => self.num_rows as u64,
+                (false, Some(bitmap)) => bitmap.unset_bits() as u64,
+                (false, None) => 0,
+            };
+
+            let histogram = histogram_from_ndv(
+                ndv,
+                self.num_rows as u64,
+                Some((min.clone(), max.clone())),
+                DEFAULT_HISTOGRAM_BUCKETS,
+            )
+            .ok();
+            let column_stat = ColumnStat {
+                min,
+                max,
+                ndv: ndv as f64,
+                null_count,
+                histogram,
+            };
+            column_stats.insert(*index, column_stat);
+        }
         Ok(Arc::new(StatInfo {
             cardinality: self.num_rows as f64,
-            // TODO
-            statistics: Default::default(),
+            statistics: Statistics {
+                precise_cardinality: Some(self.num_rows as u64),
+                column_stats,
+            },
         }))
     }
 

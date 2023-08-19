@@ -131,6 +131,10 @@ use crate::api::ExchangeInjector;
 use crate::pipelines::builders::build_append_data_pipeline;
 use crate::pipelines::builders::build_fill_missing_columns_pipeline;
 use crate::pipelines::processors::transforms::build_partition_bucket;
+use crate::pipelines::processors::transforms::hash_join::TransformHashJoinBuild;
+use crate::pipelines::processors::transforms::hash_join::TransformHashJoinProbe;
+use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
+use crate::pipelines::processors::transforms::range_join::TransformRangeJoinRight;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
@@ -145,15 +149,11 @@ use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
-use crate::pipelines::processors::transforms::TransformRangeJoinLeft;
-use crate::pipelines::processors::transforms::TransformRangeJoinRight;
 use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformCastSchema;
-use crate::pipelines::processors::TransformHashJoinBuild;
-use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformRuntimeFilter;
 use crate::pipelines::Pipeline;
@@ -391,6 +391,7 @@ impl PipelineBuilder {
             bloom_filter_column_indexes,
             catalog_info,
             segments,
+            block_slots,
             need_insert,
         } = replace;
         let max_threads = self.ctx.get_settings().get_max_threads()?;
@@ -413,6 +414,7 @@ impl PipelineBuilder {
         let block_builder = serialize_block_transform.get_block_builder();
 
         let serialize_segment_transform = TransformSerializeSegment::new(
+            self.ctx.clone(),
             InputPort::create(),
             OutputPort::create(),
             table,
@@ -437,6 +439,7 @@ impl PipelineBuilder {
                 on_conflicts.clone(),
                 bloom_filter_column_indexes.clone(),
                 segments,
+                block_slots.clone(),
                 io_request_semaphore,
             )?;
             self.main_pipeline.add_pipe(Pipe::create(
@@ -518,6 +521,7 @@ impl PipelineBuilder {
                 on_conflicts.clone(),
                 bloom_filter_column_indexes.clone(),
                 segments,
+                block_slots.clone(),
                 io_request_semaphore,
             )?;
             assert_eq!(

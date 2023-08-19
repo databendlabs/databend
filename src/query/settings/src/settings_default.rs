@@ -338,9 +338,10 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("enable_auto_reclustering", DefaultSettingValue {
+
+                ("enable_recluster_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enables auto re-clustering.",
+                    desc: "Enables re-clustering after write(copy/replace-into).",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -365,6 +366,18 @@ impl DefaultSettings {
                 ("replace_into_bloom_pruning_max_column_number", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Max number of columns used by bloom pruning for replace-into statement.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("recluster_timeout_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(12 * 60 * 60),
+                    desc: "Sets the seconds that recluster final will be timeout.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Refresh aggregating index after new data written",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),

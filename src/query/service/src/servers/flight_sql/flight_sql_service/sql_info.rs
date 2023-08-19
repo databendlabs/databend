@@ -67,7 +67,7 @@ impl SqlInfoProvider {
         let batch = Self::server_name()?;
         let schema = (*batch.schema()).clone();
         let batches = vec![batch];
-        batches_to_flight_data(schema, batches)
+        batches_to_flight_data(&schema, batches)
     }
 
     pub fn all_info() -> Result<DoGetStream, Status> {

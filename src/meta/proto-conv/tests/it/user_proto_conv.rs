@@ -22,8 +22,10 @@ use chrono::Utc;
 use common_meta_app as mt;
 use common_meta_app::principal::UserIdentity;
 use common_meta_app::principal::UserPrivilegeType;
+use common_meta_app::storage::StorageCosConfig;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageGcsConfig;
+use common_meta_app::storage::StorageObsConfig;
 use common_meta_app::storage::StorageOssConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageS3Config;
@@ -289,6 +291,72 @@ pub(crate) fn test_webhdfs_stage_info() -> mt::principal::StageInfo {
                 endpoint_url: "https://webhdfs.example.com".to_string(),
                 root: "/path/to/stage/files".to_string(),
                 delegation: "<delegation_token>".to_string(),
+            }),
+        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(3141),
+            size_limit: 1038,
+            max_files: 0,
+            split_size: 0,
+            purge: true,
+            single: false,
+            max_file_size: 0,
+            disable_variant_check: false,
+        },
+        comment: "test".to_string(),
+        ..Default::default()
+    }
+}
+
+pub(crate) fn test_obs_stage_info() -> mt::principal::StageInfo {
+    mt::principal::StageInfo {
+        stage_name: "obs://bucket/to/stage/files".to_string(),
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: StorageParams::Obs(StorageObsConfig {
+                endpoint_url: "https://obs.example.com".to_string(),
+                root: "/path/to/stage/files".to_string(),
+                access_key_id: "access_key_id".to_string(),
+                secret_access_key: "secret_access_key".to_string(),
+                bucket: "bucket".to_string(),
+            }),
+        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(3141),
+            size_limit: 1038,
+            max_files: 0,
+            split_size: 0,
+            purge: true,
+            single: false,
+            max_file_size: 0,
+            disable_variant_check: false,
+        },
+        comment: "test".to_string(),
+        ..Default::default()
+    }
+}
+
+pub(crate) fn test_cos_stage_info() -> mt::principal::StageInfo {
+    mt::principal::StageInfo {
+        stage_name: "cos://bucket/to/stage/files".to_string(),
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: StorageParams::Cos(StorageCosConfig {
+                endpoint_url: "https://cos.example.com".to_string(),
+                root: "/path/to/stage/files".to_string(),
+                secret_id: "secret_id".to_string(),
+                secret_key: "secret_key".to_string(),
+                bucket: "bucket".to_string(),
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(

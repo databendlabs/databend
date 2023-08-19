@@ -74,6 +74,7 @@ pub enum OperatorType {
     Exchange,
     RuntimeFilter,
     Insert,
+    ConstantTableScan,
 }
 
 impl Display for OperatorType {
@@ -97,6 +98,7 @@ impl Display for OperatorType {
             OperatorType::RuntimeFilter => write!(f, "RuntimeFilter"),
             OperatorType::Insert => write!(f, "Insert"),
             OperatorType::CteScan => write!(f, "CteScan"),
+            OperatorType::ConstantTableScan => write!(f, "ConstantTableScan"),
         }
     }
 }

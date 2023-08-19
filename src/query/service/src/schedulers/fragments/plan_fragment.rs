@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
@@ -26,6 +25,7 @@ use common_sql::executor::DeletePartial;
 use common_sql::executor::QuerySource;
 use common_sql::executor::ReplaceInto;
 use common_storages_fuse::TableContext;
+use storages_common_table_meta::meta::BlockSlotDescription;
 use storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchange;
@@ -211,35 +211,6 @@ impl PlanFragment {
         Ok(fragment_actions)
     }
 
-    fn reshuffle<T: Clone>(
-        executors: Vec<String>,
-        partitions: Vec<T>,
-    ) -> Result<HashMap<String, Vec<T>>> {
-        let num_parts = partitions.len();
-        let num_executors = executors.len();
-        let mut executors_sorted = executors;
-        executors_sorted.sort();
-        let mut executor_part = HashMap::default();
-        // the first num_parts % num_executors get parts_per_node parts
-        // the remaining get parts_per_node - 1 parts
-        let parts_per_node = (num_parts + num_executors - 1) / num_executors;
-        for (idx, executor) in executors_sorted.iter().enumerate() {
-            let begin = parts_per_node * idx;
-            let end = num_parts.min(parts_per_node * (idx + 1));
-            let parts = partitions[begin..end].to_vec();
-            executor_part.insert(executor.clone(), parts);
-            if end == num_parts && idx < num_executors - 1 {
-                // reach here only when num_executors > num_parts
-                executors_sorted[(idx + 1)..].iter().for_each(|executor| {
-                    executor_part.insert(executor.clone(), vec![]);
-                });
-                break;
-            }
-        }
-
-        Ok(executor_part)
-    }
-
     fn redistribute_replace_into(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
         let plan = match &self.plan {
             PhysicalPlan::ExchangeSink(plan) => plan,
@@ -252,16 +223,20 @@ impl PlanFragment {
         let partitions = &plan.segments;
         let executors = Fragmenter::get_executors(ctx.clone());
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
-        let partition_reshuffle = Self::reshuffle(executors, partitions.clone())?;
-
         let local_id = &ctx.get_cluster().local_id;
+        let num_slots = executors.len();
 
-        for (executor, parts) in partition_reshuffle.iter() {
+        // assign all the segment locations to each one of the executors,
+        // but for each segment, one executor only need to take part of the blocks
+        for (executor_idx, executor) in executors.into_iter().enumerate() {
             let mut plan = self.plan.clone();
-            let need_insert = executor == local_id;
-
+            let need_insert = &executor == local_id;
             let mut replace_replace_into = ReplaceReplaceInto {
-                partitions: parts.clone(),
+                partitions: partitions.clone(),
+                slot: Some(BlockSlotDescription {
+                    num_slots,
+                    slot: executor_idx as u32,
+                }),
                 need_insert,
             };
             plan = replace_replace_into.replace(&plan)?;
@@ -362,6 +337,8 @@ impl PhysicalPlanReplacer for ReplaceDeletePartial {
 
 struct ReplaceReplaceInto {
     pub partitions: Vec<(usize, Location)>,
+    // for standalone mode, slot is None
+    pub slot: Option<BlockSlotDescription>,
     pub need_insert: bool,
 }
 
@@ -372,6 +349,7 @@ impl PhysicalPlanReplacer for ReplaceReplaceInto {
             input: Box::new(input),
             need_insert: self.need_insert,
             segments: self.partitions.clone(),
+            block_slots: self.slot.clone(),
             ..plan.clone()
         }))
     }

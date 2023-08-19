@@ -16,21 +16,14 @@ This feature can be particularly useful for inspecting or viewing the contents o
 ## Syntax and Parameters
 
 ```sql
-SELECT [<alias>.]<column> [, <column> ...] | [<alias>.]$<col_position> [, $<col_position> ...] FROM
-{@<stage_name>[/<path>] [<table_alias>] | '<uri>' [<table_alias>]} [(
+SELECT [<alias>.]<column> [, <column> ...] | [<alias>.]$<col_position> [, $<col_position> ...] 
+FROM {@<stage_name>[/<path>] [<table_alias>] | '<uri>' [<table_alias>]} 
+[ 
+  [<connection_parameters>]
   [ PATTERN => '<regex_pattern>']
   [ FILE_FORMAT => '<format_name>']
-  [ FILES => ( 'file_name' [ , 'file_name' ... ] ) ]
-  [ ENDPOINT_URL => <'url'> ]
-  [ AWS_KEY_ID => <'aws_key_id'> ]
-  [ AWS_KEY_SECRET => <'aws_key_secret'> ]
-  [ ACCESS_KEY_ID => <'access_key_id'> ]
-  [ ACCESS_KEY_SECRET => <'access_key_secret'> ]
-  [ SECRET_ACCESS_KEY => <'secret_access_key'> ]
-  [ SESSION_TOKEN => <'session_token'> ]
-  [ REGION => <'region'> ]
-  [ ENABLE_VIRTUAL_HOST_STYLE => true|false ]
-)]
+  [ FILES => ( '<file_name>' [ , '<file_name>' ... ])]
+]
 ```
 
 ### FILE_FORMAT
@@ -94,25 +87,13 @@ When using COPY INTO to copy data from a staged file, Databend matches the field
 COPY INTO my_table FROM (SELECT $1 SELECT @my_stage t) FILE_FORMAT = (type = NDJSON)
 ```
 
-### Others
+### connection_parameters
 
-To query data files in a bucket or container, provide necessary connection information with the following parameters:
+To query data files in a bucket or container on your storage service, provide the necessary connection parameters. For the available connection parameters for each storage service, refer to [Connection Parameters](/13-sql-reference/51-connect-parameters.md).
 
-- ENDPOINT_URL
-- AWS_KEY_ID
-- AWS_SECRET_KEY
-- ACCESS_KEY_ID
-- ACCESS_KEY_SECRET
-- SECRET_ACCESS_KEY
-- SESSION_TOKEN
-- REGION
-- ENABLE_VIRTUAL_HOST_STYLE
+### uri
 
-They are explained in [Create Stage](/14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md).
-
-:::tip
-If you're using S3 storage and your bucket has public read access, you can access and query an external stage associated with the bucket anonymously without providing credentials. To enable this feature, add the **allow_anonymous** parameter to the [storage.s3] section in the *databend-query.toml* configuration file and set it to **true**.
-:::
+Specifies the URI of remote files accessible via HTTPS.
 
 ## Limitations
 

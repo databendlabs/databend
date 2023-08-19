@@ -40,3 +40,24 @@ pub fn metrics_inc_copy_read_size_bytes(c: u64) {
 pub fn metrics_inc_copy_read_part_cost_milliseconds(c: u64) {
     increment_gauge!(key!("copy_read_part_cost_milliseconds"), c as f64);
 }
+
+pub fn metrics_inc_filter_out_copied_files_request_milliseconds(c: u64) {
+    increment_gauge!(
+        key!("filter_out_copied_files_request_milliseconds"),
+        c as f64
+    );
+}
+
+pub fn metrics_inc_filter_out_copied_files_entire_milliseconds(c: u64) {
+    increment_gauge!(
+        key!("filter_out_copied_files_entire_milliseconds"),
+        c as f64
+    );
+}
+
+pub fn metrics_inc_collect_files_get_all_source_files_milliseconds(c: u64) {
+    increment_gauge!(
+        key!("collect_files_get_all_source_files_milliseconds"),
+        c as f64
+    );
+}

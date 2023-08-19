@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -22,6 +23,7 @@ use std::str::FromStr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Instant;
 use std::time::SystemTime;
 
 use chrono_tz::Tz;
@@ -57,12 +59,13 @@ use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_sql::IndexType;
+use common_storage::common_metrics::copy::metrics_inc_filter_out_copied_files_request_milliseconds;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
 use common_storages_parquet::Parquet2Table;
-use common_storages_parquet::ParquetTable;
+use common_storages_parquet::ParquetRSTable;
 use common_storages_result_cache::ResultScan;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
@@ -71,6 +74,7 @@ use dashmap::DashMap;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
+use storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -88,14 +92,6 @@ const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub enum Origin {
-    #[default]
-    Default,
-    HttpHandler,
-    BuiltInProcedure,
-}
-
 #[derive(Clone)]
 pub struct QueryContext {
     version: String,
@@ -105,7 +101,8 @@ pub struct QueryContext {
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
-    origin: Arc<RwLock<Origin>>,
+    // Used by synchronized generate aggregating indexes when new data written.
+    inserted_segment_locs: Arc<RwLock<Vec<Location>>>,
 }
 
 impl QueryContext {
@@ -126,7 +123,7 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
-            origin: Arc::new(RwLock::new(Origin::Default)),
+            inserted_segment_locs: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -141,7 +138,22 @@ impl QueryContext {
     ) -> Result<Arc<dyn Table>> {
         let catalog = self.shared.catalog_manager.build_catalog(catalog_info)?;
         match table_args {
-            None => catalog.get_table_by_info(table_info),
+            None => {
+                let table = catalog.get_table_by_info(table_info);
+                if table.is_err() {
+                    let table_function = catalog
+                        .get_table_function(&table_info.name, TableArgs::new_positioned(vec![]));
+
+                    if table_function.is_err() {
+                        table
+                    } else {
+                        Ok(table_function?.as_table())
+                    }
+                } else {
+                    table
+                }
+            }
+
             Some(table_args) => Ok(catalog
                 .get_table_function(&table_info.name, table_args)?
                 .as_table()),
@@ -184,14 +196,6 @@ impl QueryContext {
 
     pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
         self.shared.attach_table(catalog, database, name, table)
-    }
-
-    pub fn set_origin(&self, origin: Origin) {
-        let mut o = self.origin.write();
-        *o = origin;
-    }
-    pub fn get_origin(&self) -> Origin {
-        self.origin.read().clone()
     }
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
@@ -267,6 +271,9 @@ impl QueryContext {
 
 #[async_trait::async_trait]
 impl TableContext for QueryContext {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     /// Build a table instance the plan wants to operate on.
     ///
     /// A plan just contains raw information about a table or table function.
@@ -284,7 +291,7 @@ impl TableContext for QueryContext {
                 plan.tbl_args.clone(),
             ),
             DataSourceInfo::Parquet2Source(table_info) => Parquet2Table::from_info(table_info),
-            DataSourceInfo::ParquetSource(table_info) => ParquetTable::from_info(table_info),
+            DataSourceInfo::ParquetSource(table_info) => ParquetRSTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
         }
     }
@@ -661,10 +668,15 @@ impl TableContext for QueryContext {
         for chunk in files.chunks(batch_size) {
             let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
             let req = GetTableCopiedFileReq { table_id, files };
+            let start_request = Instant::now();
             let copied_files = catalog
                 .get_table_copied_file_info(&tenant, database_name, req)
                 .await?
                 .file_info;
+
+            metrics_inc_filter_out_copied_files_request_milliseconds(
+                Instant::now().duration_since(start_request).as_millis() as u64,
+            );
             // Colored
             for file in chunk {
                 if let Some(copied_file) = copied_files.get(&file.path) {
@@ -718,6 +730,16 @@ impl TableContext for QueryContext {
 
     fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
         self.shared.materialized_cte_tables.clone()
+    }
+
+    fn add_segment_location(&self, segment_loc: Location) -> Result<()> {
+        let mut segment_locations = self.inserted_segment_locs.write();
+        segment_locations.push(segment_loc);
+        Ok(())
+    }
+
+    fn get_segment_locations(&self) -> Result<Vec<Location>> {
+        Ok(self.inserted_segment_locs.read().to_vec())
     }
 }
 

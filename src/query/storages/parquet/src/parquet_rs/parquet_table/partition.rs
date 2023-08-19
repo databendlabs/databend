@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
@@ -21,28 +22,18 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
-use super::ParquetTable;
-use crate::parquet_rs::pruning::ParquetPartitionPruner;
+use super::table::ParquetRSTable;
+use crate::parquet_part::ParquetRSFilePart;
+use crate::ParquetPart;
 
-impl ParquetTable {
+impl ParquetRSTable {
     #[inline]
     #[async_backtrace::framed]
     pub(super) async fn do_read_partitions(
         &self,
-        ctx: Arc<dyn TableContext>,
-        push_down: Option<PushDownInfo>,
+        _ctx: Arc<dyn TableContext>,
+        _push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let pruner = ParquetPartitionPruner::try_create(
-            ctx.clone(),
-            &self.arrow_schema,
-            self.schema_descr.clone(),
-            &self.schema_from,
-            &push_down,
-            self.read_options,
-            self.compression_ratio,
-            false,
-        )?;
-
         let file_locations = match &self.files_to_read {
             Some(files) => files
                 .iter()
@@ -58,15 +49,30 @@ impl ParquetTable {
             .collect::<Vec<_>>(),
         };
 
-        let (stats, partitions) = pruner
-            .read_and_prune_partitions(self.operator.clone(), &file_locations)
-            .await?;
-
-        let partition_kind = PartitionsShuffleKind::Mod;
-        let partitions = partitions
+        // TODO(parquet):
+        // The second field of `file_locations` is size of the file.
+        // It will be used for judging if we need to read small parquet files at once to reduce IO.
+        let partitions = file_locations
             .into_iter()
-            .map(|p| p.convert_to_part_info())
+            .map(|(location, file_size)| {
+                Arc::new(Box::new(ParquetPart::ParquetRSFile(ParquetRSFilePart {
+                    location,
+                    file_size,
+                })) as Box<dyn PartInfo>)
+            })
             .collect();
-        Ok((stats, Partitions::create_nolazy(partition_kind, partitions)))
+
+        // TODO(parquet):
+        // - collect exact statistics.
+        // - use stats to prune row groups.
+        // - make one row group one partition.
+
+        // We cannot get the exact statistics of partitions from parquet files.
+        // It's because we will not read metadata of parquet files for parquet_rs.
+        // Metadata will be read before reading data.
+        Ok((
+            PartStatistics::default(),
+            Partitions::create_nolazy(PartitionsShuffleKind::Mod, partitions),
+        ))
     }
 }

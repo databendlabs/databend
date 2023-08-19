@@ -96,7 +96,9 @@ impl FuseTable {
             DEFAULT_AVG_DEPTH_THRESHOLD,
         );
         let block_count = snapshot.summary.block_count;
-        let threshold = (block_count as f64 * avg_depth_threshold).max(1.0);
+        let threshold = (block_count as f64 * avg_depth_threshold)
+            .max(1.0)
+            .min(64.0);
         let mut mutator = ReclusterMutator::try_create(ctx.clone(), threshold, block_thresholds)?;
 
         let schema = self.table_info.schema();
@@ -161,7 +163,6 @@ impl FuseTable {
             self.table_info.schema(),
             None,
             &block_metas,
-            None,
             block_count,
             PruningStatistics::default(),
         )?;
@@ -260,7 +261,8 @@ impl FuseTable {
 
         pipeline.try_resize(1)?;
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
+            let proc =
+                TransformSerializeSegment::new(ctx.clone(), input, output, self, block_thresholds);
             proc.into_processor()
         })?;
 

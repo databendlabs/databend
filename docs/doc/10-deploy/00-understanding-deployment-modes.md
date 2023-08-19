@@ -82,4 +82,3 @@ Databend supports for self-hosted and cloud object storage solutions. Prepare yo
 - Tencent COS
 - Alibaba OSS
 - QingCloud QingStor
-- Huawei Cloud OBS
