@@ -669,8 +669,10 @@ impl TableContext for QueryContext {
                 .get_table_copied_file_info(&tenant, database_name, req)
                 .await?
                 .file_info;
-            let cost_time = Instant::now().duration_since(start_request).as_millis();
-            metrics_inc_filter_out_copied_files_request_milliseconds(cost_time as u64);
+
+            metrics_inc_filter_out_copied_files_request_milliseconds(
+                Instant::now().duration_since(start_request).as_millis() as u64,
+            );
             // Colored
             for file in chunk {
                 if let Some(copied_file) = copied_files.get(&file.path) {
