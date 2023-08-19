@@ -11,8 +11,3 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-mod processor_merge_into_matched;
-mod processor_merge_into_not_matched;
-mod processor_merge_into_split;
-pub use processor_merge_into_split::MergeIntoSplitProcessor;

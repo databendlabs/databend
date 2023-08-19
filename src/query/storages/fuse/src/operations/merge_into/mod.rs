@@ -14,3 +14,4 @@
 
 mod mutator;
 mod processors;
+pub use processors::MergeIntoSplitProcessor;

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
@@ -128,13 +127,6 @@ impl MergeIntoInterpreter {
             ));
         }
 
-        // merge_into_source is used to recv join's datablocks and split them into macthed and not matched
-        // datablocks.
-        let merge_into_source = PhysicalPlan::MergeIntoSource(MergeIntoSource {
-            input: Box::new(join_input),
-            row_id_idx: row_id_idx as u32,
-        });
-
         let table = self.ctx.get_table(catalog, database, &table_name).await?;
         let fuse_table =
             table
@@ -147,6 +139,15 @@ impl MergeIntoInterpreter {
                 )))?;
         let table_info = fuse_table.get_table_info();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
+
+        // merge_into_source is used to recv join's datablocks and split them into macthed and not matched
+        // datablocks.
+        let merge_into_source = PhysicalPlan::MergeIntoSource(MergeIntoSource {
+            input: Box::new(join_input),
+            row_id_idx: row_id_idx as u32,
+            table_info: table_info.clone(),
+            catalog_info: catalog_.info(),
+        });
 
         // transform unmatched for insert
         // reference to func `build_eval_scalar`

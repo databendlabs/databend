@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -849,6 +848,8 @@ impl UnionAll {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MergeIntoSource {
     // join result: target_columns, source_columns, target_table._row_id
+    pub table_info: TableInfo,
+    pub catalog_info: CatalogInfo,
     pub input: Box<PhysicalPlan>,
     pub row_id_idx: u32,
 }

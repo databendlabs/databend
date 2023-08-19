@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::Pipe;

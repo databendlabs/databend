@@ -115,6 +115,7 @@ use common_storage::DataOperator;
 use common_storages_factory::Table;
 use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
+use common_storages_fuse::operations::merge_into::MergeIntoSplitProcessor;
 use common_storages_fuse::operations::replace_into::BroadcastProcessor;
 use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
 use common_storages_fuse::operations::replace_into::UnbranchedReplaceIntoProcessor;
@@ -284,13 +285,25 @@ impl PipelineBuilder {
     }
 
     fn build_merge_into_source(&mut self, merge_into_source: &MergeIntoSource) -> Result<()> {
-        let MergeIntoSource { input, row_id_idx } = merge_into_source;
+        let MergeIntoSource {
+            input,
+            row_id_idx,
+            catalog_info,
+            table_info,
+        } = merge_into_source;
         self.build_pipeline(input)?;
         // we need to do type cast for insert data, no need for update,
         // because we have done it at eval_scalar phase.
-        // 1. split data_block as matched block and not-matched block
+        // split data_block as matched block and not-matched block
+        let tbl = self
+            .ctx
+            .build_table_by_table_info(catalog_info, table_info, None)?;
+        let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
 
-        todo!()
+        self.main_pipeline
+            .add_pipe(merge_into_split_processor.into_pipe()?);
+
+        Ok(())
     }
 
     fn build_deduplicate(&mut self, deduplicate: &Deduplicate) -> Result<()> {
@@ -306,6 +319,7 @@ impl PipelineBuilder {
             table_schema,
             need_insert,
         } = deduplicate;
+
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
