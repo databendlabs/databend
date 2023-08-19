@@ -664,12 +664,12 @@ impl TableContext for QueryContext {
         for chunk in files.chunks(batch_size) {
             let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
             let req = GetTableCopiedFileReq { table_id, files };
-            let start_reuqest = Instant::now();
+            let start_request = Instant::now();
             let copied_files = catalog
                 .get_table_copied_file_info(&tenant, database_name, req)
                 .await?
                 .file_info;
-            let cost_time = Instant::now().duration_since(start_reuqest).as_millis();
+            let cost_time = Instant::now().duration_since(start_request).as_millis();
             metrics_inc_filter_out_copied_files_request_milliseconds(cost_time as u64);
             // Colored
             for file in chunk {
