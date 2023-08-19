@@ -32,6 +32,7 @@ use log::info;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
+use crate::io::VirtualColumnReader;
 use crate::operations::read::native_data_source_deserializer::NativeDeserializeDataTransform;
 use crate::operations::read::native_data_source_reader::ReadNativeDataSource;
 use crate::operations::read::parquet_data_source_deserializer::DeserializeDataTransform;
@@ -47,6 +48,7 @@ pub fn build_fuse_native_source_pipeline(
     topk: Option<TopK>,
     mut max_io_requests: usize,
     index_reader: Arc<Option<AggIndexReader>>,
+    virtual_reader: Arc<Option<VirtualColumnReader>>,
 ) -> Result<()> {
     (max_threads, max_io_requests) =
         adjust_threads_and_request(true, max_threads, max_io_requests, plan);
@@ -78,6 +80,7 @@ pub fn build_fuse_native_source_pipeline(
                         block_reader.clone(),
                         partitions.clone(),
                         index_reader.clone(),
+                        virtual_reader.clone(),
                     )?,
                 );
             }
@@ -102,6 +105,7 @@ pub fn build_fuse_native_source_pipeline(
                         block_reader.clone(),
                         partitions.clone(),
                         index_reader.clone(),
+                        virtual_reader.clone(),
                     )?,
                 );
             }
@@ -119,12 +123,14 @@ pub fn build_fuse_native_source_pipeline(
             transform_input,
             transform_output,
             index_reader.clone(),
+            virtual_reader.clone(),
         )
     })?;
 
     pipeline.try_resize(max_threads)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_fuse_parquet_source_pipeline(
     ctx: Arc<dyn TableContext>,
     pipeline: &mut Pipeline,
@@ -133,6 +139,7 @@ pub fn build_fuse_parquet_source_pipeline(
     mut max_threads: usize,
     mut max_io_requests: usize,
     index_reader: Arc<Option<AggIndexReader>>,
+    virtual_reader: Arc<Option<VirtualColumnReader>>,
 ) -> Result<()> {
     (max_threads, max_io_requests) =
         adjust_threads_and_request(false, max_threads, max_io_requests, plan);
@@ -155,6 +162,7 @@ pub fn build_fuse_parquet_source_pipeline(
                         block_reader.clone(),
                         partitions.clone(),
                         index_reader.clone(),
+                        virtual_reader.clone(),
                     )?,
                 );
             }
@@ -177,6 +185,7 @@ pub fn build_fuse_parquet_source_pipeline(
                         block_reader.clone(),
                         partitions.clone(),
                         index_reader.clone(),
+                        virtual_reader.clone(),
                     )?,
                 );
             }
@@ -195,9 +204,11 @@ pub fn build_fuse_parquet_source_pipeline(
         DeserializeDataTransform::create(
             ctx.clone(),
             block_reader.clone(),
+            plan,
             transform_input,
             transform_output,
             index_reader.clone(),
+            virtual_reader.clone(),
         )
     })
 }
@@ -287,7 +298,7 @@ pub(crate) fn fill_internal_column_meta(
         block_id: block_meta.block_id,
         block_location: block_meta.block_location.clone(),
         segment_location: block_meta.segment_location.clone(),
-        snapshot_location: block_meta.snapshot_location.as_ref().unwrap().clone(),
+        snapshot_location: block_meta.snapshot_location.clone(),
         offsets,
     };
 

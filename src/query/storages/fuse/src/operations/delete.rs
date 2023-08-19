@@ -357,7 +357,6 @@ impl FuseTable {
             self.table_info.schema(),
             None,
             &range_block_metas,
-            None,
             base_snapshot.summary.block_count as usize,
             PruningStatistics::default(),
         )?;

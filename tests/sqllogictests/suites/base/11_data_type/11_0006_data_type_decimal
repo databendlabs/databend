@@ -909,3 +909,17 @@ query TT
 select 1.234::DECIMAL(76,3)::DECIMAL(2,1), 1.234::DECIMAL(76,3)::DECIMAL(6,4)
 ----
 1.2 1.2340
+
+statement ok
+create table t(c1 decimal(28))
+
+statement ok
+insert into t values(1.01);
+
+query T
+select * from t
+----
+1
+
+statement ok
+drop table t

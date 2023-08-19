@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
+use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
 use common_expression::ColumnId;
@@ -44,6 +45,7 @@ pub struct FieldDeserializationContext<'a> {
     pub(crate) num_rows: usize,
     pub(crate) compression: &'a Compression,
     pub(crate) uncompressed_buffer: &'a Option<Arc<UncompressedBuffer>>,
+    pub(crate) parquet_schema_descriptor: &'a Option<SchemaDescriptor>,
 }
 
 impl BlockReader {
@@ -104,7 +106,7 @@ impl BlockReader {
 
         // Get the merged IO read result.
         let merge_io_read_result = self
-            .read_columns_data_by_merge_io(settings, &meta.location.0, columns_meta)
+            .read_columns_data_by_merge_io(settings, &meta.location.0, columns_meta, &None)
             .await?;
 
         // Get the columns chunk.

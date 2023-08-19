@@ -375,6 +375,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Refresh aggregating index after new data written",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

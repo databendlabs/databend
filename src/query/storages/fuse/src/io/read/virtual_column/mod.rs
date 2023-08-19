@@ -12,18 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod compact_hook;
-mod grant;
-mod metrics;
-mod refresh_aggregating_index;
-mod table;
-mod util;
+mod virtual_column_reader;
+mod virtual_column_reader_native;
+mod virtual_column_reader_parquet;
 
-pub use compact_hook::*;
-pub use grant::validate_grant_object_exists;
-pub use refresh_aggregating_index::hook_refresh_agg_index;
-pub use refresh_aggregating_index::RefreshAggIndexDesc;
-pub use table::check_referenced_computed_columns;
-pub use util::check_deduplicate_label;
-
-pub use self::metrics::*;
+pub use virtual_column_reader::VirtualColumnReader;
+pub use virtual_column_reader_parquet::VirtualMergeIOReadResult;
