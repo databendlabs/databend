@@ -115,7 +115,7 @@ opendal = { version = "0.39", features = [
 ethnum = { version = "1.3.2" }
 ordered-float = { version = "3.6.0", default-features = false }
 # TODO fix rev after PR merge
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "d009094" }
+jsonb = { git = "https://github.com/akoshchiy/jsonb", rev = "d009094" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
