@@ -32,10 +32,7 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
-use common_expression::Expr;
-use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_expression::TopKSorter;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
@@ -46,23 +43,16 @@ use common_pipeline_core::processors::Processor;
 use opendal::services::Memory;
 use opendal::Operator;
 
+use super::source::Parquet2SourceMeta;
+use crate::parquet2::parquet_reader::BlockIterator;
+use crate::parquet2::parquet_reader::IndexedReaders;
+use crate::parquet2::parquet_reader::Parquet2PartData;
+use crate::parquet2::parquet_reader::Parquet2Reader;
+use crate::parquet2::parquet_table::Parquet2PrewhereInfo;
+use crate::parquet2::pruning::PartitionPruner;
+use crate::parquet_part::Parquet2RowGroupPart;
 use crate::parquet_part::ParquetPart;
-use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_part::ParquetSmallFilesPart;
-use crate::parquet_reader::BlockIterator;
-use crate::parquet_reader::IndexedReaders;
-use crate::parquet_reader::ParquetPartData;
-use crate::parquet_reader::ParquetReader;
-use crate::processors::ParquetSourceMeta;
-
-#[derive(Clone)]
-pub struct ParquetPrewhereInfo {
-    pub func_ctx: FunctionContext,
-    pub reader: Arc<dyn ParquetReader>,
-    pub filter: Expr,
-    pub top_k: Option<(usize, TopKSorter)>,
-    // the usize is the index of the column in ParquetReader.schema
-}
 
 pub trait SmallFilePrunner: Send + Sync {
     fn prune_one_file(
@@ -70,10 +60,10 @@ pub trait SmallFilePrunner: Send + Sync {
         path: &str,
         op: &Operator,
         file_size: u64,
-    ) -> Result<Vec<ParquetRowGroupPart>>;
+    ) -> Result<Vec<Parquet2RowGroupPart>>;
 }
 
-pub struct ParquetDeserializeTransform {
+pub struct Parquet2DeserializeTransform {
     // Used for pipeline operations
     scan_progress: Arc<Progress>,
     input: Arc<InputPort>,
@@ -81,24 +71,24 @@ pub struct ParquetDeserializeTransform {
     output_data: Vec<DataBlock>,
 
     // data from input
-    parts: VecDeque<(PartInfoPtr, ParquetPartData)>,
+    parts: VecDeque<(PartInfoPtr, Parquet2PartData)>,
     current_row_group: Option<Box<dyn BlockIterator>>,
 
     src_schema: DataSchemaRef,
     output_schema: DataSchemaRef,
 
     // Used for prewhere reading and filtering
-    prewhere_info: Option<ParquetPrewhereInfo>,
+    prewhere_info: Option<Parquet2PrewhereInfo>,
 
     // Used for remain reading
-    remain_reader: Arc<dyn ParquetReader>,
+    remain_reader: Arc<Parquet2Reader>,
 
     // Used for reading from small files
-    source_reader: Arc<dyn ParquetReader>,
-    partition_pruner: Arc<dyn SmallFilePrunner>,
+    source_reader: Arc<Parquet2Reader>,
+    partition_pruner: Arc<PartitionPruner>,
 }
 
-impl ParquetDeserializeTransform {
+impl Parquet2DeserializeTransform {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
@@ -106,15 +96,15 @@ impl ParquetDeserializeTransform {
         output: Arc<OutputPort>,
         src_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
-        prewhere_info: Option<ParquetPrewhereInfo>,
-        source_reader: Arc<dyn ParquetReader>,
-        remain_reader: Arc<dyn ParquetReader>,
-        partition_pruner: Arc<dyn SmallFilePrunner>,
+        prewhere_info: Option<Parquet2PrewhereInfo>,
+        source_reader: Arc<Parquet2Reader>,
+        remain_reader: Arc<Parquet2Reader>,
+        partition_pruner: Arc<PartitionPruner>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
 
         Ok(ProcessorPtr::create(Box::new(
-            ParquetDeserializeTransform {
+            Parquet2DeserializeTransform {
                 scan_progress,
                 input,
                 output,
@@ -185,7 +175,7 @@ impl ParquetDeserializeTransform {
 
     fn process_row_group(
         &mut self,
-        part: &ParquetRowGroupPart,
+        part: &Parquet2RowGroupPart,
         readers: &mut IndexedReaders,
     ) -> Result<Option<DataBlock>> {
         let row_selection = part
@@ -199,7 +189,7 @@ impl ParquetDeserializeTransform {
         }
 
         let data_block = match self.prewhere_info.as_mut() {
-            Some(ParquetPrewhereInfo {
+            Some(Parquet2PrewhereInfo {
                 func_ctx,
                 reader,
                 filter,
@@ -324,7 +314,7 @@ impl ParquetDeserializeTransform {
     }
 }
 
-impl Processor for ParquetDeserializeTransform {
+impl Processor for Parquet2DeserializeTransform {
     fn name(&self) -> String {
         String::from("ParquetDeserializeTransform")
     }
@@ -359,7 +349,7 @@ impl Processor for ParquetDeserializeTransform {
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
             let source_meta = data_block.take_meta().unwrap();
-            let source_meta = ParquetSourceMeta::downcast_from(source_meta).unwrap();
+            let source_meta = Parquet2SourceMeta::downcast_from(source_meta).unwrap();
 
             self.parts = VecDeque::from(source_meta.parts);
             return Ok(Event::Sync);
@@ -387,12 +377,12 @@ impl Processor for ParquetDeserializeTransform {
         if let Some((part, data)) = self.parts.pop_front() {
             let part = ParquetPart::from_part(&part)?;
             match (&part, data) {
-                (ParquetPart::RowGroup(rg), ParquetPartData::RowGroup(mut reader)) => {
+                (ParquetPart::Parquet2RowGroup(rg), Parquet2PartData::RowGroup(mut reader)) => {
                     if let Some(block) = self.process_row_group(rg, &mut reader)? {
                         self.add_block(block)?;
                     }
                 }
-                (ParquetPart::SmallFiles(p), ParquetPartData::SmallFiles(buffers)) => {
+                (ParquetPart::SmallFiles(p), Parquet2PartData::SmallFiles(buffers)) => {
                     let blocks = self.process_small_files(p, buffers)?;
                     self.add_block(DataBlock::concat(&blocks)?)?;
                 }
