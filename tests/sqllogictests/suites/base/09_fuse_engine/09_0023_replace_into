@@ -1,4 +1,7 @@
 statement ok
+set enable_distributed_replace_into = 1;
+
+statement ok
 DROP DATABASE IF EXISTS db_09_0023
 
 statement ok
@@ -358,9 +361,9 @@ statement ok
 insert into test values(2, 2), (3, 2)
 
 
-# disable the auto re-clustering, so that the latter checking
+# disable the auto re-clustering
 statement ok
-set enable_auto_reclustering = 0;
+set enable_recluster_after_write = 0;
 
 statement ok
 replace into test on(a) values(3, 3), (4, 4)

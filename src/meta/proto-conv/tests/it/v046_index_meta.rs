@@ -52,6 +52,7 @@ fn test_decode_v46_index() -> anyhow::Result<()> {
             dropped_on: None,
             query,
             updated_on: None,
+            sync_creation: false,
         }
     };
 

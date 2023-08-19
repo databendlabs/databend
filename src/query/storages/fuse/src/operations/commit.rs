@@ -34,6 +34,7 @@ use common_meta_types::MatchSeq;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use common_sql::executor::MutationKind;
 use log::debug;
 use log::info;
 use log::warn;
@@ -61,7 +62,6 @@ use crate::operations::common::AbortOperation;
 use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
-use crate::operations::common::MutationKind;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeSegment;
 use crate::statistics::merge_statistics;
@@ -86,7 +86,8 @@ impl FuseTable {
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
+            let proc =
+                TransformSerializeSegment::new(ctx.clone(), input, output, self, block_thresholds);
             proc.into_processor()
         })?;
 
@@ -439,7 +440,7 @@ impl FuseTable {
 
             let fuse_segment_io = SegmentsIO::create(ctx, operator, schema);
             let concurrent_appended_segment_infos = fuse_segment_io
-                .read_segments::<Arc<SegmentInfo>>(concurrently_appended_segment_locations, true)
+                .read_segments::<SegmentInfo>(concurrently_appended_segment_locations, true)
                 .await?;
 
             let mut new_statistics = base_summary.clone();

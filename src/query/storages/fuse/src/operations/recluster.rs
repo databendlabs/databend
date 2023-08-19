@@ -29,13 +29,13 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::build_merge_sort_pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::CompoundBlockOperator;
+use common_sql::executor::MutationKind;
 use log::info;
 use storages_common_table_meta::meta::BlockMeta;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
-use crate::operations::common::MutationKind;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::common::TransformSerializeSegment;
@@ -96,7 +96,9 @@ impl FuseTable {
             DEFAULT_AVG_DEPTH_THRESHOLD,
         );
         let block_count = snapshot.summary.block_count;
-        let threshold = (block_count as f64 * avg_depth_threshold).max(1.0);
+        let threshold = (block_count as f64 * avg_depth_threshold)
+            .max(1.0)
+            .min(64.0);
         let mut mutator = ReclusterMutator::try_create(ctx.clone(), threshold, block_thresholds)?;
 
         let schema = self.table_info.schema();
@@ -161,7 +163,6 @@ impl FuseTable {
             self.table_info.schema(),
             None,
             &block_metas,
-            None,
             block_count,
             PruningStatistics::default(),
         )?;
@@ -260,7 +261,8 @@ impl FuseTable {
 
         pipeline.try_resize(1)?;
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
+            let proc =
+                TransformSerializeSegment::new(ctx.clone(), input, output, self, block_thresholds);
             proc.into_processor()
         })?;
 

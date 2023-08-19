@@ -44,7 +44,19 @@ columntest tid3
 columntest tid4
 
 statement ok
+drop view if exists default.test_v_t;
+
+statement ok
+create view default.test_v_t as select * from default.t;
+
+statement ok
 drop table default.t;
+
+statement ok
+select * from system.columns where table='test_v_t'
+
+statement ok
+drop view if exists default.test_v_t;
 
 statement ok
 DROP DATABASE COLUMNTEST

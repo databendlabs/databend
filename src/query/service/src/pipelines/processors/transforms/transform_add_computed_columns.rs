@@ -92,7 +92,10 @@ where Self: Transform
         let func_ctx = ctx.get_function_context()?;
         let expression_transform = CompoundBlockOperator {
             ctx: func_ctx,
-            operators: vec![BlockOperator::Map { exprs }],
+            operators: vec![BlockOperator::Map {
+                exprs,
+                projections: None,
+            }],
         };
 
         Ok(ProcessorPtr::create(Transformer::create(

@@ -103,6 +103,7 @@ message CsvFileFormatParams {
   string nan_display = 5;
   string escape = 6;
   string quote = 7;
+  string null_display = 8;
 }
 
 message TsvFileFormatParams {

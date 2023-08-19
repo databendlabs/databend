@@ -368,8 +368,10 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         ],
     };
     let expr = check(&expr, &BUILTIN_FUNCTIONS).unwrap();
-
-    let operators = vec![BlockOperator::Map { exprs: vec![expr] }];
+    let operators = vec![BlockOperator::Map {
+        exprs: vec![expr],
+        projections: None,
+    }];
 
     let stats_gen = ClusterStatsGenerator::new(
         0,

@@ -31,7 +31,6 @@ use storages_common_cache_manager::CachedObject;
 use storages_common_index::BloomIndexMeta;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 
@@ -77,7 +76,7 @@ impl FuseTable {
 
         let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
         let table_agg_index_ids = catalog
-            .list_indexes_by_table_id(ListIndexesByIdReq {
+            .list_index_ids_by_table_id(ListIndexesByIdReq {
                 tenant: ctx.get_tenant(),
                 table_id: self.get_id(),
             })
@@ -672,20 +671,22 @@ pub struct LocationTuple {
     pub bloom_location: HashSet<String>,
 }
 
-impl From<SegmentInfo> for LocationTuple {
-    fn from(value: SegmentInfo) -> Self {
+impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
+    type Error = ErrorCode;
+    fn try_from(value: Arc<CompactSegmentInfo>) -> Result<Self> {
         let mut block_location = HashSet::new();
         let mut bloom_location = HashSet::new();
-        for block_meta in &value.blocks {
+        let block_metas = value.block_metas()?;
+        for block_meta in block_metas.into_iter() {
             block_location.insert(block_meta.location.0.clone());
             if let Some(bloom_loc) = &block_meta.bloom_filter_index_location {
                 bloom_location.insert(bloom_loc.0.clone());
             }
         }
-        Self {
+        Ok(Self {
             block_location,
             bloom_location,
-        }
+        })
     }
 }
 

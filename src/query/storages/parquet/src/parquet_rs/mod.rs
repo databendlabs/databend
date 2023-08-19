@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod column_nodes;
-mod convert;
 mod parquet_reader;
 mod parquet_table;
-mod projection;
-pub(crate) mod pruning;
+mod pruning;
+mod source;
 mod statistics;
 
-pub use parquet_reader::ParquetReader;
-pub use parquet_table::ParquetTable;
-pub use pruning::ParquetPartitionPruner;
+pub use parquet_reader::ParquetRSReader;
+pub use parquet_table::ParquetRSTable;
+pub use pruning::ParquetRSPruner;

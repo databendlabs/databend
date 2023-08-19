@@ -48,7 +48,6 @@ The Databend storage layer is the Databend Fuse Engine and supports for cloud an
 | Azure Blob  | Yes     |
 | Aliyun OSS  | Yes     |
 | Tencent COS | Yes     |
-| Huawei OBS  | Yes     |
 | MinIO       | Yes     |
 | Ceph        | Yes     |
 | Wasabi      | Yes     |

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
@@ -88,17 +86,13 @@ pub struct InternalColumnMeta {
     pub block_id: usize,
     pub block_location: String,
     pub segment_location: String,
-    pub snapshot_location: String,
+    pub snapshot_location: Option<String>,
     /// The row offsets in the block.
     pub offsets: Option<Vec<usize>>,
 }
 
 #[typetag::serde(name = "internal_column_meta")]
 impl BlockMetaInfo for InternalColumnMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         InternalColumnMeta::downcast_ref_from(info).is_some_and(|other| self == other)
     }
@@ -213,9 +207,14 @@ impl InternalColumn {
                 )
             }
             InternalColumnType::SnapshotName => {
-                let mut builder =
-                    StringColumnBuilder::with_capacity(1, meta.snapshot_location.len());
-                builder.put_str(&meta.snapshot_location);
+                let mut builder = StringColumnBuilder::with_capacity(
+                    1,
+                    meta.snapshot_location
+                        .clone()
+                        .unwrap_or("".to_string())
+                        .len(),
+                );
+                builder.put_str(&meta.snapshot_location.clone().unwrap_or("".to_string()));
                 builder.commit_row();
                 BlockEntry::new(
                     DataType::String,

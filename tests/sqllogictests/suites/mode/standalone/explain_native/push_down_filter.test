@@ -12,16 +12,20 @@ query T
 explain select name, json_path_query(details, '$.features.*') as all_features, json_path_query_first(details, '$.features.*') as first_feature from products where name = 'Laptop' and first_feature = '16GB' and all_features = '512GB';
 ----
 EvalScalar
-├── expressions: [products.name (#0), get(1)(json_path_query (#2)), json_path_query_first(products.details (#1), '$.features.*')]
+├── output columns: [products.name (#0), all_features (#3), first_feature (#4)]
+├── expressions: [get(1)(json_path_query (#2)), json_path_query_first(products.details (#1), '$.features.*')]
 ├── estimated rows: 0.12
 └── Filter
+    ├── output columns: [products.name (#0), products.details (#1), json_path_query (#2)]
     ├── filters: [is_true(TRY_CAST(get(1)(json_path_query (#2)) AS String NULL) = '512GB')]
     ├── estimated rows: 0.12
     └── ProjectSet
+        ├── output columns: [products.name (#0), products.details (#1), json_path_query (#2)]
         ├── estimated rows: 0.60
         ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
         └── TableScan
             ├── table: default.default.products
+            ├── output columns: [name (#0), details (#1)]
             ├── read rows: 3
             ├── read bytes: 358
             ├── partitions total: 1
@@ -39,13 +43,16 @@ query T
 explain select name, json_path_query(details, '$.features.*') as all_features, json_path_query_first(details, '$.features.*') as first_feature from products where name = 'Laptop' and first_feature = '16GB';
 ----
 EvalScalar
-├── expressions: [products.name (#0), get(1)(json_path_query (#2)), json_path_query_first(products.details (#1), '$.features.*')]
+├── output columns: [products.name (#0), all_features (#3), first_feature (#4)]
+├── expressions: [get(1)(json_path_query (#2)), json_path_query_first(products.details (#1), '$.features.*')]
 ├── estimated rows: 0.60
 └── ProjectSet
+    ├── output columns: [products.name (#0), products.details (#1), json_path_query (#2)]
     ├── estimated rows: 0.60
     ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
     └── TableScan
         ├── table: default.default.products
+        ├── output columns: [name (#0), details (#1)]
         ├── read rows: 3
         ├── read bytes: 358
         ├── partitions total: 1

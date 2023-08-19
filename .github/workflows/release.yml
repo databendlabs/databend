@@ -154,10 +154,10 @@ jobs:
           repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
 
   linux:
-    runs-on: [self-hosted, X64, Linux, 16c32g]
+    runs-on: [self-hosted, X64, Linux, 16c32g, gcp]
     needs: create_release
     env:
-      RUNNER_PROVIDER: aws
+      RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
@@ -226,11 +226,11 @@ jobs:
           target: ${{ steps.target.outputs.target }}
           repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
 
-  hive:
-    runs-on: [self-hosted, X64, Linux, 16c32g]
+  hdfs:
+    runs-on: [self-hosted, X64, Linux, 16c32g, gcp]
     needs: create_release
     env:
-      RUNNER_PROVIDER: aws
+      RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
@@ -258,8 +258,9 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ steps.target.outputs.target }}
-          artifacts: query
-          features: hive
+          artifacts: meta,query
+          category: hdfs
+          features: storage-hdfs
           upload: false
       - name: Pack binaries
         run: |
@@ -273,17 +274,17 @@ jobs:
           cp ./scripts/distribution/release-readme.txt release/${target}/readme.txt
           cp -r ./scripts/distribution/local-scripts/* release/${target}/scripts/
           cp -r ./scripts/distribution/package-scripts/* release/${target}/scripts/
-          tar -C ./release/${target} -czvf databend-hive-${version}-${target}.tar.gz bin configs systemd scripts readme.txt
+          tar -C ./release/${target} -czvf databend-hdfs-${version}-${target}.tar.gz bin configs systemd scripts readme.txt
       - name: generate sha256sums
         run: |
           target=${{ steps.target.outputs.target }}
           version=${{ needs.create_release.outputs.version }}
-          sha256sum databend-hive-${version}-${target}.tar.gz >> sha256-hive-${version}-${target}.txt
+          sha256sum databend-hdfs-${version}-${target}.tar.gz >> sha256-hdfs-${version}-${target}.txt
       - name: post sha256
         uses: actions/upload-artifact@v3
         with:
           name: sha256sums
-          path: sha256-hive-${{ needs.create_release.outputs.version }}-${{ steps.target.outputs.target }}.txt
+          path: sha256-hdfs-${{ needs.create_release.outputs.version }}-${{ steps.target.outputs.target }}.txt
           retention-days: 1
       - name: Publish Binaries
         uses: ./.github/actions/publish_binary
@@ -292,7 +293,7 @@ jobs:
           version: ${{ needs.create_release.outputs.version }}
           target: ${{ steps.target.outputs.target }}
           repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
-          mode: hive
+          category: hdfs
 
   testsuites:
     runs-on: ubuntu-latest
@@ -313,7 +314,7 @@ jobs:
 
   docker_combined:
     name: docker combined
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: ubuntu-latest
     needs: [create_release, linux]
     steps:
       - name: Checkout
@@ -323,13 +324,15 @@ jobs:
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
       - name: Download binaries for usage
         id: download_binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="${{ needs.create_release.outputs.version }}"
           declare -A platform_targets=( ["arm64"]="aarch64-unknown-linux-gnu" ["amd64"]="x86_64-unknown-linux-gnu")
           mkdir -p ./distro/
           for platform in ${!platform_targets[@]}; do
               target=${platform_targets[$platform]}
-              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
+              gh release download ${version} --pattern "databend-${version}-${target}.tar.gz" --dir distro/
               mkdir -p ./target/${target}/release
               tar x -C ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
               mkdir -p ./distro/linux/${platform}
@@ -369,7 +372,7 @@ jobs:
 
   docker_separate:
     name: docker separate
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: ubuntu-latest
     needs: [create_release, linux]
     strategy:
       fail-fast: false
@@ -388,13 +391,15 @@ jobs:
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
       - name: Download binaries for usage
         id: download_binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="${{ needs.create_release.outputs.version }}"
           declare -A platform_targets=( ["arm64"]="aarch64-unknown-linux-gnu" ["amd64"]="x86_64-unknown-linux-gnu")
           mkdir -p ./distro/
           for platform in ${!platform_targets[@]}; do
               target=${platform_targets[$platform]}
-              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
+              gh release download ${version} --pattern "databend-${version}-${target}.tar.gz" --dir distro/
               mkdir -p ./target/${target}/release
               tar x -C ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
               mkdir -p ./distro/linux/${platform}
@@ -432,7 +437,7 @@ jobs:
           file: ./docker/${{ matrix.distro }}/${{ matrix.service }}.Dockerfile
 
   distribution:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: ubuntu-latest
     needs: [create_release, linux]
     strategy:
       matrix:
@@ -457,11 +462,13 @@ jobs:
           echo 'target=${{ matrix.arch }}-unknown-linux-gnu' >> $GITHUB_OUTPUT
       - name: Download binaries for usage
         id: download_binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           target=${{ steps.target.outputs.target }}
           version="${{ needs.create_release.outputs.version }}"
           mkdir -p ./distro/
-          aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
+          gh release download ${version} --pattern "databend-${version}-${target}.tar.gz" --dir distro/
           tar x -C distro -f ./distro/databend-${version}-${target}.tar.gz
       - name: Build Packages
         id: build_packages
@@ -535,6 +542,7 @@ jobs:
       source: release
       source_id: ${{ needs.create_release.outputs.version }}
       version: ${{ needs.create_release.outputs.version }}
+      runner_provider: gcp
 
   bindings_python:
     needs: create_release

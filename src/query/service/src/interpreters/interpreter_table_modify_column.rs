@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::ModifyColumnAction;
 use common_ast::ast::TypeName;
@@ -37,6 +38,7 @@ use common_meta_types::MatchSeq;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
+use common_sql::field_default_value;
 use common_sql::plans::ModifyTableColumnPlan;
 use common_sql::plans::Plan;
 use common_sql::resolve_type_name;
@@ -191,11 +193,23 @@ impl ModifyTableColumnInterpreter {
     async fn do_set_data_type(
         &self,
         table: &Arc<dyn Table>,
-        column_name_types: &Vec<(Identifier, TypeName)>,
+        column_name_types: &Vec<(Identifier, TypeName, Option<Expr>)>,
     ) -> Result<PipelineBuildResult> {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
+
+        // first check default expr before lock table
+        for (column, _type_name, default_expr_opt) in column_name_types {
+            let column = column.to_string();
+            if let Ok(i) = schema.index_of(&column) {
+                if let Some(default_expr) = default_expr_opt {
+                    let default_expr = default_expr.to_string();
+                    new_schema.fields[i].default_expr = Some(default_expr);
+                    let _ = field_default_value(self.ctx.clone(), &new_schema.fields[i])?;
+                }
+            }
+        }
 
         // Add table lock heartbeat.
         let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
@@ -219,7 +233,7 @@ impl ModifyTableColumnInterpreter {
             }
         }
 
-        for (column, type_name) in column_name_types {
+        for (column, type_name, _default_expr_opt) in column_name_types {
             let column = column.to_string();
             if let Ok(i) = schema.index_of(&column) {
                 let new_type = resolve_type_name(type_name)?;
@@ -292,7 +306,10 @@ impl ModifyTableColumnInterpreter {
             } => {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                (builder1.build(&s_expr).await?, bind_context.columns.clone())
+                (
+                    builder1.build(&s_expr, bind_context.column_set()).await?,
+                    bind_context.columns.clone(),
+                )
             }
             _ => unreachable!(),
         };

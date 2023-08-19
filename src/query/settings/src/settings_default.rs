@@ -245,14 +245,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                    #[cfg(feature = "hive")]
                 ("enable_hive_parquet_predict_pushdown", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable hive parquet predict pushdown  by setting this variable to 1, default value: 1",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                    #[cfg(feature = "hive")]
                 ("hive_parquet_chunk_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(16384),
                     desc: "the max number of rows each read from parquet to databend processor",
@@ -328,15 +326,22 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("enable_distributed_replace_into", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable distributed execution of replace into.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("enable_aggregating_index_scan", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable scanning aggregating index data while querying.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("enable_auto_reclustering", DefaultSettingValue {
+
+                ("enable_recluster_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enables auto re-clustering.",
+                    desc: "Enables re-clustering after write(copy/replace-into).",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -361,6 +366,18 @@ impl DefaultSettings {
                 ("replace_into_bloom_pruning_max_column_number", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Max number of columns used by bloom pruning for replace-into statement.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("recluster_timeout_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(12 * 60 * 60),
+                    desc: "Sets the seconds that recluster final will be timeout.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Refresh aggregating index after new data written",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),

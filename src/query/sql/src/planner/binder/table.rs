@@ -73,7 +73,7 @@ use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use common_storages_parquet::Parquet2Table;
-use common_storages_parquet::ParquetTable;
+use common_storages_parquet::ParquetRSTable;
 use common_storages_result_cache::ResultCacheMetaManager;
 use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::ResultScan;
@@ -259,7 +259,7 @@ impl Binder {
                             parent = bind_context.parent.as_mut();
                         }
                         return Err(ErrorCode::UnknownTable(format!(
-                            "Unknown table '{table_name}'"
+                            "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
                         ))
                         .set_span(*span));
                     }
@@ -780,7 +780,7 @@ impl Binder {
                     )
                     .await?
                 } else {
-                    ParquetTable::create(
+                    ParquetRSTable::create(
                         stage_info.clone(),
                         files_info,
                         read_options,

@@ -19,16 +19,13 @@ use common_ast::ast::FormatTreeNode;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
 use common_profile::QueryProfileManager;
 use common_profile::SharedProcessorProfiles;
 use common_sql::executor::ProfileHelper;
+use common_sql::optimizer::ColumnSet;
 use common_sql::MetadataRef;
 use common_storages_result_cache::gen_result_cache_key;
 use common_storages_result_cache::ResultCacheReader;
@@ -51,7 +48,6 @@ use crate::sql::plans::Plan;
 
 pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
-    schema: DataSchemaRef,
     kind: ExplainKind,
     plan: Plan,
 }
@@ -60,10 +56,6 @@ pub struct ExplainInterpreter {
 impl Interpreter for ExplainInterpreter {
     fn name(&self) -> &str {
         "ExplainInterpreterV2"
-    }
-
-    fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
     }
 
     #[async_backtrace::framed]
@@ -75,6 +67,7 @@ impl Interpreter for ExplainInterpreter {
                 Plan::Query {
                     s_expr,
                     metadata,
+                    bind_context,
                     formatted_ast,
                     ..
                 } => {
@@ -85,7 +78,7 @@ impl Interpreter for ExplainInterpreter {
                     // It's because we need to get the same partitions as the original selecting plan.
                     let mut builder =
                         PhysicalPlanBuilder::new(metadata.clone(), ctx, formatted_ast.is_none());
-                    let plan = builder.build(s_expr).await?;
+                    let plan = builder.build(s_expr, bind_context.column_set()).await?;
                     self.explain_physical_plan(&plan, metadata, formatted_ast)
                         .await?
                 }
@@ -94,11 +87,14 @@ impl Interpreter for ExplainInterpreter {
 
             ExplainKind::JOIN => match &self.plan {
                 Plan::Query {
-                    s_expr, metadata, ..
+                    s_expr,
+                    metadata,
+                    bind_context,
+                    ..
                 } => {
                     let ctx = self.ctx.clone();
                     let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, true);
-                    let plan = builder.build(s_expr).await?;
+                    let plan = builder.build(s_expr, bind_context.column_set()).await?;
                     self.explain_join_order(&plan, metadata)?
                 }
                 _ => Err(ErrorCode::Unimplemented(
@@ -110,11 +106,17 @@ impl Interpreter for ExplainInterpreter {
                 Plan::Query {
                     s_expr,
                     metadata,
+                    bind_context,
                     ignore_result,
                     ..
                 } => {
-                    self.explain_analyze(s_expr, metadata, *ignore_result)
-                        .await?
+                    self.explain_analyze(
+                        s_expr,
+                        metadata,
+                        bind_context.column_set(),
+                        *ignore_result,
+                    )
+                    .await?
                 }
                 _ => Err(ErrorCode::Unimplemented(
                     "Unsupported EXPLAIN ANALYZE statement",
@@ -129,10 +131,17 @@ impl Interpreter for ExplainInterpreter {
 
             ExplainKind::Fragments => match &self.plan {
                 Plan::Query {
-                    s_expr, metadata, ..
+                    s_expr,
+                    metadata,
+                    bind_context,
+                    ..
                 } => {
-                    self.explain_fragments(*s_expr.clone(), metadata.clone())
-                        .await?
+                    self.explain_fragments(
+                        *s_expr.clone(),
+                        metadata.clone(),
+                        bind_context.column_set(),
+                    )
+                    .await?
                 }
                 _ => {
                     return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
@@ -160,14 +169,7 @@ impl Interpreter for ExplainInterpreter {
 
 impl ExplainInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Plan, kind: ExplainKind) -> Result<Self> {
-        let data_field = DataField::new("explain", DataType::String);
-        let schema = DataSchemaRefExt::create(vec![data_field]);
-        Ok(ExplainInterpreter {
-            ctx,
-            schema,
-            plan,
-            kind,
-        })
+        Ok(ExplainInterpreter { ctx, plan, kind })
     }
 
     pub fn explain_plan(&self, plan: &Plan) -> Result<Vec<DataBlock>> {
@@ -257,10 +259,11 @@ impl ExplainInterpreter {
         &self,
         s_expr: SExpr,
         metadata: MetadataRef,
+        required: ColumnSet,
     ) -> Result<Vec<DataBlock>> {
         let ctx = self.ctx.clone();
         let plan = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true)
-            .build(&s_expr)
+            .build(&s_expr, required)
             .await?;
 
         let root_fragment = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
@@ -282,10 +285,11 @@ impl ExplainInterpreter {
         &self,
         s_expr: &SExpr,
         metadata: &MetadataRef,
+        required: ColumnSet,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
-        let plan = builder.build(s_expr).await?;
+        let plan = builder.build(s_expr, required).await?;
         let mut build_res =
             build_query_pipeline(&self.ctx, &[], &plan, ignore_result, true).await?;
 

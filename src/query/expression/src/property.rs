@@ -18,6 +18,7 @@ use crate::types::boolean::BooleanDomain;
 use crate::types::decimal::Decimal128Type;
 use crate::types::decimal::Decimal256Type;
 use crate::types::decimal::DecimalDomain;
+use crate::types::decimal::DecimalScalar;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
@@ -368,6 +369,16 @@ impl Domain {
                 if min == max && !min.is_nan() =>
             {
                 Some(Scalar::Number(NumberScalar::Float64(*min)))
+            }
+            Domain::Decimal(DecimalDomain::Decimal128(SimpleDomain { min, max }, sz))
+                if min == max =>
+            {
+                Some(Scalar::Decimal(DecimalScalar::Decimal128(*min, *sz)))
+            }
+            Domain::Decimal(DecimalDomain::Decimal256(SimpleDomain { min, max }, sz))
+                if min == max =>
+            {
+                Some(Scalar::Decimal(DecimalScalar::Decimal256(*min, *sz)))
             }
             Domain::Boolean(BooleanDomain {
                 has_false: true,

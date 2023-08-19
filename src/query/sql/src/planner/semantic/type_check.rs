@@ -64,6 +64,8 @@ use common_functions::is_builtin_function;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use common_functions::GENERAL_WINDOW_FUNCTIONS;
+use common_license::license::Feature::VirtualColumns;
+use common_license::license_manager::get_license_manager;
 use common_users::UserApiProvider;
 use indexmap::IndexMap;
 use simsearch::SimSearch;
@@ -756,10 +758,12 @@ impl<'a> TypeChecker<'a> {
 
                     let in_window = self.in_window_function;
                     self.in_window_function = self.in_window_function || window.is_some();
+                    let in_aggregate_function = self.in_aggregate_function;
                     let (new_agg_func, data_type) = self
                         .resolve_aggregate_function(*span, &name, expr, *distinct, params, &args)
                         .await?;
                     self.in_window_function = in_window;
+                    self.in_aggregate_function = in_aggregate_function;
                     if let Some(window) = window {
                         // aggregate window function
                         let display_name = format!("{:#}", expr);
@@ -1069,6 +1073,14 @@ impl<'a> TypeChecker<'a> {
         window: &Window,
         func: WindowFuncType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if self.in_aggregate_function {
+            // Reset the state
+            self.in_aggregate_function = false;
+            return Err(ErrorCode::SemanticError(
+                "aggregate function calls cannot contain window function calls".to_string(),
+            )
+            .set_span(span));
+        }
         if self.in_window_function {
             // Reset the state
             self.in_window_function = false;
@@ -2843,6 +2855,19 @@ impl<'a> TypeChecker<'a> {
             .table(table_index)
             .table()
             .support_virtual_columns()
+        {
+            return None;
+        }
+
+        let license_manager = get_license_manager();
+        if license_manager
+            .manager
+            .check_enterprise_enabled(
+                &self.ctx.get_settings(),
+                self.ctx.get_tenant(),
+                VirtualColumns,
+            )
+            .is_err()
         {
             return None;
         }

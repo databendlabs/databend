@@ -20,7 +20,6 @@ use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::ComputedExpr;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_sql::plans::ShowCreateTablePlan;
@@ -49,10 +48,6 @@ impl ShowCreateTableInterpreter {
 impl Interpreter for ShowCreateTableInterpreter {
     fn name(&self) -> &str {
         "ShowCreateTableInterpreter"
-    }
-
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
     }
 
     #[async_backtrace::framed]

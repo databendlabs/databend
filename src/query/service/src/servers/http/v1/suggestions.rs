@@ -21,9 +21,9 @@ use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::procedures::admins::SuggestedBackgroundTasksProcedure;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::SessionType;
+use crate::table_functions::SuggestedBackgroundTasksSource;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SuggestionsResponse {
@@ -41,7 +41,7 @@ pub async fn list_suggestions(
         .create_query_context()
         .await
         .map_err(InternalServerError)?;
-    let suggestions = SuggestedBackgroundTasksProcedure::all_suggestions(context)
+    let suggestions = SuggestedBackgroundTasksSource::all_suggestions(context)
         .await
         .map_err(|err| poem::Error::from_string(err.message(), StatusCode::BAD_REQUEST))?;
     Ok(Json(SuggestionsResponse { suggestions }))

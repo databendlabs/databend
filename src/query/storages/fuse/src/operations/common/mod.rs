@@ -20,7 +20,6 @@ mod snapshot_generator;
 
 pub use abort_operation::AbortOperation;
 pub use mutation_accumulator::MutationAccumulator;
-pub use mutation_accumulator::MutationKind;
 pub use mutation_log::*;
 pub use processors::*;
 pub use snapshot_generator::*;

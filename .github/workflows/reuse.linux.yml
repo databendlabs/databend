@@ -8,14 +8,19 @@ on:
         type: string
         required: true
         default: 'debug'
+      runner_provider:
+        description: 'Self-hosted runner provider, aws or gcp'
+        type: string
+        required: true
+        default: 'aws'
 
 env:
   BUILD_PROFILE: ${{ inputs.build_profile }}
-  RUNNER_PROVIDER: aws
+  RUNNER_PROVIDER: ${{ inputs.runner_provider }}
 
 jobs:
   check:
-    runs-on: [self-hosted, X64, Linux, 8c16g]
+    runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -27,22 +32,30 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   license:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     outputs:
       license: ${{ steps.license.outputs.license }}
     steps:
       - uses: actions/checkout@v3
       - name: Get License from S3
-        id: license
+        if: inputs.runner_provider == 'aws'
         run: |
           aws s3 cp s3://databend-ci/misc/license.key license.key
           aws s3 cp s3://databend-ci/misc/license.json license.json
+      - name: Get License from GCS
+        if: inputs.runner_provider == 'gcp'
+        run: |
+          gcloud storage cp gs://databend-ci/misc/license.key license.key
+          gcloud storage cp gs://databend-ci/misc/license.json license.json
+      - name: Output License
+        id: license
+        run: |
           echo "license=$(cat license.key | base64 -w 0)" >> $GITHUB_OUTPUT
           cat license.json
 
   build:
     name: build_${{ matrix.arch }}_${{ matrix.libc }}
-    runs-on: [self-hosted, X64, Linux, 16c32g]
+    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
         include:
@@ -61,7 +74,7 @@ jobs:
 
   build_other:
     name: build_${{ matrix.arch }}_${{ matrix.libc }}
-    runs-on: [self-hosted, X64, Linux, 8c16g]
+    runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
         include:
@@ -81,7 +94,7 @@ jobs:
           artifacts: query
 
   test_unit:
-    runs-on: [self-hosted, X64, Linux, 8c16g]
+    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -91,7 +104,7 @@ jobs:
         timeout-minutes: 30
 
   test_metactl:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     steps:
       - uses: actions/checkout@v3
@@ -99,7 +112,7 @@ jobs:
         timeout-minutes: 10
 
   test_meta-data-compat-openraft-07:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     steps:
       - uses: actions/checkout@v3
@@ -107,7 +120,7 @@ jobs:
         timeout-minutes: 10
 
   test_compat:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     steps:
       - uses: actions/checkout@v3
@@ -115,7 +128,7 @@ jobs:
         timeout-minutes: 10
 
   test_compat_fuse:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     steps:
       - uses: actions/checkout@v3
@@ -123,7 +136,7 @@ jobs:
         timeout-minutes: 20
 
   test_meta_cluster:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     steps:
       - uses: actions/checkout@v3
@@ -132,7 +145,7 @@ jobs:
 
   sqllogic_management_mode:
     name: sqllogic_${{ matrix.dirs }}
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     strategy:
       matrix:
@@ -150,7 +163,7 @@ jobs:
 
   sqllogic_standalone:
     name: sqllogic_standalone_${{ matrix.dirs }}
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     strategy:
       matrix:
@@ -178,7 +191,7 @@ jobs:
 
   sqllogic_standalone_with_native:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     strategy:
       matrix:
@@ -207,7 +220,7 @@ jobs:
 
   sqllogic_standalone_ee:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
-    runs-on: [ self-hosted, X64, Linux, 4c8g ]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     if: needs.license.outputs.license
     needs: [build, license]
     strategy:
@@ -241,7 +254,7 @@ jobs:
 
   sqllogic_cluster:
     name: sqllogic_cluster_${{ matrix.dirs }}
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     strategy:
       matrix:
@@ -269,7 +282,7 @@ jobs:
 
   sqllogic_cluster_large:
     name: sqllogic_cluster_${{ matrix.dirs }}
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     strategy:
       matrix:
@@ -292,7 +305,7 @@ jobs:
           name: test-sqllogic-cluster-${{ matrix.handlers }}-${{ matrix.dirs }}
 
   test_stateless_standalone:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     steps:
       - uses: actions/checkout@v3
@@ -300,7 +313,7 @@ jobs:
         timeout-minutes: 10
 
   test_stateless_cluster:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     steps:
       - uses: actions/checkout@v3
@@ -308,7 +321,7 @@ jobs:
         timeout-minutes: 10
 
   test_stateful_standalone:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     steps:
       - uses: actions/checkout@v3
@@ -321,7 +334,7 @@ jobs:
           name: test-stateful-standalone-linux
 
   test_stateful_sharing:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     steps:
       - uses: actions/checkout@v3
@@ -335,12 +348,12 @@ jobs:
           name: test-stateful-sharing-linux
 
   test_stateful_cluster:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_cluster_linux
-        timeout-minutes: 10
+        timeout-minutes: 15
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
@@ -349,7 +362,7 @@ jobs:
 
   test_stateful_large_data:
     if: contains(github.event.pull_request.labels.*.name, 'ci-largedata')
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     steps:
       - uses: actions/checkout@v3
@@ -357,7 +370,7 @@ jobs:
         timeout-minutes: 60
 
   test_fuzz_standalone:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     steps:
       - uses: actions/checkout@v3
@@ -367,7 +380,7 @@ jobs:
 
   test_ee_standalone:
     needs: [build, license]
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     if: needs.license.outputs.license
     steps:
       - uses: actions/checkout@v3
@@ -387,7 +400,7 @@ jobs:
 
   test_ee_standalone_background:
     needs: [build, license]
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     if: needs.license.outputs.license
     steps:
       - uses: actions/checkout@v3

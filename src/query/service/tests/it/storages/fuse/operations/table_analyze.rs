@@ -140,7 +140,7 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
             put_cache: false,
         };
         let compact_segment = segment_reader.read(&param).await?;
-        let segment_info = SegmentInfo::try_from(compact_segment.as_ref())?;
+        let segment_info = SegmentInfo::try_from(compact_segment)?;
         merge_statistics_mut(
             &mut segment_summary,
             &segment_info.summary,

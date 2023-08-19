@@ -71,6 +71,18 @@ impl TableArgs {
         }
     }
 
+    pub fn expect_all_strings(args: Vec<Scalar>) -> Result<Vec<String>> {
+        args.into_iter()
+            .map(|arg| {
+                let arg = arg
+                    .into_string()
+                    .map_err(|_| ErrorCode::BadArguments("Expected string argument"))?;
+
+                Ok(String::from_utf8(arg)?)
+            })
+            .collect::<Result<Vec<_>>>()
+    }
+
     /// Check TableArgs only contain named args.
     ///
     /// Returns the map of named args.

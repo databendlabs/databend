@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_sql::plans::Plan;
 use common_sql::PlanExtras;
@@ -240,7 +241,13 @@ impl ExecuteState {
         let ctx_clone = ctx.clone();
         let block_sender_closer = block_sender.closer();
 
-        let res = execute(interpreter, ctx_clone, block_sender, executor_clone.clone());
+        let res = execute(
+            interpreter,
+            plan.schema(),
+            ctx_clone,
+            block_sender,
+            executor_clone.clone(),
+        );
         match CatchUnwindFuture::create(res).await {
             Ok(Err(err)) => {
                 Executor::stop(&executor_clone, Err(err.clone()), false).await;
@@ -259,6 +266,7 @@ impl ExecuteState {
 
 async fn execute(
     interpreter: Arc<dyn Interpreter>,
+    schema: DataSchemaRef,
     ctx: Arc<QueryContext>,
     block_sender: SizedChannelSender<DataBlock>,
     executor: Arc<RwLock<Executor>>,
@@ -276,7 +284,7 @@ async fn execute(
     let mut data_stream = data_stream_res.unwrap();
     match data_stream.next().await {
         None => {
-            let block = DataBlock::empty_with_schema(interpreter.schema());
+            let block = DataBlock::empty_with_schema(schema);
             block_sender.send(block, 0).await;
             Executor::stop(&executor, Ok(()), false).await;
             block_sender.close();
