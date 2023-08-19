@@ -12,5 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod mutator;
-mod processors;
+mod processor_merge_into_split;

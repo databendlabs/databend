@@ -90,6 +90,8 @@ use common_sql::executor::HashJoin;
 use common_sql::executor::Lambda;
 use common_sql::executor::Limit;
 use common_sql::executor::MaterializedCte;
+use common_sql::executor::MergeInto;
+use common_sql::executor::MergeIntoSource;
 use common_sql::executor::MutationAggregate;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
@@ -258,8 +260,10 @@ impl PipelineBuilder {
             PhysicalPlan::AsyncSourcer(async_sourcer) => self.build_async_sourcer(async_sourcer),
             PhysicalPlan::Deduplicate(deduplicate) => self.build_deduplicate(deduplicate),
             PhysicalPlan::ReplaceInto(replace) => self.build_replace_into(replace),
-            PhysicalPlan::MergeInto(_) => unimplemented!(),
-            PhysicalPlan::MergeIntoSource(_) => unimplemented!(),
+            PhysicalPlan::MergeInto(merge_into) => self.build_merge_into(merge_into),
+            PhysicalPlan::MergeIntoSource(merge_into_source) => {
+                self.build_merge_into_source(merge_into_source)
+            }
         }
     }
 
@@ -277,6 +281,16 @@ impl PipelineBuilder {
         // check if cast needed
         let cast_needed = select_schema != output_schema;
         Ok(cast_needed)
+    }
+
+    fn build_merge_into_source(&mut self, merge_into_source: &MergeIntoSource) -> Result<()> {
+        let MergeIntoSource { input, row_id_idx } = merge_into_source;
+        self.build_pipeline(input)?;
+        // we need to do type cast for insert data, no need for update,
+        // because we have done it at eval_scalar phase.
+        // 1. split data_block as matched block and not-matched block
+
+        todo!()
     }
 
     fn build_deduplicate(&mut self, deduplicate: &Deduplicate) -> Result<()> {
@@ -382,6 +396,10 @@ impl PipelineBuilder {
                 .add_pipe(replace_into_processor.into_pipe());
         }
         Ok(())
+    }
+
+    fn build_merge_into(&mut self, merge_info: &MergeInto) -> Result<()> {
+        todo!()
     }
 
     fn build_replace_into(&mut self, replace: &ReplaceInto) -> Result<()> {

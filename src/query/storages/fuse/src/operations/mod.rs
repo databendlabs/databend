@@ -33,7 +33,6 @@ mod revert;
 mod truncate;
 mod update;
 pub mod util;
-
 pub use agg_index_sink::AggIndexSink;
 pub use common::BlockMetaIndex;
 pub use common::FillInternalColumnProcessor;

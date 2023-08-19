@@ -851,8 +851,6 @@ pub struct MergeIntoSource {
     // join result: target_columns, source_columns, target_table._row_id
     pub input: Box<PhysicalPlan>,
     pub row_id_idx: u32,
-    // used for duplicate-check
-    pub row_id_set: HashSet<u64>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

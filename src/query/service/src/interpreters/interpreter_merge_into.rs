@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ConstantFolder;
@@ -23,6 +24,7 @@ use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_meta_app::schema::TableInfo;
 use common_sql::executor::MergeInto;
 use common_sql::executor::MergeIntoSource;
 use common_sql::executor::PhysicalPlan;
@@ -34,10 +36,12 @@ use common_sql::TypeCheck;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
+use table_lock::TableLockHandlerWrapper;
 
 use super::Interpreter;
 use super::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 
 const DUMMY_COL_INDEX: usize = 1;
@@ -60,19 +64,34 @@ impl Interpreter for MergeIntoInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // Add table lock heartbeat.
-        // let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        // let mut heartbeat = handler
-        //     .try_lock(self.ctx.clone(), self.plan.table.clone())
-        //     .await?;
-        // self.build_physical_plan()?;
-        todo!()
+        let (physical_plan, table_info) = self.build_physical_plan().await?;
+        let mut build_res =
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
+                .await?;
+
+        // Add table lock heartbeat before execution.
+        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
+        let mut heartbeat = handler.try_lock(self.ctx.clone(), table_info).await?;
+
+        if build_res.main_pipeline.is_empty() {
+            heartbeat.shutdown().await?;
+        } else {
+            build_res.main_pipeline.set_on_finished(move |may_error| {
+                // shutdown table lock heartbeat.
+                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
+                match may_error {
+                    None => Ok(()),
+                    Some(error_code) => Err(error_code.clone()),
+                }
+            });
+        }
+        Ok(build_res)
     }
 }
 
 // todo:(JackTan25) computed exprs
 impl MergeIntoInterpreter {
-    async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
+    async fn build_physical_plan(&self) -> Result<(PhysicalPlan, TableInfo)> {
         let mut row_id_idx = -1;
         let MergePlan {
             bind_context,
@@ -114,7 +133,6 @@ impl MergeIntoInterpreter {
         let merge_into_source = PhysicalPlan::MergeIntoSource(MergeIntoSource {
             input: Box::new(join_input),
             row_id_idx: row_id_idx as u32,
-            row_id_set: HashSet::new(),
         });
 
         let table = self.ctx.get_table(catalog, database, &table_name).await?;
@@ -220,13 +238,16 @@ impl MergeIntoInterpreter {
 
         // recv datablocks from matched upstream and unmatched upstream
         // transform and append data
-        Ok(PhysicalPlan::MergeInto(MergeInto {
-            input: Box::new(merge_into_source),
-            table_info: table_info.clone(),
-            catalog_info: catalog_.info(),
-            unmatched,
-            matched,
-        }))
+        Ok((
+            PhysicalPlan::MergeInto(MergeInto {
+                input: Box::new(merge_into_source),
+                table_info: table_info.clone(),
+                catalog_info: catalog_.info(),
+                unmatched,
+                matched,
+            }),
+            table_info.clone(),
+        ))
     }
 
     fn transform_scalar_expr2expr(
