@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod deserialize_transform;
-mod parquet_source;
+mod virtual_column_reader;
+mod virtual_column_reader_native;
+mod virtual_column_reader_parquet;
 
-pub(crate) use deserialize_transform::ParquetDeserializeTransform;
-pub(crate) use deserialize_transform::ParquetPrewhereInfo;
-pub(crate) use deserialize_transform::SmallFilePrunner;
-pub(crate) use parquet_source::AsyncParquetSource;
-pub(crate) use parquet_source::ParquetSourceMeta;
-pub(crate) use parquet_source::SyncParquetSource;
+pub use virtual_column_reader::VirtualColumnReader;
+pub use virtual_column_reader_parquet::VirtualMergeIOReadResult;

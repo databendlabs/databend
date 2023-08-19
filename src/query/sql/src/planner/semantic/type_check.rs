@@ -64,6 +64,8 @@ use common_functions::is_builtin_function;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use common_functions::GENERAL_WINDOW_FUNCTIONS;
+use common_license::license::Feature::VirtualColumns;
+use common_license::license_manager::get_license_manager;
 use common_users::UserApiProvider;
 use indexmap::IndexMap;
 use simsearch::SimSearch;
@@ -2853,6 +2855,19 @@ impl<'a> TypeChecker<'a> {
             .table(table_index)
             .table()
             .support_virtual_columns()
+        {
+            return None;
+        }
+
+        let license_manager = get_license_manager();
+        if license_manager
+            .manager
+            .check_enterprise_enabled(
+                &self.ctx.get_settings(),
+                self.ctx.get_tenant(),
+                VirtualColumns,
+            )
+            .is_err()
         {
             return None;
         }
