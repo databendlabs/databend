@@ -22,6 +22,7 @@ use std::str::FromStr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Instant;
 use std::time::SystemTime;
 
 use chrono_tz::Tz;
@@ -57,6 +58,7 @@ use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_sql::IndexType;
+use common_storage::common_metrics::copy::metrics_inc_filter_out_copied_files_request_milliseconds;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
@@ -657,10 +659,13 @@ impl TableContext for QueryContext {
         for chunk in files.chunks(batch_size) {
             let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
             let req = GetTableCopiedFileReq { table_id, files };
+            let start_reuqest = Instant::now();
             let copied_files = catalog
                 .get_table_copied_file_info(&tenant, database_name, req)
                 .await?
                 .file_info;
+            let cost_time = Instant::now().duration_since(start_reuqest).as_millis();
+            metrics_inc_filter_out_copied_files_request_milliseconds(cost_time as u64);
             // Colored
             for file in chunk {
                 if let Some(copied_file) = copied_files.get(&file.path) {
