@@ -268,6 +268,8 @@ impl MergeIntoInterpreter {
                 fuse_table.schema().as_ref().clone(),
             ))
         });
+
+        // build mutation_aggregate
         let physical_plan = PhysicalPlan::MutationAggregate(Box::new(MutationAggregate {
             input: Box::new(merge_into),
             snapshot: (*base_snapshot).clone(),
@@ -276,7 +278,7 @@ impl MergeIntoInterpreter {
             // let's use update first, we will do some optimizeations and select exact stragety
             mutation_kind: MutationKind::Update,
         }));
-        // build mutation_aggregate
+
         Ok((physical_plan, table_info.clone()))
     }
 

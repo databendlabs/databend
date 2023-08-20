@@ -275,6 +275,11 @@ impl Binder {
                     columns.insert(idx);
                 }
             }
+            if update_columns.len() != schema.num_fields() {
+                return Err(ErrorCode::BadArguments(
+                    "for now, we need to make sure the input schema same with table schema",
+                ));
+            }
             Ok(MatchedEvaluator {
                 condition,
                 update: Some(update_columns),
@@ -326,7 +331,11 @@ impl Binder {
         } else {
             table_schema.clone()
         };
-
+        if source_schema != table_schema {
+            return Err(ErrorCode::BadArguments(
+                "for now, we need to make sure the input schema same with table schema",
+            ));
+        }
         Ok(UnmatchedEvaluator {
             source_schema: Arc::new(source_schema.into()),
             condition,

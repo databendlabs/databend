@@ -442,6 +442,11 @@ impl PipelineBuilder {
                 merge_into_matched_processor.into_pipe_item(),
             ],
         ));
+
+        // todo:(JackTan25): process filling default columns
+        // because the datablock we recieve here may have different
+        // schema, so we can't just add build_filling_defalut_columns
+        // to solve it simply. we will add new processor in the later pr.
         Ok(())
     }
 
