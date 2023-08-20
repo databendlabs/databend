@@ -220,6 +220,7 @@ impl Binder {
             columns_set: Box::new(columns_set),
             matched_evaluators,
             unmatched_evaluators,
+            target_table_idx: table_index,
         })))
     }
 

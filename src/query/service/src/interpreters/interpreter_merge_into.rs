@@ -21,11 +21,12 @@ use common_expression::ConstantFolder;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
-use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_sql::executor::MergeInto;
 use common_sql::executor::MergeIntoSource;
+use common_sql::executor::MutationAggregate;
+use common_sql::executor::MutationKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
 use common_sql::plans::MergeInto as MergePlan;
@@ -35,6 +36,7 @@ use common_sql::TypeCheck;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
+use storages_common_table_meta::meta::TableSnapshot;
 use table_lock::TableLockHandlerWrapper;
 
 use super::Interpreter;
@@ -91,7 +93,6 @@ impl Interpreter for MergeIntoInterpreter {
 // todo:(JackTan25) computed exprs
 impl MergeIntoInterpreter {
     async fn build_physical_plan(&self) -> Result<(PhysicalPlan, TableInfo)> {
-        let mut row_id_idx = -1;
         let MergePlan {
             bind_context,
             input,
@@ -102,6 +103,7 @@ impl MergeIntoInterpreter {
             table,
             matched_evaluators,
             unmatched_evaluators,
+            target_table_idx,
             ..
         } = &self.plan;
         let table_name = table.clone();
@@ -113,15 +115,29 @@ impl MergeIntoInterpreter {
         // find row_id column index
         let join_output_schema = join_input.output_schema()?;
 
+        let mut row_id_idx = match meta_data
+            .read()
+            .row_id_index_by_table_index(*target_table_idx)
+        {
+            None => {
+                return Err(ErrorCode::InValidRowIdIndex(
+                    "can't get internal row_id_idx when running merge into",
+                ));
+            }
+            Some(row_id_idx) => row_id_idx,
+        };
+
+        let mut found_row_id = false;
         for (idx, data_filed) in join_output_schema.fields().into_iter().enumerate() {
-            if data_filed.name() == ROW_ID_COL_NAME {
-                row_id_idx = idx as i32;
+            if data_filed.name().to_string() == row_id_idx.to_string() {
+                row_id_idx = idx;
+                found_row_id = true;
                 break;
             }
         }
 
-        // we can't get row_id_idx, throw a exception
-        if row_id_idx == -1 {
+        // we can't get row_id_idx, throw an exception
+        if !found_row_id {
             return Err(ErrorCode::InValidRowIdIndex(
                 "can't get internal row_id_idx when running merge into",
             ));
@@ -222,7 +238,7 @@ impl MergeIntoInterpreter {
                     vec![]
                 } else {
                     // we don't need to real col_indices here, just give a
-                    // dummy index, that' ok.
+                    // dummy index, that's ok.
                     vec![DUMMY_COL_INDEX]
                 };
                 Some(update_plan.generate_update_list(
@@ -238,17 +254,30 @@ impl MergeIntoInterpreter {
         }
 
         // recv datablocks from matched upstream and unmatched upstream
-        // transform and append data
-        Ok((
-            PhysicalPlan::MergeInto(MergeInto {
-                input: Box::new(merge_into_source),
-                table_info: table_info.clone(),
-                catalog_info: catalog_.info(),
-                unmatched,
-                matched,
-            }),
-            table_info.clone(),
-        ))
+        // transform and append dat
+        let merge_into = PhysicalPlan::MergeInto(MergeInto {
+            input: Box::new(merge_into_source),
+            table_info: table_info.clone(),
+            catalog_info: catalog_.info(),
+            unmatched,
+            matched,
+            row_id_idx: row_id_idx as u32,
+        });
+        let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
+            Arc::new(TableSnapshot::new_empty_snapshot(
+                fuse_table.schema().as_ref().clone(),
+            ))
+        });
+        let physical_plan = PhysicalPlan::MutationAggregate(Box::new(MutationAggregate {
+            input: Box::new(merge_into),
+            snapshot: (*base_snapshot).clone(),
+            table_info: table_info.clone(),
+            catalog_info: catalog_.info(),
+            // let's use update first, we will do some optimizeations and select exact stragety
+            mutation_kind: MutationKind::Update,
+        }));
+        // build mutation_aggregate
+        Ok((physical_plan, table_info.clone()))
     }
 
     fn transform_scalar_expr2expr(

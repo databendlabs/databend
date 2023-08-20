@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::convert::TryFrom;
 use std::io::BufRead;
@@ -115,6 +116,8 @@ use common_storage::DataOperator;
 use common_storages_factory::Table;
 use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
+use common_storages_fuse::operations::merge_into::MergeIntoMatchedProcessor;
+use common_storages_fuse::operations::merge_into::MergeIntoNotMatchedProcessor;
 use common_storages_fuse::operations::merge_into::MergeIntoSplitProcessor;
 use common_storages_fuse::operations::replace_into::BroadcastProcessor;
 use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
@@ -301,7 +304,7 @@ impl PipelineBuilder {
         let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
 
         self.main_pipeline
-            .add_pipe(merge_into_split_processor.into_pipe()?);
+            .add_pipe(merge_into_split_processor.into_pipe());
 
         Ok(())
     }
@@ -412,8 +415,34 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_merge_into(&mut self, merge_info: &MergeInto) -> Result<()> {
-        todo!()
+    fn build_merge_into(&mut self, merge_into: &MergeInto) -> Result<()> {
+        let MergeInto {
+            input,
+            table_info,
+            catalog_info,
+            unmatched,
+            matched,
+            row_id_idx,
+        } = merge_into;
+
+        let tbl = self
+            .ctx
+            .build_table_by_table_info(catalog_info, table_info, None)?;
+        let merge_into_not_matched_processor =
+            MergeIntoNotMatchedProcessor::create(*row_id_idx, unmatched.clone())?;
+
+        let merge_into_matched_processor =
+            MergeIntoMatchedProcessor::create(matched.clone(), tbl.schema().clone())?;
+
+        self.main_pipeline.add_pipe(Pipe::create(
+            self.main_pipeline.input_len(),
+            self.main_pipeline.input_len(),
+            vec![
+                merge_into_not_matched_processor.into_pipe_item(),
+                merge_into_matched_processor.into_pipe_item(),
+            ],
+        ));
+        Ok(())
     }
 
     fn build_replace_into(&mut self, replace: &ReplaceInto) -> Result<()> {

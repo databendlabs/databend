@@ -15,4 +15,6 @@
 mod processor_merge_into_matched;
 mod processor_merge_into_not_matched;
 mod processor_merge_into_split;
+pub use processor_merge_into_matched::MergeIntoMatchedProcessor;
+pub use processor_merge_into_not_matched::MergeIntoNotMatchedProcessor;
 pub use processor_merge_into_split::MergeIntoSplitProcessor;

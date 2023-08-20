@@ -57,6 +57,7 @@ use crate::plans::ValidationMode;
 use crate::plans::WindowFuncFrame;
 use crate::ColumnBinding;
 use crate::IndexType;
+use crate::MetadataRef;
 
 pub type ColumnID = String;
 
@@ -859,7 +860,6 @@ pub struct MergeInto {
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
-    // pub matched: Vec<MatchedEvaluator>,
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs,projections)
     pub unmatched: Vec<(
         DataSchemaRef,
@@ -873,6 +873,7 @@ pub struct MergeInto {
         Option<RemoteExpr<String>>,
         Option<Vec<(FieldIndex, RemoteExpr<String>)>>,
     )>,
+    pub row_id_idx: u32,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -1188,9 +1189,9 @@ impl PhysicalPlan {
             PhysicalPlan::CteScan(plan) => plan.output_schema(),
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
+            PhysicalPlan::MergeIntoSource(plan) => plan.input.output_schema(),
             PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::MergeInto(_)
-            | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_) => Ok(DataSchemaRef::default()),
         }

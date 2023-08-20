@@ -54,6 +54,7 @@ pub struct MergeInto {
     pub meta_data: MetadataRef,
     pub matched_evaluators: Vec<MatchedEvaluator>,
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
+    pub target_table_idx: usize,
 }
 
 impl std::fmt::Debug for MergeInto {
