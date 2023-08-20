@@ -16,6 +16,7 @@ use std::any::Any;
 use std::ops::Deref;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_base::base::uuid;
 use common_catalog::plan::DataSourceInfo;
@@ -44,6 +45,7 @@ use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
 use dashmap::DashMap;
 use log::debug;
+use log::info;
 use opendal::Operator;
 use parking_lot::Mutex;
 
@@ -120,6 +122,8 @@ impl Table for StageTable {
         };
         let format = InputContext::get_input_format(&stage_info.stage_info.file_format_params)?;
         let operator = StageTable::get_op(&stage_info.stage_info)?;
+        let begin = Instant::now();
+        info!("getting split");
         let splits = format
             .get_splits(
                 files,
@@ -128,6 +132,12 @@ impl Table for StageTable {
                 &ctx.get_settings(),
             )
             .await?;
+
+        use metrics::increment_gauge;
+        increment_gauge!(
+            "stage_table_get_splits_execution_ms",
+            begin.elapsed().as_millis() as f64
+        );
 
         let partitions = splits
             .into_iter()
