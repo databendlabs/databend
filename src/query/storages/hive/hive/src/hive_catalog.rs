@@ -216,16 +216,14 @@ impl HiveCatalog {
             .map_err(from_thrift_error)
     }
 
-    fn do_get_table(
-        client: impl TThriftHiveMetastoreSyncClient,
-        sp: Option<StorageParams>,
+    fn get_table_meta(
+        client: &mut impl TThriftHiveMetastoreSyncClient,
         db_name: String,
         table_name: String,
-    ) -> Result<Arc<dyn Table>> {
-        let mut client = client;
+    ) -> Result<hive_metastore::Table> {
         let table = client.get_table(db_name.clone(), table_name.clone());
-        let table_meta = match table {
-            Ok(table_meta) => table_meta,
+        match table {
+            Ok(table_meta) => Ok(table_meta),
             Err(e) => {
                 if let thrift::Error::User(err) = &e {
                     if let Some(e) = err.downcast_ref::<hive_metastore::NoSuchObjectException>() {
@@ -234,10 +232,12 @@ impl HiveCatalog {
                         ));
                     }
                 }
-                return Err(from_thrift_error(e));
+                Err(from_thrift_error(e))
             }
-        };
+        }
+    }
 
+    fn handle_table_meta(table_meta: &hive_metastore::Table) -> Result<()> {
         if let Some(sd) = table_meta.sd.as_ref() {
             if let Some(input_format) = sd.input_format.as_ref() {
                 if input_format != "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat" {
@@ -255,6 +255,29 @@ impl HiveCatalog {
             }
         }
 
+        Ok(())
+    }
+
+    fn get_database(
+        client: &mut impl TThriftHiveMetastoreSyncClient,
+        db_name: String,
+    ) -> Result<Arc<dyn Database>> {
+        let thrift_db_meta = client.get_database(db_name).map_err(from_thrift_error)?;
+        let hive_database: HiveDatabase = thrift_db_meta.into();
+        let res: Arc<dyn Database> = Arc::new(hive_database);
+        Ok(res)
+    }
+
+    fn do_get_table(
+        client: impl TThriftHiveMetastoreSyncClient,
+        sp: Option<StorageParams>,
+        db_name: String,
+        table_name: String,
+    ) -> Result<Arc<dyn Table>> {
+        let mut client = client;
+        let table_meta = Self::get_table_meta(&mut client, db_name.clone(), table_name.clone())?;
+        Self::handle_table_meta(&table_meta)?;
+
         let fields = client
             .get_schema(db_name, table_name)
             .map_err(from_thrift_error)?;
@@ -263,15 +286,39 @@ impl HiveCatalog {
         Ok(res)
     }
 
+    fn do_get_all_tables(
+        client: impl TThriftHiveMetastoreSyncClient,
+        sp: Option<StorageParams>,
+        db_name: String,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let mut client = client;
+        let table_names = client
+            .get_all_tables(db_name.clone())
+            .map_err(from_thrift_error)?;
+        table_names
+            .iter()
+            .map(|table_name| {
+                let table_meta =
+                    Self::get_table_meta(&mut client, db_name.clone(), table_name.clone())?;
+                Self::handle_table_meta(&table_meta)?;
+
+                let fields = client
+                    .get_schema(db_name.clone(), table_name.clone())
+                    .map_err(from_thrift_error)?;
+                let table_info: TableInfo =
+                    super::converters::try_into_table_info(sp.clone(), table_meta, fields)?;
+                let res: Arc<dyn Table> = Arc::new(HiveTable::try_create(table_info)?);
+                Ok(res)
+            })
+            .collect()
+    }
+
     fn do_get_database(
         client: impl TThriftHiveMetastoreSyncClient,
         db_name: String,
     ) -> Result<Arc<dyn Database>> {
         let mut client = client;
-        let thrift_db_meta = client.get_database(db_name).map_err(from_thrift_error)?;
-        let hive_database: HiveDatabase = thrift_db_meta.into();
-        let res: Arc<dyn Database> = Arc::new(hive_database);
-        Ok(res)
+        Self::get_database(&mut client, db_name)
     }
 
     fn do_get_all_databases(
@@ -281,64 +328,7 @@ impl HiveCatalog {
         let db_names = client.get_all_databases().map_err(from_thrift_error)?;
         db_names
             .iter()
-            .map(|db_name| {
-                let thrift_db_meta = client.get_database(db_name.to_owned()).map_err(from_thrift_error)?;
-                let hive_database: HiveDatabase = thrift_db_meta.into();
-                let res: Arc<dyn Database> = Arc::new(hive_database);
-                Ok(res)
-            })
-            .collect()
-    }
-
-    fn do_get_all_tables(
-        client: impl TThriftHiveMetastoreSyncClient,
-        sp: Option<StorageParams>,
-        db_name: String,
-    ) -> Result<Vec<Arc<dyn Table>>> {
-        let mut client = client;
-        let table_names = client.get_all_tables(db_name.clone()).map_err(from_thrift_error)?;
-        table_names
-            .iter()
-            .map(|table_name| {
-                let table = client.get_table(db_name.clone(), table_name.clone());
-                let table_meta = match table {
-                    Ok(table_meta) => table_meta,
-                    Err(e) => {
-                        if let thrift::Error::User(err) = &e {
-                            if let Some(e) = err.downcast_ref::<hive_metastore::NoSuchObjectException>() {
-                                return Err(ErrorCode::TableInfoError(
-                                    e.message.clone().unwrap_or_default(),
-                                ));
-                            }
-                        }
-                        return Err(from_thrift_error(e));
-                    }
-                };
-        
-                if let Some(sd) = table_meta.sd.as_ref() {
-                    if let Some(input_format) = sd.input_format.as_ref() {
-                        if input_format != "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat" {
-                            return Err(ErrorCode::Unimplemented(format!(
-                                "only support parquet, {} not support",
-                                input_format
-                            )));
-                        }
-                    }
-                }
-        
-                if let Some(t) = table_meta.table_type.as_ref() {
-                    if t == "VIRTUAL_VIEW" {
-                        return Err(ErrorCode::Unimplemented("not support view table"));
-                    }
-                }
-        
-                let fields = client
-                    .get_schema(db_name.clone(), table_name.clone())
-                    .map_err(from_thrift_error)?;
-                let table_info: TableInfo = super::converters::try_into_table_info(sp.clone(), table_meta, fields)?;
-                let res: Arc<dyn Table> = Arc::new(HiveTable::try_create(table_info)?);
-                Ok(res)
-            })
+            .map(|db_name| Self::get_database(&mut client, db_name.to_owned()))
             .collect()
     }
 }
