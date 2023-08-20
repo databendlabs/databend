@@ -221,7 +221,7 @@ impl HiveCatalog {
         db_name: String,
         table_name: String,
     ) -> Result<hive_metastore::Table> {
-        let table = client.get_table(db_name.clone(), table_name.clone());
+        let table = client.get_table(db_name, table_name);
         match table {
             Ok(table_meta) => Ok(table_meta),
             Err(e) => {
