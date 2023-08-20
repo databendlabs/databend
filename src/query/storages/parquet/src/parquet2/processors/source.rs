@@ -32,15 +32,15 @@ use common_storage::common_metrics::copy::metrics_inc_copy_read_part_counter;
 use serde::Deserializer;
 use serde::Serializer;
 
-use crate::parquet_reader::ParquetPartData;
-use crate::parquet_reader::ParquetReader;
+use crate::parquet2::parquet_reader::Parquet2PartData;
+use crate::parquet2::parquet_reader::Parquet2Reader;
 use crate::ParquetPart;
 
-pub struct ParquetSourceMeta {
-    pub parts: Vec<(PartInfoPtr, ParquetPartData)>,
+pub struct Parquet2SourceMeta {
+    pub parts: Vec<(PartInfoPtr, Parquet2PartData)>,
 }
 
-impl Debug for ParquetSourceMeta {
+impl Debug for Parquet2SourceMeta {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ParquetSourceMeta")
             .field(
@@ -51,14 +51,14 @@ impl Debug for ParquetSourceMeta {
     }
 }
 
-impl serde::Serialize for ParquetSourceMeta {
+impl serde::Serialize for Parquet2SourceMeta {
     fn serialize<S>(&self, _: S) -> common_exception::Result<S::Ok, S::Error>
     where S: Serializer {
         unimplemented!("Unimplemented serialize ParquetSourceMeta")
     }
 }
 
-impl<'de> serde::Deserialize<'de> for ParquetSourceMeta {
+impl<'de> serde::Deserialize<'de> for Parquet2SourceMeta {
     fn deserialize<D>(_: D) -> common_exception::Result<Self, D::Error>
     where D: Deserializer<'de> {
         unimplemented!("Unimplemented deserialize ParquetSourceMeta")
@@ -66,7 +66,7 @@ impl<'de> serde::Deserialize<'de> for ParquetSourceMeta {
 }
 
 #[typetag::serde(name = "parquet_source")]
-impl BlockMetaInfo for ParquetSourceMeta {
+impl BlockMetaInfo for Parquet2SourceMeta {
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals ParquetSourceMeta")
     }
@@ -76,22 +76,25 @@ impl BlockMetaInfo for ParquetSourceMeta {
     }
 }
 
-pub struct SyncParquetSource {
+pub struct SyncParquet2Source {
     ctx: Arc<dyn TableContext>,
-    block_reader: Arc<dyn ParquetReader>,
+    block_reader: Arc<Parquet2Reader>,
 }
 
-impl SyncParquetSource {
+impl SyncParquet2Source {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        block_reader: Arc<dyn ParquetReader>,
+        block_reader: Arc<Parquet2Reader>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx.clone(), output, SyncParquetSource { ctx, block_reader })
+        SyncSourcer::create(ctx.clone(), output, SyncParquet2Source {
+            ctx,
+            block_reader,
+        })
     }
 }
 
-impl SyncSource for SyncParquetSource {
+impl SyncSource for SyncParquet2Source {
     const NAME: &'static str = "SyncParquetSource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
@@ -102,7 +105,7 @@ impl SyncSource for SyncParquetSource {
                 let data = self.block_reader.readers_from_blocking_io(part)?;
                 metrics_inc_copy_read_part_counter();
                 Ok(Some(DataBlock::empty_with_meta(Box::new(
-                    ParquetSourceMeta {
+                    Parquet2SourceMeta {
                         parts: vec![(part_clone, data)],
                     },
                 ))))
@@ -111,22 +114,22 @@ impl SyncSource for SyncParquetSource {
     }
 }
 
-pub struct AsyncParquetSource {
+pub struct AsyncParquet2Source {
     finished: bool,
     ctx: Arc<dyn TableContext>,
-    block_reader: Arc<dyn ParquetReader>,
+    block_reader: Arc<Parquet2Reader>,
 
     output: Arc<OutputPort>,
-    output_data: Option<Vec<(PartInfoPtr, ParquetPartData)>>,
+    output_data: Option<Vec<(PartInfoPtr, Parquet2PartData)>>,
 }
 
-impl AsyncParquetSource {
+impl AsyncParquet2Source {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        block_reader: Arc<dyn ParquetReader>,
+        block_reader: Arc<Parquet2Reader>,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(AsyncParquetSource {
+        Ok(ProcessorPtr::create(Box::new(AsyncParquet2Source {
             ctx,
             output,
             block_reader,
@@ -137,7 +140,7 @@ impl AsyncParquetSource {
 }
 
 #[async_trait::async_trait]
-impl Processor for AsyncParquetSource {
+impl Processor for AsyncParquet2Source {
     fn name(&self) -> String {
         String::from("AsyncParquetSource")
     }
@@ -161,7 +164,7 @@ impl Processor for AsyncParquetSource {
         }
 
         if let Some(parts) = self.output_data.take() {
-            let output = DataBlock::empty_with_meta(Box::new(ParquetSourceMeta { parts }));
+            let output = DataBlock::empty_with_meta(Box::new(Parquet2SourceMeta { parts }));
             self.output.push_data(Ok(output));
         }
 

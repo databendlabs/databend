@@ -18,6 +18,8 @@ pub mod bloom;
 pub mod meta;
 mod read_settings;
 mod snapshot_history_reader;
+mod utils;
+mod virtual_column;
 
 pub use agg_index::AggIndexReader;
 pub use block::BlockReader;
@@ -31,3 +33,5 @@ pub use meta::MetaReaders;
 pub use meta::TableSnapshotReader;
 pub use read_settings::ReadSettings;
 pub use snapshot_history_reader::SnapshotHistoryReader;
+pub use virtual_column::VirtualColumnReader;
+pub use virtual_column::VirtualMergeIOReadResult;

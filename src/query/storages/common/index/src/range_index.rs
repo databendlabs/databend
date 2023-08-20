@@ -13,6 +13,10 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_expression::types::decimal::Decimal128Type;
+use common_expression::types::decimal::Decimal256Type;
+use common_expression::types::decimal::DecimalDataType;
+use common_expression::types::decimal::DecimalDomain;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::SimpleDomain;
 use common_expression::types::string::StringDomain;
@@ -196,6 +200,22 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
                     min: DateType::try_downcast_scalar(&stat.min().as_ref()).unwrap(),
                     max: DateType::try_downcast_scalar(&stat.max().as_ref()).unwrap(),
                 }),
+                DataType::Decimal(dec) => match dec {
+                    DecimalDataType::Decimal128(sz) => Domain::Decimal(DecimalDomain::Decimal128(
+                        SimpleDomain {
+                            min: Decimal128Type::try_downcast_scalar(&stat.min().as_ref()).unwrap(),
+                            max: Decimal128Type::try_downcast_scalar(&stat.max().as_ref()).unwrap(),
+                        },
+                        *sz,
+                    )),
+                    DecimalDataType::Decimal256(sz) => Domain::Decimal(DecimalDomain::Decimal256(
+                        SimpleDomain {
+                            min: Decimal256Type::try_downcast_scalar(&stat.min().as_ref()).unwrap(),
+                            max: Decimal256Type::try_downcast_scalar(&stat.max().as_ref()).unwrap(),
+                        },
+                        *sz,
+                    )),
+                },
                 // Unsupported data type
                 _ => Domain::full(data_type),
             })

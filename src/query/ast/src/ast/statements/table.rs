@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::format;
 
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
@@ -743,8 +744,8 @@ pub enum ModifyColumnAction {
     SetMaskingPolicy(Identifier, String),
     // column name id
     UnsetMaskingPolicy(Identifier),
-    // vec<(column name id, type name)>
-    SetDataType(Vec<(Identifier, TypeName)>),
+    // vec<(column name id, type name, default expr)>
+    SetDataType(Vec<(Identifier, TypeName, Option<Expr>)>),
     // column name id
     ConvertStoredComputedColumn(Identifier),
 }
@@ -762,11 +763,15 @@ impl Display for ModifyColumnAction {
                 let ret = column_type_name_vec
                     .iter()
                     .enumerate()
-                    .map(|(i, (column, type_name))| {
+                    .map(|(i, (column, type_name, default_expr_opt))| {
+                        let default_expr_str = match default_expr_opt {
+                            Some(default_expr) => format!(" DEFAULT {}", default_expr),
+                            None => "".to_string(),
+                        };
                         if i > 0 {
-                            format!(" COLUMN {} {}", column, type_name)
+                            format!(" COLUMN {} {}{}", column, type_name, default_expr_str)
                         } else {
-                            format!("{} {}", column, type_name)
+                            format!("{} {}{}", column, type_name, default_expr_str)
                         }
                     })
                     .collect::<Vec<_>>()

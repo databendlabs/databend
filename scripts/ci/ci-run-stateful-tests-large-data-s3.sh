@@ -6,17 +6,31 @@ set -e
 
 TEST_ID=${TEST_ID:-$(date +%s)}
 
-echo "*************************************"
-echo "* Setting STORAGE_TYPE to S3.       *"
-echo "*                                   *"
-echo "* Please make sure that S3 backend  *"
-echo "* is ready, and configured properly.*"
-echo "*************************************"
-export STORAGE_TYPE=s3
-export STORAGE_S3_BUCKET=databend-ci
-export STORAGE_S3_REGION=us-east-2
-export STORAGE_S3_ROOT="stateful/${TEST_ID}"
-export STORAGE_ALLOW_INSECURE=true
+echo "*******************************************"
+echo "* Setting STORAGE_TYPE to Object Storage. *"
+echo "*                                         *"
+echo "* Please make sure that storage backend   *"
+echo "* is ready, and configured properly.      *"
+echo "*******************************************"
+case $RUNNER_PROVIDER in
+"aws")
+    export STORAGE_TYPE=s3
+    export STORAGE_S3_BUCKET=databend-ci
+    export STORAGE_S3_REGION=us-east-2
+    export STORAGE_S3_ROOT="stateful/${TEST_ID}"
+    export STORAGE_ALLOW_INSECURE=true
+    ;;
+"gcp")
+    export STORAGE_TYPE=gcs
+    export STORAGE_GCS_BUCKET=databend-ci
+    export STORAGE_GCS_REGION=us-central1
+    export STORAGE_GCS_ROOT="stateful/${TEST_ID}"
+    ;;
+*)
+    echo "Unknown provider: $RUNNER_PROVIDER"
+    exit 1
+    ;;
+esac
 
 echo "Install dependencies"
 python3 -m pip install --quiet mysql-connector-python
