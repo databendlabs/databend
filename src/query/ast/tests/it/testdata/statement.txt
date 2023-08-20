@@ -9078,10 +9078,10 @@ COPY INTO mytable
                     skip_header = 1
                 )
                 size_limit=10
-                max_files=1000;
+                max_files=3000;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 MAX_FILES = 500 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 MAX_FILES = 2000 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -9120,7 +9120,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
-        max_files: 500,
+        max_files: 2000,
         max_file_size: 0,
         split_size: 0,
         single: false,

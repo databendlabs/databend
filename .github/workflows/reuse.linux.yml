@@ -94,7 +94,7 @@ jobs:
           artifacts: query
 
   test_unit:
-    runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -353,7 +353,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_cluster_linux
-        timeout-minutes: 10
+        timeout-minutes: 15
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure

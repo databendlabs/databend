@@ -23,10 +23,11 @@ use serde::Deserializer;
 use serde::Serializer;
 
 use crate::io::MergeIOReadResult;
+use crate::io::VirtualMergeIOReadResult;
 
 pub enum DataSource {
     AggIndex((PartInfoPtr, MergeIOReadResult)),
-    Normal(MergeIOReadResult),
+    Normal((MergeIOReadResult, Option<VirtualMergeIOReadResult>)),
 }
 
 pub struct DataSourceMeta {

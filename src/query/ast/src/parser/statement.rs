@@ -44,7 +44,7 @@ use crate::rule;
 use crate::util::*;
 use crate::ErrorKind;
 
-const MAX_COPIED_FILES_NUM: usize = 500;
+const MAX_COPIED_FILES_NUM: usize = 2000;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),

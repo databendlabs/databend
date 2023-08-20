@@ -271,7 +271,7 @@ fn test_statement() {
                     skip_header = 1
                 )
                 size_limit=10
-                max_files=1000;"#,
+                max_files=3000;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 CONNECTION = (

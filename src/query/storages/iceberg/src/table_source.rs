@@ -24,6 +24,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
+use common_storages_parquet::ParquetPart;
 use common_storages_parquet::ParquetRSReader;
 
 use crate::partition::IcebergPartInfo;
@@ -60,11 +61,12 @@ impl AsyncSource for IcebergTableSource {
         if let Some(part) = self.ctx.get_partition() {
             let iceberg_part = IcebergPartInfo::from_part(&part)?;
             let block = match iceberg_part {
-                IcebergPartInfo::Parquet(parquet_part) => {
+                IcebergPartInfo::Parquet(ParquetPart::ParquetRSFile(parquet_part)) => {
                     self.parquet_reader
                         .read_block(self.ctx.clone(), &parquet_part.location)
                         .await?
                 }
+                _ => unreachable!(),
             };
             let block = check_block_schema(&self.output_schema, block)?;
             Ok(Some(block))

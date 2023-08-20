@@ -17,7 +17,7 @@ jobs:
     secrets: inherit
     with:
       build_profile: release
-      runner_provider: aws
+      runner_provider: gcp
 
   macos:
     needs: linux
