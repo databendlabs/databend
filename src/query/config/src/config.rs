@@ -1364,6 +1364,9 @@ pub struct QueryConfig {
     #[clap(long, default_value = "localhost")]
     pub rpc_tls_query_service_domain_name: String,
 
+    #[clap(long, default_value = "0")]
+    pub rpc_client_timeout_secs: u64,
+
     /// Table engine memory enabled
     #[clap(long, parse(try_from_str), default_value = "true")]
     pub table_engine_memory_enabled: bool,
@@ -1548,6 +1551,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             rpc_tls_server_key: self.rpc_tls_server_key,
             rpc_tls_query_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert,
             rpc_tls_query_service_domain_name: self.rpc_tls_query_service_domain_name,
+            rpc_client_timeout_secs: self.rpc_client_timeout_secs,
             table_engine_memory_enabled: self.table_engine_memory_enabled,
             wait_timeout_mills: self.wait_timeout_mills,
             max_query_log_size: self.max_query_log_size,
@@ -1621,6 +1625,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             rpc_tls_server_key: inner.rpc_tls_server_key,
             rpc_tls_query_server_root_ca_cert: inner.rpc_tls_query_server_root_ca_cert,
             rpc_tls_query_service_domain_name: inner.rpc_tls_query_service_domain_name,
+            rpc_client_timeout_secs: inner.rpc_client_timeout_secs,
             table_engine_memory_enabled: inner.table_engine_memory_enabled,
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
