@@ -545,10 +545,6 @@ pub enum TableReferenceElement {
         options: Vec<SelectStageOption>,
         alias: Option<TableAlias>,
     },
-    Values {
-        values: Vec<Vec<Expr>>,
-        alias: Option<TableAlias>,
-    },
 }
 
 pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
@@ -656,18 +652,10 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         },
     );
 
-    let values = map(
-        rule! {
-            "(" ~ VALUES ~ ^#comma_separated_list1(row_values) ~ ")" ~ #table_alias?
-        },
-        |(_, _, values, _, alias)| TableReferenceElement::Values { values, alias },
-    );
-
     let (rest, (span, elem)) = consumed(rule! {
         #aliased_stage
         | #table_function
         | #aliased_table
-        | #values
         | #subquery
         | #group
         | #join
@@ -761,11 +749,6 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                     alias,
                 }
             }
-            TableReferenceElement::Values { values, alias } => TableReference::Values {
-                span: transform_span(input.span.0),
-                values,
-                alias,
-            },
             _ => unreachable!(),
         };
         Ok(table_ref)
