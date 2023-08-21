@@ -93,8 +93,13 @@ impl Processor for ParquetSource {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let Some(mut stream) = self.stream.take() {
-            self.generated_data = self.reader.read_block(&mut stream).await?;
-            self.stream = Some(stream);
+            if let Some(block) = self.reader.read_block(&mut stream).await? {
+                self.generated_data = Some(block);
+                self.stream = Some(stream);
+            }
+            // else:
+            // If `read_block` returns `None`, it means the stream is finished.
+            // And we should try to build another stream (in next event loop).
         } else if let Some(part) = self.ctx.get_partition() {
             match ParquetPart::from_part(&part)? {
                 ParquetPart::ParquetRSFile(file) => {

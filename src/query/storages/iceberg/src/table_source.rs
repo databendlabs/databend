@@ -100,13 +100,19 @@ impl Processor for IcebergTableSource {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let Some(mut stream) = self.stream.take() {
-            self.generated_data = self
+            if let Some(block) = self
                 .parquet_reader
                 .read_block(&mut stream)
                 .await?
                 .map(|b| check_block_schema(&self.output_schema, b))
-                .transpose()?;
-            self.stream = Some(stream);
+                .transpose()?
+            {
+                self.generated_data = Some(block);
+                self.stream = Some(stream);
+            }
+            // else:
+            // If `read_block` returns `None`, it means the stream is finished.
+            // And we should try to build another stream (in next event loop).
         } else if let Some(part) = self.ctx.get_partition() {
             match IcebergPartInfo::from_part(&part)? {
                 IcebergPartInfo::Parquet(ParquetPart::ParquetRSFile(file)) => {
