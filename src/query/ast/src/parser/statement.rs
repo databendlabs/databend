@@ -44,7 +44,7 @@ use crate::rule;
 use crate::util::*;
 use crate::ErrorKind;
 
-const MAX_COPIED_FILES_NUM: usize = 500;
+const MAX_COPIED_FILES_NUM: usize = 2000;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
@@ -1995,12 +1995,18 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     )(i)
 }
 
-fn column_type(i: Input) -> IResult<(Identifier, TypeName)> {
+fn column_type(i: Input) -> IResult<(Identifier, TypeName, Option<Expr>)> {
     map(
         rule! {
-            #ident ~ #type_name
+            #ident ~ #type_name ~ (DEFAULT ~ ^#subexpr(NOT_PREC))?
         },
-        |(column, type_name)| (column, type_name),
+        |(column, type_name, default_expr_opt)| {
+            (
+                column,
+                type_name,
+                default_expr_opt.map(|default_expr| default_expr.1),
+            )
+        },
     )(i)
 }
 

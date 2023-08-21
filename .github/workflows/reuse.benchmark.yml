@@ -41,6 +41,7 @@ env:
 
 jobs:
   local:
+    if: inputs.runner_provider == 'aws'
     timeout-minutes: 60
     runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     strategy:
@@ -92,7 +93,6 @@ jobs:
           source_id: ${{ inputs.source_id }}
 
   cloud:
-    timeout-minutes: 90
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
@@ -112,7 +112,7 @@ jobs:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/benchmark_cloud
-        timeout-minutes: 60
+        timeout-minutes: 20
         id: benchmark
         with:
           sha: ${{ inputs.sha }}
@@ -127,7 +127,7 @@ jobs:
           cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
 
   comment:
-    needs: [local, cloud]
+    needs: cloud
     if: inputs.source == 'pr'
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     steps:
@@ -179,13 +179,13 @@ jobs:
           number: ${{ inputs.source_id }}
           token: ${{ github.token }}
           body: |
-            ![local](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=XLarge&color=blue&logo=icloud)
+            ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=XLarge&color=blue&logo=icloud)
             ## ClickBench Report
             * **hits**: https://repo.databend.rs/benchmark/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/hits.html
             * **tpch**: https://repo.databend.rs/benchmark/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/tpch.html
 
   archive:
-    needs: [local, cloud]
+    needs: cloud
     if: inputs.source == 'release'
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     strategy:

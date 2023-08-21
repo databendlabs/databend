@@ -85,6 +85,7 @@ fn test_statement() {
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"create table a (c decimal(38, 0))"#,
+        r#"create table a (c decimal(38))"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
@@ -193,7 +194,7 @@ fn test_statement() {
         r#"ALTER TABLE t DROP COLUMN b;"#,
         r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;"#,
         r#"ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY;"#,
-        r#"ALTER TABLE t MODIFY COLUMN a int, COLUMN b float;"#,
+        r#"ALTER TABLE t MODIFY COLUMN a int DEFAULT 1, COLUMN b float;"#,
         r#"ALTER TABLE t MODIFY COLUMN a int;"#,
         r#"ALTER TABLE t MODIFY COLUMN a DROP STORED;"#,
         r#"ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);"#,
@@ -270,7 +271,7 @@ fn test_statement() {
                     skip_header = 1
                 )
                 size_limit=10
-                max_files=1000;"#,
+                max_files=3000;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 CONNECTION = (
