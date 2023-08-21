@@ -528,17 +528,14 @@ pub async fn create_client(config: &InnerConfig, address: &str) -> Result<Flight
     } else {
         None
     };
-    match config.tls_query_cli_enabled() {
-        true => Ok(FlightClient::new(FlightServiceClient::new(
-            ConnectionFactory::create_rpc_channel(
-                address.to_owned(),
-                timeout,
-                Some(config.query.to_rpc_client_tls_config()),
-            )
-            .await?,
-        ))),
-        false => Ok(FlightClient::new(FlightServiceClient::new(
-            ConnectionFactory::create_rpc_channel(address.to_owned(), timeout, None).await?,
-        ))),
-    }
+
+    let rpc_tls_config = if config.tls_query_cli_enabled() {
+        Some(config.query.to_rpc_client_tls_config())
+    } else {
+        None
+    };
+
+    Ok(FlightClient::new(FlightServiceClient::new(
+        ConnectionFactory::create_rpc_channel(address.to_owned(), timeout, rpc_tls_config).await?,
+    )))
 }
