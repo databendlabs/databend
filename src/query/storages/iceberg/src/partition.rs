@@ -18,14 +18,14 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_parquet::ParquetRSPart;
+use common_storages_parquet::ParquetPart;
 
 /// # TODO
 ///
 /// - we should support different format.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum IcebergPartInfo {
-    Parquet(ParquetRSPart),
+    Parquet(ParquetPart),
 }
 
 impl IcebergPartInfo {

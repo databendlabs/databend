@@ -12,57 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
-use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::table::ParquetRSTable;
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
-pub struct ParquetRSPart {
-    pub location: String,
-}
-
-#[typetag::serde(name = "parquet_rs_part")]
-impl PartInfo for ParquetRSPart {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        info.as_any()
-            .downcast_ref::<ParquetRSPart>()
-            .is_some_and(|other| self == other)
-    }
-
-    fn hash(&self) -> u64 {
-        let mut s = DefaultHasher::new();
-        self.location.hash(&mut s);
-        s.finish()
-    }
-}
-
-impl ParquetRSPart {
-    pub fn from_part(info: &PartInfoPtr) -> Result<&ParquetRSPart> {
-        info.as_any()
-            .downcast_ref::<ParquetRSPart>()
-            .ok_or(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to ParquetRSPart.",
-            ))
-    }
-}
+use crate::parquet_part::ParquetRSFilePart;
+use crate::ParquetPart;
 
 impl ParquetRSTable {
     #[inline]
@@ -87,14 +49,17 @@ impl ParquetRSTable {
             .collect::<Vec<_>>(),
         };
 
-        // TODO:
-        // The second filed of `file_locations` is size of the file.
+        // TODO(parquet):
+        // The second field of `file_locations` is size of the file.
         // It will be used for judging if we need to read small parquet files at once to reduce IO.
         let partitions = file_locations
             .into_iter()
-            .map(
-                |(location, _)| Arc::new(Box::new(ParquetRSPart { location }) as Box<dyn PartInfo>),
-            )
+            .map(|(location, file_size)| {
+                Arc::new(Box::new(ParquetPart::ParquetRSFile(ParquetRSFilePart {
+                    location,
+                    file_size,
+                })) as Box<dyn PartInfo>)
+            })
             .collect();
 
         // TODO(parquet):

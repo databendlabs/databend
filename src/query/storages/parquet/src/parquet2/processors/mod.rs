@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod blocking_create;
-mod non_blocking_create;
-mod partition;
-mod read;
-mod table;
+mod deserialize_transform;
+mod source;
 
-pub use read::Parquet2PrewhereInfo;
-pub(crate) use table::arrow_to_table_schema;
-pub use table::Parquet2Table;
+pub use deserialize_transform::Parquet2DeserializeTransform;
+pub use source::AsyncParquet2Source;
+pub use source::SyncParquet2Source;

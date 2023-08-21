@@ -634,6 +634,13 @@ select 1 < ANY(SELECT 1.0)
 ----
 0
 
+query I
+select number from numbers(10) where number in (select unnest([1,2,3]))
+----
+1
+2
+3
+
 statement ok
 drop table if exists t1
 
