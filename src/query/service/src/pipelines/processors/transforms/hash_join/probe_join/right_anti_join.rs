@@ -20,10 +20,10 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
-use crate::pipelines::processors::JoinHashTable;
 
-impl JoinHashTable {
+impl HashJoinProbeState {
     pub(crate) fn probe_right_anti_join<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
@@ -58,7 +58,7 @@ impl JoinHashTable {
             occupied += match_count;
             if occupied >= max_block_size {
                 loop {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
@@ -122,7 +122,7 @@ impl JoinHashTable {
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
 
-        let data_blocks = self.row_space.chunks.read();
+        let data_blocks = self.hash_join_state.row_space.chunks.read();
         let data_blocks = data_blocks
             .iter()
             .map(|c| &c.data_block)
@@ -130,7 +130,10 @@ impl JoinHashTable {
         let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
         let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
 
         for (i, key) in keys_iter.enumerate() {
@@ -151,7 +154,7 @@ impl JoinHashTable {
             probe_indexes_len += 1;
             if occupied >= max_block_size {
                 loop {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
@@ -167,7 +170,7 @@ impl JoinHashTable {
                         None
                     };
                     let build_block = if is_build_projected {
-                        Some(self.row_space.gather(
+                        Some(self.hash_join_state.row_space.gather(
                             local_build_indexes,
                             &data_blocks,
                             &build_num_rows,
@@ -180,7 +183,11 @@ impl JoinHashTable {
                     if !result_block.is_empty() {
                         let (bm, all_true, all_false) = self.get_other_filters(
                             &result_block,
-                            self.hash_join_desc.other_predicate.as_ref().unwrap(),
+                            self.hash_join_state
+                                .hash_join_desc
+                                .other_predicate
+                                .as_ref()
+                                .unwrap(),
                         )?;
 
                         if all_true {
@@ -245,7 +252,7 @@ impl JoinHashTable {
             None
         };
         let build_block = if is_build_projected {
-            Some(self.row_space.gather(
+            Some(self.hash_join_state.row_space.gather(
                 &local_build_indexes[0..occupied],
                 &data_blocks,
                 &build_num_rows,
@@ -258,7 +265,11 @@ impl JoinHashTable {
         if !result_block.is_empty() {
             let (bm, all_true, all_false) = self.get_other_filters(
                 &result_block,
-                self.hash_join_desc.other_predicate.as_ref().unwrap(),
+                self.hash_join_state
+                    .hash_join_desc
+                    .other_predicate
+                    .as_ref()
+                    .unwrap(),
             )?;
 
             if all_true {

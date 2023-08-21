@@ -32,18 +32,6 @@ pub struct MarkJoinDesc {
     pub(crate) has_null: RwLock<bool>,
 }
 
-pub struct JoinState {
-    pub(crate) _build_indexes: RwLock<Vec<RowPtr>>,
-}
-
-impl JoinState {
-    pub fn create() -> Result<Self> {
-        Ok(JoinState {
-            _build_indexes: RwLock::new(Vec::with_capacity(1)),
-        })
-    }
-}
-
 pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<Expr>,
     pub(crate) probe_keys: Vec<Expr>,
@@ -52,7 +40,6 @@ pub struct HashJoinDesc {
     pub(crate) marker_join_desc: MarkJoinDesc,
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
-    pub(crate) join_state: JoinState,
 }
 
 impl HashJoinDesc {
@@ -80,7 +67,6 @@ impl HashJoinDesc {
                 // marker_index: join.marker_index,
             },
             from_correlated_subquery: join.from_correlated_subquery,
-            join_state: JoinState::create()?,
         })
     }
 

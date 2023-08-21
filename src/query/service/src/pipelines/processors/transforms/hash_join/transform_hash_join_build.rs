@@ -20,6 +20,7 @@ use common_expression::DataBlock;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinState;
 use crate::pipelines::processors::Processor;
 
@@ -38,27 +39,23 @@ pub struct TransformHashJoinBuild {
 
     input_data: Option<DataBlock>,
     step: HashJoinBuildStep,
-    join_state: Arc<dyn HashJoinState>,
+    build_state: Arc<HashJoinBuildState>,
     finalize_finished: bool,
 }
 
 impl TransformHashJoinBuild {
-    pub fn create(
+    pub fn try_create(
         input_port: Arc<InputPort>,
-        join_state: Arc<dyn HashJoinState>,
-    ) -> Box<dyn Processor> {
-        Box::new(TransformHashJoinBuild {
+        build_state: Arc<HashJoinBuildState>,
+    ) -> Result<Box<dyn Processor>> {
+        build_state.build_attach()?;
+        Ok(Box::new(TransformHashJoinBuild {
             input_port,
             input_data: None,
             step: HashJoinBuildStep::Running,
-            join_state,
+            build_state,
             finalize_finished: false,
-        })
-    }
-
-    pub fn attach(join_state: Arc<dyn HashJoinState>) -> Result<Arc<dyn HashJoinState>> {
-        join_state.build_attach()?;
-        Ok(join_state)
+        }))
     }
 }
 
@@ -80,7 +77,7 @@ impl Processor for TransformHashJoinBuild {
                 }
 
                 if self.input_port.is_finished() {
-                    self.join_state.build_done()?;
+                    self.build_state.row_space_build_done()?;
                     return Ok(Event::Async);
                 }
 
@@ -104,23 +101,23 @@ impl Processor for TransformHashJoinBuild {
     }
 
     fn interrupt(&self) {
-        self.join_state.interrupt()
+        self.build_state.hash_join_state.interrupt()
     }
 
     fn process(&mut self) -> Result<()> {
         match self.step {
             HashJoinBuildStep::Running => {
                 if let Some(data_block) = self.input_data.take() {
-                    self.join_state.build(data_block)?;
+                    self.build_state.build(data_block)?;
                 }
                 Ok(())
             }
             HashJoinBuildStep::Finalize => {
-                if let Some(task) = self.join_state.finalize_task() {
-                    self.join_state.finalize(task)
+                if let Some(task) = self.build_state.finalize_task() {
+                    self.build_state.finalize(task)
                 } else {
                     self.finalize_finished = true;
-                    self.join_state.finalize_done()
+                    self.build_state.build_done()
                 }
             }
             HashJoinBuildStep::FastReturn => unreachable!(),
@@ -130,8 +127,8 @@ impl Processor for TransformHashJoinBuild {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let HashJoinBuildStep::Running = &self.step {
-            self.join_state.wait_build_finish().await?;
-            if self.join_state.fast_return()? {
+            self.build_state.wait_row_space_build_finish().await?;
+            if self.build_state.hash_join_state.fast_return()? {
                 self.step = HashJoinBuildStep::FastReturn;
                 return Ok(());
             }
