@@ -510,6 +510,7 @@ fn flatten_plan_node_profile(
         | PhysicalPlan::AsyncSourcer(_)
         | PhysicalPlan::Deduplicate(_)
         | PhysicalPlan::ReplaceInto(_) => unreachable!(),
+        PhysicalPlan::FinalCommit(_) => unreachable!(),
     }
 
     Ok(())

@@ -86,6 +86,7 @@ use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
 use common_sql::executor::ExchangeSource;
 use common_sql::executor::Filter;
+use common_sql::executor::FinalCommit;
 use common_sql::executor::HashJoin;
 use common_sql::executor::Lambda;
 use common_sql::executor::Limit;
@@ -160,6 +161,7 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::MutationKind;
 
 pub struct PipelineBuilder {
     ctx: Arc<QueryContext>,
@@ -258,7 +260,25 @@ impl PipelineBuilder {
             PhysicalPlan::AsyncSourcer(async_sourcer) => self.build_async_sourcer(async_sourcer),
             PhysicalPlan::Deduplicate(deduplicate) => self.build_deduplicate(deduplicate),
             PhysicalPlan::ReplaceInto(replace) => self.build_replace_into(replace),
+            PhysicalPlan::FinalCommit(final_commit) => self.build_final_commit(final_commit),
         }
+    }
+
+    fn build_final_commit(&mut self, final_commit: &FinalCommit) -> Result<()> {
+        self.build_pipeline(&final_commit.input)?;
+        let tbl = self.ctx.build_table_by_table_info(
+            &final_commit.catalog_info,
+            &final_commit.table_info,
+            None,
+        )?;
+        let table = FuseTable::try_from_table(tbl.as_ref())?;
+        table.chain_commit_meta_merger(&mut self.main_pipeline, table.cluster_key_id())?;
+        let ctx: Arc<dyn TableContext> = self.ctx.clone();
+        table.chain_commit_sink(
+            &ctx,
+            &mut self.main_pipeline,
+            Arc::new(final_commit.snapshot.clone()),
+        )
     }
 
     fn check_schema_cast(
@@ -624,6 +644,13 @@ impl PipelineBuilder {
             )?;
             proc.into_processor()
         })?;
+        let ctx: Arc<dyn TableContext> = self.ctx.clone();
+        table.chain_mutation_aggregator(
+            &ctx,
+            &mut self.main_pipeline,
+            Arc::new(delete.snapshot.clone()),
+            MutationKind::Delete,
+        )?;
         Ok(())
     }
 

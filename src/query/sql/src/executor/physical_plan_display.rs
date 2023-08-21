@@ -24,6 +24,7 @@ use super::CopyIntoTable;
 use super::Deduplicate;
 use super::DeletePartial;
 use super::DistributedInsertSelect;
+use super::FinalCommit;
 use super::MutationAggregate;
 use super::ProjectSet;
 use super::ReplaceInto;
@@ -97,6 +98,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
+            PhysicalPlan::FinalCommit(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -448,6 +450,12 @@ impl Display for Deduplicate {
 impl Display for ReplaceInto {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Replace")
+    }
+}
+
+impl Display for FinalCommit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FinalCommit")
     }
 }
 

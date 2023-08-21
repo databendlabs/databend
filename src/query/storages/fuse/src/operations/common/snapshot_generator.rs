@@ -60,7 +60,7 @@ pub trait SnapshotGenerator {
     ) -> Result<TableSnapshot>;
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Default)]
 pub struct SnapshotChanges {
     pub removed_segment_indexes: Vec<usize>,
     pub added_segments: Vec<Option<Location>>,

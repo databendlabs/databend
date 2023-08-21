@@ -216,6 +216,7 @@ fn to_format_tree(
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
         PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan, metadata),
+        PhysicalPlan::FinalCommit(_) => Ok(FormatTreeNode::new("FinalCommit".to_string())),
     }
 }
 
