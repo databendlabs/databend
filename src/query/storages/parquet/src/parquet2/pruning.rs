@@ -51,9 +51,8 @@ use crate::parquet2::statistics::collect_row_group_stats;
 use crate::parquet2::statistics::BatchStatistics;
 use crate::parquet_part::collect_small_file_parts;
 use crate::parquet_part::ColumnMeta;
+use crate::parquet_part::Parquet2RowGroupPart;
 use crate::parquet_part::ParquetPart;
-use crate::parquet_part::ParquetRowGroupPart;
-use crate::processors::SmallFilePrunner;
 
 /// Prune parquet row groups and pages.
 pub struct PartitionPruner {
@@ -96,13 +95,13 @@ pub fn check_parquet_schema(
     Ok(())
 }
 
-impl SmallFilePrunner for PartitionPruner {
-    fn prune_one_file(
+impl PartitionPruner {
+    pub fn prune_one_file(
         &self,
         path: &str,
         op: &Operator,
         file_size: u64,
-    ) -> Result<Vec<ParquetRowGroupPart>> {
+    ) -> Result<Vec<Parquet2RowGroupPart>> {
         let blocking_op = op.blocking();
         let mut reader = blocking_op.reader(path)?;
         let file_meta = read_metadata_with_size(&mut reader, file_size).map_err(|e| {
@@ -111,16 +110,14 @@ impl SmallFilePrunner for PartitionPruner {
         let (_, parts) = self.read_and_prune_file_meta(path, file_meta, op.clone())?;
         Ok(parts)
     }
-}
 
-impl PartitionPruner {
     #[async_backtrace::framed]
     pub fn read_and_prune_file_meta(
         &self,
         path: &str,
         file_meta: FileMetaData,
         operator: Operator,
-    ) -> Result<(PartStatistics, Vec<ParquetRowGroupPart>)> {
+    ) -> Result<(PartStatistics, Vec<Parquet2RowGroupPart>)> {
         check_parquet_schema(
             &self.schema_descr,
             file_meta.schema(),
@@ -217,7 +214,7 @@ impl PartitionPruner {
                 });
             }
 
-            partitions.push(ParquetRowGroupPart {
+            partitions.push(Parquet2RowGroupPart {
                 location: path.to_string(),
                 num_rows: rg.num_rows(),
                 column_metas,
@@ -294,7 +291,7 @@ impl PartitionPruner {
                 max_compression_ratio = max_compression_ratio
                     .max(p.uncompressed_size() as f64 / p.compressed_size() as f64);
                 max_compressed_size = max_compressed_size.max(p.compressed_size());
-                partitions.push(ParquetPart::RowGroup(p));
+                partitions.push(ParquetPart::Parquet2RowGroup(p));
             }
             stats.partitions_total += sub_stats.partitions_total;
             stats.partitions_scanned += sub_stats.partitions_scanned;
