@@ -675,31 +675,12 @@ impl TableContext for QueryContext {
             );
             // Colored
             for file in chunk {
-                if let Some(copied_file) = copied_files.get(&file.path) {
-                    match &copied_file.etag {
-                        Some(copied_etag) => {
-                            if let Some(file_etag) = &file.etag {
-                                // Check the 7 bytes etag prefix.
-                                if file_etag.starts_with(copied_etag) {
-                                    continue;
-                                }
-                            }
-                        }
-                        None => {
-                            // etag is none, compare with content_length and last_modified.
-                            if copied_file.content_length == file.size
-                                && copied_file.last_modified == Some(file.last_modified)
-                            {
-                                continue;
-                            }
-                        }
+                if !copied_files.contains_key(&file.path) {
+                    results.push(file.clone());
+                    limit += 1;
+                    if limit == max_files {
+                        return Ok(results);
                     }
-                }
-
-                results.push(file.clone());
-                limit += 1;
-                if limit == max_files {
-                    return Ok(results);
                 }
             }
         }
