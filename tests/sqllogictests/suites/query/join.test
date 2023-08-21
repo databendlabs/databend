@@ -698,14 +698,14 @@ statement ok
 insert into t2 values(2, 6), (2, 8);
 
 query I
-select t1.a, t2.b, t1.b from t1 inner join t2 on t1.a = t2.a order by t2.b, t1.b;
+select t1.a, t2.b, t1.b from t1 inner join t2 on t1.a = t2.a order by t1.a, t2.b, t1.b;
 ----
 1 2 2
 1 4 2
 1 6 2
+1 8 2
+1 10 2
 2 6 2
 2 6 4
-1 8 2
 2 8 2
 2 8 4
-1 10 2
