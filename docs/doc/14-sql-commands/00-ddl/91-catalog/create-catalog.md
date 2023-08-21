@@ -22,12 +22,13 @@ CONNECTION = (
 )
 ```
 
-| Parameter             | Description                                                                                                               |
-|-----------------------|---------------------------------------------------------------------------------------------------------------------------|
-| TYPE                  | Type of the catalog: 'HIVE' for Hive catalog or 'ICEBERG' for Iceberg catalog.                                      |
-| ADDRESS               | Address of the Hive Metastore. Required for Hive catalog.                                                                |
-| URL                   | Location of the external storage linked to this catalog. This could be a bucket or a folder within a bucket. For example, 's3://databend-toronto/'.                       |
-| connection_parameter  | Connection parameters to establish connections with external storage. The required parameters vary based on the specific storage service and authentication methods. Refer to [Connection Parameters](../../../13-sql-reference/51-connect-parameters.md) for detailed information. |
+| Parameter             | Required? | Description                                                                                                               | 
+|-----------------------|-----------|---------------------------------------------------------------------------------------------------------------------------| 
+| TYPE                  | Yes       | Type of the catalog: 'HIVE' for Hive catalog or 'ICEBERG' for Iceberg catalog.                                      | 
+| ADDRESS               | No        | Address of the Hive Metastore. Required for Hive catalog.                                                                | 
+| URL                   | Yes       | Location of the external storage linked to this catalog. This could be a bucket or a folder within a bucket. For example, 's3://databend-toronto/'.                       | 
+| connection_parameter  | Yes       | Connection parameters to establish connections with external storage. The required parameters vary based on the specific storage service and authentication methods. Refer to [Connection Parameters](../../../13-sql-reference/51-connect-parameters.md) for detailed information. |
+
 
 ## Examples
 
