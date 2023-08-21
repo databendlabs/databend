@@ -13,61 +13,78 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashSet;
+use std::f32::consts::E;
 use std::sync::Arc;
 
-use ahash::HashMap;
-use ahash::HashMapExt;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
+use common_expression::Expr;
 use common_expression::RemoteExpr;
-use common_pipeline_core::pipe::Pipe;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_sql::evaluator::BlockOperator;
+use itertools::Itertools;
 
-use crate::operations::mutation::BlockIndex;
+type UnMatchedExprs = Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>;
 
-type UnMatchedExprs = Vec<(
-    DataSchemaRef,
-    Option<RemoteExpr>,
-    Vec<RemoteExpr>,
-    Vec<usize>,
-)>;
+struct InsertDataBlockMutation {
+    op: BlockOperator,
+    filter: Option<Expr>,
+}
+
 // need to evaluate expression and
 pub struct MergeIntoNotMatchedProcessor {
-    unmatched: Vec<(
-        DataSchemaRef,
-        Option<RemoteExpr>,
-        Vec<RemoteExpr>,
-        Vec<usize>,
-    )>,
-    // block_mutator, store new data after update,
-    // BlockIndex => (unmatched_expr_idx,(new_data,remain_columns))
-    updatede_block: HashMap<BlockIndex, HashMap<u32, (DataBlock, Vec<u32>)>>,
-    // store the row_id which is deleted/updated
-    block_mutation_row_offset: HashMap<BlockIndex, u32>,
-    row_id_idx: u32,
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
+    ops: Vec<InsertDataBlockMutation>,
+    input_data: Option<DataBlock>,
+    output_data: Option<DataBlock>,
 }
 
 impl MergeIntoNotMatchedProcessor {
-    pub fn create(row_id_idx: u32, unmatched: UnMatchedExprs) -> Result<Self> {
+    pub fn create(unmatched: UnMatchedExprs, input_schema: DataSchemaRef) -> Result<Self> {
+        let mut ops = Vec::<InsertDataBlockMutation>::with_capacity(unmatched.len());
+        for item in &unmatched {
+            let eval_projections: HashSet<usize> =
+                (input_schema.num_fields()..input_schema.num_fields() + item.2.len()).collect();
+
+            ops.push(InsertDataBlockMutation {
+                op: BlockOperator::Map {
+                    exprs: item
+                        .2
+                        .iter()
+                        .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
+                        .collect_vec(),
+                    projections: Some(eval_projections),
+                },
+                filter: match &item.1 {
+                    None => None,
+                    Some(expr) => Some(expr.as_expr(&BUILTIN_FUNCTIONS)),
+                },
+            })
+        }
+
         Ok(Self {
-            unmatched,
-            row_id_idx,
-            updatede_block: HashMap::new(),
-            block_mutation_row_offset: HashMap::new(),
             input_port: InputPort::create(),
             output_port: OutputPort::create(),
+            ops,
+            input_data: None,
+            output_data: None,
         })
     }
 
-    pub fn into_pipe_item(&self) -> PipeItem {
-        todo!()
+    pub fn into_pipe_item(self) -> PipeItem {
+        let input = self.input_port.clone();
+        let output_port = self.output_port.clone();
+        let processor_ptr = ProcessorPtr::create(Box::new(self));
+        PipeItem::create(processor_ptr, vec![input], vec![output_port])
     }
 }
 
@@ -82,7 +99,31 @@ impl Processor for MergeIntoNotMatchedProcessor {
     }
 
     fn event(&mut self) -> Result<Event> {
-        todo!()
+        let finished = self.input_port.is_finished() && self.output_data.is_none();
+        if finished {
+            self.output_port.finish();
+            return Ok(Event::Finished);
+        }
+
+        let mut pushed_something = false;
+
+        if self.output_port.can_push() {
+            if let Some(matched_data) = self.output_data.take() {
+                self.output_port.push_data(Ok(matched_data));
+                pushed_something = true
+            }
+        }
+
+        if pushed_something {
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input_port.has_data() {
+            self.input_data = Some(self.input_port.pull_data().unwrap()?);
+            return Ok(Event::Sync);
+        } else {
+            return Ok(Event::NeedData);
+        }
     }
 
     fn process(&mut self) -> Result<()> {

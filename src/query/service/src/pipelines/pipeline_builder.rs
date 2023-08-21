@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::convert::TryFrom;
 use std::io::BufRead;
@@ -424,15 +423,21 @@ impl PipelineBuilder {
             matched,
             row_id_idx,
         } = merge_into;
-
+        self.build_pipeline(input)?;
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
-        let merge_into_not_matched_processor =
-            MergeIntoNotMatchedProcessor::create(*row_id_idx, unmatched.clone())?;
+        let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
+            unmatched.clone(),
+            input.output_schema()?.clone(),
+        )?;
 
-        let merge_into_matched_processor =
-            MergeIntoMatchedProcessor::create(matched.clone(), tbl.schema().clone())?;
+        let merge_into_matched_processor = MergeIntoMatchedProcessor::create(
+            *row_id_idx,
+            matched.clone(),
+            tbl.schema().clone(),
+            input.output_schema()?.clone(),
+        )?;
 
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.input_len(),

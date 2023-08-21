@@ -11,8 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-mod merge_into_split_mutator;
-mod split_by_expr_mutator;
 
-pub use merge_into_split_mutator::MergeIntoSplitMutator;
-pub use split_by_expr_mutator::SplitByExprMutator;
+use common_expression::DataBlock;
+use common_expression::Expr;
+
+pub struct SplitByExprMutator {
+    expr: Option<Expr>,
+}
+
+impl SplitByExprMutator {
+    // first datablock statisfy expr, the second doesn't
+    pub fn split_by_expr(&self, data_block: DataBlock) -> (DataBlock, DataBlock) {
+        if self.expr.is_none() {
+            return (data_block, DataBlock::empty());
+        } else {
+            todo!()
+        }
+    }
+}

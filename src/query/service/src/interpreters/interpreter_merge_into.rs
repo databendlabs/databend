@@ -36,6 +36,7 @@ use common_sql::TypeCheck;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
+use itertools::Itertools;
 use storages_common_table_meta::meta::TableSnapshot;
 use table_lock::TableLockHandlerWrapper;
 
@@ -167,13 +168,11 @@ impl MergeIntoInterpreter {
 
         // transform unmatched for insert
         // reference to func `build_eval_scalar`
-        // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs,projections)
-        let mut unmatched = Vec::<(
-            DataSchemaRef,
-            Option<RemoteExpr>,
-            Vec<RemoteExpr>,
-            Vec<usize>,
-        )>::with_capacity(unmatched_evaluators.len());
+        // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
+        let mut unmatched =
+            Vec::<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>::with_capacity(
+                unmatched_evaluators.len(),
+            );
 
         for item in unmatched_evaluators {
             let filter = if let Some(filter_expr) = &item.condition {
@@ -187,31 +186,23 @@ impl MergeIntoInterpreter {
                 values_exprs
                     .push(self.transform_scalar_expr2expr(scalar_expr, join_output_schema.clone())?)
             }
-            let mut projections = Vec::<usize>::with_capacity(item.source_schema.num_fields());
-            for idx in 0..item.source_schema.num_fields() {
-                projections.push(join_output_schema.num_fields() + idx);
-            }
-            unmatched.push((
-                item.source_schema.clone(),
-                filter,
-                values_exprs,
-                projections,
-            ))
+
+            unmatched.push((item.source_schema.clone(), filter, values_exprs))
         }
 
         // the first option is used for condition
         // the second option is used to distinct update and delete
-        let mut matched = Vec::<(
-            Option<RemoteExpr<String>>,
-            Option<Vec<(FieldIndex, RemoteExpr<String>)>>,
-        )>::with_capacity(matched_evaluators.len());
+        let mut matched =
+            Vec::<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>::with_capacity(
+                matched_evaluators.len(),
+            );
 
         // transform matched for delete/update
         for item in matched_evaluators {
             let condition = if let Some(condition) = &item.condition {
-                let expr = condition
-                    .as_expr()?
-                    .project_column_ref(|col| col.column_name.clone());
+                let expr = self
+                    .transform_scalar_expr2expr(condition, join_output_schema.clone())?
+                    .as_expr(&BUILTIN_FUNCTIONS);
                 let (expr, _) = ConstantFolder::fold(
                     &expr,
                     &self.ctx.get_function_context()?,
@@ -241,11 +232,27 @@ impl MergeIntoInterpreter {
                     // dummy index, that's ok.
                     vec![DUMMY_COL_INDEX]
                 };
-                Some(update_plan.generate_update_list(
-                    self.ctx.clone(),
-                    fuse_table.schema().into(),
-                    col_indices,
-                )?)
+                let update_list: Vec<(FieldIndex, RemoteExpr<String>)> = update_plan
+                    .generate_update_list(
+                        self.ctx.clone(),
+                        fuse_table.schema().into(),
+                        col_indices,
+                    )?;
+                let update_list = update_list
+                    .iter()
+                    .map(|(idx, remote_expr)| {
+                        (
+                            *idx,
+                            remote_expr
+                                .as_expr(&BUILTIN_FUNCTIONS)
+                                .project_column_ref(|name| {
+                                    join_output_schema.index_of(name).unwrap()
+                                })
+                                .as_remote_expr(),
+                        )
+                    })
+                    .collect_vec();
+                Some(update_list)
             } else {
                 // delete
                 None

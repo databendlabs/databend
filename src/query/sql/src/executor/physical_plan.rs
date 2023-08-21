@@ -57,7 +57,6 @@ use crate::plans::ValidationMode;
 use crate::plans::WindowFuncFrame;
 use crate::ColumnBinding;
 use crate::IndexType;
-use crate::MetadataRef;
 
 pub type ColumnID = String;
 
@@ -860,19 +859,11 @@ pub struct MergeInto {
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
-    // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs,projections)
-    pub unmatched: Vec<(
-        DataSchemaRef,
-        Option<RemoteExpr>,
-        Vec<RemoteExpr>,
-        Vec<usize>,
-    )>,
+    // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
+    pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     // the first option stands for the condition
     // the second option stands for update/delete
-    pub matched: Vec<(
-        Option<RemoteExpr<String>>,
-        Option<Vec<(FieldIndex, RemoteExpr<String>)>>,
-    )>,
+    pub matched: Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>,
     pub row_id_idx: u32,
 }
 
