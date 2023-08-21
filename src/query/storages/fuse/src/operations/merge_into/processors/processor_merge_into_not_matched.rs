@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::HashSet;
-use std::f32::consts::E;
 use std::sync::Arc;
 
 use common_exception::Result;

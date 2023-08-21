@@ -12,20 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Result;
+use common_expression::types::BooleanType;
+use common_expression::types::DataType;
 use common_expression::DataBlock;
+use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FunctionContext;
+use common_functions::BUILTIN_FUNCTIONS;
 
 pub struct SplitByExprMutator {
     expr: Option<Expr>,
+    func_ctx: FunctionContext,
 }
 
 impl SplitByExprMutator {
     // first datablock statisfy expr, the second doesn't
-    pub fn split_by_expr(&self, data_block: DataBlock) -> (DataBlock, DataBlock) {
+    pub fn split_by_expr(&self, data_block: DataBlock) -> Result<(DataBlock, DataBlock)> {
         if self.expr.is_none() {
-            return (data_block, DataBlock::empty());
+            return Ok((data_block, DataBlock::empty()));
         } else {
-            todo!()
+            let filter = self.expr.as_ref().unwrap();
+            assert_eq!(filter.data_type(), &DataType::Boolean);
+
+            let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+
+            let predicates = evaluator
+                .run(filter)
+                .map_err(|e| e.add_message("eval filter failed:"))?
+                .try_downcast::<BooleanType>()
+                .unwrap();
+            let filter = predicates.into_column().unwrap();
+            data_block.split_filter_with_bitmap(&filter)
         }
     }
 }
