@@ -173,7 +173,7 @@ async-backtrace = "0.2.2"
 # observability
 logcall = "0.1.4"
 log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
-minitrace = "0.5"
+minitrace = "0.5.1"
 
 [profile.release]
 debug = 1
