@@ -134,7 +134,7 @@ fn merge_conflict_resolve_context(
                 .collect(),
             removed_statistics: merge_statistics(
                 &l.removed_statistics,
-                &r.added_statistics,
+                &r.removed_statistics,
                 default_cluster_key_id,
             ),
             added_statistics: merge_statistics(
