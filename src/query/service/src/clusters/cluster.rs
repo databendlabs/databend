@@ -237,10 +237,7 @@ impl ClusterDiscovery {
                 for node in &cluster_nodes {
                     if node.id != self.local_id {
                         let start_at = Instant::now();
-                        let timeout = Duration::from_secs(30);
-                        if let Err(cause) =
-                            create_client(config, &node.flight_address, timeout).await
-                        {
+                        if let Err(cause) = create_client(config, &node.flight_address).await {
                             warn!(
                                 "Cannot connect node [{:?}] after {:?}s, remove it in query. cause: {:?}",
                                 node.flight_address,
@@ -525,22 +522,23 @@ impl ClusterHeartbeat {
 }
 
 #[async_backtrace::framed]
-pub async fn create_client(
-    config: &InnerConfig,
-    address: &str,
-    timeout: Duration,
-) -> Result<FlightClient> {
+pub async fn create_client(config: &InnerConfig, address: &str) -> Result<FlightClient> {
+    let timeout = if config.query.rpc_client_timeout_secs > 0 {
+        Some(Duration::from_secs(config.query.rpc_client_timeout_secs))
+    } else {
+        None
+    };
     match config.tls_query_cli_enabled() {
         true => Ok(FlightClient::new(FlightServiceClient::new(
             ConnectionFactory::create_rpc_channel(
                 address.to_owned(),
-                Some(timeout),
+                timeout,
                 Some(config.query.to_rpc_client_tls_config()),
             )
             .await?,
         ))),
         false => Ok(FlightClient::new(FlightServiceClient::new(
-            ConnectionFactory::create_rpc_channel(address.to_owned(), Some(timeout), None).await?,
+            ConnectionFactory::create_rpc_channel(address.to_owned(), timeout, None).await?,
         ))),
     }
 }
