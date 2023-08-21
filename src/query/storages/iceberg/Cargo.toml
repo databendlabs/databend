@@ -17,7 +17,6 @@ common-functions = { path = "../../functions" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
-common-pipeline-sources = { path = "../../pipeline/sources" }
 common-storage = { path = "../../../common/storage" }
 common-storages-parquet = { path = "../parquet" }
 storages-common-pruner = { path = "../common/pruner" }
@@ -32,6 +31,7 @@ icelake = { version = "0.0.9" }
 match-template = "0.0.1"
 minitrace = { workspace = true }
 opendal = { workspace = true }
+parquet = "45.0.0"
 serde = { workspace = true }
 tokio = { workspace = true }
 typetag = "0.2"

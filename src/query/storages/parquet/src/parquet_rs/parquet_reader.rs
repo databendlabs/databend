@@ -73,7 +73,10 @@ pub struct ParquetRSReader {
     field_paths: Vec<(FieldRef, Vec<FieldIndex>)>,
 
     pruner: ParquetRSPruner,
+
+    // Options
     need_page_index: bool,
+    batch_size: usize,
 }
 
 impl ParquetRSReader {
@@ -123,6 +126,8 @@ impl ParquetRSReader {
             options,
         )?;
 
+        let batch_size = ctx.get_settings().get_max_block_size()? as usize;
+
         Ok(Self {
             op,
             predicate,
@@ -131,10 +136,11 @@ impl ParquetRSReader {
             field_paths,
             pruner,
             need_page_index: options.prune_pages(),
+            batch_size,
         })
     }
 
-    async fn prepare_data_stream(
+    pub async fn prepare_data_stream(
         &self,
         ctx: Arc<dyn TableContext>,
         loc: &str,
@@ -149,7 +155,8 @@ impl ParquetRSReader {
                 .with_skip_arrow_metadata(true),
         )
         .await?
-        .with_projection(self.projection.clone());
+        .with_projection(self.projection.clone())
+        .with_batch_size(self.batch_size);
 
         // Prune row groups.
         let file_meta = builder.metadata();
@@ -198,28 +205,23 @@ impl ParquetRSReader {
     }
 
     /// Read a [`DataBlock`] from parquet file using native apache arrow-rs APIs.
-    pub async fn read_block(&self, ctx: Arc<dyn TableContext>, loc: &str) -> Result<DataBlock> {
-        let stream = self.prepare_data_stream(ctx, loc).await?;
-        let record_batches = stream.collect::<Vec<_>>().await;
-        let blocks = if self.is_inner_project {
-            record_batches
-                .into_iter()
-                .map(|b| {
-                    let b = b?;
-                    transform_record_batch(&b, &self.field_paths)
-                })
-                .collect::<Result<Vec<_>>>()?
-        } else {
-            record_batches
-                .into_iter()
-                .map(|b| {
-                    let (block, _) = DataBlock::from_record_batch(&b?)?;
-                    Ok(block)
-                })
-                .collect::<Result<Vec<_>>>()?
-        };
+    pub async fn read_block(
+        &self,
+        stream: &mut ParquetRecordBatchStream<Reader>,
+    ) -> Result<Option<DataBlock>> {
+        let record_batch = stream.next().await.transpose()?;
 
-        DataBlock::concat(&blocks)
+        if let Some(batch) = record_batch {
+            let blocks = if self.is_inner_project {
+                transform_record_batch(&batch, &self.field_paths)?
+            } else {
+                let (block, _) = DataBlock::from_record_batch(&batch)?;
+                block
+            };
+            Ok(Some(blocks))
+        } else {
+            Ok(None)
+        }
     }
 }
 
