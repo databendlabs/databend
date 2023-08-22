@@ -89,8 +89,11 @@ impl Metadata {
         database_name: Option<&str>,
         table_name: &str,
     ) -> Option<IndexType> {
+        // Use `rev` is because a table may be quried multiple times in join clause,
+        // and the virtual columns should add to the table newly added.
         self.tables
             .iter()
+            .rev()
             .find(|table| match database_name {
                 Some(database_name) => {
                     table.database == database_name && table.name == table_name
