@@ -17,22 +17,12 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
-use common_expression::arrow::and_validities;
-use common_expression::with_join_hash_method;
-use common_expression::BlockEntry;
-use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_expression::Evaluator;
 use common_expression::HashMethodFixedKeys;
 use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
-use common_expression::RemoteExpr;
-use common_expression::Value;
-use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::StringHashJoinHashMap;
@@ -42,11 +32,8 @@ use ethnum::U256;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use super::ProbeState;
-use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
-use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 
@@ -81,7 +68,6 @@ pub enum HashJoinHashTable {
 /// It will like a bridge to connect build and probe.
 /// Such as build side will pass hash table to probe side by it
 pub struct HashJoinState {
-    pub(crate) ctx: Arc<QueryContext>,
     /// A shared big hash table stores all the rows from build side
     pub(crate) hash_table: Arc<SyncUnsafeCell<HashJoinHashTable>>,
     /// It will be increased by 1 when a new hash join build processor is created.
@@ -126,7 +112,6 @@ impl HashJoinState {
             build_schema = build_schema_wrap_nullable(&build_schema);
         }
         Ok(Arc::new(HashJoinState {
-            ctx: ctx.clone(),
             hash_table: Arc::new(SyncUnsafeCell::new(HashJoinHashTable::Null)),
             hash_table_builders: Mutex::new(0),
             build_done: Mutex::new(false),
@@ -178,9 +163,6 @@ impl HashJoinState {
     }
 
     pub fn need_mark_scan(&self) -> bool {
-        matches!(
-            self.hash_join_desc.join_type,
-            JoinType::LeftMark
-        )
+        matches!(self.hash_join_desc.join_type, JoinType::LeftMark)
     }
 }

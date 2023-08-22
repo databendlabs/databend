@@ -40,8 +40,7 @@ impl HashJoinProbeState {
         let mut occupied = 0;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
-        let outer_scan_map =
-            unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(

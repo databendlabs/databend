@@ -24,8 +24,8 @@ use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_hashtable::HashJoinHashtableLike;
-use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 
+use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::sql::plans::JoinType;

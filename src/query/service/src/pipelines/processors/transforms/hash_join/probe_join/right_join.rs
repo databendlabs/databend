@@ -23,8 +23,8 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 use common_hashtable::RowPtr;
-use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 
+use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::sql::plans::JoinType;

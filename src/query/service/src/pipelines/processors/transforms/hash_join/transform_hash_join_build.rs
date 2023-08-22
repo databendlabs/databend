@@ -21,7 +21,6 @@ use common_expression::DataBlock;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
-use crate::pipelines::processors::transforms::hash_join::HashJoinState;
 use crate::pipelines::processors::Processor;
 
 enum HashJoinBuildStep {

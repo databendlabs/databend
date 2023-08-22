@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::SyncUnsafeCell;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -24,7 +23,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::arrow::and_validities;
 use common_expression::types::nullable::NullableColumn;
-use common_expression::types::DataType;
 use common_expression::with_join_hash_method;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -32,36 +30,22 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::HashMethod;
-use common_expression::HashMethodKind;
-use common_expression::HashMethodSerializer;
-use common_expression::HashMethodSingleString;
-use common_expression::KeysState;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_hashtable::HashJoinHashMap;
-use common_hashtable::RawEntry;
-use common_hashtable::RowPtr;
-use common_hashtable::StringHashJoinHashMap;
-use common_hashtable::StringRawEntry;
-use common_hashtable::STRING_EARLY_SIZE;
 use common_sql::ColumnSet;
-use ethnum::U256;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use super::ProbeState;
+use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
-use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
-use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::HashJoinState;
-use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 use crate::sql::planner::plans::JoinType;
 
 /// Define some shared states for all hash join probe threads.
@@ -519,8 +503,6 @@ impl HashJoinProbeState {
         }
         Ok(result_blocks)
     }
-
-
 
     pub fn left_mark_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         let max_block_size = state.max_block_size;

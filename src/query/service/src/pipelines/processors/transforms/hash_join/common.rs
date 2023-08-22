@@ -38,10 +38,7 @@ use super::desc::MARKER_KIND_FALSE;
 use super::desc::MARKER_KIND_NULL;
 use super::desc::MARKER_KIND_TRUE;
 use super::HashJoinState;
-use crate::pipelines::processors::transforms::hash_join::row::Chunk;
-use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
-use crate::sql::plans::JoinType;
 
 /// Some common methods for hash join.
 
@@ -226,12 +223,7 @@ impl HashJoinState {
     }
 }
 
-
-pub(crate) fn set_validity(
-    column: &BlockEntry,
-    num_rows: usize,
-    validity: &Bitmap,
-) -> BlockEntry {
+pub(crate) fn set_validity(column: &BlockEntry, num_rows: usize, validity: &Bitmap) -> BlockEntry {
     let (value, data_type) = (&column.value, &column.data_type);
     let col = value.convert_to_full_column(data_type, num_rows);
 

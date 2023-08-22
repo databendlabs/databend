@@ -760,7 +760,7 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &hash_join_plan.build_keys,
             &hash_join_plan.build_projections,
-            join_state.clone(),
+            join_state,
         )?;
         let create_sink_processor = |input| {
             let transform = TransformHashJoinBuild::try_create(input, build_state.clone())?;
@@ -1657,7 +1657,7 @@ impl PipelineBuilder {
 
         let probe_state = Arc::new(HashJoinProbeState::create(
             self.ctx.clone(),
-            state.clone(),
+            state,
             &join.probe_projections,
             join.probe.output_schema()?,
             &join.join_type,

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -25,15 +24,11 @@ use common_base::base::tokio::sync::Notify;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::arrow::and_validities;
 use common_expression::types::DataType;
-use common_expression::with_join_hash_method;
 use common_expression::Column;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::HashMethod;
-use common_expression::HashMethodFixedKeys;
 use common_expression::HashMethodKind;
 use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
@@ -41,7 +36,6 @@ use common_expression::KeysState;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashMap;
-use common_hashtable::HashtableKeyable;
 use common_hashtable::RawEntry;
 use common_hashtable::RowPtr;
 use common_hashtable::StringHashJoinHashMap;
@@ -53,16 +47,14 @@ use ethnum::U256;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
+use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::SingleStringHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::row::Chunk;
-use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
-use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::HashJoinState;
-use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 use crate::sessions::QueryContext;
 
 /// Define some shared states for all hash join build threads.
