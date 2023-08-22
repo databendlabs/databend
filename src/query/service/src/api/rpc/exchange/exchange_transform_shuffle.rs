@@ -297,17 +297,15 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
         )]));
     }
 
-    let inputs = pipeline.output_len();
-    let outputs = params.destination_ids.len();
-    let transform = ExchangeShuffleTransform::create(inputs, outputs, output_len);
+    let inputs_size = pipeline.output_len();
+    let outputs_size = params.destination_ids.len();
+    let transform = ExchangeShuffleTransform::create(inputs_size, outputs_size, output_len);
 
     let inputs = transform.get_inputs();
     let outputs = transform.get_outputs();
-    pipeline.add_pipe(Pipe::create(inputs, outputs, vec![PipeItem::create(
-        ProcessorPtr::create(Box::new(transform)),
-        inputs,
-        outputs,
-    )]));
+    pipeline.add_pipe(Pipe::create(inputs_size, outputs_size, vec![
+        PipeItem::create(ProcessorPtr::create(Box::new(transform)), inputs, outputs),
+    ]));
 
     Ok(())
 }
