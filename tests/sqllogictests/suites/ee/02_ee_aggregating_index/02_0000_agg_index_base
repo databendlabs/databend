@@ -250,6 +250,7 @@ DROP AGGREGATING INDEX testi
 statement ok
 DROP TABLE t
 
+# test sync agg index
 statement ok
 SET enable_refresh_aggregating_index_after_write=1;
 

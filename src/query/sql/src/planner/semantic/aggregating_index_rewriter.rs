@@ -126,6 +126,9 @@ impl VisitorMut for AggregatingIndexRewriter {
                 }
                 _ => unreachable!(),
             }
+        } else {
+            let groups = vec![block_name_expr];
+            *group_by = Some(GroupBy::Normal(groups));
         }
     }
 }
