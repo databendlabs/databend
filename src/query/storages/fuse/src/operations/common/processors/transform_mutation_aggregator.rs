@@ -181,60 +181,6 @@ impl TableMutationAggregator {
     }
 
     pub async fn apply(&mut self) -> Result<CommitMeta> {
-        let start = Instant::now();
-        let mut count = 0;
-
-        let mut removed_segment_indexes = vec![];
-        let mut removed_statistics = Statistics::default();
-        for s in &self.deleted_segments {
-            removed_segment_indexes.push(s.deleted_segment.index);
-            merge_statistics_mut(
-                &mut removed_statistics,
-                &s.deleted_segment.segment_info.1,
-                self.default_cluster_key_id,
-            );
-        }
-
-        let mut replaced_segments = HashMap::new();
-        let mut merged_statistics = Statistics::default();
-        let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
-        let segment_indices = self.mutations.keys().cloned().collect::<Vec<_>>();
-        for chunk in segment_indices.chunks(chunk_size) {
-            let results = self.partial_apply(chunk.to_vec()).await?;
-            for result in results {
-                if let Some((location, summary)) = result.new_segment_info {
-                    // replace the old segment location with the new one.
-                    self.abort_operation.add_segment(location.clone());
-                    merge_statistics_mut(
-                        &mut merged_statistics,
-                        &summary,
-                        self.default_cluster_key_id,
-                    );
-                    replaced_segments.insert(result.index, (location, SegmentInfo::VERSION));
-                } else {
-                    removed_segment_indexes.push(result.index);
-                }
-
-                merge_statistics_mut(
-                    &mut removed_statistics,
-                    &result.origin_summary,
-                    self.default_cluster_key_id,
-                );
-            }
-
-            // Refresh status
-            {
-                count += chunk.len();
-                let status = format!(
-                    "mutation: generate new segment files:{}/{}, cost:{} sec",
-                    count,
-                    segment_indices.len(),
-                    start.elapsed().as_secs()
-                );
-                self.ctx.set_status_info(&status);
-            }
-        }
-
         let appended_segments = std::mem::take(&mut self.appended_segments);
         let appended_statistics = std::mem::take(&mut self.appended_statistics);
         let conflict_resolve_context = match self.kind {
@@ -246,6 +192,61 @@ impl TableMutationAggregator {
                 self.schema.clone(),
             )),
             _ => {
+                let start = Instant::now();
+                let mut count = 0;
+
+                let mut removed_segment_indexes = vec![];
+                let mut removed_statistics = Statistics::default();
+                for s in &self.deleted_segments {
+                    removed_segment_indexes.push(s.deleted_segment.index);
+                    merge_statistics_mut(
+                        &mut removed_statistics,
+                        &s.deleted_segment.segment_info.1,
+                        self.default_cluster_key_id,
+                    );
+                }
+
+                let mut replaced_segments = HashMap::new();
+                let mut merged_statistics = Statistics::default();
+                let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+                let segment_indices = self.mutations.keys().cloned().collect::<Vec<_>>();
+                for chunk in segment_indices.chunks(chunk_size) {
+                    let results = self.partial_apply(chunk.to_vec()).await?;
+                    for result in results {
+                        if let Some((location, summary)) = result.new_segment_info {
+                            // replace the old segment location with the new one.
+                            self.abort_operation.add_segment(location.clone());
+                            merge_statistics_mut(
+                                &mut merged_statistics,
+                                &summary,
+                                self.default_cluster_key_id,
+                            );
+                            replaced_segments
+                                .insert(result.index, (location, SegmentInfo::VERSION));
+                        } else {
+                            removed_segment_indexes.push(result.index);
+                        }
+
+                        merge_statistics_mut(
+                            &mut removed_statistics,
+                            &result.origin_summary,
+                            self.default_cluster_key_id,
+                        );
+                    }
+
+                    // Refresh status
+                    {
+                        count += chunk.len();
+                        let status = format!(
+                            "mutation: generate new segment files:{}/{}, cost:{} sec",
+                            count,
+                            segment_indices.len(),
+                            start.elapsed().as_secs()
+                        );
+                        self.ctx.set_status_info(&status);
+                    }
+                }
+
                 info!("removed_segment_indexes:{:?}", removed_segment_indexes);
 
                 merge_statistics_mut(
