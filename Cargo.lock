@@ -2855,6 +2855,7 @@ dependencies = [
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
+ "bytes",
  "chrono",
  "common-arrow",
  "common-base",

@@ -40,14 +40,21 @@ use opendal::Operator;
 use opendal::Reader;
 use parquet::arrow::arrow_reader::ArrowPredicateFn;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_reader::RowFilter;
+use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::arrow_to_parquet_schema;
 use parquet::arrow::async_reader::ParquetRecordBatchStream;
+use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::parquet_to_arrow_schema_by_columns;
+use parquet::arrow::FieldLevels;
 use parquet::arrow::ParquetRecordBatchStreamBuilder;
 use parquet::arrow::ProjectionMask;
+use parquet::file::metadata::RowGroupMetaData;
+use parquet::format::PageLocation;
 
 use super::pruning::ParquetRSPruner;
+use super::row_group::InMemoryRowGroup;
 
 struct ParquetPredicate {
     /// Columns used for eval predicate.
@@ -60,6 +67,7 @@ struct ParquetPredicate {
 pub struct ParquetRSReader {
     op: Operator,
     predicate: Option<Arc<ParquetPredicate>>,
+
     /// Columns to output.
     projection: ProjectionMask,
     /// If we use [`ProjectionMask`] to get inner columns of a struct,
@@ -71,6 +79,8 @@ pub struct ParquetRSReader {
     is_inner_project: bool,
     /// Field paths helping to traverse columns.
     field_paths: Vec<(FieldRef, Vec<FieldIndex>)>,
+    /// Projected field levels.
+    field_levels: FieldLevels,
 
     pruner: ParquetRSPruner,
 
@@ -127,6 +137,7 @@ impl ParquetRSReader {
         )?;
 
         let batch_size = ctx.get_settings().get_max_block_size()? as usize;
+        let field_levels = parquet_to_arrow_field_levels(&schema_descr, projection.clone(), None)?;
 
         Ok(Self {
             op,
@@ -137,6 +148,7 @@ impl ParquetRSReader {
             pruner,
             need_page_index: options.prune_pages(),
             batch_size,
+            field_levels,
         })
     }
 
@@ -222,6 +234,36 @@ impl ParquetRSReader {
         } else {
             Ok(None)
         }
+    }
+
+    /// Read a row group and return a batch record iterator.
+    ///
+    /// If return [None], it means the whole row group is skipped (by eval push down predicate).
+    pub async fn read_row_group(
+        &self,
+        loc: &str,
+        rg: &RowGroupMetaData,
+        page_location: Option<&[Vec<PageLocation>]>,
+        selection: Option<RowSelection>,
+    ) -> Result<Option<ParquetRecordBatchReader>> {
+        // TODO(parquet): calling build_array multiple times is wasteful
+
+        let mut row_group = InMemoryRowGroup::new(rg, page_location);
+
+        // TODO(parquet): prewhere filter.
+
+        row_group
+            .fetch(loc, self.op.clone(), &self.projection, selection.as_ref())
+            .await?;
+
+        let reader = ParquetRecordBatchReader::try_new_with_row_groups(
+            &self.field_levels,
+            &row_group,
+            self.batch_size,
+            selection,
+        )?;
+
+        Ok(Some(reader))
     }
 }
 

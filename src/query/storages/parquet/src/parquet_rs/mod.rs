@@ -15,6 +15,7 @@
 mod parquet_reader;
 mod parquet_table;
 mod pruning;
+mod row_group;
 mod source;
 mod statistics;
 
