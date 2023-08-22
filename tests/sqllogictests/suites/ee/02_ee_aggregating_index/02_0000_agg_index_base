@@ -251,6 +251,37 @@ statement ok
 DROP TABLE t
 
 statement ok
+CREATE TABLE t(id int, user_id int, event_name varchar)
+
+statement ok
+INSERT INTO t (id, user_id, event_name)
+VALUES (1, 1, 'Login'),
+       (2, 2, 'Login'),
+       (3, 3, 'Login'),
+       (4, 1, 'Logout'),
+       (5, 2, 'Logout'),
+       (6, 4, 'Login'),
+       (7, 1, 'Login');
+
+statement ok
+CREATE AGGREGATING INDEX testi AS select approx_count_distinct(user_id) from t
+
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query I
+SELECT approx_count_distinct(user_id) from t
+----
+4
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+statement ok
+DROP TABLE t
+
+# test sync agg index
+statement ok
 SET enable_refresh_aggregating_index_after_write=1;
 
 statement ok
