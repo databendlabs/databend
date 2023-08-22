@@ -15,6 +15,7 @@
 mod clickhouse_federated;
 mod clickhouse_handler;
 mod http_services;
+mod metrics;
 pub mod middleware;
 pub mod v1;
 
