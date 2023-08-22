@@ -27,6 +27,10 @@ pub struct SplitByExprMutator {
 }
 
 impl SplitByExprMutator {
+    pub fn create(expr: Option<Expr>, func_ctx: FunctionContext) -> Self {
+        Self { expr, func_ctx }
+    }
+
     // first datablock statisfy expr, the second doesn't
     pub fn split_by_expr(&self, data_block: DataBlock) -> Result<(DataBlock, DataBlock)> {
         if self.expr.is_none() {

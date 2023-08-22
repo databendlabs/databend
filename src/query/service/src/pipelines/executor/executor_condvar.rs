@@ -54,7 +54,7 @@ impl WorkersCondvar {
     }
 
     pub fn has_waiting_async_task(&self) -> bool {
-        self.waiting_async_task.load(Ordering::Relaxed) != 0
+        self.waiting_async_task.load(Ordering::Acquire) != 0
     }
 
     pub fn inc_active_async_worker(&self) {

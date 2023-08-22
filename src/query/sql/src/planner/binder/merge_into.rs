@@ -28,10 +28,12 @@ use common_catalog::plan::InternalColumn;
 use common_catalog::plan::InternalColumnType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::TableSchemaRef;
 use common_expression::ROW_ID_COL_NAME;
 use indexmap::IndexMap;
 
+use super::wrap_cast_scalar;
 use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
 use crate::normalize_identifier;
@@ -317,25 +319,34 @@ impl Binder {
 
         let mut values = Vec::with_capacity(clause.insert_operation.values.len());
 
-        for expr in clause.insert_operation.values.iter() {
-            let (scalar_expr, _) = scalar_binder.bind(expr).await?;
-            values.push(scalar_expr.clone());
-            for idx in scalar_expr.used_columns() {
-                columns.insert(idx);
-            }
-        }
-
         // we need to get source schema, and use it for filling columns.
         let source_schema = if let Some(fields) = clause.insert_operation.columns.clone() {
             self.schema_project(&table_schema, &fields)?
         } else {
             table_schema.clone()
         };
+
         if source_schema != table_schema {
             return Err(ErrorCode::BadArguments(
                 "for now, we need to make sure the input schema same with table schema",
             ));
         }
+
+        for (idx, expr) in clause.insert_operation.values.iter().enumerate() {
+            let (mut scalar_expr, _) = scalar_binder.bind(expr).await?;
+            // type cast
+            scalar_expr = wrap_cast_scalar(
+                &scalar_expr,
+                &scalar_expr.data_type()?,
+                &DataType::from(source_schema.field(idx).data_type()),
+            )?;
+
+            values.push(scalar_expr.clone());
+            for idx in scalar_expr.used_columns() {
+                columns.insert(idx);
+            }
+        }
+
         Ok(UnmatchedEvaluator {
             source_schema: Arc::new(source_schema.into()),
             condition,

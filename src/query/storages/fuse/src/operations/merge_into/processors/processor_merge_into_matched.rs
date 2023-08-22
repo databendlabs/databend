@@ -43,7 +43,6 @@ enum MutationKind {
 
 enum State {
     RecevingData,
-    OutPutData,
     FinishedOutPut,
 }
 
@@ -206,13 +205,16 @@ impl Processor for MergeIntoMatchedProcessor {
                 return Ok(Event::NeedConsume);
             }
 
-            self.state = State::OutPutData;
-
             return Ok(Event::Async);
         }
     }
 
     fn process(&mut self) -> Result<()> {
+        if let Some(data_block) = self.input_data.take() {
+            if data_block.is_empty() {
+                return Ok(());
+            }
+        }
         Ok(())
     }
 

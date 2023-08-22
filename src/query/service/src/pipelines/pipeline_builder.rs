@@ -296,12 +296,6 @@ impl PipelineBuilder {
             table_info,
         } = merge_into_source;
         self.build_pipeline(input)?;
-        // we need to do type cast for insert data, no need for update,
-        // because we have done it at eval_scalar phase.
-        // split data_block as matched block and not-matched block
-        let tbl = self
-            .ctx
-            .build_table_by_table_info(catalog_info, table_info, None)?;
         let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
 
         self.main_pipeline
@@ -432,6 +426,7 @@ impl PipelineBuilder {
         let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
             unmatched.clone(),
             input.output_schema()?.clone(),
+            self.ctx.get_function_context()?,
         )?;
 
         let merge_into_matched_processor = MergeIntoMatchedProcessor::create(

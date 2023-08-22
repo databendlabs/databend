@@ -19,7 +19,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::pipe::PipeItem;
@@ -31,11 +31,14 @@ use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::BlockOperator;
 use itertools::Itertools;
 
+use crate::operations::merge_into::mutator::SplitByExprMutator;
+
 type UnMatchedExprs = Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>;
 
 struct InsertDataBlockMutation {
     op: BlockOperator,
-    filter: Option<Expr>,
+    split_mutator: SplitByExprMutator,
+    source_chema: DataSchemaRef,
 }
 
 // need to evaluate expression and
@@ -45,10 +48,15 @@ pub struct MergeIntoNotMatchedProcessor {
     ops: Vec<InsertDataBlockMutation>,
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
+    func_ctx: FunctionContext,
 }
 
 impl MergeIntoNotMatchedProcessor {
-    pub fn create(unmatched: UnMatchedExprs, input_schema: DataSchemaRef) -> Result<Self> {
+    pub fn create(
+        unmatched: UnMatchedExprs,
+        input_schema: DataSchemaRef,
+        func_ctx: FunctionContext,
+    ) -> Result<Self> {
         let mut ops = Vec::<InsertDataBlockMutation>::with_capacity(unmatched.len());
         for item in &unmatched {
             let eval_projections: HashSet<usize> =
@@ -63,11 +71,15 @@ impl MergeIntoNotMatchedProcessor {
                         .collect_vec(),
                     projections: Some(eval_projections),
                 },
-                filter: match &item.1 {
-                    None => None,
-                    Some(expr) => Some(expr.as_expr(&BUILTIN_FUNCTIONS)),
+                split_mutator: {
+                    let filter = match &item.1 {
+                        None => None,
+                        Some(expr) => Some(expr.as_expr(&BUILTIN_FUNCTIONS)),
+                    };
+                    SplitByExprMutator::create(filter, func_ctx.clone())
                 },
-            })
+                source_chema: item.0.clone(),
+            });
         }
 
         Ok(Self {
@@ -76,6 +88,7 @@ impl MergeIntoNotMatchedProcessor {
             ops,
             input_data: None,
             output_data: None,
+            func_ctx: func_ctx.clone(),
         })
     }
 
@@ -107,8 +120,8 @@ impl Processor for MergeIntoNotMatchedProcessor {
         let mut pushed_something = false;
 
         if self.output_port.can_push() {
-            if let Some(matched_data) = self.output_data.take() {
-                self.output_port.push_data(Ok(matched_data));
+            if let Some(not_matched_data) = self.output_data.take() {
+                self.output_port.push_data(Ok(not_matched_data));
                 pushed_something = true
             }
         }
@@ -126,6 +139,31 @@ impl Processor for MergeIntoNotMatchedProcessor {
     }
 
     fn process(&mut self) -> Result<()> {
-        todo!()
+        if let Some(data_block) = self.input_data.take() {
+            if data_block.is_empty() {
+                return Ok(());
+            }
+            // get an empty data_block but have same schema
+            let mut output_block = data_block.slice(0..0);
+            let mut current_block = data_block;
+            for op in &self.ops {
+                let (statisfied_block, unstatisfied_block) =
+                    op.split_mutator.split_by_expr(current_block)?;
+                // in V1, we make sure the output_schema of each update expr result block is the same
+                // we will fix it in the future.
+                output_block = DataBlock::concat(&[
+                    output_block,
+                    op.op.execute(&self.func_ctx, statisfied_block)?,
+                ])?;
+                if unstatisfied_block.is_empty() {
+                    break;
+                } else {
+                    current_block = unstatisfied_block
+                }
+            }
+            // todo:(JackTan25) fill format data block
+            self.output_data = Some(output_block)
+        }
+        Ok(())
     }
 }
