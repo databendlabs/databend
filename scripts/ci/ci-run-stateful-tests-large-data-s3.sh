@@ -14,22 +14,22 @@ echo "* is ready, and configured properly.      *"
 echo "*******************************************"
 case $RUNNER_PROVIDER in
 "aws")
-    export STORAGE_TYPE=s3
-    export STORAGE_S3_BUCKET=databend-ci
-    export STORAGE_S3_REGION=us-east-2
-    export STORAGE_S3_ROOT="stateful/${TEST_ID}"
-    export STORAGE_ALLOW_INSECURE=true
-    ;;
+	export STORAGE_TYPE=s3
+	export STORAGE_S3_BUCKET=databend-ci
+	export STORAGE_S3_REGION=us-east-2
+	export STORAGE_S3_ROOT="stateful/${TEST_ID}"
+	export STORAGE_ALLOW_INSECURE=true
+	;;
 "gcp")
-    export STORAGE_TYPE=gcs
-    export STORAGE_GCS_BUCKET=databend-ci
-    export STORAGE_GCS_REGION=us-central1
-    export STORAGE_GCS_ROOT="stateful/${TEST_ID}"
-    ;;
+	export STORAGE_TYPE=gcs
+	export STORAGE_GCS_BUCKET=databend-ci
+	export STORAGE_GCS_REGION=us-central1
+	export STORAGE_GCS_ROOT="stateful/${TEST_ID}"
+	;;
 *)
-    echo "Unknown provider: $RUNNER_PROVIDER"
-    exit 1
-    ;;
+	echo "Unknown provider: $RUNNER_PROVIDER"
+	exit 1
+	;;
 esac
 
 echo "Install dependencies"
