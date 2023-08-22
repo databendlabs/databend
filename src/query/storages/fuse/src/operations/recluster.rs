@@ -267,14 +267,17 @@ impl FuseTable {
         })?;
 
         pipeline.add_transform(|input, output| {
-            let mut aggregator = TableMutationAggregator::create(
+            let mut aggregator = TableMutationAggregator::new(
                 self,
                 ctx.clone(),
                 snapshot.segments.clone(),
-                snapshot.summary.clone(),
                 MutationKind::Recluster,
             );
-            aggregator.accumulate_log_entry(mutator.mutation_logs());
+            mutator
+                .mutation_logs()
+                .entries
+                .into_iter()
+                .for_each(|v| aggregator.accumulate_log_entry(v));
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
             )))

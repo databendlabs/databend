@@ -20,7 +20,7 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::FormatVersion;
-use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
 
 use super::ConflictResolveContext;
 use crate::operations::common::AbortOperation;
@@ -35,8 +35,9 @@ pub struct MutationLogs {
 pub enum MutationLogEntry {
     AppendSegment {
         segment_location: String,
-        segment_info: Arc<SegmentInfo>,
         format_version: FormatVersion,
+        abort_operation: AbortOperation,
+        summary: Statistics,
     },
     DeletedBlock {
         index: BlockMetaIndex,
@@ -44,7 +45,7 @@ pub enum MutationLogEntry {
     DeletedSegment {
         deleted_segment: MutationDeletedSegment,
     },
-    Replaced {
+    ReplacedBlock {
         index: BlockMetaIndex,
         block_meta: Arc<BlockMeta>,
     },

@@ -46,10 +46,11 @@ fn test_unresolvable_delete_conflict() {
     latest_snapshot.segments = vec![("1".to_string(), 1), ("4".to_string(), 1)];
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
-        added_segments: vec![],
+        appended_segments: vec![],
+        replaced_segments: HashMap::new(),
         removed_segment_indexes: vec![1],
         removed_statistics: Statistics::default(),
-        added_statistics: Statistics::default(),
+        merged_statistics: Statistics::default(),
     });
 
     let mut generator = MutationGenerator::new(Arc::new(base_snapshot));
@@ -66,7 +67,7 @@ fn test_unresolvable_delete_conflict() {
 #[test]
 /// base snapshot contains segments 1, 2, 3,
 ///
-/// a delete operation wants to remove segment 2,3, and add segment 8
+/// a delete operation wants to remove segment 2, and replace segment 3 with segment 8
 ///
 /// the latest snapshot contains segments 2, 3, 4
 ///
@@ -121,7 +122,7 @@ fn test_resolvable_delete_conflict() {
         cluster_stats: None,
     };
 
-    let added_statistics = Statistics {
+    let merged_statistics = Statistics {
         row_count: 8,
         block_count: 8,
         perfect_block_count: 8,
@@ -133,10 +134,11 @@ fn test_resolvable_delete_conflict() {
     };
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
-        removed_segment_indexes: vec![1, 2],
-        added_segments: vec![None, Some(("8".to_string(), 1))],
+        appended_segments: vec![],
+        replaced_segments: HashMap::from([(2, ("8".to_string(), 1))]),
+        removed_segment_indexes: vec![1],
         removed_statistics,
-        added_statistics,
+        merged_statistics,
     });
 
     let mut generator = MutationGenerator::new(Arc::new(base_snapshot));
