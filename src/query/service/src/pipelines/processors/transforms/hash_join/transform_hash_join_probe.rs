@@ -124,8 +124,8 @@ impl Processor for TransformHashJoinProbe {
                 if self.output_port.is_finished() {
                     self.input_port.finish();
 
-                    if self.join_probe_state.need_outer_scan()
-                        || self.join_probe_state.need_mark_scan()
+                    if self.join_probe_state.hash_join_state.need_outer_scan()
+                        || self.join_probe_state.hash_join_state.need_mark_scan()
                     {
                         self.join_probe_state.probe_done()?;
                     }
@@ -164,8 +164,8 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if self.input_port.is_finished() {
-                    return if self.join_probe_state.need_outer_scan()
-                        || self.join_probe_state.need_mark_scan()
+                    return if self.join_probe_state.hash_join_state.need_outer_scan()
+                        || self.join_probe_state.hash_join_state.need_mark_scan()
                     {
                         self.join_probe_state.probe_done()?;
                         Ok(Event::Async)

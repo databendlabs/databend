@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 use common_hashtable::RowPtr;
+use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -64,7 +65,7 @@ impl HashJoinProbeState {
             .hash_join_state
             .is_build_projected
             .load(Ordering::Relaxed);
-        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
         let right_single_scan_map =
             if self.hash_join_state.hash_join_desc.join_type == JoinType::RightSingle {
                 outer_scan_map
@@ -114,7 +115,7 @@ impl HashJoinProbeState {
                         let nullable_columns = probe_block
                             .columns()
                             .iter()
-                            .map(|c| self.set_validity(c, max_block_size, true_validity))
+                            .map(|c| set_validity(c, max_block_size, true_validity))
                             .collect::<Vec<_>>();
                         Some(DataBlock::new(nullable_columns, max_block_size))
                     } else {
@@ -257,7 +258,7 @@ impl HashJoinProbeState {
             let nullable_columns = probe_block
                 .columns()
                 .iter()
-                .map(|c| self.set_validity(c, probe_block.num_rows(), &validity))
+                .map(|c| set_validity(c, probe_block.num_rows(), &validity))
                 .collect::<Vec<_>>();
             Some(DataBlock::new(nullable_columns, validity.len()))
         } else {

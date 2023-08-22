@@ -24,6 +24,7 @@ use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_hashtable::HashJoinHashtableLike;
+use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -69,7 +70,7 @@ impl HashJoinProbeState {
             .hash_join_state
             .is_build_projected
             .load(Ordering::Relaxed);
-        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
 
         // Start to probe hash table.
         for (i, key) in keys_iter.enumerate() {
@@ -144,7 +145,7 @@ impl HashJoinProbeState {
                                 probe_block
                                     .columns()
                                     .iter()
-                                    .map(|c| self.set_validity(c, max_block_size, true_validity))
+                                    .map(|c| set_validity(c, max_block_size, true_validity))
                                     .collect::<Vec<_>>()
                             } else {
                                 let mut validity = MutableBitmap::new();
@@ -153,7 +154,7 @@ impl HashJoinProbeState {
                                 probe_block
                                     .columns()
                                     .iter()
-                                    .map(|c| self.set_validity(c, matched_num, &validity))
+                                    .map(|c| set_validity(c, matched_num, &validity))
                                     .collect::<Vec<_>>()
                             };
                             probe_block = DataBlock::new(nullable_probe_columns, matched_num);
@@ -186,7 +187,7 @@ impl HashJoinProbeState {
                                 build_block
                                     .columns()
                                     .iter()
-                                    .map(|c| self.set_validity(c, max_block_size, true_validity))
+                                    .map(|c| set_validity(c, max_block_size, true_validity))
                                     .collect::<Vec<_>>(),
                                 max_block_size,
                             )
@@ -198,7 +199,7 @@ impl HashJoinProbeState {
                                 build_block
                                     .columns()
                                     .iter()
-                                    .map(|c| self.set_validity(c, matched_num, &validity))
+                                    .map(|c| set_validity(c, matched_num, &validity))
                                     .collect::<Vec<_>>(),
                                 matched_num,
                             )
@@ -313,7 +314,7 @@ impl HashJoinProbeState {
             .hash_join_state
             .is_build_projected
             .load(Ordering::Relaxed);
-        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
 
         // Start to probe hash table.
         for (i, key) in keys_iter.enumerate() {
@@ -375,7 +376,7 @@ impl HashJoinProbeState {
                                 probe_block
                                     .columns()
                                     .iter()
-                                    .map(|c| self.set_validity(c, max_block_size, true_validity))
+                                    .map(|c| set_validity(c, max_block_size, true_validity))
                                     .collect::<Vec<_>>()
                             } else {
                                 let mut validity = MutableBitmap::new();
@@ -384,7 +385,7 @@ impl HashJoinProbeState {
                                 probe_block
                                     .columns()
                                     .iter()
-                                    .map(|c| self.set_validity(c, matched_num, &validity))
+                                    .map(|c| set_validity(c, matched_num, &validity))
                                     .collect::<Vec<_>>()
                             };
                             probe_block = DataBlock::new(nullable_probe_columns, matched_num)
@@ -417,7 +418,7 @@ impl HashJoinProbeState {
                                 build_block
                                     .columns()
                                     .iter()
-                                    .map(|c| self.set_validity(c, max_block_size, true_validity))
+                                    .map(|c| set_validity(c, max_block_size, true_validity))
                                     .collect::<Vec<_>>(),
                                 max_block_size,
                             )
@@ -429,7 +430,7 @@ impl HashJoinProbeState {
                                 build_block
                                     .columns()
                                     .iter()
-                                    .map(|c| self.set_validity(c, matched_num, &validity))
+                                    .map(|c| set_validity(c, matched_num, &validity))
                                     .collect::<Vec<_>>(),
                                 matched_num,
                             )
@@ -590,7 +591,7 @@ impl HashJoinProbeState {
                         let mut probe_validity = MutableBitmap::new();
                         probe_validity.extend_constant(occupied, true);
                         let probe_validity: Bitmap = probe_validity.into();
-                        self.set_validity(c, occupied, &probe_validity)
+                        set_validity(c, occupied, &probe_validity)
                     })
                     .collect::<Vec<_>>();
                 probe_block = DataBlock::new(nullable_probe_columns, occupied);

@@ -62,7 +62,7 @@ impl HashJoinProbeState {
         let build_indexes_ptr = build_index.as_mut_ptr();
 
         // If find join partner, set the marker to true.
-        let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
+        let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
 
         for (i, key) in keys_iter.enumerate() {
             if (i & max_block_size) == 0 {
@@ -76,6 +76,7 @@ impl HashJoinProbeState {
             }
 
             let (mut match_count, mut incomplete_ptr) = match self
+                .hash_join_state
                 .hash_join_desc
                 .from_correlated_subquery
             {
@@ -177,7 +178,7 @@ impl HashJoinProbeState {
             .is_build_projected
             .load(Ordering::Relaxed);
 
-        let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
+        let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
         let _mark_scan_map_lock = self.mark_scan_map_lock.lock();
 
         for (i, key) in keys_iter.enumerate() {

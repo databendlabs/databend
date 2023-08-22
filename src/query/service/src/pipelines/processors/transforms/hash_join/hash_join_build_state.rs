@@ -58,9 +58,11 @@ use crate::pipelines::processors::transforms::hash_join::hash_join_state::FixedK
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::SingleStringHashJoinHashTable;
+use crate::pipelines::processors::transforms::hash_join::row::Chunk;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::HashJoinState;
+use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 use crate::sessions::QueryContext;
 
 /// Define some shared states for all hash join build threads.
@@ -110,7 +112,7 @@ impl HashJoinBuildState {
             .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         Ok(Arc::new(Self {
-            ctx,
+            ctx: ctx.clone(),
             hash_join_state,
             chunk_size_limit: Arc::new(ctx.get_settings().get_max_block_size()? as usize * 16),
             row_space_builders: Default::default(),
@@ -141,6 +143,43 @@ impl HashJoinBuildState {
             drop(buffer_row_size);
             self.add_build_block(data_block)
         }
+    }
+
+    // Add `data_block` for build table to `row_space`
+    pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
+        let mut data_block = data_block;
+        if matches!(
+            self.hash_join_state.hash_join_desc.join_type,
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full
+        ) {
+            let mut validity = MutableBitmap::new();
+            validity.extend_constant(data_block.num_rows(), true);
+            let validity: Bitmap = validity.into();
+
+            let nullable_columns = data_block
+                .columns()
+                .iter()
+                .map(|c| set_validity(c, validity.len(), &validity))
+                .collect::<Vec<_>>();
+            data_block = DataBlock::new(nullable_columns, data_block.num_rows());
+        }
+
+        let chunk = Chunk { data_block };
+
+        {
+            // Acquire write lock in current scope
+            let mut chunks = self.hash_join_state.row_space.chunks.write();
+            if self.hash_join_state.need_outer_scan() {
+                let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
+                outer_scan_map.push(vec![false; chunk.num_rows()]);
+            }
+            if self.hash_join_state.need_mark_scan() {
+                let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
+                mark_scan_map.push(vec![MARKER_KIND_FALSE; chunk.num_rows()]);
+            }
+            chunks.push(chunk);
+        }
+        Ok(())
     }
 
     /// Attach to state: `row_space_builders` and `hash_table_builders`.
@@ -316,7 +355,7 @@ impl HashJoinBuildState {
         let entry_size = self.entry_size.load(Ordering::Relaxed);
         let mut local_raw_entry_spaces: Vec<Vec<u8>> = Vec::new();
         let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
-        let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
+        let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
 
         macro_rules! insert_key {
             ($table: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty,) => {{

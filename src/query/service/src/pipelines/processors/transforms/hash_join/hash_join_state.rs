@@ -103,6 +103,10 @@ pub struct HashJoinState {
     /// `RowSpace` contains all rows from build side.
     pub(crate) row_space: RowSpace,
     pub(crate) is_build_projected: Arc<AtomicBool>,
+    /// OuterScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
+    pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
+    /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
+    pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
 }
 
 impl HashJoinState {
@@ -122,7 +126,7 @@ impl HashJoinState {
             build_schema = build_schema_wrap_nullable(&build_schema);
         }
         Ok(Arc::new(HashJoinState {
-            ctx,
+            ctx: ctx.clone(),
             hash_table: Arc::new(SyncUnsafeCell::new(HashJoinHashTable::Null)),
             hash_table_builders: Mutex::new(0),
             build_done: Mutex::new(false),
@@ -130,8 +134,10 @@ impl HashJoinState {
             hash_join_desc,
             interrupt: Arc::new(AtomicBool::new(false)),
             fast_return: Arc::new(Default::default()),
-            row_space: RowSpace::new(ctx.clone(), build_schema, build_projections)?,
+            row_space: RowSpace::new(ctx, build_schema, build_projections)?,
             is_build_projected: Arc::new(AtomicBool::new(true)),
+            outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
         }))
     }
 
@@ -158,5 +164,23 @@ impl HashJoinState {
     pub fn fast_return(&self) -> Result<bool> {
         let fast_return = self.fast_return.read();
         Ok(*fast_return)
+    }
+
+    pub fn need_outer_scan(&self) -> bool {
+        matches!(
+            self.hash_join_desc.join_type,
+            JoinType::Full
+                | JoinType::Right
+                | JoinType::RightSingle
+                | JoinType::RightSemi
+                | JoinType::RightAnti
+        )
+    }
+
+    pub fn need_mark_scan(&self) -> bool {
+        matches!(
+            self.hash_join_desc.join_type,
+            JoinType::LeftMark
+        )
     }
 }

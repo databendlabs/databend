@@ -59,6 +59,7 @@ use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap
 use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::HashJoinState;
+use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::planner::plans::JoinType;
@@ -85,10 +86,6 @@ pub struct HashJoinProbeState {
     /// Todo(xudong): add more detailed comments for the following fields.
     /// Final scan tasks
     pub(crate) final_scan_tasks: Arc<RwLock<VecDeque<usize>>>,
-    /// OuterScan map
-    pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
-    /// LeftMarkScan map
-    pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
     pub(crate) mark_scan_map_lock: Mutex<bool>,
 }
 
@@ -115,8 +112,6 @@ impl HashJoinProbeState {
             probe_schema,
             probe_projections: Arc::new(probe_projections.clone()),
             final_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
-            outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
-            mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             mark_scan_map_lock: Mutex::new(false),
         }
     }
@@ -156,7 +151,7 @@ impl HashJoinProbeState {
                     let mut validity = MutableBitmap::new();
                     validity.extend_constant(input.num_rows(), true);
                     let validity: Bitmap = validity.into();
-                    self.set_validity(c, validity.len(), &validity)
+                    set_validity(c, validity.len(), &validity)
                 })
                 .collect::<Vec<_>>();
             input = DataBlock::new(nullable_columns, input.num_rows());
@@ -298,17 +293,6 @@ impl HashJoinProbeState {
         }
     }
 
-    pub fn need_outer_scan(&self) -> bool {
-        matches!(
-            self.hash_join_state.hash_join_desc.join_type,
-            JoinType::Full
-                | JoinType::Right
-                | JoinType::RightSingle
-                | JoinType::RightSemi
-                | JoinType::RightAnti
-        )
-    }
-
     pub fn right_and_full_outer_scan(
         &self,
         task: usize,
@@ -340,7 +324,7 @@ impl HashJoinProbeState {
             }
         }
 
-        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
         let interrupt = self.hash_join_state.interrupt.clone();
         let chunk_index = task;
         if interrupt.load(Ordering::Relaxed) {
@@ -394,7 +378,7 @@ impl HashJoinProbeState {
                         unmatched_build_block
                             .columns()
                             .iter()
-                            .map(|c| self.set_validity(c, num_rows, true_validity))
+                            .map(|c| set_validity(c, num_rows, true_validity))
                             .collect::<Vec<_>>()
                     } else {
                         let mut validity = MutableBitmap::new();
@@ -403,7 +387,7 @@ impl HashJoinProbeState {
                         unmatched_build_block
                             .columns()
                             .iter()
-                            .map(|c| self.set_validity(c, num_rows, &validity))
+                            .map(|c| set_validity(c, num_rows, &validity))
                             .collect::<Vec<_>>()
                     };
                     unmatched_build_block =
@@ -443,7 +427,7 @@ impl HashJoinProbeState {
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
-        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
         let interrupt = self.hash_join_state.interrupt.clone();
         let chunk_index = task;
         if interrupt.load(Ordering::Relaxed) {
@@ -499,7 +483,7 @@ impl HashJoinProbeState {
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
-        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
         let interrupt = self.hash_join_state.interrupt.clone();
         let chunk_index = task;
         if interrupt.load(Ordering::Relaxed) {
@@ -536,12 +520,7 @@ impl HashJoinProbeState {
         Ok(result_blocks)
     }
 
-    pub fn need_mark_scan(&self) -> bool {
-        matches!(
-            self.hash_join_state.hash_join_desc.join_type,
-            JoinType::LeftMark
-        )
-    }
+
 
     pub fn left_mark_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         let max_block_size = state.max_block_size;
@@ -558,7 +537,7 @@ impl HashJoinProbeState {
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
-        let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
+        let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
         let interrupt = self.hash_join_state.interrupt.clone();
         let chunk_index = task;
         if interrupt.load(Ordering::Relaxed) {
