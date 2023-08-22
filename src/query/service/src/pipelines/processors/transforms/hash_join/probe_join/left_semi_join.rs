@@ -117,7 +117,10 @@ impl HashJoinProbeState {
 
         let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
         let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
-        let is_build_projected = self.hash_join_state.is_build_projected.load(Ordering::Relaxed);
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
 
         let other_predicate = self
             .hash_join_state
@@ -192,10 +195,11 @@ impl HashJoinProbeState {
                         None
                     };
                     let build_block = if is_build_projected {
-                        Some(
-                            self.row_space
-                                .gather(build_indexes, data_blocks, build_num_rows)?,
-                        )
+                        Some(self.hash_join_state.row_space.gather(
+                            build_indexes,
+                            data_blocks,
+                            build_num_rows,
+                        )?)
                     } else {
                         None
                     };
@@ -284,10 +288,11 @@ impl HashJoinProbeState {
             None
         };
         let build_block = if is_build_projected {
-            Some(
-                self.row_space
-                    .gather(&build_indexes[0..occupied], data_blocks, build_num_rows)?,
-            )
+            Some(self.hash_join_state.row_space.gather(
+                &build_indexes[0..occupied],
+                data_blocks,
+                build_num_rows,
+            )?)
         } else {
             None
         };

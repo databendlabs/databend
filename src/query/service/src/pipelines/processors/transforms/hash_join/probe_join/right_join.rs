@@ -56,17 +56,21 @@ impl HashJoinProbeState {
         let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
         let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
-        let right_single_scan_map = if self.hash_join_state.hash_join_desc.join_type == JoinType::RightSingle {
-            outer_scan_map
-                .iter_mut()
-                .map(|sp| unsafe {
-                    std::mem::transmute::<*mut bool, *mut AtomicBool>(sp.as_mut_ptr())
-                })
-                .collect::<Vec<_>>()
-        } else {
-            vec![]
-        };
-        let is_build_projected = self.hash_join_state.is_build_projected.load(Ordering::Relaxed);
+        let right_single_scan_map =
+            if self.hash_join_state.hash_join_desc.join_type == JoinType::RightSingle {
+                outer_scan_map
+                    .iter_mut()
+                    .map(|sp| unsafe {
+                        std::mem::transmute::<*mut bool, *mut AtomicBool>(sp.as_mut_ptr())
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                vec![]
+            };
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(

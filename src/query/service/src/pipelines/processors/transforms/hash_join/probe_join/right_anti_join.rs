@@ -125,7 +125,10 @@ impl HashJoinProbeState {
         let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
         let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
