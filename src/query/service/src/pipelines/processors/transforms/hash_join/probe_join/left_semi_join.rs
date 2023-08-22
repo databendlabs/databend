@@ -22,11 +22,11 @@ use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 use common_hashtable::RowPtr;
 
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
-use crate::pipelines::processors::JoinHashTable;
 
 /// Semi join contain semi join and semi-anti join
-impl JoinHashTable {
+impl HashJoinProbeState {
     pub(crate) fn left_semi_anti_join<'a, const SEMI: bool, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
@@ -47,7 +47,7 @@ impl JoinHashTable {
         let mut result_blocks = vec![];
 
         for (i, key) in keys_iter.enumerate() {
-            let contains = if self.hash_join_desc.from_correlated_subquery {
+            let contains = if self.hash_join_state.hash_join_desc.from_correlated_subquery {
                 hash_table.contains(key)
             } else {
                 self.contains(hash_table, key, valids, i)
@@ -58,7 +58,7 @@ impl JoinHashTable {
                     probe_indexes[probe_indexes_occupied] = (i as u32, 1);
                     probe_indexes_occupied += 1;
                     if probe_indexes_occupied >= max_block_size {
-                        if self.interrupt.load(Ordering::Relaxed) {
+                        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                             return Err(ErrorCode::AbortedQuery(
                                 "Aborted query, because the server is shutting down or the query was killed.",
                             ));
@@ -115,7 +115,7 @@ impl JoinHashTable {
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
 
-        let data_blocks = self.row_space.chunks.read();
+        let data_blocks = self.hash_join_state.row_space.chunks.read();
         let data_blocks = data_blocks
             .iter()
             .map(|c| &c.data_block)
@@ -123,9 +123,17 @@ impl JoinHashTable {
         let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
 
-        let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
+        let other_predicate = self
+            .hash_join_state
+            .hash_join_desc
+            .other_predicate
+            .as_ref()
+            .unwrap();
         // For semi join, it defaults to all.
         let mut row_state = vec![0_u32; input.num_rows()];
         let dummy_probed_rows = vec![RowPtr {
@@ -135,7 +143,7 @@ impl JoinHashTable {
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_desc.from_correlated_subquery {
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
                     hash_table.probe_hash_table(key, build_indexes_ptr, occupied, max_block_size)
                 } else {
                     self.probe_key(
@@ -177,7 +185,7 @@ impl JoinHashTable {
             probe_indexes_len += 1;
             if occupied >= max_block_size {
                 loop {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
@@ -193,10 +201,11 @@ impl JoinHashTable {
                         None
                     };
                     let build_block = if is_build_projected {
-                        Some(
-                            self.row_space
-                                .gather(build_indexes, &data_blocks, &build_num_rows)?,
-                        )
+                        Some(self.hash_join_state.row_space.gather(
+                            build_indexes,
+                            &data_blocks,
+                            &build_num_rows,
+                        )?)
                     } else {
                         None
                     };
@@ -269,7 +278,7 @@ impl JoinHashTable {
             return Ok(result_blocks);
         }
 
-        if self.interrupt.load(Ordering::Relaxed) {
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
@@ -285,7 +294,7 @@ impl JoinHashTable {
             None
         };
         let build_block = if is_build_projected {
-            Some(self.row_space.gather(
+            Some(self.hash_join_state.row_space.gather(
                 &build_indexes[0..occupied],
                 &data_blocks,
                 &build_num_rows,
