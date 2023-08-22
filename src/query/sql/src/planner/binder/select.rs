@@ -363,7 +363,7 @@ impl Binder {
         };
 
         let (mut s_expr, bind_context) = match query.body {
-            SetExpr::Select(_) | SetExpr::Query(_) | SetExpr::Values { .. } => {
+            SetExpr::Select(_) | SetExpr::Query(_) => {
                 self.bind_set_expr(
                     bind_context,
                     &query.body,
@@ -372,7 +372,7 @@ impl Binder {
                 )
                 .await?
             }
-            SetExpr::SetOperation(_) => {
+            SetExpr::SetOperation(_) | SetExpr::Values { .. } => {
                 let (mut s_expr, mut bind_context) = self
                     .bind_set_expr(bind_context, &query.body, &[], limit.unwrap_or_default())
                     .await?;
