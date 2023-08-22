@@ -269,12 +269,6 @@ pub enum TableReference {
         options: SelectStageOptions,
         alias: Option<TableAlias>,
     },
-    // A set of values generates a temporary constant table that can be used for queries
-    Values {
-        span: Span,
-        values: Vec<Vec<Expr>>,
-        alias: Option<TableAlias>,
-    },
 }
 
 impl TableReference {
@@ -538,25 +532,6 @@ impl Display for TableReference {
                 write!(f, "{options}")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
-                }
-            }
-            TableReference::Values {
-                span: _,
-                values,
-                alias,
-            } => {
-                write!(f, "(VALUES")?;
-                for (i, value) in values.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "(")?;
-                    write_comma_separated_list(f, value)?;
-                    write!(f, ")")?;
-                }
-                write!(f, ")")?;
-                if let Some(alias) = alias {
-                    write!(f, " {alias}")?;
                 }
             }
         }
