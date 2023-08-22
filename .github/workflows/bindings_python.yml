@@ -124,7 +124,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v3
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@master
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.pypi_password }}
-          skip_existing: true
+          skip-existing: true

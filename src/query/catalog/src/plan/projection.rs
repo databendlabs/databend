@@ -32,6 +32,18 @@ pub enum Projection {
     /// inner column indices for tuple data type with inner columns.
     /// the key is the column_index of ColumnEntry.
     /// the value is the path indices of inner columns.
+    /// the following is an example of a tuple and the corresponding path indices:
+    /// a: Tuple (          path: [0]
+    ///   b1: Tuple (       path: [0, 0]
+    ///     c1: Int32,      path: [0, 0, 0]
+    ///     c2: String,     path: [0, 0, 1]
+    ///   ),
+    ///   b2: Tuple (       path: [0, 1]
+    ///     d1: Int32,      path: [0, 1, 0]
+    ///     d2: String,     path: [0, 1, 1]
+    ///     d3: String,     path: [0, 1, 2]
+    ///   )
+    /// )
     InnerColumns(BTreeMap<FieldIndex, Vec<FieldIndex>>),
 }
 
