@@ -181,7 +181,8 @@ impl Processor for ExchangeShuffleTransform {
         }
 
         if !self.all_inputs_finished {
-            if self.try_pull_inputs()? && !self.all_outputs_finished && !self.all_inputs_finished {
+            let pull_pending = self.try_pull_inputs()?;
+            if pull_pending && !self.all_outputs_finished && !self.all_inputs_finished {
                 self.try_push_outputs();
             }
         }
