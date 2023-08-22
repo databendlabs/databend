@@ -57,7 +57,6 @@ use common_pipeline_transforms::processors::transforms::transform_sort_partial;
 pub use hash_join::FixedKeyHashJoinHashTable;
 pub use hash_join::HashJoinDesc;
 pub use hash_join::HashJoinState;
-pub use hash_join::JoinHashTable;
 pub use range_join::RangeJoinState;
 pub use runtime_filter::RuntimeFilterState;
 pub use transform_add_computed_columns::TransformAddComputedColumns;
