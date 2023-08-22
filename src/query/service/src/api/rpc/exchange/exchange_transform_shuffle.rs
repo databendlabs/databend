@@ -283,8 +283,8 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
     let exchange_injector = &params.exchange_injector;
     exchange_injector.apply_shuffle_serializer(params, pipeline)?;
 
+    let output_len = pipeline.output_len();
     if let Some(exchange_sorting) = &exchange_injector.exchange_sorting() {
-        let output_len = pipeline.output_len();
         let sorting = ShuffleExchangeSorting::create(exchange_sorting.clone());
         let transform = TransformExchangeSorting::create(output_len, sorting);
 
@@ -297,7 +297,6 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
         )]));
     }
 
-    let output_len = pipeline.output_len();
     let new_output_len = params.destination_ids.len();
     let transform = ExchangeShuffleTransform::create(output_len, new_output_len);
 
