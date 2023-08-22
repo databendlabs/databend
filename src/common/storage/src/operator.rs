@@ -44,7 +44,7 @@ use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
-use opendal::layers::TracingLayer;
+use opendal::layers::MinitraceLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
@@ -111,7 +111,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add logging
         .layer(LoggingLayer::default())
         // Add tracing
-        .layer(TracingLayer)
+        .layer(MinitraceLayer)
         .finish();
 
     Ok(op)
