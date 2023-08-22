@@ -300,16 +300,16 @@ pub struct MetricsMiddlewareEndpoint<E> {
 impl<E: Endpoint> Endpoint for MetricsMiddlewareEndpoint<E> {
     type Output = Response;
 
-    async fn call(&self, mut req: Request) -> poem::error::Result<Self::Output> {
+    async fn call(&self, req: Request) -> poem::error::Result<Self::Output> {
         let start_time = Instant::now();
         let method = req.method().to_string();
         let output = self.ep.call(req).await?;
         let resp = output.into_response();
-        let status_code = resp.status().as_u16();
-        metrics_incr_http_request_count(&method, &self.api, status_code.clone());
+        let status_code = resp.status().to_string();
+        metrics_incr_http_request_count(method.clone(), self.api.clone(), status_code.clone());
         if start_time.elapsed().as_secs() > 20 {
             // TODO: replace this into histogram
-            metrics_incr_http_slow_request_count(&method, &self.api, status_code);
+            metrics_incr_http_slow_request_count(method, self.api.clone(), status_code);
         }
         Ok(resp)
     }
