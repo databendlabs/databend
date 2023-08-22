@@ -128,7 +128,7 @@ pub struct ExchangeShuffleTransform {
 }
 
 impl ExchangeShuffleTransform {
-    pub fn create(inputs: usize, outputs: usize) -> ExchangeShuffleTransform {
+    pub fn create(inputs: usize, outputs: usize, buffer: usize) -> ExchangeShuffleTransform {
         let mut inputs_port = Vec::with_capacity(inputs);
         let mut outputs_port = Vec::with_capacity(outputs);
 
@@ -143,7 +143,7 @@ impl ExchangeShuffleTransform {
         ExchangeShuffleTransform {
             inputs: inputs_port,
             outputs: outputs_port,
-            buffer: OutputsBuffer::create(inputs, outputs),
+            buffer: OutputsBuffer::create(buffer, outputs),
             cur_input_index: 0,
             all_inputs_finished: false,
             all_outputs_finished: false,
@@ -297,12 +297,13 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
         )]));
     }
 
-    let new_output_len = params.destination_ids.len();
-    let transform = ExchangeShuffleTransform::create(output_len, new_output_len);
+    let inputs = pipeline.output_len();
+    let outputs = params.destination_ids.len();
+    let transform = ExchangeShuffleTransform::create(inputs, outputs, output_len);
 
     let inputs = transform.get_inputs();
     let outputs = transform.get_outputs();
-    pipeline.add_pipe(Pipe::create(output_len, new_output_len, vec![
+    pipeline.add_pipe(Pipe::create(inputs, outputs, vec![
         PipeItem::create(ProcessorPtr::create(Box::new(transform)), inputs, outputs),
     ]));
 
