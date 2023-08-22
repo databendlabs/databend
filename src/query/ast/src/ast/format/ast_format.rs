@@ -2751,36 +2751,6 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let node = FormatTreeNode::with_children(format_ctx, children);
                 self.children.push(node)
             }
-            TableReference::Values {
-                span: _,
-                values,
-                alias,
-            } => {
-                let mut children = Vec::with_capacity(values.len());
-                for (i, row_values) in values.iter().enumerate() {
-                    let mut row_children = Vec::with_capacity(row_values.len());
-                    for value in row_values {
-                        self.visit_expr(value);
-                        row_children.push(self.children.pop().unwrap());
-                    }
-                    let row_name = format!("Row {}", i);
-                    let row_format_ctx =
-                        AstFormatContext::with_children(row_name, row_children.len());
-                    let row_node = FormatTreeNode::with_children(row_format_ctx, row_children);
-                    children.push(row_node);
-                }
-                let format_ctx = if let Some(alias) = alias {
-                    AstFormatContext::with_children_alias(
-                        "Values".to_string(),
-                        children.len(),
-                        Some(format!("{}", alias)),
-                    )
-                } else {
-                    AstFormatContext::with_children("Values".to_string(), children.len())
-                };
-                let node = FormatTreeNode::with_children(format_ctx, children);
-                self.children.push(node);
-            }
         }
     }
 

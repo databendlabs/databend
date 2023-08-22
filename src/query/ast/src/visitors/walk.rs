@@ -275,16 +275,6 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a 
             visitor.visit_join(join);
         }
         TableReference::Stage { .. } => {}
-        TableReference::Values { values, alias, .. } => {
-            for row_values in values {
-                for value in row_values {
-                    visitor.visit_expr(value);
-                }
-            }
-            if let Some(alias) = alias {
-                visitor.visit_identifier(&alias.name);
-            }
-        }
     }
 }
 

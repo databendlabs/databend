@@ -182,10 +182,7 @@ pub enum MergeSource {
         on_error_mode: Option<String>,
         start: usize,
     },
-    Values {
-        values: Vec<Vec<Expr>>,
-        alias: Option<TableAlias>,
-    },
+
     Select {
         query: Box<Query>,
     },
@@ -214,11 +211,7 @@ impl MergeSource {
                 },
                 alias: None,
             },
-            Self::Values { values, alias } => TableReference::Values {
-                span: None,
-                values: values.clone(),
-                alias: alias.clone(),
-            },
+
             Self::Select { query } => TableReference::Subquery {
                 span: None,
                 subquery: query.clone(),
@@ -247,22 +240,7 @@ impl Display for MergeSource {
                     on_error_mode.as_ref().unwrap_or(&"Abort".to_string())
                 )
             }
-            MergeSource::Values { values, alias } => {
-                write!(f, "(VALUES")?;
-                for (i, value) in values.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "(")?;
-                    write_comma_separated_list(f, value)?;
-                    write!(f, ")")?;
-                }
-                write!(f, ")")?;
-                if let Some(alias) = alias {
-                    write!(f, " {alias}")?;
-                }
-                Ok(())
-            }
+
             MergeSource::Select { query } => write!(f, "{query}"),
         }
     }

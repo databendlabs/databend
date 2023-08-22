@@ -1674,19 +1674,13 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
             start,
         },
     );
-    let values = map(
-        rule! {
-            "(" ~ VALUES ~ ^#comma_separated_list1(row_values) ~ ")" ~ #table_alias?
-        },
-        |(_, _, values, _, alias)| MergeSource::Values { values, alias },
-    );
+
     let query = map(query, |query| MergeSource::Select {
         query: Box::new(query),
     });
 
     rule!(
           #streaming_v2
-        | #values
         | #query
     )(i)
 }

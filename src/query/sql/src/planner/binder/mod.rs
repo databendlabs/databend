@@ -48,6 +48,7 @@ mod stage;
 mod table;
 mod table_args;
 mod update;
+mod values;
 mod window;
 pub use aggregate::AggregateInfo;
 pub use bind_context::*;

@@ -433,22 +433,6 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             } else {
                 RcDoc::nil()
             }),
-        TableReference::Values {
-            span: _,
-            values,
-            alias,
-        } => RcDoc::text("(VALUES")
-            .append(inline_comma(values.into_iter().map(|row_values| {
-                RcDoc::text("(")
-                    .append(inline_comma(row_values.into_iter().map(pretty_expr)))
-                    .append(RcDoc::text(")"))
-            })))
-            .append(RcDoc::text(")"))
-            .append(if let Some(alias) = alias {
-                RcDoc::text(format!(" {alias}"))
-            } else {
-                RcDoc::nil()
-            }),
     }
 }
 
