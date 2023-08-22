@@ -303,9 +303,11 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
 
     let inputs = transform.get_inputs();
     let outputs = transform.get_outputs();
-    pipeline.add_pipe(Pipe::create(inputs, outputs, vec![
-        PipeItem::create(ProcessorPtr::create(Box::new(transform)), inputs, outputs),
-    ]));
+    pipeline.add_pipe(Pipe::create(inputs, outputs, vec![PipeItem::create(
+        ProcessorPtr::create(Box::new(transform)),
+        inputs,
+        outputs,
+    )]));
 
     Ok(())
 }
