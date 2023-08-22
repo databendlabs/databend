@@ -535,6 +535,13 @@ impl Binder {
                     self.bind_query(&mut new_bind_context, subquery).await?;
                 if let Some(alias) = alias {
                     res_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    // reset column name as alias column name
+                    for i in 0..alias.columns.len() {
+                        let column = &res_bind_context.columns[i];
+                        self.metadata
+                            .write()
+                            .change_derived_column_alias(column.index, column.column_name.clone());
+                    }
                 }
                 Ok((s_expr, res_bind_context))
             }
