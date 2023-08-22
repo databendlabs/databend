@@ -89,7 +89,7 @@ impl Metadata {
         database_name: Option<&str>,
         table_name: &str,
     ) -> Option<IndexType> {
-        // Use `rev` is because a table may be quried multiple times in join clause,
+        // Use `rev` is because a table may be queried multiple times in join clause,
         // and the virtual columns should add to the table newly added.
         self.tables
             .iter()
