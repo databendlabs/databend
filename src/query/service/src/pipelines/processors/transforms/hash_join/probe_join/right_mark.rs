@@ -27,10 +27,10 @@ use common_hashtable::HashJoinHashtableLike;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
-use crate::pipelines::processors::JoinHashTable;
 
-impl JoinHashTable {
+impl HashJoinProbeState {
     pub(crate) fn probe_right_mark_join<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
@@ -44,10 +44,15 @@ impl JoinHashTable {
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        let has_null = *self.hash_join_desc.marker_join_desc.has_null.read();
+        let has_null = *self
+            .hash_join_state
+            .hash_join_desc
+            .marker_join_desc
+            .has_null
+            .read();
         let markers = probe_state.markers.as_mut().unwrap();
         for (i, key) in keys_iter.enumerate() {
-            let contains = match self.hash_join_desc.from_correlated_subquery {
+            let contains = match self.hash_join_state.hash_join_desc.from_correlated_subquery {
                 true => hash_table.contains(key),
                 false => self.contains(hash_table, key, valids, i),
             };
@@ -85,17 +90,28 @@ impl JoinHashTable {
     {
         let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
-        let has_null = *self.hash_join_desc.marker_join_desc.has_null.read();
+        let has_null = *self
+            .hash_join_state
+            .hash_join_desc
+            .marker_join_desc
+            .has_null
+            .read();
         let cols = input
             .columns()
             .iter()
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
             .collect::<Vec<_>>();
         let markers = probe_state.markers.as_mut().unwrap();
-        Self::init_markers(&cols, input.num_rows(), markers);
+        self.hash_join_state
+            .init_markers(&cols, input.num_rows(), markers);
 
         let _func_ctx = self.ctx.get_function_context()?;
-        let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
+        let other_predicate = self
+            .hash_join_state
+            .hash_join_desc
+            .other_predicate
+            .as_ref()
+            .unwrap();
 
         let mut occupied = 0;
         let mut probe_indexes_len = 0;
@@ -103,7 +119,7 @@ impl JoinHashTable {
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
 
-        let data_blocks = self.row_space.chunks.read();
+        let data_blocks = self.hash_join_state.row_space.chunks.read();
         let data_blocks = data_blocks
             .iter()
             .map(|c| &c.data_block)
@@ -111,11 +127,14 @@ impl JoinHashTable {
         let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_desc.from_correlated_subquery {
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
                     hash_table.probe_hash_table(key, build_indexes_ptr, occupied, max_block_size)
                 } else {
                     self.probe_key(
@@ -137,7 +156,7 @@ impl JoinHashTable {
             probe_indexes_len += 1;
             if occupied >= max_block_size {
                 loop {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
@@ -153,10 +172,11 @@ impl JoinHashTable {
                         None
                     };
                     let build_block = if is_build_projected {
-                        Some(
-                            self.row_space
-                                .gather(build_indexes, &data_blocks, &build_num_rows)?,
-                        )
+                        Some(self.hash_join_state.row_space.gather(
+                            build_indexes,
+                            &data_blocks,
+                            &build_num_rows,
+                        )?)
                     } else {
                         None
                     };
@@ -225,7 +245,7 @@ impl JoinHashTable {
                 None
             };
             let build_block = if is_build_projected {
-                Some(self.row_space.gather(
+                Some(self.hash_join_state.row_space.gather(
                     &build_indexes[0..occupied],
                     &data_blocks,
                     &build_num_rows,
