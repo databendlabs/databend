@@ -615,6 +615,8 @@ pub struct HashJoin {
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
+    // Use the column of probe side to construct build side column.
+    // (probe index, (is probe column nullable, is build column nullable))
     pub probe_to_build: Vec<(usize, (bool, bool))>,
     pub output_schema: DataSchemaRef,
     // It means that join has a corresponding runtime filter
