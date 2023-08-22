@@ -29,6 +29,7 @@ use common_ast::walk_statement_mut;
 use common_ast::Dialect;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunctionFactory;
 use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
@@ -248,6 +249,9 @@ impl Binder {
                     return err;
                 }
                 if let Some(fn_name) = target.function_call_name() {
+                    if !AggregateFunctionFactory::instance().contains(&fn_name) {
+                        continue;
+                    }
                     if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&&*fn_name) {
                         return Err(ErrorCode::UnsupportedIndex(format!(
                             "Currently create aggregating index just support these aggregate functions: {}",
