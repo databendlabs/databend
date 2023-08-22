@@ -74,6 +74,7 @@ use jsonb::parse_value;
 use jsonb::to_bool;
 use jsonb::to_f64;
 use jsonb::to_i64;
+use jsonb::to_pretty_string;
 use jsonb::to_str;
 use jsonb::to_string;
 use jsonb::to_u64;
@@ -896,6 +897,22 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             let s = to_string(val);
+            output.put_slice(s.as_bytes());
+            output.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
+        "json_pretty",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            let s = to_pretty_string(val);
             output.put_slice(s.as_bytes());
             output.commit_row();
         }),
