@@ -405,6 +405,19 @@ async fn test_sync_agg_index() -> Result<()> {
         assert_two_blocks_sorted_eq_with_name("refresh index", &data_blocks, &agg_data_blocks);
     }
 
+    // Insert more data with insert into ... select ...
+    execute_sql(fixture.ctx(), "INSERT INTO t0 SELECT * FROM t0").await?;
+
+    let blocks = collect_file_names(&block_path)?;
+
+    // check index0
+    let indexes_0 = collect_file_names(&agg_index_path_0)?;
+    assert_eq!(blocks, indexes_0);
+
+    // check index1
+    let indexes_1 = collect_file_names(&agg_index_path_1)?;
+    assert_eq!(blocks, indexes_1);
+
     Ok(())
 }
 

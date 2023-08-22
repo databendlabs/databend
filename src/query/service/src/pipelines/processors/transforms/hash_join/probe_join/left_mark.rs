@@ -27,10 +27,10 @@ use common_hashtable::HashJoinHashtableLike;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
-use crate::pipelines::processors::JoinHashTable;
 
-impl JoinHashTable {
+impl HashJoinProbeState {
     pub(crate) fn probe_left_mark_join<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
@@ -49,7 +49,12 @@ impl JoinHashTable {
         let probe_column = input.get_by_offset(0).value.as_column().unwrap();
         // Check if there is any null in the probe column.
         if matches!(probe_column.validity().1, Some(x) if x.unset_bits() > 0) {
-            let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
+            let mut has_null = self
+                .hash_join_state
+                .hash_join_desc
+                .marker_join_desc
+                .has_null
+                .write();
             *has_null = true;
         }
         let mut occupied = 0;
@@ -57,13 +62,13 @@ impl JoinHashTable {
         let build_indexes_ptr = build_index.as_mut_ptr();
 
         // If find join partner, set the marker to true.
-        let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
+        let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
 
         for (i, key) in keys_iter.enumerate() {
             if (i & max_block_size) == 0 {
                 max_block_size <<= 1;
 
-                if self.interrupt.load(Ordering::Relaxed) {
+                if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                     return Err(ErrorCode::AbortedQuery(
                         "Aborted query, because the server is shutting down or the query was killed.",
                     ));
@@ -71,6 +76,7 @@ impl JoinHashTable {
             }
 
             let (mut match_count, mut incomplete_ptr) = match self
+                .hash_join_state
                 .hash_join_desc
                 .from_correlated_subquery
             {
@@ -136,12 +142,22 @@ impl JoinHashTable {
         let probe_column = input.get_by_offset(0).value.as_column().unwrap();
         // Check if there is any null in the probe column.
         if matches!(probe_column.validity().1, Some(x) if x.unset_bits() > 0) {
-            let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
+            let mut has_null = self
+                .hash_join_state
+                .hash_join_desc
+                .marker_join_desc
+                .has_null
+                .write();
             *has_null = true;
         }
 
         let _func_ctx = self.ctx.get_function_context()?;
-        let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
+        let other_predicate = self
+            .hash_join_state
+            .hash_join_desc
+            .other_predicate
+            .as_ref()
+            .unwrap();
 
         let mut occupied = 0;
         let mut probe_indexes_len = 0;
@@ -149,16 +165,16 @@ impl JoinHashTable {
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
 
-        let data_blocks = unsafe { &*self.chunks.get() };
-        let build_num_rows = unsafe { &*self.build_num_rows.get() };
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
+        let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
+        let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
+        let is_build_projected = self.hash_join_state.is_build_projected.load(Ordering::Relaxed);
 
-        let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
+        let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
         let _mark_scan_map_lock = self.mark_scan_map_lock.lock();
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_desc.from_correlated_subquery {
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
                     hash_table.probe_hash_table(key, build_indexes_ptr, occupied, max_block_size)
                 } else {
                     self.probe_key(
@@ -180,7 +196,7 @@ impl JoinHashTable {
             probe_indexes_len += 1;
             if occupied >= max_block_size {
                 loop {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
@@ -254,10 +270,15 @@ impl JoinHashTable {
             }
         }
 
-        if self.hash_join_desc.from_correlated_subquery {
+        if self.hash_join_state.hash_join_desc.from_correlated_subquery {
             // Must be correlated ANY subquery, we won't need to check `has_null` in `mark_join_blocks`.
             // In the following, if value is Null and Marker is False, we'll set the marker to Null
-            let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
+            let mut has_null = self
+                .hash_join_state
+                .hash_join_desc
+                .marker_join_desc
+                .has_null
+                .write();
             *has_null = false;
         }
 

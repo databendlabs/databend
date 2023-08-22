@@ -19,7 +19,7 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_hashtable::RowPtr;
-use common_sql::optimizer::ColumnSet;
+use common_sql::ColumnSet;
 use common_storages_fuse::TableContext;
 use parking_lot::RwLock;
 

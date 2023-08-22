@@ -24,11 +24,12 @@ use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 use common_hashtable::RowPtr;
 
+use crate::pipelines::processors::transforms::hash_join::common::set_validity;
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
-use crate::pipelines::processors::JoinHashTable;
 use crate::sql::plans::JoinType;
 
-impl JoinHashTable {
+impl HashJoinProbeState {
     pub(crate) fn probe_right_join<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
@@ -52,10 +53,10 @@ impl JoinHashTable {
         let mut result_blocks = vec![];
         let mut probe_indexes_len = 0;
 
-        let data_blocks = unsafe { &*self.chunks.get() };
-        let build_num_rows = unsafe { &*self.build_num_rows.get() };
-        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
-        let right_single_scan_map = if self.hash_join_desc.join_type == JoinType::RightSingle {
+        let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
+        let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
+        let right_single_scan_map = if self.hash_join_state.hash_join_desc.join_type == JoinType::RightSingle {
             outer_scan_map
                 .iter_mut()
                 .map(|sp| unsafe {
@@ -65,7 +66,7 @@ impl JoinHashTable {
         } else {
             vec![]
         };
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
+        let is_build_projected = self.hash_join_state.is_build_projected.load(Ordering::Relaxed);
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -87,7 +88,7 @@ impl JoinHashTable {
                 loop {
                     // The matched_num must be equal to max_block_size.
                     debug_assert_eq!(matched_num, max_block_size);
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
@@ -104,14 +105,14 @@ impl JoinHashTable {
                         let nullable_columns = probe_block
                             .columns()
                             .iter()
-                            .map(|c| Self::set_validity(c, max_block_size, true_validity))
+                            .map(|c| set_validity(c, max_block_size, true_validity))
                             .collect::<Vec<_>>();
                         Some(DataBlock::new(nullable_columns, max_block_size))
                     } else {
                         None
                     };
                     let build_block = if is_build_projected {
-                        Some(self.row_space.gather(
+                        Some(self.hash_join_state.row_space.gather(
                             local_build_indexes,
                             data_blocks,
                             build_num_rows,
@@ -123,9 +124,16 @@ impl JoinHashTable {
                         self.merge_eq_block(probe_block, build_block, max_block_size);
 
                     if !result_block.is_empty() {
-                        if self.hash_join_desc.other_predicate.is_none() {
+                        if self
+                            .hash_join_state
+                            .hash_join_desc
+                            .other_predicate
+                            .is_none()
+                        {
                             result_blocks.push(result_block);
-                            if self.hash_join_desc.join_type == JoinType::RightSingle {
+                            if self.hash_join_state.hash_join_desc.join_type
+                                == JoinType::RightSingle
+                            {
                                 self.update_right_single_scan_map(
                                     local_build_indexes,
                                     &right_single_scan_map,
@@ -140,12 +148,18 @@ impl JoinHashTable {
                         } else {
                             let (bm, all_true, all_false) = self.get_other_filters(
                                 &result_block,
-                                self.hash_join_desc.other_predicate.as_ref().unwrap(),
+                                self.hash_join_state
+                                    .hash_join_desc
+                                    .other_predicate
+                                    .as_ref()
+                                    .unwrap(),
                             )?;
 
                             if all_true {
                                 result_blocks.push(result_block);
-                                if self.hash_join_desc.join_type == JoinType::RightSingle {
+                                if self.hash_join_state.hash_join_desc.join_type
+                                    == JoinType::RightSingle
+                                {
                                     self.update_right_single_scan_map(
                                         local_build_indexes,
                                         &right_single_scan_map,
@@ -160,7 +174,9 @@ impl JoinHashTable {
                             } else if !all_false {
                                 // Safe to unwrap.
                                 let validity = bm.unwrap();
-                                if self.hash_join_desc.join_type == JoinType::RightSingle {
+                                if self.hash_join_state.hash_join_desc.join_type
+                                    == JoinType::RightSingle
+                                {
                                     self.update_right_single_scan_map(
                                         local_build_indexes,
                                         &right_single_scan_map,
@@ -232,14 +248,14 @@ impl JoinHashTable {
             let nullable_columns = probe_block
                 .columns()
                 .iter()
-                .map(|c| Self::set_validity(c, probe_block.num_rows(), &validity))
+                .map(|c| set_validity(c, probe_block.num_rows(), &validity))
                 .collect::<Vec<_>>();
             Some(DataBlock::new(nullable_columns, validity.len()))
         } else {
             None
         };
         let build_block = if is_build_projected {
-            Some(self.row_space.gather(
+            Some(self.hash_join_state.row_space.gather(
                 &local_build_indexes[0..matched_num],
                 data_blocks,
                 build_num_rows,
@@ -250,9 +266,14 @@ impl JoinHashTable {
         let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
         if !result_block.is_empty() {
-            if self.hash_join_desc.other_predicate.is_none() {
+            if self
+                .hash_join_state
+                .hash_join_desc
+                .other_predicate
+                .is_none()
+            {
                 result_blocks.push(result_block);
-                if self.hash_join_desc.join_type == JoinType::RightSingle {
+                if self.hash_join_state.hash_join_desc.join_type == JoinType::RightSingle {
                     self.update_right_single_scan_map(
                         &local_build_indexes[0..matched_num],
                         &right_single_scan_map,
@@ -267,12 +288,16 @@ impl JoinHashTable {
             } else {
                 let (bm, all_true, all_false) = self.get_other_filters(
                     &result_block,
-                    self.hash_join_desc.other_predicate.as_ref().unwrap(),
+                    self.hash_join_state
+                        .hash_join_desc
+                        .other_predicate
+                        .as_ref()
+                        .unwrap(),
                 )?;
 
                 if all_true {
                     result_blocks.push(result_block);
-                    if self.hash_join_desc.join_type == JoinType::RightSingle {
+                    if self.hash_join_state.hash_join_desc.join_type == JoinType::RightSingle {
                         self.update_right_single_scan_map(
                             &local_build_indexes[0..matched_num],
                             &right_single_scan_map,
@@ -287,7 +312,7 @@ impl JoinHashTable {
                 } else if !all_false {
                     // Safe to unwrap.
                     let validity = bm.unwrap();
-                    if self.hash_join_desc.join_type == JoinType::RightSingle {
+                    if self.hash_join_state.hash_join_desc.join_type == JoinType::RightSingle {
                         self.update_right_single_scan_map(
                             &local_build_indexes[0..matched_num],
                             &right_single_scan_map,
