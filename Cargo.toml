@@ -114,7 +114,7 @@ opendal = { version = "0.39", features = [
 ] }
 ethnum = { version = "1.3.2" }
 ordered-float = { version = "3.6.0", default-features = false }
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "fe6835a" }
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "cb4b1eb" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
