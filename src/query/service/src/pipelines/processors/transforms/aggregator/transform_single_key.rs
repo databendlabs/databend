@@ -47,7 +47,7 @@ pub struct PartialSingleStateAggregator {
     funcs: Vec<AggregateFunctionRef>,
 
     /// A temporary place to hold aggregating state from index data.
-    temp_place: StateAddr,
+    temp_places: Vec<StateAddr>,
 }
 
 impl PartialSingleStateAggregator {
@@ -64,15 +64,19 @@ impl PartialSingleStateAggregator {
             .ok_or_else(|| ErrorCode::LayoutError("layout shouldn't be None"))?;
 
         let place: StateAddr = arena.alloc_layout(layout).into();
+        let temp_place: StateAddr = arena.alloc_layout(layout).into();
         let mut places = Vec::with_capacity(params.offsets_aggregate_states.len());
+        let mut temp_places = Vec::with_capacity(params.offsets_aggregate_states.len());
 
         for (idx, func) in params.aggregate_functions.iter().enumerate() {
             let arg_place = place.next(params.offsets_aggregate_states[idx]);
             func.init_state(arg_place);
             places.push(arg_place);
-        }
 
-        let temp_place = arena.alloc_layout(layout).into();
+            let state_place = temp_place.next(params.offsets_aggregate_states[idx]);
+            func.init_state(state_place);
+            temp_places.push(state_place);
+        }
 
         Ok(AccumulatingTransformer::create(
             input,
@@ -82,7 +86,7 @@ impl PartialSingleStateAggregator {
                 places,
                 funcs: params.aggregate_functions.clone(),
                 arg_indices: params.aggregate_functions_arguments.clone(),
-                temp_place,
+                temp_places,
             },
         ))
     }
@@ -123,7 +127,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                     .unwrap()
                     .as_string()
                     .unwrap();
-                let state_place = self.temp_place;
+                let state_place = self.temp_places[idx];
                 for (_, mut raw_state) in agg_state.iter().enumerate() {
                     func.deserialize(state_place, &mut raw_state)?;
                     func.merge(place, state_place)?;

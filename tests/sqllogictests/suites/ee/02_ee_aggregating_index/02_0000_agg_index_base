@@ -250,6 +250,35 @@ DROP AGGREGATING INDEX testi
 statement ok
 DROP TABLE t
 
+# multiple agg functions
+statement ok
+CREATE TABLE t (a int, b int, c int)
+
+statement ok
+INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5), (1,3,3)
+
+# query: eval-agg-eval-scan, index: eval-agg-eval-scan
+
+statement ok
+CREATE AGGREGATING INDEX testi AS select b, sum(a), max(c) from t where c > 1 group by b
+
+# partial refresh
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query II
+SELECT b, SUM(a), MAX(c) from t WHERE c > 1 GROUP BY b ORDER BY b
+----
+1 1 4
+2 3 5
+3 1 3
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+statement ok
+DROP TABLE t
+
 statement ok
 CREATE TABLE t(id int, user_id int, event_name varchar)
 
