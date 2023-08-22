@@ -102,18 +102,17 @@ impl OutputsBuffer {
         self.inner.iter().any(|x| x.len() == x.capacity())
     }
 
-    pub fn clear(&mut self, index: usize) -> usize {
-        let len = self.inner[index].len();
+    pub fn clear(&mut self, index: usize) {
         self.inner[index].clear();
-        len
     }
 
     pub fn pop(&mut self, index: usize) -> Option<DataBlock> {
         self.inner[index].pop_front()
     }
 
-    pub fn push_back(&mut self, index: usize, block: DataBlock) {
-        self.inner[index].push_back(block)
+    pub fn push_back(&mut self, index: usize, block: DataBlock) -> usize {
+        self.inner[index].push_back(block);
+        self.inner[index].len()
     }
 }
 
@@ -169,17 +168,8 @@ impl Processor for ExchangeShuffleTransform {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if !self.all_inputs_finished {
-            self.try_pull_inputs()?;
-        }
-
         if !self.all_outputs_finished {
-            let consumed_buffer = self.try_push_outputs();
-
-            // try pull inputs again if consumed buffer.
-            if consumed_buffer && !self.all_outputs_finished && !self.all_inputs_finished {
-                self.try_pull_inputs()?;
-            }
+            self.try_push_outputs();
         }
 
         if self.all_outputs_finished {
@@ -188,6 +178,12 @@ impl Processor for ExchangeShuffleTransform {
             }
 
             return Ok(Event::Finished);
+        }
+
+        if !self.all_inputs_finished {
+            if self.try_pull_inputs()? && !self.all_outputs_finished && !self.all_inputs_finished {
+                self.try_push_outputs();
+            }
         }
 
         if self.all_inputs_finished && self.buffer.is_empty() {
@@ -203,13 +199,12 @@ impl Processor for ExchangeShuffleTransform {
 }
 
 impl ExchangeShuffleTransform {
-    fn try_push_outputs(&mut self) -> bool {
+    fn try_push_outputs(&mut self) {
         self.all_outputs_finished = true;
-        let mut consumed_buffer = false;
 
         for (index, output) in self.outputs.iter().enumerate() {
             if output.is_finished() {
-                consumed_buffer |= self.buffer.clear(index) != 0;
+                self.buffer.clear(index);
                 continue;
             }
 
@@ -217,17 +212,15 @@ impl ExchangeShuffleTransform {
 
             if output.can_push() {
                 if let Some(data_block) = self.buffer.pop(index) {
-                    consumed_buffer = true;
                     output.push_data(Ok(data_block));
                 }
             }
         }
-
-        consumed_buffer
     }
 
-    fn try_pull_inputs(&mut self) -> Result<()> {
+    fn try_pull_inputs(&mut self) -> Result<bool> {
         self.all_inputs_finished = true;
+        let mut pull_pending = false;
         for index in (self.cur_input_index..self.inputs.len()).chain(0..self.cur_input_index) {
             if self.inputs[index].is_finished() {
                 continue;
@@ -241,7 +234,7 @@ impl ExchangeShuffleTransform {
 
             if self.buffer.is_full() {
                 self.cur_input_index = index;
-                return Ok(());
+                return Ok(pull_pending);
             }
 
             let mut data_block = self.inputs[index].pull_data().unwrap()?;
@@ -250,8 +243,10 @@ impl ExchangeShuffleTransform {
             if let Some(block_meta) = data_block.take_meta() {
                 if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
                     for (index, block) in shuffle_meta.blocks.into_iter().enumerate() {
-                        if !block.is_empty() || block.get_meta().is_some() {
-                            self.buffer.push_back(index, block);
+                        if (!block.is_empty() || block.get_meta().is_some())
+                            && !self.outputs[index].is_finished()
+                        {
+                            pull_pending |= self.buffer.push_back(index, block) == 1;
                         }
                     }
 
@@ -265,7 +260,7 @@ impl ExchangeShuffleTransform {
             ));
         }
 
-        Ok(())
+        Ok(pull_pending)
     }
 }
 
