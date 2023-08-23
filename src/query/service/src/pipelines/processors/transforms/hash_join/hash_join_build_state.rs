@@ -58,7 +58,9 @@ use crate::pipelines::processors::transforms::hash_join::hash_join_state::HashJo
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::SingleStringHashJoinHashTable;
 use crate::pipelines::processors::HashJoinState;
+use crate::pipelines::processors::transforms::hash_join::row::Chunk;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
+use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
 /// Define some shared states for all hash join build threads.
@@ -93,6 +95,8 @@ pub struct HashJoinBuildState {
     pub(crate) build_worker_num: Arc<AtomicU32>,
     /// Tasks for building hash table.
     pub(crate) build_hash_table_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
+    /// Coordinator for build spill.
+    pub(crate) spill_coordinator: Arc<BuildSpillCoordinator>,
 }
 
 impl HashJoinBuildState {
@@ -101,6 +105,7 @@ impl HashJoinBuildState {
         build_keys: &[RemoteExpr],
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
+        spill_coordinator: Arc<BuildSpillCoordinator>,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
@@ -120,24 +125,32 @@ impl HashJoinBuildState {
             build_projections: Arc::new(build_projections.clone()),
             build_worker_num: Arc::new(Default::default()),
             build_hash_table_tasks: Arc::new(Default::default()),
+            spill_coordinator,
         }))
     }
 
     /// Add input `DataBlock` to `hash_join_state.row_space`.
-    pub fn build(&self, input: DataBlock) -> Result<()> {
+    /// The return value means whether need to spill.
+    /// if added, return false, otherwise return true.
+    pub fn build(&self, input: DataBlock) -> Result<bool> {
+        // Check if need to spill
+        if self.check_need_spill(&input)? {
+            return Ok(true);
+        }
         let mut buffer = self.hash_join_state.row_space.buffer.write();
         let mut buffer_row_size = self.hash_join_state.row_space.buffer_row_size.write();
         *buffer_row_size += input.num_rows();
         buffer.push(input);
         if *buffer_row_size < *self.chunk_size_limit {
-            Ok(())
+            Ok(false)
         } else {
             let data_block = DataBlock::concat(buffer.as_slice())?;
             buffer.clear();
             *buffer_row_size = 0;
             drop(buffer);
             drop(buffer_row_size);
-            self.add_build_block(data_block)
+            self.add_build_block(data_block)?;
+            Ok(false)
         }
     }
 

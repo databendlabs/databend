@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod build_spill;
 mod common;
 mod desc;
 mod hash_join_build_state;
@@ -24,8 +25,8 @@ pub(crate) mod row;
 mod transform_hash_join_build;
 mod transform_hash_join_probe;
 mod util;
-mod build_spill;
 
+pub use build_spill::BuildSpillCoordinator;
 pub use desc::HashJoinDesc;
 pub use hash_join_build_state::HashJoinBuildState;
 pub use hash_join_probe_state::HashJoinProbeState;
@@ -35,4 +36,3 @@ pub use probe_state::ProbeState;
 pub use result_blocks::*;
 pub use transform_hash_join_build::TransformHashJoinBuild;
 pub use transform_hash_join_probe::TransformHashJoinProbe;
-pub use build_spill::BuildSpillCoordinator;

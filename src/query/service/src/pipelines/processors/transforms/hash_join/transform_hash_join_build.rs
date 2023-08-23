@@ -31,6 +31,8 @@ enum HashJoinBuildStep {
     // The fast return step indicates there is no data in build side,
     // so we can directly finish the following steps for hash join and return empty result.
     FastReturn,
+    // Wait to spill
+    WaitSpill,
 }
 
 pub struct TransformHashJoinBuild {
@@ -107,7 +109,11 @@ impl Processor for TransformHashJoinBuild {
         match self.step {
             HashJoinBuildStep::Running => {
                 if let Some(data_block) = self.input_data.take() {
-                    self.build_state.build(data_block)?;
+                    let need_spill = self.build_state.build(data_block)?;
+                    if need_spill {
+                        self.step = HashJoinBuildStep::WaitSpill;
+                        self.build_state.spill_coordinator.need_spill()
+                    }
                 }
                 Ok(())
             }
@@ -119,19 +125,25 @@ impl Processor for TransformHashJoinBuild {
                     self.build_state.build_done()
                 }
             }
-            HashJoinBuildStep::FastReturn => unreachable!(),
+            HashJoinBuildStep::FastReturn | HashJoinBuildStep::WaitSpill => unreachable!(),
         }
     }
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        if let HashJoinBuildStep::Running = &self.step {
-            self.build_state.wait_row_space_build_finish().await?;
-            if self.build_state.hash_join_state.fast_return()? {
-                self.step = HashJoinBuildStep::FastReturn;
-                return Ok(());
+        match &self.step {
+            HashJoinBuildStep::Running => {
+                self.build_state.wait_row_space_build_finish().await?;
+                if self.build_state.hash_join_state.fast_return()? {
+                    self.step = HashJoinBuildStep::FastReturn;
+                    return Ok(());
+                }
+                self.step = HashJoinBuildStep::Finalize;
             }
-            self.step = HashJoinBuildStep::Finalize;
+            HashJoinBuildStep::WaitSpill => {
+                todo!()
+            }
+            _ => Ok(()),
         }
         Ok(())
     }

@@ -16,10 +16,9 @@ use opendal::Operator;
 
 /// Spiller type, currently only supports HashJoin
 enum SpillerType {
-    HashJoin
-    // Todo: Add more spiller type
-    // OrderBy
-    // Aggregation
+    HashJoin, /* Todo: Add more spiller type
+               * OrderBy
+               * Aggregation */
 }
 
 /// Spiller configuration
@@ -37,5 +36,4 @@ pub struct Spiller {
     operator: Operator,
     config: SpillerConfig,
     spiller_type: SpillerType,
-
 }

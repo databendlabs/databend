@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use common_exception::Result;
-use crate::pipelines::processors::transforms::hash_join::{BuildSpillCoordinator, HashJoinBuildState};
-use crate::spiller::Spiller;
 
+use common_exception::Result;
+use common_expression::DataBlock;
+
+use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
+use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
+use crate::spiller::Spiller;
 
 /// Define some states for hash join build spilling
 struct BuildSpillState {
@@ -31,9 +34,24 @@ struct BuildSpillState {
 /// Define some spill-related APIs for hash join build
 impl HashJoinBuildState {
     // Start to spill.
-    fn spill(&mut self) -> Result<()> {
+    async fn spill(&mut self) -> Result<()> {
         todo!()
     }
 
+    // Need to spill, tell coordinator that current processor need to spill.
+    // And change state to `WaitSpill`
+    fn need_spill(&mut self) -> Result<()> {
+        todo!()
+    }
 
+    // Wait to spill, tell coordinator that current processor is waiting for spilling.
+    // And change state to `WaitSpill`
+    fn wait_spill(&mut self) -> Result<()> {
+        todo!()
+    }
+
+    // Check if need to spill.
+    pub(crate) fn check_need_spill(&self, input: &DataBlock) -> Result<bool> {
+        todo!()
+    }
 }

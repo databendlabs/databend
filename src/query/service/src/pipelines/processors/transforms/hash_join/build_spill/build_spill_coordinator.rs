@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
+
+use common_exception::Result;
+
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 
 /// Coordinate all hash join build processors to spill.
@@ -20,6 +25,24 @@ use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 /// When hash join build needs to spill, all processor will stop executing and prepare to spill.
 /// The last one will be as the coordinator to spill all processors and then wake up all processors to continue executing.
 pub struct BuildSpillCoordinator {
-    /// Hash join builders' reference.
-    builders: Vec<Arc<HashJoinBuildState>>,
+    /// Need to spill, if one of the builders need to spill, this flag will be set to true.
+    need_spill: AtomicBool,
+}
+
+impl BuildSpillCoordinator {
+    // Start to spill.
+    fn spill(&self) -> Result<()> {
+        todo!()
+    }
+
+    // Called by hash join build processor, if current processor need to spill, then set `need_spill` to true.
+    pub fn need_spill(&self) -> Result<()> {
+        self.need_spill.store(true, Ordering::SeqCst);
+        todo!()
+    }
+
+    // If current waiting spilling builder is the last one, then spill all builders.
+    fn wait_spill(&mut self) -> Result<()> {
+        todo!()
+    }
 }
