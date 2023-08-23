@@ -167,7 +167,7 @@ impl ReclusterAggregator {
 
         let mut tasks = Vec::new();
         let merged_blocks = std::mem::take(&mut self.merged_blocks);
-        let segments_num = (merged_blocks.len() / self.block_per_seg).min(1);
+        let segments_num = (merged_blocks.len() / self.block_per_seg).max(1);
         let chunk_size = merged_blocks.len().div_ceil(segments_num);
         let default_cluster_key = Some(self.default_cluster_key);
         let block_thresholds = self.block_thresholds;
