@@ -2895,13 +2895,13 @@ impl<'a> TypeChecker<'a> {
 
         let mut index = 0;
         // Check for duplicate virtual columns
-        for column in self
+        for table_column in self
             .metadata
             .read()
             .virtual_columns_by_table_index(table_index)
         {
-            if column.name() == name {
-                index = column.index();
+            if table_column.name() == name {
+                index = table_column.index();
                 break;
             }
         }

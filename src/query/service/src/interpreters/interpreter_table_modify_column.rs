@@ -200,10 +200,12 @@ impl ModifyTableColumnInterpreter {
         let mut new_schema = schema.clone();
 
         // first check default expr before lock table
-        for (column, _type_name, default_expr_opt) in column_name_types {
+        for (column, type_name, default_expr_opt) in column_name_types {
             let column = column.to_string();
             if let Ok(i) = schema.index_of(&column) {
                 if let Some(default_expr) = default_expr_opt {
+                    let new_type = resolve_type_name(type_name)?;
+                    new_schema.fields[i].data_type = new_type;
                     let default_expr = default_expr.to_string();
                     new_schema.fields[i].default_expr = Some(default_expr);
                     let _ = field_default_value(self.ctx.clone(), &new_schema.fields[i])?;
