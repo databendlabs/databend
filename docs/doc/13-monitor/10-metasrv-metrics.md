@@ -13,8 +13,9 @@ You can access the metrics through a web browser using the following URLs:
 - Query Metrics: `http://<metric_api_address>/metrics`. Defaults to `0.0.0.0:7070/metrics`.
 
 :::tip
-Alternatively, you can visualize the metrics with a third-party tool. For supported tools and integration tutorials, see **Monitor** > **Using 3rd-party Tools**.
+Alternatively, you can visualize the metrics using third-party tools. For information about supported tools and integration tutorials, refer to **Monitor** > **Using 3rd-party Tools**. When employing the Prometheus & Grafana solution, you can create dashboards using our provided dashboard templates, available [here](https://github.com/datafuselabs/helm-charts/tree/main/dashboards). For more details, check out the [Prometheus & Grafana](tools/prometheus-and-grafana.md) guide.
 :::
+
 ## Meta Metrics
 
 Here's a list of Meta metrics captured by Databend.
