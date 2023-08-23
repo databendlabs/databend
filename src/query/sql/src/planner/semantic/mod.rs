@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod aggregate_rewriter;
-mod aggregating_index_rewriter;
+mod aggregating_index_visitor;
 mod distinct_to_groupby;
 mod grouping_check;
 mod lowering;
@@ -22,7 +22,8 @@ mod type_check;
 mod window_check;
 
 pub use aggregate_rewriter::AggregateRewriter;
-pub use aggregating_index_rewriter::AggregatingIndexRewriter;
+pub use aggregating_index_visitor::AggregatingIndexChecker;
+pub use aggregating_index_visitor::AggregatingIndexRewriter;
 pub use distinct_to_groupby::DistinctToGroupBy;
 pub use grouping_check::GroupingChecker;
 pub use lowering::*;
