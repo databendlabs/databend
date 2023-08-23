@@ -7209,7 +7209,7 @@ dependencies = [
 [[package]]
 name = "mysql_async"
 version = "0.32.2"
-source = "git+https://github.com/blackbeam/mysql_async?rev=1adbbcf#1adbbcfab7459b0eee4c8bd14ceebc968df55341"
+source = "git+https://github.com/datafuse-extras/mysql_async?rev=1adbbcf#1adbbcfab7459b0eee4c8bd14ceebc968df55341"
 dependencies = [
  "bytes",
  "crossbeam",
