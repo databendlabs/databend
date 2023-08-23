@@ -284,7 +284,7 @@ impl Parquet2Reader {
                 metrics_inc_copy_read_size_bytes(part.compressed_size());
                 Ok(Parquet2PartData::SmallFiles(buffers))
             }
-            ParquetPart::ParquetRSFile(_) => unreachable!(),
+            ParquetPart::ParquetRSRowGroup(_) => unreachable!(),
         }
     }
 
@@ -348,7 +348,7 @@ impl Parquet2Reader {
 
                 Ok(Parquet2PartData::SmallFiles(buffers))
             }
-            ParquetPart::ParquetRSFile(_) => unreachable!(),
+            ParquetPart::ParquetRSRowGroup(_) => unreachable!(),
         }
     }
 }

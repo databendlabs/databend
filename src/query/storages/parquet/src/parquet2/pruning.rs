@@ -207,7 +207,7 @@ impl PartitionPruner {
                     offset,
                     length,
                     num_values: c.num_values(),
-                    compression: c.compression(),
+                    compression: c.compression().into(),
                     uncompressed_size: c.uncompressed_size() as u64,
                     min_max,
                     has_dictionary: c.dictionary_page_offset().is_some(),

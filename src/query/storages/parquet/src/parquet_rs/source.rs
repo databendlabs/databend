@@ -102,7 +102,7 @@ impl Processor for ParquetSource {
             // And we should try to build another stream (in next event loop).
         } else if let Some(part) = self.ctx.get_partition() {
             match ParquetPart::from_part(&part)? {
-                ParquetPart::ParquetRSFile(file) => {
+                ParquetPart::ParquetRSRowGroup(file) => {
                     let stream = self
                         .reader
                         .prepare_data_stream(self.ctx.clone(), &file.location)

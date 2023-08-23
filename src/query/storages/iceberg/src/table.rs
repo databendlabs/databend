@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
@@ -41,8 +42,8 @@ use common_meta_app::schema::TableMeta;
 use common_pipeline_core::Pipeline;
 use common_storage::DataOperator;
 use common_storages_parquet::ParquetPart;
-use common_storages_parquet::ParquetRSFilePart;
 use common_storages_parquet::ParquetRSReader;
+use common_storages_parquet::ParquetRSRowGroupPart;
 use storages_common_pruner::RangePrunerCreator;
 use tokio::sync::OnceCell;
 
@@ -231,14 +232,14 @@ impl IcebergTable {
                         let location = table
                             .rel_path(&v.file_path)
                             .expect("file path must be rel to table");
-                        Ok(Arc::new(
-                            Box::new(IcebergPartInfo::Parquet(ParquetPart::ParquetRSFile(
-                                ParquetRSFilePart {
-                                    location,
-                                    file_size: v.file_size_in_bytes as u64,
-                                },
-                            ))) as Box<dyn PartInfo>,
-                        ))
+                        Ok(Arc::new(Box::new(IcebergPartInfo::Parquet(
+                            ParquetPart::ParquetRSRowGroup(ParquetRSRowGroupPart {
+                                location,
+                                num_rows: v.record_count as usize,
+                                column_metas: HashMap::new(),
+                                row_selection: None,
+                            }),
+                        )) as Box<dyn PartInfo>))
                     }
                     _ => Err(ErrorCode::Unimplemented(
                         "Only parquet format is supported for iceberg table",

@@ -12,27 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_base::runtime::execute_futures_in_parallel;
+use common_base::runtime::GLOBAL_MEM_STAT;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use opendal::Operator;
+use parquet::arrow::arrow_reader::RowSelector;
+use parquet::arrow::async_reader::AsyncFileReader;
+use parquet::file::metadata::ParquetMetaData;
+use parquet::schema::types::SchemaDescPtr;
+use parquet::schema::types::SchemaDescriptor;
 
 use super::table::ParquetRSTable;
-use crate::parquet_part::ParquetRSFilePart;
+use crate::parquet_part::ColumnMeta;
+use crate::parquet_part::ParquetRSRowGroupPart;
+use crate::parquet_part::SerdeRowSelector;
 use crate::ParquetPart;
+use crate::ParquetRSPruner;
 
 impl ParquetRSTable {
     #[inline]
     #[async_backtrace::framed]
     pub(super) async fn do_read_partitions(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _push_down: Option<PushDownInfo>,
+        ctx: Arc<dyn TableContext>,
+        push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let file_locations = match &self.files_to_read {
             Some(files) => files
@@ -49,30 +63,198 @@ impl ParquetRSTable {
             .collect::<Vec<_>>(),
         };
 
+        let settings = ctx.get_settings();
+
+        let parquet_metas = read_parquet_metas_in_parallel(
+            self.operator.clone(),
+            file_locations,
+            self.schema_descr.clone(),
+            self.schema_from.clone(),
+            settings.get_max_threads()? as usize,
+            64,
+            settings.get_max_memory_usage()?,
+        )
+        .await?;
+
+        let pruner = ParquetRSPruner::try_create(
+            ctx.get_function_context()?,
+            self.schema(),
+            &push_down,
+            self.read_options,
+        )?;
+
         // TODO(parquet):
         // The second field of `file_locations` is size of the file.
         // It will be used for judging if we need to read small parquet files at once to reduce IO.
-        let partitions = file_locations
-            .into_iter()
-            .map(|(location, file_size)| {
-                Arc::new(Box::new(ParquetPart::ParquetRSFile(ParquetRSFilePart {
-                    location,
-                    file_size,
-                })) as Box<dyn PartInfo>)
+
+        prune_and_generate_partitions(pruner, parquet_metas)
+    }
+}
+
+fn prune_and_generate_partitions(
+    pruner: ParquetRSPruner,
+    parquet_metas: Vec<(String, Arc<ParquetMetaData>)>,
+) -> Result<(PartStatistics, Partitions)> {
+    let mut parts = vec![];
+    let mut part_stats = PartStatistics::default_exact();
+    for (location, meta) in parquet_metas {
+        part_stats.partitions_total += meta.num_row_groups();
+        let rgs = pruner.prune_row_groups(&meta)?;
+        let mut row_selections = pruner.prune_pages(&meta, &rgs)?;
+        for rg in rgs {
+            let rg_meta = meta.row_group(rg);
+            let num_rows = rg_meta.num_rows() as usize;
+            let selection = row_selections.as_mut().map(|s| s.split_off(num_rows));
+            let serde_selection = selection.map(|s| {
+                let selectors: Vec<RowSelector> = s.into();
+                selectors
+                    .into_iter()
+                    .map(SerdeRowSelector::from)
+                    .collect::<Vec<_>>()
+            });
+
+            let mut column_metas = HashMap::new();
+            for (id, col) in rg_meta.columns().iter().enumerate() {
+                // TODO(parquet): skip unused columns by `ProjectionMask`. (after optimizeing `PrwhereInfo`)
+                let (offset, length) = col.byte_range();
+                column_metas.insert(id, ColumnMeta {
+                    offset,
+                    length,
+                    num_values: col.num_values(),
+                    compression: col.compression().into(),
+                    uncompressed_size: col.uncompressed_size() as u64,
+                    min_max: None,
+                    has_dictionary: col.dictionary_page_offset().is_some(),
+                });
+            }
+
+            part_stats.read_rows += num_rows;
+            part_stats.read_bytes += rg_meta.total_byte_size() as usize;
+            part_stats.partitions_scanned += 1;
+
+            parts.push(Arc::new(
+                Box::new(ParquetPart::ParquetRSRowGroup(ParquetRSRowGroupPart {
+                    location: location.clone(),
+                    num_rows,
+                    column_metas,
+                    row_selection: serde_selection,
+                })) as Box<dyn PartInfo>,
+            ))
+        }
+    }
+
+    Ok((
+        part_stats,
+        Partitions::create_nolazy(PartitionsShuffleKind::Mod, parts),
+    ))
+}
+
+fn check_parquet_schema(
+    expect: &SchemaDescriptor,
+    actual: &SchemaDescriptor,
+    path: &str,
+    schema_from: &str,
+) -> Result<()> {
+    if expect.root_schema() != actual.root_schema() {
+        return Err(ErrorCode::TableSchemaMismatch(format!(
+            "infer schema from '{}', but get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
+            schema_from, path, expect, actual
+        )));
+    }
+    Ok(())
+}
+
+/// Load parquet meta and check if the schema is matched.
+async fn load_and_check_parquet_meta(
+    loc: &str,
+    op: Operator,
+    expect: &SchemaDescriptor,
+    schema_from: &str,
+) -> Result<Arc<ParquetMetaData>> {
+    let mut reader = op.reader(loc).await?;
+    let metadata = reader.get_metadata().await?;
+    check_parquet_schema(
+        expect,
+        metadata.file_metadata().schema_descr(),
+        loc,
+        schema_from,
+    )?;
+    Ok(metadata)
+}
+
+async fn read_parquet_metas_batch(
+    file_infos: Vec<(String, u64)>,
+    op: Operator,
+    expect: SchemaDescPtr,
+    schema_from: String,
+    max_memory_usage: u64,
+) -> Result<Vec<(String, Arc<ParquetMetaData>)>> {
+    let mut metas = Vec::with_capacity(file_infos.len());
+    for (path, _size) in file_infos {
+        let meta = load_and_check_parquet_meta(&path, op.clone(), &expect, &schema_from).await?;
+        metas.push((path, meta));
+    }
+    let used = GLOBAL_MEM_STAT.get_memory_usage();
+    if max_memory_usage as i64 - used < 100 * 1024 * 1024 {
+        Err(ErrorCode::Internal(format!(
+            "not enough memory to load parquet file metas, max_memory_usage = {}, used = {}.",
+            max_memory_usage, used
+        )))
+    } else {
+        Ok(metas)
+    }
+}
+
+#[async_backtrace::framed]
+pub async fn read_parquet_metas_in_parallel(
+    op: Operator,
+    file_infos: Vec<(String, u64)>,
+    expect: SchemaDescPtr,
+    schema_from: String,
+    thread_nums: usize,
+    permit_nums: usize,
+    max_memory_usage: u64,
+) -> Result<Vec<(String, Arc<ParquetMetaData>)>> {
+    let batch_size = 100;
+    if file_infos.len() <= batch_size {
+        read_parquet_metas_batch(
+            file_infos,
+            op.clone(),
+            expect,
+            schema_from,
+            max_memory_usage,
+        )
+        .await
+    } else {
+        let mut chunks = file_infos.chunks(batch_size);
+
+        let tasks = std::iter::from_fn(move || {
+            let expect = expect.clone();
+            let schema_from = schema_from.clone();
+            chunks.next().map(|location| {
+                read_parquet_metas_batch(
+                    location.to_vec(),
+                    op.clone(),
+                    expect.clone(),
+                    schema_from.clone(),
+                    max_memory_usage,
+                )
             })
-            .collect();
+        });
 
-        // TODO(parquet):
-        // - collect exact statistics.
-        // - use stats to prune row groups.
-        // - make one row group one partition.
+        let result = execute_futures_in_parallel(
+            tasks,
+            thread_nums,
+            permit_nums,
+            "read-parquet-metas-worker".to_owned(),
+        )
+        .await?
+        .into_iter()
+        .collect::<Result<Vec<Vec<_>>>>()?
+        .into_iter()
+        .flatten()
+        .collect();
 
-        // We cannot get the exact statistics of partitions from parquet files.
-        // It's because we will not read metadata of parquet files for parquet_rs.
-        // Metadata will be read before reading data.
-        Ok((
-            PartStatistics::default(),
-            Partitions::create_nolazy(PartitionsShuffleKind::Mod, partitions),
-        ))
+        Ok(result)
     }
 }
