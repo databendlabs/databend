@@ -157,7 +157,7 @@ bumpalo = "3.12.0"
 tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
 
 # http
-reqwest = { version = "0.11", default-features = false, features = [
+reqwest = { version = "0.11.19", default-features = false, features = [
     "json",
     "rustls-tls",
     "rustls-tls-native-roots",
@@ -236,3 +236,4 @@ arrow-cast = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
 arrow-data = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
 arrow-buffer = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
 parquet = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
+sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "6ef6d97" }
