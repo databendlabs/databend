@@ -449,14 +449,14 @@ impl Display for ThriftProtocol {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CatalogHiveConfig {
-    pub address: String,
+    pub hive_metastore: String,
     pub protocol: ThriftProtocol,
 }
 
 impl Default for CatalogHiveConfig {
     fn default() -> Self {
         Self {
-            address: "127.0.0.1:9083".to_string(),
+            hive_metastore: "127.0.0.1:9083".to_string(),
             protocol: ThriftProtocol::Binary,
         }
     }

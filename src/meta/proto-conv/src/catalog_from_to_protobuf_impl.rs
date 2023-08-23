@@ -80,7 +80,7 @@ impl FromToProto for mt::CatalogMeta {
             catalog_option: match option {
                 pb::catalog_option::CatalogOption::Hive(v) => {
                     CatalogOption::Hive(HiveCatalogOption {
-                        address: v.address,
+                        hive_metastore: v.hive_metastore,
                         storage_params: v.storage_params.map(StorageParams::from_pb).transpose()?.map(Box::new),
                     })
                 }
@@ -115,7 +115,7 @@ impl FromToProto for mt::CatalogMeta {
                         pb::HiveCatalogOption {
                             ver: VER,
                             min_reader_ver: MIN_READER_VER,
-                            address: v.address,
+                            hive_metastore: v.hive_metastore,
                             storage_params: v.storage_params.map(|v| v.to_pb()).transpose()?,
                         },
                     )),

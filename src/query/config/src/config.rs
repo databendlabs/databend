@@ -417,7 +417,7 @@ impl Default for CatalogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CatalogsHiveConfig {
-    pub address: String,
+    pub hive_metastore: String,
 
     /// Deprecated fields, used for catching error, will be removed later.
     pub meta_store_address: Option<String>,
@@ -430,7 +430,7 @@ pub struct CatalogsHiveConfig {
 #[serde(default)]
 pub struct HiveCatalogConfig {
     #[clap(long = "hive-meta-store-address", default_value_t)]
-    pub address: String,
+    pub hive_metastore: String,
     /// Deprecated fields, used for catching error, will be removed later.
     pub meta_store_address: Option<String>,
 
@@ -473,7 +473,7 @@ impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
         }
 
         Ok(InnerCatalogHiveConfig {
-            address: self.address,
+            hive_metastore: self.hive_metastore,
             protocol: self.protocol.parse()?,
         })
     }
@@ -482,7 +482,7 @@ impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
 impl From<InnerCatalogHiveConfig> for CatalogsHiveConfig {
     fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
-            address: inner.address,
+            hive_metastore: inner.hive_metastore,
             protocol: inner.protocol.to_string(),
 
             // Deprecated fields
@@ -507,7 +507,7 @@ impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
         }
 
         Ok(InnerCatalogHiveConfig {
-            address: self.address,
+            hive_metastore: self.hive_metastore,
             protocol: self.protocol.parse()?,
         })
     }
@@ -516,7 +516,7 @@ impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
 impl From<InnerCatalogHiveConfig> for HiveCatalogConfig {
     fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
-            address: inner.address,
+            hive_metastore: inner.hive_metastore,
             protocol: inner.protocol.to_string(),
 
             // Deprecated fields
@@ -2307,7 +2307,7 @@ mod cache_config_converters {
                 let catalog = v.try_into()?;
                 catalogs.insert(k, catalog);
             }
-            if !self.catalog.address.is_empty() || !self.catalog.protocol.is_empty() {
+            if !self.catalog.hive_metastore.is_empty() || !self.catalog.protocol.is_empty() {
                 warn!(
                     "`catalog` is planned to be deprecated, please add catalog in `catalogs` instead"
                 );

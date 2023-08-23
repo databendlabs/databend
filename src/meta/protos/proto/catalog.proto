@@ -52,7 +52,7 @@ message HiveCatalogOption {
   uint64 min_reader_ver = 101;
 
   // Hive metastore thrift uri
-  string address = 1;
+  string hive_metastore = 1;
   StorageConfig storage_params = 2;
 }
 

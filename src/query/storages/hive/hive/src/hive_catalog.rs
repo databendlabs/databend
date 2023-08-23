@@ -106,7 +106,7 @@ impl CatalogCreator for HiveCreator {
         let catalog: Arc<dyn Catalog> = Arc::new(HiveCatalog::try_create(
             info.clone(),
             opt.storage_params.clone().map(|v| *v),
-            &opt.address,
+            &opt.hive_metastore,
         )?);
 
         Ok(catalog)

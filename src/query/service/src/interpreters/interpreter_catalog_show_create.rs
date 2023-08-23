@@ -59,8 +59,8 @@ impl Interpreter for ShowCreateCatalogInterpreter {
             CatalogOption::Hive(op) => (
                 String::from("hive"),
                 format!(
-                    "ADDRESS\n{}\nSTORAGE PARAMS\n{}",
-                    op.address,
+                    "HIVE META STORE\n{}\nSTORAGE PARAMS\n{}",
+                    op.hive_metastore,
                     op.storage_params.unwrap_or(Box::new(StorageParams::None))
                 ),
             ),

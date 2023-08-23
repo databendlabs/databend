@@ -144,14 +144,14 @@ impl Binder {
                 let mut options = options.clone();
 
                 // Remove address and url to avoid unexpected field error in uri location.
-                let address = options
-                    .remove("address")
-                    .ok_or_else(|| ErrorCode::InvalidArgument("expected field: ADDRESS"))?;
+                let hive_metastore = options
+                    .remove("hive_metastore")
+                    .ok_or_else(|| ErrorCode::InvalidArgument("expected field: HIVE_METASTORE"))?;
 
                 let sp = parse_catalog_url(options)?;
 
                 CatalogOption::Hive(HiveCatalogOption {
-                    address,
+                    hive_metastore,
                     storage_params: sp.map(Box::new),
                 })
             }

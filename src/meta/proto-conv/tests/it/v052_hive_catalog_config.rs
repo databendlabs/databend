@@ -45,7 +45,7 @@ fn test_decode_v52_hive_catalog() -> anyhow::Result<()> {
 
     let want = || common_meta_app::schema::CatalogMeta {
         catalog_option: CatalogOption::Hive(HiveCatalogOption {
-            address: "127.0.0.1:10000".to_string(),
+            hive_metastore: "127.0.0.1:10000".to_string(),
             storage_params: Some(Box::new(common_meta_app::storage::StorageParams::S3(
                 StorageS3Config {
                     endpoint_url: "http://127.0.0.1:9900".to_string(),
