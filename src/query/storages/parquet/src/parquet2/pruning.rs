@@ -47,11 +47,11 @@ use opendal::Operator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 
+use super::partition::ColumnMeta;
+use super::Parquet2RowGroupPart;
 use crate::parquet2::statistics::collect_row_group_stats;
 use crate::parquet2::statistics::BatchStatistics;
 use crate::parquet_part::collect_small_file_parts;
-use crate::parquet_part::ColumnMeta;
-use crate::parquet_part::Parquet2RowGroupPart;
 use crate::parquet_part::ParquetPart;
 
 /// Prune parquet row groups and pages.
@@ -207,7 +207,7 @@ impl PartitionPruner {
                     offset,
                     length,
                     num_values: c.num_values(),
-                    compression: c.compression().into(),
+                    compression: c.compression(),
                     uncompressed_size: c.uncompressed_size() as u64,
                     min_max,
                     has_dictionary: c.dictionary_page_offset().is_some(),

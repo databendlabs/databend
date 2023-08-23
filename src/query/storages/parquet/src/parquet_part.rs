@@ -14,112 +14,19 @@
 
 use std::any::Any;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::mem;
 use std::sync::Arc;
 
-use common_arrow::parquet::compression::Compression as Compression2;
-use common_arrow::parquet::indexes::Interval;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PartStatistics;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::FieldIndex;
-use common_expression::Scalar;
-use parquet::arrow::arrow_reader::RowSelector;
-use parquet::basic::BrotliLevel;
-use parquet::basic::Compression;
-use parquet::basic::GzipLevel;
-use parquet::basic::ZstdLevel;
 
-/// Serializable compression types.
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Copy, Clone, Debug)]
-pub enum SerdeCompression {
-    Uncompressed,
-    Snappy,
-    Gzip(u32),
-    Lzo,
-    Brotli(u32),
-    Lz4,
-    Zstd(i32),
-    Lz4Raw,
-}
-
-impl From<Compression2> for SerdeCompression {
-    fn from(value: Compression2) -> Self {
-        match value {
-            Compression2::Uncompressed => SerdeCompression::Uncompressed,
-            Compression2::Snappy => SerdeCompression::Snappy,
-            Compression2::Gzip => SerdeCompression::Gzip(6),
-            Compression2::Lzo => SerdeCompression::Lzo,
-            Compression2::Brotli => SerdeCompression::Brotli(1),
-            Compression2::Lz4 => SerdeCompression::Lz4,
-            Compression2::Zstd => SerdeCompression::Zstd(1),
-            Compression2::Lz4Raw => SerdeCompression::Lz4Raw,
-        }
-    }
-}
-
-impl From<SerdeCompression> for Compression2 {
-    fn from(value: SerdeCompression) -> Self {
-        match value {
-            SerdeCompression::Uncompressed => Compression2::Uncompressed,
-            SerdeCompression::Snappy => Compression2::Snappy,
-            SerdeCompression::Gzip(_) => Compression2::Gzip,
-            SerdeCompression::Lzo => Compression2::Lzo,
-            SerdeCompression::Brotli(_) => Compression2::Brotli,
-            SerdeCompression::Lz4 => Compression2::Lz4,
-            SerdeCompression::Zstd(_) => Compression2::Zstd,
-            SerdeCompression::Lz4Raw => Compression2::Lz4Raw,
-        }
-    }
-}
-
-impl From<Compression> for SerdeCompression {
-    fn from(value: Compression) -> Self {
-        match value {
-            Compression::UNCOMPRESSED => SerdeCompression::Uncompressed,
-            Compression::SNAPPY => SerdeCompression::Snappy,
-            Compression::GZIP(l) => SerdeCompression::Gzip(l.compression_level()),
-            Compression::LZO => SerdeCompression::Lzo,
-            Compression::BROTLI(l) => SerdeCompression::Brotli(l.compression_level()),
-            Compression::LZ4 => SerdeCompression::Lz4,
-            Compression::ZSTD(l) => SerdeCompression::Zstd(l.compression_level()),
-            Compression::LZ4_RAW => SerdeCompression::Lz4Raw,
-        }
-    }
-}
-
-impl From<SerdeCompression> for Compression {
-    fn from(value: SerdeCompression) -> Self {
-        match value {
-            SerdeCompression::Uncompressed => Compression::UNCOMPRESSED,
-            SerdeCompression::Snappy => Compression::SNAPPY,
-            SerdeCompression::Gzip(l) => Compression::GZIP(GzipLevel::try_new(l).unwrap()),
-            SerdeCompression::Lzo => Compression::LZO,
-            SerdeCompression::Brotli(l) => Compression::BROTLI(BrotliLevel::try_new(l).unwrap()),
-            SerdeCompression::Lz4 => Compression::LZ4,
-            SerdeCompression::Zstd(l) => Compression::ZSTD(ZstdLevel::try_new(l).unwrap()),
-            SerdeCompression::Lz4Raw => Compression::LZ4_RAW,
-        }
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
-pub struct ColumnMeta {
-    pub offset: u64,
-    pub length: u64,
-    pub num_values: i64,
-    pub compression: SerdeCompression,
-    pub uncompressed_size: u64,
-    pub min_max: Option<(Scalar, Scalar)>,
-
-    // if has dictionary, we can not push down predicate to deserialization.
-    pub has_dictionary: bool,
-}
+use crate::parquet2::Parquet2RowGroupPart;
+use crate::parquet_rs::ParquetRSRowGroupPart;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum ParquetPart {
@@ -165,50 +72,6 @@ impl ParquetSmallFilesPart {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
-pub struct Parquet2RowGroupPart {
-    pub location: String,
-    pub num_rows: usize,
-    pub column_metas: HashMap<FieldIndex, ColumnMeta>,
-    pub row_selection: Option<Vec<Interval>>,
-
-    pub sort_min_max: Option<(Scalar, Scalar)>,
-}
-
-impl Parquet2RowGroupPart {
-    pub fn uncompressed_size(&self) -> u64 {
-        self.column_metas
-            .values()
-            .map(|c| c.uncompressed_size)
-            .sum()
-    }
-
-    pub fn compressed_size(&self) -> u64 {
-        self.column_metas.values().map(|c| c.length).sum()
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
-pub struct ParquetRSRowGroupPart {
-    pub location: String,
-    pub num_rows: usize,
-    pub column_metas: HashMap<FieldIndex, ColumnMeta>,
-    pub row_selection: Option<Vec<SerdeRowSelector>>,
-}
-
-impl ParquetRSRowGroupPart {
-    pub fn uncompressed_size(&self) -> u64 {
-        self.column_metas
-            .values()
-            .map(|c| c.uncompressed_size)
-            .sum()
-    }
-
-    pub fn compressed_size(&self) -> u64 {
-        self.column_metas.values().map(|c| c.length).sum()
-    }
-}
-
 #[typetag::serde(name = "parquet_part")]
 impl PartInfo for ParquetPart {
     fn as_any(&self) -> &dyn Any {
@@ -240,31 +103,6 @@ impl ParquetPart {
             .ok_or(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to ParquetPart.",
             ))
-    }
-}
-
-/// Serializable row selector.
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
-pub struct SerdeRowSelector {
-    pub row_count: usize,
-    pub skip: bool,
-}
-
-impl From<RowSelector> for SerdeRowSelector {
-    fn from(value: RowSelector) -> Self {
-        SerdeRowSelector {
-            row_count: value.row_count,
-            skip: value.skip,
-        }
-    }
-}
-
-impl From<SerdeRowSelector> for RowSelector {
-    fn from(value: SerdeRowSelector) -> Self {
-        RowSelector {
-            row_count: value.row_count,
-            skip: value.skip,
-        }
     }
 }
 

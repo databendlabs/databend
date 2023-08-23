@@ -34,9 +34,9 @@ use parquet::schema::types::SchemaDescPtr;
 use parquet::schema::types::SchemaDescriptor;
 
 use super::table::ParquetRSTable;
-use crate::parquet_part::ColumnMeta;
-use crate::parquet_part::ParquetRSRowGroupPart;
-use crate::parquet_part::SerdeRowSelector;
+use crate::parquet_rs::partition::ColumnMeta;
+use crate::parquet_rs::partition::SerdeRowSelector;
+use crate::parquet_rs::ParquetRSRowGroupPart;
 use crate::ParquetPart;
 use crate::ParquetRSPruner;
 
@@ -123,8 +123,6 @@ fn prune_and_generate_partitions(
                     num_values: col.num_values(),
                     compression: col.compression().into(),
                     uncompressed_size: col.uncompressed_size() as u64,
-                    min_max: None,
-                    has_dictionary: col.dictionary_page_offset().is_some(),
                 });
             }
 

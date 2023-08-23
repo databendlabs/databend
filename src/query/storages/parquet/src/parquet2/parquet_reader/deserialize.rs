@@ -37,7 +37,7 @@ use log::debug;
 
 use super::filter::FilterState;
 use crate::parquet2::parquet_reader::Parquet2Reader;
-use crate::parquet_part::ColumnMeta;
+use crate::parquet2::partition::ColumnMeta;
 
 impl Parquet2Reader {
     /// The number of columns can be greater than 1 because the it may be a nested type.
@@ -57,7 +57,7 @@ impl Parquet2Reader {
                     PageMetaData {
                         column_start: meta.offset,
                         num_values: meta.num_values,
-                        compression: meta.compression.into(),
+                        compression: meta.compression,
                         descriptor: descriptor.descriptor.clone(),
                     },
                     Arc::new(|_, _| true),
@@ -100,7 +100,7 @@ impl Parquet2Reader {
                     PageMetaData {
                         column_start: meta.offset,
                         num_values: meta.num_values,
-                        compression: meta.compression.into(),
+                        compression: meta.compression,
                         descriptor: descriptor.descriptor.clone(),
                     },
                     Arc::new(move |_, header| {

@@ -45,7 +45,7 @@ use super::Parquet2PartData;
 use crate::parquet2::parquet_reader::deserialize::try_next_block;
 use crate::parquet2::parquet_table::arrow_to_table_schema;
 use crate::parquet2::projection::project_parquet_schema;
-use crate::parquet_part::Parquet2RowGroupPart;
+use crate::parquet2::Parquet2RowGroupPart;
 use crate::ParquetPart;
 
 /// The reader to parquet files with a projected schema.

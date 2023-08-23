@@ -50,7 +50,7 @@ use crate::parquet2::parquet_reader::Parquet2PartData;
 use crate::parquet2::parquet_reader::Parquet2Reader;
 use crate::parquet2::parquet_table::Parquet2PrewhereInfo;
 use crate::parquet2::pruning::PartitionPruner;
-use crate::parquet_part::Parquet2RowGroupPart;
+use crate::parquet2::Parquet2RowGroupPart;
 use crate::parquet_part::ParquetPart;
 use crate::parquet_part::ParquetSmallFilesPart;
 
