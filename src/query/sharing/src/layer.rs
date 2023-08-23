@@ -23,8 +23,8 @@ use http::Response;
 use http::StatusCode;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
+use opendal::layers::MinitraceLayer;
 use opendal::layers::RetryLayer;
-use opendal::layers::TracingLayer;
 use opendal::raw::new_request_build_error;
 use opendal::raw::parse_content_length;
 use opendal::raw::parse_etag;
@@ -82,7 +82,7 @@ pub fn create_share_table_operator(
             // Add logging
             .layer(LoggingLayer::default())
             // Add tracing
-            .layer(TracingLayer)
+            .layer(MinitraceLayer)
             .finish()
         }
         None => {

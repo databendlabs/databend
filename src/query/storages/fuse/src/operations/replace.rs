@@ -166,14 +166,8 @@ impl FuseTable {
 
         pipeline.add_transform(|input, output| {
             let base_segments = base_snapshot.segments.clone();
-            let base_summary = base_snapshot.summary.clone();
-            let mutation_aggregator = TableMutationAggregator::create(
-                self,
-                ctx.clone(),
-                base_segments,
-                base_summary,
-                mutation_kind,
-            );
+            let mutation_aggregator =
+                TableMutationAggregator::new(self, ctx.clone(), base_segments, mutation_kind);
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input,
                 output,

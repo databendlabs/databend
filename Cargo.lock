@@ -2781,7 +2781,6 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
- "common-pipeline-sources",
  "common-storage",
  "common-storages-parquet",
  "futures",
@@ -2789,6 +2788,7 @@ dependencies = [
  "match-template",
  "minitrace",
  "opendal",
+ "parquet",
  "serde",
  "storages-common-pruner",
  "storages-common-table-meta",
@@ -6417,7 +6417,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.2.3"
-source = "git+https://github.com/datafuselabs/jsonb?rev=fe6835a#fe6835a0a6813279366550db7ba6cd64aed317d8"
+source = "git+https://github.com/datafuselabs/jsonb?rev=cb4b1eb#cb4b1ebde906a56b82b064b639fcfcf989e0f235"
 dependencies = [
  "byteorder",
  "fast-float",
@@ -6747,9 +6747,9 @@ dependencies = [
 
 [[package]]
 name = "logcall"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4abc7eef9e6fd624accfb9f7f031909825a03f41209508e172a6c84a69353b57"
+checksum = "2d369db60a3256a6d47b13adcfff7ce37588d8b670bb3e334fa1cc8886cdfaa9"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -7590,6 +7590,7 @@ dependencies = [
  "log",
  "md-5",
  "metrics",
+ "minitrace",
  "moka",
  "once_cell",
  "parking_lot 0.12.1",
@@ -7604,7 +7605,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "tokio",
- "tracing",
  "uuid",
 ]
 

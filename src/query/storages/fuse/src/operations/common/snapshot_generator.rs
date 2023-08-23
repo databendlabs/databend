@@ -62,10 +62,12 @@ pub trait SnapshotGenerator {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Default)]
 pub struct SnapshotChanges {
+    pub appended_segments: Vec<Location>,
+    pub replaced_segments: HashMap<usize, Location>,
     pub removed_segment_indexes: Vec<usize>,
-    pub added_segments: Vec<Option<Location>>,
+
+    pub merged_statistics: Statistics,
     pub removed_statistics: Statistics,
-    pub added_statistics: Statistics,
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
@@ -105,44 +107,51 @@ impl ConflictResolveContext {
     pub fn is_modified_segments_exists_in_latest(
         base: &TableSnapshot,
         latest: &TableSnapshot,
+        replaced_segments: &HashMap<usize, Location>,
         removed_segments: &[usize],
-    ) -> Option<Vec<usize>> {
-        let mut positions = Vec::with_capacity(removed_segments.len());
+    ) -> Option<(Vec<usize>, HashMap<usize, Location>)> {
         let latest_segments = latest
             .segments
             .iter()
             .enumerate()
             .map(|(i, x)| (x, i))
             .collect::<HashMap<_, usize>>();
+        let mut removed = Vec::with_capacity(removed_segments.len());
         for removed_segment in removed_segments {
             let removed_segment = &base.segments[*removed_segment];
             if let Some(position) = latest_segments.get(removed_segment) {
-                positions.push(*position);
+                removed.push(*position);
             } else {
                 return None;
             }
         }
-        Some(positions)
+
+        let mut replaced = HashMap::with_capacity(replaced_segments.len());
+        for (position, location) in replaced_segments {
+            let origin_segment = &base.segments[*position];
+            if let Some(position) = latest_segments.get(origin_segment) {
+                replaced.insert(*position, location.clone());
+            } else {
+                return None;
+            }
+        }
+        Some((removed, replaced))
     }
 
     pub fn merge_segments(
         mut base_segments: Vec<Location>,
-        added_segments: Vec<Option<Location>>,
+        appended_segments: Vec<Location>,
+        replaced_segments: HashMap<usize, Location>,
         removed_segment_indexes: Vec<usize>,
     ) -> Vec<Location> {
-        let mut blanks = vec![];
-        for (position, added_segment) in removed_segment_indexes
+        replaced_segments
             .into_iter()
-            .zip(added_segments.into_iter())
-        {
-            if let Some(added) = added_segment {
-                base_segments[position] = added;
-            } else {
-                blanks.push(position);
-            }
-        }
+            .for_each(|(k, v)| base_segments[k] = v);
+
+        let mut blanks = removed_segment_indexes;
         blanks.sort_unstable();
-        let mut merged_segments = Vec::with_capacity(base_segments.len() - blanks.len());
+        let mut merged_segments =
+            Vec::with_capacity(base_segments.len() + appended_segments.len() - blanks.len());
         if !blanks.is_empty() {
             let mut last = 0;
             for blank in blanks {
@@ -153,7 +162,11 @@ impl ConflictResolveContext {
         } else {
             merged_segments = base_segments;
         }
-        merged_segments
+
+        appended_segments
+            .into_iter()
+            .chain(merged_segments)
+            .collect()
     }
 }
 
@@ -230,10 +243,11 @@ impl SnapshotGenerator for MutationGenerator {
                 }
             }
             ConflictResolveContext::ModifiedSegmentExistsInLatest(ctx) => {
-                if let Some(positions) =
+                if let Some((removed, replaced)) =
                     ConflictResolveContext::is_modified_segments_exists_in_latest(
                         &self.base_snapshot,
                         &previous,
+                        &ctx.replaced_segments,
                         &ctx.removed_segment_indexes,
                     )
                 {
@@ -241,11 +255,12 @@ impl SnapshotGenerator for MutationGenerator {
                     metrics_inc_commit_mutation_modified_segment_exists_in_latest();
                     let new_segments = ConflictResolveContext::merge_segments(
                         previous.segments.clone(),
-                        ctx.added_segments.clone(),
-                        positions,
+                        ctx.appended_segments.clone(),
+                        replaced,
+                        removed,
                     );
                     let mut new_summary = merge_statistics(
-                        &ctx.added_statistics,
+                        &ctx.merged_statistics,
                         &previous.summary,
                         default_cluster_key_id,
                     );

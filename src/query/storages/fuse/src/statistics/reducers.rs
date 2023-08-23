@@ -24,6 +24,8 @@ use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
+use crate::table_functions::cmp_with_null;
+
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
 ) -> StatisticsOfColumns {
@@ -108,8 +110,14 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
         }
     }
 
-    let min = min_stats.into_iter().min_by(|x, y| x.cmp(y)).unwrap();
-    let max = max_stats.into_iter().max_by(|x, y| x.cmp(y)).unwrap();
+    let min = min_stats
+        .into_iter()
+        .min_by(|x, y| x.iter().cmp_by(y.iter(), cmp_with_null))
+        .unwrap();
+    let max = max_stats
+        .into_iter()
+        .max_by(|x, y| x.iter().cmp_by(y.iter(), cmp_with_null))
+        .unwrap();
     let level = levels.into_iter().max().unwrap_or(0);
 
     Some(ClusterStatistics::new(
