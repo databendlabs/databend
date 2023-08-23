@@ -104,9 +104,9 @@ If you are interested in learning more, please check out the resources listed be
 
 We have also made these improvements to Databend that we hope you will find helpful:
 
-- `VALUES` clause can be used without being combined with `SELECT`.
-- Setting default values is supported when modifying column type.
-- Automatic reclustering of tables is now supported after performing write operations (`COPY INTO` and `REPLACE INTO`).
+- [`VALUES` clause](https://databend.rs/doc/sql-commands/query-syntax/values) can be used without being combined with `SELECT`.
+- You can now set a default value when modifying the type of a column. See [Docs | ALTER TABLE COLUMN](https://databend.rs/doc/sql-commands/ddl/table/alter-table-column) for details.
+- Databend can now automatically recluster a table after write operations such as `COPY INTO` and `REPLACE INTO`.
 
 ## What's Up Next
 
@@ -128,13 +128,13 @@ However, the `infer_schema` function only works with staged files. For example:
 select * from infer_schema(location=>'@stage/...');
 ```
 
-When trying to use `infer_schema` with other file locations, it causes a panic:
+When attempting to use `infer_schema` with other file locations, it leads to a panic:
 
 ```sql
 select * from infer_schema(location =>'fs:///home/...'); -- this will panic.
 ```
 
-Therefore, the required enhancement is to expand the `infer_schema` functionality to allow inference on all types of file paths, not just those from staged files. This change will improve the consistency of our system and make the `infer_schema` function more useful.
+So, the improvement involves extending the `infer_schema` capability to encompass all types of file paths, not limited to staged files. This will enhance system consistency and the usefulness of the `infer_schema` function.
 
 [Issue #12458 | Feature: `infer_schema` support normal file path](https://github.com/datafuselabs/databend/issues/12458)
 
