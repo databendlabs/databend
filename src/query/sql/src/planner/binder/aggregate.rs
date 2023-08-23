@@ -633,6 +633,7 @@ impl Binder {
                 self.m_cte_bound_ctx.clone(),
                 self.ctes_map.clone(),
             );
+            scalar_binder.allow_pushdown();
             let (scalar_expr, _) = scalar_binder
                 .bind(expr)
                 .await
