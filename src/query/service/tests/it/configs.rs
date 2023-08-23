@@ -870,7 +870,10 @@ path = "_cache"
             let cfg = inner.unwrap();
             match cfg {
                 CatalogConfig::Hive(cfg) => {
-                    assert_eq!("127.0.0.1:9083", cfg.hive_metastore, "hive meta store address incorrect");
+                    assert_eq!(
+                        "127.0.0.1:9083", cfg.hive_metastore,
+                        "hive meta store address incorrect"
+                    );
                     assert_eq!("binary", cfg.protocol.to_string(), "protocol incorrect");
                 }
             }
@@ -892,7 +895,7 @@ fn test_override_config_old_hive_catalog() -> Result<()> {
     f.write_all(
         r#"
 [catalog]
-address = "1.1.1.1:10000"
+hive_metastore = "1.1.1.1:10000"
 protocol = "binary"
 "#
         .as_bytes(),
@@ -932,7 +935,7 @@ fn test_override_config_new_hive_catalog() -> Result<()> {
         r#"
 [catalogs.my_hive]
 type = "hive"
-address = "1.1.1.1:12000"
+hive_metastore = "1.1.1.1:12000"
 protocol = "binary"
 "#
         .as_bytes(),
