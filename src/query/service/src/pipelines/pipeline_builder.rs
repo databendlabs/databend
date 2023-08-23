@@ -115,7 +115,6 @@ use common_storage::DataOperator;
 use common_storages_factory::Table;
 use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
-use common_storages_fuse::operations::merge_into::MergeIntoMatchedProcessor;
 use common_storages_fuse::operations::merge_into::MergeIntoNotMatchedProcessor;
 use common_storages_fuse::operations::merge_into::MergeIntoSplitProcessor;
 use common_storages_fuse::operations::replace_into::BroadcastProcessor;
@@ -430,21 +429,51 @@ impl PipelineBuilder {
             self.ctx.get_function_context()?,
         )?;
 
-        let merge_into_matched_processor = MergeIntoMatchedProcessor::create(
+        let table = FuseTable::try_from_table(tbl.as_ref())?;
+        let block_thresholds = table.get_block_thresholds();
+
+        let cluster_stats_gen =
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds)?;
+
+        // append data for unmatched data
+        let serialize_block_transform = TransformSerializeBlock::try_create(
+            self.ctx.clone(),
+            InputPort::create(),
+            OutputPort::create(),
+            table,
+            cluster_stats_gen,
+        )?;
+        let block_builder = serialize_block_transform.get_block_builder();
+
+        let serialize_segment_transform = TransformSerializeSegment::new(
+            self.ctx.clone(),
+            InputPort::create(),
+            OutputPort::create(),
+            &table,
+            block_thresholds,
+        );
+
+        let mut pipe_items = Vec::with_capacity(2);
+        // for unmatched processor insert
+        pipe_items.push(serialize_segment_transform.into_pipe_item());
+
+        let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
+        let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+        // for matched update and delete
+        pipe_items.push(table.matched_mutator(
+            self.ctx.clone(),
+            block_builder,
+            io_request_semaphore,
             *row_id_idx,
             matched.clone(),
-            tbl.schema().clone(),
             input.output_schema()?.clone(),
             self.ctx.get_function_context()?,
-        )?;
+        )?);
 
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.input_len(),
             self.main_pipeline.input_len(),
-            vec![
-                merge_into_not_matched_processor.into_pipe_item(),
-                merge_into_matched_processor.into_pipe_item(),
-            ],
+            pipe_items,
         ));
 
         // todo:(JackTan25): process filling default columns

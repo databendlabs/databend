@@ -20,7 +20,7 @@ pub mod common;
 mod compact;
 mod delete;
 mod gc;
-
+pub mod merge;
 pub mod merge_into;
 mod mutation;
 mod navigate;

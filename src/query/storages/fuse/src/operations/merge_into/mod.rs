@@ -14,6 +14,8 @@
 
 mod mutator;
 mod processors;
-pub use processors::MergeIntoMatchedProcessor;
+
+pub use mutator::MatchExpr;
+pub use mutator::MatchedAggregator;
 pub use processors::MergeIntoNotMatchedProcessor;
 pub use processors::MergeIntoSplitProcessor;

@@ -11,8 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+mod matched_mutator;
 mod merge_into_split_mutator;
 mod split_by_expr_mutator;
 
+pub use matched_mutator::MatchExpr;
+pub use matched_mutator::MatchedAggregator;
 pub use merge_into_split_mutator::MergeIntoSplitMutator;
 pub use split_by_expr_mutator::SplitByExprMutator;
