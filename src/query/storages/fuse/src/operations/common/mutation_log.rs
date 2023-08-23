@@ -128,19 +128,24 @@ fn merge_conflict_resolve_context(
                 .into_iter()
                 .chain(r.removed_segment_indexes.into_iter())
                 .collect(),
-            added_segments: l
-                .added_segments
-                .into_iter()
-                .chain(r.added_segments.into_iter())
-                .collect(),
             removed_statistics: merge_statistics(
                 &l.removed_statistics,
                 &r.removed_statistics,
                 default_cluster_key_id,
             ),
-            added_statistics: merge_statistics(
-                &l.added_statistics,
-                &r.added_statistics,
+            appended_segments: l
+                .appended_segments
+                .into_iter()
+                .chain(r.appended_segments)
+                .collect(),
+            replaced_segments: l
+                .replaced_segments
+                .into_iter()
+                .chain(r.replaced_segments)
+                .collect(),
+            merged_statistics: merge_statistics(
+                &l.merged_statistics,
+                &r.merged_statistics,
                 default_cluster_key_id,
             ),
         }),
