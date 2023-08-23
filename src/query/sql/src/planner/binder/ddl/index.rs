@@ -25,6 +25,7 @@ use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
+use common_ast::walk_query;
 use common_ast::walk_statement_mut;
 use common_ast::Dialect;
 use common_exception::ErrorCode;
@@ -43,6 +44,7 @@ use crate::plans::CreateIndexPlan;
 use crate::plans::DropIndexPlan;
 use crate::plans::Plan;
 use crate::plans::RefreshIndexPlan;
+use crate::AggregatingIndexChecker;
 use crate::AggregatingIndexRewriter;
 use crate::BindContext;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
@@ -63,7 +65,10 @@ impl Binder {
         } = stmt;
 
         // check if query support index
-        Self::check_index_support(query)?;
+        let mut agg_index_checker = AggregatingIndexChecker::default();
+        walk_query(&mut agg_index_checker, query);
+        // todo(ariesdevil): do all check using `AggregatingIndexChecker`
+        Self::check_index_support(query, agg_index_checker.has_now_func)?;
 
         let index_name = self.normalize_object_identifier(index_name);
 
@@ -221,11 +226,17 @@ impl Binder {
         Ok(plan)
     }
 
-    fn check_index_support(query: &Query) -> Result<()> {
+    fn check_index_support(query: &Query, has_now_func: bool) -> Result<()> {
+        let now_func = "now";
         let err = Err(ErrorCode::UnsupportedIndex(format!(
-            "Currently create aggregating index just support simple query, like: {}",
-            "SELECT ... FROM ... WHERE ... GROUP BY ..."
+            "Currently create aggregating index just support simple query, like: {},\
+             and real-time functions are not support like: {}",
+            "SELECT ... FROM ... WHERE ... GROUP BY ...", now_func,
         )));
+
+        if has_now_func {
+            return err;
+        }
 
         if query.with.is_some() || !query.order_by.is_empty() || !query.limit.is_empty() {
             return err;
