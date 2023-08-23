@@ -52,6 +52,7 @@ pub mod table_functions;
 pub mod test_kits;
 
 mod global_services;
+mod spiller;
 
 pub use common_sql as sql;
 pub use common_storages_factory as storages;
