@@ -272,7 +272,7 @@ impl Processor for TransformSerializeBlock {
                 }
 
                 let data_block = if let Some(index) = index {
-                    Self::mutation_logs(MutationLogEntry::Replaced {
+                    Self::mutation_logs(MutationLogEntry::ReplacedBlock {
                         index,
                         block_meta: Arc::new(serialized.block_meta),
                     })
