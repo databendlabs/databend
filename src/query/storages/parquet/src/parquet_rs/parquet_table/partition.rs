@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::runtime::execute_futures_in_parallel;
@@ -34,7 +33,7 @@ use parquet::schema::types::SchemaDescPtr;
 use parquet::schema::types::SchemaDescriptor;
 
 use super::table::ParquetRSTable;
-use crate::parquet_rs::partition::ColumnMeta;
+use crate::parquet_rs::partition::SerdePageLocation;
 use crate::parquet_rs::partition::SerdeRowSelector;
 use crate::parquet_rs::ParquetRSRowGroupPart;
 use crate::ParquetPart;
@@ -108,34 +107,28 @@ fn prune_and_generate_partitions(
             let serde_selection = selection.map(|s| {
                 let selectors: Vec<RowSelector> = s.into();
                 selectors
-                    .into_iter()
+                    .iter()
                     .map(SerdeRowSelector::from)
                     .collect::<Vec<_>>()
             });
-
-            let mut column_metas = HashMap::new();
-            for (id, col) in rg_meta.columns().iter().enumerate() {
-                // TODO(parquet): skip unused columns by `ProjectionMask`. (after optimizeing `PrwhereInfo`)
-                let (offset, length) = col.byte_range();
-                column_metas.insert(id, ColumnMeta {
-                    offset,
-                    length,
-                    num_values: col.num_values(),
-                    compression: col.compression().into(),
-                    uncompressed_size: col.uncompressed_size() as u64,
-                });
-            }
 
             part_stats.read_rows += num_rows;
             part_stats.read_bytes += rg_meta.total_byte_size() as usize;
             part_stats.partitions_scanned += 1;
 
+            let page_locations = meta.offset_index().map(|x| {
+                x[rg]
+                    .iter()
+                    .map(|x| x.iter().map(SerdePageLocation::from).collect())
+                    .collect()
+            });
+
             parts.push(Arc::new(
                 Box::new(ParquetPart::ParquetRSRowGroup(ParquetRSRowGroupPart {
                     location: location.clone(),
-                    num_rows,
-                    column_metas,
-                    row_selection: serde_selection,
+                    selectors: serde_selection,
+                    meta: rg_meta.clone(),
+                    page_locations,
                 })) as Box<dyn PartInfo>,
             ))
         }

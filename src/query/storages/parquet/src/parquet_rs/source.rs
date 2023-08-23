@@ -22,8 +22,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use opendal::Reader;
-use parquet::arrow::async_reader::ParquetRecordBatchStream;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 
 use super::parquet_reader::ParquetRSReader;
 use crate::ParquetPart;
@@ -37,7 +36,7 @@ pub struct ParquetSource {
 
     // Used to read parquet.
     reader: Arc<ParquetRSReader>,
-    stream: Option<ParquetRecordBatchStream<Reader>>,
+    batch_reader: Option<ParquetRecordBatchReader>,
 }
 
 impl ParquetSource {
@@ -50,7 +49,7 @@ impl ParquetSource {
             ctx,
             output,
             reader,
-            stream: None,
+            batch_reader: None,
             generated_data: None,
             is_finished: false,
         })))
@@ -92,22 +91,19 @@ impl Processor for ParquetSource {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        if let Some(mut stream) = self.stream.take() {
-            if let Some(block) = self.reader.read_block(&mut stream).await? {
+        if let Some(mut reader) = self.batch_reader.take() {
+            if let Some(block) = self.reader.read_block(&mut reader).await? {
                 self.generated_data = Some(block);
-                self.stream = Some(stream);
+                self.batch_reader = Some(reader);
             }
             // else:
             // If `read_block` returns `None`, it means the stream is finished.
             // And we should try to build another stream (in next event loop).
         } else if let Some(part) = self.ctx.get_partition() {
             match ParquetPart::from_part(&part)? {
-                ParquetPart::ParquetRSRowGroup(file) => {
-                    let stream = self
-                        .reader
-                        .prepare_data_stream(self.ctx.clone(), &file.location)
-                        .await?;
-                    self.stream = Some(stream);
+                ParquetPart::ParquetRSRowGroup(part) => {
+                    let reader = self.reader.prepare_row_group_reader(part).await?;
+                    self.batch_reader = reader;
                 }
                 _ => unreachable!(),
             }

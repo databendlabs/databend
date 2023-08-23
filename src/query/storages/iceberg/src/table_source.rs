@@ -102,7 +102,7 @@ impl Processor for IcebergTableSource {
         if let Some(mut stream) = self.stream.take() {
             if let Some(block) = self
                 .parquet_reader
-                .read_block(&mut stream)
+                .read_block_from_stream(&mut stream)
                 .await?
                 .map(|b| check_block_schema(&self.output_schema, b))
                 .transpose()?

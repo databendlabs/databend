@@ -12,87 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::io::Cursor;
+use std::sync::Arc;
 
-use common_expression::FieldIndex;
 use parquet::arrow::arrow_reader::RowSelector;
-use parquet::basic::BrotliLevel;
-use parquet::basic::Compression;
-use parquet::basic::GzipLevel;
-use parquet::basic::ZstdLevel;
-
-/// Serializable compression types.
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Copy, Clone, Debug)]
-pub enum SerdeCompression {
-    Uncompressed,
-    Snappy,
-    Gzip(u32),
-    Lzo,
-    Brotli(u32),
-    Lz4,
-    Zstd(i32),
-    Lz4Raw,
-}
-
-impl From<Compression> for SerdeCompression {
-    fn from(value: Compression) -> Self {
-        match value {
-            Compression::UNCOMPRESSED => SerdeCompression::Uncompressed,
-            Compression::SNAPPY => SerdeCompression::Snappy,
-            Compression::GZIP(l) => SerdeCompression::Gzip(l.compression_level()),
-            Compression::LZO => SerdeCompression::Lzo,
-            Compression::BROTLI(l) => SerdeCompression::Brotli(l.compression_level()),
-            Compression::LZ4 => SerdeCompression::Lz4,
-            Compression::ZSTD(l) => SerdeCompression::Zstd(l.compression_level()),
-            Compression::LZ4_RAW => SerdeCompression::Lz4Raw,
-        }
-    }
-}
-
-impl From<SerdeCompression> for Compression {
-    fn from(value: SerdeCompression) -> Self {
-        match value {
-            SerdeCompression::Uncompressed => Compression::UNCOMPRESSED,
-            SerdeCompression::Snappy => Compression::SNAPPY,
-            SerdeCompression::Gzip(l) => Compression::GZIP(GzipLevel::try_new(l).unwrap()),
-            SerdeCompression::Lzo => Compression::LZO,
-            SerdeCompression::Brotli(l) => Compression::BROTLI(BrotliLevel::try_new(l).unwrap()),
-            SerdeCompression::Lz4 => Compression::LZ4,
-            SerdeCompression::Zstd(l) => Compression::ZSTD(ZstdLevel::try_new(l).unwrap()),
-            SerdeCompression::Lz4Raw => Compression::LZ4_RAW,
-        }
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
-pub struct ColumnMeta {
-    pub offset: u64,
-    pub length: u64,
-    pub num_values: i64,
-    pub compression: SerdeCompression,
-    pub uncompressed_size: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
-pub struct ParquetRSRowGroupPart {
-    pub location: String,
-    pub num_rows: usize,
-    pub column_metas: HashMap<FieldIndex, ColumnMeta>,
-    pub row_selection: Option<Vec<SerdeRowSelector>>,
-}
-
-impl ParquetRSRowGroupPart {
-    pub fn uncompressed_size(&self) -> u64 {
-        self.column_metas
-            .values()
-            .map(|c| c.uncompressed_size)
-            .sum()
-    }
-
-    pub fn compressed_size(&self) -> u64 {
-        self.column_metas.values().map(|c| c.length).sum()
-    }
-}
+use parquet::file::metadata::RowGroupMetaData;
+use parquet::format::PageLocation;
+use parquet::format::RowGroup;
+use parquet::format::SchemaElement;
+use parquet::schema::types::from_thrift;
+use parquet::schema::types::to_thrift;
+use parquet::schema::types::SchemaDescriptor;
+use serde::Deserialize;
+use thrift::protocol::TCompactInputProtocol;
+use thrift::protocol::TCompactOutputProtocol;
+use thrift::protocol::TInputProtocol;
+use thrift::protocol::TListIdentifier;
+use thrift::protocol::TOutputProtocol;
+use thrift::protocol::TSerializable;
+use thrift::protocol::TType;
 
 /// Serializable row selector.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
@@ -101,8 +39,8 @@ pub struct SerdeRowSelector {
     pub skip: bool,
 }
 
-impl From<RowSelector> for SerdeRowSelector {
-    fn from(value: RowSelector) -> Self {
+impl From<&RowSelector> for SerdeRowSelector {
+    fn from(value: &RowSelector) -> Self {
         SerdeRowSelector {
             row_count: value.row_count,
             skip: value.skip,
@@ -110,11 +48,125 @@ impl From<RowSelector> for SerdeRowSelector {
     }
 }
 
-impl From<SerdeRowSelector> for RowSelector {
-    fn from(value: SerdeRowSelector) -> Self {
+impl From<&SerdeRowSelector> for RowSelector {
+    fn from(value: &SerdeRowSelector) -> Self {
         RowSelector {
             row_count: value.row_count,
             skip: value.skip,
         }
     }
+}
+
+/// Serializable page location.
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
+pub struct SerdePageLocation {
+    pub offset: i64,
+    pub compressed_page_size: i32,
+    pub first_row_index: i64,
+}
+
+impl From<&PageLocation> for SerdePageLocation {
+    fn from(value: &PageLocation) -> Self {
+        SerdePageLocation {
+            offset: value.offset,
+            compressed_page_size: value.compressed_page_size,
+            first_row_index: value.first_row_index,
+        }
+    }
+}
+
+impl From<&SerdePageLocation> for PageLocation {
+    fn from(value: &SerdePageLocation) -> Self {
+        PageLocation {
+            offset: value.offset,
+            compressed_page_size: value.compressed_page_size,
+            first_row_index: value.first_row_index,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
+pub struct ParquetRSRowGroupPart {
+    pub location: String,
+    #[serde(
+        serialize_with = "ser_row_group_meta",
+        deserialize_with = "deser_row_group_meta"
+    )]
+    pub meta: RowGroupMetaData,
+    pub selectors: Option<Vec<SerdeRowSelector>>,
+    pub page_locations: Option<Vec<Vec<SerdePageLocation>>>,
+}
+
+impl Eq for ParquetRSRowGroupPart {}
+
+impl ParquetRSRowGroupPart {
+    // TODO(parquet): change to size after projection.
+    pub fn uncompressed_size(&self) -> u64 {
+        self.meta
+            .columns()
+            .iter()
+            .map(|col| col.uncompressed_size() as u64)
+            .sum()
+    }
+
+    // TODO(parquet): change to size after projection.
+    pub fn compressed_size(&self) -> u64 {
+        self.meta.total_byte_size() as u64
+    }
+}
+
+fn deser_row_group_meta<'de, D>(deserializer: D) -> Result<RowGroupMetaData, D::Error>
+where D: serde::Deserializer<'de> {
+    let bytes: Vec<u8> = Deserialize::deserialize(deserializer)?;
+    let cursor = Cursor::new(bytes);
+
+    let mut i_prot = TCompactInputProtocol::new(cursor);
+    // Deserialize schema first.
+    let list_ident = i_prot.read_list_begin().unwrap();
+    let mut schema_elements: Vec<SchemaElement> = Vec::with_capacity(list_ident.size as usize);
+    for _ in 0..list_ident.size {
+        let list_elem = SchemaElement::read_from_in_protocol(&mut i_prot).unwrap();
+        schema_elements.push(list_elem);
+    }
+    i_prot.read_list_end().unwrap();
+    let schema = from_thrift(&schema_elements).unwrap();
+    let schema = Arc::new(SchemaDescriptor::new(schema));
+
+    // Then deserialize row group meta.
+    let rg = RowGroup::read_from_in_protocol(&mut i_prot).unwrap();
+    let meta = RowGroupMetaData::from_thrift(schema, rg).unwrap();
+
+    Ok(meta)
+}
+
+fn ser_row_group_meta<S>(meta: &RowGroupMetaData, serializer: S) -> Result<S::Ok, S::Error>
+where S: serde::Serializer {
+    let mut transport = Vec::<u8>::new();
+    let mut o_prot = TCompactOutputProtocol::new(&mut transport);
+
+    // Serialize schema first.
+    let schema = meta.schema_descr();
+    let schema_elements = to_thrift(schema.root_schema()).map_err(|e| {
+        serde::ser::Error::custom(format!("Failed to convert schema to thrift: {:?}", e))
+    })?;
+    o_prot
+        .write_list_begin(&TListIdentifier::new(
+            TType::Struct,
+            schema_elements.len() as i32,
+        ))
+        .unwrap();
+    for e in schema_elements {
+        e.write_to_out_protocol(&mut o_prot).unwrap();
+    }
+    o_prot.write_list_end().unwrap();
+
+    // Then Serialize row group meta.
+    let rg = meta.to_thrift();
+    rg.write_to_out_protocol(&mut o_prot).map_err(|e| {
+        serde::ser::Error::custom(format!(
+            "Failed to convert row group meta to thrift: {:?}",
+            e
+        ))
+    })?;
+    serializer.serialize_bytes(&transport)
 }

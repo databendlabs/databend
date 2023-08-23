@@ -2879,6 +2879,7 @@ dependencies = [
  "storages-common-pruner",
  "storages-common-table-meta",
  "tempfile",
+ "thrift",
  "typetag",
 ]
 
