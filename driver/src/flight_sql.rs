@@ -30,10 +30,13 @@ use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 use tonic::Streaming;
 use url::Url;
 
+use databend_sql::error::{Error, Result};
+use databend_sql::rows::{
+    QueryProgress, Row, RowIterator, RowProgressIterator, RowWithProgress, Rows,
+};
+use databend_sql::schema::Schema;
+
 use crate::conn::{Connection, ConnectionInfo, Reader};
-use crate::error::{Error, Result};
-use crate::rows::{QueryProgress, Row, RowIterator, RowProgressIterator, RowWithProgress, Rows};
-use crate::Schema;
 
 #[derive(Clone)]
 pub struct FlightSQLConnection {

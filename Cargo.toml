@@ -1,8 +1,10 @@
 [workspace]
-default-members = ["core", "driver", "cli"]
+default-members = ["core", "sql", "driver", "macros", "cli"]
 members = [
     "core",
+    "sql",
     "driver",
+    "macros",
     "cli",
     "bindings/python",
     "bindings/nodejs",
@@ -20,3 +22,5 @@ repository = "https://github.com/datafuselabs/bendsql"
 [workspace.dependencies]
 databend-client = { path = "core", version = "0.5.2" }
 databend-driver = { path = "driver", version = "0.5.2" }
+databend-driver-macros = { path = "macros", version = "0.5.2" }
+databend-sql = { path = "sql", version = "0.5.2" }

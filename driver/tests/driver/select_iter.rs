@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_driver::{Client, Connection};
 use tokio_stream::StreamExt;
+
+use databend_driver::{Client, Connection};
 
 use crate::common::DEFAULT_DSN;
 
@@ -25,9 +26,8 @@ async fn prepare(name: &str) -> (Box<dyn Connection>, String) {
     (conn, table)
 }
 
-#[tokio::test]
-async fn select_iter() {
-    let (conn, table) = prepare("select_iter").await;
+async fn prepare_data(name: &str) -> (Box<dyn Connection>, String) {
+    let (conn, table) = prepare(name).await;
     let sql_create = format!(
         "CREATE TABLE `{}` (
 		i64 Int64,
@@ -48,6 +48,14 @@ async fn select_iter() {
         (-3, 3, 3.0, '3', '2', '2016-04-04', '2016-04-04 11:30:00')",
         table
     );
+    conn.exec(&sql_insert).await.unwrap();
+    (conn, table)
+}
+
+#[tokio::test]
+async fn select_iter_tuple() {
+    let (conn, table) = prepare_data("select_iter_tuple").await;
+
     type RowResult = (
         i64,
         u64,
@@ -92,7 +100,6 @@ async fn select_iter() {
                 .naive_utc(),
         ),
     ];
-    conn.exec(&sql_insert).await.unwrap();
     let sql_select = format!("SELECT * FROM `{}`", table);
     let mut rows = conn.query_iter(&sql_select).await.unwrap();
     let mut row_count = 0;
@@ -105,6 +112,75 @@ async fn select_iter() {
 
     let sql_drop = format!("DROP TABLE `{}`", table);
     conn.exec(&sql_drop).await.unwrap();
+}
+
+#[tokio::test]
+async fn select_iter_struct() {
+    let (conn, table) = prepare_data("select_iter_struct").await;
+
+    use databend_driver::TryFromRow;
+    #[derive(TryFromRow)]
+    struct RowResult {
+        i64: i64,
+        u64: u64,
+        f64: f64,
+        s: String,
+        s2: String,
+        d: chrono::NaiveDate,
+        t: chrono::NaiveDateTime,
+    }
+
+    let expected: Vec<RowResult> = vec![
+        RowResult {
+            i64: -1,
+            u64: 1,
+            f64: 1.0,
+            s: "1".into(),
+            s2: "1".into(),
+            d: chrono::NaiveDate::from_ymd_opt(2011, 3, 6).unwrap(),
+            t: chrono::DateTime::parse_from_rfc3339("2011-03-06T06:20:00Z")
+                .unwrap()
+                .naive_utc(),
+        },
+        RowResult {
+            i64: -2,
+            u64: 2,
+            f64: 2.0,
+            s: "2".into(),
+            s2: "2".into(),
+            d: chrono::NaiveDate::from_ymd_opt(2012, 5, 31).unwrap(),
+            t: chrono::DateTime::parse_from_rfc3339("2012-05-31T11:20:00Z")
+                .unwrap()
+                .naive_utc(),
+        },
+        RowResult {
+            i64: -3,
+            u64: 3,
+            f64: 3.0,
+            s: "3".into(),
+            s2: "2".into(),
+            d: chrono::NaiveDate::from_ymd_opt(2016, 4, 4).unwrap(),
+            t: chrono::DateTime::parse_from_rfc3339("2016-04-04T11:30:00Z")
+                .unwrap()
+                .naive_utc(),
+        },
+    ];
+
+    let sql_select = format!("SELECT * FROM `{}`", table);
+    let mut rows = conn.query_iter(&sql_select).await.unwrap();
+    let mut row_count = 0;
+    while let Some(row) = rows.next().await {
+        let v: RowResult = row.unwrap().try_into().unwrap();
+        let expected_row = &expected[row_count];
+        assert_eq!(v.i64, expected_row.i64);
+        assert_eq!(v.u64, expected_row.u64);
+        assert_eq!(v.f64, expected_row.f64);
+        assert_eq!(v.s, expected_row.s);
+        assert_eq!(v.s2, expected_row.s2);
+        assert_eq!(v.d, expected_row.d);
+        assert_eq!(v.t, expected_row.t);
+        row_count += 1;
+    }
 }
 
 #[tokio::test]

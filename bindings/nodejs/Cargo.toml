@@ -1,5 +1,5 @@
 [package]
-name = "bindings-nodejs"
+name = "databend-nodejs"
 publish = false
 
 version = { workspace = true }

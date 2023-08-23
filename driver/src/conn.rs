@@ -22,11 +22,11 @@ use url::Url;
 #[cfg(feature = "flight-sql")]
 use crate::flight_sql::FlightSQLConnection;
 
-use crate::error::{Error, Result};
+use databend_sql::error::{Error, Result};
+use databend_sql::rows::{QueryProgress, Row, RowIterator, RowProgressIterator};
+use databend_sql::schema::Schema;
+
 use crate::rest_api::RestAPIConnection;
-use crate::rows::{Row, RowIterator, RowProgressIterator};
-use crate::schema::Schema;
-use crate::QueryProgress;
 
 pub struct Client {
     dsn: String,

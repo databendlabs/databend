@@ -23,11 +23,11 @@ use databend_client::response::QueryResponse;
 use databend_client::APIClient;
 use tokio_stream::{Stream, StreamExt};
 
+use databend_sql::error::{Error, Result};
+use databend_sql::rows::{QueryProgress, Row, RowIterator, RowProgressIterator, RowWithProgress};
+use databend_sql::schema::{Schema, SchemaRef};
+
 use crate::conn::{Connection, ConnectionInfo, Reader};
-use crate::error::{Error, Result};
-use crate::rows::{Row, RowIterator, RowProgressIterator, RowWithProgress};
-use crate::schema::{Schema, SchemaRef};
-use crate::QueryProgress;
 
 #[derive(Clone)]
 pub struct RestAPIConnection {

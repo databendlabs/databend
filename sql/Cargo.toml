@@ -1,6 +1,6 @@
 [package]
-name = "databend-driver"
-description = "Databend Driver for Rust"
+name = "databend-sql"
+description = "SQL types for Databend Driver"
 categories = ["database"]
 keywords = ["databend", "database", "sdk"]
 
@@ -11,37 +11,20 @@ authors = { workspace = true }
 repository = { workspace = true }
 
 [features]
-default = ["rustls"]
-
-# Enable rustls for TLS support
-rustls = ["databend-client/rustls"]
-# Enable native-tls for TLS support
-native-tls = ["databend-client/native-tls"]
-
-flight-sql = [
-    "dep:arrow-flight",
-    "dep:arrow-schema",
-    "dep:tonic",
-    "databend-sql/flight-sql",
-]
+flight-sql = ["dep:arrow-array", "dep:arrow-cast", "dep:arrow-flight", "dep:arrow-schema", "dep:tonic"]
 
 [dependencies]
 databend-client = { workspace = true }
-databend-driver-macros = { workspace = true }
-databend-sql = { workspace = true }
 
-async-trait = "0.1.68"
-chrono = { version = "0.4.26", default-features = false, features = ["clock"] }
-dyn-clone = "1.0.11"
-http = "0.2.9"
-percent-encoding = "2.3.0"
+chrono = { version = "0.4.26", default-features = false }
 serde = { version = "1.0.164", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0.97", default-features = false, features = ["std"] }
-tokio = { version = "1.28.2", features = ["macros"] }
 tokio-stream = "0.1.14"
 url = { version = "2.4.0", default-features = false }
 
 arrow = { version = "41.0.0" }
+arrow-array = { version = "41.0.0", optional = true }
+arrow-cast = { version = "41.0.0", features = ["prettyprint"], optional = true }
 arrow-flight = { version = "41.0.0", features = ["flight-sql-experimental"], optional = true }
 arrow-schema = { version = "41.0.0", optional = true }
 tonic = { version = "0.9.2", default-features = false, features = [
@@ -51,5 +34,3 @@ tonic = { version = "0.9.2", default-features = false, features = [
     "tls-webpki-roots",
     "prost",
 ], optional = true }
-
-[dev-dependencies]

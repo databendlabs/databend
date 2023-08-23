@@ -72,7 +72,7 @@ pub enum Value {
 }
 
 impl Value {
-    pub(crate) fn get_type(&self) -> DataType {
+    pub fn get_type(&self) -> DataType {
         match self {
             Self::Null => DataType::Null,
             Self::Boolean(_) => DataType::Boolean,

@@ -12,19 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod conn;
-#[cfg(feature = "flight-sql")]
-mod flight_sql;
-mod rest_api;
+pub mod error;
+pub mod from_row;
+pub mod rows;
+pub mod schema;
+pub mod value;
 
-pub use conn::{Client, Connection, ConnectionInfo};
-
-// pub use for convenience
-pub use databend_sql::error::Error;
-pub use databend_sql::rows::{
-    QueryProgress, Row, RowIterator, RowProgressIterator, RowWithProgress,
-};
-pub use databend_sql::schema::{DataType, DecimalSize, Field, Schema, SchemaRef};
-pub use databend_sql::value::{NumberValue, Value};
-
-pub use databend_driver_macros::TryFromRow;
+#[doc(hidden)]
+pub mod _macro_internal {
+    pub use crate::error::{Error, Result};
+    pub use crate::rows::Row;
+    pub use crate::schema::Schema;
+    pub use crate::value::Value;
+}
