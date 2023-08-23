@@ -33,6 +33,7 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Versioned;
 
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::common::AbortOperation;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::pipelines::processors::port::InputPort;
@@ -199,6 +200,12 @@ impl Processor for TransformSerializeSegment {
                     segment_cache.put(location.clone(), Arc::new(segment.as_ref().try_into()?));
                 }
 
+                let mut abort_operation = AbortOperation::default();
+                for block_meta in &segment.blocks {
+                    abort_operation.add_block(block_meta);
+                }
+                abort_operation.add_segment(location.clone());
+
                 let format_version = SegmentInfo::VERSION;
 
                 // emit log entry.
@@ -206,8 +213,9 @@ impl Processor for TransformSerializeSegment {
                 let meta = MutationLogs {
                     entries: vec![MutationLogEntry::AppendSegment {
                         segment_location: location.clone(),
-                        segment_info: segment,
                         format_version,
+                        abort_operation,
+                        summary: segment.summary.clone(),
                     }],
                 };
 
