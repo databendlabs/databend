@@ -60,9 +60,9 @@ If you are interested in learning more, please check out the resources listed be
 
 ### Adding Storage Parameters for Hive Catalog
 
-Over the past week, Databend has introduced storage parameter for Hive Catalog, which allows configuring specific storage services for it, no longer relying on the storage backend of Default Catalog itself.
+Over the past week, Databend introduced storage parameters for the Hive Catalog, allowing the configuration of specific storage services. This means that the catalog no longer relies on the storage backend of the default catalog.
 
-The following example shows how to create a Hive Catalog with MinIO as the underlying storage service:
+The following example shows how to create a Hive Catalog using MinIO as the underlying storage service:
 
 ```sql
 CREATE CATALOG hive_ctl 
@@ -106,16 +106,15 @@ We have also made these improvements to Databend that we hope you will find help
 
 - `VALUES` clause can be used without being combined with `SELECT`.
 - Setting default values is supported when modifying column type.
-- **Virtual Column** support has been added for tables in Parquet format.
 - Automatic reclustering of tables is now supported after performing write operations (`COPY INTO` and `REPLACE INTO`).
 
 ## What's Up Next
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-### Enhancing `infer_schema` Functionality to Support All File Locations
+### Enhancing `infer_schema` for All File Locations
 
-Currently, it is possible to query files using file locations or stages in our database. Examples of this are:
+Currently, it is possible to query files using file locations or from stages in Databend.
 
 ```sql
 select * from 'fs:///home/...';
@@ -123,7 +122,7 @@ select * from 's3://bucket/...';
 select * from @stage;
 ```
 
-However, when it comes to invoking the `infer_schema` function, it is limited to only staged files. For example:
+However, the `infer_schema` function only works with staged files. For example:
 
 ```sql
 select * from infer_schema(location=>'@stage/...');
