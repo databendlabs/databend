@@ -112,7 +112,14 @@ impl Processor for TransformHashJoinBuild {
                     let need_spill = self.build_state.build(data_block)?;
                     if need_spill {
                         self.step = HashJoinBuildStep::WaitSpill;
-                        self.build_state.spill_coordinator.need_spill()
+                        self.build_state.spill_coordinator.need_spill()?;
+                    } else {
+                        if self.build_state.spill_coordinator.get_need_spill() {
+                            // even if input can fit into memory, but there exists one processor need to spill,
+                            // then it needs to wait spill.
+                            self.step = HashJoinBuildStep::WaitSpill;
+                            self.build_state.spill_coordinator.wait_spill()?;
+                        }
                     }
                 }
                 Ok(())

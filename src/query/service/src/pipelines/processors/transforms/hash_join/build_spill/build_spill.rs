@@ -38,19 +38,8 @@ impl HashJoinBuildState {
         todo!()
     }
 
-    // Need to spill, tell coordinator that current processor need to spill.
-    // And change state to `WaitSpill`
-    fn need_spill(&mut self) -> Result<()> {
-        todo!()
-    }
-
-    // Wait to spill, tell coordinator that current processor is waiting for spilling.
-    // And change state to `WaitSpill`
-    fn wait_spill(&mut self) -> Result<()> {
-        todo!()
-    }
-
     // Check if need to spill.
+    // Notes: even if input can fit into memory, but there exists one processor need to spill, then it needs to wait spill.
     pub(crate) fn check_need_spill(&self, input: &DataBlock) -> Result<bool> {
         todo!()
     }

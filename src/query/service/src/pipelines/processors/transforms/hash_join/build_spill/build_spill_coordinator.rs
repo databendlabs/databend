@@ -17,6 +17,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::Result;
+use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 
@@ -27,6 +28,10 @@ use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 pub struct BuildSpillCoordinator {
     /// Need to spill, if one of the builders need to spill, this flag will be set to true.
     need_spill: AtomicBool,
+    /// Current waiting spilling processor count.
+    waiting_spill_count: RwLock<usize>,
+    /// Total processor count.
+    total_builder_count: usize,
 }
 
 impl BuildSpillCoordinator {
@@ -42,7 +47,12 @@ impl BuildSpillCoordinator {
     }
 
     // If current waiting spilling builder is the last one, then spill all builders.
-    fn wait_spill(&mut self) -> Result<()> {
+    pub(crate) fn wait_spill(&mut self) -> Result<()> {
         todo!()
+    }
+
+    // Get the need_spill flag.
+    pub fn get_need_spill(&self) -> bool {
+        self.need_spill.load(Ordering::SeqCst)
     }
 }
