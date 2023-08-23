@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -39,6 +40,8 @@ use poem::Response;
 use super::v1::HttpQueryContext;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
+use crate::servers::http::metrics::metrics_incr_http_request_count;
+use crate::servers::http::metrics::metrics_incr_http_slow_request_count;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -265,4 +268,49 @@ pub fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<String, String> 
             }
         })
         .collect()
+}
+
+pub struct MetricsMiddleware {
+    api: String,
+}
+
+impl MetricsMiddleware {
+    pub fn new(api: impl Into<String>) -> Self {
+        Self { api: api.into() }
+    }
+}
+
+impl<E: Endpoint> Middleware<E> for MetricsMiddleware {
+    type Output = MetricsMiddlewareEndpoint<E>;
+
+    fn transform(&self, ep: E) -> Self::Output {
+        MetricsMiddlewareEndpoint {
+            ep,
+            api: self.api.clone(),
+        }
+    }
+}
+
+pub struct MetricsMiddlewareEndpoint<E> {
+    api: String,
+    ep: E,
+}
+
+#[poem::async_trait]
+impl<E: Endpoint> Endpoint for MetricsMiddlewareEndpoint<E> {
+    type Output = Response;
+
+    async fn call(&self, req: Request) -> poem::error::Result<Self::Output> {
+        let start_time = Instant::now();
+        let method = req.method().to_string();
+        let output = self.ep.call(req).await?;
+        let resp = output.into_response();
+        let status_code = resp.status().to_string();
+        metrics_incr_http_request_count(method.clone(), self.api.clone(), status_code.clone());
+        if start_time.elapsed().as_secs() > 20 {
+            // TODO: replace this into histogram
+            metrics_incr_http_slow_request_count(method, self.api.clone(), status_code);
+        }
+        Ok(resp)
+    }
 }

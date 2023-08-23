@@ -18,10 +18,12 @@ use std::sync::Arc;
 use std::vec;
 
 use bumpalo::Bump;
+use common_catalog::plan::AggIndexMeta;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::Scalar;
@@ -43,6 +45,9 @@ pub struct PartialSingleStateAggregator {
     places: Vec<StateAddr>,
     arg_indices: Vec<Vec<usize>>,
     funcs: Vec<AggregateFunctionRef>,
+
+    /// A temporary place to hold aggregating state from index data.
+    temp_places: Vec<StateAddr>,
 }
 
 impl PartialSingleStateAggregator {
@@ -59,12 +64,18 @@ impl PartialSingleStateAggregator {
             .ok_or_else(|| ErrorCode::LayoutError("layout shouldn't be None"))?;
 
         let place: StateAddr = arena.alloc_layout(layout).into();
+        let temp_place: StateAddr = arena.alloc_layout(layout).into();
         let mut places = Vec::with_capacity(params.offsets_aggregate_states.len());
+        let mut temp_places = Vec::with_capacity(params.offsets_aggregate_states.len());
 
         for (idx, func) in params.aggregate_functions.iter().enumerate() {
             let arg_place = place.next(params.offsets_aggregate_states[idx]);
             func.init_state(arg_place);
             places.push(arg_place);
+
+            let state_place = temp_place.next(params.offsets_aggregate_states[idx]);
+            func.init_state(state_place);
+            temp_places.push(state_place);
         }
 
         Ok(AccumulatingTransformer::create(
@@ -75,6 +86,7 @@ impl PartialSingleStateAggregator {
                 places,
                 funcs: params.aggregate_functions.clone(),
                 arg_indices: params.aggregate_functions_arguments.clone(),
+                temp_places,
             },
         ))
     }
@@ -84,6 +96,12 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
     const NAME: &'static str = "AggregatorPartialTransform";
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
+        let is_agg_index_block = block
+            .get_meta()
+            .and_then(AggIndexMeta::downcast_ref_from)
+            .map(|index| index.is_agg)
+            .unwrap_or_default();
+
         let block = block.convert_to_full();
 
         for (idx, func) in self.funcs.iter().enumerate() {
@@ -99,7 +117,32 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 );
             }
             let place = self.places[idx];
-            func.accumulate(place, &arg_columns, None, block.num_rows())?;
+            if is_agg_index_block {
+                // Aggregation states are in the back of the block.
+                let agg_index = block.num_columns() - self.funcs.len() + idx;
+                let agg_state = block
+                    .get_by_offset(agg_index)
+                    .value
+                    .as_column()
+                    .unwrap()
+                    .as_string()
+                    .unwrap();
+                let state_place = self.temp_places[idx];
+                for (_, mut raw_state) in agg_state.iter().enumerate() {
+                    func.deserialize(state_place, &mut raw_state)?;
+                    func.merge(place, state_place)?;
+                    if func.need_manual_drop_state() {
+                        unsafe {
+                            // State may allocate memory out of the arena,
+                            // drop state to avoid memory leak.
+                            func.drop_state(state_place);
+                        }
+                        func.init_state(state_place);
+                    }
+                }
+            } else {
+                func.accumulate(place, &arg_columns, None, block.num_rows())?;
+            }
         }
 
         Ok(vec![])

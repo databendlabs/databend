@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::HashMethodFixedKeys;
 use common_expression::HashMethodSerializer;
@@ -88,6 +89,9 @@ pub struct HashJoinState {
     pub(crate) fast_return: Arc<RwLock<bool>>,
     /// `RowSpace` contains all rows from build side.
     pub(crate) row_space: RowSpace,
+    pub(crate) chunks: Arc<SyncUnsafeCell<Vec<DataBlock>>>,
+    pub(crate) build_num_rows: Arc<SyncUnsafeCell<usize>>,
+    pub(crate) probe_to_build: Arc<Vec<(usize, (bool, bool))>>,
     pub(crate) is_build_projected: Arc<AtomicBool>,
     /// OuterScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
     pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
@@ -101,6 +105,7 @@ impl HashJoinState {
         mut build_schema: DataSchemaRef,
         build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
+        probe_to_build: &[(usize, (bool, bool))],
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
@@ -120,6 +125,9 @@ impl HashJoinState {
             interrupt: Arc::new(AtomicBool::new(false)),
             fast_return: Arc::new(Default::default()),
             row_space: RowSpace::new(ctx, build_schema, build_projections)?,
+            chunks: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            build_num_rows: Arc::new(SyncUnsafeCell::new(0)),
+            probe_to_build: Arc::new(probe_to_build.to_vec()),
             is_build_projected: Arc::new(AtomicBool::new(true)),
             outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),

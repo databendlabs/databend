@@ -15,6 +15,8 @@
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -26,6 +28,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashtableLike;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
+use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
@@ -52,14 +55,8 @@ impl HashJoinProbeState {
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
 
-        let data_blocks = self.hash_join_state.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
+        let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
         let is_build_projected = self
             .hash_join_state
             .is_build_projected
@@ -108,13 +105,38 @@ impl HashJoinProbeState {
                     let build_block = if is_build_projected {
                         Some(self.hash_join_state.row_space.gather(
                             build_indexes,
-                            &data_blocks,
-                            &build_num_rows,
+                            data_blocks,
+                            build_num_rows,
                         )?)
                     } else {
                         None
                     };
-                    let result_block = self.merge_eq_block(probe_block, build_block, occupied);
+                    let mut result_block = self.merge_eq_block(probe_block, build_block, occupied);
+                    if self.hash_join_state.probe_to_build.len() > 0 {
+                        for (index, (is_probe_nullable, is_build_nullable)) in
+                            self.hash_join_state.probe_to_build.iter()
+                        {
+                            let entry = match (is_probe_nullable, is_build_nullable) {
+                                (true, true) | (false, false) => {
+                                    result_block.get_by_offset(*index).clone()
+                                }
+                                (true, false) => {
+                                    result_block.get_by_offset(*index).clone().remove_nullable()
+                                }
+                                (false, true) => {
+                                    let mut validity = MutableBitmap::new();
+                                    validity.extend_constant(result_block.num_rows(), true);
+                                    let validity: Bitmap = validity.into();
+                                    set_validity(
+                                        result_block.get_by_offset(*index),
+                                        validity.len(),
+                                        &validity,
+                                    )
+                                }
+                            };
+                            result_block.add_column(entry);
+                        }
+                    }
 
                     probed_blocks.push(result_block);
 
@@ -159,13 +181,36 @@ impl HashJoinProbeState {
             let build_block = if is_build_projected {
                 Some(self.hash_join_state.row_space.gather(
                     &build_indexes[0..occupied],
-                    &data_blocks,
-                    &build_num_rows,
+                    data_blocks,
+                    build_num_rows,
                 )?)
             } else {
                 None
             };
-            let result_block = self.merge_eq_block(probe_block, build_block, occupied);
+            let mut result_block = self.merge_eq_block(probe_block, build_block, occupied);
+            if self.hash_join_state.probe_to_build.len() > 0 {
+                for (index, (is_probe_nullable, is_build_nullable)) in
+                    self.hash_join_state.probe_to_build.iter()
+                {
+                    let entry = match (is_probe_nullable, is_build_nullable) {
+                        (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
+                        (true, false) => {
+                            result_block.get_by_offset(*index).clone().remove_nullable()
+                        }
+                        (false, true) => {
+                            let mut validity = MutableBitmap::new();
+                            validity.extend_constant(result_block.num_rows(), true);
+                            let validity: Bitmap = validity.into();
+                            set_validity(
+                                result_block.get_by_offset(*index),
+                                validity.len(),
+                                &validity,
+                            )
+                        }
+                    };
+                    result_block.add_column(entry);
+                }
+            }
 
             probed_blocks.push(result_block);
         }
