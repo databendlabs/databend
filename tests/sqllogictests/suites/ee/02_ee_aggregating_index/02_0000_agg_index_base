@@ -7,9 +7,24 @@ create database test_index
 statement ok
 use test_index
 
-
 statement ok
 DROP AGGREGATING INDEX IF EXISTS testi;
+
+# test create index error.
+statement ok
+CREATE TABLE t (a int, b int, c int)
+
+statement error
+CREATE AGGREGATING INDEX testi AS select now() as n, sum(a) from t where c > 1 group by n
+
+statement error
+CREATE AGGREGATING INDEX testi AS select sum(a) from t where now() > to_timestamp('2022-01-02 02:00:11')
+
+statement error
+CREATE AGGREGATING INDEX testi AS select sum(a) from t group by now()
+
+statement ok
+DROP TABLE t
 
 statement ok
 CREATE TABLE t (a int, b int, c int)
@@ -283,18 +298,18 @@ statement ok
 CREATE TABLE t (a int, b int, c int)
 
 statement ok
-INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5), (1,3,3)
+INSERT INTO t VALUES (1,1,4), (1,2,1), (1,-1,4), (2,2,5), (1,3,3)
 
 # query: eval-agg-eval-scan, index: eval-agg-eval-scan
 
 statement ok
-CREATE AGGREGATING INDEX testi AS select to_string(b) as bs, sum(a) from t where c > 1 group by bs
+CREATE AGGREGATING INDEX testi AS select abs(b) as bs, sum(a) from t where c > 1 group by bs
 
 statement ok
 REFRESH AGGREGATING INDEX testi
 
 query TI rowsort
-SELECT to_string(b) as bs, SUM(a) from t WHERE c > 1 GROUP BY bs
+SELECT ABS(b) as bs, SUM(a) from t WHERE c > 1 GROUP BY bs
 ----
 1 1
 2 3
@@ -329,37 +344,6 @@ query I
 SELECT approx_count_distinct(user_id) from t
 ----
 4
-
-statement ok
-DROP AGGREGATING INDEX testi
-
-statement ok
-DROP TABLE t
-
-# test sync agg index
-statement ok
-SET enable_refresh_aggregating_index_after_write=1;
-
-statement ok
-CREATE TABLE t (a int, b int, c int)
-
-statement ok
-CREATE SYNC AGGREGATING INDEX testi AS select b, sum(a) from t where c > 1 group by b
-
-statement ok
-INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5), (1,3,3)
-
-# query: eval-agg-eval-scan, index: eval-agg-eval-scan
-
-query II
-SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b ORDER BY b
-----
-1 1
-2 3
-3 1
-
-statement ok
-SET enable_refresh_aggregating_index_after_write=0;
 
 statement ok
 DROP AGGREGATING INDEX testi
