@@ -183,7 +183,7 @@ select id, val['a'], val['b'], val from t2 where val['a']=11 or val['a']=44 orde
 4 44 4 {"a":44,"b":4}
 
 query IT
-select max(id), val:a from t2 group by val:a order by max(id) order by val:a
+select max(id), val:a from t2 group by val:a order by val:a
 ----
 1 11
 2 22
