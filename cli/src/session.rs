@@ -66,10 +66,12 @@ impl Session {
             println!("Connected to {}", version);
             println!();
 
-            let mut rows = conn.query_iter(PROMPT_SQL).await.unwrap();
-            while let Some(row) = rows.next().await {
-                let name: (String,) = row.unwrap().try_into().unwrap();
-                keywords.push(name.0);
+            let rows = conn.query_iter(PROMPT_SQL).await;
+            if let Ok(mut rows) = rows {
+                while let Some(row) = rows.next().await {
+                    let name: (String,) = row.unwrap().try_into().unwrap();
+                    keywords.push(name.0);
+                }
             }
         }
 
