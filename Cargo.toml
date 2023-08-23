@@ -157,7 +157,7 @@ bumpalo = "3.12.0"
 tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
 
 # http
-reqwest = { version = "0.11", default-features = false, features = [
+reqwest = { version = "0.11.19", default-features = false, features = [
     "json",
     "rustls-tls",
     "rustls-tls-native-roots",
@@ -174,6 +174,9 @@ async-backtrace = "0.2.2"
 logcall = "0.1.5"
 log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
 minitrace = "0.5.1"
+
+# test
+mysql_async = { version = "0.32", default-features = false, features = ["rustls-tls"] }
 
 [profile.release]
 debug = 1
@@ -236,3 +239,5 @@ arrow-cast = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
 arrow-data = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
 arrow-buffer = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
 parquet = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
+sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "6ef6d97" }
+mysql_async = { git = "https://github.com/datafuse-extras/mysql_async", rev = "1adbbcf" }

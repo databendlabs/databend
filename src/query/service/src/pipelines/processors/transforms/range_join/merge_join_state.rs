@@ -118,8 +118,11 @@ impl RangeJoinState {
                     for res in right_buffer.iter() {
                         indices.push((0u32, *res as u32, 1usize));
                     }
-                    let right_result_block =
-                        DataBlock::take_blocks(&[&right_table[right_idx]], &indices, indices.len());
+                    let right_result_block = DataBlock::take_blocks(
+                        &right_table[right_idx..right_idx + 1],
+                        &indices,
+                        indices.len(),
+                    );
                     // Merge left_result_block and right_result_block
                     for col in right_result_block.columns() {
                         left_result_block.add_column(col.clone());

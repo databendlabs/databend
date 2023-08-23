@@ -807,6 +807,7 @@ impl PipelineBuilder {
             join.build.output_schema()?,
             &join.build_projections,
             HashJoinDesc::create(join)?,
+            &join.probe_to_build,
         )
     }
 

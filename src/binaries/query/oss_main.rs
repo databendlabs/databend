@@ -26,6 +26,7 @@ use common_license::license_manager::LicenseManager;
 use common_license::license_manager::OssLicenseManager;
 
 use crate::entry::init_services;
+use crate::entry::run_cmd;
 use crate::entry::start_services;
 
 #[global_allocator]
@@ -48,6 +49,9 @@ fn main() {
 
 async fn main_entrypoint() -> Result<()> {
     let conf: InnerConfig = InnerConfig::load()?;
+    if run_cmd(&conf).await? {
+        return Ok(());
+    }
     init_services(&conf).await?;
     // init oss license manager
     OssLicenseManager::init()?;
