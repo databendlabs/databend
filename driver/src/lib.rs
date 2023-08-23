@@ -20,7 +20,7 @@ mod rest_api;
 pub use conn::{Client, Connection, ConnectionInfo};
 
 // pub use for convenience
-pub use databend_sql::error::Error;
+pub use databend_sql::error::{Error, Result};
 pub use databend_sql::rows::{
     QueryProgress, Row, RowIterator, RowProgressIterator, RowWithProgress,
 };
@@ -28,3 +28,8 @@ pub use databend_sql::schema::{DataType, DecimalSize, Field, Schema, SchemaRef};
 pub use databend_sql::value::{NumberValue, Value};
 
 pub use databend_driver_macros::TryFromRow;
+
+#[doc(hidden)]
+pub mod _macro_internal {
+    pub use databend_sql::_macro_internal::*;
+}

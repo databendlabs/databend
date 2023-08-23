@@ -24,6 +24,8 @@ pub fn from_row_derive(tokens_input: TokenStream) -> TokenStream {
     let struct_name = &item.ident;
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
 
+    let path = quote!(databend_driver::_macro_internal);
+
     let set_fields_code = struct_fields.named.iter().map(|field| {
         let field_name = &field.ident;
         let field_type = &field.ty;
@@ -35,26 +37,21 @@ pub fn from_row_derive(tokens_input: TokenStream) -> TokenStream {
                     .unwrap(); // vals_iter size is checked before this code is reached, so
                                // it is safe to unwrap
                 let t = col_value.get_type();
-
                 <#field_type>::try_from(col_value)
-                    .map_err(|_| Error::InvalidResponse(format!("failed converting column {} from type({:?}) to type({})", col_ix, t, std::any::type_name::<#field_type>())))?
+                    .map_err(|_| #path::Error::InvalidResponse(format!("failed converting column {} from type({:?}) to type({})", col_ix, t, std::any::type_name::<#field_type>())))?
             },
         }
     });
 
     let fields_count = struct_fields.named.len();
     let generated = quote! {
-        use databend_sql::rows::Row;
-        use databend_sql::error::{Error, Result};
-
-        impl #impl_generics TryFrom<Row> for #struct_name #ty_generics #where_clause {
-            type Error = Error;
-            fn try_from(row: Row) -> Result<Self> {
+        impl #impl_generics TryFrom<#path::Row> for #struct_name #ty_generics #where_clause {
+            type Error = #path::Error;
+            fn try_from(row: #path::Row) -> #path::Result<Self> {
                 if #fields_count != row.len() {
-                    return Err(Error::InvalidResponse(format!("row size mismatch: expected {} columns, got {}", #fields_count, row.len())));
+                    return Err(#path::Error::InvalidResponse(format!("row size mismatch: expected {} columns, got {}", #fields_count, row.len())));
                 }
                 let mut vals_iter = row.into_iter().enumerate();
-
                 Ok(#struct_name {
                     #(#set_fields_code)*
                 })
