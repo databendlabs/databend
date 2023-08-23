@@ -104,10 +104,10 @@ If you are interested in learning more, please check out the resources listed be
 
 We have also made these improvements to Databend that we hope you will find helpful:
 
-- Added support for distributed `REPLACE INTO`.
-- Added support for the operator `<->` to calculate the L2 norm (Euclidean norm) of a vector.
-- Added Geo functions: `h3_to_center_child`, `h3_exact_edge_length_m`, `h3_exact_edge_length_km`, `h3_exact_edge_length_rads`, `h3_num_hexagons`, `h3_line`, `h3_distance`, `h3_hex_ring` and `h3_get_unidirectional_edge`.
-- Read document [Docs | ALTER TABLE COLUMN](https://databend.rs/doc/sql-commands/ddl/table/alter-table-column) to learn how to modify a table by adding, converting, renaming, changing, or removing a column.
+- `VALUES` clause can be used without being combined with `SELECT`.
+- Setting default values is supported when modifying column type.
+- **Virtual Column** support has been added for tables in Parquet format.
+- Automatic reclustering of tables is now supported after performing write operations (`COPY INTO` and `REPLACE INTO`).
 
 ## What's Up Next
 
