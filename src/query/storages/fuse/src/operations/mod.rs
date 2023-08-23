@@ -40,6 +40,7 @@ pub use common::TransformSerializeBlock;
 pub use compact::CompactOptions;
 pub use mutation::BlockCompactMutator;
 pub use mutation::CompactPartInfo;
+pub use mutation::Mutation;
 pub use mutation::ReclusterMutator;
 pub use mutation::SegmentCompactMutator;
 pub use mutation::SegmentCompactionState;
