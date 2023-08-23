@@ -19,7 +19,6 @@ use common_cache::DefaultHashBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use futures::AsyncRead;
 use futures::AsyncSeek;
 use futures_util::AsyncReadExt;
 use futures_util::AsyncSeekExt;
@@ -123,9 +122,8 @@ impl Loader<CompactSegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
 impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<BloomIndexMeta> {
-        let mut reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
         // read the ThriftFileMetaData, omit unnecessary conversions
-        let meta = read_thrift_file_metadata(&mut reader)
+        let meta = read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint)
             .await
             .map_err(|err| {
                 ErrorCode::StorageOther(format!(
@@ -185,10 +183,20 @@ mod thrift_file_meta_read {
     }
 
     #[async_backtrace::framed]
-    pub async fn read_thrift_file_metadata<R: AsyncRead + AsyncSeek + Send + std::marker::Unpin>(
-        reader: &mut R,
+    pub async fn read_thrift_file_metadata(
+        op: Operator,
+        path: &str,
+        len_hint: Option<u64>,
     ) -> common_arrow::parquet::error::Result<ThriftFileMetaData> {
-        let file_size = stream_len(reader).await?;
+        let file_size = if let Some(len) = len_hint {
+            len
+        } else {
+            let meta = op
+                .stat(path)
+                .await
+                .map_err(|err| Error::OutOfSpec(err.to_string()))?;
+            meta.content_length()
+        };
 
         if file_size < HEADER_SIZE + FOOTER_SIZE {
             return Err(Error::OutOfSpec(
@@ -198,16 +206,13 @@ mod thrift_file_meta_read {
 
         // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
         let default_end_len = std::cmp::min(DEFAULT_FOOTER_READ_SIZE, file_size) as usize;
-        reader
-            .seek(SeekFrom::End(-(default_end_len as i64)))
-            .await?;
 
-        let mut buffer = vec![];
-        buffer.try_reserve(default_end_len)?;
-        reader
-            .take(default_end_len as u64)
-            .read_to_end(&mut buffer)
-            .await?;
+        // read the end of the file
+        let mut buffer = op
+            .read_with(path)
+            .range(file_size - default_end_len as u64..file_size)
+            .await
+            .map_err(|err| Error::OutOfSpec(err.to_string()))?;
 
         // check this is indeed a parquet file
         if buffer[default_end_len - 4..] != PARQUET_MAGIC {
@@ -232,7 +237,11 @@ mod thrift_file_meta_read {
             &buffer[remaining..]
         } else {
             // the end of file read by default is not long enough, read again including the metadata.
-            reader.seek(SeekFrom::End(-(footer_len as i64))).await?;
+            let reader = op
+                .reader_with(path)
+                .range(file_size - footer_len..file_size)
+                .await
+                .map_err(|err| Error::OutOfSpec(err.to_string()))?;
 
             buffer.clear();
             buffer.try_reserve(footer_len as usize)?;

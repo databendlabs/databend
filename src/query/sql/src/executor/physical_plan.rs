@@ -958,13 +958,25 @@ pub struct MutationAggregate {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Copy)]
-/// This is used by MutationAccumulator, so no compact here.
+/// This is used by TableMutationAggregator, so no compact here.
 pub enum MutationKind {
     Delete,
     Update,
     Replace,
     Recluster,
     Insert,
+}
+
+impl Display for MutationKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MutationKind::Delete => write!(f, "Delete"),
+            MutationKind::Insert => write!(f, "Insert"),
+            MutationKind::Recluster => write!(f, "Recluster"),
+            MutationKind::Update => write!(f, "Update"),
+            MutationKind::Replace => write!(f, "Replace"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

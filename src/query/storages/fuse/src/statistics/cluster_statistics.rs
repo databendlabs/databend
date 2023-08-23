@@ -24,6 +24,7 @@ use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::statistics::column_statistic::Trim;
+use crate::table_functions::cmp_with_null;
 
 pub const CLUSTER_STATS_STRING_PREFIX_LEN: usize = 8;
 
@@ -200,8 +201,8 @@ pub fn sort_by_cluster_stats(
                 return Ordering::Equal;
             }
 
-            match a.min().cmp(&b.min()) {
-                Ordering::Equal => a.max().cmp(&b.max()),
+            match a.min().iter().cmp_by(b.min().iter(), cmp_with_null) {
+                Ordering::Equal => a.max().iter().cmp_by(b.max().iter(), cmp_with_null),
                 ord => ord,
             }
         }
