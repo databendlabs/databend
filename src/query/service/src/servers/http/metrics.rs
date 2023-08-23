@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clickhouse_federated;
-mod clickhouse_handler;
-mod http_services;
-mod metrics;
-pub mod middleware;
-pub mod v1;
+use metrics::counter;
 
-pub use clickhouse_federated::ClickHouseFederated;
-pub use http_services::HttpHandler;
-pub use http_services::HttpHandlerKind;
+pub fn metrics_incr_http_request_count(method: String, api: String, status: String) {
+    let labels = [("method", method), ("api", api), ("status", status)];
+    counter!("query_http_requests_count", 1, &labels);
+}
 
-pub const CLICKHOUSE_VERSION: &str = "8.12.14";
+pub fn metrics_incr_http_slow_request_count(method: String, api: String, status: String) {
+    let labels = [("method", method), ("api", api), ("status", status)];
+    counter!("query_http_slow_requests_count", 1, &labels);
+}
