@@ -295,6 +295,7 @@ impl PipelineBuilder {
             catalog_info,
             table_info,
         } = merge_into_source;
+
         self.build_pipeline(input)?;
         let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
 
@@ -434,6 +435,7 @@ impl PipelineBuilder {
             matched.clone(),
             tbl.schema().clone(),
             input.output_schema()?.clone(),
+            self.ctx.get_function_context()?,
         )?;
 
         self.main_pipeline.add_pipe(Pipe::create(

@@ -864,7 +864,7 @@ pub struct MergeInto {
     // the first option stands for the condition
     // the second option stands for update/delete
     pub matched: Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>,
-    pub row_id_idx: u32,
+    pub row_id_idx: usize,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

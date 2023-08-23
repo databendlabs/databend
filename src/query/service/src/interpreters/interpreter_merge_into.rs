@@ -268,7 +268,7 @@ impl MergeIntoInterpreter {
             catalog_info: catalog_.info(),
             unmatched,
             matched,
-            row_id_idx: row_id_idx as u32,
+            row_id_idx,
         });
         let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
             Arc::new(TableSnapshot::new_empty_snapshot(
