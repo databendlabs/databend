@@ -20,3 +20,4 @@ mod settings_global;
 pub use settings::ChangeValue;
 pub use settings::ScopeLevel;
 pub use settings::Settings;
+pub use settings_default::ReplaceIntoShuffleStrategy;

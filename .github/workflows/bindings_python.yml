@@ -50,6 +50,7 @@ jobs:
             GIT_TAG=${{ inputs.tag }}
           fi
           VERSION=`echo ${GIT_TAG} | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+'`
+
           echo "building tag and version: $GIT_TAG $VERSION"
           sed "s#version = \"0.0.0\"#version = \"$VERSION\"#g" Cargo.toml > Cargo.toml.bak
           mv Cargo.toml.bak Cargo.toml
@@ -113,7 +114,8 @@ jobs:
           path: src/bendpy/dist/*.whl
 
   release:
-    if: github.event_name != 'pull_request'
+    # publish release only the version endsWith 0
+    if: endsWith(inputs.tag, '0')
     name: Publish to PyPI
     needs: builds
     runs-on: ubuntu-latest
