@@ -25,6 +25,7 @@ use common_exception::Result;
 use enterprise_query::enterprise_services::EnterpriseServices;
 
 use crate::entry::init_services;
+use crate::entry::run_cmd;
 use crate::entry::start_services;
 
 #[global_allocator]
@@ -47,6 +48,9 @@ fn main() {
 
 pub async fn main_entrypoint() -> Result<()> {
     let conf: InnerConfig = InnerConfig::load()?;
+    if run_cmd(&conf).await? {
+        return Ok(());
+    }
     init_services(&conf).await?;
     EnterpriseServices::init(conf.clone()).await?;
     start_services(&conf).await

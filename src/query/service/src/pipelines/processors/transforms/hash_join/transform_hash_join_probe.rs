@@ -26,7 +26,7 @@ use common_sql::plans::JoinType;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::transforms::hash_join::HashJoinState;
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::Processor;
 
@@ -49,7 +49,7 @@ pub struct TransformHashJoinProbe {
     output_data_blocks: VecDeque<DataBlock>,
     projections: ColumnSet,
     step: HashJoinProbeStep,
-    join_state: Arc<dyn HashJoinState>,
+    join_probe_state: Arc<HashJoinProbeState>,
     probe_state: ProbeState,
     max_block_size: usize,
     outer_scan_finished: bool,
@@ -61,12 +61,13 @@ impl TransformHashJoinProbe {
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         projections: ColumnSet,
-        join_state: Arc<dyn HashJoinState>,
+        join_probe_state: Arc<HashJoinProbeState>,
         max_block_size: usize,
         func_ctx: FunctionContext,
         join_type: &JoinType,
         with_conjunct: bool,
     ) -> Result<Box<dyn Processor>> {
+        join_probe_state.probe_attach()?;
         Ok(Box::new(TransformHashJoinProbe {
             input_port,
             output_port,
@@ -74,21 +75,16 @@ impl TransformHashJoinProbe {
             input_data: VecDeque::new(),
             output_data_blocks: VecDeque::new(),
             step: HashJoinProbeStep::WaitBuild,
-            join_state,
+            join_probe_state,
             probe_state: ProbeState::create(max_block_size, join_type, with_conjunct, func_ctx),
             max_block_size,
             outer_scan_finished: false,
         }))
     }
 
-    pub fn attach(join_state: Arc<dyn HashJoinState>) -> Result<Arc<dyn HashJoinState>> {
-        join_state.probe_attach()?;
-        Ok(join_state)
-    }
-
     fn probe(&mut self, block: DataBlock) -> Result<()> {
         self.probe_state.clear();
-        let data_blocks = self.join_state.probe(block, &mut self.probe_state)?;
+        let data_blocks = self.join_probe_state.probe(block, &mut self.probe_state)?;
         if !data_blocks.is_empty() {
             self.output_data_blocks.extend(data_blocks);
         }
@@ -96,7 +92,9 @@ impl TransformHashJoinProbe {
     }
 
     fn final_scan(&mut self, task: usize) -> Result<()> {
-        let data_blocks = self.join_state.final_scan(task, &mut self.probe_state)?;
+        let data_blocks = self
+            .join_probe_state
+            .final_scan(task, &mut self.probe_state)?;
         if !data_blocks.is_empty() {
             self.output_data_blocks.extend(data_blocks);
         }
@@ -125,8 +123,10 @@ impl Processor for TransformHashJoinProbe {
                 if self.output_port.is_finished() {
                     self.input_port.finish();
 
-                    if self.join_state.need_outer_scan() || self.join_state.need_mark_scan() {
-                        self.join_state.probe_done()?;
+                    if self.join_probe_state.hash_join_state.need_outer_scan()
+                        || self.join_probe_state.hash_join_state.need_mark_scan()
+                    {
+                        self.join_probe_state.probe_done()?;
                     }
 
                     return Ok(Event::Finished);
@@ -163,9 +163,10 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if self.input_port.is_finished() {
-                    return if self.join_state.need_outer_scan() || self.join_state.need_mark_scan()
+                    return if self.join_probe_state.hash_join_state.need_outer_scan()
+                        || self.join_probe_state.hash_join_state.need_mark_scan()
                     {
-                        self.join_state.probe_done()?;
+                        self.join_probe_state.probe_done()?;
                         Ok(Event::Async)
                     } else {
                         self.output_port.finish();
@@ -206,7 +207,7 @@ impl Processor for TransformHashJoinProbe {
     }
 
     fn interrupt(&self) {
-        self.join_state.interrupt()
+        self.join_probe_state.hash_join_state.interrupt()
     }
 
     fn process(&mut self) -> Result<()> {
@@ -219,7 +220,7 @@ impl Processor for TransformHashJoinProbe {
                 Ok(())
             }
             HashJoinProbeStep::FinalScan => {
-                if let Some(task) = self.join_state.final_scan_task() {
+                if let Some(task) = self.join_probe_state.final_scan_task() {
                     self.final_scan(task)?;
                 } else {
                     self.outer_scan_finished = true;
@@ -234,9 +235,18 @@ impl Processor for TransformHashJoinProbe {
     async fn async_process(&mut self) -> Result<()> {
         match self.step {
             HashJoinProbeStep::WaitBuild => {
-                self.join_state.wait_finalize_finish().await?;
-                if self.join_state.fast_return()? {
-                    match self.join_state.join_type() {
+                self.join_probe_state
+                    .hash_join_state
+                    .wait_build_hash_table_finish()
+                    .await?;
+                let join_type = self
+                    .join_probe_state
+                    .hash_join_state
+                    .hash_join_desc
+                    .join_type
+                    .clone();
+                if self.join_probe_state.hash_join_state.fast_return()? {
+                    match join_type {
                         JoinType::Inner
                         | JoinType::Cross
                         | JoinType::Right
@@ -255,7 +265,7 @@ impl Processor for TransformHashJoinProbe {
                         _ => {
                             return Err(ErrorCode::Internal(format!(
                                 "Join type: {:?} is unexpected",
-                                self.join_state.join_type()
+                                join_type
                             )));
                         }
                     }
@@ -264,8 +274,8 @@ impl Processor for TransformHashJoinProbe {
                 self.step = HashJoinProbeStep::Running;
             }
             HashJoinProbeStep::Running => {
-                self.join_state.wait_probe_finish().await?;
-                if self.join_state.fast_return()? {
+                self.join_probe_state.wait_probe_finish().await?;
+                if self.join_probe_state.hash_join_state.fast_return()? {
                     self.step = HashJoinProbeStep::FastReturn;
                 } else {
                     self.step = HashJoinProbeStep::FinalScan;

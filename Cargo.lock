@@ -2781,7 +2781,6 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
- "common-pipeline-sources",
  "common-storage",
  "common-storages-parquet",
  "futures",
@@ -2789,6 +2788,7 @@ dependencies = [
  "match-template",
  "minitrace",
  "opendal",
+ "parquet",
  "serde",
  "storages-common-pruner",
  "storages-common-table-meta",
@@ -6417,7 +6417,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.2.3"
-source = "git+https://github.com/datafuselabs/jsonb?rev=fe6835a#fe6835a0a6813279366550db7ba6cd64aed317d8"
+source = "git+https://github.com/datafuselabs/jsonb?rev=cb4b1eb#cb4b1ebde906a56b82b064b639fcfcf989e0f235"
 dependencies = [
  "byteorder",
  "fast-float",
@@ -6747,9 +6747,9 @@ dependencies = [
 
 [[package]]
 name = "logcall"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4abc7eef9e6fd624accfb9f7f031909825a03f41209508e172a6c84a69353b57"
+checksum = "2d369db60a3256a6d47b13adcfff7ce37588d8b670bb3e334fa1cc8886cdfaa9"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -7029,11 +7029,10 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "minitrace"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bdc5c5a697f93f25a109f36988a60ce534c05b944afb8ef3c1498e131638133"
+checksum = "823c2c0be9db5d4a0497700a405a231c9db19e67a24f5fe1ef4e3fdaca6a9b7e"
 dependencies = [
- "defer",
  "futures",
  "minitrace-macro",
  "minstant",
@@ -7045,9 +7044,9 @@ dependencies = [
 
 [[package]]
 name = "minitrace-macro"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2277f13e7d585f02062590b3496cc0ca862aefadd24888efa01d50843605b79"
+checksum = "db3a906b1d9cacfe2174ad7c4139fccb441af566940559822103b79e5ea25f31"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -7293,7 +7292,7 @@ checksum = "57349d5a326b437989b6ee4dc8f2f34b0cc131202748414712a8e7d98952fc8c"
 dependencies = [
  "base64 0.21.0",
  "bigdecimal",
- "bindgen 0.59.2",
+ "bindgen 0.66.1",
  "bitflags 2.3.1",
  "bitvec",
  "byteorder",
@@ -7591,6 +7590,7 @@ dependencies = [
  "log",
  "md-5",
  "metrics",
+ "minitrace",
  "moka",
  "once_cell",
  "parking_lot 0.12.1",
@@ -7605,7 +7605,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "tokio",
- "tracing",
  "uuid",
 ]
 
