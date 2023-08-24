@@ -31,13 +31,13 @@ use crate::role::role_api::RoleApi;
 static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
 
 pub struct RoleMgr {
-    kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
+    kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     role_prefix: String,
 }
 
 impl RoleMgr {
     pub fn create(
-        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
+        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
         tenant: &str,
     ) -> Result<Self, ErrorCode> {
         if tenant.is_empty() {
