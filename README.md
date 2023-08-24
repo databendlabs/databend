@@ -115,6 +115,7 @@ prompt = ":) "
 | `output_format` | The output format to use. |
 | `time` | Whether to show the time elapsed when executing queries. |
 | `multi_line` | Whether to allow multi-line input. |
+| `replace_newline` | whether replace '\n' with '\\\n'. |
 
 
 ## Control commands in REPL

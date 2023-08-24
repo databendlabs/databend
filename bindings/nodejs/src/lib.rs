@@ -220,12 +220,7 @@ impl Row {
     #[napi]
     pub fn values(&self) -> Vec<Value> {
         // FIXME: do not clone
-        self.0
-            .values()
-            .to_owned()
-            .into_iter()
-            .map(|v| Value(v))
-            .collect()
+        self.0.values().iter().map(|v| Value(v.clone())).collect()
     }
 }
 

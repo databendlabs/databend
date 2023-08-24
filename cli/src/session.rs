@@ -317,7 +317,11 @@ impl Session {
                 Ok(false)
             }
             _ => {
-                let replace_newline = replace_newline_in_box_display(query);
+                let replace_newline = !if self.settings.replace_newline {
+                    false
+                } else {
+                    replace_newline_in_box_display(query)
+                };
                 let (schema, data) = self.conn.query_iter_ext(query).await?;
                 let mut displayer = FormatDisplay::new(
                     &self.settings,

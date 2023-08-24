@@ -37,6 +37,7 @@ pub struct SettingsConfig {
     pub progress_color: Option<String>,
     pub show_progress: Option<bool>,
     pub show_stats: Option<bool>,
+    pub replace_newline: Option<bool>,
 }
 
 #[derive(Clone, Debug)]
@@ -67,6 +68,8 @@ pub struct Settings {
 
     /// Multi line mode, default is true.
     pub multi_line: bool,
+    /// whether replace '\n' with '\\n', default true.
+    pub replace_newline: bool,
 }
 
 #[derive(ValueEnum, Clone, Debug, PartialEq, Deserialize)]
@@ -94,6 +97,9 @@ impl Settings {
         if let Some(show_stats) = cfg.show_stats {
             self.show_stats = show_stats;
         }
+        if let Some(replace_newline) = cfg.replace_newline {
+            self.replace_newline = replace_newline;
+        }
     }
 
     pub fn inject_ctrl_cmd(&mut self, cmd_name: &str, cmd_value: &str) -> Result<()> {
@@ -117,6 +123,7 @@ impl Settings {
             "max_display_rows" => self.max_display_rows = cmd_value.parse()?,
             "max_width" => self.max_width = cmd_value.parse()?,
             "max_col_width" => self.max_col_width = cmd_value.parse()?,
+            "replace_newline" => self.replace_newline = cmd_value.parse()?,
             _ => return Err(anyhow!("Unknown command: {}", cmd_name)),
         }
         Ok(())
@@ -169,6 +176,7 @@ impl Default for Settings {
             show_stats: false,
             time: false,
             multi_line: true,
+            replace_newline: true,
         }
     }
 }

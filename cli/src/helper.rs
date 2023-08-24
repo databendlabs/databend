@@ -192,6 +192,10 @@ impl KeyWordCompleter {
                 }),
         );
 
-        (pos - hint.len(), results)
+        if pos >= hint.len() {
+            (pos - hint.len(), results)
+        } else {
+            (0, results)
+        }
     }
 }

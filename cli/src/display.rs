@@ -44,7 +44,8 @@ pub struct FormatDisplay<'a> {
     settings: &'a Settings,
     query: &'a str,
     kind: QueryKind,
-    // whether replace '\n' with '\\n', only disable in explain/show create stmts
+    // whether replace '\n' with '\\n',
+    // disable in explain/show create stmts or user config setting false
     replace_newline: bool,
     schema: SchemaRef,
     data: RowProgressIterator,
@@ -67,10 +68,10 @@ impl<'a> FormatDisplay<'a> {
         Self {
             settings,
             query,
+            kind: QueryKind::from(query),
             replace_newline,
             schema,
             data,
-            kind: QueryKind::from(query),
             rows: 0,
             progress: None,
             start,
@@ -397,7 +398,7 @@ fn create_table(
     schema: SchemaRef,
     results: &[Row],
     replace_newline: bool,
-    mut max_rows: usize,
+    max_rows: usize,
     mut max_width: usize,
     max_col_width: usize,
 ) -> Result<Table> {
@@ -417,15 +418,12 @@ fn create_table(
         }
     }
 
-    if !replace_newline {
-        max_width = usize::MAX;
-        max_rows = usize::MAX;
-    }
-
     let row_count: usize = results.len();
     let mut rows_to_render = row_count.min(max_rows);
-
-    if row_count <= max_rows + 3 {
+    if !replace_newline {
+        max_width = usize::MAX;
+        rows_to_render = row_count;
+    } else if row_count <= max_rows + 3 {
         // hiding rows adds 3 extra rows
         // so hiding rows makes no sense if we are only slightly over the limit
         // if we are 1 row over the limit hiding rows will actually increase the number of lines we display!
