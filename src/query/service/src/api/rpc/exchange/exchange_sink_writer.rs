@@ -46,7 +46,9 @@ impl AsyncSink for ExchangeWriterSink {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
-        self.flight_sender.close();
+        let (tx, _) = async_channel::bounded(1);
+        let mut empty = FlightSender::create(tx);
+        std::mem::swap(&mut self.flight_sender, &mut empty);
         Ok(())
     }
 
