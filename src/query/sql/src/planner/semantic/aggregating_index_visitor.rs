@@ -165,10 +165,10 @@ impl<'ast> Visitor<'ast> for AggregatingIndexChecker {
             return;
         }
 
-        self.has_no_deterministic_func = match BUILTIN_FUNCTIONS.get_property(&name.name) {
-            Some(property) => property.non_deterministic,
-            None => false,
-        };
+        self.has_no_deterministic_func = BUILTIN_FUNCTIONS
+            .get_property(&name.name)
+            .map(|p| p.non_deterministic)
+            .unwrap_or(false);
 
         for arg in args {
             walk_expr(self, arg);
