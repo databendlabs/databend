@@ -99,7 +99,7 @@ impl SelectInterpreter {
         mut physical_plan: PhysicalPlan,
     ) -> Result<PipelineBuildResult> {
         if let PhysicalPlan::Exchange(exchange) = &mut physical_plan {
-            if exchange.kind == FragmentKind::Merge {
+            if exchange.kind == FragmentKind::Merge && self.ignore_result {
                 exchange.ignore_exchange = self.ignore_result;
             }
         }
