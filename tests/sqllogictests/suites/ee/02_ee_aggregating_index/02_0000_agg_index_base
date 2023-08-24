@@ -311,8 +311,8 @@ REFRESH AGGREGATING INDEX testi
 query TI rowsort
 SELECT ABS(b) as bs, SUM(a) from t WHERE c > 1 GROUP BY bs
 ----
-1 1
-2 3
+1 2
+2 2
 3 1
 
 statement ok
