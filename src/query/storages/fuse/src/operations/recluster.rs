@@ -121,6 +121,7 @@ impl FuseTable {
 
         let mut need_recluster = false;
         for chunk in segment_locations.chunks(limit) {
+            // read segments.
             let compact_segments = Self::segment_pruning(
                 &ctx,
                 self.schema(),
@@ -133,11 +134,13 @@ impl FuseTable {
                 continue;
             }
 
+            // select the segments with the highest depth.
             let selected_segs = ReclusterMutator::select_segments(
                 &compact_segments,
                 block_per_seg,
                 max_threads * 4,
             );
+            // select the blocks with the highest depth.
             if selected_segs.is_empty() {
                 for compact_segment in compact_segments.into_iter() {
                     if mutator.target_select(vec![compact_segment]).await? {
@@ -326,6 +329,7 @@ impl FuseTable {
             v
         };
 
+        // Only use push_down here.
         let pruning_ctx = PruningContext::try_create(
             ctx,
             dal,

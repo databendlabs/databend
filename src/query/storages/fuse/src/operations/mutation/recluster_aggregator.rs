@@ -52,14 +52,13 @@ pub struct ReclusterAggregator {
     default_cluster_key: u32,
     block_thresholds: BlockThresholds,
     block_per_seg: usize,
-
-    merged_blocks: Vec<Arc<BlockMeta>>,
-    removed_segment_indexes: Vec<usize>,
-    removed_statistics: Statistics,
-
     start_time: Instant,
 
     abort_operation: AbortOperation,
+    merged_blocks: Vec<Arc<BlockMeta>>,
+
+    removed_segment_indexes: Vec<usize>,
+    removed_statistics: Statistics,
 }
 
 #[async_trait::async_trait]
