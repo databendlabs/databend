@@ -68,7 +68,7 @@ impl Binder {
         let mut agg_index_checker = AggregatingIndexChecker::default();
         walk_query(&mut agg_index_checker, query);
         // todo(ariesdevil): do all check using `AggregatingIndexChecker`
-        Self::check_index_support(query, agg_index_checker.has_now_func)?;
+        Self::check_index_support(query, agg_index_checker.has_no_deterministic_func)?;
 
         let index_name = self.normalize_object_identifier(index_name);
 
@@ -226,15 +226,14 @@ impl Binder {
         Ok(plan)
     }
 
-    fn check_index_support(query: &Query, has_now_func: bool) -> Result<()> {
-        let now_func = "now";
+    fn check_index_support(query: &Query, has_no_deterministic_func: bool) -> Result<()> {
         let err = Err(ErrorCode::UnsupportedIndex(format!(
             "Currently create aggregating index just support simple query, like: {},\
-             and real-time functions are not support like: {}",
-            "SELECT ... FROM ... WHERE ... GROUP BY ...", now_func,
+             and non-deterministic functions are not support like: NOW()",
+            "SELECT ... FROM ... WHERE ... GROUP BY ...",
         )));
 
-        if has_now_func {
+        if has_no_deterministic_func {
             return err;
         }
 
