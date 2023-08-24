@@ -62,7 +62,7 @@ fn test_arithmetic() {
                 },
             )),
         ),
-        ("g", Int64Type::from_data(vec![i64::MIN, i64::MAX, 0])),
+        ("g", Int64Type::from_data(vec![i64::MAX, i64::MIN, 0])),
     ];
     test_add(file, columns);
     test_minus(file, columns);
