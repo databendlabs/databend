@@ -1,6 +1,14 @@
 ---
 title: "Revolutionizing Data Archival and Query Performance for Pharmaceutical Group"
 ---
+import CustomerVoiceCard from '@site/src/components/CustomerVoiceCard';
+
+<CustomerVoiceCard 
+  name="Jim H." 
+  position="Information Lead of the Pharmaceutical Group" 
+  date="Aug 24, 2023"
+  description="By embracing Databend, we achieved remarkable outcomes. The platform's user-friendly interactions, swift queries, and seamless transition for historical data queries significantly shortened project timelines, improved efficiency, and alleviated business concerns."
+/>
 
 A prominent pharmaceutical retail chain laid its foundation in 1999, gradually evolving into a significant player. Accumulating substantial data volumes through expansive supply chain operations, the business managed extensive datasets, including tables with billions of records. As the enterprise embraced digital evolution, the imperative for efficient data utilization and intelligent technology solutions grew. However, a notable challenge emerged as their existing CDH ([Cloudera Distribution for Hadoop](https://www.cloudera.com/products/open-source/apache-hadoop/key-cdh-components.html)) necessitated an upgrade due to architectural reasons.
 
@@ -18,4 +26,3 @@ Historical data from CDH was exported as Parquet files using Tencent Cloud's COS
 
 Databend proved transformative for the Pharmaceutical Group. **The migration resulted in a 2x increase in query and loading speed for large table data. Storage costs on Tencent Cloud COS plummeted around 15x compared to CDH's local storage and replication costs. **
 
-By embracing Databend, we achieved remarkable outcomes. The platform's user-friendly interactions, swift queries, and seamless transition for historical data queries significantly shortened project timelines, improved efficiency, and alleviated business concerns.
