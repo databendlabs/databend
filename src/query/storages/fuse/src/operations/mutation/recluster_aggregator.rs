@@ -99,7 +99,7 @@ impl AsyncAccumulatingTransform for ReclusterAggregator {
         let mut replaced_segments = HashMap::with_capacity(replaced_segments_len);
 
         if new_segments_len > removed_segments_len {
-            // The retain new segments will be append.
+            // The remain new segments will be append.
             let appended = new_segments.split_off(removed_segments_len);
             for (location, stats) in appended.into_iter().rev() {
                 self.abort_operation.add_segment(location.clone());
@@ -151,7 +151,7 @@ impl ReclusterAggregator {
             default_cluster_key: mutator.cluster_key_id,
             block_thresholds: mutator.block_thresholds,
             block_per_seg,
-            merged_blocks: mutator.retain_blocks.clone(),
+            merged_blocks: mutator.remained_blocks.clone(),
             removed_segment_indexes: mutator.removed_segment_indexes.clone(),
             removed_statistics: mutator.removed_segment_summary.clone(),
             start_time: Instant::now(),

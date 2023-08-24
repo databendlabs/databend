@@ -46,7 +46,7 @@ pub struct ReclusterMutator {
     pub(crate) cluster_key_id: u32,
 
     pub(crate) selected_blocks: Vec<Arc<BlockMeta>>,
-    pub(crate) retain_blocks: Vec<Arc<BlockMeta>>,
+    pub(crate) remained_blocks: Vec<Arc<BlockMeta>>,
     pub(crate) removed_segment_indexes: Vec<usize>,
     pub(crate) removed_segment_summary: Statistics,
 
@@ -68,7 +68,7 @@ impl ReclusterMutator {
             block_thresholds,
             cluster_key_id,
             selected_blocks: Vec::new(),
-            retain_blocks: Vec::new(),
+            remained_blocks: Vec::new(),
             removed_segment_indexes: Vec::new(),
             removed_segment_summary: Statistics::default(),
             total_rows: 0,
@@ -102,12 +102,12 @@ impl ReclusterMutator {
         let memory_threshold =
             cmp::min(mem_info.avail as usize * 1024, max_memory_usage) * 50 / 100;
 
-        let mut retain_blocks = Vec::new();
+        let mut remained_blocks = Vec::new();
         let mut selected = false;
         for (level, block_metas) in blocks_map.into_iter() {
             let len = block_metas.len();
             if selected || len < 2 {
-                retain_blocks.extend(block_metas.into_iter());
+                remained_blocks.extend(block_metas.into_iter());
                 continue;
             }
 
@@ -144,26 +144,26 @@ impl ReclusterMutator {
 
             let selected_idx = Self::fetch_max_depth(points_map, self.depth_threshold);
             if selected_idx.is_empty() {
-                retain_blocks.extend(block_metas.into_iter());
+                remained_blocks.extend(block_metas.into_iter());
                 continue;
             }
 
             let blocks_idx: IndexSet<usize> = IndexSet::from_iter(0..len);
             let diff = blocks_idx.difference(&selected_idx);
             diff.into_iter()
-                .for_each(|v| retain_blocks.push(block_metas[*v].clone()));
+                .for_each(|v| remained_blocks.push(block_metas[*v].clone()));
 
             let mut over_memory = false;
             for idx in selected_idx {
                 let block_meta = block_metas[idx].clone();
                 if over_memory {
-                    retain_blocks.push(block_meta);
+                    remained_blocks.push(block_meta);
                     continue;
                 }
 
                 let memory_usage = self.total_bytes + block_meta.block_size as usize;
                 if memory_usage > memory_threshold {
-                    retain_blocks.push(block_meta);
+                    remained_blocks.push(block_meta);
                     over_memory = true;
                     continue;
                 }
@@ -178,7 +178,7 @@ impl ReclusterMutator {
         }
 
         if selected {
-            self.retain_blocks = retain_blocks;
+            self.remained_blocks = remained_blocks;
 
             selected_indices.sort_by(|a, b| b.cmp(a));
             self.removed_segment_indexes = selected_indices;
