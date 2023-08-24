@@ -24,7 +24,7 @@ use crate::data_mask::RealDatamaskHandler;
 use crate::license::RealLicenseManager;
 use crate::storages::fuse::operations::RealVacuumHandler;
 use crate::table_lock::RealTableLockHandler;
-use crate::virtual_column::RealVirtualColumnsHandler;
+use crate::virtual_column::RealVirtualColumnHandler;
 
 pub struct MockServices;
 impl MockServices {
@@ -39,7 +39,7 @@ impl MockServices {
         RealAggregatingIndexHandler::init()?;
         RealTableLockHandler::init()?;
         RealDatamaskHandler::init()?;
-        RealVirtualColumnsHandler::init()?;
+        RealVirtualColumnHandler::init()?;
         Ok(())
     }
 }

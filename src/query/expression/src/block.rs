@@ -69,6 +69,15 @@ impl BlockEntry {
 
         Self { data_type, value }
     }
+
+    pub fn remove_nullable(self) -> Self {
+        match self.value {
+            Value::Column(Column::Nullable(col)) => {
+                Self::new(self.data_type.remove_nullable(), Value::Column(col.column))
+            }
+            _ => self,
+        }
+    }
 }
 
 #[typetag::serde(tag = "type")]

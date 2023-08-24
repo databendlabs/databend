@@ -5651,7 +5651,7 @@ Query {
 ---------- Input ----------
 SELECT * FROM (VALUES(1,1),(2,null),(null,5)) AS t(a,b)
 ---------- Output ---------
-SELECT * FROM (VALUES(1, 1), (2, NULL), (NULL, 5)) t(a, b)
+SELECT * FROM (VALUES(1, 1), (2, NULL), (NULL, 5)) AS t(a, b)
 ---------- AST ------------
 Query {
     span: Some(
@@ -5678,62 +5678,77 @@ Query {
                 },
             ],
             from: [
-                Values {
+                Subquery {
                     span: Some(
                         14..55,
                     ),
-                    values: [
-                        [
-                            Literal {
-                                span: Some(
-                                    22..23,
-                                ),
-                                lit: UInt64(
-                                    1,
-                                ),
-                            },
-                            Literal {
-                                span: Some(
-                                    24..25,
-                                ),
-                                lit: UInt64(
-                                    1,
-                                ),
-                            },
-                        ],
-                        [
-                            Literal {
-                                span: Some(
-                                    28..29,
-                                ),
-                                lit: UInt64(
-                                    2,
-                                ),
-                            },
-                            Literal {
-                                span: Some(
-                                    30..34,
-                                ),
-                                lit: Null,
-                            },
-                        ],
-                        [
-                            Literal {
-                                span: Some(
-                                    37..41,
-                                ),
-                                lit: Null,
-                            },
-                            Literal {
-                                span: Some(
-                                    42..43,
-                                ),
-                                lit: UInt64(
-                                    5,
-                                ),
-                            },
-                        ],
-                    ],
+                    subquery: Query {
+                        span: Some(
+                            15..44,
+                        ),
+                        with: None,
+                        body: Values {
+                            span: Some(
+                                15..44,
+                            ),
+                            values: [
+                                [
+                                    Literal {
+                                        span: Some(
+                                            22..23,
+                                        ),
+                                        lit: UInt64(
+                                            1,
+                                        ),
+                                    },
+                                    Literal {
+                                        span: Some(
+                                            24..25,
+                                        ),
+                                        lit: UInt64(
+                                            1,
+                                        ),
+                                    },
+                                ],
+                                [
+                                    Literal {
+                                        span: Some(
+                                            28..29,
+                                        ),
+                                        lit: UInt64(
+                                            2,
+                                        ),
+                                    },
+                                    Literal {
+                                        span: Some(
+                                            30..34,
+                                        ),
+                                        lit: Null,
+                                    },
+                                ],
+                                [
+                                    Literal {
+                                        span: Some(
+                                            37..41,
+                                        ),
+                                        lit: Null,
+                                    },
+                                    Literal {
+                                        span: Some(
+                                            42..43,
+                                        ),
+                                        lit: UInt64(
+                                            5,
+                                        ),
+                                    },
+                                ],
+                            ],
+                        },
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
                     alias: Some(
                         TableAlias {
                             name: Identifier {

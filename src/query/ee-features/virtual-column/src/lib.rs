@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod virtual_columns_handler;
+pub mod virtual_column;
 
-pub use virtual_columns_handler::get_virtual_columns_handler;
-pub use virtual_columns_handler::VirtualColumnsHandler;
-pub use virtual_columns_handler::VirtualColumnsHandlerWrapper;
+pub use virtual_column::get_virtual_column_handler;
+pub use virtual_column::VirtualColumnHandler;
+pub use virtual_column::VirtualColumnHandlerWrapper;

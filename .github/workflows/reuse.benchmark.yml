@@ -27,7 +27,6 @@ on:
         description: 'Self-hosted runner provider, aws or gcp'
         type: string
         required: true
-        default: 'aws'
 
 permissions:
   id-token: write
@@ -41,7 +40,7 @@ env:
 
 jobs:
   local:
-    if: inputs.runner_provider == 'aws'
+    if: inputs.runner_provider == 'aws' && inputs.source == 'release'
     timeout-minutes: 60
     runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     strategy:
@@ -73,6 +72,7 @@ jobs:
           version=${{ inputs.source_id }}
           target=x86_64-unknown-linux-gnu
           mkdir -p ./distro/
+          mkdir -p ./target/release/
           gh release download ${version} --pattern "databend-${version}-${target}.tar.gz" --dir distro/
           tar x -C ./target/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
           chmod +x ./target/release/databend-*
