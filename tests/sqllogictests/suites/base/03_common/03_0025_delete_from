@@ -379,7 +379,7 @@ select count(*) from t;
 500000
 
 query I
-select count(*) from t where c >= 0 and c < 1500000
+select count(*) from t where c >= 0 and c < 1500000;
 ----
 0
 
