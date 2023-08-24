@@ -166,16 +166,13 @@ impl Table for NumbersTable {
             fake_partitions as usize,
         );
 
+        let cluster = ctx.get_cluster();
         let mut worker_num = ctx.get_settings().get_max_threads()?;
 
-        let cluster = ctx.get_cluster();
-        if !cluster.is_empty() {
-            worker_num *= cluster.nodes.len() as u64;
-        }
-
-        if worker_num > fake_partitions {
-            worker_num = fake_partitions;
-        }
+        worker_num = match worker_num > fake_partitions {
+            true => fake_partitions,
+            false => worker_num * cluster.nodes.len() as u64,
+        };
 
         let parts = generate_numbers_parts(0, worker_num, total);
         Ok((statistics, parts))
