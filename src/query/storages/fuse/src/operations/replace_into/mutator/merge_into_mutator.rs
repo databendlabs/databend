@@ -43,6 +43,7 @@ use storages_common_index::filters::Filter;
 use storages_common_index::filters::Xor8Filter;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::BlockSlotDescription;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -81,6 +82,7 @@ use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
+    block_slots_in_charge: Option<BlockSlotDescription>,
     // the fields specified in ON CONFLICT clause
     on_conflict_fields: Vec<OnConflictField>,
     // the field indexes of `on_conflict_fields`
@@ -113,6 +115,7 @@ impl MergeIntoOperationAggregator {
         on_conflict_fields: Vec<OnConflictField>,
         bloom_filter_column_indexes: Vec<FieldIndex>,
         segment_locations: Vec<(SegmentIndex, Location)>,
+        block_slots: Option<BlockSlotDescription>,
         data_accessor: Operator,
         table_schema: Arc<TableSchema>,
         write_settings: WriteSettings,
@@ -174,6 +177,7 @@ impl MergeIntoOperationAggregator {
             deletion_accumulator,
             aggregation_ctx: Arc::new(AggregationContext {
                 segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
+                block_slots_in_charge: block_slots,
                 on_conflict_fields,
                 bloom_filter_column_indexes,
                 remain_column_field_ids,
@@ -232,6 +236,14 @@ impl MergeIntoOperationAggregator {
 
                             // block level pruning, using range index
                             for (block_index, block_meta) in seg.blocks.iter().enumerate() {
+                                if let Some(BlockSlotDescription { num_slots, slot }) =
+                                    &aggregation_ctx.block_slots_in_charge
+                                {
+                                    if block_index % num_slots != *slot as usize {
+                                        // skip this block
+                                        continue;
+                                    }
+                                }
                                 if aggregation_ctx
                                     .overlapped(&block_meta.col_stats, columns_min_max)
                                 {
@@ -520,7 +532,7 @@ impl AggregationContext {
         }
 
         // generate log
-        let mutation = MutationLogEntry::Replaced {
+        let mutation = MutationLogEntry::ReplacedBlock {
             index: BlockMetaIndex {
                 segment_idx: segment_index,
                 block_idx: block_index,
@@ -592,6 +604,7 @@ impl AggregationContext {
                 &self.read_settings,
                 &block_meta.location.0,
                 &block_meta.col_metas,
+                &None,
             )
             .await?;
 

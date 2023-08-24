@@ -30,7 +30,9 @@ use common_ast::Dialect;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::GetIndexReq;
+use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
+use storages_common_table_meta::meta::Location;
 
 use crate::binder::Binder;
 use crate::optimizer::optimize;
@@ -56,6 +58,7 @@ impl Binder {
             if_not_exists,
             index_name,
             query,
+            sync_creation,
         } = stmt;
 
         // check if query support index
@@ -95,6 +98,7 @@ impl Binder {
             index_name,
             query: query.to_string(),
             table_id,
+            sync_creation: *sync_creation,
         };
         Ok(Plan::CreateIndex(Box::new(plan)))
     }
@@ -145,8 +149,25 @@ impl Binder {
         let index_id = res.index_id;
         let index_meta = res.index_meta;
 
+        let plan = self
+            .build_refresh_index_plan(bind_context, index_id, index_name, index_meta, *limit, None)
+            .await?;
+
+        Ok(Plan::RefreshIndex(Box::new(plan)))
+    }
+
+    pub async fn build_refresh_index_plan(
+        &mut self,
+        bind_context: &mut BindContext,
+        index_id: u64,
+        index_name: String,
+        index_meta: IndexMeta,
+        limit: Option<u64>,
+        segment_locs: Option<Vec<Location>>,
+    ) -> Result<RefreshIndexPlan> {
         let tokens = tokenize_sql(&index_meta.query)?;
         let (mut stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+
         // rewrite aggregate function
         // The file name and block only correspond to each other at the time of table_scan,
         // after multiple transformations, this correspondence does not exist,
@@ -154,11 +175,10 @@ impl Binder {
         // to generate the index file corresponding to the source table data file,
         // so we rewrite the sql here to add `_block_name` to select targets,
         // so that we inline the file name into the data block.
-        let mut index_rewriter = AggregatingIndexRewriter {
-            // note: if user already use the `_block_name` in their sql
-            // we no need add it and **MUST NOT** drop this column in sink phase.
-            user_defined_block_name: false,
-        };
+
+        // NOTE: if user already use the `_block_name` in their sql
+        // we no need add it and **MUST NOT** drop this column in sink phase.
+        let mut index_rewriter = AggregatingIndexRewriter::default();
         walk_statement_mut(&mut index_rewriter, &mut stmt);
 
         bind_context.planning_agg_index = true;
@@ -190,14 +210,14 @@ impl Binder {
             index_id,
             index_name,
             index_meta,
-            limit: *limit,
+            limit,
             table_info: table.get_table_info().clone(),
             query_plan: Box::new(plan),
-            metadata: self.metadata.clone(),
             user_defined_block_name: index_rewriter.user_defined_block_name,
+            segment_locs,
         };
 
-        Ok(Plan::RefreshIndex(Box::new(plan)))
+        Ok(plan)
     }
 
     fn check_index_support(query: &Query) -> Result<()> {

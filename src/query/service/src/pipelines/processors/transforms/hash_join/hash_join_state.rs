@@ -12,93 +12,165 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::SyncUnsafeCell;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+
+use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::HashMethodFixedKeys;
+use common_expression::HashMethodSerializer;
+use common_expression::HashMethodSingleString;
+use common_hashtable::HashJoinHashMap;
+use common_hashtable::HashtableKeyable;
+use common_hashtable::StringHashJoinHashMap;
 use common_sql::plans::JoinType;
+use common_sql::ColumnSet;
+use ethnum::U256;
+use parking_lot::Mutex;
+use parking_lot::RwLock;
 
-use super::ProbeState;
-use crate::pipelines::processors::transforms::hash_join::desc::JoinState;
+use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
+use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
+use crate::pipelines::processors::HashJoinDesc;
+use crate::sessions::QueryContext;
 
-#[async_trait::async_trait]
-/// Concurrent hash table for hash join.
-pub trait HashJoinState: Send + Sync {
-    /// Add input `DataBlock` to `row_space`.
-    fn build(&self, input: DataBlock) -> Result<()>;
+pub struct SerializerHashJoinHashTable {
+    pub(crate) hash_table: StringHashJoinHashMap,
+    pub(crate) hash_method: HashMethodSerializer,
+}
 
-    /// Probe the hash table and retrieve matched rows as DataBlocks.
-    fn probe(&self, input: DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>>;
+pub struct SingleStringHashJoinHashTable {
+    pub(crate) hash_table: StringHashJoinHashMap,
+    pub(crate) hash_method: HashMethodSingleString,
+}
 
-    fn interrupt(&self);
+pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable> {
+    pub(crate) hash_table: HashJoinHashMap<T>,
+    pub(crate) hash_method: HashMethodFixedKeys<T>,
+}
 
-    fn join_state(&self) -> &JoinState;
+pub enum HashJoinHashTable {
+    Null,
+    Serializer(SerializerHashJoinHashTable),
+    SingleString(SingleStringHashJoinHashTable),
+    KeysU8(FixedKeyHashJoinHashTable<u8>),
+    KeysU16(FixedKeyHashJoinHashTable<u16>),
+    KeysU32(FixedKeyHashJoinHashTable<u32>),
+    KeysU64(FixedKeyHashJoinHashTable<u64>),
+    KeysU128(FixedKeyHashJoinHashTable<u128>),
+    KeysU256(FixedKeyHashJoinHashTable<U256>),
+}
 
-    /// Attach to state: `build_count` and `finalize_count`.
-    fn build_attach(&self) -> Result<()>;
+/// Define some shared states for hash join build and probe.
+/// It will like a bridge to connect build and probe.
+/// Such as build side will pass hash table to probe side by it
+pub struct HashJoinState {
+    /// A shared big hash table stores all the rows from build side
+    pub(crate) hash_table: Arc<SyncUnsafeCell<HashJoinHashTable>>,
+    /// It will be increased by 1 when a new hash join build processor is created.
+    /// After the processor added its chunks to `HashTable`, it will be decreased by 1.
+    /// When the counter is 0, it means all hash join build processors have added their chunks to `HashTable`.
+    /// And the build phase is finished. Probe phase will start.
+    pub(crate) hash_table_builders: Mutex<usize>,
+    /// After `hash_table_builders` is 0, it will be set as true.
+    /// It works with notify to make HashJoin start the probe phase.
+    pub(crate) build_done: Mutex<bool>,
+    /// Notify probe processors that build phase is finished.
+    pub(crate) build_done_notify: Arc<Notify>,
+    /// Some description of hash join. Such as join type, join keys, etc.
+    pub(crate) hash_join_desc: HashJoinDesc,
+    /// Interrupt the build phase or probe phase.
+    pub(crate) interrupt: Arc<AtomicBool>,
+    /// If there is no data in build side, maybe we can fast return.
+    pub(crate) fast_return: Arc<RwLock<bool>>,
+    /// `RowSpace` contains all rows from build side.
+    pub(crate) row_space: RowSpace,
+    pub(crate) chunks: Arc<SyncUnsafeCell<Vec<DataBlock>>>,
+    pub(crate) build_num_rows: Arc<SyncUnsafeCell<usize>>,
+    pub(crate) probe_to_build: Arc<Vec<(usize, (bool, bool))>>,
+    pub(crate) is_build_projected: Arc<AtomicBool>,
+    /// OuterScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
+    pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
+    /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
+    pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
+}
 
-    /// Detach to state: `build_count`, create finalize task and initialize the hash table.
-    fn build_done(&self) -> Result<()>;
+impl HashJoinState {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        mut build_schema: DataSchemaRef,
+        build_projections: &ColumnSet,
+        hash_join_desc: HashJoinDesc,
+        probe_to_build: &[(usize, (bool, bool))],
+    ) -> Result<Arc<HashJoinState>> {
+        if matches!(
+            hash_join_desc.join_type,
+            JoinType::Left | JoinType::LeftSingle
+        ) {
+            build_schema = build_schema_wrap_nullable(&build_schema);
+        };
+        if hash_join_desc.join_type == JoinType::Full {
+            build_schema = build_schema_wrap_nullable(&build_schema);
+        }
+        Ok(Arc::new(HashJoinState {
+            hash_table: Arc::new(SyncUnsafeCell::new(HashJoinHashTable::Null)),
+            hash_table_builders: Mutex::new(0),
+            build_done: Mutex::new(false),
+            build_done_notify: Arc::new(Default::default()),
+            hash_join_desc,
+            interrupt: Arc::new(AtomicBool::new(false)),
+            fast_return: Arc::new(Default::default()),
+            row_space: RowSpace::new(ctx, build_schema, build_projections)?,
+            chunks: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            build_num_rows: Arc::new(SyncUnsafeCell::new(0)),
+            probe_to_build: Arc::new(probe_to_build.to_vec()),
+            is_build_projected: Arc::new(AtomicBool::new(true)),
+            outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
+        }))
+    }
 
-    /// Divide the finalize phase into multiple tasks.
-    fn generate_finalize_task(&self) -> Result<()>;
+    pub fn interrupt(&self) {
+        self.interrupt.store(true, Ordering::Release);
+    }
 
-    /// Get the finalize task and using the `chunks` in `row_space` to build hash table in parallel.
-    fn finalize(&self, task: (usize, usize)) -> Result<()>;
+    /// Used by hash join probe processors, wait for build phase finished.
+    #[async_backtrace::framed]
+    pub async fn wait_build_hash_table_finish(&self) -> Result<()> {
+        let notified = {
+            let finalized_guard = self.build_done.lock();
+            match *finalized_guard {
+                true => None,
+                false => Some(self.build_done_notify.notified()),
+            }
+        };
+        if let Some(notified) = notified {
+            notified.await;
+        }
+        Ok(())
+    }
 
-    /// Get one finalize task.
-    fn finalize_task(&self) -> Option<(usize, usize)>;
+    pub fn fast_return(&self) -> Result<bool> {
+        let fast_return = self.fast_return.read();
+        Ok(*fast_return)
+    }
 
-    /// Detach to state: `finalize_count`.
-    fn finalize_done(&self) -> Result<()>;
+    pub fn need_outer_scan(&self) -> bool {
+        matches!(
+            self.hash_join_desc.join_type,
+            JoinType::Full
+                | JoinType::Right
+                | JoinType::RightSingle
+                | JoinType::RightSemi
+                | JoinType::RightAnti
+        )
+    }
 
-    /// Attach to state: `probe_count`.
-    fn probe_attach(&self) -> Result<()>;
-
-    // Detach to state: `probe_count`.
-    fn probe_done(&self) -> Result<()>;
-
-    /// Divide the final scan phase into multiple tasks.
-    fn generate_final_scan_task(&self) -> Result<()>;
-
-    /// Get one final scan task.
-    fn final_scan_task(&self) -> Option<usize>;
-
-    /// Final scan.
-    fn final_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>>;
-
-    /// Check if need outer scan.
-    fn need_outer_scan(&self) -> bool;
-
-    /// Outer scan for right and full join.
-    fn right_and_full_outer_scan(
-        &self,
-        task: usize,
-        state: &mut ProbeState,
-    ) -> Result<Vec<DataBlock>>;
-
-    /// Outer scan for right semi join.
-    fn right_semi_outer_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>>;
-
-    /// Outer scan for right anti join.
-    fn right_anti_outer_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>>;
-
-    /// Check if need mark scan.
-    fn need_mark_scan(&self) -> bool;
-
-    /// Mark scan for left mark join.
-    fn left_mark_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>>;
-
-    /// Wait until the build phase is finished.
-    async fn wait_build_finish(&self) -> Result<()>;
-
-    /// Wait until the finalize phase is finished.
-    async fn wait_finalize_finish(&self) -> Result<()>;
-
-    /// Wait until the probe phase is finished.
-    async fn wait_probe_finish(&self) -> Result<()>;
-
-    /// Get `fast_return`
-    fn fast_return(&self) -> Result<bool>;
-
-    /// Get join type
-    fn join_type(&self) -> JoinType;
+    pub fn need_mark_scan(&self) -> bool {
+        matches!(self.hash_join_desc.join_type, JoinType::LeftMark)
+    }
 }

@@ -59,16 +59,8 @@ pub struct With {
 pub struct CTE {
     pub span: Span,
     pub alias: TableAlias,
-    pub source: CTESource,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum CTESource {
-    Query {
-        materialized: bool,
-        query: Box<Query>,
-    },
-    Values(Vec<Vec<Expr>>),
+    pub materialized: bool,
+    pub query: Box<Query>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -126,6 +118,8 @@ pub enum SetExpr {
     Query(Box<Query>),
     // UNION/EXCEPT/INTERSECT operator
     SetOperation(Box<SetOperation>),
+    // Values clause
+    Values { span: Span, values: Vec<Vec<Expr>> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -275,12 +269,6 @@ pub enum TableReference {
         options: SelectStageOptions,
         alias: Option<TableAlias>,
     },
-    // A set of values generates a temporary constant table that can be used for queries
-    Values {
-        span: Span,
-        values: Vec<Vec<Expr>>,
-        alias: Option<TableAlias>,
-    },
 }
 
 impl TableReference {
@@ -342,6 +330,7 @@ impl SetExpr {
             SetExpr::Select(stmt) => stmt.span,
             SetExpr::Query(query) => query.span,
             SetExpr::SetOperation(op) => op.span,
+            SetExpr::Values { span, .. } => *span,
         }
     }
 
@@ -545,25 +534,6 @@ impl Display for TableReference {
                     write!(f, " AS {alias}")?;
                 }
             }
-            TableReference::Values {
-                span: _,
-                values,
-                alias,
-            } => {
-                write!(f, "(VALUES")?;
-                for (i, value) in values.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "(")?;
-                    write_comma_separated_list(f, value)?;
-                    write!(f, ")")?;
-                }
-                write!(f, ")")?;
-                if let Some(alias) = alias {
-                    write!(f, " {alias}")?;
-                }
-            }
         }
         Ok(())
     }
@@ -702,32 +672,8 @@ impl Display for SetExpr {
                 }
                 write!(f, "{}", set_operation.right)?;
             }
-        }
-        Ok(())
-    }
-}
-
-impl Display for CTE {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} AS {}", self.alias, self.source)?;
-        Ok(())
-    }
-}
-
-impl Display for CTESource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CTESource::Query {
-                materialized,
-                query,
-            } => {
-                if *materialized {
-                    write!(f, "MATERIALIZED ")?;
-                }
-                write!(f, "({query})")?;
-            }
-            CTESource::Values(values) => {
-                write!(f, "(VALUES")?;
+            SetExpr::Values { values, .. } => {
+                write!(f, "VALUES")?;
                 for (i, value) in values.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
@@ -736,9 +682,19 @@ impl Display for CTESource {
                     write_comma_separated_list(f, value)?;
                     write!(f, ")")?;
                 }
-                write!(f, ")")?;
             }
         }
+        Ok(())
+    }
+}
+
+impl Display for CTE {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} AS ", self.alias)?;
+        if self.materialized {
+            write!(f, "MATERIALIZED ")?;
+        }
+        write!(f, "({})", self.query)?;
         Ok(())
     }
 }

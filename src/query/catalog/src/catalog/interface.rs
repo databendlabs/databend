@@ -127,7 +127,12 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>>;
 
-    async fn list_indexes_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>>;
+    async fn list_index_ids_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>>;
+
+    async fn list_indexes_by_table_id(
+        &self,
+        req: ListIndexesByIdReq,
+    ) -> Result<Vec<(u64, String, IndexMeta)>>;
 
     async fn create_virtual_column(
         &self,
@@ -282,6 +287,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         Err(ErrorCode::Unimplemented(
             "'get_table_function' not implemented",
         ))
+    }
+
+    fn exists_table_function(&self, _func_name: &str) -> bool {
+        false
     }
 
     // List all table functions' names.

@@ -142,7 +142,7 @@ impl AccessChecker for PrivilegeAccess {
             }
 
             // Virtual Column.
-            Plan::CreateVirtualColumns(plan) => {
+            Plan::CreateVirtualColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -154,7 +154,7 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::AlterVirtualColumns(plan) => {
+            Plan::AlterVirtualColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -166,7 +166,7 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::DropVirtualColumns(plan) => {
+            Plan::DropVirtualColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -178,7 +178,7 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::GenerateVirtualColumns(plan) => {
+            Plan::RefreshVirtualColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -515,7 +515,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::ShowObjectGrantPrivileges(_)
             | Plan::ShowGrantTenantsOfShare(_)
             | Plan::ShowGrants(_)
-            | Plan::ShowRoles(_)
             | Plan::GrantRole(_)
             | Plan::GrantPriv(_)
             | Plan::RevokePriv(_)
@@ -565,7 +564,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropShare(_)
             | Plan::DescShare(_)
             | Plan::ShowShares(_)
-            | Plan::Call(_)
             | Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
@@ -592,8 +590,9 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             // Note: No need to check privileges
-            // SET ROLE is a session-local statement (have same semantic with the SET ROLE in postgres), no need to check privileges
+            // SET ROLE & SHOW ROLES is a session-local statement (have same semantic with the SET ROLE in postgres), no need to check privileges
             Plan::SetRole(_) => {}
+            Plan::ShowRoles(_) => {}
             Plan::Presign(_) => {}
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}

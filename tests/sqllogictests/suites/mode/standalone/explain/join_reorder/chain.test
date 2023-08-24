@@ -29,12 +29,14 @@ query T
 explain select * from t, t1, t2 where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
+├── output columns: [t2.a (#2), t.a (#0), t1.a (#1)]
 ├── join type: INNER
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t2.a (#2)]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
+│   ├── output columns: [t1.a (#1), t.a (#0)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
 │   ├── probe keys: [t1.a (#1)]
@@ -42,6 +44,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
+│   │   ├── output columns: [a (#0)]
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 39
 │   │   ├── partitions total: 1
@@ -51,6 +54,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 65
 │       ├── partitions total: 1
@@ -60,6 +64,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
+    ├── output columns: [a (#2)]
     ├── read rows: 100
     ├── read bytes: 172
     ├── partitions total: 1
@@ -72,12 +77,14 @@ query T
 explain select * from t, t2, t1 where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
+├── output columns: [t2.a (#1), t.a (#0), t1.a (#2)]
 ├── join type: INNER
 ├── build keys: [t1.a (#2)]
 ├── probe keys: [t2.a (#1)]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
+│   ├── output columns: [t1.a (#2), t.a (#0)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
 │   ├── probe keys: [t1.a (#2)]
@@ -85,6 +92,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
+│   │   ├── output columns: [a (#0)]
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 39
 │   │   ├── partitions total: 1
@@ -94,6 +102,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
+│       ├── output columns: [a (#2)]
 │       ├── read rows: 10
 │       ├── read bytes: 65
 │       ├── partitions total: 1
@@ -103,6 +112,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
+    ├── output columns: [a (#1)]
     ├── read rows: 100
     ├── read bytes: 172
     ├── partitions total: 1
@@ -115,12 +125,14 @@ query T
 explain select * from t1, t, t2 where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
+├── output columns: [t2.a (#2), t.a (#1), t1.a (#0)]
 ├── join type: INNER
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [t2.a (#2)]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
+│   ├── output columns: [t1.a (#0), t.a (#1)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#1)]
 │   ├── probe keys: [t1.a (#0)]
@@ -128,6 +140,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
+│   │   ├── output columns: [a (#1)]
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 39
 │   │   ├── partitions total: 1
@@ -137,6 +150,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
+│       ├── output columns: [a (#0)]
 │       ├── read rows: 10
 │       ├── read bytes: 65
 │       ├── partitions total: 1
@@ -146,6 +160,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
+    ├── output columns: [a (#2)]
     ├── read rows: 100
     ├── read bytes: 172
     ├── partitions total: 1
@@ -158,12 +173,14 @@ query T
 explain select * from t1, t2, t where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
+├── output columns: [t2.a (#1), t.a (#2), t1.a (#0)]
 ├── join type: INNER
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [t2.a (#1)]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
+│   ├── output columns: [t1.a (#0), t.a (#2)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#2)]
 │   ├── probe keys: [t1.a (#0)]
@@ -171,6 +188,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
+│   │   ├── output columns: [a (#2)]
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 39
 │   │   ├── partitions total: 1
@@ -180,6 +198,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
+│       ├── output columns: [a (#0)]
 │       ├── read rows: 10
 │       ├── read bytes: 65
 │       ├── partitions total: 1
@@ -189,6 +208,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
+    ├── output columns: [a (#1)]
     ├── read rows: 100
     ├── read bytes: 172
     ├── partitions total: 1
@@ -201,12 +221,14 @@ query T
 explain select * from t2, t1, t where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
+├── output columns: [t2.a (#0), t.a (#2), t1.a (#1)]
 ├── join type: INNER
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t2.a (#0)]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
+│   ├── output columns: [t1.a (#1), t.a (#2)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#2)]
 │   ├── probe keys: [t1.a (#1)]
@@ -214,6 +236,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
+│   │   ├── output columns: [a (#2)]
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 39
 │   │   ├── partitions total: 1
@@ -223,6 +246,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
+│       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read bytes: 65
 │       ├── partitions total: 1
@@ -232,6 +256,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
+    ├── output columns: [a (#0)]
     ├── read rows: 100
     ├── read bytes: 172
     ├── partitions total: 1
@@ -244,12 +269,14 @@ query T
 explain select * from t2, t, t1 where t.a = t1.a and t1.a = t2.a
 ----
 HashJoin
+├── output columns: [t2.a (#0), t.a (#1), t1.a (#2)]
 ├── join type: INNER
 ├── build keys: [t1.a (#2)]
 ├── probe keys: [t2.a (#0)]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
+│   ├── output columns: [t1.a (#2), t.a (#1)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#1)]
 │   ├── probe keys: [t1.a (#2)]
@@ -257,6 +284,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
+│   │   ├── output columns: [a (#1)]
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 39
 │   │   ├── partitions total: 1
@@ -266,6 +294,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
+│       ├── output columns: [a (#2)]
 │       ├── read rows: 10
 │       ├── read bytes: 65
 │       ├── partitions total: 1
@@ -275,6 +304,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
+    ├── output columns: [a (#0)]
     ├── read rows: 100
     ├── read bytes: 172
     ├── partitions total: 1
@@ -287,6 +317,7 @@ query T
 explain select * from t left join t1 on t1.a = t.a
 ----
 HashJoin
+├── output columns: [t1.a (#1), t.a (#0)]
 ├── join type: RIGHT OUTER
 ├── build keys: [CAST(t.a (#0) AS UInt64 NULL)]
 ├── probe keys: [t1.a (#1)]
@@ -294,6 +325,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -303,6 +335,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -315,6 +348,7 @@ query T
 explain select * from t right join t1 on t1.a = t.a
 ----
 HashJoin
+├── output columns: [t1.a (#1), t.a (#0)]
 ├── join type: LEFT OUTER
 ├── build keys: [t.a (#0)]
 ├── probe keys: [CAST(t1.a (#1) AS UInt64 NULL)]
@@ -322,6 +356,7 @@ HashJoin
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -331,6 +366,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -343,6 +379,7 @@ query T
 explain select * from t left semi join t1 on t1.a = t.a
 ----
 HashJoin
+├── output columns: [t.a (#0)]
 ├── join type: RIGHT SEMI
 ├── build keys: [t.a (#0)]
 ├── probe keys: [t1.a (#1)]
@@ -350,6 +387,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -359,6 +397,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -371,13 +410,15 @@ query T
 explain select * from t right semi join t1 on t1.a = t.a
 ----
 HashJoin
+├── output columns: [t1.a (#1)]
 ├── join type: LEFT SEMI
 ├── build keys: [t.a (#0)]
 ├── probe keys: [t1.a (#1)]
 ├── filters: []
-├── estimated rows: 10.00
+├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -387,6 +428,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -399,6 +441,7 @@ query T
 explain select * from t left anti join t1 on t1.a = t.a
 ----
 HashJoin
+├── output columns: [t.a (#0)]
 ├── join type: RIGHT ANTI
 ├── build keys: [t.a (#0)]
 ├── probe keys: [t1.a (#1)]
@@ -406,6 +449,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -415,6 +459,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -427,6 +472,7 @@ query T
 explain select * from t right anti join t1 on t1.a = t.a
 ----
 HashJoin
+├── output columns: [t1.a (#1)]
 ├── join type: LEFT ANTI
 ├── build keys: [t.a (#0)]
 ├── probe keys: [t1.a (#1)]
@@ -434,6 +480,7 @@ HashJoin
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
+│   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read bytes: 39
 │   ├── partitions total: 1
@@ -443,6 +490,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read bytes: 65
     ├── partitions total: 1
@@ -454,11 +502,11 @@ HashJoin
 query T
 explain join select * from t right anti join t1 on t1.a = t.a
 ----
-HashJoin: LEFT ANTI
+HashJoin: LEFT ANTI (rows: 10.00)
 ├── Build
-│   └── Scan: default.join_reorder.t, rows: 1
+│   └── Scan: default.join_reorder.t (read rows: 1)
 └── Probe
-    └── Scan: default.join_reorder.t1, rows: 10
+    └── Scan: default.join_reorder.t1 (read rows: 10)
 
 statement ok
 drop database join_reorder

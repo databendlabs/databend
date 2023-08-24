@@ -42,7 +42,7 @@ use log::info;
 
 use crate::local;
 
-async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
+pub async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
     if conf.cmd.is_empty() {
         return Ok(false);
     }
@@ -68,10 +68,6 @@ async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
 }
 
 pub async fn init_services(conf: &InnerConfig) -> Result<()> {
-    if run_cmd(conf).await? {
-        return Ok(());
-    }
-
     init_default_metrics_recorder();
     set_panic_hook();
     set_alloc_error_hook();
@@ -134,6 +130,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     precheck_services(conf).await?;
 
     let mut shutdown_handle = ShutdownHandle::create()?;
+    let start_time = std::time::Instant::now();
 
     info!("Databend Query start with config: {:?}", conf);
 
@@ -346,7 +343,11 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         println!("    {}={}", k, v);
     }
 
-    info!("Ready for connections.");
+    info!(
+        "Ready for connections after {}s.",
+        start_time.elapsed().as_secs_f32()
+    );
+
     if conf.background.enable {
         println!("Start background service");
         get_background_service_handler().start().await?;

@@ -45,7 +45,6 @@ use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
-use crate::plans::CallPlan;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateUDFPlan;
@@ -318,10 +317,10 @@ impl<'a> Binder {
             Statement::RefreshIndex(stmt) => self.bind_refresh_index(bind_context, stmt).await?,
 
             // Virtual Columns
-            Statement::CreateVirtualColumns(stmt) => self.bind_create_virtual_columns(stmt).await?,
-            Statement::AlterVirtualColumns(stmt) => self.bind_alter_virtual_columns(stmt).await?,
-            Statement::DropVirtualColumns(stmt) => self.bind_drop_virtual_columns(stmt).await?,
-            Statement::GenerateVirtualColumns(stmt) => self.bind_generate_virtual_columns(stmt).await?,
+            Statement::CreateVirtualColumn(stmt) => self.bind_create_virtual_column(stmt).await?,
+            Statement::AlterVirtualColumn(stmt) => self.bind_alter_virtual_column(stmt).await?,
+            Statement::DropVirtualColumn(stmt) => self.bind_drop_virtual_column(stmt).await?,
+            Statement::RefreshVirtualColumn(stmt) => self.bind_refresh_virtual_column(stmt).await?,
 
             // Users
             Statement::CreateUser(stmt) => self.bind_create_user(stmt).await?,
@@ -488,10 +487,7 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 name: udf_name.to_string(),
             })),
-            Statement::Call(stmt) => Plan::Call(Box::new(CallPlan {
-                name: stmt.name.clone(),
-                args: stmt.args.clone(),
-            })),
+            Statement::Call(stmt) => self.bind_call(bind_context, stmt).await?,
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 

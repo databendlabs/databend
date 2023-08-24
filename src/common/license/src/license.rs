@@ -24,7 +24,7 @@ pub enum Feature {
     Vacuum,
     TableLock,
     Test,
-    VirtualColumns,
+    VirtualColumn,
     BackgroundService,
     DataMask,
     AggregateIndex,
@@ -34,8 +34,8 @@ pub enum Feature {
 impl Display for Feature {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Feature::VirtualColumns => {
-                write!(f, "virtual_columns")
+            Feature::VirtualColumn => {
+                write!(f, "virtual_column")
             }
             Feature::LicenseInfo => {
                 write!(f, "license_info")

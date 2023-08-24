@@ -541,7 +541,15 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_indexes_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>> {
+    async fn list_index_ids_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>> {
+        self.mutable_catalog.list_index_ids_by_table_id(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn list_indexes_by_table_id(
+        &self,
+        req: ListIndexesByIdReq,
+    ) -> Result<Vec<(u64, String, IndexMeta)>> {
         self.mutable_catalog.list_indexes_by_table_id(req).await
     }
 
@@ -585,6 +593,10 @@ impl Catalog for DatabaseCatalog {
         tbl_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         self.table_function_factory.get(func_name, tbl_args)
+    }
+
+    fn exists_table_function(&self, func_name: &str) -> bool {
+        self.table_function_factory.exists(func_name)
     }
 
     fn list_table_functions(&self) -> Vec<String> {

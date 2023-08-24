@@ -15,60 +15,51 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::Progress;
-use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_storages_parquet::ParquetPart;
-use common_storages_parquet::ParquetPartData;
 use common_storages_parquet::ParquetRSReader;
-use common_storages_parquet::ParquetReader;
+use opendal::Reader;
+use parquet::arrow::async_reader::ParquetRecordBatchStream;
 
 use crate::partition::IcebergPartInfo;
 
 pub struct IcebergTableSource {
-    state: State,
+    // Used for event transforming.
     ctx: Arc<dyn TableContext>,
-    _scan_progress: Arc<Progress>,
     output: Arc<OutputPort>,
+    generated_data: Option<DataBlock>,
+    is_finished: bool,
 
-    /// The reader to read [`DataBlock`]s from parquet files.
+    // Used to read parquet.
+    output_schema: DataSchemaRef,
     parquet_reader: Arc<ParquetRSReader>,
-}
-
-enum State {
-    /// Read parquet file meta data
-    InitReader(Option<PartInfoPtr>),
-
-    /// Read data from parquet file.
-    ReadParquetData(ParquetPartData, PartInfoPtr),
-
-    /// Generate [`DataBlock`], which is the output of this processor.
-    GenerateBlock(DataBlock),
-
-    Finish,
+    stream: Option<ParquetRecordBatchStream<Reader>>,
 }
 
 impl IcebergTableSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
+        output_schema: DataSchemaRef,
         parquet_reader: Arc<ParquetRSReader>,
     ) -> Result<ProcessorPtr> {
-        let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(IcebergTableSource {
             ctx,
             output,
-            _scan_progress: scan_progress,
-            state: State::InitReader(None),
             parquet_reader,
+            output_schema,
+            stream: None,
+            generated_data: None,
+            is_finished: false,
         })))
     }
 }
@@ -76,7 +67,7 @@ impl IcebergTableSource {
 #[async_trait::async_trait]
 impl Processor for IcebergTableSource {
     fn name(&self) -> String {
-        "IcebergEngineSource".to_string()
+        "IcebergSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -84,10 +75,9 @@ impl Processor for IcebergTableSource {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::InitReader(None)) {
-            self.state = self.ctx.get_partition().map_or(State::Finish, |part_info| {
-                State::InitReader(Some(part_info))
-            });
+        if self.is_finished {
+            self.output.finish();
+            return Ok(Event::Finished);
         }
 
         if self.output.is_finished() {
@@ -98,84 +88,47 @@ impl Processor for IcebergTableSource {
             return Ok(Event::NeedConsume);
         }
 
-        if matches!(self.state, State::GenerateBlock(_)) {
-            if let State::GenerateBlock(block) = std::mem::replace(&mut self.state, State::Finish) {
-                // Check if the schema of the data block is matched with the schema of the table.
-                let block = check_block_schema(&self.parquet_reader.output_schema, block)?;
-                self.output.push_data(Ok(block));
-                self.state = self.ctx.get_partition().map_or(State::Finish, |part_info| {
-                    State::InitReader(Some(part_info))
-                });
-                return Ok(Event::NeedConsume);
+        match self.generated_data.take() {
+            None => Ok(Event::Async),
+            Some(data_block) => {
+                self.output.push_data(Ok(data_block));
+                Ok(Event::NeedConsume)
             }
-            unreachable!()
-        }
-
-        match self.state {
-            State::Finish => {
-                self.output.finish();
-                Ok(Event::Finished)
-            }
-            State::InitReader(_) => Ok(Event::Async),
-            State::ReadParquetData(_, _) => Ok(Event::Sync),
-            State::GenerateBlock(_) => unreachable!(),
         }
     }
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Finish) {
-            State::InitReader(Some(part)) => {
-                let iceberg_part = IcebergPartInfo::from_part(&part)?;
-                match iceberg_part {
-                    IcebergPartInfo::Parquet(parquet_part) => {
-                        // Currently, we only support parquet file format.
-                        let data = self
-                            .parquet_reader
-                            .readers_from_non_blocking_io(parquet_part)
-                            .await?;
-
-                        self.state = State::ReadParquetData(data, part.clone());
-                    }
-                }
-
-                Ok(())
+        if let Some(mut stream) = self.stream.take() {
+            if let Some(block) = self
+                .parquet_reader
+                .read_block(&mut stream)
+                .await?
+                .map(|b| check_block_schema(&self.output_schema, b))
+                .transpose()?
+            {
+                self.generated_data = Some(block);
+                self.stream = Some(stream);
             }
-            _ => Err(ErrorCode::Internal(
-                "It's a bug for IcebergTableSource to async_process current state.",
-            )),
-        }
-    }
-
-    fn process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Finish) {
-            State::ReadParquetData(parquet_data, part) => match parquet_data {
-                ParquetPartData::RowGroup(mut rg) => {
-                    let iceberg_part = IcebergPartInfo::from_part(&part)?;
-                    if let IcebergPartInfo::Parquet(ParquetPart::RowGroup(parquet_part)) =
-                        &iceberg_part
-                    {
-                        let chunks = self.parquet_reader.read_from_readers(&mut rg)?;
-                        // TODO: use `get_deseriliazer` to get `BlockIterator` to generate size-fixed blocks.
-                        // Notice that `BlockIterator` will not hold the ownership of raw data,
-                        // so if we use `BlockIterator`, we should hold the raw data until the iterator is drained.
-                        let block = self
-                            .parquet_reader
-                            .deserialize(parquet_part, chunks, None)?;
-                        self.state = State::GenerateBlock(block);
-                    } else {
-                        unreachable!()
-                    }
-                    Ok(())
+            // else:
+            // If `read_block` returns `None`, it means the stream is finished.
+            // And we should try to build another stream (in next event loop).
+        } else if let Some(part) = self.ctx.get_partition() {
+            match IcebergPartInfo::from_part(&part)? {
+                IcebergPartInfo::Parquet(ParquetPart::ParquetRSFile(file)) => {
+                    let stream = self
+                        .parquet_reader
+                        .prepare_data_stream(self.ctx.clone(), &file.location)
+                        .await?;
+                    self.stream = Some(stream);
                 }
-                ParquetPartData::SmallFiles(_) => Err(ErrorCode::ReadTableDataError(
-                    "Do not support read small parqute files now",
-                )),
-            },
-            _ => Err(ErrorCode::Internal(
-                "It's a bug for IcebergTableSource to process current state.",
-            )),
+                _ => unreachable!(),
+            }
+        } else {
+            self.is_finished = true;
         }
+
+        Ok(())
     }
 }
 

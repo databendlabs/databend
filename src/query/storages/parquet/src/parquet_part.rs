@@ -45,8 +45,9 @@ pub struct ColumnMeta {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum ParquetPart {
-    RowGroup(ParquetRowGroupPart),
+    Parquet2RowGroup(Parquet2RowGroupPart),
     SmallFiles(ParquetSmallFilesPart),
+    ParquetRSFile(ParquetRSFilePart),
 }
 
 impl ParquetPart {
@@ -56,15 +57,17 @@ impl ParquetPart {
 
     pub fn uncompressed_size(&self) -> u64 {
         match self {
-            ParquetPart::RowGroup(r) => r.uncompressed_size(),
+            ParquetPart::Parquet2RowGroup(r) => r.uncompressed_size(),
             ParquetPart::SmallFiles(p) => p.uncompressed_size(),
+            ParquetPart::ParquetRSFile(_) => unimplemented!(),
         }
     }
 
     pub fn compressed_size(&self) -> u64 {
         match self {
-            ParquetPart::RowGroup(r) => r.compressed_size(),
+            ParquetPart::Parquet2RowGroup(r) => r.compressed_size(),
             ParquetPart::SmallFiles(p) => p.compressed_size(),
+            ParquetPart::ParquetRSFile(p) => p.file_size,
         }
     }
 }
@@ -85,7 +88,7 @@ impl ParquetSmallFilesPart {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
-pub struct ParquetRowGroupPart {
+pub struct Parquet2RowGroupPart {
     pub location: String,
     pub num_rows: usize,
     pub column_metas: HashMap<FieldIndex, ColumnMeta>,
@@ -94,7 +97,7 @@ pub struct ParquetRowGroupPart {
     pub sort_min_max: Option<(Scalar, Scalar)>,
 }
 
-impl ParquetRowGroupPart {
+impl Parquet2RowGroupPart {
     pub fn uncompressed_size(&self) -> u64 {
         self.column_metas
             .values()
@@ -105,6 +108,12 @@ impl ParquetRowGroupPart {
     pub fn compressed_size(&self) -> u64 {
         self.column_metas.values().map(|c| c.length).sum()
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
+pub struct ParquetRSFilePart {
+    pub location: String,
+    pub file_size: u64,
 }
 
 #[typetag::serde(name = "parquet_part")]
@@ -121,8 +130,9 @@ impl PartInfo for ParquetPart {
 
     fn hash(&self) -> u64 {
         let path = match self {
-            ParquetPart::RowGroup(r) => &r.location,
+            ParquetPart::Parquet2RowGroup(r) => &r.location,
             ParquetPart::SmallFiles(p) => &p.files[0].0,
+            ParquetPart::ParquetRSFile(p) => &p.location,
         };
         let mut s = DefaultHasher::new();
         path.hash(&mut s);

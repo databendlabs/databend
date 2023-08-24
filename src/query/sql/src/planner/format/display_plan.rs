@@ -48,8 +48,6 @@ impl Plan {
 
             Plan::Copy(plan) => Ok(format!("{:?}", plan)),
 
-            Plan::Call(plan) => Ok(format!("{:?}", plan)),
-
             // catalog
             Plan::ShowCreateCatalog(show_create_catalog) => {
                 Ok(format!("{:?}", show_create_catalog))
@@ -107,17 +105,17 @@ impl Plan {
             Plan::RefreshIndex(index) => Ok(format!("{index:?}")),
 
             // Virtual Columns
-            Plan::CreateVirtualColumns(create_virtual_columns) => {
-                Ok(format!("{:?}", create_virtual_columns))
+            Plan::CreateVirtualColumn(create_virtual_column) => {
+                Ok(format!("{:?}", create_virtual_column))
             }
-            Plan::AlterVirtualColumns(alter_virtual_columns) => {
-                Ok(format!("{:?}", alter_virtual_columns))
+            Plan::AlterVirtualColumn(alter_virtual_column) => {
+                Ok(format!("{:?}", alter_virtual_column))
             }
-            Plan::DropVirtualColumns(drop_virtual_columns) => {
-                Ok(format!("{:?}", drop_virtual_columns))
+            Plan::DropVirtualColumn(drop_virtual_column) => {
+                Ok(format!("{:?}", drop_virtual_column))
             }
-            Plan::GenerateVirtualColumns(generate_virtual_columns) => {
-                Ok(format!("{:?}", generate_virtual_columns))
+            Plan::RefreshVirtualColumn(refresh_virtual_column) => {
+                Ok(format!("{:?}", refresh_virtual_column))
             }
 
             // Insert

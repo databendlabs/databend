@@ -238,6 +238,14 @@ fn test_reduce_cluster_statistics() -> common_exception::Result<()> {
         None,
     ));
 
+    let cluster_stats_2 = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::Null],
+        vec![Scalar::Null],
+        0,
+        None,
+    ));
+
     let res_0 = reducers::reduce_cluster_statistics(
         &[cluster_stats_0.clone(), cluster_stats_1.clone()],
         default_cluster_key_id,
@@ -252,13 +260,26 @@ fn test_reduce_cluster_statistics() -> common_exception::Result<()> {
     assert_eq!(res_0, expect);
 
     let res_1 = reducers::reduce_cluster_statistics(
+        &[cluster_stats_2, cluster_stats_0.clone()],
+        default_cluster_key_id,
+    );
+    let expect = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::from(2i64)],
+        vec![Scalar::Null],
+        0,
+        None,
+    ));
+    assert_eq!(res_1, expect);
+
+    let res_2 = reducers::reduce_cluster_statistics(
         &[cluster_stats_0.clone(), None],
         default_cluster_key_id,
     );
-    assert_eq!(res_1, None);
-
-    let res_2 = reducers::reduce_cluster_statistics(&[cluster_stats_0, cluster_stats_1], Some(1));
     assert_eq!(res_2, None);
+
+    let res_3 = reducers::reduce_cluster_statistics(&[cluster_stats_0, cluster_stats_1], Some(1));
+    assert_eq!(res_3, None);
 
     // multi cluster keys.
     let multi_cluster_stats_0 = Some(ClusterStatistics::new(
@@ -275,7 +296,7 @@ fn test_reduce_cluster_statistics() -> common_exception::Result<()> {
         0,
         None,
     ));
-    let res_3 = reducers::reduce_cluster_statistics(
+    let res_4 = reducers::reduce_cluster_statistics(
         &[multi_cluster_stats_0, multi_cluster_stats_2],
         default_cluster_key_id,
     );
@@ -286,7 +307,7 @@ fn test_reduce_cluster_statistics() -> common_exception::Result<()> {
         0,
         None,
     ));
-    assert_eq!(res_3, expect);
+    assert_eq!(res_4, expect);
 
     Ok(())
 }

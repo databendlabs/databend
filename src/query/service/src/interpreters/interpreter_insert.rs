@@ -16,10 +16,12 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use common_catalog::table::AppendMode;
+use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_meta_app::principal::StageFileFormatType;
+use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSourcer;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
@@ -28,15 +30,15 @@ use common_sql::plans::Insert;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
 use common_sql::NameResolutionContext;
-use parking_lot::Mutex;
 
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::hook_refresh_agg_index;
+use crate::interpreters::common::RefreshAggIndexDesc;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::builders::build_append2table_with_commit_pipeline;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::SourcePipeBuilder;
 use crate::pipelines::ValueSource;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -45,16 +47,11 @@ use crate::sessions::TableContext;
 pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
     plan: Insert,
-    source_pipe_builder: Mutex<Option<SourcePipeBuilder>>,
 }
 
 impl InsertInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Insert) -> Result<InterpreterPtr> {
-        Ok(Arc::new(InsertInterpreter {
-            ctx,
-            plan,
-            source_pipe_builder: Mutex::new(None),
-        }))
+        Ok(Arc::new(InsertInterpreter { ctx, plan }))
     }
 
     fn check_schema_cast(&self, plan: &Plan) -> Result<bool> {
@@ -87,10 +84,9 @@ impl Interpreter for InsertInterpreter {
         if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }
-        let plan = &self.plan;
         let table = self
             .ctx
-            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
 
         let mut build_res = PipelineBuildResult::create();
@@ -110,7 +106,7 @@ impl Interpreter for InsertInterpreter {
                             data.to_string(),
                             self.ctx.clone(),
                             name_resolution_ctx,
-                            plan.schema(),
+                            self.plan.schema(),
                         );
                         AsyncSourcer::create(self.ctx.clone(), output, inner)
                     },
@@ -125,7 +121,7 @@ impl Interpreter for InsertInterpreter {
 
                 match StageFileFormatType::from_str(format) {
                     Ok(f) if f.has_inner_schema() => {
-                        let dest_schema = plan.schema();
+                        let dest_schema = self.plan.schema();
                         let func_ctx = self.ctx.get_function_context()?;
 
                         build_res.main_pipeline.add_transform(
@@ -153,7 +149,7 @@ impl Interpreter for InsertInterpreter {
                     .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
 
                 if format.get_type().has_inner_schema() {
-                    let dest_schema = plan.schema();
+                    let dest_schema = self.plan.schema();
                     let func_ctx = self.ctx.get_function_context()?;
 
                     build_res.main_pipeline.add_transform(
@@ -242,6 +238,14 @@ impl Interpreter for InsertInterpreter {
                     None,
                 )?;
 
+                hook_refresh_indexes(
+                    self.ctx.clone(),
+                    &self.plan,
+                    table.as_ref(),
+                    &mut build_res.main_pipeline,
+                )
+                .await?;
+
                 return Ok(build_res);
             }
         };
@@ -256,18 +260,37 @@ impl Interpreter for InsertInterpreter {
             self.ctx.clone(),
             &mut build_res.main_pipeline,
             table.clone(),
-            plan.schema(),
+            self.plan.schema(),
             None,
             self.plan.overwrite,
             append_mode,
         )?;
 
+        hook_refresh_indexes(
+            self.ctx.clone(),
+            &self.plan,
+            table.as_ref(),
+            &mut build_res.main_pipeline,
+        )
+        .await?;
+
         Ok(build_res)
     }
+}
 
-    fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {
-        let mut guard = self.source_pipe_builder.lock();
-        *guard = builder;
-        Ok(())
-    }
+#[async_backtrace::framed]
+async fn hook_refresh_indexes(
+    ctx: Arc<QueryContext>,
+    plan: &Insert,
+    table: &dyn Table,
+    pipeline: &mut Pipeline,
+) -> Result<()> {
+    let refresh_agg_index_desc = RefreshAggIndexDesc {
+        catalog: plan.catalog.clone(),
+        database: plan.database.clone(),
+        table: plan.table.clone(),
+        table_id: table.get_id(),
+    };
+
+    hook_refresh_agg_index(ctx, pipeline, refresh_agg_index_desc).await
 }

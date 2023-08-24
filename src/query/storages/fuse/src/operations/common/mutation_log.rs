@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -21,7 +20,7 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::FormatVersion;
-use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
 
 use super::ConflictResolveContext;
 use crate::operations::common::AbortOperation;
@@ -36,8 +35,9 @@ pub struct MutationLogs {
 pub enum MutationLogEntry {
     AppendSegment {
         segment_location: String,
-        segment_info: Arc<SegmentInfo>,
         format_version: FormatVersion,
+        abort_operation: AbortOperation,
+        summary: Statistics,
     },
     DeletedBlock {
         index: BlockMetaIndex,
@@ -45,7 +45,7 @@ pub enum MutationLogEntry {
     DeletedSegment {
         deleted_segment: MutationDeletedSegment,
     },
-    Replaced {
+    ReplacedBlock {
         index: BlockMetaIndex,
         block_meta: Arc<BlockMeta>,
     },
@@ -62,14 +62,8 @@ pub struct BlockMetaIndex {
 
 #[typetag::serde(name = "mutation_logs_meta")]
 impl BlockMetaInfo for MutationLogs {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        info.as_any()
-            .downcast_ref::<MutationLogs>()
-            .is_some_and(|other| self == other)
+        Self::downcast_ref_from(info).is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
@@ -118,14 +112,8 @@ impl CommitMeta {
 
 #[typetag::serde(name = "commit_meta")]
 impl BlockMetaInfo for CommitMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        info.as_any()
-            .downcast_ref::<CommitMeta>()
-            .is_some_and(|other| self == other)
+        Self::downcast_ref_from(info).is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {

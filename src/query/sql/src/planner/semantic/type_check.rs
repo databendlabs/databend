@@ -64,6 +64,8 @@ use common_functions::is_builtin_function;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use common_functions::GENERAL_WINDOW_FUNCTIONS;
+use common_license::license::Feature::VirtualColumn;
+use common_license::license_manager::get_license_manager;
 use common_users::UserApiProvider;
 use indexmap::IndexMap;
 use simsearch::SimSearch;
@@ -2857,6 +2859,19 @@ impl<'a> TypeChecker<'a> {
             return None;
         }
 
+        let license_manager = get_license_manager();
+        if license_manager
+            .manager
+            .check_enterprise_enabled(
+                &self.ctx.get_settings(),
+                self.ctx.get_tenant(),
+                VirtualColumn,
+            )
+            .is_err()
+        {
+            return None;
+        }
+
         let mut name = String::new();
         name.push_str(&column.column_name);
         let mut json_paths = Vec::with_capacity(paths.len());
@@ -2880,13 +2895,13 @@ impl<'a> TypeChecker<'a> {
 
         let mut index = 0;
         // Check for duplicate virtual columns
-        for column in self
+        for table_column in self
             .metadata
             .read()
             .virtual_columns_by_table_index(table_index)
         {
-            if column.name() == name {
-                index = column.index();
+            if table_column.name() == name {
+                index = table_column.index();
                 break;
             }
         }

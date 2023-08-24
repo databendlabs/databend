@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use common_meta_app as mt;
+use common_meta_app::storage::StorageCosConfig;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageGcsConfig;
+use common_meta_app::storage::StorageObsConfig;
 use common_meta_app::storage::StorageOssConfig;
 use common_meta_app::storage::StorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig;
@@ -49,6 +51,12 @@ impl FromToProto for mt::storage::StorageParams {
             Some(pb::storage_config::Storage::Webhdfs(s)) => Ok(
                 mt::storage::StorageParams::Webhdfs(mt::storage::StorageWebhdfsConfig::from_pb(s)?),
             ),
+            Some(pb::storage_config::Storage::Obs(s)) => Ok(mt::storage::StorageParams::Obs(
+                mt::storage::StorageObsConfig::from_pb(s)?,
+            )),
+            Some(pb::storage_config::Storage::Cos(s)) => Ok(mt::storage::StorageParams::Cos(
+                mt::storage::StorageCosConfig::from_pb(s)?,
+            )),
             None => Err(Incompatible {
                 reason: "StageStorage.storage cannot be None".to_string(),
             }),
@@ -71,6 +79,12 @@ impl FromToProto for mt::storage::StorageParams {
             }),
             mt::storage::StorageParams::Webhdfs(v) => Ok(pb::StorageConfig {
                 storage: Some(pb::storage_config::Storage::Webhdfs(v.to_pb()?)),
+            }),
+            mt::storage::StorageParams::Obs(v) => Ok(pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Obs(v.to_pb()?)),
+            }),
+            mt::storage::StorageParams::Cos(v) => Ok(pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Cos(v.to_pb()?)),
             }),
             others => Err(Incompatible {
                 reason: format!("stage type: {} not supported", others),
@@ -242,6 +256,72 @@ impl FromToProto for StorageWebhdfsConfig {
 
             username: String::new(), // reserved for future use
             password: String::new(), // reserved for future use
+        })
+    }
+}
+
+impl FromToProto for StorageObsConfig {
+    type PB = pb::ObsStorageConfig;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.version
+    }
+
+    fn from_pb(p: pb::ObsStorageConfig) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.version, p.min_reader_ver)?;
+
+        Ok(StorageObsConfig {
+            endpoint_url: p.endpoint_url,
+            bucket: p.bucket,
+            root: p.root,
+
+            access_key_id: p.access_key_id,
+            secret_access_key: p.secret_access_key,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::ObsStorageConfig, Incompatible> {
+        Ok(pb::ObsStorageConfig {
+            version: VER,
+            min_reader_ver: MIN_READER_VER,
+            endpoint_url: self.endpoint_url.clone(),
+            bucket: self.bucket.clone(),
+            root: self.root.clone(),
+            access_key_id: self.access_key_id.clone(),
+            secret_access_key: self.secret_access_key.clone(),
+        })
+    }
+}
+
+impl FromToProto for StorageCosConfig {
+    type PB = pb::CosStorageConfig;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.version
+    }
+
+    fn from_pb(p: pb::CosStorageConfig) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.version, p.min_reader_ver)?;
+
+        Ok(StorageCosConfig {
+            endpoint_url: p.endpoint_url,
+            bucket: p.bucket,
+            root: p.root,
+
+            secret_id: p.secret_id,
+            secret_key: p.secret_key,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::CosStorageConfig, Incompatible> {
+        Ok(pb::CosStorageConfig {
+            version: VER,
+            min_reader_ver: MIN_READER_VER,
+            endpoint_url: self.endpoint_url.clone(),
+            bucket: self.bucket.clone(),
+            root: self.root.clone(),
+            secret_id: self.secret_id.clone(),
+            secret_key: self.secret_key.clone(),
         })
     }
 }

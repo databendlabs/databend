@@ -20,6 +20,7 @@ use common_meta_app::principal::UserSettingValue;
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
 use crate::ChangeValue;
+use crate::ReplaceIntoShuffleStrategy;
 use crate::ScopeLevel;
 
 impl Settings {
@@ -399,12 +400,12 @@ impl Settings {
         self.try_set_u64("enable_aggregating_index_scan", u64::from(val))
     }
 
-    pub fn get_enable_auto_reclustering(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_auto_reclustering")? != 0)
+    pub fn get_enable_recluster_after_write(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_recluster_after_write")? != 0)
     }
 
-    pub fn set_enable_auto_reclustering(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_auto_reclustering", u64::from(val))
+    pub fn set_enable_recluster_after_write(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_recluster_after_write", u64::from(val))
     }
 
     pub fn get_use_parquet2(&self) -> Result<bool> {
@@ -435,5 +436,33 @@ impl Settings {
     }
     pub fn set_replace_into_bloom_pruning_max_column_number(&self, val: u64) -> Result<()> {
         self.try_set_u64("replace_into_bloom_pruning_max_column_number", val)
+    }
+
+    pub fn get_replace_into_shuffle_strategy(&self) -> Result<ReplaceIntoShuffleStrategy> {
+        let v = self.try_get_u64("replace_into_shuffle_strategy")?;
+        ReplaceIntoShuffleStrategy::try_from(v)
+    }
+
+    pub fn set_replace_into_shuffle_strategy(&self, val: u64) -> Result<()> {
+        ReplaceIntoShuffleStrategy::try_from(val)?;
+        self.try_set_u64("replace_into_shuffle_strategy", val)
+    }
+
+    pub fn get_recluster_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("recluster_timeout_secs")
+    }
+    pub fn set_recluster_timeout_secs(&self, val: u64) -> Result<()> {
+        self.try_set_u64("recluster_timeout_secs", val)
+    }
+
+    pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_refresh_aggregating_index_after_write")? != 0)
+    }
+
+    pub fn set_enable_refresh_aggregating_index_after_write(&self, val: bool) -> Result<()> {
+        self.try_set_u64(
+            "enable_refresh_aggregating_index_after_write",
+            u64::from(val),
+        )
     }
 }

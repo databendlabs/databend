@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod blocking_create;
-mod non_blocking_create;
 mod partition;
 mod read;
 mod table;
 
-pub(crate) use table::arrow_to_table_schema;
-pub use table::ParquetTable;
+pub use table::ParquetRSTable;

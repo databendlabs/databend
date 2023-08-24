@@ -44,7 +44,7 @@ use crate::rule;
 use crate::util::*;
 use crate::ErrorKind;
 
-const MAX_COPIED_FILES_NUM: usize = 500;
+const MAX_COPIED_FILES_NUM: usize = 2000;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
@@ -738,16 +738,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let create_index = map(
         rule! {
-            CREATE ~ AGGREGATING ~ INDEX ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ (SYNC)? ~ AGGREGATING ~ INDEX ~ ( IF ~ NOT ~ EXISTS )?
             ~ #ident
             ~ AS ~ #query
         },
-        |(_, _, _, opt_if_not_exists, index_name, _, query)| {
+        |(_, opt_sync, _, _, opt_if_not_exists, index_name, _, query)| {
             Statement::CreateIndex(CreateIndexStmt {
                 index_type: TableIndexType::Aggregating,
                 if_not_exists: opt_if_not_exists.is_some(),
                 index_name,
                 query: Box::new(query),
+                sync_creation: opt_sync.is_some(),
             })
         },
     );
@@ -776,12 +777,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let create_virtual_columns = map(
+    let create_virtual_column = map(
         rule! {
-            CREATE ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+            CREATE ~ VIRTUAL ~ COLUMN ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
-            Statement::CreateVirtualColumns(CreateVirtualColumnsStmt {
+            Statement::CreateVirtualColumn(CreateVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -790,12 +791,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let alter_virtual_columns = map(
+    let alter_virtual_column = map(
         rule! {
-            ALTER ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+            ALTER ~ VIRTUAL ~ COLUMN ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
-            Statement::AlterVirtualColumns(AlterVirtualColumnsStmt {
+            Statement::AlterVirtualColumn(AlterVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -804,12 +805,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let drop_virtual_columns = map(
+    let drop_virtual_column = map(
         rule! {
-            DROP ~ VIRTUAL ~ COLUMNS ~ FOR ~ #period_separated_idents_1_to_3
+            DROP ~ VIRTUAL ~ COLUMN ~ FOR ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, _, (catalog, database, table))| {
-            Statement::DropVirtualColumns(DropVirtualColumnsStmt {
+            Statement::DropVirtualColumn(DropVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -817,12 +818,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let generate_virtual_columns = map(
+    let refresh_virtual_column = map(
         rule! {
-            GENERATE ~ VIRTUAL ~ COLUMNS ~ FOR ~ #period_separated_idents_1_to_3
+            REFRESH ~ VIRTUAL ~ COLUMN ~ FOR ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, _, (catalog, database, table))| {
-            Statement::GenerateVirtualColumns(GenerateVirtualColumnsStmt {
+            Statement::RefreshVirtualColumn(RefreshVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -1497,10 +1498,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
         ),
         rule!(
-            #create_virtual_columns: "`CREATE VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
-            | #alter_virtual_columns: "`ALTER VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
-            | #drop_virtual_columns: "`DROP VIRTUAL COLUMNS FOR [<database>.]<table>`"
-            | #generate_virtual_columns: "`GENERATE VIRTUAL COLUMNS FOR [<database>.]<table>`"
+            #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
+            | #alter_virtual_column: "`ALTER VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
+            | #drop_virtual_column: "`DROP VIRTUAL COLUMN FOR [<database>.]<table>`"
+            | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
         ),
         rule!(
             #show_users : "`SHOW USERS`"
@@ -1994,12 +1995,18 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     )(i)
 }
 
-fn column_type(i: Input) -> IResult<(Identifier, TypeName)> {
+fn column_type(i: Input) -> IResult<(Identifier, TypeName, Option<Expr>)> {
     map(
         rule! {
-            #ident ~ #type_name
+            #ident ~ #type_name ~ (DEFAULT ~ ^#subexpr(NOT_PREC))?
         },
-        |(column, type_name)| (column, type_name),
+        |(column, type_name, default_expr_opt)| {
+            (
+                column,
+                type_name,
+                default_expr_opt.map(|default_expr| default_expr.1),
+            )
+        },
     )(i)
 }
 

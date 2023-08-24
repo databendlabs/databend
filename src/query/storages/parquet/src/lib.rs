@@ -13,23 +13,18 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
+#![feature(try_blocks)]
+#![feature(impl_trait_in_assoc_type)]
+#![feature(let_chains)]
 
 mod parquet2;
 mod parquet_part;
-mod parquet_reader;
 mod parquet_rs;
-mod processors;
 mod utils;
 
-pub use parquet2::Parquet2Reader;
 pub use parquet2::Parquet2Table;
 pub use parquet_part::ParquetPart;
-pub use parquet_part::ParquetRowGroupPart;
-pub use parquet_part::ParquetSmallFilesPart;
-pub use parquet_reader::BlockIterator;
-pub use parquet_reader::ParquetPartData;
-pub use parquet_reader::ParquetReader;
-pub use parquet_rs::ParquetPartitionPruner;
-pub use parquet_rs::ParquetReader as ParquetRSReader;
-pub use parquet_rs::ParquetTable;
+pub use parquet_part::ParquetRSFilePart;
+pub use parquet_rs::ParquetRSPruner;
+pub use parquet_rs::ParquetRSReader;
+pub use parquet_rs::ParquetRSTable;

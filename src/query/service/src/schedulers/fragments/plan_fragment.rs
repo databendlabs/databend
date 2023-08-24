@@ -19,6 +19,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Partitions;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_settings::ReplaceIntoShuffleStrategy;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::Deduplicate;
@@ -26,6 +27,7 @@ use common_sql::executor::DeletePartial;
 use common_sql::executor::QuerySource;
 use common_sql::executor::ReplaceInto;
 use common_storages_fuse::TableContext;
+use storages_common_table_meta::meta::BlockSlotDescription;
 use storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchange;
@@ -211,6 +213,62 @@ impl PlanFragment {
         Ok(fragment_actions)
     }
 
+    fn redistribute_replace_into(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
+        let plan = match &self.plan {
+            PhysicalPlan::ExchangeSink(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+        let plan = match plan.input.as_ref() {
+            PhysicalPlan::ReplaceInto(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+        let partitions = &plan.segments;
+        let executors = Fragmenter::get_executors(ctx.clone());
+        let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
+        let local_id = &ctx.get_cluster().local_id;
+        match ctx.get_settings().get_replace_into_shuffle_strategy()? {
+            ReplaceIntoShuffleStrategy::SegmentLevelShuffling => {
+                let partition_reshuffle = Self::reshuffle(executors, partitions.clone())?;
+                for (executor, parts) in partition_reshuffle.iter() {
+                    let mut plan = self.plan.clone();
+                    let need_insert = executor == local_id;
+
+                    let mut replace_replace_into = ReplaceReplaceInto {
+                        partitions: parts.clone(),
+                        slot: None,
+                        need_insert,
+                    };
+                    plan = replace_replace_into.replace(&plan)?;
+
+                    fragment_actions
+                        .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+                }
+            }
+            ReplaceIntoShuffleStrategy::BlockLevelShuffling => {
+                let num_slots = executors.len();
+                // assign all the segment locations to each one of the executors,
+                // but for each segment, one executor only need to take part of the blocks
+                for (executor_idx, executor) in executors.iter().enumerate() {
+                    let mut plan = self.plan.clone();
+                    let need_insert = executor == local_id;
+                    let mut replace_replace_into = ReplaceReplaceInto {
+                        partitions: partitions.clone(),
+                        slot: Some(BlockSlotDescription {
+                            num_slots,
+                            slot: executor_idx as u32,
+                        }),
+                        need_insert,
+                    };
+                    plan = replace_replace_into.replace(&plan)?;
+
+                    fragment_actions
+                        .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+                }
+            }
+        }
+        Ok(fragment_actions)
+    }
+
     fn reshuffle<T: Clone>(
         executors: Vec<String>,
         partitions: Vec<T>,
@@ -219,6 +277,15 @@ impl PlanFragment {
         let num_executors = executors.len();
         let mut executors_sorted = executors;
         executors_sorted.sort();
+
+        let mut parts = partitions
+            .into_iter()
+            .enumerate()
+            .map(|(idx, p)| (idx % num_executors, p))
+            .collect::<Vec<_>>();
+        parts.sort_by(|a, b| a.0.cmp(&b.0));
+        let partitions: Vec<_> = parts.into_iter().map(|x| x.1).collect();
+
         let mut executor_part = HashMap::default();
         // the first num_parts % num_executors get parts_per_node parts
         // the remaining get parts_per_node - 1 parts
@@ -238,39 +305,6 @@ impl PlanFragment {
         }
 
         Ok(executor_part)
-    }
-
-    fn redistribute_replace_into(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
-        let plan = match &self.plan {
-            PhysicalPlan::ExchangeSink(plan) => plan,
-            _ => unreachable!("logic error"),
-        };
-        let plan = match plan.input.as_ref() {
-            PhysicalPlan::ReplaceInto(plan) => plan,
-            _ => unreachable!("logic error"),
-        };
-        let partitions = &plan.segments;
-        let executors = Fragmenter::get_executors(ctx.clone());
-        let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
-        let partition_reshuffle = Self::reshuffle(executors, partitions.clone())?;
-
-        let local_id = &ctx.get_cluster().local_id;
-
-        for (executor, parts) in partition_reshuffle.iter() {
-            let mut plan = self.plan.clone();
-            let need_insert = executor == local_id;
-
-            let mut replace_replace_into = ReplaceReplaceInto {
-                partitions: parts.clone(),
-                need_insert,
-            };
-            plan = replace_replace_into.replace(&plan)?;
-
-            fragment_actions
-                .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
-        }
-
-        Ok(fragment_actions)
     }
 
     fn get_read_source(&self) -> Result<DataSourcePlan> {
@@ -362,6 +396,8 @@ impl PhysicalPlanReplacer for ReplaceDeletePartial {
 
 struct ReplaceReplaceInto {
     pub partitions: Vec<(usize, Location)>,
+    // for standalone mode, slot is None
+    pub slot: Option<BlockSlotDescription>,
     pub need_insert: bool,
 }
 
@@ -372,6 +408,7 @@ impl PhysicalPlanReplacer for ReplaceReplaceInto {
             input: Box::new(input),
             need_insert: self.need_insert,
             segments: self.partitions.clone(),
+            block_slots: self.slot.clone(),
             ..plan.clone()
         }))
     }

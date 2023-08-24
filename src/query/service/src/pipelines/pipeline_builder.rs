@@ -131,6 +131,12 @@ use crate::api::ExchangeInjector;
 use crate::pipelines::builders::build_append_data_pipeline;
 use crate::pipelines::builders::build_fill_missing_columns_pipeline;
 use crate::pipelines::processors::transforms::build_partition_bucket;
+use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
+use crate::pipelines::processors::transforms::hash_join::TransformHashJoinBuild;
+use crate::pipelines::processors::transforms::hash_join::TransformHashJoinProbe;
+use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
+use crate::pipelines::processors::transforms::range_join::TransformRangeJoinRight;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
@@ -145,15 +151,11 @@ use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
-use crate::pipelines::processors::transforms::TransformRangeJoinLeft;
-use crate::pipelines::processors::transforms::TransformRangeJoinRight;
 use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::AggregatorParams;
-use crate::pipelines::processors::JoinHashTable;
+use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformCastSchema;
-use crate::pipelines::processors::TransformHashJoinBuild;
-use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformRuntimeFilter;
 use crate::pipelines::Pipeline;
@@ -168,7 +170,7 @@ pub struct PipelineBuilder {
     pub pipelines: Vec<Pipeline>,
 
     // Used in runtime filter source
-    pub join_state: Option<Arc<JoinHashTable>>,
+    pub join_state: Option<Arc<HashJoinBuildState>>,
     // record the index of join build side pipeline in `pipelines`
     pub index: Option<usize>,
 
@@ -391,6 +393,7 @@ impl PipelineBuilder {
             bloom_filter_column_indexes,
             catalog_info,
             segments,
+            block_slots,
             need_insert,
         } = replace;
         let max_threads = self.ctx.get_settings().get_max_threads()?;
@@ -413,6 +416,7 @@ impl PipelineBuilder {
         let block_builder = serialize_block_transform.get_block_builder();
 
         let serialize_segment_transform = TransformSerializeSegment::new(
+            self.ctx.clone(),
             InputPort::create(),
             OutputPort::create(),
             table,
@@ -437,6 +441,7 @@ impl PipelineBuilder {
                 on_conflicts.clone(),
                 bloom_filter_column_indexes.clone(),
                 segments,
+                block_slots.clone(),
                 io_request_semaphore,
             )?;
             self.main_pipeline.add_pipe(Pipe::create(
@@ -518,6 +523,7 @@ impl PipelineBuilder {
                 on_conflicts.clone(),
                 bloom_filter_column_indexes.clone(),
                 segments,
+                block_slots.clone(),
                 io_request_semaphore,
             )?;
             assert_eq!(
@@ -725,15 +731,13 @@ impl PipelineBuilder {
         self.build_join_probe(join, state)
     }
 
-    fn build_join_state(&mut self, join: &HashJoin) -> Result<Arc<JoinHashTable>> {
-        JoinHashTable::create_join_state(
+    fn build_join_state(&mut self, join: &HashJoin) -> Result<Arc<HashJoinState>> {
+        HashJoinState::try_create(
             self.ctx.clone(),
-            &join.build_keys,
             join.build.output_schema()?,
-            join.probe.output_schema()?,
-            &join.probe_projections,
             &join.build_projections,
             HashJoinDesc::create(join)?,
+            &join.probe_to_build,
         )
     }
 
@@ -741,7 +745,7 @@ impl PipelineBuilder {
         &mut self,
         build: &PhysicalPlan,
         hash_join_plan: &HashJoin,
-        join_state: Arc<JoinHashTable>,
+        join_state: Arc<HashJoinState>,
     ) -> Result<()> {
         let build_side_context = QueryContext::create_from(self.ctx.clone());
         let mut build_side_builder = PipelineBuilder::create(
@@ -753,11 +757,14 @@ impl PipelineBuilder {
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
+        let build_state = HashJoinBuildState::try_create(
+            self.ctx.clone(),
+            &hash_join_plan.build_keys,
+            &hash_join_plan.build_projections,
+            join_state,
+        )?;
         let create_sink_processor = |input| {
-            let transform = TransformHashJoinBuild::create(
-                input,
-                TransformHashJoinBuild::attach(join_state.clone())?,
-            );
+            let transform = TransformHashJoinBuild::try_create(input, build_state.clone())?;
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
@@ -771,7 +778,7 @@ impl PipelineBuilder {
         };
         if hash_join_plan.contain_runtime_filter {
             build_res.main_pipeline.duplicate(false)?;
-            self.join_state = Some(join_state);
+            self.join_state = Some(build_state);
             self.index = Some(self.pipelines.len());
         } else {
             build_res.main_pipeline.add_sink(create_sink_processor)?;
@@ -1643,17 +1650,25 @@ impl PipelineBuilder {
         )
     }
 
-    fn build_join_probe(&mut self, join: &HashJoin, state: Arc<JoinHashTable>) -> Result<()> {
+    fn build_join_probe(&mut self, join: &HashJoin, state: Arc<HashJoinState>) -> Result<()> {
         self.build_pipeline(&join.probe)?;
 
         let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let func_ctx = self.ctx.get_function_context()?;
+
+        let probe_state = Arc::new(HashJoinProbeState::create(
+            self.ctx.clone(),
+            state,
+            &join.probe_projections,
+            join.probe.output_schema()?,
+            &join.join_type,
+        ));
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformHashJoinProbe::create(
                 input,
                 output,
                 join.projections.clone(),
-                TransformHashJoinProbe::attach(state.clone())?,
+                probe_state.clone(),
                 max_block_size,
                 func_ctx.clone(),
                 &join.join_type,
@@ -1840,6 +1855,7 @@ impl PipelineBuilder {
         let pipeline = &mut self.pipelines[self.index.unwrap()];
         let output_size = pipeline.output_len();
         debug_assert!(output_size % 2 == 0);
+
         let mut items = Vec::with_capacity(output_size);
         //           Join
         //          /   \
@@ -1851,10 +1867,10 @@ impl PipelineBuilder {
         for _ in 0..output_size / 2 {
             let input = InputPort::create();
             items.push(PipeItem::create(
-                ProcessorPtr::create(TransformHashJoinBuild::create(
+                ProcessorPtr::create(TransformHashJoinBuild::try_create(
                     input.clone(),
-                    TransformHashJoinBuild::attach(self.join_state.as_ref().unwrap().clone())?,
-                )),
+                    self.join_state.as_ref().unwrap().clone(),
+                )?),
                 vec![input],
                 vec![],
             ));

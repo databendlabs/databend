@@ -24,6 +24,8 @@ use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::CatalogInfo;
+use common_storage::common_metrics::copy::metrics_inc_collect_files_get_all_source_files_milliseconds;
+use common_storage::common_metrics::copy::metrics_inc_filter_out_copied_files_entire_milliseconds;
 use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
 use log::info;
@@ -134,6 +136,10 @@ impl CopyIntoTablePlan {
 
         let num_all_files = all_source_file_infos.len();
 
+        let end_get_all_source = Instant::now();
+        let cost_get_all_files = end_get_all_source.duration_since(start).as_millis();
+        metrics_inc_collect_files_get_all_source_files_milliseconds(cost_get_all_files as u64);
+
         ctx.set_status_info(&format!("end list files: got {} files", num_all_files));
 
         let need_copy_file_infos = if self.force {
@@ -145,6 +151,7 @@ impl CopyIntoTablePlan {
         } else {
             // Status.
             ctx.set_status_info("begin filtering out copied files");
+
             let files = ctx
                 .filter_out_copied_files(
                     self.catalog_info.catalog_name(),
@@ -158,6 +165,13 @@ impl CopyIntoTablePlan {
                 "end filtering out copied files: {}",
                 num_all_files
             ));
+
+            let end_filter_out = Instant::now();
+            let cost_filter_out = end_filter_out
+                .duration_since(end_get_all_source)
+                .as_millis();
+            metrics_inc_filter_out_copied_files_entire_milliseconds(cost_filter_out as u64);
+
             files
         };
 

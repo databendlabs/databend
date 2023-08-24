@@ -89,8 +89,11 @@ impl Metadata {
         database_name: Option<&str>,
         table_name: &str,
     ) -> Option<IndexType> {
+        // Use `rev` is because a table may be queried multiple times in join clause,
+        // and the virtual columns should add to the table newly added.
         self.tables
             .iter()
+            .rev()
             .find(|table| match database_name {
                 Some(database_name) => {
                     table.database == database_name && table.name == table_name
@@ -560,6 +563,17 @@ impl ColumnEntry {
             ColumnEntry::VirtualColumn(VirtualColumn { column_name, .. }) => {
                 column_name.to_string()
             }
+        }
+    }
+
+    pub fn table_index(&self) -> Option<IndexType> {
+        match self {
+            ColumnEntry::BaseTableColumn(BaseTableColumn { table_index, .. }) => Some(*table_index),
+            ColumnEntry::DerivedColumn(_) => None,
+            ColumnEntry::InternalColumn(TableInternalColumn { table_index, .. }) => {
+                Some(*table_index)
+            }
+            ColumnEntry::VirtualColumn(VirtualColumn { table_index, .. }) => Some(*table_index),
         }
     }
 }

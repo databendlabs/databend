@@ -443,13 +443,10 @@ impl Operator for Join {
                     + f64::max(right_cardinality, inner_join_cardinality)
                     - inner_join_cardinality
             }
-            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::LeftSingle => {
-                left_cardinality
-            }
-            JoinType::RightSemi
-            | JoinType::RightAnti
-            | JoinType::RightMark
-            | JoinType::RightSingle => right_cardinality,
+            JoinType::LeftSemi => f64::min(left_cardinality, inner_join_cardinality),
+            JoinType::RightSemi => f64::min(right_cardinality, inner_join_cardinality),
+            JoinType::LeftSingle | JoinType::RightMark | JoinType::LeftAnti => left_cardinality,
+            JoinType::RightSingle | JoinType::LeftMark | JoinType::RightAnti => right_cardinality,
         };
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {

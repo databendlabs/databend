@@ -1,4 +1,4 @@
-USE_PARQUET=0
+USE_PARQUET2=0
 --- named internal stage
 1	2	3
 4	5	6
@@ -8,7 +8,7 @@ USE_PARQUET=0
 --- file_format
 1	2	3
 4	5	6
-USE_PARQUET=1
+USE_PARQUET2=1
 --- named internal stage
 1	2	3
 4	5	6

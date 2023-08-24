@@ -31,11 +31,10 @@ pub struct AbortOperation {
 }
 
 impl AbortOperation {
-    pub fn merge(&mut self, rhs: &AbortOperation) {
-        self.segments.extend(rhs.segments.clone());
-        self.blocks.extend(rhs.blocks.clone());
-        self.bloom_filter_indexes
-            .extend(rhs.bloom_filter_indexes.clone());
+    pub fn merge(&mut self, rhs: AbortOperation) {
+        self.segments.extend(rhs.segments);
+        self.blocks.extend(rhs.blocks);
+        self.bloom_filter_indexes.extend(rhs.bloom_filter_indexes);
     }
 
     pub fn add_block(&mut self, block: &BlockMeta) {
