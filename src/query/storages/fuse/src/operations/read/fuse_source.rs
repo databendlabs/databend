@@ -60,8 +60,7 @@ pub fn build_fuse_native_source_pipeline(
 
     let mut source_builder = SourcePipeBuilder::create();
 
-    let blocking = false;
-    match blocking {
+    match block_reader.support_blocking_api() {
         true => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
             let mut partitions = StealablePartitions::new(partitions, ctx.clone());
