@@ -71,9 +71,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
             "| Column 0 | Column 1 |",
             "+----------+----------+",
             "| 1        | (2, 3)   |",
-            "| 1        | (2, 3)   |",
+            "| 2        | (2, 3)   |",
             "| 2        | (4, 6)   |",
-            "| 2        | (4, 6)   |",
+            "| 4        | (4, 6)   |",
             "+----------+----------+",
         ];
         common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
@@ -115,9 +115,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
             "| Column 0 | Column 1 |",
             "+----------+----------+",
             "| 2        | (4, 6)   |",
-            "| 2        | (4, 6)   |",
             "| 3        | (6, 9)   |",
-            "| 3        | (6, 9)   |",
+            "| 4        | (4, 6)   |",
+            "| 6        | (6, 9)   |",
             "+----------+----------+",
         ];
         common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
