@@ -46,7 +46,7 @@ use crate::idm_config::IDMConfig;
 
 pub struct UserApiProvider {
     meta: MetaStore,
-    client: Arc<dyn kvapi::KVApi<Error = MetaError>>,
+    client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     idm_config: IDMConfig,
 }
 
