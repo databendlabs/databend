@@ -60,6 +60,16 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &MergeIntoStmt,
     ) -> Result<Plan> {
+        if !self
+            .ctx
+            .get_settings()
+            .get_enable_unstable_merge_into()
+            .unwrap_or_default()
+        {
+            return Err(ErrorCode::Unimplemented(
+                "merge into is unstable for now, you can use 'set enable_unstable_merge_into = 1' to set up it",
+            ));
+        }
         let MergeIntoStmt {
             catalog,
             database,
