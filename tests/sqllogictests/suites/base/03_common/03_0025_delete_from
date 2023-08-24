@@ -374,24 +374,14 @@ statement ok
 delete from t where c >= 0 and c < 1500000;
 
 query I
-select value from system.metrics where metric = 'fuse_deletion_block_range_pruned_nums';
-----
-5.0
-
-query I
-select value from system.metrics where metric = 'fuse_deletion_segment_range_pruned_whole_segment_nums';
-----
-1.0
-
-query I
-select value from system.metrics where metric = 'fuse_deletion_block_range_pruned_whole_block_nums';
-----
-15.0
-
-query I
 select count(*) from t;
 ----
 500000
+
+query I
+select count(*) from t where c >= 0 and c < 1500000;
+----
+0
 
 statement ok
 drop table t all

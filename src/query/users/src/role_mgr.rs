@@ -138,6 +138,21 @@ impl UserApiProvider {
     }
 
     #[async_backtrace::framed]
+    pub async fn grant_ownership_to_role(
+        &self,
+        tenant: &str,
+        from: &String,
+        to: &String,
+        object: GrantObject,
+    ) -> Result<()> {
+        let client = self.get_role_api_client(tenant)?;
+        client
+            .grant_ownership(from, to, &object)
+            .await
+            .map_err(|e| e.add_message_back("(while set role ownership)"))
+    }
+
+    #[async_backtrace::framed]
     pub async fn grant_privileges_to_role(
         &self,
         tenant: &str,

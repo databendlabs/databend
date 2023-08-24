@@ -870,7 +870,7 @@ path = "_cache"
             let cfg = inner.unwrap();
             match cfg {
                 CatalogConfig::Hive(cfg) => {
-                    assert_eq!("127.0.0.1:9083", cfg.address, "address incorrect");
+                    assert_eq!("127.0.0.1:9083", cfg.metastore_address, "address incorrect");
                     assert_eq!("binary", cfg.protocol.to_string(), "protocol incorrect");
                 }
             }
@@ -909,7 +909,7 @@ protocol = "binary"
             assert_eq!(
                 cfg.catalogs["hive"],
                 CatalogConfig::Hive(CatalogHiveConfig {
-                    address: "1.1.1.1:10000".to_string(),
+                    metastore_address: "1.1.1.1:10000".to_string(),
                     protocol: ThriftProtocol::Binary,
                 })
             );
@@ -949,7 +949,7 @@ protocol = "binary"
             assert_eq!(
                 cfg.catalogs["my_hive"],
                 CatalogConfig::Hive(CatalogHiveConfig {
-                    address: "1.1.1.1:12000".to_string(),
+                    metastore_address: "1.1.1.1:12000".to_string(),
                     protocol: ThriftProtocol::Binary,
                 })
             );
