@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
 
 use serde::Deserialize;
-use tokio_stream::Stream;
+use tokio_stream::{Stream, StreamExt};
 
 #[cfg(feature = "flight-sql")]
 use arrow::record_batch::RecordBatch;
@@ -23,9 +25,6 @@ use arrow::record_batch::RecordBatch;
 use crate::error::{Error, Result};
 use crate::schema::SchemaRef;
 use crate::value::Value;
-
-pub type RowIterator = Pin<Box<dyn Stream<Item = Result<Row>> + Send>>;
-pub type RowProgressIterator = Pin<Box<dyn Stream<Item = Result<RowWithProgress>> + Send>>;
 
 #[derive(Clone, Debug)]
 pub enum RowWithProgress {
@@ -147,5 +146,59 @@ impl IntoIterator for Rows {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
+    }
+}
+
+pub struct RowIterator(Pin<Box<dyn Stream<Item = Result<Row>> + Send>>);
+
+impl RowIterator {
+    pub fn new(it: Pin<Box<dyn Stream<Item = Result<Row>> + Send>>) -> Self {
+        Self(it)
+    }
+
+    pub async fn try_collect<T>(mut self) -> Result<Vec<T>>
+    where
+        T: TryFrom<Row>,
+        T::Error: std::fmt::Display,
+    {
+        let mut ret = Vec::new();
+        while let Some(row) = self.0.next().await {
+            let v = T::try_from(row?).map_err(|e| Error::Parsing(e.to_string()))?;
+            ret.push(v)
+        }
+        Ok(ret)
+    }
+}
+
+impl Stream for RowIterator {
+    type Item = Result<Row>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Pin::new(&mut self.0).poll_next(cx)
+    }
+}
+
+pub struct RowProgressIterator(Pin<Box<dyn Stream<Item = Result<RowWithProgress>> + Send>>);
+
+impl RowProgressIterator {
+    pub fn new(it: Pin<Box<dyn Stream<Item = Result<RowWithProgress>> + Send>>) -> Self {
+        Self(it)
+    }
+
+    pub async fn filter_rows(self) -> RowIterator {
+        let rows = self.0.filter_map(|r| match r {
+            Ok(RowWithProgress::Row(r)) => Some(Ok(r)),
+            Ok(_) => None,
+            Err(err) => Some(Err(err)),
+        });
+        RowIterator(Box::pin(rows))
+    }
+}
+
+impl Stream for RowProgressIterator {
+    type Item = Result<RowWithProgress>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Pin::new(&mut self.0).poll_next(cx)
     }
 }

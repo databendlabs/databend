@@ -76,7 +76,7 @@ pub trait Connection: DynClone + Send + Sync {
         let row = self.query_row("SELECT version()").await?;
         let version = match row {
             Some(row) => {
-                let (version,): (String,) = row.try_into()?;
+                let (version,): (String,) = row.try_into().map_err(Error::Parsing)?;
                 version
             }
             None => "".to_string(),

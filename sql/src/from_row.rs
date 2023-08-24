@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::rows::Row;
 use crate::value::Value;
 
@@ -29,15 +29,15 @@ macro_rules! impl_tuple_from_row {
         where
             $($Ti: TryFrom<Value>),+
         {
-            type Error = Error;
-            fn try_from(row: Row) -> Result<Self> {
+            type Error = String;
+            fn try_from(row: Row) -> Result<Self, String> {
                 // It is not possible yet to get the number of metavariable repetitions
                 // ref: https://github.com/rust-lang/lang-team/issues/28#issue-644523674
                 // This is a workaround
                 let expected_len = <[()]>::len(&[$(replace_expr!(($Ti) ())),*]);
 
                 if expected_len != row.len() {
-                    return Err(Error::InvalidResponse(format!("row size mismatch: expected {} columns, got {}", expected_len, row.len())));
+                    return Err(format!("row size mismatch: expected {} columns, got {}", expected_len, row.len()));
                 }
                 let mut vals_iter = row.into_iter().enumerate();
 
@@ -50,7 +50,7 @@ macro_rules! impl_tuple_from_row {
                                            // so it is safe to unwrap
                             let t = col_value.get_type();
                             $Ti::try_from(col_value)
-                                .map_err(|_| Error::InvalidResponse(format!("failed converting column {} from type({:?}) to type({})", col_ix, t, std::any::type_name::<$Ti>())))?
+                                .map_err(|_| format!("failed converting column {} from type({:?}) to type({})", col_ix, t, std::any::type_name::<$Ti>()))?
                         }
                     ,)+
                 ))

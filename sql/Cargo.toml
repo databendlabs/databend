@@ -16,6 +16,7 @@ flight-sql = ["dep:arrow-array", "dep:arrow-cast", "dep:arrow-flight", "dep:arro
 [dependencies]
 databend-client = { workspace = true }
 
+async-trait = "0.1.68"
 chrono = { version = "0.4.26", default-features = false }
 serde = { version = "1.0.164", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0.97", default-features = false, features = ["std"] }

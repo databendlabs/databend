@@ -38,7 +38,7 @@ pub fn from_row_derive(tokens_input: TokenStream) -> TokenStream {
                                // it is safe to unwrap
                 let t = col_value.get_type();
                 <#field_type>::try_from(col_value)
-                    .map_err(|_| #path::Error::InvalidResponse(format!("failed converting column {} from type({:?}) to type({})", col_ix, t, std::any::type_name::<#field_type>())))?
+                    .map_err(|_| format!("failed converting column {} from type({:?}) to type({})", col_ix, t, std::any::type_name::<#field_type>()))?
             },
         }
     });
@@ -46,10 +46,10 @@ pub fn from_row_derive(tokens_input: TokenStream) -> TokenStream {
     let fields_count = struct_fields.named.len();
     let generated = quote! {
         impl #impl_generics TryFrom<#path::Row> for #struct_name #ty_generics #where_clause {
-            type Error = #path::Error;
-            fn try_from(row: #path::Row) -> #path::Result<Self> {
+            type Error = String;
+            fn try_from(row: #path::Row) -> #path::Result<Self, String> {
                 if #fields_count != row.len() {
-                    return Err(#path::Error::InvalidResponse(format!("row size mismatch: expected {} columns, got {}", #fields_count, row.len())));
+                    return Err(format!("row size mismatch: expected {} columns, got {}", #fields_count, row.len()));
                 }
                 let mut vals_iter = row.into_iter().enumerate();
                 Ok(#struct_name {

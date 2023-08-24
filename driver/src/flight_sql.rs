@@ -78,7 +78,7 @@ impl Connection for FlightSQLConnection {
             Ok(_) => None,
             Err(err) => Some(Err(err)),
         });
-        Ok(Box::pin(rows))
+        Ok(RowIterator::new(Box::pin(rows)))
     }
 
     async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowProgressIterator)> {
@@ -92,7 +92,7 @@ impl Connection for FlightSQLConnection {
             .ok_or(Error::Protocol("Ticket is empty".to_string()))?;
         let flight_data = client.do_get(ticket.clone()).await?;
         let (schema, rows) = FlightSQLRows::try_from_flight_data(flight_data).await?;
-        Ok((schema, Box::pin(rows)))
+        Ok((schema, RowProgressIterator::new(Box::pin(rows))))
     }
 
     async fn stream_load(

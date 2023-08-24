@@ -167,11 +167,10 @@ async fn select_iter_struct() {
     ];
 
     let sql_select = format!("SELECT * FROM `{}`", table);
-    let mut rows = conn.query_iter(&sql_select).await.unwrap();
-    let mut row_count = 0;
-    while let Some(row) = rows.next().await {
-        let v: RowResult = row.unwrap().try_into().unwrap();
-        let expected_row = &expected[row_count];
+    let rows = conn.query_iter(&sql_select).await.unwrap();
+    let results = rows.try_collect::<RowResult>().await.unwrap();
+    for (idx, v) in results.iter().enumerate() {
+        let expected_row = &expected[idx];
         assert_eq!(v.i64, expected_row.i64);
         assert_eq!(v.u64, expected_row.u64);
         assert_eq!(v.f64, expected_row.f64);
@@ -179,7 +178,6 @@ async fn select_iter_struct() {
         assert_eq!(v.s2, expected_row.s2);
         assert_eq!(v.d, expected_row.d);
         assert_eq!(v.t, expected_row.t);
-        row_count += 1;
     }
 }
 

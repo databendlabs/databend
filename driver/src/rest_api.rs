@@ -62,13 +62,13 @@ impl Connection for RestAPIConnection {
             Ok(_) => None,
             Err(err) => Some(Err(err)),
         });
-        Ok(Box::pin(rows))
+        Ok(RowIterator::new(Box::pin(rows)))
     }
 
     async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowProgressIterator)> {
         let resp = self.client.query(sql).await?;
         let (schema, rows) = RestAPIRows::from_response(self.client.clone(), resp)?;
-        Ok((schema, Box::pin(rows)))
+        Ok((schema, RowProgressIterator::new(Box::pin(rows))))
     }
 
     async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
