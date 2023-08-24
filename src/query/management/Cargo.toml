@@ -13,6 +13,7 @@ doctest = false
 test = false
 
 [dependencies]
+chrono = { workspace = true }
 common-base = { path = "../../common/base" }
 common-exception = { path = "../../common/exception" }
 common-functions = { path = "../functions" }
