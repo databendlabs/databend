@@ -69,12 +69,18 @@ select segment_count, block_count from fuse_snapshot('default','t') limit 1;
 # check the sum of columns
 query I
 select (select sum(id) from t_after_delete where id > 499) = (select sum(id) from t);
+----
+1
 
 query I
 select (select sum(c1) from t_after_delete where id > 499) = (select sum(c1) from t);
+----
+1
 
 query I
 select (select sum(c2) from t_after_delete where id > 499) = (select sum(c2) from t);
+----
+1
 
 # backup t again
 statement ok
@@ -86,16 +92,24 @@ delete from t where id > 600 and id < 700;
 
 query II
 select segment_count, block_count from fuse_snapshot('default','t') limit 1;
+----
+2 90
 
 # check the sum of columns
 query I
 select (select sum(id) from t_after_delete_2 where id <= 600 or id >= 700) = (select sum(id) from t);
+----
+1
 
 query I
 select (select sum(c1) from t_after_delete_2 where id <= 600 or id >= 700) = (select sum(c1) from t);
+----
+1
 
 query I
 select (select sum(c2) from t_after_delete_2 where id <= 600 or id >= 700) = (select sum(c2) from t);
+----
+1
 
 # for issue #11784 https://github.com/datafuselabs/databend/issues/11784
 
