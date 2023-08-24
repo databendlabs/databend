@@ -40,7 +40,7 @@ env:
 
 jobs:
   local:
-    if: inputs.runner_provider == 'aws'
+    if: inputs.runner_provider == 'aws' && inputs.source == 'release'
     timeout-minutes: 60
     runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     strategy:
