@@ -1,12 +1,6 @@
 ---
 title: Quick Start Resources
 ---
-import CustomerVoiceCard from '@site/src/components/CustomerVoiceCard';
-import Avatar from '@site/static/img/blog/ai2sql.png';
-
-
-
-
 Welcome to our Quick Start Resources page! 
 
 Whether you're a newbie to Databend or looking to refresh your knowledge, this page is designed to help you get up and running quickly 🚀. We've compiled a list of key documents to help you navigate our documentation and learn the essentials of Databend. From deployment guides to usecases, this page will provide you with everything you need to begin using Databend effectively.
@@ -189,10 +183,3 @@ Databend's rich ecosystem offers a range of powerful tools and integrations, all
 Congratulations on completing the Quick Start materials 👏👏👏! 
 
 We hope you found them helpful in getting up and running with Databend. To continue your journey with Databend, we encourage you to check out our documentation, which provides in-depth information on Databend's features and capabilities. You can also join our [community](../00-overview/index.md#community) to connect with other Databend users and get help with any questions or issues you may have.
-
-<CustomerVoiceCard 
-  name="Eric" 
-  position="Engineer" 
-  date="Mar 25, 2021"
-  description="Whether you're a newbie to Databend or looking to refresh your knowledge, this page is designed to help you get up and running quickly. We've compiled a list of key documents to help you navigate our documentation and learn the essentials of Databend. From deployment guides to usecases, this page will provide you with everything you need to begin using Databend effectively."
-/>
