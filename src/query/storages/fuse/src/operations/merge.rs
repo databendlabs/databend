@@ -40,16 +40,15 @@ impl FuseTable {
         row_id_idx: usize,
         matched: MatchExpr,
         input_schema: DataSchemaRef,
-        func_ctx: FunctionContext,
         segment_locations: Vec<(SegmentIndex, Location)>,
     ) -> Result<PipeItem> {
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let aggragator = MatchedAggregator::create(
+            ctx.clone(),
             row_id_idx,
             matched,
             self.table_info.schema(),
             input_schema,
-            func_ctx,
             self.get_operator().clone(),
             self.get_write_settings(),
             read_settings,

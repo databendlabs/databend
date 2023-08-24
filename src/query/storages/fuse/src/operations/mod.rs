@@ -48,3 +48,4 @@ pub use mutation::SegmentCompactor;
 pub use read::build_row_fetcher_pipeline;
 pub use util::acquire_task_permit;
 pub use util::column_parquet_metas;
+pub use util::read_block;

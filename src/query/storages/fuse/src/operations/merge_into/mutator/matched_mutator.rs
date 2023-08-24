@@ -16,12 +16,15 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use ahash::AHashMap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_catalog::plan::split_prefix;
 use common_catalog::plan::split_row_id;
+use common_catalog::plan::Projection;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::NumberColumn;
@@ -35,13 +38,17 @@ use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
+use itertools::Itertools;
+use log::info;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 
+use crate::io::write_data;
 use crate::io::BlockBuilder;
+use crate::io::BlockReader;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
@@ -52,6 +59,8 @@ use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::SplitByExprMutator;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
+use crate::operations::read_block;
+use crate::operations::BlockMetaIndex;
 
 pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
 
@@ -79,29 +88,31 @@ struct AggregationContext {
     write_settings: WriteSettings,
     read_settings: ReadSettings,
     block_builder: BlockBuilder,
+    block_reader: Arc<BlockReader>,
 }
 
 pub struct MatchedAggregator {
     io_request_semaphore: Arc<Semaphore>,
     segment_reader: CompactSegmentInfoReader,
     segment_locations: AHashMap<SegmentIndex, Location>,
-    // (update_idx,remain_columns)
-    remain_projections_map: HashMap<usize, Vec<usize>>,
+    // (update_idx,(updated_columns,remain_columns))
+    remain_projections_map: Arc<HashMap<usize, (Vec<usize>, Vec<usize>)>>,
     // block_mutator, store new data after update,
-    // BlockMetaIndex => (update_idx,new_data)
-    updatede_block: HashMap<u64, HashMap<usize, DataBlock>>,
+    // BlockMetaIndex => (update_idx,(block_offsets,new_data))
+    // todo: (JackTan25) need to add precomputed expr for update to optimize
+    updatede_block: HashMap<u64, HashMap<usize, (Vec<usize>, DataBlock)>>,
     // store the row_id which is deleted/updated
-    block_mutation_row_offset: HashMap<u64, Vec<u64>>,
+    block_mutation_row_offset: HashMap<u64, HashSet<usize>>,
     aggregation_ctx: Arc<AggregationContext>,
 }
 
 impl MatchedAggregator {
     pub fn create(
+        ctx: Arc<dyn TableContext>,
         row_id_idx: usize,
         matched: MatchExpr,
         target_table_schema: TableSchemaRef,
         input_schema: DataSchemaRef,
-        func_ctx: FunctionContext,
         data_accessor: Operator,
         write_settings: WriteSettings,
         read_settings: ReadSettings,
@@ -111,6 +122,18 @@ impl MatchedAggregator {
     ) -> Result<Self> {
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), target_table_schema.clone());
+        let block_reader = {
+            let projection =
+                Projection::Columns((0..target_table_schema.num_fields()).collect_vec());
+            BlockReader::create(
+                data_accessor.clone(),
+                target_table_schema.clone(),
+                projection,
+                ctx.clone(),
+                false,
+            )
+        }?;
+
         let mut ops = Vec::<MutationKind>::new();
         let mut remain_projections_map = HashMap::new();
         for (expr_idx, item) in matched.iter().enumerate() {
@@ -121,17 +144,22 @@ impl MatchedAggregator {
                     Some(expr) => Some(expr.as_expr(&BUILTIN_FUNCTIONS)),
                 };
                 ops.push(MutationKind::Delete(DeleteDataBlockMutation {
-                    split_mutator: SplitByExprMutator::create(filter.clone(), func_ctx.clone()),
+                    split_mutator: SplitByExprMutator::create(
+                        filter.clone(),
+                        ctx.get_function_context()?,
+                    ),
                 }))
             } else {
                 let update_lists = item.1.as_ref().unwrap();
                 let mut set = HashSet::new();
                 let mut remain_projections = Vec::new();
+                let mut collected_projections = Vec::new();
                 let input_len = input_schema.num_fields();
                 let eval_projections: HashSet<usize> =
                     (input_len..update_lists.len() + input_len).collect();
 
                 for (idx, _) in update_lists {
+                    collected_projections.push(*idx);
                     set.insert(idx);
                 }
 
@@ -146,7 +174,8 @@ impl MatchedAggregator {
                     .map(|item| item.1.as_expr(&BUILTIN_FUNCTIONS))
                     .collect();
 
-                remain_projections_map.insert(expr_idx, remain_projections);
+                remain_projections_map
+                    .insert(expr_idx, (collected_projections, remain_projections));
                 let filter = match &item.0 {
                     None => None,
                     Some(condition) => Some(condition.as_expr(&BUILTIN_FUNCTIONS)),
@@ -157,7 +186,7 @@ impl MatchedAggregator {
                         exprs,
                         projections: Some(eval_projections),
                     },
-                    split_mutator: SplitByExprMutator::create(filter, func_ctx.clone()),
+                    split_mutator: SplitByExprMutator::create(filter, ctx.get_function_context()?),
                 }))
             }
         }
@@ -167,17 +196,18 @@ impl MatchedAggregator {
                 target_table_schema,
                 row_id_idx,
                 ops,
-                func_ctx: func_ctx.clone(),
+                func_ctx: ctx.get_function_context()?,
                 write_settings,
                 read_settings,
                 data_accessor,
                 block_builder,
+                block_reader,
             }),
             io_request_semaphore,
             segment_reader,
             updatede_block: HashMap::new(),
             block_mutation_row_offset: HashMap::new(),
-            remain_projections_map,
+            remain_projections_map: Arc::new(remain_projections_map),
             segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
         })
     }
@@ -207,25 +237,34 @@ impl MatchedAggregator {
                             self.updatede_block
                                 .entry(prefix)
                                 .and_modify(|v| {
-                                    let old_block = v.remove(&expr_idx).unwrap();
+                                    let (mut old_offsets, old_block) = v.remove(&expr_idx).unwrap();
+                                    old_offsets.push(idx);
                                     v.insert(
                                         expr_idx,
-                                        DataBlock::concat(&[
-                                            old_block,
-                                            updated_block.slice(idx..idx + 1),
-                                        ])
-                                        .unwrap(),
+                                        (
+                                            old_offsets,
+                                            DataBlock::concat(&[
+                                                old_block,
+                                                updated_block.slice(idx..idx + 1),
+                                            ])
+                                            .unwrap(),
+                                        ),
                                     );
                                 })
-                                .or_insert(|| -> HashMap<usize, DataBlock> {
+                                .or_insert(|| -> HashMap<usize, (Vec<usize>, DataBlock)> {
                                     let mut m = HashMap::new();
-                                    m.insert(expr_idx, updated_block.slice(idx..idx + 1));
+                                    m.insert(
+                                        expr_idx,
+                                        (vec![idx], updated_block.slice(idx..idx + 1)),
+                                    );
                                     m
                                 }());
                             self.block_mutation_row_offset
                                 .entry(prefix)
-                                .and_modify(|v| v.push(offset))
-                                .or_insert(Vec::new());
+                                .and_modify(|v| {
+                                    v.insert(offset as usize);
+                                })
+                                .or_insert(HashSet::new());
                         }
                     }
 
@@ -254,8 +293,10 @@ impl MatchedAggregator {
 
                         self.block_mutation_row_offset
                             .entry(prefix)
-                            .and_modify(|v| v.push(offset))
-                            .or_insert(Vec::new());
+                            .and_modify(|v| {
+                                v.insert(offset as usize);
+                            })
+                            .or_insert(HashSet::new());
                     }
                 }
             }
@@ -295,17 +336,17 @@ impl MatchedAggregator {
 
         let io_runtime = GlobalIORuntime::instance();
         let mut mutation_log_handlers = Vec::with_capacity(self.block_mutation_row_offset.len());
+
         for item in &self.block_mutation_row_offset {
             let (segment_idx, block_idx) = split_prefix(*item.0);
             let segment_idx = segment_idx as usize;
             let block_idx = block_idx as usize;
             let permit = acquire_task_permit(self.io_request_semaphore.clone()).await?;
             let aggregation_ctx = self.aggregation_ctx.clone();
-            let block_meta = segment_infos
-                .get(&segment_idx)
-                .expect(format!("can't get segment info segment_idx: {}", segment_idx).as_str())
-                .blocks[block_idx]
-                .clone();
+            let block_meta = segment_infos.get(&segment_idx).unwrap().blocks[block_idx].clone();
+            let remain_projections = self.remain_projections_map.clone();
+            let updated_block_info = self.updatede_block.remove(item.0);
+            let modified_offsets = item.1.clone();
             let handle = io_runtime.spawn(async_backtrace::location!().frame({
                 async move {
                     let mutation_log_entry = aggregation_ctx
@@ -313,6 +354,9 @@ impl MatchedAggregator {
                             segment_idx,
                             block_idx,
                             &block_meta,
+                            updated_block_info,
+                            remain_projections,
+                            modified_offsets,
                         )
                         .await?;
 
@@ -322,6 +366,7 @@ impl MatchedAggregator {
             }));
             mutation_log_handlers.push(handle);
         }
+
         let log_entries = futures::future::try_join_all(mutation_log_handlers)
             .await
             .map_err(|e| {
@@ -347,8 +392,96 @@ impl AggregationContext {
         segment_idx: SegmentIndex,
         block_idx: BlockIndex,
         block_meta: &BlockMeta,
+        block_updated: Option<HashMap<usize, (Vec<usize>, DataBlock)>>,
+        remain_projections: Arc<HashMap<usize, (Vec<usize>, Vec<usize>)>>,
+        modified_offsets: HashSet<usize>,
     ) -> Result<Option<MutationLogEntry>> {
-        todo!()
+        info!(
+            "apply update and delete to segment idx {}, block idx {}",
+            segment_idx, block_idx,
+        );
+
+        let origin_data_block = read_block(
+            self.write_settings.storage_format,
+            &self.block_reader,
+            block_meta,
+            &self.read_settings,
+        )
+        .await?;
+        let mut res_blocks = Vec::new();
+        let get_block = |data_block: &DataBlock, offsets: &Vec<usize>| -> Result<DataBlock> {
+            let mut blocks = Vec::with_capacity(offsets.len());
+            for offset in offsets {
+                blocks.push(data_block.slice(*offset..*offset + 1));
+            }
+            DataBlock::concat(&blocks)
+        };
+        // remain columns for update
+        if block_updated.is_some() {
+            for (expr_idx, (offsets, mut updated_block)) in block_updated.unwrap() {
+                let mut remain = remain_projections.get(&expr_idx).unwrap().1.clone();
+                let mut collected = remain_projections.get(&expr_idx).unwrap().0.clone();
+                collected.append(&mut remain);
+                let block_operator = BlockOperator::Project {
+                    projection: remain.clone(),
+                };
+                let remain_block = block_operator
+                    .execute(&self.func_ctx, get_block(&origin_data_block, &offsets)?)?;
+                for col in remain_block.columns() {
+                    updated_block.add_column(col.clone());
+                }
+
+                // sort columns
+                let mut projection = (0..(remain.len() + collected.len())).collect::<Vec<_>>();
+                projection.sort_by_key(|&i| collected[i]);
+                let sort_operator = BlockOperator::Project { projection };
+                res_blocks.push(sort_operator.execute(&self.func_ctx, updated_block)?);
+            }
+        }
+
+        // apply delete
+        let mut bitmap = MutableBitmap::new();
+        for row in 0..origin_data_block.num_rows() {
+            if modified_offsets.contains(&row) {
+                bitmap.push(false);
+            } else {
+                bitmap.push(true);
+            }
+        }
+        res_blocks.push(origin_data_block.filter_with_bitmap(&bitmap.into())?);
+        let res_block = DataBlock::concat(&res_blocks)?;
+
+        // serialization and compression is cpu intensive, send them to dedicated thread pool
+        // and wait (asyncly, which will NOT block the executor thread)
+        let block_builder = self.block_builder.clone();
+        let origin_stats = block_meta.cluster_stats.clone();
+        let serialized = GlobalIORuntime::instance()
+            .spawn_blocking(move || {
+                block_builder.build(res_block, |block, generator| {
+                    let cluster_stats =
+                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
+                    Ok((cluster_stats, block))
+                })
+            })
+            .await?;
+
+        // persistent data
+        let new_block_meta = serialized.block_meta;
+        let new_block_location = new_block_meta.location.0.clone();
+        let new_block_raw_data = serialized.block_raw_data;
+        let data_accessor = self.data_accessor.clone();
+        write_data(new_block_raw_data, &data_accessor, &new_block_location).await?;
+
+        // generate log
+        let mutation = MutationLogEntry::ReplacedBlock {
+            index: BlockMetaIndex {
+                segment_idx,
+                block_idx,
+            },
+            block_meta: Arc::new(new_block_meta),
+        };
+
+        Ok(Some(mutation))
     }
 }
 

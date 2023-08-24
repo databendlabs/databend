@@ -75,6 +75,7 @@ use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
+use crate::operations::read_block;
 use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
@@ -398,7 +399,13 @@ impl AggregationContext {
             return Ok(None);
         }
 
-        let key_columns_data = self.read_block(&self.key_column_reader, block_meta).await?;
+        let key_columns_data = read_block(
+            self.write_settings.storage_format,
+            &self.key_column_reader,
+            block_meta,
+            &self.read_settings,
+        )
+        .await?;
 
         let num_rows = key_columns_data.num_rows();
 

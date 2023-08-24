@@ -468,7 +468,6 @@ impl PipelineBuilder {
             *row_id_idx,
             matched.clone(),
             input.output_schema()?.clone(),
-            self.ctx.get_function_context()?,
             segments.clone(),
         )?);
 
