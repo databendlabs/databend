@@ -18,7 +18,6 @@ use std::time::Instant;
 
 use ahash::AHashMap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::base::ProgressValues;
 use common_base::runtime::GlobalIORuntime;
@@ -70,6 +69,7 @@ use crate::metrics::metrics_inc_replace_row_number_totally_loaded;
 use crate::metrics::metrics_inc_replace_row_number_write;
 use crate::metrics::metrics_inc_replace_segment_number_after_pruning;
 use crate::metrics::metrics_inc_replace_whole_block_deletion;
+use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -80,7 +80,6 @@ use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoO
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
-
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
     block_slots_in_charge: Option<BlockSlotDescription>,
@@ -320,7 +319,8 @@ impl MergeIntoOperationAggregator {
             let segment_info: SegmentInfo = compact_segment_info.try_into()?;
 
             for (block_index, keys) in block_deletion {
-                let permit = aggregation_ctx.acquire_task_permit().await?;
+                let permit =
+                    acquire_task_permit(aggregation_ctx.io_request_semaphore.clone()).await?;
                 let block_meta = segment_info.blocks[block_index].clone();
                 let aggregation_ctx = aggregation_ctx.clone();
                 num_rows_mutated += block_meta.row_count;
@@ -542,20 +542,6 @@ impl AggregationContext {
         };
 
         Ok(Some(mutation))
-    }
-
-    #[async_backtrace::framed]
-    async fn acquire_task_permit(&self) -> Result<OwnedSemaphorePermit> {
-        let permit = self
-            .io_request_semaphore
-            .clone()
-            .acquire_owned()
-            .await
-            .map_err(|e| {
-                ErrorCode::Internal("unexpected, io request semaphore is closed. {}")
-                    .add_message_back(e.to_string())
-            })?;
-        Ok(permit)
     }
 
     fn overlapped(

@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_base::base::tokio::sync::OwnedSemaphorePermit;
+use common_base::base::tokio::sync::Semaphore;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
@@ -72,4 +75,15 @@ pub fn column_parquet_metas(
         }
     }
     Ok(col_metas)
+}
+
+#[async_backtrace::framed]
+pub async fn acquire_task_permit(
+    io_request_semaphore: Arc<Semaphore>,
+) -> Result<OwnedSemaphorePermit> {
+    let permit = io_request_semaphore.acquire_owned().await.map_err(|e| {
+        ErrorCode::Internal("unexpected, io request semaphore is closed. {}")
+            .add_message_back(e.to_string())
+    })?;
+    Ok(permit)
 }

@@ -418,6 +418,7 @@ impl PipelineBuilder {
             unmatched,
             matched,
             row_id_idx,
+            segments,
         } = merge_into;
         self.build_pipeline(input)?;
         let tbl = self
@@ -468,6 +469,7 @@ impl PipelineBuilder {
             matched.clone(),
             input.output_schema()?.clone(),
             self.ctx.get_function_context()?,
+            segments.clone(),
         )?);
 
         self.main_pipeline.add_pipe(Pipe::create(

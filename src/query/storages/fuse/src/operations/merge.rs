@@ -6,9 +6,11 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
 use common_pipeline_core::pipe::PipeItem;
+use storages_common_table_meta::meta::Location;
 
 use super::merge_into::MatchExpr;
 use super::merge_into::MatchedAggregator;
+use super::mutation::SegmentIndex;
 use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
 use crate::FuseTable;
@@ -39,6 +41,7 @@ impl FuseTable {
         matched: MatchExpr,
         input_schema: DataSchemaRef,
         func_ctx: FunctionContext,
+        segment_locations: Vec<(SegmentIndex, Location)>,
     ) -> Result<PipeItem> {
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let aggragator = MatchedAggregator::create(
@@ -52,6 +55,7 @@ impl FuseTable {
             read_settings,
             block_builder,
             io_request_semaphore,
+            segment_locations,
         )?;
         Ok(aggragator.into_pipe_item())
     }

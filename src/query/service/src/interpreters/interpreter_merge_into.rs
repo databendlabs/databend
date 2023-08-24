@@ -260,6 +260,12 @@ impl MergeIntoInterpreter {
             matched.push((condition, update_list))
         }
 
+        let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
+            Arc::new(TableSnapshot::new_empty_snapshot(
+                fuse_table.schema().as_ref().clone(),
+            ))
+        });
+
         // recv datablocks from matched upstream and unmatched upstream
         // transform and append dat
         let merge_into = PhysicalPlan::MergeInto(MergeInto {
@@ -269,11 +275,12 @@ impl MergeIntoInterpreter {
             unmatched,
             matched,
             row_id_idx,
-        });
-        let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
-            Arc::new(TableSnapshot::new_empty_snapshot(
-                fuse_table.schema().as_ref().clone(),
-            ))
+            segments: base_snapshot
+                .segments
+                .clone()
+                .into_iter()
+                .enumerate()
+                .collect(),
         });
 
         // build mutation_aggregate

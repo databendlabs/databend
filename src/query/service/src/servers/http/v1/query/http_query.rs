@@ -110,7 +110,7 @@ pub struct PaginationConf {
 impl Default for PaginationConf {
     fn default() -> Self {
         PaginationConf {
-            wait_time_secs: 1,
+            wait_time_secs: 3,
             max_rows_in_buffer: DEFAULT_MAX_ROWS_IN_BUFFER,
             max_rows_per_page: DEFAULT_MAX_ROWS_PER_PAGE,
         }

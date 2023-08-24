@@ -1,11 +1,3 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::sync::Arc;
-
-use common_arrow::arrow::buffer::Buffer;
-use common_base::base::tokio::sync::Semaphore;
-use common_catalog::plan::split_row_id;
-use common_exception::ErrorCode;
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +11,18 @@ use common_exception::ErrorCode;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::sync::Arc;
+
+use ahash::AHashMap;
+use common_arrow::arrow::buffer::Buffer;
+use common_base::base::tokio::sync::Semaphore;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::TrySpawn;
+use common_catalog::plan::split_prefix;
+use common_catalog::plan::split_row_id;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::NumberColumn;
 use common_expression::Column;
@@ -32,12 +36,22 @@ use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use opendal::Operator;
+use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
 
 use crate::io::BlockBuilder;
+use crate::io::CompactSegmentInfoReader;
+use crate::io::MetaReaders;
 use crate::io::ReadSettings;
 use crate::io::WriteSettings;
+use crate::operations::acquire_task_permit;
+use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::SplitByExprMutator;
+use crate::operations::mutation::BlockIndex;
+use crate::operations::mutation::SegmentIndex;
 
 pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
 
@@ -55,9 +69,22 @@ struct DeleteDataBlockMutation {
     split_mutator: SplitByExprMutator,
 }
 
-pub struct MatchedAggregator {
+struct AggregationContext {
     // used to read remain columns
     target_table_schema: TableSchemaRef,
+    row_id_idx: usize,
+    ops: Vec<MutationKind>,
+    func_ctx: FunctionContext,
+    data_accessor: Operator,
+    write_settings: WriteSettings,
+    read_settings: ReadSettings,
+    block_builder: BlockBuilder,
+}
+
+pub struct MatchedAggregator {
+    io_request_semaphore: Arc<Semaphore>,
+    segment_reader: CompactSegmentInfoReader,
+    segment_locations: AHashMap<SegmentIndex, Location>,
     // (update_idx,remain_columns)
     remain_projections_map: HashMap<usize, Vec<usize>>,
     // block_mutator, store new data after update,
@@ -65,16 +92,7 @@ pub struct MatchedAggregator {
     updatede_block: HashMap<u64, HashMap<usize, DataBlock>>,
     // store the row_id which is deleted/updated
     block_mutation_row_offset: HashMap<u64, Vec<u64>>,
-    row_id_idx: usize,
-    ops: Vec<MutationKind>,
-    func_ctx: FunctionContext,
-
-    data_accessor: Operator,
-    write_settings: WriteSettings,
-    read_settings: ReadSettings,
-
-    block_builder: BlockBuilder,
-    io_request_semaphore: Arc<Semaphore>,
+    aggregation_ctx: Arc<AggregationContext>,
 }
 
 impl MatchedAggregator {
@@ -89,7 +107,10 @@ impl MatchedAggregator {
         read_settings: ReadSettings,
         block_builder: BlockBuilder,
         io_request_semaphore: Arc<Semaphore>,
+        segment_locations: Vec<(SegmentIndex, Location)>,
     ) -> Result<Self> {
+        let segment_reader =
+            MetaReaders::segment_info_reader(data_accessor.clone(), target_table_schema.clone());
         let mut ops = Vec::<MutationKind>::new();
         let mut remain_projections_map = HashMap::new();
         for (expr_idx, item) in matched.iter().enumerate() {
@@ -142,18 +163,22 @@ impl MatchedAggregator {
         }
 
         Ok(Self {
-            target_table_schema,
+            aggregation_ctx: Arc::new(AggregationContext {
+                target_table_schema,
+                row_id_idx,
+                ops,
+                func_ctx: func_ctx.clone(),
+                write_settings,
+                read_settings,
+                data_accessor,
+                block_builder,
+            }),
+            io_request_semaphore,
+            segment_reader,
             updatede_block: HashMap::new(),
             block_mutation_row_offset: HashMap::new(),
-            row_id_idx,
             remain_projections_map,
-            ops,
-            func_ctx: func_ctx.clone(),
-            write_settings,
-            read_settings,
-            io_request_semaphore,
-            data_accessor,
-            block_builder,
+            segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
         })
     }
 
@@ -163,17 +188,18 @@ impl MatchedAggregator {
             return Ok(());
         }
         let mut current_block = data_block;
-        for (expr_idx, op) in self.ops.iter().enumerate() {
+        for (expr_idx, op) in self.aggregation_ctx.ops.iter().enumerate() {
             match op {
                 MutationKind::Update(update_mutation) => {
                     let (statisfied_block, unstatisfied_block) =
                         update_mutation.split_mutator.split_by_expr(current_block)?;
 
                     if !statisfied_block.is_empty() {
-                        let row_ids = get_row_id(&statisfied_block, self.row_id_idx)?;
+                        let row_ids =
+                            get_row_id(&statisfied_block, self.aggregation_ctx.row_id_idx)?;
                         let updated_block = update_mutation
                             .op
-                            .execute(&self.func_ctx, statisfied_block)?;
+                            .execute(&self.aggregation_ctx.func_ctx, statisfied_block)?;
                         // record the modified block offsets
                         for (idx, row_id) in row_ids.iter().enumerate() {
                             let (prefix, offset) = split_row_id(*row_id);
@@ -220,7 +246,7 @@ impl MatchedAggregator {
 
                     current_block = unstatisfied_block;
 
-                    let row_ids = get_row_id(&statisfied_block, self.row_id_idx)?;
+                    let row_ids = get_row_id(&statisfied_block, self.aggregation_ctx.row_id_idx)?;
 
                     // record the modified block offsets
                     for row_id in row_ids {
@@ -239,6 +265,89 @@ impl MatchedAggregator {
 
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
+        // 1.get modified segments
+        let mut segment_infos = HashMap::<SegmentIndex, SegmentInfo>::new();
+        for prefix in self.block_mutation_row_offset.keys() {
+            let (segment_idx, _) = split_prefix(*prefix);
+            let segment_idx = segment_idx as usize;
+            if segment_infos.contains_key(&segment_idx) {
+                continue;
+            } else {
+                let (path, ver) = self.segment_locations.get(&segment_idx).ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "unexpected, segment (idx {}) not found, during applying mutation log",
+                        segment_idx
+                    ))
+                })?;
+
+                let load_param = LoadParams {
+                    location: path.clone(),
+                    len_hint: None,
+                    ver: *ver,
+                    put_cache: true,
+                };
+
+                let compact_segment_info = self.segment_reader.read(&load_param).await?;
+                let segment_info: SegmentInfo = compact_segment_info.try_into()?;
+                segment_infos.insert(segment_idx, segment_info);
+            }
+        }
+
+        let io_runtime = GlobalIORuntime::instance();
+        let mut mutation_log_handlers = Vec::with_capacity(self.block_mutation_row_offset.len());
+        for item in &self.block_mutation_row_offset {
+            let (segment_idx, block_idx) = split_prefix(*item.0);
+            let segment_idx = segment_idx as usize;
+            let block_idx = block_idx as usize;
+            let permit = acquire_task_permit(self.io_request_semaphore.clone()).await?;
+            let aggregation_ctx = self.aggregation_ctx.clone();
+            let block_meta = segment_infos
+                .get(&segment_idx)
+                .expect(format!("can't get segment info segment_idx: {}", segment_idx).as_str())
+                .blocks[block_idx]
+                .clone();
+            let handle = io_runtime.spawn(async_backtrace::location!().frame({
+                async move {
+                    let mutation_log_entry = aggregation_ctx
+                        .apply_update_and_deletion_to_data_block(
+                            segment_idx,
+                            block_idx,
+                            &block_meta,
+                        )
+                        .await?;
+
+                    drop(permit);
+                    Ok::<_, ErrorCode>(mutation_log_entry)
+                }
+            }));
+            mutation_log_handlers.push(handle);
+        }
+        let log_entries = futures::future::try_join_all(mutation_log_handlers)
+            .await
+            .map_err(|e| {
+                ErrorCode::Internal("unexpected, failed to join apply-deletion tasks.")
+                    .add_message_back(e.to_string())
+            })?;
+        let mut mutation_logs = Vec::new();
+        for maybe_log_entry in log_entries {
+            if let Some(segment_mutation_log) = maybe_log_entry? {
+                mutation_logs.push(segment_mutation_log);
+            }
+        }
+        Ok(Some(MutationLogs {
+            entries: mutation_logs,
+        }))
+    }
+}
+
+impl AggregationContext {
+    #[async_backtrace::framed]
+    async fn apply_update_and_deletion_to_data_block(
+        &self,
+        segment_idx: SegmentIndex,
+        block_idx: BlockIndex,
+        block_meta: &BlockMeta,
+    ) -> Result<Option<MutationLogEntry>> {
         todo!()
     }
 }
