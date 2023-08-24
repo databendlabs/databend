@@ -34,6 +34,7 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::TopK;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Expr;
@@ -42,6 +43,7 @@ use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_storage::read_parquet_metas_in_parallel;
 use common_storage::ColumnNodes;
+use common_storage::FileStatus;
 use log::info;
 use opendal::Operator;
 use storages_common_pruner::RangePruner;
@@ -232,6 +234,8 @@ impl PartitionPruner {
         &self,
         operator: Operator,
         locations: &Vec<(String, u64)>,
+        ctx: Arc<dyn TableContext>,
+        is_copy: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         // part stats
         let mut stats = PartStatistics::default();
@@ -250,6 +254,7 @@ impl PartitionPruner {
 
         let is_blocking_io = operator.info().can_blocking();
 
+        let copy_status = ctx.get_copy_status();
         // 1. Read parquet meta data. Distinguish between sync and async reading.
         let file_metas = if is_blocking_io {
             let mut file_metas = Vec::with_capacity(locations.len());
@@ -261,6 +266,12 @@ impl PartitionPruner {
                         location, e
                     ))
                 })?;
+                if is_copy {
+                    copy_status.add_chunk(location, FileStatus {
+                        num_rows_loaded: file_meta.num_rows,
+                        error: None,
+                    });
+                }
                 file_metas.push(file_meta);
             }
             file_metas

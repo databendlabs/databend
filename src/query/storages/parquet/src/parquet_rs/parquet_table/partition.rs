@@ -25,6 +25,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storage::FileStatus;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::RowSelector;
 use parquet::arrow::async_reader::AsyncFileReader;
@@ -74,6 +75,15 @@ impl ParquetRSTable {
             settings.get_max_memory_usage()?,
         )
         .await?;
+        let copy_status = ctx.get_copy_status();
+        if ctx.get_query_kind() == "Copy" {
+            for (loc, meta) in &parquet_metas {
+                copy_status.add_chunk(loc, FileStatus {
+                    num_rows_loaded: meta.file_metadata().num_rows() as usize,
+                    error: None,
+                });
+            }
+        }
 
         let pruner = ParquetRSPruner::try_create(
             ctx.get_function_context()?,

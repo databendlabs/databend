@@ -459,6 +459,7 @@ impl Plan {
             Plan::DropNetworkPolicy(plan) => plan.schema(),
             Plan::DescNetworkPolicy(plan) => plan.schema(),
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
+            Plan::Copy(plan) => plan.schema(),
             other => {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())
@@ -492,6 +493,7 @@ impl Plan {
                 | Plan::DescDatamaskPolicy(_)
                 | Plan::DescNetworkPolicy(_)
                 | Plan::ShowNetworkPolicies(_)
+                | Plan::Copy(_)
         )
     }
 }
