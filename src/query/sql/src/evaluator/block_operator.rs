@@ -77,16 +77,16 @@ impl BlockOperator {
         }
         match self {
             BlockOperator::Map { exprs, projections } => {
-                let agg_index_functions_len = input
+                let num_evals = input
                     .get_meta()
                     .and_then(AggIndexMeta::downcast_ref_from)
-                    .map(|agg_index_meta| agg_index_meta.agg_functions_len);
+                    .map(|a| a.num_evals);
 
-                if let Some(agg_index_functions_len) = agg_index_functions_len {
+                if let Some(num_evals) = num_evals {
                     // It's from aggregating index.
                     match projections {
                         Some(projections) => {
-                            Ok(input.project_with_agg_index(projections, agg_index_functions_len))
+                            Ok(input.project_with_agg_index(projections, num_evals))
                         }
                         None => Ok(input),
                     }
@@ -107,14 +107,14 @@ impl BlockOperator {
             BlockOperator::Filter { projections, expr } => {
                 assert_eq!(expr.data_type(), &DataType::Boolean);
 
-                let agg_index_functions_len = input
+                let num_evals = input
                     .get_meta()
                     .and_then(AggIndexMeta::downcast_ref_from)
-                    .map(|agg_index_meta| agg_index_meta.agg_functions_len);
+                    .map(|a| a.num_evals);
 
-                if let Some(agg_index_functions_len) = agg_index_functions_len {
+                if let Some(num_evals) = num_evals {
                     // It's from aggregating index.
-                    Ok(input.project_with_agg_index(projections, agg_index_functions_len))
+                    Ok(input.project_with_agg_index(projections, num_evals))
                 } else {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                     let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
