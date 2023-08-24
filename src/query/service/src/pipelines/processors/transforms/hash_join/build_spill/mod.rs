@@ -15,4 +15,5 @@
 mod build_spill;
 mod build_spill_coordinator;
 
+pub use build_spill::BuildSpillState;
 pub use build_spill_coordinator::BuildSpillCoordinator;

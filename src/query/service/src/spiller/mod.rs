@@ -15,3 +15,4 @@
 mod spiller;
 
 pub use spiller::Spiller;
+pub use spiller::SpillerConfig;

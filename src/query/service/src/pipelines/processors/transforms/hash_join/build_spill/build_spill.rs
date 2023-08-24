@@ -16,25 +16,45 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_storage::DataOperator;
+use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
+use crate::sessions::QueryContext;
 use crate::spiller::Spiller;
+use crate::spiller::SpillerConfig;
 
 /// Define some states for hash join build spilling
-struct BuildSpillState {
+pub struct BuildSpillState {
     /// Spilling memory threshold
-    spill_memory_threshold: usize,
+    pub(crate) spill_memory_threshold: usize,
     /// Hash join build spilling coordinator
-    spill_coordinator: Arc<BuildSpillCoordinator>,
+    pub(crate) spill_coordinator: Arc<BuildSpillCoordinator>,
     /// Spiller, responsible for specific spill work
-    spiller: Spiller,
+    pub(crate) spiller: Spiller,
+    /// DataBlocks need to be spilled for the processor
+    pub(crate) input_data: RwLock<Vec<DataBlock>>,
+}
+
+impl BuildSpillState {
+    pub fn create(_ctx: Arc<QueryContext>, spill_coordinator: Arc<BuildSpillCoordinator>) -> Self {
+        let spill_config = SpillerConfig::create("hash_join_build_spill".to_string());
+        let operator = DataOperator::instance().operator();
+        let spiller = Spiller::create(operator, spill_config);
+        Self {
+            spill_memory_threshold: 1024,
+            spill_coordinator,
+            spiller,
+            input_data: Default::default(),
+        }
+    }
 }
 
 /// Define some spill-related APIs for hash join build
 impl HashJoinBuildState {
-    // Start to spill.
-    async fn spill(&mut self) -> Result<()> {
+    // Start to spill `input_data`.
+    pub(crate) fn spill(&self) -> Result<()> {
         todo!()
     }
 
@@ -42,5 +62,16 @@ impl HashJoinBuildState {
     // Notes: even if input can fit into memory, but there exists one processor need to spill, then it needs to wait spill.
     pub(crate) fn check_need_spill(&self, input: &DataBlock) -> Result<bool> {
         todo!()
+    }
+
+    // Spill last build processors' input data
+    pub(crate) fn spill_input(&self, data_block: DataBlock) -> Result<()> {
+        todo!()
+    }
+
+    // Add data that will be spilled to `input_data`
+    pub(crate) fn add_unspilled_data(&self, input: DataBlock) {
+        let mut input_data = self.spill_state.input_data.write();
+        input_data.push(input)
     }
 }

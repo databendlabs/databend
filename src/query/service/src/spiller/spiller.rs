@@ -22,8 +22,14 @@ enum SpillerType {
 }
 
 /// Spiller configuration
-struct SpillerConfig {
+pub struct SpillerConfig {
     location_prefix: String,
+}
+
+impl SpillerConfig {
+    pub fn create(location_prefix: String) -> Self {
+        Self { location_prefix }
+    }
 }
 
 /// Spiller is a unified framework for operators which need to spill data from memory.
@@ -36,4 +42,16 @@ pub struct Spiller {
     operator: Operator,
     config: SpillerConfig,
     spiller_type: SpillerType,
+}
+
+impl Spiller {
+    /// Create a new spiller
+    pub fn create(operator: Operator, config: SpillerConfig) -> Self {
+        let spiller_type = SpillerType::HashJoin;
+        Self {
+            operator,
+            config,
+            spiller_type,
+        }
+    }
 }
