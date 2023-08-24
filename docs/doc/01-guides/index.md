@@ -1,7 +1,6 @@
 ---
 title: Quick Start Resources
 ---
-
 Welcome to our Quick Start Resources page! 
 
 Whether you're a newbie to Databend or looking to refresh your knowledge, this page is designed to help you get up and running quickly 🚀. We've compiled a list of key documents to help you navigate our documentation and learn the essentials of Databend. From deployment guides to usecases, this page will provide you with everything you need to begin using Databend effectively.
