@@ -170,7 +170,7 @@ impl Table for NumbersTable {
 
         let cluster = ctx.get_cluster();
         if !cluster.is_empty() {
-            worker_num = worker_num * cluster.nodes.len() as u64;
+            worker_num *= cluster.nodes.len() as u64;
         }
 
         if worker_num > fake_partitions {
