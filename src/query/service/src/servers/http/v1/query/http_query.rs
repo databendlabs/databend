@@ -83,7 +83,7 @@ impl Debug for HttpQueryRequest {
 
 const DEFAULT_MAX_ROWS_IN_BUFFER: usize = 5 * 1000 * 1000;
 const DEFAULT_MAX_ROWS_PER_PAGE: usize = 10000;
-const DEFAULT_WAIT_TIME_SECS: u32 = 1;
+const DEFAULT_WAIT_TIME_SECS: u32 = 3;
 
 fn default_max_rows_in_buffer() -> usize {
     DEFAULT_MAX_ROWS_IN_BUFFER
@@ -110,7 +110,7 @@ pub struct PaginationConf {
 impl Default for PaginationConf {
     fn default() -> Self {
         PaginationConf {
-            wait_time_secs: 1,
+            wait_time_secs: DEFAULT_WAIT_TIME_SECS,
             max_rows_in_buffer: DEFAULT_MAX_ROWS_IN_BUFFER,
             max_rows_per_page: DEFAULT_MAX_ROWS_PER_PAGE,
         }
