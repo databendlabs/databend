@@ -21,7 +21,7 @@ use crate::ast::Expr;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CreateVirtualColumnsStmt {
+pub struct CreateVirtualColumnStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
@@ -29,9 +29,9 @@ pub struct CreateVirtualColumnsStmt {
     pub virtual_columns: Vec<Expr>,
 }
 
-impl Display for CreateVirtualColumnsStmt {
+impl Display for CreateVirtualColumnStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CREATE VIRTUAL COLUMNS (")?;
+        write!(f, "CREATE VIRTUAL COLUMN (")?;
         write_comma_separated_list(f, &self.virtual_columns)?;
         write!(f, ") FOR ")?;
         write_period_separated_list(
@@ -46,7 +46,7 @@ impl Display for CreateVirtualColumnsStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AlterVirtualColumnsStmt {
+pub struct AlterVirtualColumnStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
@@ -54,9 +54,9 @@ pub struct AlterVirtualColumnsStmt {
     pub virtual_columns: Vec<Expr>,
 }
 
-impl Display for AlterVirtualColumnsStmt {
+impl Display for AlterVirtualColumnStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ALTER VIRTUAL COLUMNS (")?;
+        write!(f, "ALTER VIRTUAL COLUMN (")?;
         write_comma_separated_list(f, &self.virtual_columns)?;
         write!(f, ") FOR ")?;
         write_period_separated_list(
@@ -71,15 +71,15 @@ impl Display for AlterVirtualColumnsStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DropVirtualColumnsStmt {
+pub struct DropVirtualColumnStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
 }
 
-impl Display for DropVirtualColumnsStmt {
+impl Display for DropVirtualColumnStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DROP VIRTUAL COLUMNS FOR ")?;
+        write!(f, "DROP VIRTUAL COLUMN FOR ")?;
         write_period_separated_list(
             f,
             self.catalog
@@ -92,15 +92,15 @@ impl Display for DropVirtualColumnsStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct GenerateVirtualColumnsStmt {
+pub struct RefreshVirtualColumnStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
 }
 
-impl Display for GenerateVirtualColumnsStmt {
+impl Display for RefreshVirtualColumnStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "GENERATE VIRTUAL COLUMNS FOR ")?;
+        write!(f, "REFRESH VIRTUAL COLUMN FOR ")?;
         write_period_separated_list(
             f,
             self.catalog

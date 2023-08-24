@@ -18,54 +18,54 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CreateVirtualColumnsPlan {
+pub struct CreateVirtualColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
     pub virtual_columns: Vec<String>,
 }
 
-impl CreateVirtualColumnsPlan {
+impl CreateVirtualColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AlterVirtualColumnsPlan {
+pub struct AlterVirtualColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
     pub virtual_columns: Vec<String>,
 }
 
-impl AlterVirtualColumnsPlan {
+impl AlterVirtualColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropVirtualColumnsPlan {
+pub struct DropVirtualColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
 }
 
-impl DropVirtualColumnsPlan {
+impl DropVirtualColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GenerateVirtualColumnsPlan {
+pub struct RefreshVirtualColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
 }
 
-impl GenerateVirtualColumnsPlan {
+impl RefreshVirtualColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

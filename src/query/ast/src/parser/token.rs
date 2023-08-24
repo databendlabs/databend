@@ -539,8 +539,6 @@ pub enum TokenKind {
     SET_VAR,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
-    #[token("GENERATE", ignore(ascii_case))]
-    GENERATE,
     #[token("GENERATED", ignore(ascii_case))]
     GENERATED,
     #[token("GLOBAL", ignore(ascii_case))]

@@ -22,11 +22,11 @@ use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::FuseTable;
 use databend_query::test_kits::table_test_fixture::append_variant_sample_data;
 use databend_query::test_kits::table_test_fixture::TestFixture;
-use enterprise_query::storages::fuse::operations::virtual_columns::do_generate_virtual_columns;
+use enterprise_query::storages::fuse::operations::virtual_columns::do_refresh_virtual_column;
 use storages_common_cache::LoadParams;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_do_generate_virtual_columns() -> Result<()> {
+async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
@@ -42,7 +42,7 @@ async fn test_fuse_do_generate_virtual_columns() -> Result<()> {
     let dal = fuse_table.get_operator_ref();
 
     let virtual_columns = vec!["v:a".to_string(), "v:b".to_string()];
-    do_generate_virtual_columns(fuse_table, table_ctx, virtual_columns).await?;
+    do_refresh_virtual_column(fuse_table, table_ctx, virtual_columns).await?;
 
     let snapshot_opt = fuse_table.read_table_snapshot().await?;
     let snapshot = snapshot_opt.unwrap();
