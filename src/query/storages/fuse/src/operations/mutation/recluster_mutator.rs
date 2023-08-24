@@ -45,14 +45,14 @@ pub struct ReclusterMutator {
     pub(crate) block_thresholds: BlockThresholds,
     pub(crate) cluster_key_id: u32,
 
-    pub(crate) selected_blocks: Vec<Arc<BlockMeta>>,
-    pub(crate) remained_blocks: Vec<Arc<BlockMeta>>,
-    pub(crate) removed_segment_indexes: Vec<usize>,
-    pub(crate) removed_segment_summary: Statistics,
-
     pub(crate) total_rows: usize,
     pub(crate) total_bytes: usize,
     pub(crate) level: i32,
+
+    pub selected_blocks: Vec<Arc<BlockMeta>>,
+    pub remained_blocks: Vec<Arc<BlockMeta>>,
+    pub removed_segment_indexes: Vec<usize>,
+    pub removed_segment_summary: Statistics,
 }
 
 impl ReclusterMutator {
@@ -103,7 +103,7 @@ impl ReclusterMutator {
         let mem_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
         let max_memory_usage = self.ctx.get_settings().get_max_memory_usage()? as usize;
         let memory_threshold =
-            cmp::min(mem_info.avail as usize * 1024, max_memory_usage) * 50 / 100;
+            cmp::min(mem_info.avail as usize * 1024, max_memory_usage) * 45 / 100;
 
         let mut remained_blocks = Vec::new();
         let mut selected = false;

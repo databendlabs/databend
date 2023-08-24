@@ -15,7 +15,9 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_base::base::tokio;
+use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
@@ -28,12 +30,16 @@ use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::SendableDataBlockStream;
 use common_expression::Value;
+use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_storage::DataOperator;
+use common_storages_fuse::io::serialize_block;
 use common_storages_fuse::io::CompactSegmentInfoReader;
 use common_storages_fuse::io::MetaReaders;
+use common_storages_fuse::io::MetaWriter;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::SegmentsIO;
 use common_storages_fuse::io::TableMetaLocationGenerator;
+use common_storages_fuse::io::WriteSettings;
 use common_storages_fuse::operations::CompactOptions;
 use common_storages_fuse::operations::SegmentCompactMutator;
 use common_storages_fuse::operations::SegmentCompactionState;
@@ -46,7 +52,6 @@ use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::test_kits::block_writer::BlockWriter;
 use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
@@ -56,6 +61,7 @@ use rand::Rng;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;
+use storages_common_table_meta::meta::Compression;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
@@ -650,7 +656,6 @@ impl CompactSegmentTestFixture {
         let block_per_seg = self.threshold;
         let data_accessor = &self.data_accessor.operator();
         let location_gen = &self.location_gen;
-        let block_writer = BlockWriter::new(data_accessor, location_gen);
 
         let schema = TestFixture::default_table_schema();
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
@@ -667,12 +672,12 @@ impl CompactSegmentTestFixture {
 
         let rows_per_block = vec![1; num_block_of_segments.len()];
         let (locations, blocks, segments) = Self::gen_segments(
-            &block_writer,
-            &segment_writer,
-            num_block_of_segments,
-            &rows_per_block,
+            self.ctx.clone(),
+            num_block_of_segments.to_owned(),
+            rows_per_block,
             BlockThresholds::default(),
             cluster_key_id,
+            block_per_seg as usize,
         )
         .await?;
         let mut summary = Statistics::default();
@@ -690,54 +695,114 @@ impl CompactSegmentTestFixture {
     }
 
     pub async fn gen_segments(
-        block_writer: &BlockWriter<'_>,
-        segment_writer: &SegmentWriter<'_>,
-        block_num_of_segments: &[usize],
-        rows_per_blocks: &[usize],
+        ctx: Arc<dyn TableContext>,
+        block_num_of_segments: Vec<usize>,
+        rows_per_blocks: Vec<usize>,
         thresholds: BlockThresholds,
         cluster_key_id: Option<u32>,
+        block_per_seg: usize,
     ) -> Result<(Vec<Location>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
+        let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
+        let data_accessor = ctx.get_data_operator()?.operator();
+        let threads_nums = ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = ctx.get_settings().get_max_storage_io_requests()? as usize;
+
+        let mut tasks = vec![];
+        for (num_blocks, rows_per_block) in block_num_of_segments
+            .into_iter()
+            .zip(rows_per_blocks.into_iter())
+            .rev()
+        {
+            let location_gen = location_gen.clone();
+            let data_accessor = data_accessor.clone();
+            tasks.push(async move {
+                let (schema, blocks) =
+                    TestFixture::gen_sample_blocks_ex(num_blocks, rows_per_block, 1);
+                let mut stats_acc = StatisticsAccumulator::default();
+
+                let mut collected_blocks = vec![];
+                for block in blocks {
+                    let block = block?;
+
+                    let col_stats = gen_columns_statistics(&block, None, &schema)?;
+
+                    let cluster_stats = if num_blocks % 5 == 0 {
+                        None
+                    } else {
+                        cluster_key_id.map(|v| {
+                            let val = block.get_by_offset(0);
+                            let val_ref = val.value.as_ref();
+                            let left = vec![unsafe { val_ref.index_unchecked(0) }.to_owned()];
+                            let right = vec![
+                                unsafe { val_ref.index_unchecked(val_ref.len() - 1) }.to_owned(),
+                            ];
+                            let level = if left.eq(&right) && block.num_rows() >= block_per_seg {
+                                -1
+                            } else {
+                                0
+                            };
+                            ClusterStatistics::new(v, left, right, level, None)
+                        })
+                    };
+
+                    let (location, _) = location_gen.gen_block_location();
+                    let row_count = block.num_rows() as u64;
+                    let block_size = block.memory_size() as u64;
+
+                    let write_settings = WriteSettings {
+                        storage_format: FuseStorageFormat::Parquet,
+                        ..Default::default()
+                    };
+
+                    let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
+                    let (file_size, col_metas) =
+                        serialize_block(&write_settings, &schema, block, &mut buf)?;
+
+                    data_accessor.write(&location.0, buf).await?;
+
+                    let block_meta = BlockMeta::new(
+                        row_count,
+                        block_size,
+                        file_size,
+                        col_stats,
+                        col_metas,
+                        cluster_stats,
+                        location,
+                        None,
+                        0,
+                        Compression::Lz4Raw,
+                        Some(Utc::now()),
+                    );
+
+                    collected_blocks.push(block_meta.clone());
+                    stats_acc.add_with_block_meta(block_meta);
+                }
+                let summary = stats_acc.summary(thresholds, cluster_key_id);
+                let segment_info = SegmentInfo::new(stats_acc.blocks_metas, summary);
+                let path = location_gen.gen_segment_info_location();
+                segment_info.write_meta(&data_accessor, &path).await?;
+                Ok::<_, ErrorCode>(((path, SegmentInfo::VERSION), collected_blocks, segment_info))
+            });
+        }
+
+        let res = execute_futures_in_parallel(
+            tasks,
+            threads_nums,
+            permit_nums,
+            "fuse-write-segments-worker".to_owned(),
+        )
+        .await?
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?;
+
         let mut locations = vec![];
         let mut collected_blocks = vec![];
         let mut segment_infos = vec![];
-        for (num_blocks, rows_per_block) in block_num_of_segments
-            .iter()
-            .zip(rows_per_blocks.iter())
-            .rev()
-        {
-            let (schema, blocks) =
-                TestFixture::gen_sample_blocks_ex(*num_blocks, *rows_per_block, 1);
-            let mut stats_acc = StatisticsAccumulator::default();
-            for block in blocks {
-                let block = block?;
-                let col_stats = gen_columns_statistics(&block, None, &schema)?;
-
-                let val = block.get_by_offset(0);
-                let val_ref = val.value.as_ref();
-                let left = vec![unsafe { val_ref.index_unchecked(0) }.to_owned()];
-                let cluster_stats =
-                    cluster_key_id.map(|v| ClusterStatistics::new(v, left.clone(), left, 0, None));
-
-                let (block_meta, _index_meta) = block_writer
-                    .write(
-                        FuseStorageFormat::Parquet,
-                        &schema,
-                        block,
-                        col_stats,
-                        cluster_stats,
-                    )
-                    .await?;
-
-                collected_blocks.push(block_meta.clone());
-                stats_acc.add_with_block_meta(block_meta);
-            }
-            let summary = stats_acc.summary(thresholds, cluster_key_id);
-            let segment_info = SegmentInfo::new(stats_acc.blocks_metas, summary);
-            let location = segment_writer.write_segment_no_cache(&segment_info).await?;
-            segment_infos.push(segment_info);
+        for (location, blocks, info) in res.into_iter() {
             locations.push(location);
+            collected_blocks.extend(blocks);
+            segment_infos.push(info);
         }
-
         Ok((locations, collected_blocks, segment_infos))
     }
 
@@ -904,7 +969,6 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
     settings.set_max_threads(2)?;
     settings.set_max_storage_io_requests(4)?;
 
-    let block_writer = BlockWriter::new(&data_accessor, &location_gen);
     let segment_writer = SegmentWriter::new(&data_accessor, &location_gen);
     let compact_segment_reader =
         MetaReaders::segment_info_reader(data_accessor.clone(), schema.clone());
@@ -938,12 +1002,12 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
         // setup & run
         let rows_per_block = vec![1; block_number_of_segments.len()];
         let (locations, _, mut segments) = CompactSegmentTestFixture::gen_segments(
-            &block_writer,
-            &segment_writer,
-            &block_number_of_segments,
-            &rows_per_block,
+            ctx.clone(),
+            block_number_of_segments,
+            rows_per_block,
             BlockThresholds::default(),
             Some(cluster_key_id),
+            block_per_seg as usize,
         )
         .await?;
         let mut summary = Statistics::default();
