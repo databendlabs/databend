@@ -178,7 +178,7 @@ jobs:
 
   sqllogic_standalone_udf_server:
     name: sqllogic_standalone_${{ matrix.dirs }}
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: build
     strategy:
       matrix:
