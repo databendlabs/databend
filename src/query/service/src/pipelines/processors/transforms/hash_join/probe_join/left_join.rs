@@ -58,19 +58,13 @@ impl HashJoinProbeState {
         let mut probe_unmatched_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
-        let data_blocks = self.hash_join_state.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
+        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
         let is_build_projected = self
             .hash_join_state
             .is_build_projected
             .load(Ordering::Relaxed);
-        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
 
         // Start to probe hash table.
         for (i, key) in keys_iter.enumerate() {
@@ -166,7 +160,7 @@ impl HashJoinProbeState {
                     let build_block = if is_build_projected {
                         let build_block = self.hash_join_state.row_space.gather(
                             &local_build_indexes[0..matched_num],
-                            &data_blocks,
+                            data_blocks,
                             &build_num_rows,
                         )?;
                         // For left join, wrap nullable for build block
@@ -302,19 +296,13 @@ impl HashJoinProbeState {
         let mut probe_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
-        let data_blocks = self.hash_join_state.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
+        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
         let is_build_projected = self
             .hash_join_state
             .is_build_projected
             .load(Ordering::Relaxed);
-        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
 
         // Start to probe hash table.
         for (i, key) in keys_iter.enumerate() {
@@ -397,7 +385,7 @@ impl HashJoinProbeState {
                     let build_block = if is_build_projected {
                         let build_block = self.hash_join_state.row_space.gather(
                             &local_build_indexes[0..matched_num],
-                            &data_blocks,
+                            data_blocks,
                             &build_num_rows,
                         )?;
                         // For left join, wrap nullable for build block

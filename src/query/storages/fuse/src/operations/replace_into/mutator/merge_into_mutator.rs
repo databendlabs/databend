@@ -532,7 +532,7 @@ impl AggregationContext {
         }
 
         // generate log
-        let mutation = MutationLogEntry::Replaced {
+        let mutation = MutationLogEntry::ReplacedBlock {
             index: BlockMetaIndex {
                 segment_idx: segment_index,
                 block_idx: block_index,

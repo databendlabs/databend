@@ -28,6 +28,7 @@ use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 #[derive(Debug, Clone, Default)]
 pub struct AggregatingIndexRewriter {
     pub user_defined_block_name: bool,
+    has_agg_function: bool,
 }
 
 impl VisitorMut for AggregatingIndexRewriter {
@@ -45,9 +46,11 @@ impl VisitorMut for AggregatingIndexRewriter {
                     .contains(&&*name.name.to_ascii_lowercase().to_lowercase())
                 && window.is_none() =>
             {
+                self.has_agg_function = true;
                 name.name = format!("{}_STATE", name.name);
             }
             Expr::CountAll { window, .. } if window.is_none() => {
+                self.has_agg_function = true;
                 *expr = Expr::FunctionCall {
                     span: None,
                     distinct: false,
@@ -112,8 +115,8 @@ impl VisitorMut for AggregatingIndexRewriter {
             });
         }
 
-        if let Some(group_by) = group_by {
-            match group_by {
+        match group_by {
+            Some(group_by) => match group_by {
                 GroupBy::Normal(groups) => {
                     if !groups.iter().any(|expr| match (*expr).clone() {
                         Expr::ColumnRef { column, .. } => {
@@ -125,10 +128,12 @@ impl VisitorMut for AggregatingIndexRewriter {
                     }
                 }
                 _ => unreachable!(),
+            },
+            None if self.has_agg_function => {
+                let groups = vec![block_name_expr];
+                *group_by = Some(GroupBy::Normal(groups));
             }
-        } else {
-            let groups = vec![block_name_expr];
-            *group_by = Some(GroupBy::Normal(groups));
+            _ => {}
         }
     }
 }
