@@ -56,7 +56,7 @@ use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
-use crate::plans::AlterVirtualColumnsPlan;
+use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::CreateDatabasePlan;
@@ -68,7 +68,7 @@ use crate::plans::CreateTablePlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
-use crate::plans::CreateVirtualColumnsPlan;
+use crate::plans::CreateVirtualColumnPlan;
 use crate::plans::DeletePlan;
 use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescribeTablePlan;
@@ -84,14 +84,14 @@ use crate::plans::DropTablePlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
-use crate::plans::DropVirtualColumnsPlan;
+use crate::plans::DropVirtualColumnPlan;
 use crate::plans::ExistsTablePlan;
-use crate::plans::GenerateVirtualColumnsPlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
 use crate::plans::KillPlan;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::RefreshIndexPlan;
+use crate::plans::RefreshVirtualColumnPlan;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTablePlan;
@@ -204,10 +204,10 @@ pub enum Plan {
     RefreshIndex(Box<RefreshIndexPlan>),
 
     // Virtual Columns
-    CreateVirtualColumns(Box<CreateVirtualColumnsPlan>),
-    AlterVirtualColumns(Box<AlterVirtualColumnsPlan>),
-    DropVirtualColumns(Box<DropVirtualColumnsPlan>),
-    GenerateVirtualColumns(Box<GenerateVirtualColumnsPlan>),
+    CreateVirtualColumn(Box<CreateVirtualColumnPlan>),
+    AlterVirtualColumn(Box<AlterVirtualColumnPlan>),
+    DropVirtualColumn(Box<DropVirtualColumnPlan>),
+    RefreshVirtualColumn(Box<RefreshVirtualColumnPlan>),
 
     // Account
     AlterUser(Box<AlterUserPlan>),
@@ -348,10 +348,10 @@ impl Display for Plan {
             Plan::CreateIndex(_) => write!(f, "CreateIndex"),
             Plan::DropIndex(_) => write!(f, "DropIndex"),
             Plan::RefreshIndex(_) => write!(f, "RefreshIndex"),
-            Plan::CreateVirtualColumns(_) => write!(f, "CreateVirtualColumns"),
-            Plan::AlterVirtualColumns(_) => write!(f, "AlterVirtualColumns"),
-            Plan::DropVirtualColumns(_) => write!(f, "DropVirtualColumns"),
-            Plan::GenerateVirtualColumns(_) => write!(f, "GenerateVirtualColumns"),
+            Plan::CreateVirtualColumn(_) => write!(f, "CreateVirtualColumn"),
+            Plan::AlterVirtualColumn(_) => write!(f, "AlterVirtualColumn"),
+            Plan::DropVirtualColumn(_) => write!(f, "DropVirtualColumn"),
+            Plan::RefreshVirtualColumn(_) => write!(f, "RefreshVirtualColumn"),
             Plan::AlterUser(_) => write!(f, "AlterUser"),
             Plan::CreateUser(_) => write!(f, "CreateUser"),
             Plan::DropUser(_) => write!(f, "DropUser"),

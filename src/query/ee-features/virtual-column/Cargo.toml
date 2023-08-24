@@ -1,6 +1,6 @@
 [package]
-name = "virtual-columns-handler"
-description = "virtual columns handler"
+name = "virtual-column"
+description = "virtual column handler"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
