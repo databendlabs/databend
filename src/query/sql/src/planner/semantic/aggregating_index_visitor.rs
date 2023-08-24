@@ -22,11 +22,13 @@ use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::TableReference;
 use common_ast::ast::Window;
+use common_ast::walk_expr;
 use common_ast::walk_select_target_mut;
 use common_ast::Visitor;
 use common_ast::VisitorMut;
 use common_exception::Span;
 use common_expression::BLOCK_NAME_COL_NAME;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
@@ -38,7 +40,7 @@ pub struct AggregatingIndexRewriter {
 
 #[derive(Debug, Clone, Default)]
 pub struct AggregatingIndexChecker {
-    pub has_now_func: bool,
+    pub has_no_deterministic_func: bool,
 }
 
 impl VisitorMut for AggregatingIndexRewriter {
@@ -154,13 +156,22 @@ impl<'ast> Visitor<'ast> for AggregatingIndexChecker {
         _span: Span,
         _distinct: bool,
         name: &'ast Identifier,
-        _args: &'ast [Expr],
+        args: &'ast [Expr],
         _params: &'ast [Literal],
         _over: &'ast Option<Window>,
         _lambda: &'ast Option<Lambda>,
     ) {
-        if name.name.eq_ignore_ascii_case("now") {
-            self.has_now_func = true
+        if self.has_no_deterministic_func {
+            return;
+        }
+
+        self.has_no_deterministic_func = match BUILTIN_FUNCTIONS.get_property(&name.name) {
+            Some(property) => property.non_deterministic,
+            None => false,
+        };
+
+        for arg in args {
+            walk_expr(self, arg);
         }
     }
 }

@@ -21,7 +21,10 @@ statement error
 CREATE AGGREGATING INDEX testi AS select sum(a) from t where now() > to_timestamp('2022-01-02 02:00:11')
 
 statement error
-CREATE AGGREGATING INDEX testi AS select sum(a) from t group by now()
+CREATE AGGREGATING INDEX testi AS select sum(a) from t group by to_date(now())
+
+statement error
+CREATE AGGREGATING INDEX testi AS select sum(a) from t group by rand()
 
 statement ok
 DROP TABLE t
