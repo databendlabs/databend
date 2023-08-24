@@ -187,6 +187,7 @@ async fn test_safety() -> Result<()> {
             &rows_per_blocks,
             threshold,
             cluster_key_id,
+            5,
         )
         .await?;
 

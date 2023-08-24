@@ -45,14 +45,14 @@ pub struct ReclusterMutator {
     pub(crate) block_thresholds: BlockThresholds,
     pub(crate) cluster_key_id: u32,
 
-    pub(crate) selected_blocks: Vec<Arc<BlockMeta>>,
-    pub(crate) remained_blocks: Vec<Arc<BlockMeta>>,
-    pub(crate) removed_segment_indexes: Vec<usize>,
-    pub(crate) removed_segment_summary: Statistics,
-
     pub(crate) total_rows: usize,
     pub(crate) total_bytes: usize,
     pub(crate) level: i32,
+
+    pub selected_blocks: Vec<Arc<BlockMeta>>,
+    pub remained_blocks: Vec<Arc<BlockMeta>>,
+    pub removed_segment_indexes: Vec<usize>,
+    pub removed_segment_summary: Statistics,
 }
 
 impl ReclusterMutator {

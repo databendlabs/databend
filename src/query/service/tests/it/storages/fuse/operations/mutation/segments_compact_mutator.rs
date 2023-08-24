@@ -673,6 +673,7 @@ impl CompactSegmentTestFixture {
             &rows_per_block,
             BlockThresholds::default(),
             cluster_key_id,
+            block_per_seg as usize,
         )
         .await?;
         let mut summary = Statistics::default();
@@ -696,6 +697,7 @@ impl CompactSegmentTestFixture {
         rows_per_blocks: &[usize],
         thresholds: BlockThresholds,
         cluster_key_id: Option<u32>,
+        block_per_seg: usize,
     ) -> Result<(Vec<Location>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
         let mut locations = vec![];
         let mut collected_blocks = vec![];
@@ -712,11 +714,23 @@ impl CompactSegmentTestFixture {
                 let block = block?;
                 let col_stats = gen_columns_statistics(&block, None, &schema)?;
 
-                let val = block.get_by_offset(0);
-                let val_ref = val.value.as_ref();
-                let left = vec![unsafe { val_ref.index_unchecked(0) }.to_owned()];
-                let cluster_stats =
-                    cluster_key_id.map(|v| ClusterStatistics::new(v, left.clone(), left, 0, None));
+                let cluster_stats = if num_blocks % 5 == 0 {
+                    None
+                } else {
+                    cluster_key_id.map(|v| {
+                        let val = block.get_by_offset(0);
+                        let val_ref = val.value.as_ref();
+                        let left = vec![unsafe { val_ref.index_unchecked(0) }.to_owned()];
+                        let right =
+                            vec![unsafe { val_ref.index_unchecked(val_ref.len() - 1) }.to_owned()];
+                        let level = if left.eq(&right) && block.num_rows() >= block_per_seg {
+                            -1
+                        } else {
+                            0
+                        };
+                        ClusterStatistics::new(v, left, right, level, None)
+                    })
+                };
 
                 let (block_meta, _index_meta) = block_writer
                     .write(
@@ -944,6 +958,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
             &rows_per_block,
             BlockThresholds::default(),
             Some(cluster_key_id),
+            block_per_seg as usize,
         )
         .await?;
         let mut summary = Statistics::default();
