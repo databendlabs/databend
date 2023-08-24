@@ -37,14 +37,14 @@ query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
 ----
 Exchange
-├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
 ├── exchange type: Merge
 └── Filter
-    ├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+    ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
     ├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
     ├── estimated rows: 0.00
     └── HashJoin
-        ├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+        ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
         ├── join type: INNER
         ├── build keys: [t2.a (#2)]
         ├── probe keys: [t1.a (#0)]
@@ -87,10 +87,10 @@ query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
 ----
 Exchange
-├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
 ├── exchange type: Merge
 └── HashJoin
-    ├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+    ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
     ├── join type: INNER
     ├── build keys: [t2.a (#2)]
     ├── probe keys: [t1.a (#0)]
@@ -264,10 +264,10 @@ query T
 explain select * from t1 join t2 on t1.a = t2.a;
 ----
 Exchange
-├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
 ├── exchange type: Merge
 └── HashJoin
-    ├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+    ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
     ├── join type: INNER
     ├── build keys: [t2.a (#2)]
     ├── probe keys: [t1.a (#0)]

@@ -102,7 +102,7 @@ impl CatalogManager {
                 },
                 meta: CatalogMeta {
                     catalog_option: CatalogOption::Hive(HiveCatalogOption {
-                        address: hive_ctl_cfg.address.clone(),
+                        address: hive_ctl_cfg.metastore_address.clone(),
                         storage_params: None,
                     }),
                     created_on: Utc::now(),

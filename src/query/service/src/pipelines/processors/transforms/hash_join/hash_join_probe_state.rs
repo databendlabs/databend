@@ -249,7 +249,7 @@ impl HashJoinProbeState {
     }
 
     pub fn generate_final_scan_task(&self) -> Result<()> {
-        let task_num = self.hash_join_state.row_space.chunks.read().len();
+        let task_num = unsafe { &*self.hash_join_state.chunks.get() }.len();
         if task_num == 0 {
             return Ok(());
         }
@@ -288,14 +288,8 @@ impl HashJoinProbeState {
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
-        let data_blocks = self.hash_join_state.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let data_blocks = unsafe { &mut *self.hash_join_state.chunks.get() };
+        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
         let is_build_projected = self
             .hash_join_state
             .is_build_projected
@@ -352,7 +346,7 @@ impl HashJoinProbeState {
             let build_block = if is_build_projected {
                 let mut unmatched_build_block = self.hash_join_state.row_space.gather(
                     &build_indexes[0..build_indexes_occupied],
-                    &data_blocks,
+                    data_blocks,
                     &build_num_rows,
                 )?;
 
@@ -402,14 +396,8 @@ impl HashJoinProbeState {
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
-        let data_blocks = self.hash_join_state.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let data_blocks = unsafe { &mut *self.hash_join_state.chunks.get() };
+        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
 
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
         let interrupt = self.hash_join_state.interrupt.clone();
@@ -440,7 +428,7 @@ impl HashJoinProbeState {
 
             result_blocks.push(self.hash_join_state.row_space.gather(
                 &build_indexes[0..build_indexes_occupied],
-                &data_blocks,
+                data_blocks,
                 &build_num_rows,
             )?);
             build_indexes_occupied = 0;
@@ -458,14 +446,8 @@ impl HashJoinProbeState {
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
-        let data_blocks = self.hash_join_state.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let data_blocks = unsafe { &mut *self.hash_join_state.chunks.get() };
+        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
 
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
         let interrupt = self.hash_join_state.interrupt.clone();
@@ -496,7 +478,7 @@ impl HashJoinProbeState {
 
             result_blocks.push(self.hash_join_state.row_space.gather(
                 &build_indexes[0..build_indexes_occupied],
-                &data_blocks,
+                data_blocks,
                 &build_num_rows,
             )?);
             build_indexes_occupied = 0;
@@ -510,14 +492,8 @@ impl HashJoinProbeState {
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
-        let data_blocks = self.hash_join_state.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let data_blocks = unsafe { &mut *self.hash_join_state.chunks.get() };
+        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
 
         let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
         let interrupt = self.hash_join_state.interrupt.clone();
@@ -577,7 +553,7 @@ impl HashJoinProbeState {
             let marker_block = DataBlock::new_from_columns(vec![marker_column]);
             let build_block = self.hash_join_state.row_space.gather(
                 &build_indexes[0..build_indexes_occupied],
-                &data_blocks,
+                data_blocks,
                 &build_num_rows,
             )?;
             result_blocks.push(self.merge_eq_block(

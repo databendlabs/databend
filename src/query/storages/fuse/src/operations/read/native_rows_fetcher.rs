@@ -98,7 +98,6 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
             })
             .collect::<Vec<_>>();
 
-        let blocks = blocks.iter().collect::<Vec<_>>();
         Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
     }
 

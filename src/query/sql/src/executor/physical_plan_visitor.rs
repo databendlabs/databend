@@ -202,6 +202,8 @@ pub trait PhysicalPlanReplacer {
             join_type: plan.join_type.clone(),
             marker_index: plan.marker_index,
             from_correlated_subquery: plan.from_correlated_subquery,
+            probe_to_build: plan.probe_to_build.clone(),
+            output_schema: plan.output_schema.clone(),
             contain_runtime_filter: plan.contain_runtime_filter,
             stat_info: plan.stat_info.clone(),
         }))
@@ -284,6 +286,7 @@ pub trait PhysicalPlanReplacer {
             input: Box::new(input),
             kind: plan.kind.clone(),
             keys: plan.keys.clone(),
+            ignore_exchange: plan.ignore_exchange,
         }))
     }
 
@@ -305,6 +308,7 @@ pub trait PhysicalPlanReplacer {
             keys: plan.keys.clone(),
             destination_fragment_id: plan.destination_fragment_id,
             query_id: plan.query_id.clone(),
+            ignore_exchange: plan.ignore_exchange,
         }))
     }
 

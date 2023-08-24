@@ -42,7 +42,7 @@ use log::info;
 
 use crate::local;
 
-async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
+pub async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
     if conf.cmd.is_empty() {
         return Ok(false);
     }
@@ -68,10 +68,6 @@ async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
 }
 
 pub async fn init_services(conf: &InnerConfig) -> Result<()> {
-    if run_cmd(conf).await? {
-        return Ok(());
-    }
-
     init_default_metrics_recorder();
     set_panic_hook();
     set_alloc_error_hook();

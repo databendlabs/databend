@@ -13,4 +13,4 @@
 // limitations under the License.
 
 mod virtual_column_handler;
-pub use virtual_column_handler::RealVirtualColumnsHandler;
+pub use virtual_column_handler::RealVirtualColumnHandler;
