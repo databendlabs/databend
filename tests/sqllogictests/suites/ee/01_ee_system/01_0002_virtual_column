@@ -31,10 +31,10 @@ statement ok
 insert into t1 values(1, '{"a":11,"b":1}'), (2, '{"a":22}'), (3, '3')
 
 statement ok
-create virtual columns (val['a'], val['b']) for t1
+create virtual column (val['a'], val['b']) for t1
 
 statement ok
-generate virtual columns for t1
+refresh virtual column for t1
 
 statement ok
 insert into t1 values(4, '{"a":44,"b":4}'), (5, '{"a":55}'), (6, '6')
@@ -120,10 +120,10 @@ statement ok
 insert into t2 values(1, '{"a":11,"b":1}'), (2, '{"a":22}'), (3, '3')
 
 statement ok
-create virtual columns (val['a'], val['b']) for t2
+create virtual column (val['a'], val['b']) for t2
 
 statement ok
-generate virtual columns for t2
+refresh virtual column for t2
 
 statement ok
 insert into t2 values(4, '{"a":44,"b":4}'), (5, '{"a":55}'), (6, '6')

@@ -29,7 +29,7 @@ use common_meta_app::schema::VirtualColumnMeta;
 use common_storages_fuse::FuseTable;
 
 #[async_trait::async_trait]
-pub trait VirtualColumnsHandler: Sync + Send {
+pub trait VirtualColumnHandler: Sync + Send {
     async fn do_create_virtual_column(
         &self,
         catalog: Arc<dyn Catalog>,
@@ -54,7 +54,7 @@ pub trait VirtualColumnsHandler: Sync + Send {
         req: ListVirtualColumnsReq,
     ) -> Result<Vec<VirtualColumnMeta>>;
 
-    async fn do_generate_virtual_columns(
+    async fn do_refresh_virtual_column(
         &self,
         fuse_table: &FuseTable,
         ctx: Arc<dyn TableContext>,
@@ -62,12 +62,12 @@ pub trait VirtualColumnsHandler: Sync + Send {
     ) -> Result<()>;
 }
 
-pub struct VirtualColumnsHandlerWrapper {
-    handler: Box<dyn VirtualColumnsHandler>,
+pub struct VirtualColumnHandlerWrapper {
+    handler: Box<dyn VirtualColumnHandler>,
 }
 
-impl VirtualColumnsHandlerWrapper {
-    pub fn new(handler: Box<dyn VirtualColumnsHandler>) -> Self {
+impl VirtualColumnHandlerWrapper {
+    pub fn new(handler: Box<dyn VirtualColumnHandler>) -> Self {
         Self { handler }
     }
 
@@ -108,18 +108,18 @@ impl VirtualColumnsHandlerWrapper {
     }
 
     #[async_backtrace::framed]
-    pub async fn do_generate_virtual_columns(
+    pub async fn do_refresh_virtual_column(
         &self,
         fuse_table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         virtual_columns: Vec<String>,
     ) -> Result<()> {
         self.handler
-            .do_generate_virtual_columns(fuse_table, ctx, virtual_columns)
+            .do_refresh_virtual_column(fuse_table, ctx, virtual_columns)
             .await
     }
 }
 
-pub fn get_virtual_columns_handler() -> Arc<VirtualColumnsHandlerWrapper> {
+pub fn get_virtual_column_handler() -> Arc<VirtualColumnHandlerWrapper> {
     GlobalInstance::get()
 }

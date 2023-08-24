@@ -27,15 +27,15 @@ use common_meta_app::schema::UpdateVirtualColumnReply;
 use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_storages_fuse::FuseTable;
-use virtual_columns_handler::VirtualColumnsHandler;
-use virtual_columns_handler::VirtualColumnsHandlerWrapper;
+use virtual_column::VirtualColumnHandler;
+use virtual_column::VirtualColumnHandlerWrapper;
 
-use crate::storages::fuse::do_generate_virtual_columns;
+use crate::storages::fuse::do_refresh_virtual_column;
 
-pub struct RealVirtualColumnsHandler {}
+pub struct RealVirtualColumnHandler {}
 
 #[async_trait::async_trait]
-impl VirtualColumnsHandler for RealVirtualColumnsHandler {
+impl VirtualColumnHandler for RealVirtualColumnHandler {
     #[async_backtrace::framed]
     async fn do_create_virtual_column(
         &self,
@@ -72,20 +72,20 @@ impl VirtualColumnsHandler for RealVirtualColumnsHandler {
         catalog.list_virtual_columns(req).await
     }
 
-    async fn do_generate_virtual_columns(
+    async fn do_refresh_virtual_column(
         &self,
         fuse_table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         virtual_columns: Vec<String>,
     ) -> Result<()> {
-        do_generate_virtual_columns(fuse_table, ctx, virtual_columns).await
+        do_refresh_virtual_column(fuse_table, ctx, virtual_columns).await
     }
 }
 
-impl RealVirtualColumnsHandler {
+impl RealVirtualColumnHandler {
     pub fn init() -> Result<()> {
-        let rm = RealVirtualColumnsHandler {};
-        let wrapper = VirtualColumnsHandlerWrapper::new(Box::new(rm));
+        let rm = RealVirtualColumnHandler {};
+        let wrapper = VirtualColumnHandlerWrapper::new(Box::new(rm));
         GlobalInstance::set(Arc::new(wrapper));
         Ok(())
     }
