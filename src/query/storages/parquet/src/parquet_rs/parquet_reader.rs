@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
 use arrow_schema::ArrowError;
@@ -26,11 +25,8 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
@@ -53,17 +49,10 @@ use parquet::arrow::ParquetRecordBatchStreamBuilder;
 use parquet::arrow::ProjectionMask;
 use parquet::format::PageLocation;
 
+use super::predicate::ParquetPredicate;
 use super::pruning::ParquetRSPruner;
 use super::row_group::InMemoryRowGroup;
 use crate::ParquetRSRowGroupPart;
-
-struct ParquetPredicate {
-    /// Columns used for eval predicate.
-    pub projection: ProjectionMask,
-    /// Predicate filter expression.
-    pub filter: Expr,
-    field_paths: Vec<(FieldRef, Vec<FieldIndex>)>,
-}
 
 pub struct ParquetRSReader {
     op: Operator,
@@ -117,11 +106,16 @@ impl ParquetRSReader {
                 let batch_schema =
                     parquet_to_arrow_schema_by_columns(&schema_desc, projection.clone(), None)?;
                 let field_paths = compute_output_field_paths(&schema, &batch_schema)?;
-                Ok::<_, ErrorCode>(Arc::new(ParquetPredicate {
+                let field_levels =
+                    parquet_to_arrow_field_levels(&schema_desc, projection.clone(), None)?;
+                Ok::<_, ErrorCode>(Arc::new(ParquetPredicate::new(
+                    ctx.get_function_context()?,
                     projection,
+                    field_levels,
                     filter,
                     field_paths,
-                }))
+                    matches!(prewhere.prewhere_columns, Projection::InnerColumns(_)),
+                )))
             })
             .transpose()?;
         // Build projection mask and field paths for transforming `RecordBatch` to output block.
@@ -158,11 +152,7 @@ impl ParquetRSReader {
         })
     }
 
-    pub async fn prepare_data_stream(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        loc: &str,
-    ) -> Result<ParquetRecordBatchStream<Reader>> {
+    pub async fn prepare_data_stream(&self, loc: &str) -> Result<ParquetRecordBatchStream<Reader>> {
         let reader: Reader = self.op.reader(loc).await?;
         // TODO(parquet):
         // - set batch size to generate block one by one.
@@ -190,31 +180,12 @@ impl ParquetRSReader {
         }
 
         if let Some(predicate) = self.predicate.as_ref() {
-            let func_ctx = ctx.get_function_context()?;
-            let is_inner_project = self.is_inner_project;
-            let projection = predicate.projection.clone();
+            let projection = predicate.projection().clone();
             let predicate = predicate.clone();
             let predicate_fn = move |batch| {
-                let ParquetPredicate {
-                    filter,
-                    field_paths,
-                    ..
-                } = predicate.as_ref();
-                let res: Result<BooleanArray> = try {
-                    let block = if is_inner_project {
-                        transform_record_batch(&batch, field_paths)?
-                    } else {
-                        let (block, _) = DataBlock::from_record_batch(&batch)?;
-                        block
-                    };
-                    let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
-                    let res = evaluator
-                        .run(filter)?
-                        .convert_to_full_column(&DataType::Boolean, batch.num_rows())
-                        .into_arrow_rs()?;
-                    BooleanArray::from(res.to_data())
-                };
-                res.map_err(|e| ArrowError::from_external_error(Box::new(e)))
+                predicate
+                    .evaluate(&batch)
+                    .map_err(|e| ArrowError::from_external_error(Box::new(e)))
             };
             builder = builder.with_row_filter(RowFilter::new(vec![Box::new(
                 ArrowPredicateFn::new(projection, predicate_fn),
@@ -271,22 +242,58 @@ impl ParquetRSReader {
         &self,
         part: &ParquetRSRowGroupPart,
     ) -> Result<Option<ParquetRecordBatchReader>> {
-        // TODO(parquet): calling build_array multiple times is wasteful
-
         let page_locations = part.page_locations.as_ref().map(|x| {
             x.iter()
                 .map(|x| x.iter().map(PageLocation::from).collect())
                 .collect::<Vec<Vec<_>>>()
         });
         let mut row_group = InMemoryRowGroup::new(&part.meta, page_locations.as_deref());
-
-        // TODO(parquet): prewhere filter.
-
-        let selection = part
+        let mut selection = part
             .selectors
             .as_ref()
             .map(|x| x.iter().map(RowSelector::from).collect::<Vec<_>>())
             .map(RowSelection::from);
+
+        if let Some(predicate) = &self.predicate {
+            // Fetch columns used for eval predicate (prewhere).
+            row_group
+                .fetch(
+                    &part.location,
+                    self.op.clone(),
+                    predicate.projection(),
+                    selection.as_ref(),
+                )
+                .await?;
+
+            let mut reader = ParquetRecordBatchReader::try_new_with_row_groups(
+                predicate.field_levels(),
+                &row_group,
+                usize::MAX, // Read all rows for eval prewhere predicate.
+                selection.clone(),
+            )?;
+
+            if let Some(batch) = reader.next() {
+                assert!(reader.next().is_none());
+                let batch = batch?;
+                let filter = predicate.evaluate(&batch)?;
+                let sel = RowSelection::from_filters(&[filter]);
+                if !sel.selects_any() {
+                    // All rows in current row group are filtered out.
+                    return Ok(None);
+                }
+
+                match selection.as_mut() {
+                    Some(selection) => {
+                        selection.and_then(&sel);
+                    }
+                    None => {
+                        selection = Some(sel);
+                    }
+                }
+            }
+        }
+
+        // Fetch remain columns.
         row_group
             .fetch(
                 &part.location,
@@ -393,7 +400,7 @@ fn error_cannot_traverse_path(path: &[FieldIndex], schema: &arrow_schema::Schema
 /// Transform a [`RecordBatch`] to [`DataBlock`].
 ///
 /// `field_paths` is used to traverse nested columns in `batch`.
-fn transform_record_batch(
+pub fn transform_record_batch(
     batch: &RecordBatch,
     field_paths: &[(FieldRef, Vec<FieldIndex>)],
 ) -> Result<DataBlock> {

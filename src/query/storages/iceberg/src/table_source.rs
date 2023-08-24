@@ -119,7 +119,7 @@ impl Processor for IcebergTableSource {
                     assert_eq!(files.files.len(), 1);
                     let stream = self
                         .parquet_reader
-                        .prepare_data_stream(self.ctx.clone(), &files.files[0].0)
+                        .prepare_data_stream(&files.files[0].0)
                         .await?;
                     self.stream = Some(stream);
                 }

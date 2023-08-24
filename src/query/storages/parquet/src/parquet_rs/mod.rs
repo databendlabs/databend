@@ -15,6 +15,7 @@
 mod parquet_reader;
 mod parquet_table;
 mod partition;
+mod predicate;
 mod pruning;
 mod row_group;
 mod source;

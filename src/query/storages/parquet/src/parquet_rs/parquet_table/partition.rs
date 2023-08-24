@@ -103,7 +103,13 @@ fn prune_and_generate_partitions(
         for rg in rgs {
             let rg_meta = meta.row_group(rg);
             let num_rows = rg_meta.num_rows() as usize;
+            // Split rows belonging to current row group.
             let selection = row_selections.as_mut().map(|s| s.split_off(num_rows));
+            if !selection.as_ref().map(|x| x.selects_any()).unwrap_or(true) {
+                // All rows in current row group are filtered out.
+                continue;
+            }
+
             let serde_selection = selection.map(|s| {
                 let selectors: Vec<RowSelector> = s.into();
                 selectors
