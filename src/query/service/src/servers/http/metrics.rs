@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod abort_operation;
-mod mutation_log;
-mod processors;
-mod snapshot_generator;
+use metrics::counter;
 
-pub use abort_operation::AbortOperation;
-pub use mutation_log::*;
-pub use processors::*;
-pub use snapshot_generator::*;
+pub fn metrics_incr_http_request_count(method: String, api: String, status: String) {
+    let labels = [("method", method), ("api", api), ("status", status)];
+    counter!("query_http_requests_count", 1, &labels);
+}
+
+pub fn metrics_incr_http_slow_request_count(method: String, api: String, status: String) {
+    let labels = [("method", method), ("api", api), ("status", status)];
+    counter!("query_http_slow_requests_count", 1, &labels);
+}
