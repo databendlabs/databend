@@ -13,22 +13,36 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use chrono::Utc;
 
+use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
-use common_meta_api::{SchemaApi, serialize_struct, txn_cond_seq, TXN_MAX_RETRY_TIMES, txn_op_put};
-use common_meta_app::principal::{GrantObject, RoleInfo, UserPrivilegeSet, UserPrivilegeType};
-use common_meta_app::schema::{DatabaseId, DatabaseNameIdent, GetDatabaseReq, GetTableReq, Ownership, TableId, TableNameIdent};
+use common_meta_api::serialize_struct;
+use common_meta_api::txn_cond_seq;
+use common_meta_api::txn_op_put;
+use common_meta_api::SchemaApi;
+use common_meta_api::TXN_MAX_RETRY_TIMES;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserPrivilegeSet;
+use common_meta_app::principal::UserPrivilegeType;
+use common_meta_app::schema::DatabaseId;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::Ownership;
+use common_meta_app::schema::TableId;
+use common_meta_app::schema::TableNameIdent;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::{IntoSeqV, TxnRequest};
 use common_meta_types::ConditionResult::Eq;
+use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::TxnRequest;
 
 use crate::role::role_api::RoleApi;
 
@@ -37,14 +51,14 @@ static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
 pub const BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 
 pub struct RoleMgr {
-    kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> >,
+    kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     role_prefix: String,
     tenant: String,
 }
 
 impl RoleMgr {
     pub fn create(
-        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
+        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
         tenant: &str,
     ) -> Result<Self, ErrorCode> {
         if tenant.is_empty() {
@@ -99,7 +113,8 @@ impl RoleMgr {
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
-            let db_info = self.kv_api
+            let db_info = self
+                .kv_api
                 .get_database(GetDatabaseReq {
                     inner: DatabaseNameIdent {
                         tenant: tenant.clone(),
@@ -187,7 +202,8 @@ impl RoleMgr {
         let tenant = self.tenant.clone();
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
-            let table_info = self.kv_api
+            let table_info = self
+                .kv_api
                 .get_table(GetTableReq {
                     inner: TableNameIdent {
                         tenant: tenant.clone(),
@@ -348,7 +364,12 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
-    async fn grant_ownership(&self, from: &String, to: &String, object: &GrantObject) -> common_exception::Result<()> {
+    async fn grant_ownership(
+        &self,
+        from: &String,
+        to: &String,
+        object: &GrantObject,
+    ) -> common_exception::Result<()> {
         match object {
             GrantObject::Database(catalog, db) => {
                 self.grant_database_ownership(from, to, catalog, db).await?;

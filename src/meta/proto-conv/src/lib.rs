@@ -70,6 +70,7 @@ mod datetime_from_to_protobuf_impl;
 mod file_format_from_to_protobuf_impl;
 mod from_to_protobuf;
 mod index_from_to_protobuf_impl;
+mod owner_from_to_protobuf_impl;
 mod schema_from_to_protobuf_impl;
 mod share_from_to_protobuf_impl;
 mod stage_from_to_protobuf_impl;
@@ -77,7 +78,6 @@ mod table_from_to_protobuf_impl;
 mod user_from_to_protobuf_impl;
 mod util;
 mod virtual_column_from_to_protobuf_impl;
-mod owner_from_to_protobuf_impl;
 
 pub use from_to_protobuf::FromToProto;
 pub use from_to_protobuf::Incompatible;

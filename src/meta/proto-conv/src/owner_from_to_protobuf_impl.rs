@@ -31,7 +31,7 @@ impl FromToProto for mt::Ownership {
     }
 
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
-        where Self: Sized {
+    where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {

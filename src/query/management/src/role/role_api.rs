@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_meta_app::principal::{GrantObject, RoleInfo};
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::RoleInfo;
 use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
 
@@ -40,7 +41,7 @@ pub trait RoleApi: Sync + Send {
     /// Seq number ensures there is no other write happens between get and set.
     #[allow(clippy::ptr_arg)]
     async fn grant_ownership(&self, from: &String, to: &String, object: &GrantObject)
-                             -> Result<()>;
+    -> Result<()>;
 
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<()>;
 }

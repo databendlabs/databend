@@ -17,9 +17,9 @@
 mod catalog;
 mod database;
 mod index;
+mod ownership;
 mod table;
 mod virtual_column;
-mod ownership;
 pub use catalog::*;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;

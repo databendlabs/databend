@@ -998,6 +998,8 @@ pub enum TokenKind {
     ROLLUP,
     #[token("INDEXES", ignore(ascii_case))]
     INDEXES,
+    #[token("OWNERSHIP", ignore(ascii_case))]
+    OWNERSHIP,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

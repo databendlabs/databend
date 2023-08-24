@@ -22,9 +22,9 @@ use std::ops::Deref;
 use chrono::DateTime;
 use chrono::Utc;
 
+use crate::schema::Ownership;
 use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
-use crate::schema::Ownership;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseNameIdent {
@@ -115,7 +115,7 @@ impl Default for DatabaseMeta {
             drop_on: None,
             shared_by: BTreeSet::new(),
             from_share: None,
-            owner: None
+            owner: None,
         }
     }
 }
