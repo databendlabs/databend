@@ -517,10 +517,7 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
                             |a, output, ctx| match a.checked_neg() {
                                 Some(a) => output.push(a),
                                 None => {
-                                    ctx.set_error(
-                                        output.len(),
-                                        "number overflowed",
-                                    );
+                                    ctx.set_error(output.len(), "number overflowed");
                                     output.push(0);
                                 }
                             },
