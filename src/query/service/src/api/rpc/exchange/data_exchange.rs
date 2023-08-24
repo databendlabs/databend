@@ -57,11 +57,15 @@ impl ShuffleDataExchange {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MergeExchange {
     pub destination_id: String,
+    pub ignore_exchange: bool,
 }
 
 impl MergeExchange {
-    pub fn create(destination_id: String) -> DataExchange {
-        DataExchange::Merge(MergeExchange { destination_id })
+    pub fn create(destination_id: String, ignore_exchange: bool) -> DataExchange {
+        DataExchange::Merge(MergeExchange {
+            destination_id,
+            ignore_exchange,
+        })
     }
 }
 
