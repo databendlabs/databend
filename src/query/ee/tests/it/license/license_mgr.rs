@@ -128,7 +128,7 @@ async fn test_license_features() -> common_exception::Result<()> {
 
     assert!(
         license_mgr
-            .check_enterprise_enabled(&settings, ctx.get_tenant(), Feature::VirtualColumns)
+            .check_enterprise_enabled(&settings, ctx.get_tenant(), Feature::VirtualColumn)
             .is_err()
     );
     assert!(

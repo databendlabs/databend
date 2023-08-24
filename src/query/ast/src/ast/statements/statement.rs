@@ -135,10 +135,10 @@ pub enum Statement {
     RefreshIndex(RefreshIndexStmt),
 
     // VirtualColumns
-    CreateVirtualColumns(CreateVirtualColumnsStmt),
-    AlterVirtualColumns(AlterVirtualColumnsStmt),
-    DropVirtualColumns(DropVirtualColumnsStmt),
-    GenerateVirtualColumns(GenerateVirtualColumnsStmt),
+    CreateVirtualColumn(CreateVirtualColumnStmt),
+    AlterVirtualColumn(AlterVirtualColumnStmt),
+    DropVirtualColumn(DropVirtualColumnStmt),
+    RefreshVirtualColumn(RefreshVirtualColumnStmt),
 
     // User
     ShowUsers,
@@ -406,10 +406,10 @@ impl Display for Statement {
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateVirtualColumns(stmt) => write!(f, "{stmt}")?,
-            Statement::AlterVirtualColumns(stmt) => write!(f, "{stmt}")?,
-            Statement::DropVirtualColumns(stmt) => write!(f, "{stmt}")?,
-            Statement::GenerateVirtualColumns(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateVirtualColumn(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterVirtualColumn(stmt) => write!(f, "{stmt}")?,
+            Statement::DropVirtualColumn(stmt) => write!(f, "{stmt}")?,
+            Statement::RefreshVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,
             Statement::ShowRoles => write!(f, "SHOW ROLES")?,
             Statement::CreateUser(stmt) => write!(f, "{stmt}")?,

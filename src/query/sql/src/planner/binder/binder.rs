@@ -317,10 +317,10 @@ impl<'a> Binder {
             Statement::RefreshIndex(stmt) => self.bind_refresh_index(bind_context, stmt).await?,
 
             // Virtual Columns
-            Statement::CreateVirtualColumns(stmt) => self.bind_create_virtual_columns(stmt).await?,
-            Statement::AlterVirtualColumns(stmt) => self.bind_alter_virtual_columns(stmt).await?,
-            Statement::DropVirtualColumns(stmt) => self.bind_drop_virtual_columns(stmt).await?,
-            Statement::GenerateVirtualColumns(stmt) => self.bind_generate_virtual_columns(stmt).await?,
+            Statement::CreateVirtualColumn(stmt) => self.bind_create_virtual_column(stmt).await?,
+            Statement::AlterVirtualColumn(stmt) => self.bind_alter_virtual_column(stmt).await?,
+            Statement::DropVirtualColumn(stmt) => self.bind_drop_virtual_column(stmt).await?,
+            Statement::RefreshVirtualColumn(stmt) => self.bind_refresh_virtual_column(stmt).await?,
 
             // Users
             Statement::CreateUser(stmt) => self.bind_create_user(stmt).await?,

@@ -36,7 +36,7 @@ mod unset;
 mod update;
 mod user;
 mod view;
-mod virtual_columns;
+mod virtual_column;
 
 pub use call::*;
 pub use catalog::*;
@@ -62,4 +62,4 @@ pub use unset::*;
 pub use update::*;
 pub use user::*;
 pub use view::*;
-pub use virtual_columns::*;
+pub use virtual_column::*;
