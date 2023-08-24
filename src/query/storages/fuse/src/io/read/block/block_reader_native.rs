@@ -126,11 +126,15 @@ impl BlockReader {
     ) -> Result<(usize, Vec<NativeReader<Reader>>)> {
         let mut native_readers = Vec::with_capacity(metas.len());
         for meta in metas {
-            let (offset, length) = meta.offset_length();
             let mut native_meta = meta.as_native().unwrap().clone();
             if let Some(range) = &range {
                 native_meta = native_meta.slice(range.start, range.end);
             }
+
+            let (offset, length) = (
+                native_meta.offset,
+                native_meta.pages.iter().map(|p| p.length).sum::<u64>(),
+            );
 
             let reader = op.range_read(path, offset..offset + length).await?;
             let reader: Reader = Box::new(std::io::Cursor::new(reader));
