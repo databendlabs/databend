@@ -25,11 +25,12 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_hashtable::HashJoinHashtableLike;
 
+use crate::pipelines::processors::transforms::hash_join::common::set_validity;
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
-use crate::pipelines::processors::JoinHashTable;
 use crate::sql::plans::JoinType;
 
-impl JoinHashTable {
+impl HashJoinProbeState {
     pub(crate) fn probe_left_join<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
@@ -57,21 +58,18 @@ impl JoinHashTable {
         let mut probe_unmatched_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
-        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+        let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
+        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
 
         // Start to probe hash table.
         for (i, key) in keys_iter.enumerate() {
             let (mut probe_matched, mut incomplete_ptr) =
-                if self.hash_join_desc.from_correlated_subquery {
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
                     hash_table.probe_hash_table(
                         key,
                         local_build_indexes_ptr,
@@ -92,7 +90,8 @@ impl JoinHashTable {
             let mut total_probe_matched = 0;
             if probe_matched > 0 {
                 total_probe_matched += probe_matched;
-                if self.hash_join_desc.join_type == JoinType::LeftSingle && total_probe_matched > 1
+                if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle
+                    && total_probe_matched > 1
                 {
                     return Err(ErrorCode::Internal(
                         "Scalar subquery can't return more than one row",
@@ -105,7 +104,7 @@ impl JoinHashTable {
                 probe_unmatched_indexes[probe_unmatched_indexes_occupied] = (i as u32, 1);
                 probe_unmatched_indexes_occupied += 1;
                 if probe_unmatched_indexes_occupied >= max_block_size {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
@@ -122,7 +121,7 @@ impl JoinHashTable {
             }
             if matched_num >= max_block_size || i == input_num_rows - 1 {
                 loop {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
@@ -135,12 +134,12 @@ impl JoinHashTable {
                             matched_num,
                         )?;
                         // For full join, wrap nullable for probe block
-                        if self.hash_join_desc.join_type == JoinType::Full {
+                        if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                             let nullable_probe_columns = if matched_num == max_block_size {
                                 probe_block
                                     .columns()
                                     .iter()
-                                    .map(|c| Self::set_validity(c, max_block_size, true_validity))
+                                    .map(|c| set_validity(c, max_block_size, true_validity))
                                     .collect::<Vec<_>>()
                             } else {
                                 let mut validity = MutableBitmap::new();
@@ -149,7 +148,7 @@ impl JoinHashTable {
                                 probe_block
                                     .columns()
                                     .iter()
-                                    .map(|c| Self::set_validity(c, matched_num, &validity))
+                                    .map(|c| set_validity(c, matched_num, &validity))
                                     .collect::<Vec<_>>()
                             };
                             probe_block = DataBlock::new(nullable_probe_columns, matched_num);
@@ -159,9 +158,9 @@ impl JoinHashTable {
                         None
                     };
                     let build_block = if is_build_projected {
-                        let build_block = self.row_space.gather(
+                        let build_block = self.hash_join_state.row_space.gather(
                             &local_build_indexes[0..matched_num],
-                            &data_blocks,
+                            data_blocks,
                             &build_num_rows,
                         )?;
                         // For left join, wrap nullable for build block
@@ -182,7 +181,7 @@ impl JoinHashTable {
                                 build_block
                                     .columns()
                                     .iter()
-                                    .map(|c| Self::set_validity(c, max_block_size, true_validity))
+                                    .map(|c| set_validity(c, max_block_size, true_validity))
                                     .collect::<Vec<_>>(),
                                 max_block_size,
                             )
@@ -194,7 +193,7 @@ impl JoinHashTable {
                                 build_block
                                     .columns()
                                     .iter()
-                                    .map(|c| Self::set_validity(c, matched_num, &validity))
+                                    .map(|c| set_validity(c, matched_num, &validity))
                                     .collect::<Vec<_>>(),
                                 matched_num,
                             )
@@ -207,7 +206,7 @@ impl JoinHashTable {
 
                     if !result_block.is_empty() {
                         result_blocks.push(result_block);
-                        if self.hash_join_desc.join_type == JoinType::Full {
+                        if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                             for row_ptr in local_build_indexes.iter().take(matched_num) {
                                 outer_scan_map[row_ptr.chunk_index as usize]
                                     [row_ptr.row_index as usize] = true;
@@ -231,7 +230,7 @@ impl JoinHashTable {
 
                     if probe_matched > 0 {
                         total_probe_matched += probe_matched;
-                        if self.hash_join_desc.join_type == JoinType::LeftSingle
+                        if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle
                             && total_probe_matched > 1
                         {
                             return Err(ErrorCode::Internal(
@@ -297,21 +296,18 @@ impl JoinHashTable {
         let mut probe_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
-        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+        let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
+        let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
 
         // Start to probe hash table.
         for (i, key) in keys_iter.enumerate() {
             let (mut probe_matched, mut incomplete_ptr) =
-                if self.hash_join_desc.from_correlated_subquery {
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
                     hash_table.probe_hash_table(
                         key,
                         local_build_indexes_ptr,
@@ -332,7 +328,8 @@ impl JoinHashTable {
             let mut total_probe_matched = 0;
             if probe_matched > 0 {
                 total_probe_matched += probe_matched;
-                if self.hash_join_desc.join_type == JoinType::LeftSingle && total_probe_matched > 1
+                if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle
+                    && total_probe_matched > 1
                 {
                     return Err(ErrorCode::Internal(
                         "Scalar subquery can't return more than one row",
@@ -349,7 +346,7 @@ impl JoinHashTable {
             }
             if matched_num >= max_block_size || i == input_num_rows - 1 {
                 loop {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
@@ -362,12 +359,12 @@ impl JoinHashTable {
                             matched_num,
                         )?;
                         // For full join, wrap nullable for probe block
-                        if self.hash_join_desc.join_type == JoinType::Full {
+                        if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                             let nullable_probe_columns = if matched_num == max_block_size {
                                 probe_block
                                     .columns()
                                     .iter()
-                                    .map(|c| Self::set_validity(c, max_block_size, true_validity))
+                                    .map(|c| set_validity(c, max_block_size, true_validity))
                                     .collect::<Vec<_>>()
                             } else {
                                 let mut validity = MutableBitmap::new();
@@ -376,7 +373,7 @@ impl JoinHashTable {
                                 probe_block
                                     .columns()
                                     .iter()
-                                    .map(|c| Self::set_validity(c, matched_num, &validity))
+                                    .map(|c| set_validity(c, matched_num, &validity))
                                     .collect::<Vec<_>>()
                             };
                             probe_block = DataBlock::new(nullable_probe_columns, matched_num)
@@ -386,9 +383,9 @@ impl JoinHashTable {
                         None
                     };
                     let build_block = if is_build_projected {
-                        let build_block = self.row_space.gather(
+                        let build_block = self.hash_join_state.row_space.gather(
                             &local_build_indexes[0..matched_num],
-                            &data_blocks,
+                            data_blocks,
                             &build_num_rows,
                         )?;
                         // For left join, wrap nullable for build block
@@ -409,7 +406,7 @@ impl JoinHashTable {
                                 build_block
                                     .columns()
                                     .iter()
-                                    .map(|c| Self::set_validity(c, max_block_size, true_validity))
+                                    .map(|c| set_validity(c, max_block_size, true_validity))
                                     .collect::<Vec<_>>(),
                                 max_block_size,
                             )
@@ -421,7 +418,7 @@ impl JoinHashTable {
                                 build_block
                                     .columns()
                                     .iter()
-                                    .map(|c| Self::set_validity(c, matched_num, &validity))
+                                    .map(|c| set_validity(c, matched_num, &validity))
                                     .collect::<Vec<_>>(),
                                 matched_num,
                             )
@@ -435,12 +432,16 @@ impl JoinHashTable {
                     if !result_block.is_empty() {
                         let (bm, all_true, all_false) = self.get_other_filters(
                             &result_block,
-                            self.hash_join_desc.other_predicate.as_ref().unwrap(),
+                            self.hash_join_state
+                                .hash_join_desc
+                                .other_predicate
+                                .as_ref()
+                                .unwrap(),
                         )?;
 
                         if all_true {
                             result_blocks.push(result_block);
-                            if self.hash_join_desc.join_type == JoinType::Full {
+                            if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                                 for row_ptr in local_build_indexes.iter().take(matched_num) {
                                     outer_scan_map[row_ptr.chunk_index as usize]
                                         [row_ptr.row_index as usize] = true;
@@ -455,7 +456,7 @@ impl JoinHashTable {
                         } else {
                             // Safe to unwrap.
                             let validity = bm.unwrap();
-                            if self.hash_join_desc.join_type == JoinType::Full {
+                            if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                                 let mut idx = 0;
                                 while idx < matched_num {
                                     let valid = unsafe { validity.get_bit_unchecked(idx) };
@@ -500,7 +501,7 @@ impl JoinHashTable {
 
                     if probe_matched > 0 {
                         total_probe_matched += probe_matched;
-                        if self.hash_join_desc.join_type == JoinType::LeftSingle
+                        if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle
                             && total_probe_matched > 1
                         {
                             return Err(ErrorCode::Internal(
@@ -570,7 +571,7 @@ impl JoinHashTable {
             let mut probe_block =
                 DataBlock::take_compacted_indices(input, &indexes[0..occupied], occupied)?;
             // For full join, wrap nullable for probe block
-            if self.hash_join_desc.join_type == JoinType::Full {
+            if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                 let nullable_probe_columns = probe_block
                     .columns()
                     .iter()
@@ -578,7 +579,7 @@ impl JoinHashTable {
                         let mut probe_validity = MutableBitmap::new();
                         probe_validity.extend_constant(occupied, true);
                         let probe_validity: Bitmap = probe_validity.into();
-                        Self::set_validity(c, occupied, &probe_validity)
+                        set_validity(c, occupied, &probe_validity)
                     })
                     .collect::<Vec<_>>();
                 probe_block = DataBlock::new(nullable_probe_columns, occupied);
@@ -589,7 +590,8 @@ impl JoinHashTable {
         };
         let build_block = if is_build_projected {
             let null_build_block = DataBlock::new(
-                self.row_space
+                self.hash_join_state
+                    .row_space
                     .build_schema
                     .fields()
                     .iter()

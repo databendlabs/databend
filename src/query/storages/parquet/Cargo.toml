@@ -26,17 +26,21 @@ storages-common-index = { path = "../common/index" }
 storages-common-pruner = { path = "../common/pruner" }
 storages-common-table-meta = { path = "../common/table-meta" }
 
-arrow-array = "43.0.0"
-arrow-schema = "43.0.0"
+arrow-array = "45.0.0"
+arrow-buffer = "45.0.0"
+arrow-schema = "45.0.0"
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
+ethnum = { workspace = true }
 futures = "0.3.24"
 log = { workspace = true }
 opendal = { workspace = true }
-parquet = "43.0.0"
+parquet = { version = "45.0.0", features = ["async"] }
 serde = { workspace = true }
 typetag = "0.2.3"
 
 [dev-dependencies]
 common-sql = { path = "../../sql" }
+databend-query = { path = "../../service" }
+tempfile = "3.4.0"

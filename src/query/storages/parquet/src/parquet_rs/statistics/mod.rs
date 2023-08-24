@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod virtual_columns_handler;
+mod column;
+mod page;
+mod row_group;
+mod utils;
 
-pub use virtual_columns_handler::get_virtual_columns_handler;
-pub use virtual_columns_handler::VirtualColumnsHandler;
-pub use virtual_columns_handler::VirtualColumnsHandlerWrapper;
+pub use page::convert_index_to_column_statistics;
+pub use row_group::collect_row_group_stats;

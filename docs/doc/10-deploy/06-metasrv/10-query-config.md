@@ -202,36 +202,6 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 * Env variable: `STORAGE_AZBLOB_ACCOUNT_KEY`
 * Required.
 
-### storage.obs
-
-#### bucket
-
-* OBS bucket name.
-* Default: `""`
-* Env variable: `STORAGE_OBS_BUCKET`
-* Required.
-
-#### endpoint_url
-
-* OBS endpoint URL, e.g., `"https://obs.cn-north-4.myhuaweicloud.com"`.
-* Default: `""`
-* Env variable: `STORAGE_OBS_ENDPOINT_URL`
-* Required.
-
-#### access_key_id
-
-* OBS access_key_id.
-* Default: `""`
-* Env variable: `STORAGE_OBS_ACCESS_KEY_ID`
-* Required.
-
-#### secret_access_key
-
-* OBS secret_access_key.
-* Default: `""`
-* Env variable: `STORAGE_OBS_SECRET_ACCESS_KEY`
-* Required.
-
 ## 5. Cache
 
 This configuration determines whether to enable caching of **block data** to the local disk and how to configure the cache.

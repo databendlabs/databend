@@ -86,18 +86,14 @@ impl FuseTable {
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
+            let proc =
+                TransformSerializeSegment::new(ctx.clone(), input, output, self, block_thresholds);
             proc.into_processor()
         })?;
 
         pipeline.add_transform(|input, output| {
-            let aggregator = TableMutationAggregator::create(
-                self,
-                ctx.clone(),
-                vec![],
-                Statistics::default(),
-                MutationKind::Insert,
-            );
+            let aggregator =
+                TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Insert);
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
             )))

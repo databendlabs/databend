@@ -15,38 +15,33 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_license::license::Feature::VirtualColumns;
+use common_license::license::Feature::VirtualColumn;
 use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::ListVirtualColumnsReq;
-use common_sql::plans::GenerateVirtualColumnsPlan;
-use common_storages_fuse::FuseTable;
-use virtual_columns_handler::get_virtual_columns_handler;
+use common_meta_app::schema::CreateVirtualColumnReq;
+use common_meta_app::schema::VirtualColumnNameIdent;
+use common_sql::plans::CreateVirtualColumnPlan;
+use virtual_column::get_virtual_column_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub struct GenerateVirtualColumnsInterpreter {
+pub struct CreateVirtualColumnInterpreter {
     ctx: Arc<QueryContext>,
-    plan: GenerateVirtualColumnsPlan,
+    plan: CreateVirtualColumnPlan,
 }
 
-impl GenerateVirtualColumnsInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: GenerateVirtualColumnsPlan) -> Result<Self> {
-        Ok(GenerateVirtualColumnsInterpreter { ctx, plan })
+impl CreateVirtualColumnInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateVirtualColumnPlan) -> Result<Self> {
+        Ok(CreateVirtualColumnInterpreter { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for GenerateVirtualColumnsInterpreter {
+impl Interpreter for CreateVirtualColumnInterpreter {
     fn name(&self) -> &str {
-        "GenerateVirtualColumnsInterpreter"
-    }
-
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
+        "CreateVirtualColumnInterpreter"
     }
 
     #[async_backtrace::framed]
@@ -56,7 +51,7 @@ impl Interpreter for GenerateVirtualColumnsInterpreter {
         license_manager.manager.check_enterprise_enabled(
             &self.ctx.get_settings(),
             tenant.clone(),
-            VirtualColumns,
+            VirtualColumn,
         )?;
 
         let catalog_name = self.plan.catalog.clone();
@@ -66,25 +61,18 @@ impl Interpreter for GenerateVirtualColumnsInterpreter {
             .ctx
             .get_table(&catalog_name, &db_name, &tbl_name)
             .await?;
+
+        let table_id = table.get_id();
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
 
-        let list_virtual_columns_req = ListVirtualColumnsReq {
-            tenant,
-            table_id: Some(table.get_id()),
+        let create_virtual_column_req = CreateVirtualColumnReq {
+            name_ident: VirtualColumnNameIdent { tenant, table_id },
+            virtual_columns: self.plan.virtual_columns.clone(),
         };
-        let handler = get_virtual_columns_handler();
-        let res = handler
-            .do_list_virtual_columns(catalog, list_virtual_columns_req)
-            .await?;
 
-        if res.is_empty() {
-            return Ok(PipelineBuildResult::create());
-        }
-        let virtual_columns = res[0].virtual_columns.clone();
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
+        let handler = get_virtual_column_handler();
         let _ = handler
-            .do_generate_virtual_columns(fuse_table, self.ctx.clone(), virtual_columns)
+            .do_create_virtual_column(catalog, create_virtual_column_req)
             .await?;
 
         Ok(PipelineBuildResult::create())

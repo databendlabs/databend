@@ -102,9 +102,17 @@ Specifies how many lines to be skipped from the beginning of the file.
 
 ### NAN_DISPLAY
 
+Specifies how "NaN" (Not-a-Number) values are displayed in query results.
+
 **Available Values**: Must be literal `'nan'` or `'null'` (case-insensitive)
 
 **Default**: `'NaN'`
+
+### NULL_DISPLAY
+
+Specifies how NULL values are displayed in query results. 
+
+**Default**: `'\N'`
 
 ### COMPRESSION
 

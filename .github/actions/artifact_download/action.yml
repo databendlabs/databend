@@ -78,6 +78,23 @@ runs:
           fi
         done
 
+    - name: Download artifact from gcs
+      if: env.RUNNER_PROVIDER == 'gcp'
+      shell: bash
+      run: |
+        artifacts="${{ inputs.artifacts }}"
+        for artifact in ${artifacts//,/ }; do
+          if [[ "${artifact}" == "open-sharing" ]]; then
+            echo "==> fetching open-sharing ..."
+            gcloud storage cp gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/open-sharing ${{ steps.info.outputs.path }}/open-sharing || true
+            chmod +x ${{ steps.info.outputs.path }}/open-sharing || true
+          else
+            echo "==> fetching databend-$artifact ..."
+            gcloud storage cp gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/databend-$artifact ${{ steps.info.outputs.path }}/databend-$artifact
+            chmod +x ${{ steps.info.outputs.path }}/databend-$artifact
+          fi
+        done
+
     - name: Check Disk Space
       shell: bash
       run: |

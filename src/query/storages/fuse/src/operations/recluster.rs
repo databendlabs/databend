@@ -163,7 +163,6 @@ impl FuseTable {
             self.table_info.schema(),
             None,
             &block_metas,
-            None,
             block_count,
             PruningStatistics::default(),
         )?;
@@ -262,19 +261,23 @@ impl FuseTable {
 
         pipeline.try_resize(1)?;
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
+            let proc =
+                TransformSerializeSegment::new(ctx.clone(), input, output, self, block_thresholds);
             proc.into_processor()
         })?;
 
         pipeline.add_transform(|input, output| {
-            let mut aggregator = TableMutationAggregator::create(
+            let mut aggregator = TableMutationAggregator::new(
                 self,
                 ctx.clone(),
                 snapshot.segments.clone(),
-                snapshot.summary.clone(),
                 MutationKind::Recluster,
             );
-            aggregator.accumulate_log_entry(mutator.mutation_logs());
+            mutator
+                .mutation_logs()
+                .entries
+                .into_iter()
+                .for_each(|v| aggregator.accumulate_log_entry(v));
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
             )))

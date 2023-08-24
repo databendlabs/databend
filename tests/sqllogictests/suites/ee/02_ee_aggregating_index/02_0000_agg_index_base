@@ -250,6 +250,96 @@ DROP AGGREGATING INDEX testi
 statement ok
 DROP TABLE t
 
+# multiple agg functions
+statement ok
+CREATE TABLE t (a int, b int, c int)
+
+statement ok
+INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5), (1,3,3)
+
+# query: eval-agg-eval-scan, index: eval-agg-eval-scan
+
+statement ok
+CREATE AGGREGATING INDEX testi AS select b, sum(a), max(c) from t where c > 1 group by b
+
+# partial refresh
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query II
+SELECT b, SUM(a), MAX(c) from t WHERE c > 1 GROUP BY b ORDER BY b
+----
+1 1 4
+2 3 5
+3 1 3
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE t(id int, user_id int, event_name varchar)
+
+statement ok
+INSERT INTO t (id, user_id, event_name)
+VALUES (1, 1, 'Login'),
+       (2, 2, 'Login'),
+       (3, 3, 'Login'),
+       (4, 1, 'Logout'),
+       (5, 2, 'Logout'),
+       (6, 4, 'Login'),
+       (7, 1, 'Login');
+
+statement ok
+CREATE AGGREGATING INDEX testi AS select approx_count_distinct(user_id) from t
+
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query I
+SELECT approx_count_distinct(user_id) from t
+----
+4
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+statement ok
+DROP TABLE t
+
+# test sync agg index
+statement ok
+SET enable_refresh_aggregating_index_after_write=1;
+
+statement ok
+CREATE TABLE t (a int, b int, c int)
+
+statement ok
+CREATE SYNC AGGREGATING INDEX testi AS select b, sum(a) from t where c > 1 group by b
+
+statement ok
+INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5), (1,3,3)
+
+# query: eval-agg-eval-scan, index: eval-agg-eval-scan
+
+query II
+SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b ORDER BY b
+----
+1 1
+2 3
+3 1
+
+statement ok
+SET enable_refresh_aggregating_index_after_write=0;
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+statement ok
+DROP TABLE t
+
 statement ok
 use default
 

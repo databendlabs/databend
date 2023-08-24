@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::ops::Range;
 
 use common_base::rangemap::RangeMerger;
@@ -97,6 +98,7 @@ impl BlockReader {
         &self,
         settings: &ReadSettings,
         part: PartInfoPtr,
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<MergeIOReadResult> {
         let part = FusePartInfo::from_part(&part)?;
         let column_array_cache = CacheManager::instance().get_table_data_array_cache();
@@ -104,6 +106,11 @@ impl BlockReader {
         let mut ranges = vec![];
         let mut cached_column_array = vec![];
         for (_index, (column_id, ..)) in self.project_indices.iter() {
+            if let Some(ignore_column_ids) = ignore_column_ids {
+                if ignore_column_ids.contains(column_id) {
+                    continue;
+                }
+            }
             // first, check column array object cache
             let block_path = &part.location;
             let column_cache_key = TableDataCacheKey::new(block_path, *column_id);

@@ -23,6 +23,7 @@ use std::str::FromStr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Instant;
 use std::time::SystemTime;
 
 use chrono_tz::Tz;
@@ -58,6 +59,7 @@ use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_sql::IndexType;
+use common_storage::common_metrics::copy::metrics_inc_filter_out_copied_files_request_milliseconds;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
@@ -72,6 +74,7 @@ use dashmap::DashMap;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
+use storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -89,14 +92,6 @@ const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub enum Origin {
-    #[default]
-    Default,
-    HttpHandler,
-    BuiltInProcedure,
-}
-
 #[derive(Clone)]
 pub struct QueryContext {
     version: String,
@@ -106,6 +101,8 @@ pub struct QueryContext {
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
+    // Used by synchronized generate aggregating indexes when new data written.
+    inserted_segment_locs: Arc<RwLock<Vec<Location>>>,
 }
 
 impl QueryContext {
@@ -126,6 +123,7 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
+            inserted_segment_locs: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -666,37 +664,23 @@ impl TableContext for QueryContext {
         for chunk in files.chunks(batch_size) {
             let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
             let req = GetTableCopiedFileReq { table_id, files };
+            let start_request = Instant::now();
             let copied_files = catalog
                 .get_table_copied_file_info(&tenant, database_name, req)
                 .await?
                 .file_info;
+
+            metrics_inc_filter_out_copied_files_request_milliseconds(
+                Instant::now().duration_since(start_request).as_millis() as u64,
+            );
             // Colored
             for file in chunk {
-                if let Some(copied_file) = copied_files.get(&file.path) {
-                    match &copied_file.etag {
-                        Some(copied_etag) => {
-                            if let Some(file_etag) = &file.etag {
-                                // Check the 7 bytes etag prefix.
-                                if file_etag.starts_with(copied_etag) {
-                                    continue;
-                                }
-                            }
-                        }
-                        None => {
-                            // etag is none, compare with content_length and last_modified.
-                            if copied_file.content_length == file.size
-                                && copied_file.last_modified == Some(file.last_modified)
-                            {
-                                continue;
-                            }
-                        }
+                if !copied_files.contains_key(&file.path) {
+                    results.push(file.clone());
+                    limit += 1;
+                    if limit == max_files {
+                        return Ok(results);
                     }
-                }
-
-                results.push(file.clone());
-                limit += 1;
-                if limit == max_files {
-                    return Ok(results);
                 }
             }
         }
@@ -723,6 +707,16 @@ impl TableContext for QueryContext {
 
     fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
         self.shared.materialized_cte_tables.clone()
+    }
+
+    fn add_segment_location(&self, segment_loc: Location) -> Result<()> {
+        let mut segment_locations = self.inserted_segment_locs.write();
+        segment_locations.push(segment_loc);
+        Ok(())
+    }
+
+    fn get_segment_locations(&self) -> Result<Vec<Location>> {
+        Ok(self.inserted_segment_locs.read().to_vec())
     }
 }
 

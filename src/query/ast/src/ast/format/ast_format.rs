@@ -1388,8 +1388,15 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
                         let child_action = column_type_name_vec
                             .iter()
-                            .map(|(column, type_name)| {
-                                format!("Set Column {} DataType {}", column, type_name)
+                            .map(|(column, type_name, expr_opt)| {
+                                if let Some(expr) = expr_opt {
+                                    format!(
+                                        "Set Column {} DataType {} Default {}",
+                                        column, type_name, expr
+                                    )
+                                } else {
+                                    format!("Set Column {} DataType {}", column, type_name)
+                                }
                             })
                             .collect::<Vec<_>>()
                             .join(",");
@@ -1633,7 +1640,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_create_virtual_columns(&mut self, stmt: &'ast CreateVirtualColumnsStmt) {
+    fn visit_create_virtual_column(&mut self, stmt: &'ast CreateVirtualColumnStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let table_child = self.children.pop().unwrap();
 
@@ -1642,20 +1649,20 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             self.visit_expr(virtual_column);
             virtual_columns_children.push(self.children.pop().unwrap());
         }
-        let virtual_columns_name = "VirtualColumns".to_string();
+        let virtual_columns_name = "VirtualColumn".to_string();
         let virtual_columns_ctx =
             AstFormatContext::with_children(virtual_columns_name, virtual_columns_children.len());
         let virtual_columns_child =
             FormatTreeNode::with_children(virtual_columns_ctx, virtual_columns_children);
         let children = vec![table_child, virtual_columns_child];
 
-        let name = "CreateVirtualColumns".to_string();
+        let name = "CreateVirtualColumn".to_string();
         let format_ctx = AstFormatContext::with_children(name, 2);
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
     }
 
-    fn visit_alter_virtual_columns(&mut self, stmt: &'ast AlterVirtualColumnsStmt) {
+    fn visit_alter_virtual_column(&mut self, stmt: &'ast AlterVirtualColumnStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let table_child = self.children.pop().unwrap();
 
@@ -1664,33 +1671,33 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             self.visit_expr(virtual_column);
             virtual_columns_children.push(self.children.pop().unwrap());
         }
-        let virtual_columns_name = "VirtualColumns".to_string();
+        let virtual_columns_name = "VirtualColumn".to_string();
         let virtual_columns_ctx =
             AstFormatContext::with_children(virtual_columns_name, virtual_columns_children.len());
         let virtual_columns_child =
             FormatTreeNode::with_children(virtual_columns_ctx, virtual_columns_children);
         let children = vec![table_child, virtual_columns_child];
 
-        let name = "AlterVirtualColumns".to_string();
+        let name = "AlterVirtualColumn".to_string();
         let format_ctx = AstFormatContext::with_children(name, 2);
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
     }
 
-    fn visit_drop_virtual_columns(&mut self, stmt: &'ast DropVirtualColumnsStmt) {
+    fn visit_drop_virtual_column(&mut self, stmt: &'ast DropVirtualColumnStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let child = self.children.pop().unwrap();
 
-        let name = "DropVirtualColumns".to_string();
+        let name = "DropVirtualColumn".to_string();
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![child]);
         self.children.push(node);
     }
 
-    fn visit_generate_virtual_columns(&mut self, stmt: &'ast GenerateVirtualColumnsStmt) {
+    fn visit_refresh_virtual_column(&mut self, stmt: &'ast RefreshVirtualColumnStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let child = self.children.pop().unwrap();
-        let name = "GenerateVirtualColumns".to_string();
+        let name = "RefreshVirtualColumn".to_string();
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![child]);
         self.children.push(node);
@@ -2738,36 +2745,6 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 };
                 let node = FormatTreeNode::with_children(format_ctx, children);
                 self.children.push(node)
-            }
-            TableReference::Values {
-                span: _,
-                values,
-                alias,
-            } => {
-                let mut children = Vec::with_capacity(values.len());
-                for (i, row_values) in values.iter().enumerate() {
-                    let mut row_children = Vec::with_capacity(row_values.len());
-                    for value in row_values {
-                        self.visit_expr(value);
-                        row_children.push(self.children.pop().unwrap());
-                    }
-                    let row_name = format!("Row {}", i);
-                    let row_format_ctx =
-                        AstFormatContext::with_children(row_name, row_children.len());
-                    let row_node = FormatTreeNode::with_children(row_format_ctx, row_children);
-                    children.push(row_node);
-                }
-                let format_ctx = if let Some(alias) = alias {
-                    AstFormatContext::with_children_alias(
-                        "Values".to_string(),
-                        children.len(),
-                        Some(format!("{}", alias)),
-                    )
-                } else {
-                    AstFormatContext::with_children("Values".to_string(), children.len())
-                };
-                let node = FormatTreeNode::with_children(format_ctx, children);
-                self.children.push(node);
             }
         }
     }

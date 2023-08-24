@@ -18,5 +18,6 @@ mod partition;
 mod read;
 mod table;
 
+pub use read::Parquet2PrewhereInfo;
 pub(crate) use table::arrow_to_table_schema;
 pub use table::Parquet2Table;

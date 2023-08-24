@@ -15,38 +15,33 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_license::license::Feature::VirtualColumns;
+use common_license::license::Feature::VirtualColumn;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::VirtualColumnNameIdent;
-use common_sql::plans::DropVirtualColumnsPlan;
-use virtual_columns_handler::get_virtual_columns_handler;
+use common_sql::plans::DropVirtualColumnPlan;
+use virtual_column::get_virtual_column_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub struct DropVirtualColumnsInterpreter {
+pub struct DropVirtualColumnInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropVirtualColumnsPlan,
+    plan: DropVirtualColumnPlan,
 }
 
-impl DropVirtualColumnsInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropVirtualColumnsPlan) -> Result<Self> {
-        Ok(DropVirtualColumnsInterpreter { ctx, plan })
+impl DropVirtualColumnInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropVirtualColumnPlan) -> Result<Self> {
+        Ok(DropVirtualColumnInterpreter { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DropVirtualColumnsInterpreter {
+impl Interpreter for DropVirtualColumnInterpreter {
     fn name(&self) -> &str {
-        "DropVirtualColumnsInterpreter"
-    }
-
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
+        "DropVirtualColumnInterpreter"
     }
 
     #[async_backtrace::framed]
@@ -56,7 +51,7 @@ impl Interpreter for DropVirtualColumnsInterpreter {
         license_manager.manager.check_enterprise_enabled(
             &self.ctx.get_settings(),
             tenant.clone(),
-            VirtualColumns,
+            VirtualColumn,
         )?;
 
         let catalog_name = self.plan.catalog.clone();
@@ -74,7 +69,7 @@ impl Interpreter for DropVirtualColumnsInterpreter {
             name_ident: VirtualColumnNameIdent { tenant, table_id },
         };
 
-        let handler = get_virtual_columns_handler();
+        let handler = get_virtual_column_handler();
         let _ = handler
             .do_drop_virtual_column(catalog, drop_virtual_column_req)
             .await?;

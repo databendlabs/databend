@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -21,19 +22,27 @@ use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_sources::AsyncSource;
-use common_pipeline_sources::AsyncSourcer;
+use common_pipeline_core::processors::Processor;
+use common_storages_parquet::ParquetPart;
 use common_storages_parquet::ParquetRSReader;
+use opendal::Reader;
+use parquet::arrow::async_reader::ParquetRecordBatchStream;
 
 use crate::partition::IcebergPartInfo;
 
 pub struct IcebergTableSource {
+    // Used for event transforming.
     ctx: Arc<dyn TableContext>,
-    output_schema: DataSchemaRef,
+    output: Arc<OutputPort>,
+    generated_data: Option<DataBlock>,
+    is_finished: bool,
 
-    /// The reader to read [`DataBlock`]s from parquet files.
+    // Used to read parquet.
+    output_schema: DataSchemaRef,
     parquet_reader: Arc<ParquetRSReader>,
+    stream: Option<ParquetRecordBatchStream<Reader>>,
 }
 
 impl IcebergTableSource {
@@ -43,35 +52,83 @@ impl IcebergTableSource {
         output_schema: DataSchemaRef,
         parquet_reader: Arc<ParquetRSReader>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, IcebergTableSource {
+        Ok(ProcessorPtr::create(Box::new(IcebergTableSource {
             ctx,
-            output_schema,
+            output,
             parquet_reader,
-        })
+            output_schema,
+            stream: None,
+            generated_data: None,
+            is_finished: false,
+        })))
     }
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for IcebergTableSource {
-    const NAME: &'static str = "IcebergSource";
+impl Processor for IcebergTableSource {
+    fn name(&self) -> String {
+        "IcebergSource".to_string()
+    }
 
-    #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if let Some(part) = self.ctx.get_partition() {
-            let iceberg_part = IcebergPartInfo::from_part(&part)?;
-            let block = match iceberg_part {
-                IcebergPartInfo::Parquet(parquet_part) => {
-                    self.parquet_reader
-                        .read_block(self.ctx.clone(), &parquet_part.location)
-                        .await?
-                }
-            };
-            let block = check_block_schema(&self.output_schema, block)?;
-            Ok(Some(block))
-        } else {
-            // No more partition, finish this source.
-            Ok(None)
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        if self.is_finished {
+            self.output.finish();
+            return Ok(Event::Finished);
         }
+
+        if self.output.is_finished() {
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            return Ok(Event::NeedConsume);
+        }
+
+        match self.generated_data.take() {
+            None => Ok(Event::Async),
+            Some(data_block) => {
+                self.output.push_data(Ok(data_block));
+                Ok(Event::NeedConsume)
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn async_process(&mut self) -> Result<()> {
+        if let Some(mut stream) = self.stream.take() {
+            if let Some(block) = self
+                .parquet_reader
+                .read_block(&mut stream)
+                .await?
+                .map(|b| check_block_schema(&self.output_schema, b))
+                .transpose()?
+            {
+                self.generated_data = Some(block);
+                self.stream = Some(stream);
+            }
+            // else:
+            // If `read_block` returns `None`, it means the stream is finished.
+            // And we should try to build another stream (in next event loop).
+        } else if let Some(part) = self.ctx.get_partition() {
+            match IcebergPartInfo::from_part(&part)? {
+                IcebergPartInfo::Parquet(ParquetPart::ParquetRSFile(file)) => {
+                    let stream = self
+                        .parquet_reader
+                        .prepare_data_stream(self.ctx.clone(), &file.location)
+                        .await?;
+                    self.stream = Some(stream);
+                }
+                _ => unreachable!(),
+            }
+        } else {
+            self.is_finished = true;
+        }
+
+        Ok(())
     }
 }
 

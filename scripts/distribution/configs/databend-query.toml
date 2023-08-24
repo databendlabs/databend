@@ -69,7 +69,7 @@ auto_sync_interval = 60
 
 # Storage config.
 [storage]
-# fs | s3 | azblob | obs | oss
+# fs | s3 | azblob | gcs | oss | cos | hdfs | webhdfs
 type = "fs"
 
 # Set a local folder to store your data.
@@ -77,7 +77,7 @@ type = "fs"
 [storage.fs]
 data_path = "/var/lib/databend/data"
 
-# To use S3-compatible object storage, uncomment this block and set your values.
+# To use an Amazon S3-like storage service, uncomment this block and set your values.
 # [storage.s3]
 # bucket = "<your-bucket-name>"
 # endpoint_url = "<your-endpoint>"
@@ -85,26 +85,40 @@ data_path = "/var/lib/databend/data"
 # secret_access_key = "<your-account-key>"
 # enable_virtual_host_style = false
 
-# To use Azure Blob storage, uncomment this block and set your values.
+# To use Azure Blob Storage, uncomment this block and set your values.
 # [storage.azblob]
 # endpoint_url = "https://<your-storage-account-name>.blob.core.windows.net"
 # container = "<your-azure-storage-container-name>"
 # account_name = "<your-storage-account-name>"
 # account_key = "<your-account-key>"
 
-# To use OBS object storage, uncomment this block and set your values.
-# [storage.obs]
+# To use Google Cloud Storage, uncomment this block and set your values.
+# [storage.gcs]
 # bucket = "<your-bucket-name>"
 # endpoint_url = "<your-endpoint>"
-# access_key_id = "<your-key-id>"
-# secret_access_key = "<your-account-key>"
+# credential = "<your-credentials>"
 
-# To use OSS object storage, uncomment this block and set your values.
+# To use Alibaba Cloud OSS, uncomment this block and set your values.
 # [storage.oss]
 # bucket = "<your-bucket-name>"
 # endpoint_url = "<your-endpoint>"
 # access_key_id = "<your-key-id>"
 # access_key_secret = "<your-account-key>"
+
+# To use Tencent Cloud Object Storage, uncomment this block and set your values.
+# [storage.cos]
+# bucket = "<your-bucket-name>"
+# endpoint_url = "<your-endpoint>"
+# secret_id = "<your-secret-id>"
+# secret_key = "<your-secret-key>"
+
+# To use HDFS, uncomment this block and set your values.
+# [storage.hdfs]
+# name_node = "<your-name-node>"
+
+# To use WebHDFS, uncomment this block and set your values.
+# [storage.webhdfs]
+# endpoint_url = "<your-endpoint>"
 
 # Cache config.
 [cache]

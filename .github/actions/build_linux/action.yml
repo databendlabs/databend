@@ -67,7 +67,7 @@ runs:
       if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
       shell: bash
       run: |
-        cargo build --target ${{ inputs.target }} --features ${{ inputs.features }}
+        cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }}
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
     - name: Build Debug for specific artifacts
@@ -77,7 +77,7 @@ runs:
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
+          cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
           ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
 
@@ -88,7 +88,7 @@ runs:
         artifacts="meta,metactl,query,sqllogictests"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
+          cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
           ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
 
@@ -99,7 +99,7 @@ runs:
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
+          cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
           ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
 
