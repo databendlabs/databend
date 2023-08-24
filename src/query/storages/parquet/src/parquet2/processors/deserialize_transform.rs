@@ -51,8 +51,8 @@ use crate::parquet2::parquet_reader::Parquet2Reader;
 use crate::parquet2::parquet_table::Parquet2PrewhereInfo;
 use crate::parquet2::pruning::PartitionPruner;
 use crate::parquet2::Parquet2RowGroupPart;
+use crate::parquet_part::ParquetFilesPart;
 use crate::parquet_part::ParquetPart;
-use crate::parquet_part::ParquetSmallFilesPart;
 
 pub trait SmallFilePrunner: Send + Sync {
     fn prune_one_file(
@@ -140,7 +140,7 @@ impl Parquet2DeserializeTransform {
 
     fn process_small_files(
         &mut self,
-        part: &ParquetSmallFilesPart,
+        part: &ParquetFilesPart,
         buffers: Vec<Vec<u8>>,
     ) -> Result<Vec<DataBlock>> {
         assert_eq!(part.files.len(), buffers.len());
@@ -382,7 +382,7 @@ impl Processor for Parquet2DeserializeTransform {
                         self.add_block(block)?;
                     }
                 }
-                (ParquetPart::SmallFiles(p), Parquet2PartData::SmallFiles(buffers)) => {
+                (ParquetPart::ParquetFiles(p), Parquet2PartData::SmallFiles(buffers)) => {
                     let blocks = self.process_small_files(p, buffers)?;
                     self.add_block(DataBlock::concat(&blocks)?)?;
                 }

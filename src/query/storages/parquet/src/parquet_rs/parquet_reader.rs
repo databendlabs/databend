@@ -83,7 +83,7 @@ pub struct ParquetRSReader {
     /// Projected field levels.
     field_levels: FieldLevels,
 
-    pruner: ParquetRSPruner,
+    pruner: Option<ParquetRSPruner>,
 
     // Options
     need_page_index: bool,
@@ -98,6 +98,7 @@ impl ParquetRSReader {
         arrow_schema: &arrow_schema::Schema,
         plan: &DataSourcePlan,
         options: ParquetReadOptions,
+        create_pruner: bool, // If prune row groups and pages before reading.
     ) -> Result<Self> {
         let mut output_projection =
             PushDownInfo::projection_of_push_downs(&table_schema, &plan.push_downs);
@@ -129,13 +130,17 @@ impl ParquetRSReader {
             parquet_to_arrow_schema_by_columns(&schema_desc, projection.clone(), None)?;
         let output_schema = to_arrow_schema(&output_projection.project_schema(&table_schema));
         let field_paths = compute_output_field_paths(&output_schema, &batch_schema)?;
-        // Build pruner to prune row groups and pages(TODO).
-        let pruner = ParquetRSPruner::try_create(
-            ctx.get_function_context()?,
-            table_schema,
-            &plan.push_downs,
-            options,
-        )?;
+
+        let pruner = if create_pruner {
+            Some(ParquetRSPruner::try_create(
+                ctx.get_function_context()?,
+                table_schema,
+                &plan.push_downs,
+                options,
+            )?)
+        } else {
+            None
+        };
 
         let batch_size = ctx.get_settings().get_max_block_size()? as usize;
         let field_levels = parquet_to_arrow_field_levels(&schema_desc, projection.clone(), None)?;
@@ -174,12 +179,14 @@ impl ParquetRSReader {
         // Prune row groups.
         let file_meta = builder.metadata();
 
-        let selected_row_groups = self.pruner.prune_row_groups(file_meta)?;
-        let row_selection = self.pruner.prune_pages(file_meta, &selected_row_groups)?;
+        if let Some(pruner) = &self.pruner {
+            let selected_row_groups = pruner.prune_row_groups(file_meta)?;
+            let row_selection = pruner.prune_pages(file_meta, &selected_row_groups)?;
 
-        builder = builder.with_row_groups(selected_row_groups);
-        if let Some(row_selection) = row_selection {
-            builder = builder.with_row_selection(row_selection);
+            builder = builder.with_row_groups(selected_row_groups);
+            if let Some(row_selection) = row_selection {
+                builder = builder.with_row_selection(row_selection);
+            }
         }
 
         if let Some(predicate) = self.predicate.as_ref() {

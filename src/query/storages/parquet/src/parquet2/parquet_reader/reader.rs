@@ -274,7 +274,7 @@ impl Parquet2Reader {
             ParquetPart::Parquet2RowGroup(part) => Ok(Parquet2PartData::RowGroup(
                 self.row_group_readers_from_blocking_io(part, &self.operator().blocking())?,
             )),
-            ParquetPart::SmallFiles(part) => {
+            ParquetPart::ParquetFiles(part) => {
                 let op = self.operator().blocking();
                 let mut buffers = Vec::with_capacity(part.files.len());
                 for path in &part.files {
@@ -330,7 +330,7 @@ impl Parquet2Reader {
                 let readers = readers.into_iter().collect::<IndexedReaders>();
                 Ok(Parquet2PartData::RowGroup(readers))
             }
-            ParquetPart::SmallFiles(part) => {
+            ParquetPart::ParquetFiles(part) => {
                 let mut join_handlers = Vec::with_capacity(part.files.len());
                 for (path, _) in part.files.iter() {
                     let op = self.operator().clone();

@@ -23,6 +23,7 @@ mod parquet_rs;
 mod utils;
 
 pub use parquet2::Parquet2Table;
+pub use parquet_part::ParquetFilesPart;
 pub use parquet_part::ParquetPart;
 pub use parquet_rs::ParquetRSPruner;
 pub use parquet_rs::ParquetRSReader;

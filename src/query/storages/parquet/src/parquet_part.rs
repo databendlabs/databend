@@ -31,7 +31,7 @@ use crate::parquet_rs::ParquetRSRowGroupPart;
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum ParquetPart {
     Parquet2RowGroup(Parquet2RowGroupPart),
-    SmallFiles(ParquetSmallFilesPart),
+    ParquetFiles(ParquetFilesPart),
     ParquetRSRowGroup(ParquetRSRowGroupPart),
 }
 
@@ -43,7 +43,7 @@ impl ParquetPart {
     pub fn uncompressed_size(&self) -> u64 {
         match self {
             ParquetPart::Parquet2RowGroup(r) => r.uncompressed_size(),
-            ParquetPart::SmallFiles(p) => p.uncompressed_size(),
+            ParquetPart::ParquetFiles(p) => p.uncompressed_size(),
             ParquetPart::ParquetRSRowGroup(p) => p.uncompressed_size(),
         }
     }
@@ -51,19 +51,19 @@ impl ParquetPart {
     pub fn compressed_size(&self) -> u64 {
         match self {
             ParquetPart::Parquet2RowGroup(r) => r.compressed_size(),
-            ParquetPart::SmallFiles(p) => p.compressed_size(),
+            ParquetPart::ParquetFiles(p) => p.compressed_size(),
             ParquetPart::ParquetRSRowGroup(p) => p.compressed_size(),
         }
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
-pub struct ParquetSmallFilesPart {
+pub struct ParquetFilesPart {
     pub files: Vec<(String, u64)>,
     pub estimated_uncompressed_size: u64,
 }
 
-impl ParquetSmallFilesPart {
+impl ParquetFilesPart {
     pub fn compressed_size(&self) -> u64 {
         self.files.iter().map(|(_, s)| *s).sum()
     }
@@ -87,7 +87,7 @@ impl PartInfo for ParquetPart {
     fn hash(&self) -> u64 {
         let path = match self {
             ParquetPart::Parquet2RowGroup(r) => &r.location,
-            ParquetPart::SmallFiles(p) => &p.files[0].0,
+            ParquetPart::ParquetFiles(p) => &p.files[0].0,
             ParquetPart::ParquetRSRowGroup(p) => &p.location,
         };
         let mut s = DefaultHasher::new();
@@ -135,7 +135,7 @@ pub(crate) fn collect_small_file_parts(
     let mut make_small_files_part = |files: Vec<(String, u64)>, part_size| {
         let estimated_uncompressed_size = (part_size as f64 / max_compression_ratio) as u64;
         num_small_files -= files.len();
-        partitions.push(ParquetPart::SmallFiles(ParquetSmallFilesPart {
+        partitions.push(ParquetPart::ParquetFiles(ParquetFilesPart {
             files,
             estimated_uncompressed_size,
         }));

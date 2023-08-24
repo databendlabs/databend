@@ -44,6 +44,7 @@ impl ParquetRSTable {
             &self.arrow_schema,
             plan,
             self.read_options,
+            false,
         )?);
 
         // TODO(parquet):

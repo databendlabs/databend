@@ -115,10 +115,11 @@ impl Processor for IcebergTableSource {
             // And we should try to build another stream (in next event loop).
         } else if let Some(part) = self.ctx.get_partition() {
             match IcebergPartInfo::from_part(&part)? {
-                IcebergPartInfo::Parquet(ParquetPart::ParquetRSRowGroup(file)) => {
+                IcebergPartInfo::Parquet(ParquetPart::ParquetFiles(files)) => {
+                    assert_eq!(files.files.len(), 1);
                     let stream = self
                         .parquet_reader
-                        .prepare_data_stream(self.ctx.clone(), &file.location)
+                        .prepare_data_stream(self.ctx.clone(), &files.files[0].0)
                         .await?;
                     self.stream = Some(stream);
                 }
