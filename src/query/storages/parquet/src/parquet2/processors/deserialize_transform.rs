@@ -40,6 +40,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_storage::CopyStatus;
+use common_storage::FileStatus;
 use opendal::services::Memory;
 use opendal::Operator;
 
@@ -86,6 +88,10 @@ pub struct Parquet2DeserializeTransform {
     // Used for reading from small files
     source_reader: Arc<Parquet2Reader>,
     partition_pruner: Arc<PartitionPruner>,
+
+    // used for collect num_rows for small files
+    is_copy: bool,
+    copy_status: Arc<CopyStatus>,
 }
 
 impl Parquet2DeserializeTransform {
@@ -120,6 +126,9 @@ impl Parquet2DeserializeTransform {
                 source_reader,
                 remain_reader,
                 partition_pruner,
+
+                is_copy: ctx.get_query_kind().eq_ignore_ascii_case("copy"),
+                copy_status: ctx.get_copy_status(),
             },
         )))
     }
@@ -169,6 +178,13 @@ impl Parquet2DeserializeTransform {
             if let Some(block) = self.process_row_group(&part, &mut readers)? {
                 res.push(block)
             }
+        }
+        if self.is_copy {
+            let num_rows_loaded = res.iter().map(|b| b.num_rows()).sum();
+            self.copy_status.add_chunk(path, FileStatus {
+                num_rows_loaded,
+                error: None,
+            })
         }
         Ok(res)
     }
