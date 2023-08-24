@@ -30,11 +30,19 @@ use crate::api::rpc::flight_client::FlightSender;
 
 pub struct ExchangeWriterSink {
     flight_sender: FlightSender,
+    ignore_exchange: bool,
 }
 
 impl ExchangeWriterSink {
-    pub fn create(input: Arc<InputPort>, flight_sender: FlightSender) -> Box<dyn Processor> {
-        AsyncSinker::create(input, ExchangeWriterSink { flight_sender })
+    pub fn create(
+        input: Arc<InputPort>,
+        flight_sender: FlightSender,
+        ignore_exchange: bool,
+    ) -> Box<dyn Processor> {
+        AsyncSinker::create(input, ExchangeWriterSink {
+            flight_sender,
+            ignore_exchange,
+        })
     }
 }
 
@@ -60,6 +68,10 @@ impl AsyncSink for ExchangeWriterSink {
             ),
         }?;
 
+        if self.ignore_exchange {
+            return Ok(self.flight_sender.is_closed());
+        }
+
         for packet in serialize_meta.packet {
             if let Err(error) = self.flight_sender.send(packet).await {
                 if error.code() == ErrorCode::ABORTED_QUERY {
@@ -74,20 +86,20 @@ impl AsyncSink for ExchangeWriterSink {
     }
 }
 
-pub fn create_writer_item(exchange: FlightSender) -> PipeItem {
+pub fn create_writer_item(exchange: FlightSender, ignore: bool) -> PipeItem {
     let input = InputPort::create();
     PipeItem::create(
-        ProcessorPtr::create(ExchangeWriterSink::create(input.clone(), exchange)),
+        ProcessorPtr::create(ExchangeWriterSink::create(input.clone(), exchange, ignore)),
         vec![input],
         vec![],
     )
 }
 
-pub fn create_writer_items(exchanges: Vec<FlightSender>) -> Vec<PipeItem> {
+pub fn create_writer_items(exchanges: Vec<FlightSender>, ignore: bool) -> Vec<PipeItem> {
     let mut items = Vec::with_capacity(exchanges.len());
 
     for exchange in exchanges {
-        items.push(create_writer_item(exchange));
+        items.push(create_writer_item(exchange, ignore));
     }
 
     items

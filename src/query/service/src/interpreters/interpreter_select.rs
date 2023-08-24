@@ -26,6 +26,7 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformDummy;
+use common_sql::executor::FragmentKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::parse_result_scan_args;
 use common_sql::ColumnBinding;
@@ -93,7 +94,16 @@ impl SelectInterpreter {
     }
 
     #[async_backtrace::framed]
-    pub async fn build_pipeline(&self, physical_plan: PhysicalPlan) -> Result<PipelineBuildResult> {
+    pub async fn build_pipeline(
+        &self,
+        mut physical_plan: PhysicalPlan,
+    ) -> Result<PipelineBuildResult> {
+        if let PhysicalPlan::Exchange(exchange) = &mut physical_plan {
+            if exchange.kind == FragmentKind::Merge {
+                exchange.ignore_exchange = self.ignore_result;
+            }
+        }
+
         build_query_pipeline(
             &self.ctx,
             &self.bind_context.columns,
