@@ -42,7 +42,7 @@ use crate::DataBlock;
 use crate::Scalar;
 use crate::Value;
 
-// Block idx, row idx in the block, repeat times
+// Block idx, row idx in the block, repeat times.
 pub type BlockRowIndex = (u32, u32, usize);
 
 impl DataBlock {
