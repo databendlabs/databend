@@ -176,6 +176,35 @@ jobs:
         with:
           name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}
 
+  sqllogic_standalone_udf_server:
+    name: sqllogic_standalone_${{ matrix.dirs }}
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
+    strategy:
+      matrix:
+        dirs:
+          - "udf_server"
+        handlers:
+          - "mysql,http,clickhouse"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Start UDF Server
+        run: |
+          pip install pyarrow
+          python3 tests/udf-server/udf_test.py &
+          sleep 2
+      - uses: ./.github/actions/test_sqllogic_standalone_linux
+        timeout-minutes: 15
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handlers }}
+          storage-format: all
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}
+
   sqllogic_standalone_with_native:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
     runs-on: [self-hosted, X64, Linux, 4c8g]
