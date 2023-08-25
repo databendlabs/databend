@@ -462,7 +462,6 @@ fn eval_scalar_to_format_tree(
         .exprs
         .iter()
         .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-        .collect::<Vec<_>>()
         .join(", ");
     let mut children = vec![
         FormatTreeNode::new(format!(
@@ -493,8 +492,7 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
         desc.sig.name,
         desc.arg_indices
             .iter()
-            .map(|&index| { metadata.column(index).name() })
-            .collect::<Vec<_>>()
+            .map(|&index| format!("{} (#{})", metadata.column(index).name(), index))
             .join(", ")
     )
 }
@@ -509,12 +507,10 @@ fn aggregate_expand_to_format_tree(
         .iter()
         .map(|set| {
             set.iter()
-                .map(|&index| metadata.column(index).name())
-                .collect::<Vec<_>>()
+                .map(|&index| format!("{} (#{})", metadata.column(index).name(), index))
                 .join(", ")
         })
         .map(|s| format!("({})", s))
-        .collect::<Vec<_>>()
         .join(", ");
 
     let mut children = vec![
@@ -548,13 +544,12 @@ fn aggregate_partial_to_format_tree(
     let group_by = plan
         .group_by
         .iter()
-        .map(|&index| metadata.column(index).name())
+        .map(|&index| format!("{} (#{})", metadata.column(index).name(), index))
         .join(", ");
     let agg_funcs = plan
         .agg_funcs
         .iter()
         .map(|agg| pretty_display_agg_desc(agg, metadata))
-        .collect::<Vec<_>>()
         .join(", ");
 
     let mut children = vec![
@@ -589,18 +584,13 @@ fn aggregate_final_to_format_tree(
     let group_by = plan
         .group_by
         .iter()
-        .map(|&index| {
-            let name = metadata.column(index).name();
-            Ok(name)
-        })
-        .collect::<Result<Vec<_>>>()?
+        .map(|&index| format!("{} (#{})", metadata.column(index).name(), index))
         .join(", ");
 
     let agg_funcs = plan
         .agg_funcs
         .iter()
         .map(|agg| pretty_display_agg_desc(agg, metadata))
-        .collect::<Vec<_>>()
         .join(", ");
 
     let mut children = vec![
@@ -640,21 +630,13 @@ fn window_to_format_tree(
     let partition_by = plan
         .partition_by
         .iter()
-        .map(|&index| {
-            let name = metadata.column(index).name();
-            Ok(name)
-        })
-        .collect::<Result<Vec<_>>>()?
+        .map(|&index| format!("{} (#{})", metadata.column(index).name(), index))
         .join(", ");
 
     let order_by = plan
         .order_by
         .iter()
-        .map(|v| {
-            let name = metadata.column(v.order_by).name();
-            Ok(name)
-        })
-        .collect::<Result<Vec<_>>>()?
+        .map(|v| format!("{} (#{})", metadata.column(v.order_by).name(), v.order_by))
         .join(", ");
 
     let frame = plan.window_frame.to_string();
@@ -696,8 +678,9 @@ fn sort_to_format_tree(
         .map(|sort_key| {
             let index = sort_key.order_by;
             Ok(format!(
-                "{} {} {}",
+                "{} (#{}) {} {}",
                 metadata.column(index).name(),
+                index,
                 if sort_key.asc { "ASC" } else { "DESC" },
                 if sort_key.nulls_first {
                     "NULLS FIRST"
@@ -866,19 +849,16 @@ fn hash_join_to_format_tree(
         .build_keys
         .iter()
         .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-        .collect::<Vec<_>>()
         .join(", ");
     let probe_keys = plan
         .probe_keys
         .iter()
         .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-        .collect::<Vec<_>>()
         .join(", ");
     let filters = plan
         .non_equi_conditions
         .iter()
         .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-        .collect::<Vec<_>>()
         .join(", ");
 
     let mut build_child = to_format_tree(&plan.build, metadata, prof_span_set)?;
@@ -931,7 +911,6 @@ fn exchange_to_format_tree(
                 plan.keys
                     .iter()
                     .map(|key| { key.as_expr(&BUILTIN_FUNCTIONS).sql_display() })
-                    .collect::<Vec<_>>()
                     .join(", ")
             ),
             FragmentKind::Expansive => "Broadcast".to_string(),
@@ -1097,7 +1076,6 @@ fn project_set_to_format_tree(
         plan.srf_exprs
             .iter()
             .map(|(expr, _)| expr.clone().as_expr(&BUILTIN_FUNCTIONS).sql_display())
-            .collect::<Vec<_>>()
             .join(", ")
     ))]);
 
@@ -1220,6 +1198,5 @@ fn format_output_columns(
             }
             _ => format!("#{}", field.name()),
         })
-        .collect::<Vec<_>>()
         .join(", ")
 }
