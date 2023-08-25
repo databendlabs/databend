@@ -5,7 +5,7 @@ description:
   Building an optimized Databend with Profile Guided Optimization.
 ---
 
-Profile-guided Optimization is a compiler optimization technique, which collects typical execution data (possible branches) during program execution and then optimizes for inlining, conditional branches, machine code layout, register allocation, etc.
+Profile-guided Optimization is a compiler optimization technique that involves collecting typical execution data, including possible branches, during program execution. This collected data is then used to optimize various aspects of the code, such as inlining, conditional branches, machine code layout, and register allocation.
 
 According to the tests, PGO makes a consistent improvement for Databend. The performance benefits depend on your typical workload - you can get better or worse results.
 
