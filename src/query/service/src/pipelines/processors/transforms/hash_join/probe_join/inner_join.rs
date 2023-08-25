@@ -15,6 +15,8 @@
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -26,10 +28,11 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashtableLike;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
+use crate::pipelines::processors::transforms::hash_join::common::set_validity;
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
-use crate::pipelines::processors::JoinHashTable;
 
-impl JoinHashTable {
+impl HashJoinProbeState {
     pub(crate) fn probe_inner_join<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
@@ -52,20 +55,17 @@ impl JoinHashTable {
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
 
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
+        let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
+        let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
 
         for (i, key) in keys_iter.enumerate() {
             // If the join is derived from correlated subquery, then null equality is safe.
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_desc.from_correlated_subquery {
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
                     hash_table.probe_hash_table(key, build_indexes_ptr, occupied, max_block_size)
                 } else {
                     self.probe_key(
@@ -87,7 +87,7 @@ impl JoinHashTable {
             probe_indexes_len += 1;
             if occupied >= max_block_size {
                 loop {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
@@ -103,14 +103,40 @@ impl JoinHashTable {
                         None
                     };
                     let build_block = if is_build_projected {
-                        Some(
-                            self.row_space
-                                .gather(build_indexes, &data_blocks, &build_num_rows)?,
-                        )
+                        Some(self.hash_join_state.row_space.gather(
+                            build_indexes,
+                            data_blocks,
+                            build_num_rows,
+                        )?)
                     } else {
                         None
                     };
-                    let result_block = self.merge_eq_block(probe_block, build_block, occupied);
+                    let mut result_block = self.merge_eq_block(probe_block, build_block, occupied);
+                    if self.hash_join_state.probe_to_build.len() > 0 {
+                        for (index, (is_probe_nullable, is_build_nullable)) in
+                            self.hash_join_state.probe_to_build.iter()
+                        {
+                            let entry = match (is_probe_nullable, is_build_nullable) {
+                                (true, true) | (false, false) => {
+                                    result_block.get_by_offset(*index).clone()
+                                }
+                                (true, false) => {
+                                    result_block.get_by_offset(*index).clone().remove_nullable()
+                                }
+                                (false, true) => {
+                                    let mut validity = MutableBitmap::new();
+                                    validity.extend_constant(result_block.num_rows(), true);
+                                    let validity: Bitmap = validity.into();
+                                    set_validity(
+                                        result_block.get_by_offset(*index),
+                                        validity.len(),
+                                        &validity,
+                                    )
+                                }
+                            };
+                            result_block.add_column(entry);
+                        }
+                    }
 
                     probed_blocks.push(result_block);
 
@@ -153,20 +179,43 @@ impl JoinHashTable {
                 None
             };
             let build_block = if is_build_projected {
-                Some(self.row_space.gather(
+                Some(self.hash_join_state.row_space.gather(
                     &build_indexes[0..occupied],
-                    &data_blocks,
-                    &build_num_rows,
+                    data_blocks,
+                    build_num_rows,
                 )?)
             } else {
                 None
             };
-            let result_block = self.merge_eq_block(probe_block, build_block, occupied);
+            let mut result_block = self.merge_eq_block(probe_block, build_block, occupied);
+            if self.hash_join_state.probe_to_build.len() > 0 {
+                for (index, (is_probe_nullable, is_build_nullable)) in
+                    self.hash_join_state.probe_to_build.iter()
+                {
+                    let entry = match (is_probe_nullable, is_build_nullable) {
+                        (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
+                        (true, false) => {
+                            result_block.get_by_offset(*index).clone().remove_nullable()
+                        }
+                        (false, true) => {
+                            let mut validity = MutableBitmap::new();
+                            validity.extend_constant(result_block.num_rows(), true);
+                            let validity: Bitmap = validity.into();
+                            set_validity(
+                                result_block.get_by_offset(*index),
+                                validity.len(),
+                                &validity,
+                            )
+                        }
+                    };
+                    result_block.add_column(entry);
+                }
+            }
 
             probed_blocks.push(result_block);
         }
 
-        match &self.hash_join_desc.other_predicate {
+        match &self.hash_join_state.hash_join_desc.other_predicate {
             None => Ok(probed_blocks),
             Some(other_predicate) => {
                 // Wrap `is_true` to `other_predicate`
@@ -177,7 +226,7 @@ impl JoinHashTable {
                 let mut filtered_blocks = Vec::with_capacity(probed_blocks.len());
 
                 for probed_block in probed_blocks {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));

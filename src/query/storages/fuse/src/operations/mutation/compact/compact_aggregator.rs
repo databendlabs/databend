@@ -96,7 +96,7 @@ impl AsyncAccumulatingTransform for CompactAggregator {
         if let Some(meta) = data.get_owned_meta().and_then(MutationLogs::downcast_from) {
             for entry in meta.entries.into_iter() {
                 match entry {
-                    MutationLogEntry::Replaced { index, block_meta } => {
+                    MutationLogEntry::ReplacedBlock { index, block_meta } => {
                         self.abort_operation.add_block(&block_meta);
                         self.merge_blocks
                             .entry(index.segment_idx)

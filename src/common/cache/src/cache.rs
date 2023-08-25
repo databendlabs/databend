@@ -38,25 +38,10 @@ where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized;
 
-    /// Returns a mutable reference to the value corresponding to the given key in the cache, if
-    /// any.
-    fn get_mut<'a, Q>(&'a mut self, k: &Q) -> Option<&'a mut V>
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
-
     /// Returns a reference to the value corresponding to the key in the cache or `None` if it is
     /// not present in the cache. Unlike `get`, `peek` does not update the Cache state so the key's
     /// position will be unchanged.
     fn peek<'a, Q>(&'a self, k: &Q) -> Option<&'a V>
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
-
-    /// Returns a mutable reference to the value corresponding to the key in the cache or `None`
-    /// if it is not present in the cache. Unlike `get_mut`, `peek_mut` does not update the Cache
-    /// state so the key's position will be unchanged.
-    fn peek_mut<'a, Q>(&'a mut self, k: &Q) -> Option<&'a mut V>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized;

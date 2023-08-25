@@ -17,16 +17,16 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::Value;
 
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
-use crate::pipelines::processors::JoinHashTable;
 
-impl JoinHashTable {
-    pub(crate) fn probe_cross_join(
+impl HashJoinProbeState {
+    pub(crate) fn cross_join(
         &self,
         input: DataBlock,
         _probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let build_blocks = self.row_space.datablocks();
+        let build_blocks = unsafe { &*self.hash_join_state.chunks.get() };
         let build_num_rows = build_blocks
             .iter()
             .fold(0, |acc, block| acc + block.num_rows());
@@ -35,7 +35,7 @@ impl JoinHashTable {
             return Ok(vec![]);
         }
         let probe_block = input.project(&self.probe_projections);
-        let build_block = DataBlock::concat(&build_blocks)?;
+        let build_block = DataBlock::concat(build_blocks)?;
         let mut result_blocks = Vec::with_capacity(input_num_rows);
         for i in 0..input_num_rows {
             result_blocks.push(self.merge_with_constant_block(

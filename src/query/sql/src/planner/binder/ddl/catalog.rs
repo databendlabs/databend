@@ -144,9 +144,9 @@ impl Binder {
                 let mut options = options.clone();
 
                 // Remove address and url to avoid unexpected field error in uri location.
-                let address = options
-                    .remove("address")
-                    .ok_or_else(|| ErrorCode::InvalidArgument("expected field: ADDRESS"))?;
+                let address = options.remove("metastore_address").ok_or_else(|| {
+                    ErrorCode::InvalidArgument("expected field: METASTORE_ADDRESS")
+                })?;
 
                 let sp = parse_catalog_url(options)?;
 

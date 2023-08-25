@@ -179,6 +179,7 @@ pub struct QueryConfig {
     /// Certificate for client to identify query rpc server
     pub rpc_tls_query_server_root_ca_cert: String,
     pub rpc_tls_query_service_domain_name: String,
+    pub rpc_client_timeout_secs: u64,
     /// Table engine memory enabled
     pub table_engine_memory_enabled: bool,
     pub wait_timeout_mills: u64,
@@ -247,6 +248,7 @@ impl Default for QueryConfig {
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),
             rpc_tls_query_service_domain_name: "localhost".to_string(),
+            rpc_client_timeout_secs: 0,
             table_engine_memory_enabled: true,
             wait_timeout_mills: 5000,
             max_query_log_size: 10_000,
@@ -447,14 +449,14 @@ impl Display for ThriftProtocol {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CatalogHiveConfig {
-    pub address: String,
+    pub metastore_address: String,
     pub protocol: ThriftProtocol,
 }
 
 impl Default for CatalogHiveConfig {
     fn default() -> Self {
         Self {
-            address: "127.0.0.1:9083".to_string(),
+            metastore_address: "127.0.0.1:9083".to_string(),
             protocol: ThriftProtocol::Binary,
         }
     }

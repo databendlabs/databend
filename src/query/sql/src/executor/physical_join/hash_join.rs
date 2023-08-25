@@ -32,6 +32,7 @@ use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::IndexType;
+use crate::ScalarExpr;
 use crate::TypeCheck;
 
 impl PhysicalPlanBuilder {
@@ -40,7 +41,7 @@ impl PhysicalPlanBuilder {
         join: &Join,
         s_expr: &SExpr,
         required: (ColumnSet, ColumnSet),
-        pre_column_projections: Vec<IndexType>,
+        mut pre_column_projections: Vec<IndexType>,
         column_projections: Vec<IndexType>,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
@@ -129,6 +130,7 @@ impl PhysicalPlanBuilder {
         assert_eq!(join.left_conditions.len(), join.right_conditions.len());
         let mut left_join_conditions = Vec::new();
         let mut right_join_conditions = Vec::new();
+        let mut probe_to_build_index = Vec::new();
         for (left_condition, right_condition) in join
             .left_conditions
             .iter()
@@ -140,7 +142,33 @@ impl PhysicalPlanBuilder {
             let right_expr = right_condition
                 .resolve_and_check(build_schema.as_ref())?
                 .project_column_ref(|index| build_schema.index_of(&index.to_string()).unwrap());
-
+            if join.join_type == JoinType::Inner {
+                if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
+                    (left_condition, right_condition)
+                {
+                    if column_projections.contains(&right.column.index) {
+                        if let (Ok(probe_index), Ok(build_index)) = (
+                            probe_schema.index_of(&left.column.index.to_string()),
+                            build_schema.index_of(&right.column.index.to_string()),
+                        ) {
+                            if probe_schema
+                                .field(probe_index)
+                                .data_type()
+                                .remove_nullable()
+                                == build_schema
+                                    .field(build_index)
+                                    .data_type()
+                                    .remove_nullable()
+                            {
+                                probe_to_build_index.push(((probe_index, false), build_index));
+                                if !pre_column_projections.contains(&left.column.index) {
+                                    pre_column_projections.push(left.column.index);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             // Unify the data types of the left and right expressions.
             let left_type = left_expr.data_type();
             let right_type = right_expr.data_type();
@@ -192,30 +220,48 @@ impl PhysicalPlanBuilder {
 
         let mut merged_fields =
             Vec::with_capacity(probe_projections.len() + build_projections.len());
-        for (i, field) in probe_schema.fields().iter().enumerate() {
-            if probe_projections.contains(&i) {
-                merged_fields.push(field.clone());
-            }
-        }
-        for (i, field) in build_schema.fields().iter().enumerate() {
-            if build_projections.contains(&i) {
-                merged_fields.push(field.clone());
-            }
-        }
-        let merged_schema = DataSchemaRefExt::create(merged_fields);
-
         let mut probe_fields = Vec::with_capacity(probe_projections.len());
         let mut build_fields = Vec::with_capacity(build_projections.len());
+        let mut probe_to_build = Vec::new();
+        let mut tail_fields = Vec::new();
         for (i, field) in probe_schema.fields().iter().enumerate() {
             if probe_projections.contains(&i) {
+                for ((probe_index, updated), _) in probe_to_build_index.iter_mut() {
+                    if probe_index == &i && !*updated {
+                        *probe_index = probe_fields.len();
+                        *updated = true;
+                    }
+                }
                 probe_fields.push(field.clone());
+                merged_fields.push(field.clone());
             }
         }
         for (i, field) in build_schema.fields().iter().enumerate() {
             if build_projections.contains(&i) {
-                build_fields.push(field.clone());
+                let mut is_tail = false;
+                for ((probe_index, _), build_index) in probe_to_build_index.iter() {
+                    if build_index == &i {
+                        tail_fields.push(field.clone());
+                        probe_to_build.push((
+                            *probe_index,
+                            (
+                                probe_fields[*probe_index].data_type().is_nullable(),
+                                field.data_type().is_nullable(),
+                            ),
+                        ));
+                        build_projections.remove(&i);
+                        is_tail = true;
+                    }
+                }
+                if !is_tail {
+                    build_fields.push(field.clone());
+                }
+                merged_fields.push(field.clone());
             }
         }
+        build_fields.extend(tail_fields.clone());
+        merged_fields.extend(tail_fields);
+        let merged_schema = DataSchemaRefExt::create(merged_fields);
 
         let merged_fields = match join.join_type {
             JoinType::Cross
@@ -256,12 +302,20 @@ impl PhysicalPlanBuilder {
             }
         };
         let mut projections = ColumnSet::new();
-        let projected_schema = DataSchemaRefExt::create(merged_fields);
-        for column in column_projections {
+        let projected_schema = DataSchemaRefExt::create(merged_fields.clone());
+        for column in column_projections.iter() {
             if let Ok(index) = projected_schema.index_of(&column.to_string()) {
                 projections.insert(index);
             }
         }
+
+        let mut output_fields = Vec::with_capacity(column_projections.len());
+        for (i, field) in merged_fields.iter().enumerate() {
+            if projections.contains(&i) {
+                output_fields.push(field.clone());
+            }
+        }
+        let output_schema = DataSchemaRefExt::create(output_fields);
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: self.next_plan_id(),
@@ -288,7 +342,8 @@ impl PhysicalPlanBuilder {
                 .collect::<Result<_>>()?,
             marker_index: join.marker_index,
             from_correlated_subquery: join.from_correlated_subquery,
-
+            probe_to_build,
+            output_schema,
             contain_runtime_filter: join.contain_runtime_filter,
             stat_info: Some(stat_info),
         }))
