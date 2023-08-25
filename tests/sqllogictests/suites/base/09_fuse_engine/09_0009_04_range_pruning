@@ -36,6 +36,16 @@ select * from range_test_t where b=0 order by a
 2 0
 
 statement ok
+insert into range_test_t (a) select number from numbers(10000);
+
+
+query II
+select max(a) from range_test_t where a >= 4000 and a <= 5000;
+----
+5000
+
+
+statement ok
 drop table range_test_t
 
 statement ok
