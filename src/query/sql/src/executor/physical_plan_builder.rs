@@ -1845,7 +1845,7 @@ impl PhysicalPlanBuilder {
             actual_table_field_len: source_fields.len(),
             is_agg: agg.is_agg,
             projection,
-            agg_functions_len: agg.agg_functions_len,
+            num_agg_funcs: agg.num_agg_funcs,
         })
     }
 
