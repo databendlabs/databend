@@ -224,7 +224,7 @@ async fn test_safety_for_recluster() -> Result<()> {
         let mut mutator =
             ReclusterMutator::try_create(ctx.clone(), 1.0, threshold, cluster_key_id)?;
         let selected_segs =
-            ReclusterMutator::select_segments(&compact_segments, block_per_seg, 8, cluster_key_id);
+            ReclusterMutator::select_segments(&compact_segments, block_per_seg, 8, cluster_key_id)?;
         if selected_segs.is_empty() {
             for compact_segment in compact_segments.into_iter() {
                 if !ReclusterMutator::segment_can_recluster(

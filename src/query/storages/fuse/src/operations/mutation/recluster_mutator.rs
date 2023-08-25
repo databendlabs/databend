@@ -27,6 +27,7 @@ use common_expression::BlockThresholds;
 use common_expression::Scalar;
 use indexmap::IndexSet;
 use itertools::Itertools;
+use log::error;
 use minitrace::future::FutureExt;
 use minitrace::Span;
 use storages_common_table_meta::meta::BlockMeta;
@@ -145,7 +146,7 @@ impl ReclusterMutator {
                 continue;
             }
 
-            let selected_idx = Self::fetch_max_depth(points_map, self.depth_threshold);
+            let selected_idx = Self::fetch_max_depth(points_map, self.depth_threshold)?;
             if selected_idx.is_empty() {
                 remained_blocks.extend(block_metas.into_iter());
                 continue;
@@ -199,7 +200,7 @@ impl ReclusterMutator {
         block_per_seg: usize,
         max_len: usize,
         cluster_key_id: u32,
-    ) -> IndexSet<usize> {
+    ) -> Result<IndexSet<usize>> {
         let mut blocks_num = 0;
         let mut indices = IndexSet::new();
         let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
@@ -227,12 +228,12 @@ impl ReclusterMutator {
         }
 
         if indices.len() < 2 || blocks_num < block_per_seg {
-            return indices;
+            return Ok(indices);
         }
 
-        let mut selected_segs = ReclusterMutator::fetch_max_depth(points_map, 1.0);
+        let mut selected_segs = ReclusterMutator::fetch_max_depth(points_map, 1.0)?;
         selected_segs.truncate(max_len);
-        selected_segs
+        Ok(selected_segs)
     }
 
     pub fn segment_can_recluster(
@@ -296,7 +297,7 @@ impl ReclusterMutator {
     fn fetch_max_depth(
         points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)>,
         depth_threshold: f64,
-    ) -> IndexSet<usize> {
+    ) -> Result<IndexSet<usize>> {
         let mut max_depth = 0;
         let mut max_points = Vec::new();
         let mut block_depths = Vec::new();
@@ -338,8 +339,13 @@ impl ReclusterMutator {
                 }
             });
         }
-        assert!(unfinished_parts.is_empty());
         assert!(!max_points.is_empty());
+        if !unfinished_parts.is_empty() {
+            error!("Recluster: unfinished_parts is not empty after calculate the blocks overlaps");
+            return Err(ErrorCode::Internal(
+                "failed to select blocks for recluster, please check your data",
+            ));
+        }
 
         let sum_depth: usize = block_depths.iter().sum();
         // round the float to 4 decimal places.
@@ -364,7 +370,7 @@ impl ReclusterMutator {
                 });
             }
         }
-        selected_idx
+        Ok(selected_idx)
     }
 
     // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.

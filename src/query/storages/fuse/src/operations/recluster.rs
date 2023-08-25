@@ -140,7 +140,7 @@ impl FuseTable {
                 block_per_seg,
                 max_threads * 4,
                 default_cluster_key_id,
-            );
+            )?;
             // select the blocks with the highest depth.
             if selected_segs.is_empty() {
                 for compact_segment in compact_segments.into_iter() {
