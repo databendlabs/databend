@@ -69,7 +69,14 @@ impl FuseTable {
                     .meta_location_generator
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
 
-                if !dry_run || is_lazy {
+                let mut nodes_num = 1;
+                let cluster = ctx.get_cluster();
+
+                if !cluster.is_empty() {
+                    nodes_num = cluster.nodes.len();
+                }
+
+                if (!dry_run && snapshot.segments.len() > nodes_num) || is_lazy {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
@@ -107,7 +114,7 @@ impl FuseTable {
                     segments_location,
                     summary,
                 )
-                .await
+                    .await
             }
             None => Ok((PartStatistics::default(), Partitions::default())),
         }
