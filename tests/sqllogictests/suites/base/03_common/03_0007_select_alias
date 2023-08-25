@@ -3,7 +3,7 @@ set max_threads=1
 
 
 query III
-select number + 3 as d,  number + 5 as c, c - 2  from numbers(3);
+select number + 3 as d,  number + 5 as c, c - 2  from numbers(3) order by d;
 ----
 3 5 3
 4 6 4
