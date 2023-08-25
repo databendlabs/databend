@@ -46,10 +46,13 @@ pub(super) struct NativeRowsFetcher<const BLOCKING_IO: bool> {
     projection: Projection,
     schema: TableSchemaRef,
     reader: Arc<BlockReader>,
-    column_leaves: Vec<Vec<ColumnDescriptor>>,
+    column_leaves: Arc<Vec<Vec<ColumnDescriptor>>>,
 
     // The value contains part info and the page size of the corresponding block file.
-    part_map: HashMap<u64, (PartInfoPtr, u64)>,
+    part_map: Arc<HashMap<u64, (PartInfoPtr, u64)>>,
+
+    // To control the parallelism of fetching blocks.
+    _max_threads: usize,
 }
 
 #[async_trait::async_trait]
@@ -89,7 +92,13 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
             })
             .collect();
 
-        let (blocks, idx_map) = self.fetch_blocks(part_set).await?;
+        let (blocks, idx_map) = Self::fetch_blocks(
+            self.reader.clone(),
+            part_set,
+            self.part_map.clone(),
+            self.column_leaves.clone(),
+        )
+        .await?;
         let indices = row_set
             .iter()
             .map(|(prefix, page_idx, idx)| {
@@ -111,7 +120,8 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
         table: Arc<FuseTable>,
         projection: Projection,
         reader: Arc<BlockReader>,
-        column_leaves: Vec<Vec<ColumnDescriptor>>,
+        column_leaves: Arc<Vec<Vec<ColumnDescriptor>>>,
+        max_threads: usize,
     ) -> Self {
         let schema = table.schema();
         let segment_reader =
@@ -125,7 +135,8 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             schema,
             reader,
             column_leaves,
-            part_map: HashMap::new(),
+            part_map: Arc::new(HashMap::new()),
+            _max_threads: max_threads,
         }
     }
 
@@ -135,6 +146,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
         let arrow_schema = self.schema.to_arrow();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
 
+        let mut part_map = HashMap::new();
         for row_id in row_ids {
             let (prefix, _) = split_row_id(*row_id);
 
@@ -166,23 +178,26 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
                 &self.projection,
             );
 
-            self.part_map.insert(prefix, (part_info, page_size));
+            part_map.insert(prefix, (part_info, page_size));
         }
+
+        self.part_map = Arc::new(part_map);
 
         Ok(())
     }
 
     fn build_blocks(
-        &self,
+        reader: &BlockReader,
         mut chunks: NativeSourceData,
         needed_pages: &[u64],
+        column_leaves: &Vec<Vec<ColumnDescriptor>>,
     ) -> Result<Vec<DataBlock>> {
         let mut array_iters = BTreeMap::new();
 
-        for (index, column_node) in self.reader.project_column_nodes.iter().enumerate() {
+        for (index, column_node) in reader.project_column_nodes.iter().enumerate() {
             let readers = chunks.remove(&index).unwrap();
             if !readers.is_empty() {
-                let leaves = self.column_leaves.get(index).unwrap().clone();
+                let leaves = column_leaves.get(index).unwrap().clone();
                 let array_iter = BlockReader::build_array_iter(column_node, leaves, readers)?;
                 array_iters.insert(index, array_iter);
             }
@@ -204,7 +219,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
                 arrays.push((*index, array));
             }
             offset = *page + 1;
-            let block = self.reader.build_block(arrays, None)?;
+            let block = reader.build_block(arrays, None)?;
             blocks.push(block);
         }
 
@@ -214,23 +229,22 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
     #[allow(clippy::type_complexity)]
     #[async_backtrace::framed]
     async fn fetch_blocks(
-        &self,
+        reader: Arc<BlockReader>,
         part_set: HashMap<u64, Vec<u64>>,
+        part_map: Arc<HashMap<u64, (PartInfoPtr, u64)>>,
+        column_leaves: Arc<Vec<Vec<ColumnDescriptor>>>,
     ) -> Result<(Vec<DataBlock>, HashMap<(u64, u64), usize>)> {
         let mut chunks = Vec::with_capacity(part_set.len());
         if BLOCKING_IO {
             for (prefix, needed_pages) in part_set.into_iter() {
-                let part = self.part_map[&prefix].0.clone();
-                let chunk = self.reader.sync_read_native_columns_data(part, &None)?;
+                let part = part_map[&prefix].0.clone();
+                let chunk = reader.sync_read_native_columns_data(part, &None)?;
                 chunks.push((prefix, chunk, needed_pages));
             }
         } else {
             for (prefix, needed_pages) in part_set.into_iter() {
-                let part = self.part_map[&prefix].0.clone();
-                let chunk = self
-                    .reader
-                    .async_read_native_columns_data(part, &None)
-                    .await?;
+                let part = part_map[&prefix].0.clone();
+                let chunk = reader.async_read_native_columns_data(part, &None).await?;
                 chunks.push((prefix, chunk, needed_pages));
             }
         }
@@ -243,7 +257,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
 
         let mut offset = 0_usize;
         for (prefix, chunk, needed_pages) in chunks.into_iter() {
-            let fetched_blocks = self.build_blocks(chunk, &needed_pages)?;
+            let fetched_blocks = Self::build_blocks(&reader, chunk, &needed_pages, &column_leaves)?;
             for (block, page) in fetched_blocks.into_iter().zip(needed_pages) {
                 idx_map.insert((prefix, page), offset);
                 offset += 1;
