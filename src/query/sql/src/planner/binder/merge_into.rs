@@ -113,7 +113,14 @@ impl Binder {
             .await?;
         let table_id = fuse_table.get_id();
         let table_schema = fuse_table.schema();
-
+        // Todo: (JackTan25) support computed expr
+        for filed in fuse_table.schema().fields() {
+            if filed.computed_expr().is_some() {
+                return Err(ErrorCode::Unimplemented(
+                    "merge into doesn't support computed expr for now",
+                ));
+            }
+        }
         // get target_table_reference
         let target_table = TableReference::Table {
             span: None,
@@ -287,11 +294,7 @@ impl Binder {
                     columns.insert(idx);
                 }
             }
-            if update_columns.len() != schema.num_fields() {
-                return Err(ErrorCode::BadArguments(
-                    "for now, we need to make sure the input schema same with table schema",
-                ));
-            }
+
             Ok(MatchedEvaluator {
                 condition,
                 update: Some(update_columns),

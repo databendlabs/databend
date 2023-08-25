@@ -455,6 +455,24 @@ impl PipelineBuilder {
         );
 
         let mut pipe_items = Vec::with_capacity(2);
+        pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
+        pipe_items.push(create_dummy_item());
+        self.main_pipeline.add_pipe(Pipe::create(
+            self.main_pipeline.input_len(),
+            self.main_pipeline.input_len(),
+            pipe_items,
+        ));
+
+        let mut pipe_items = Vec::with_capacity(2);
+        pipe_items.push(serialize_block_transform.into_pipe_item());
+        pipe_items.push(create_dummy_item());
+        self.main_pipeline.add_pipe(Pipe::create(
+            self.main_pipeline.input_len(),
+            self.main_pipeline.input_len(),
+            pipe_items,
+        ));
+        // add
+        let mut pipe_items = Vec::with_capacity(2);
         // for unmatched processor insert
         pipe_items.push(serialize_segment_transform.into_pipe_item());
 
