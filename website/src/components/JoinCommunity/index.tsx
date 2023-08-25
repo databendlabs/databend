@@ -27,6 +27,7 @@ const JoinCommunity:  FC<TProps> = ({titleAlign, maxWidth, justifyContent}): Rea
       },
       {
         'icon':'Twitter',
+        'size': 20,
         'title': 'Twitter',
         'link': 'https://twitter.com/DatabendLabs'
       },
@@ -43,7 +44,7 @@ const JoinCommunity:  FC<TProps> = ({titleAlign, maxWidth, justifyContent}): Rea
         {community.map((item,index)=>{
           const Icon = icons[item.icon]
           return <Link to={item.link} key={index}>
-            <div className={clsx('community-item', styles.communityItem)}><div className={clsx('icon', styles.Icon)}><Icon size={24}/></div><h6>{item.title}</h6>{item.star?<span className={clsx('tag', styles.tag)}>🌟 {item.star} Stars</span>:''}</div>
+            <div className={clsx('community-item', styles.communityItem)}><div className={clsx('icon', styles.Icon)}><Icon size={item?.size || 24}/></div><h6>{item.title}</h6>{item.star?<span className={clsx('tag', styles.tag)}>🌟 {item.star} Stars</span>:''}</div>
           </Link>
         })}
       </div>
