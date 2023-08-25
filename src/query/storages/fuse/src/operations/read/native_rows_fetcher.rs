@@ -190,7 +190,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
         reader: &BlockReader,
         mut chunks: NativeSourceData,
         needed_pages: &[u64],
-        column_leaves: &Vec<Vec<ColumnDescriptor>>,
+        column_leaves: &[Vec<ColumnDescriptor>],
     ) -> Result<Vec<DataBlock>> {
         let mut array_iters = BTreeMap::new();
 
