@@ -7,7 +7,7 @@ description:
 
 Profile-guided Optimization is a compiler optimization technique that involves collecting typical execution data, including possible branches, during program execution. This collected data is then used to optimize various aspects of the code, such as inlining, conditional branches, machine code layout, and register allocation.
 
-According to the tests, PGO makes a consistent improvement for Databend. The performance benefits depend on your typical workload - you can get better or worse results.
+According to the [tests](https://github.com/datafuselabs/databend/issues/9387#issuecomment-1566210063), PGO boosts Databend performance by up to 10%. The performance benefits depend on your typical workload - you can get better or worse results.
 
 More information about PGO in Databend you can read in [Issue #9387 | Feature: add PGO support](https://github.com/datafuselabs/databend/issues/9387).
 
@@ -21,7 +21,7 @@ Before you build Databend with PGO, make sure the following requirements have be
 $ rustup component add llvm-tools-preview
 ```
 
-- Install [`cargo-pgo`](https://crates.io/crates/cargo-pgo) that makes it easier to use [PGO](https://doc.rust-lang.org/rustc/profile-guided-optimization.html) and [BOLT](https://github.com/llvm/llvm-project/tree/main/bolt) to optimize Rust binaries.
+- Install [`cargo-pgo`](https://crates.io/crates/cargo-pgo) that makes it easier to use [PGO](https://doc.rust-lang.org/rustc/profile-guided-optimization.html) to optimize Rust binaries.
 
 ```bash
 $ cargo install cargo-pgo
