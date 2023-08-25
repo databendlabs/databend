@@ -51,7 +51,9 @@ pub(super) struct ParquetRowsFetcher<const BLOCKING_IO: bool> {
 
     settings: ReadSettings,
     reader: Arc<BlockReader>,
-    uncompressed_buffer: Arc<UncompressedBuffer>,
+    // [`UncompressedBuffer`] cannot be shared between multiple threads at the same time.
+    // So we create a [`UncompressedBuffer`] for each thread.
+    uncompressed_buffers: Vec<Arc<UncompressedBuffer>>,
     part_map: Arc<HashMap<u64, PartInfoPtr>>,
 
     // To control the parallelism of fetching blocks.
@@ -98,28 +100,31 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
                 self.reader.clone(),
                 parts,
                 self.part_map.clone(),
-                self.uncompressed_buffer.clone(),
+                self.uncompressed_buffers[i].clone(),
                 self.settings,
             ))
         }
-        let offset = remain * (parts_per_thread + 1);
-        for i in 0..(self.max_threads - remain) {
-            let parts = part_set
-                [offset + i * parts_per_thread..offset + (i + 1) * parts_per_thread]
-                .to_vec();
-            tasks.push(Self::fetch_blocks(
-                self.reader.clone(),
-                parts,
-                self.part_map.clone(),
-                self.uncompressed_buffer.clone(),
-                self.settings,
-            ))
+        if parts_per_thread > 0 {
+            let offset = remain * (parts_per_thread + 1);
+            for i in 0..(self.max_threads - remain) {
+                let parts = part_set
+                    [offset + i * parts_per_thread..offset + (i + 1) * parts_per_thread]
+                    .to_vec();
+                tasks.push(Self::fetch_blocks(
+                    self.reader.clone(),
+                    parts,
+                    self.part_map.clone(),
+                    self.uncompressed_buffers[i].clone(),
+                    self.settings,
+                ))
+            }
         }
 
+        let num_task = tasks.len();
         let result = execute_futures_in_parallel(
             tasks,
-            self.max_threads,
-            self.max_threads * 2,
+            num_task,
+            num_task * 2,
             "parqeut rows fetch".to_string(),
         )
         .await?
@@ -161,7 +166,10 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
         buffer_size: usize,
         max_threads: usize,
     ) -> Self {
-        let uncompressed_buffer = UncompressedBuffer::new(buffer_size);
+        let mut uncompressed_buffers = Vec::with_capacity(max_threads);
+        for _ in 0..max_threads {
+            uncompressed_buffers.push(UncompressedBuffer::new(buffer_size));
+        }
         let schema = table.schema();
         let segment_reader =
             MetaReaders::segment_info_reader(table.operator.clone(), schema.clone());
@@ -173,7 +181,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
             schema,
             reader,
             settings,
-            uncompressed_buffer,
+            uncompressed_buffers,
             part_map: Arc::new(HashMap::new()),
             max_threads,
         }
