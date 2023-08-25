@@ -13,4 +13,6 @@ echo "USE_PARQUET2=${USE_PARQUET2}"
 
 echo "set use_parquet2 = ${USE_PARQUET2} ; select t_timestamp from @data/mytime.parquet" | $MYSQL_CLIENT_CONNECT
 
+echo "set use_parquet2 = ${USE_PARQUET2} ; select t_timestamp from @data/mytime.parquet where id < '100051135'" | $MYSQL_CLIENT_CONNECT
+
 done
