@@ -15,6 +15,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -28,9 +30,12 @@ use super::parquet_reader::ParquetRSReader;
 use crate::ParquetPart;
 
 pub struct ParquetSource {
+    // Source processor related fields.
+    output: Arc<OutputPort>,
+    scan_progress: Arc<Progress>,
+
     // Used for event transforming.
     ctx: Arc<dyn TableContext>,
-    output: Arc<OutputPort>,
     generated_data: Option<DataBlock>,
     is_finished: bool,
 
@@ -45,9 +50,11 @@ impl ParquetSource {
         output: Arc<OutputPort>,
         reader: Arc<ParquetRSReader>,
     ) -> Result<ProcessorPtr> {
+        let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(Self {
-            ctx,
             output,
+            scan_progress,
+            ctx,
             reader,
             batch_reader: None,
             generated_data: None,
@@ -83,6 +90,11 @@ impl Processor for ParquetSource {
         match self.generated_data.take() {
             None => Ok(Event::Async),
             Some(data_block) => {
+                let progress_values = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+                self.scan_progress.incr(&progress_values);
                 self.output.push_data(Ok(data_block));
                 Ok(Event::NeedConsume)
             }

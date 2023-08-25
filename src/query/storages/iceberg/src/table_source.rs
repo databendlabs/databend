@@ -15,6 +15,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -33,9 +35,11 @@ use parquet::arrow::async_reader::ParquetRecordBatchStream;
 use crate::partition::IcebergPartInfo;
 
 pub struct IcebergTableSource {
+    // Source processor related fields.
+    output: Arc<OutputPort>,
+    scan_progress: Arc<Progress>,
     // Used for event transforming.
     ctx: Arc<dyn TableContext>,
-    output: Arc<OutputPort>,
     generated_data: Option<DataBlock>,
     is_finished: bool,
 
@@ -52,9 +56,11 @@ impl IcebergTableSource {
         output_schema: DataSchemaRef,
         parquet_reader: Arc<ParquetRSReader>,
     ) -> Result<ProcessorPtr> {
+        let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(IcebergTableSource {
-            ctx,
             output,
+            scan_progress,
+            ctx,
             parquet_reader,
             output_schema,
             stream: None,
@@ -91,6 +97,11 @@ impl Processor for IcebergTableSource {
         match self.generated_data.take() {
             None => Ok(Event::Async),
             Some(data_block) => {
+                let progress_values = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+                self.scan_progress.incr(&progress_values);
                 self.output.push_data(Ok(data_block));
                 Ok(Event::NeedConsume)
             }
