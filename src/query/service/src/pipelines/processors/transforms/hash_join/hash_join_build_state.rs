@@ -583,30 +583,31 @@ impl HashJoinBuildState {
         *count -= 1;
         if *count == 0 {
             let data_blocks = unsafe { &mut *self.hash_join_state.chunks.get() };
-            debug_assert!(!data_blocks.is_empty());
-            let num_columns = data_blocks[0].num_columns();
-            let columns: Vec<Vec<Column>> = (0..num_columns)
-                .map(|index| {
-                    let columns = data_blocks
-                        .iter()
-                        .map(|block| (block.get_by_offset(index), block.num_rows()))
-                        .collect_vec();
-                    let full_columns: Vec<Column> = columns
-                        .iter()
-                        .map(|(entry, rows)| match &entry.value {
-                            Value::Scalar(s) => {
-                                let builder =
-                                    ColumnBuilder::repeat(&s.as_ref(), *rows, &entry.data_type);
-                                builder.build()
-                            }
-                            Value::Column(c) => c.clone(),
-                        })
-                        .collect();
-                    full_columns
-                })
-                .collect();
-            let build_columns = unsafe { &mut *self.hash_join_state.build_columns.get() };
-            *build_columns = columns;
+            if !data_blocks.is_empty() {
+                let num_columns = data_blocks[0].num_columns();
+                let columns: Vec<Vec<Column>> = (0..num_columns)
+                    .map(|index| {
+                        let columns = data_blocks
+                            .iter()
+                            .map(|block| (block.get_by_offset(index), block.num_rows()))
+                            .collect_vec();
+                        let full_columns: Vec<Column> = columns
+                            .iter()
+                            .map(|(entry, rows)| match &entry.value {
+                                Value::Scalar(s) => {
+                                    let builder =
+                                        ColumnBuilder::repeat(&s.as_ref(), *rows, &entry.data_type);
+                                    builder.build()
+                                }
+                                Value::Column(c) => c.clone(),
+                            })
+                            .collect();
+                        full_columns
+                    })
+                    .collect();
+                let build_columns = unsafe { &mut *self.hash_join_state.build_columns.get() };
+                *build_columns = columns;
+            }
             let mut build_done = self.hash_join_state.build_done.lock();
             *build_done = true;
             self.hash_join_state.build_done_notify.notify_waiters();
