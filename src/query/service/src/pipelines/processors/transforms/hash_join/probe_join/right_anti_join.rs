@@ -36,7 +36,7 @@ impl HashJoinProbeState {
     {
         let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
-        let mut occupied = 0;
+        let mut matched_num = 0;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
 
@@ -49,14 +49,14 @@ impl HashJoinProbeState {
                 valids,
                 i,
                 local_build_indexes_ptr,
-                occupied,
+                matched_num,
                 max_block_size,
             );
             if match_count == 0 {
                 continue;
             }
-            occupied += match_count;
-            if occupied >= max_block_size {
+            matched_num += match_count;
+            if matched_num >= max_block_size {
                 loop {
                     if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -69,7 +69,7 @@ impl HashJoinProbeState {
                             true;
                     }
 
-                    occupied = 0;
+                    matched_num = 0;
 
                     if incomplete_ptr == 0 {
                         break;
@@ -78,23 +78,23 @@ impl HashJoinProbeState {
                         key,
                         incomplete_ptr,
                         local_build_indexes_ptr,
-                        occupied,
+                        matched_num,
                         max_block_size,
                     );
                     if match_count == 0 {
                         break;
                     }
 
-                    occupied += match_count;
+                    matched_num += match_count;
 
-                    if occupied < max_block_size {
+                    if matched_num < max_block_size {
                         break;
                     }
                 }
             }
         }
 
-        for row_ptr in local_build_indexes.iter().take(occupied) {
+        for row_ptr in local_build_indexes.iter().take(matched_num) {
             outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] = true;
         }
 
@@ -116,8 +116,7 @@ impl HashJoinProbeState {
         let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         // The right join will return multiple data blocks of similar size.
-        let mut occupied = 0;
-        let mut probe_indexes_len = 0;
+        let mut matched_num = 0;
         let local_probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
@@ -137,16 +136,18 @@ impl HashJoinProbeState {
                 valids,
                 i,
                 local_build_indexes_ptr,
-                occupied,
+                matched_num,
                 max_block_size,
             );
             if match_count == 0 {
                 continue;
             }
-            occupied += match_count;
-            local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-            probe_indexes_len += 1;
-            if occupied >= max_block_size {
+
+            for _ in 0..match_count {
+                local_probe_indexes[matched_num] = i as u32;
+                matched_num += 1;
+            }
+            if matched_num >= max_block_size {
                 loop {
                     if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -155,11 +156,7 @@ impl HashJoinProbeState {
                     }
 
                     let probe_block = if is_probe_projected {
-                        Some(DataBlock::take_compacted_indices(
-                            input,
-                            &local_probe_indexes[0..probe_indexes_len],
-                            occupied,
-                        )?)
+                        Some(DataBlock::take(input, local_probe_indexes)?)
                     } else {
                         None
                     };
@@ -172,7 +169,7 @@ impl HashJoinProbeState {
                     } else {
                         None
                     };
-                    let result_block = self.merge_eq_block(probe_block, build_block, occupied);
+                    let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
                     if !result_block.is_empty() {
                         let (bm, all_true, all_false) = self.get_other_filters(
@@ -193,7 +190,7 @@ impl HashJoinProbeState {
                             // Safe to unwrap.
                             let validity = bm.unwrap();
                             let mut idx = 0;
-                            while idx < occupied {
+                            while idx < matched_num {
                                 let valid = unsafe { validity.get_bit_unchecked(idx) };
                                 if valid {
                                     outer_scan_map[local_build_indexes[idx].chunk_index as usize]
@@ -203,9 +200,7 @@ impl HashJoinProbeState {
                             }
                         }
                     }
-
-                    probe_indexes_len = 0;
-                    occupied = 0;
+                    matched_num = 0;
 
                     if incomplete_ptr == 0 {
                         break;
@@ -214,47 +209,47 @@ impl HashJoinProbeState {
                         key,
                         incomplete_ptr,
                         local_build_indexes_ptr,
-                        occupied,
+                        matched_num,
                         max_block_size,
                     );
                     if match_count == 0 {
                         break;
                     }
 
-                    occupied += match_count;
-                    local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-                    probe_indexes_len += 1;
+                    for _ in 0..match_count {
+                        local_probe_indexes[matched_num] = i as u32;
+                        matched_num += 1;
+                    }
 
-                    if occupied < max_block_size {
+                    if matched_num < max_block_size {
                         break;
                     }
                 }
             }
         }
 
-        if occupied == 0 {
+        if matched_num == 0 {
             return Ok(vec![]);
         }
 
         let probe_block = if is_probe_projected {
-            Some(DataBlock::take_compacted_indices(
+            Some(DataBlock::take(
                 input,
-                &local_probe_indexes[0..probe_indexes_len],
-                occupied,
+                &local_probe_indexes[0..matched_num],
             )?)
         } else {
             None
         };
         let build_block = if is_build_projected {
             Some(self.hash_join_state.row_space.gather(
-                &local_build_indexes[0..occupied],
+                &local_build_indexes[0..matched_num],
                 data_blocks,
                 build_num_rows,
             )?)
         } else {
             None
         };
-        let result_block = self.merge_eq_block(probe_block, build_block, occupied);
+        let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
         if !result_block.is_empty() {
             let (bm, all_true, all_false) = self.get_other_filters(
@@ -267,14 +262,14 @@ impl HashJoinProbeState {
             )?;
 
             if all_true {
-                for row_ptr in local_build_indexes.iter().take(occupied) {
+                for row_ptr in local_build_indexes.iter().take(matched_num) {
                     outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] = true;
                 }
             } else if !all_false {
                 // Safe to unwrap.
                 let validity = bm.unwrap();
                 let mut idx = 0;
-                while idx < occupied {
+                while idx < matched_num {
                     let valid = unsafe { validity.get_bit_unchecked(idx) };
                     if valid {
                         outer_scan_map[local_build_indexes[idx].chunk_index as usize]

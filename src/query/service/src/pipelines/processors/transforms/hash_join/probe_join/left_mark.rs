@@ -57,7 +57,7 @@ impl HashJoinProbeState {
                 .write();
             *has_null = true;
         }
-        let mut occupied = 0;
+        let mut matched_num = 0;
         let build_index = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_index.as_mut_ptr();
 
@@ -81,7 +81,7 @@ impl HashJoinProbeState {
                 .from_correlated_subquery
             {
                 true => {
-                    hash_table.probe_hash_table(key, build_indexes_ptr, occupied, max_block_size)
+                    hash_table.probe_hash_table(key, build_indexes_ptr, matched_num, max_block_size)
                 }
                 false => self.probe_key(
                     hash_table,
@@ -89,20 +89,20 @@ impl HashJoinProbeState {
                     valids,
                     i,
                     build_indexes_ptr,
-                    occupied,
+                    matched_num,
                     max_block_size,
                 ),
             };
             if match_count == 0 {
                 continue;
             }
-            occupied += match_count;
+            matched_num += match_count;
             loop {
-                for probed_row in &build_index[0..occupied] {
+                for probed_row in &build_index[0..matched_num] {
                     mark_scan_map[probed_row.chunk_index as usize][probed_row.row_index as usize] =
                         MARKER_KIND_TRUE;
                 }
-                occupied = 0;
+                matched_num = 0;
                 if incomplete_ptr == 0 {
                     break;
                 }
@@ -110,13 +110,13 @@ impl HashJoinProbeState {
                     key,
                     incomplete_ptr,
                     build_indexes_ptr,
-                    occupied,
+                    matched_num,
                     max_block_size,
                 );
                 if match_count == 0 {
                     break;
                 }
-                occupied += match_count;
+                matched_num += match_count;
             }
         }
 
@@ -159,8 +159,7 @@ impl HashJoinProbeState {
             .as_ref()
             .unwrap();
 
-        let mut occupied = 0;
-        let mut probe_indexes_len = 0;
+        let mut matched_num = 0;
         let probe_indexes = &mut probe_state.probe_indexes;
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
@@ -178,7 +177,7 @@ impl HashJoinProbeState {
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) =
                 if self.hash_join_state.hash_join_desc.from_correlated_subquery {
-                    hash_table.probe_hash_table(key, build_indexes_ptr, occupied, max_block_size)
+                    hash_table.probe_hash_table(key, build_indexes_ptr, matched_num, max_block_size)
                 } else {
                     self.probe_key(
                         hash_table,
@@ -186,7 +185,7 @@ impl HashJoinProbeState {
                         valids,
                         i,
                         build_indexes_ptr,
-                        occupied,
+                        matched_num,
                         max_block_size,
                     )
                 };
@@ -194,10 +193,11 @@ impl HashJoinProbeState {
                 continue;
             }
 
-            occupied += match_count;
-            probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-            probe_indexes_len += 1;
-            if occupied >= max_block_size {
+            for _ in 0..match_count {
+                probe_indexes[matched_num] = i as u32;
+                matched_num += 1;
+            }
+            if matched_num >= max_block_size {
                 loop {
                     if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -206,11 +206,7 @@ impl HashJoinProbeState {
                     }
 
                     let probe_block = if is_probe_projected {
-                        Some(DataBlock::take_compacted_indices(
-                            input,
-                            &probe_indexes[0..probe_indexes_len],
-                            occupied,
-                        )?)
+                        Some(DataBlock::take(input, probe_indexes)?)
                     } else {
                         None
                     };
@@ -223,7 +219,7 @@ impl HashJoinProbeState {
                     } else {
                         None
                     };
-                    let result_block = self.merge_eq_block(probe_block, build_block, occupied);
+                    let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
                     let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
                     let filter_viewer =
@@ -245,10 +241,7 @@ impl HashJoinProbeState {
                                 [build_index.row_index as usize] = MARKER_KIND_TRUE;
                         }
                     }
-
-                    probe_indexes_len = 0;
-                    occupied = 0;
-
+                    matched_num = 0;
                     if incomplete_ptr == 0 {
                         break;
                     }
@@ -256,18 +249,19 @@ impl HashJoinProbeState {
                         key,
                         incomplete_ptr,
                         build_indexes_ptr,
-                        occupied,
+                        matched_num,
                         max_block_size,
                     );
                     if match_count == 0 {
                         break;
                     }
 
-                    occupied += match_count;
-                    probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-                    probe_indexes_len += 1;
+                    for _ in 0..match_count {
+                        probe_indexes[matched_num] = i as u32;
+                        matched_num += 1;
+                    }
 
-                    if occupied < max_block_size {
+                    if matched_num < max_block_size {
                         break;
                     }
                 }
@@ -286,36 +280,32 @@ impl HashJoinProbeState {
             *has_null = false;
         }
 
-        if probe_indexes_len == 0 {
+        if matched_num == 0 {
             return Ok(vec![]);
         }
 
         let probe_block = if is_probe_projected {
-            Some(DataBlock::take_compacted_indices(
-                input,
-                &probe_indexes[0..probe_indexes_len],
-                occupied,
-            )?)
+            Some(DataBlock::take(input, &probe_indexes[0..matched_num])?)
         } else {
             None
         };
         let build_block = if is_build_projected {
             Some(self.hash_join_state.row_space.gather(
-                &build_indexes[0..occupied],
+                &build_indexes[0..matched_num],
                 data_blocks,
                 build_num_rows,
             )?)
         } else {
             None
         };
-        let result_block = self.merge_eq_block(probe_block, build_block, occupied);
+        let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
         let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
         let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
         let validity = &filter_viewer.validity;
         let data = &filter_viewer.column;
 
-        for (idx, build_index) in (build_indexes[0..occupied]).iter().enumerate() {
+        for (idx, build_index) in (build_indexes[0..matched_num]).iter().enumerate() {
             if !validity.get_bit(idx) {
                 if mark_scan_map[build_index.chunk_index as usize][build_index.row_index as usize]
                     == MARKER_KIND_FALSE

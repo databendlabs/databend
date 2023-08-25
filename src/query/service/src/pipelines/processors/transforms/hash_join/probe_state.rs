@@ -24,7 +24,7 @@ use crate::sql::plans::JoinType;
 /// We may need some reusable state for probe phase.
 pub struct ProbeState {
     pub(crate) max_block_size: usize,
-    pub(crate) probe_indexes: Vec<(u32, u32)>,
+    pub(crate) probe_indexes: Vec<u32>,
     pub(crate) build_indexes: Vec<RowPtr>,
     pub(crate) valids: Option<Bitmap>,
     pub(crate) true_validity: Bitmap,
@@ -35,7 +35,7 @@ pub struct ProbeState {
     // row_state:  the state (counter) of the probe block row -> [1, 1, 2, 1]
     pub(crate) row_state: Option<Vec<usize>>,
     pub(crate) row_state_indexes: Option<Vec<usize>>,
-    pub(crate) probe_unmatched_indexes: Option<Vec<(u32, u32)>>,
+    pub(crate) probe_unmatched_indexes: Option<Vec<u32>>,
     pub(crate) markers: Option<Vec<u8>>,
 }
 
@@ -65,7 +65,7 @@ impl ProbeState {
                     (
                         Some(vec![0; max_block_size]),
                         None,
-                        Some(vec![(0, 0); max_block_size]),
+                        Some(vec![0; max_block_size]),
                     )
                 }
             }
@@ -78,7 +78,7 @@ impl ProbeState {
         };
         ProbeState {
             max_block_size,
-            probe_indexes: vec![(0, 0); max_block_size],
+            probe_indexes: vec![0; max_block_size],
             build_indexes: vec![
                 RowPtr {
                     chunk_index: 0,
