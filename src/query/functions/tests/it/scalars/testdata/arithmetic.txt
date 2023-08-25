@@ -409,6 +409,14 @@ evaluation (internal):
 +--------+------------------------+
 
 
+error: 
+  --> SQL:1:1
+  |
+1 | -g
+  | ^ number overflowed while evaluating function `minus(-9223372036854775808)`
+
+
+
 ast            : c - e
 raw expr       : minus(c::UInt32, e::Decimal(10, 1))
 checked expr   : minus<UInt32, Decimal(10, 1)>(c, e)
