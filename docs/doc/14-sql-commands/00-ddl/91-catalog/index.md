@@ -24,7 +24,7 @@ Here are examples of creating Iceberg and Hive catalogs in Databend:
 CREATE CATALOG hive_ctl 
 TYPE = HIVE 
 CONNECTION =(
-    ADDRESS = '127.0.0.1:9083' 
+    METASTORE_ADDRESS = '127.0.0.1:9083' 
     URL = 's3://databend-toronto/' 
     AWS_KEY_ID = '<your_key_id>' 
     AWS_SECRET_KEY = '<your_secret_key>' 
@@ -32,9 +32,11 @@ CONNECTION =(
 
 SHOW CREATE CATALOG hive_ctl;
 
-Catalog |Type|Option                |
---------+----+----------------------+
-hive_ctl|hive|ADDRESS¶127.0.0.1:9083|
+Name   |Value                                                                                                                |
+-------+---------------------------------------------------------------------------------------------------------------------+
+Catalog|hive_ctl                                                                                                             |
+Type   |hive                                                                                                                 |
+Option |METASTORE ADDRESS¶127.0.0.1:9083¶STORAGE PARAMS¶s3 | bucket=databend-toronto,root=/,endpoint=https://s3.amazonaws.com|
 
 -- Create an Iceberg catalog
 CREATE CATALOG iceberg_ctl

@@ -4,7 +4,7 @@ title: CREATE CATALOG
 
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced or updated: v1.2.65"/>
+<FunctionDescription description="Introduced or updated: v1.2.83"/>
 
 Defines and establishes a new catalog in the Databend query engine. 
 
@@ -14,7 +14,7 @@ Defines and establishes a new catalog in the Databend query engine.
 CREATE CATALOG <catalog_name>
 TYPE = <catalog_type>
 CONNECTION = (
-    ADDRESS = '<hive_metastore_address>'
+    METASTORE_ADDRESS = '<hive_metastore_address>'
     URL = '<data_storage_path>'
     <connection_parameter> = '<connection_parameter_value>'
     <connection_parameter> = '<connection_parameter_value>'
@@ -25,7 +25,7 @@ CONNECTION = (
 | Parameter             | Required? | Description                                                                                                               | 
 |-----------------------|-----------|---------------------------------------------------------------------------------------------------------------------------| 
 | TYPE                  | Yes       | Type of the catalog: 'HIVE' for Hive catalog or 'ICEBERG' for Iceberg catalog.                                      | 
-| ADDRESS               | No        | Address of the Hive Metastore. Required for Hive catalog.                                                                | 
+| METASTORE_ADDRESS     | No        | Hive Metastore address. Required for Hive catalog only.| 
 | URL                   | Yes       | Location of the external storage linked to this catalog. This could be a bucket or a folder within a bucket. For example, 's3://databend-toronto/'.                       | 
 | connection_parameter  | Yes       | Connection parameters to establish connections with external storage. The required parameters vary based on the specific storage service and authentication methods. Refer to [Connection Parameters](../../../13-sql-reference/51-connect-parameters.md) for detailed information. |
 
@@ -38,7 +38,7 @@ This example demonstrates the creation of a catalog configured to interact with 
 CREATE CATALOG hive_ctl 
 TYPE = HIVE 
 CONNECTION =(
-    ADDRESS = '127.0.0.1:9083' 
+    METASTORE_ADDRESS = '127.0.0.1:9083' 
     URL = 's3://databend-toronto/' 
     AWS_KEY_ID = '<your_key_id>' 
     AWS_SECRET_KEY = '<your_secret_key>' 
