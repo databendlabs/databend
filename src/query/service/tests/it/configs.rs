@@ -843,7 +843,7 @@ path = "_cache"
                 .expect("config load success")
                 .into_config();
 
-            assert!(!cfg.log.query.on);
+            assert!(!cfg.log.query.query_log_on);
 
             assert_eq!("tenant_id_from_env", cfg.query.tenant_id);
             assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
