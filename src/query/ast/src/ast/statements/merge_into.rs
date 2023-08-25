@@ -20,7 +20,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::Hint;
-use super::UpdateExpr;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Expr;
@@ -30,8 +29,30 @@ use crate::ast::TableAlias;
 use crate::ast::TableReference;
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct MergeUpdateExpr {
+    pub catalog: Option<Identifier>,
+    pub table: Option<Identifier>,
+    pub name: Identifier,
+    pub expr: Expr,
+}
+
+impl Display for MergeUpdateExpr {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        if self.catalog.is_some() {
+            write!(f, "{}.", self.catalog.clone().unwrap())?;
+        }
+
+        if self.table.is_some() {
+            write!(f, "{}.", self.table.clone().unwrap())?;
+        }
+
+        write!(f, "{} = {}", self.name, self.expr)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum MatchOperation {
-    Update { update_list: Vec<UpdateExpr> },
+    Update { update_list: Vec<MergeUpdateExpr> },
     Delete,
 }
 

@@ -2225,7 +2225,7 @@ fn match_operation(i: Input) -> IResult<MatchOperation> {
         value(MatchOperation::Delete, rule! {DELETE}),
         map(
             rule! {
-                UPDATE ~ SET ~ ^#comma_separated_list1(update_expr)
+                UPDATE ~ SET ~ ^#comma_separated_list1(merge_update_expr)
             },
             |(_, _, update_list)| MatchOperation::Update { update_list },
         ),
@@ -2647,4 +2647,16 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
     map(rule! { ( #ident ~ "=" ~ ^#expr ) }, |(name, _, expr)| {
         UpdateExpr { name, expr }
     })(i)
+}
+
+pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
+    map(
+        rule! { ( #period_separated_idents_1_to_3 ~ "=" ~ ^#expr ) },
+        |((catalog, table, name), _, expr)| MergeUpdateExpr {
+            catalog,
+            table,
+            name,
+            expr,
+        },
+    )(i)
 }

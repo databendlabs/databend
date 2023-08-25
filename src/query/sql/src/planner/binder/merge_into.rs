@@ -43,6 +43,7 @@ use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::UnmatchedEvaluator;
 use crate::BindContext;
+use crate::ColumnEntry;
 use crate::IndexType;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
@@ -135,7 +136,6 @@ impl Binder {
 
         // get_source_table_reference
         let source_data = source.transform_table_reference();
-        let mut columns_set = HashSet::<IndexType>::new();
 
         // bind source data
         let (left_child, mut left_context) = self
@@ -143,10 +143,7 @@ impl Binder {
             .await?;
 
         // add all left source columns for read
-        let mut columns_set = columns_set
-            .union(&left_context.column_set())
-            .cloned()
-            .collect();
+        let mut columns_set = left_context.column_set();
 
         // bind table for target table
         let (mut right_child, mut right_context) = self
@@ -178,6 +175,9 @@ impl Binder {
         self.metadata
             .write()
             .set_table_row_id_index(table_index, column_binding.index);
+        // add row_id_idx
+        columns_set.insert(column_binding.index);
+
         // add join,use left outer join in V1, we use _row_id to check_duplicate join row.
         let join = Join {
             op: LeftOuter,
@@ -207,6 +207,13 @@ impl Binder {
             HashMap::new(),
             Box::new(IndexMap::new()),
         );
+        // add join condition used column idx
+        columns_set = columns_set
+            .union(&scalar_binder.bind(join_expr).await?.0.used_columns())
+            .cloned()
+            .collect();
+
+        let column_entries = self.metadata.read().columns_by_table_index(table_index);
 
         // bind clause column
         for clause in &matched_clauses {
@@ -216,6 +223,7 @@ impl Binder {
                     clause,
                     &mut columns_set,
                     table_schema.clone(),
+                    &column_entries,
                 )
                 .await?,
             );
@@ -255,6 +263,7 @@ impl Binder {
         clause: &MatchedClause,
         columns: &mut HashSet<IndexType>,
         schema: TableSchemaRef,
+        column_entries: &Vec<ColumnEntry>,
     ) -> Result<MatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(&expr).await?;
@@ -272,6 +281,9 @@ impl Binder {
                 let (scalar_expr, _) = scalar_binder.bind(&update_expr.expr).await?;
                 let col_name =
                     normalize_identifier(&update_expr.name, &self.name_resolution_ctx).name;
+
+                columns.insert(self.find_column_index(column_entries, &col_name)?);
+
                 let index = schema.index_of(&col_name)?;
 
                 if update_columns.contains_key(&index) {
@@ -371,5 +383,21 @@ impl Binder {
             condition,
             values,
         })
+    }
+
+    fn find_column_index(
+        &self,
+        column_entries: &Vec<ColumnEntry>,
+        col_name: &str,
+    ) -> Result<usize> {
+        for column_entry in column_entries {
+            if col_name == column_entry.name() {
+                return Ok(column_entry.index());
+            }
+        }
+        Err(ErrorCode::BadArguments(format!(
+            "not found col name: {}",
+            col_name
+        )))
     }
 }

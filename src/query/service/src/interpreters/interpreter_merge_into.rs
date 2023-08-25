@@ -237,6 +237,7 @@ impl MergeIntoInterpreter {
                         self.ctx.clone(),
                         fuse_table.schema().into(),
                         col_indices,
+                        false,
                     )?;
                 let update_list = update_list
                     .iter()
