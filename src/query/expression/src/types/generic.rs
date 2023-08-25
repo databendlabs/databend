@@ -57,6 +57,10 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         Some(col.clone())
     }
 
+    fn try_downcast_column_ref<'a>(col: &'a Column) -> Option<&'a Self::Column> {
+        Some(col)
+    }
+
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         Some(domain.clone())
     }

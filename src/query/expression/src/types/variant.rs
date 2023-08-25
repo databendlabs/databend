@@ -68,6 +68,10 @@ impl ValueType for VariantType {
         col.as_variant().cloned()
     }
 
+    fn try_downcast_column_ref<'a>(col: &'a Column) -> Option<&'a Self::Column> {
+        col.as_variant()
+    }
+
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         if domain.is_undefined() {
             Some(())

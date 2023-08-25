@@ -60,6 +60,13 @@ impl ValueType for EmptyMapType {
         }
     }
 
+    fn try_downcast_column_ref<'a>(col: &'a Column) -> Option<&'a Self::Column> {
+        match col {
+            Column::EmptyMap { len } => Some(len),
+            _ => None,
+        }
+    }
+
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
             Domain::Map(None) => Some(()),

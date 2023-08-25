@@ -116,7 +116,7 @@ impl HashJoinProbeState {
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
 
-        let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
+        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
         let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
         let is_build_projected = self
             .hash_join_state
@@ -162,7 +162,7 @@ impl HashJoinProbeState {
                     let build_block = if is_build_projected {
                         Some(self.hash_join_state.row_space.gather(
                             build_indexes,
-                            data_blocks,
+                            build_columns,
                             build_num_rows,
                         )?)
                     } else {
@@ -223,7 +223,7 @@ impl HashJoinProbeState {
             let build_block = if is_build_projected {
                 Some(self.hash_join_state.row_space.gather(
                     &build_indexes[0..matched_num],
-                    data_blocks,
+                    build_columns,
                     build_num_rows,
                 )?)
             } else {

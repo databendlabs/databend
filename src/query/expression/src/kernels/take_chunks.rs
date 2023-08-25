@@ -102,6 +102,24 @@ impl DataBlock {
         DataBlock::new(result_columns, result_size)
     }
 
+    pub fn hash_join_take_blocks(
+        build_columns: &[Vec<Column>],
+        indices: &[BlockRowIndex],
+        result_size: usize,
+    ) -> Self {
+        debug_assert!(!build_columns.is_empty());
+        let num_columns = build_columns.len();
+        let result_columns = (0..num_columns)
+            .map(|index| {
+                let columns = &build_columns[index];
+                let ty = columns[0].data_type();
+                let column = Column::take_column_indices(columns, ty.clone(), indices, result_size);
+                BlockEntry::new(ty, Value::Column(column))
+            })
+            .collect();
+        DataBlock::new(result_columns, result_size)
+    }
+
     pub fn take_by_slice_limit(
         block: &DataBlock,
         slice: (usize, usize),
@@ -199,7 +217,9 @@ impl Column {
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(_) => {
                     let builder = NumberType::<NUM_TYPE>::create_builder(result_size, &[]);
-                    Self::take_block_value_types::<NumberType<NUM_TYPE>>(columns, builder, indices)
+                    Self::take_block_value_ref_types::<NumberType<NUM_TYPE>>(
+                        columns, builder, indices,
+                    )
                 }
             }),
             Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
@@ -224,19 +244,19 @@ impl Column {
             }),
             Column::Boolean(_) => {
                 let builder = BooleanType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<BooleanType>(columns, builder, indices)
+                Self::take_block_value_ref_types::<BooleanType>(columns, builder, indices)
             }
             Column::String(_) => {
                 let builder = StringType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<StringType>(columns, builder, indices)
+                Self::take_block_value_ref_types::<StringType>(columns, builder, indices)
             }
             Column::Timestamp(_) => {
                 let builder = TimestampType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<TimestampType>(columns, builder, indices)
+                Self::take_block_value_ref_types::<TimestampType>(columns, builder, indices)
             }
             Column::Date(_) => {
                 let builder = DateType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<DateType>(columns, builder, indices)
+                Self::take_block_value_ref_types::<DateType>(columns, builder, indices)
             }
             Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(result_size + 1);
@@ -264,7 +284,7 @@ impl Column {
             }
             Column::Bitmap(_) => {
                 let builder = BitmapType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<BitmapType>(columns, builder, indices)
+                Self::take_block_value_ref_types::<BitmapType>(columns, builder, indices)
             }
             Column::Nullable(_) => {
                 let inner_ty = datatype.as_nullable().unwrap();
@@ -329,9 +349,28 @@ impl Column {
             }
             Column::Variant(_) => {
                 let builder = VariantType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<VariantType>(columns, builder, indices)
+                Self::take_block_value_ref_types::<VariantType>(columns, builder, indices)
             }
         }
+    }
+
+    fn take_block_value_ref_types<T: ValueType>(
+        columns: &[Column],
+        mut builder: T::ColumnBuilder,
+        indices: &[BlockRowIndex],
+    ) -> Column {
+        let columns = columns
+            .iter()
+            .map(|col| T::try_downcast_column_ref(col).unwrap())
+            .collect_vec();
+        for &(block_index, row, times) in indices {
+            let val =
+                unsafe { T::index_column_unchecked(columns[block_index as usize], row as usize) };
+            for _ in 0..times {
+                T::push_item(&mut builder, val.clone())
+            }
+        }
+        T::upcast_column(T::build_column(builder))
     }
 
     fn take_block_value_types<T: ValueType>(

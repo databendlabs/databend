@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
@@ -57,7 +58,7 @@ impl RowSpace {
     pub fn gather(
         &self,
         row_ptrs: &[RowPtr],
-        data_blocks: &Vec<DataBlock>,
+        data_blocks: &Vec<Vec<Column>>,
         num_rows: &usize,
     ) -> Result<DataBlock> {
         let mut indices = Vec::with_capacity(row_ptrs.len());
@@ -67,7 +68,8 @@ impl RowSpace {
         }
 
         if !data_blocks.is_empty() && *num_rows != 0 {
-            let data_block = DataBlock::take_blocks(data_blocks, indices.as_slice(), indices.len());
+            let data_block =
+                DataBlock::hash_join_take_blocks(data_blocks, indices.as_slice(), indices.len());
             Ok(data_block)
         } else {
             Ok(DataBlock::empty_with_schema(self.build_schema.clone()))

@@ -74,6 +74,10 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         }
     }
 
+    fn try_downcast_column_ref<'a>(_col: &'a Column) -> Option<&'a Self::Column> {
+        unimplemented!()
+    }
+
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
             Domain::Undefined => Some(()),
@@ -332,6 +336,10 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
 
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
         ArrayColumn::try_downcast(col.as_map()?)
+    }
+
+    fn try_downcast_column_ref<'a>(_col: &'a Column) -> Option<&'a Self::Column> {
+        unimplemented!()
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {

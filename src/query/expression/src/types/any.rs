@@ -54,6 +54,10 @@ impl ValueType for AnyType {
         Some(col.clone())
     }
 
+    fn try_downcast_column_ref<'a>(col: &'a Column) -> Option<&Self::Column> {
+        Some(col)
+    }
+
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         Some(domain.clone())
     }

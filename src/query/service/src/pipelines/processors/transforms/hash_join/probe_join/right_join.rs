@@ -52,7 +52,7 @@ impl HashJoinProbeState {
         let mut matched_num = 0;
         let mut result_blocks = vec![];
 
-        let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
+        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
         let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
         let right_single_scan_map =
@@ -115,7 +115,7 @@ impl HashJoinProbeState {
                     let build_block = if is_build_projected {
                         Some(self.hash_join_state.row_space.gather(
                             local_build_indexes,
-                            data_blocks,
+                            build_columns,
                             build_num_rows,
                         )?)
                     } else {
@@ -253,7 +253,7 @@ impl HashJoinProbeState {
         let build_block = if is_build_projected {
             Some(self.hash_join_state.row_space.gather(
                 &local_build_indexes[0..matched_num],
-                data_blocks,
+                build_columns,
                 build_num_rows,
             )?)
         } else {
