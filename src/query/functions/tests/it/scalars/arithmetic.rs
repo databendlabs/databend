@@ -62,6 +62,7 @@ fn test_arithmetic() {
                 },
             )),
         ),
+        ("g", Int64Type::from_data(vec![i64::MAX, i64::MIN, 0])),
     ];
     test_add(file, columns);
     test_minus(file, columns);
@@ -105,6 +106,7 @@ fn test_minus(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "c - b", columns);
     run_ast(file, "c - d", columns);
     run_ast(file, "-c", columns);
+    run_ast(file, "-g", columns);
     run_ast(file, "c - e", columns);
     run_ast(file, "d - e", columns);
     run_ast(file, "d2 - e", columns);

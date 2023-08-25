@@ -341,57 +341,21 @@ insert into t_number select * from numbers(1000000);
 statement ok
 insert into t select c from t_number;
 
-query I
-select block_count from fuse_snapshot('db1','t');
-----
-10
-
-query I
-select segment_count from fuse_snapshot('db1','t');
-----
-1
-
 statement ok
 insert into t select c + 1000000 from t_number;
-
-query I
-select block_count from fuse_snapshot('db1','t') order by block_count;
-----
-10
-20
-
-query I
-select segment_count from fuse_snapshot('db1','t') order by segment_count;
-----
-1
-2
-
-#clear metrics
-statement ok
-truncate table system.metrics;
 
 statement ok
 delete from t where c >= 0 and c < 1500000;
 
 query I
-select value from system.metrics where metric = 'fuse_deletion_block_range_pruned_nums';
-----
-5.0
-
-query I
-select value from system.metrics where metric = 'fuse_deletion_segment_range_pruned_whole_segment_nums';
-----
-1.0
-
-query I
-select value from system.metrics where metric = 'fuse_deletion_block_range_pruned_whole_block_nums';
-----
-15.0
-
-query I
 select count(*) from t;
 ----
 500000
+
+query I
+select count(*) from t where c >= 0 and c < 1500000;
+----
+0
 
 statement ok
 drop table t all

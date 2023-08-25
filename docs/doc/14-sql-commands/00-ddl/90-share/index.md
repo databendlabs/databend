@@ -1,6 +1,5 @@
 ---
 title: SHARE
-sidebar_position: 1
 slug: ./
 ---
 

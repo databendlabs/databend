@@ -208,6 +208,7 @@ impl CopyInterpreter {
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: Vec::new(),
+                ignore_exchange: false,
             });
         }
         Ok((root, files))

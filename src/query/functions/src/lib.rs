@@ -16,6 +16,7 @@
 #![feature(core_intrinsics)]
 #![feature(box_patterns)]
 #![feature(type_ascription)]
+#![feature(try_blocks)]
 
 use aggregates::AggregateFunctionFactory;
 use common_expression::FunctionRegistry;

@@ -83,7 +83,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (51, "2023-08-15: Add: config.proto/ObsStorageConfig add CosStorageConfig", ),
     (52, "2023-08-15: Add: catalog.proto/HiveCatalogConfig add storage params", ),
     (53, "2023-08-17: Add: user.proto/CsvFileFormatParams add field `null_display`", ),
-    (54, "2023-08-17: Add: index.proto/IndexMeta::sync_creation", )
+    (54, "2023-08-17: Add: index.proto/IndexMeta::sync_creation", ),
+    (55, "2023-07-31: Add: TableMeta and DatabaseMeta add Ownership", )
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
