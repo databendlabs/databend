@@ -16,7 +16,7 @@ const CustomerVoiceCard: FC<IProps> = ({ name, position, description, date, avat
     <div className={styles.card}>
       <div className={styles.top}>
         <a><img className={styles.avatar} src={avatar}/></a>
-        <div>
+        <div style={{flex: 1}}>
           <div className={styles.name}>{name}</div>
           <div className={styles.position}>{position}</div>
         </div>
