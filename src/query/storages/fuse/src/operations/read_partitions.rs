@@ -114,7 +114,7 @@ impl FuseTable {
                     segments_location,
                     summary,
                 )
-                    .await
+                .await
             }
             None => Ok((PartStatistics::default(), Partitions::default())),
         }
