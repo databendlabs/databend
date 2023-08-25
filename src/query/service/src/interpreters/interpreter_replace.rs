@@ -185,6 +185,7 @@ impl ReplaceInterpreter {
                 input: root,
                 kind: common_sql::executor::FragmentKind::Expansive,
                 keys: vec![],
+                ignore_exchange: false,
             }));
         }
 
@@ -234,6 +235,7 @@ impl ReplaceInterpreter {
                 input: root,
                 kind: common_sql::executor::FragmentKind::Merge,
                 keys: vec![],
+                ignore_exchange: false,
             }));
         }
         root = Box::new(PhysicalPlan::MutationAggregate(Box::new(

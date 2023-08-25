@@ -777,12 +777,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let create_virtual_columns = map(
+    let create_virtual_column = map(
         rule! {
-            CREATE ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+            CREATE ~ VIRTUAL ~ COLUMN ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
-            Statement::CreateVirtualColumns(CreateVirtualColumnsStmt {
+            Statement::CreateVirtualColumn(CreateVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -791,12 +791,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let alter_virtual_columns = map(
+    let alter_virtual_column = map(
         rule! {
-            ALTER ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+            ALTER ~ VIRTUAL ~ COLUMN ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
-            Statement::AlterVirtualColumns(AlterVirtualColumnsStmt {
+            Statement::AlterVirtualColumn(AlterVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -805,12 +805,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let drop_virtual_columns = map(
+    let drop_virtual_column = map(
         rule! {
-            DROP ~ VIRTUAL ~ COLUMNS ~ FOR ~ #period_separated_idents_1_to_3
+            DROP ~ VIRTUAL ~ COLUMN ~ FOR ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, _, (catalog, database, table))| {
-            Statement::DropVirtualColumns(DropVirtualColumnsStmt {
+            Statement::DropVirtualColumn(DropVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -818,12 +818,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let generate_virtual_columns = map(
+    let refresh_virtual_column = map(
         rule! {
-            GENERATE ~ VIRTUAL ~ COLUMNS ~ FOR ~ #period_separated_idents_1_to_3
+            REFRESH ~ VIRTUAL ~ COLUMN ~ FOR ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, _, (catalog, database, table))| {
-            Statement::GenerateVirtualColumns(GenerateVirtualColumnsStmt {
+            Statement::RefreshVirtualColumn(RefreshVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -1498,10 +1498,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
         ),
         rule!(
-            #create_virtual_columns: "`CREATE VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
-            | #alter_virtual_columns: "`ALTER VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
-            | #drop_virtual_columns: "`DROP VIRTUAL COLUMNS FOR [<database>.]<table>`"
-            | #generate_virtual_columns: "`GENERATE VIRTUAL COLUMNS FOR [<database>.]<table>`"
+            #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
+            | #alter_virtual_column: "`ALTER VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
+            | #drop_virtual_column: "`DROP VIRTUAL COLUMN FOR [<database>.]<table>`"
+            | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
         ),
         rule!(
             #show_users : "`SHOW USERS`"
@@ -1837,6 +1837,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Set, rule! { SET }),
         value(UserPrivilegeType::Drop, rule! { DROP }),
         value(UserPrivilegeType::Create, rule! { CREATE }),
+        value(UserPrivilegeType::Ownership, rule! { OWNERSHIP }),
     ))(i)
 }
 

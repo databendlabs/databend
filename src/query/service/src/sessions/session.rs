@@ -320,9 +320,11 @@ impl Session {
         // 2. check the user's roles' privilege set
         self.ensure_current_role().await?;
         let available_roles = self.get_all_available_roles().await?;
-        let role_verified = available_roles
-            .iter()
-            .any(|r| r.grants.verify_privilege(object, privilege.clone()));
+        let role_verified = available_roles.iter().any(|r| {
+            r.grants
+                .verify_privilege(object, vec![UserPrivilegeType::Ownership])
+                || r.grants.verify_privilege(object, privilege.clone())
+        });
         if role_verified {
             return Ok(());
         }

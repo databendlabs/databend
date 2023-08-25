@@ -64,6 +64,8 @@ pub enum UserPrivilegeType {
     DropUser = 1 << 15,
     // Privilege to Create/Drop DataMask.
     CreateDataMask = 1 << 16,
+    // Privilege to Own a databend object such as database/table.
+    Ownership = 1 << 17,
     // TODO: remove this later
     Set = 1 << 4,
 }
@@ -86,6 +88,7 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | CreateStage
         | Set
         | CreateDataMask
+        | Ownership
     }
 );
 
@@ -109,6 +112,7 @@ impl std::fmt::Display for UserPrivilegeType {
             UserPrivilegeType::Grant => "GRANT",
             UserPrivilegeType::Set => "SET",
             UserPrivilegeType::CreateDataMask => "CREATE DATAMASK",
+            UserPrivilegeType::Ownership => "OWNERSHIP",
         })
     }
 }
@@ -146,7 +150,7 @@ impl UserPrivilegeSet {
 
     /// The all privileges global which available to the table object
     pub fn available_privileges_on_table() -> Self {
-        make_bitflags!(UserPrivilegeType::{ Create | Update | Select | Insert | Delete | Drop | Alter | Grant }).into()
+        make_bitflags!(UserPrivilegeType::{ Create | Update | Select | Insert | Delete | Drop | Alter | Grant | Ownership }).into()
     }
 
     // TODO: remove this, as ALL has different meanings on different objects

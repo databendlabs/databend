@@ -473,7 +473,7 @@ impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
         }
 
         Ok(InnerCatalogHiveConfig {
-            address: self.address,
+            metastore_address: self.address,
             protocol: self.protocol.parse()?,
         })
     }
@@ -482,7 +482,7 @@ impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
 impl From<InnerCatalogHiveConfig> for CatalogsHiveConfig {
     fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
-            address: inner.address,
+            address: inner.metastore_address,
             protocol: inner.protocol.to_string(),
 
             // Deprecated fields
@@ -507,7 +507,7 @@ impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
         }
 
         Ok(InnerCatalogHiveConfig {
-            address: self.address,
+            metastore_address: self.address,
             protocol: self.protocol.parse()?,
         })
     }
@@ -516,7 +516,7 @@ impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
 impl From<InnerCatalogHiveConfig> for HiveCatalogConfig {
     fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
-            address: inner.address,
+            address: inner.metastore_address,
             protocol: inner.protocol.to_string(),
 
             // Deprecated fields
