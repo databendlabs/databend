@@ -19,6 +19,7 @@ use std::fmt::Formatter;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::Hint;
 use super::UpdateExpr;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
@@ -60,6 +61,7 @@ pub enum MergeOption {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MergeIntoStmt {
+    pub hints: Option<Hint>,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,

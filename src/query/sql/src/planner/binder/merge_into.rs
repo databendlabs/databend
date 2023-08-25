@@ -143,7 +143,10 @@ impl Binder {
             .await?;
 
         // add all left source columns for read
-        columns_set.union(&left_context.column_set());
+        let mut columns_set = columns_set
+            .union(&left_context.column_set())
+            .cloned()
+            .collect();
 
         // bind table for target table
         let (mut right_child, mut right_context) = self
@@ -172,6 +175,9 @@ impl Binder {
         right_child =
             SExpr::add_internal_column_index(&right_child, table_index, column_binding.index);
 
+        self.metadata
+            .write()
+            .set_table_row_id_index(table_index, column_binding.index);
         // add join,use left outer join in V1, we use _row_id to check_duplicate join row.
         let join = Join {
             op: LeftOuter,

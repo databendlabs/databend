@@ -441,7 +441,18 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::MergeInto(_) => unimplemented!(),
+            Plan::MergeInto(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete],
+                    )
+                    .await?;
+            }
             Plan::Delete(plan) => {
                 session
                     .validate_privilege(

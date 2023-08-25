@@ -153,11 +153,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let merge = map(
         rule! {
-            MERGE ~ INTO ~ #period_separated_idents_1_to_3  ~ #table_alias? ~ USING
+            MERGE ~ #hint? ~ INTO ~ #period_separated_idents_1_to_3  ~ #table_alias? ~ USING
             ~ #merge_source  ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
             _,
+            opt_hints,
             _,
             (catalog, database, table),
             alias_target,
@@ -169,6 +170,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         )| {
             // we can get the target_table_reference in later, it doesn't matter.
             Statement::MergeInto(MergeIntoStmt {
+                hints: opt_hints,
                 catalog,
                 database,
                 table,
