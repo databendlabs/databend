@@ -37,13 +37,14 @@ impl ParquetRSTable {
         let max_threads = std::cmp::min(parts_len, max_threads);
 
         let table_schema: TableSchemaRef = self.table_info.schema();
-        let reader = Arc::new(ParquetRSReader::create(
+        let reader = Arc::new(ParquetRSReader::create_with_parquet_schema(
             ctx.clone(),
             self.operator.clone(),
             table_schema,
-            &self.arrow_schema,
+            &self.schema_descr,
             plan,
             self.read_options,
+            false,
         )?);
 
         // TODO(parquet):
