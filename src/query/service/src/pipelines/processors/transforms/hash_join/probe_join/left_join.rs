@@ -129,7 +129,7 @@ impl HashJoinProbeState {
 
                     let probe_block = if is_probe_projected {
                         let mut probe_block =
-                            DataBlock::take(input, &probe_indexes[0..match_count])?;
+                            DataBlock::take(input, &probe_indexes[0..matched_num])?;
                         // For full join, wrap nullable for probe block
                         if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                             let nullable_probe_columns = if matched_num == max_block_size {
