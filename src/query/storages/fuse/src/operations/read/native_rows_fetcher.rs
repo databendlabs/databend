@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::plan::block_idx_in_segment;
 use common_catalog::plan::split_prefix;
 use common_catalog::plan::split_row_id;
@@ -29,6 +30,7 @@ use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnNodes;
+use itertools::Itertools;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::TableSnapshot;
 
@@ -49,10 +51,10 @@ pub(super) struct NativeRowsFetcher<const BLOCKING_IO: bool> {
     column_leaves: Arc<Vec<Vec<ColumnDescriptor>>>,
 
     // The value contains part info and the page size of the corresponding block file.
-    part_map: Arc<HashMap<u64, (PartInfoPtr, u64)>>,
+    part_map: HashMap<u64, (PartInfoPtr, u64)>,
 
     // To control the parallelism of fetching blocks.
-    _max_threads: usize,
+    max_threads: usize,
 }
 
 #[async_trait::async_trait]
@@ -83,22 +85,74 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
                 .or_insert(HashSet::from([page_idx]));
             row_set.push((prefix, page_idx, idx_within_page));
         }
+
+        // Read blocks in `prefix` order.
         let part_set = part_set
             .into_iter()
+            .sorted_by_key(|(k, _)| *k)
             .map(|(k, v)| {
                 let mut v = v.into_iter().collect::<Vec<_>>();
                 v.sort();
                 (k, v)
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let mut idx_map = HashMap::with_capacity(part_set.len());
+        for (p, pages) in part_set.iter() {
+            for page in pages {
+                idx_map.insert((*p, *page), idx_map.len());
+            }
+        }
+        // part_set.len() = parts_per_thread * max_threads + remain
+        // task distribution:
+        //   Part number of each task   |       Task number
+        // ------------------------------------------------------
+        //    parts_per_thread + 1      |         remain
+        //      parts_per_thread        |   max_threads - remain
+        let num_parts = part_set.len();
+        let parts_per_thread = num_parts / self.max_threads;
+        let remain = num_parts % self.max_threads;
+        let mut tasks = Vec::with_capacity(self.max_threads);
+        // Fetch blocks in parallel.
+        for i in 0..remain {
+            let parts = part_set[i * (parts_per_thread + 1)..(i + 1) * (parts_per_thread + 1)]
+                .iter()
+                .map(|(idx, pages)| (self.part_map[idx].0.clone(), pages.clone()))
+                .collect::<Vec<_>>();
+            tasks.push(Self::fetch_blocks(
+                self.reader.clone(),
+                parts,
+                self.column_leaves.clone(),
+            ))
+        }
+        if parts_per_thread > 0 {
+            let offset = remain * (parts_per_thread + 1);
+            for i in 0..(self.max_threads - remain) {
+                let parts = part_set
+                    [offset + i * parts_per_thread..offset + (i + 1) * parts_per_thread]
+                    .iter()
+                    .map(|(idx, pages)| (self.part_map[idx].0.clone(), pages.clone()))
+                    .collect::<Vec<_>>();
+                tasks.push(Self::fetch_blocks(
+                    self.reader.clone(),
+                    parts,
+                    self.column_leaves.clone(),
+                ))
+            }
+        }
 
-        let (blocks, idx_map) = Self::fetch_blocks(
-            self.reader.clone(),
-            part_set,
-            self.part_map.clone(),
-            self.column_leaves.clone(),
+        let num_task = tasks.len();
+        let blocks = execute_futures_in_parallel(
+            tasks,
+            num_task,
+            num_task * 2,
+            "parqeut rows fetch".to_string(),
         )
-        .await?;
+        .await?
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
         let indices = row_set
             .iter()
             .map(|(prefix, page_idx, idx)| {
@@ -135,8 +189,8 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             schema,
             reader,
             column_leaves,
-            part_map: Arc::new(HashMap::new()),
-            _max_threads: max_threads,
+            part_map: HashMap::new(),
+            max_threads,
         }
     }
 
@@ -146,7 +200,6 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
         let arrow_schema = self.schema.to_arrow();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
 
-        let mut part_map = HashMap::new();
         for row_id in row_ids {
             let (prefix, _) = split_row_id(*row_id);
 
@@ -178,10 +231,8 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
                 &self.projection,
             );
 
-            part_map.insert(prefix, (part_info, page_size));
+            self.part_map.insert(prefix, (part_info, page_size));
         }
-
-        self.part_map = Arc::new(part_map);
 
         Ok(())
     }
@@ -230,41 +281,28 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
     #[async_backtrace::framed]
     async fn fetch_blocks(
         reader: Arc<BlockReader>,
-        part_set: HashMap<u64, Vec<u64>>,
-        part_map: Arc<HashMap<u64, (PartInfoPtr, u64)>>,
+        parts: Vec<(PartInfoPtr, Vec<u64>)>,
         column_leaves: Arc<Vec<Vec<ColumnDescriptor>>>,
-    ) -> Result<(Vec<DataBlock>, HashMap<(u64, u64), usize>)> {
-        let mut chunks = Vec::with_capacity(part_set.len());
+    ) -> Result<Vec<DataBlock>> {
+        let mut chunks = Vec::with_capacity(parts.len());
         if BLOCKING_IO {
-            for (prefix, needed_pages) in part_set.into_iter() {
-                let part = part_map[&prefix].0.clone();
+            for (part, _) in parts.iter() {
                 let chunk = reader.sync_read_native_columns_data(part, &None)?;
-                chunks.push((prefix, chunk, needed_pages));
+                chunks.push(chunk);
             }
         } else {
-            for (prefix, needed_pages) in part_set.into_iter() {
-                let part = part_map[&prefix].0.clone();
+            for (part, _) in parts.iter() {
                 let chunk = reader.async_read_native_columns_data(part, &None).await?;
-                chunks.push((prefix, chunk, needed_pages));
+                chunks.push(chunk);
             }
         }
-        let num_blocks = chunks
-            .iter()
-            .map(|(_, _, pages)| pages.len())
-            .sum::<usize>();
-        let mut idx_map = HashMap::with_capacity(num_blocks);
+        let num_blocks = parts.iter().map(|(_, p)| p.len()).sum::<usize>();
         let mut blocks = Vec::with_capacity(num_blocks);
-
-        let mut offset = 0_usize;
-        for (prefix, chunk, needed_pages) in chunks.into_iter() {
-            let fetched_blocks = Self::build_blocks(&reader, chunk, &needed_pages, &column_leaves)?;
-            for (block, page) in fetched_blocks.into_iter().zip(needed_pages) {
-                idx_map.insert((prefix, page), offset);
-                offset += 1;
-                blocks.push(block);
-            }
+        for (chunk, (_, needed_pages)) in chunks.into_iter().zip(parts.iter()) {
+            let fetched_blocks = Self::build_blocks(&reader, chunk, needed_pages, &column_leaves)?;
+            blocks.extend(fetched_blocks);
         }
 
-        Ok((blocks, idx_map))
+        Ok(blocks)
     }
 }

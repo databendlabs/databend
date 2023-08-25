@@ -81,18 +81,19 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
             row_set.push((prefix, idx));
         }
 
-        // part_set.len() = parts_per_thread * max_threads + remain
-        // task distribution:
-        //   Part number of each task   |       Task number
-        // ------------------------------------------------------
-        //    parts_per_thread + 1      |         remain
-        //      parts_per_thread        |   max_threads - remain
+        // Read blocks in `prefix` order.
         let part_set = part_set.into_iter().sorted().collect::<Vec<_>>();
         let idx_map = part_set
             .iter()
             .enumerate()
             .map(|(i, p)| (*p, i))
             .collect::<HashMap<_, _>>();
+        // part_set.len() = parts_per_thread * max_threads + remain
+        // task distribution:
+        //   Part number of each task   |       Task number
+        // ------------------------------------------------------
+        //    parts_per_thread + 1      |         remain
+        //      parts_per_thread        |   max_threads - remain
         let num_parts = part_set.len();
         let parts_per_thread = num_parts / self.max_threads;
         let remain = num_parts % self.max_threads;
