@@ -67,7 +67,7 @@ impl RowSpace {
             indices.push((row_ptr.chunk_index, row_ptr.row_index, 1usize));
         }
 
-        if !data_blocks.is_empty() && *num_rows != 0 {
+        if *num_rows != 0 {
             let data_block =
                 DataBlock::hash_join_take_blocks(data_blocks, indices.as_slice(), indices.len());
             Ok(data_block)

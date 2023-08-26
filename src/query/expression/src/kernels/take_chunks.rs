@@ -107,7 +107,6 @@ impl DataBlock {
         indices: &[BlockRowIndex],
         result_size: usize,
     ) -> Self {
-        debug_assert!(!build_columns.is_empty());
         let num_columns = build_columns.len();
         let result_columns = (0..num_columns)
             .map(|index| {
