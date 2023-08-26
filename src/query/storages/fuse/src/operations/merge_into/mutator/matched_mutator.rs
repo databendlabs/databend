@@ -79,8 +79,6 @@ struct DeleteDataBlockMutation {
 }
 
 struct AggregationContext {
-    // used to read remain columns
-    target_table_schema: TableSchemaRef,
     row_id_idx: usize,
     ops: Vec<MutationKind>,
     func_ctx: FunctionContext,
@@ -193,7 +191,6 @@ impl MatchedAggregator {
 
         Ok(Self {
             aggregation_ctx: Arc::new(AggregationContext {
-                target_table_schema,
                 row_id_idx,
                 ops,
                 func_ctx: ctx.get_function_context()?,
@@ -238,7 +235,7 @@ impl MatchedAggregator {
                                 .entry(prefix)
                                 .and_modify(|v| {
                                     let (mut old_offsets, old_block) = v.remove(&expr_idx).unwrap();
-                                    old_offsets.push(idx);
+                                    old_offsets.push(offset as usize);
                                     v.insert(
                                         expr_idx,
                                         (
@@ -255,16 +252,17 @@ impl MatchedAggregator {
                                     let mut m = HashMap::new();
                                     m.insert(
                                         expr_idx,
-                                        (vec![idx], updated_block.slice(idx..idx + 1)),
+                                        (vec![offset as usize], updated_block.slice(idx..idx + 1)),
                                     );
                                     m
                                 }());
+
                             self.block_mutation_row_offset
                                 .entry(prefix)
                                 .and_modify(|v| {
                                     v.insert(offset as usize);
                                 })
-                                .or_insert(HashSet::new());
+                                .or_insert(vec![offset as usize].into_iter().collect());
                         }
                     }
 
@@ -419,9 +417,9 @@ impl AggregationContext {
         // remain columns for update
         if block_updated.is_some() {
             for (expr_idx, (offsets, mut updated_block)) in block_updated.unwrap() {
-                let mut remain = remain_projections.get(&expr_idx).unwrap().1.clone();
+                let remain = remain_projections.get(&expr_idx).unwrap().1.clone();
                 let mut collected = remain_projections.get(&expr_idx).unwrap().0.clone();
-                collected.append(&mut remain);
+                collected.extend(remain.clone());
                 let block_operator = BlockOperator::Project {
                     projection: remain.clone(),
                 };
@@ -432,7 +430,7 @@ impl AggregationContext {
                 }
 
                 // sort columns
-                let mut projection = (0..(remain.len() + collected.len())).collect::<Vec<_>>();
+                let mut projection = (0..collected.len()).collect::<Vec<_>>();
                 projection.sort_by_key(|&i| collected[i]);
                 let sort_operator = BlockOperator::Project { projection };
                 res_blocks.push(sort_operator.execute(&self.func_ctx, updated_block)?);
@@ -489,7 +487,10 @@ fn get_row_id(data_block: &DataBlock, row_id_idx: usize) -> Result<Buffer<u64>> 
     let row_id_col = data_block.get_by_offset(row_id_idx);
     match row_id_col.value.as_column() {
         Some(column) => match column {
-            Column::Number(NumberColumn::UInt64(data)) => Ok(data.clone()),
+            Column::Nullable(boxed) => match &boxed.column {
+                Column::Number(NumberColumn::UInt64(data)) => Ok(data.clone()),
+                _ => Err(ErrorCode::BadArguments("row id is not uint64")),
+            },
             _ => Err(ErrorCode::BadArguments("row id is not uint64")),
         },
         _ => Err(ErrorCode::BadArguments("row id is not uint64")),

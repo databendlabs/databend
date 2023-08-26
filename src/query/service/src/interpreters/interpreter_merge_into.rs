@@ -162,8 +162,6 @@ impl MergeIntoInterpreter {
         let merge_into_source = PhysicalPlan::MergeIntoSource(MergeIntoSource {
             input: Box::new(join_input),
             row_id_idx: row_id_idx as u32,
-            table_info: table_info.clone(),
-            catalog_info: catalog_.info(),
         });
 
         // transform unmatched for insert

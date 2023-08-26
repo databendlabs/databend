@@ -19,3 +19,11 @@ macro_rules! key {
         concat!("query_", $key)
     };
 }
+
+pub fn metrics_inc_merge_into_replace_blocks_counter(c: u32) {
+    increment_gauge!(key!("merge_into_replace_blocks_counter"), c as f64);
+}
+
+pub fn metrics_inc_merge_into_append_blocks_counter(c: u32) {
+    increment_gauge!(key!("merge_into_append_blocks_counter"), c as f64);
+}

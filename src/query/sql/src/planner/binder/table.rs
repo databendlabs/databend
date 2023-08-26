@@ -584,7 +584,7 @@ impl Binder {
     pub(crate) async fn bind_merge_into_source(
         &mut self,
         bind_context: &mut BindContext,
-        span_: Span,
+        _span: Span,
         source: &MergeSource,
     ) -> Result<(SExpr, BindContext)> {
         // merge source has three kinds type

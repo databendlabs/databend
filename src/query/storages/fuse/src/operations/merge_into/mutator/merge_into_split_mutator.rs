@@ -41,7 +41,7 @@ impl MergeIntoSplitMutator {
         let row_id_column = &block.columns()[self.row_id_idx as usize];
         assert_eq!(
             row_id_column.data_type,
-            DataType::Number(NumberDataType::UInt64),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
         );
         let mut matched_block: Option<DataBlock> = None;
         let mut not_matched_block: Option<DataBlock> = None;

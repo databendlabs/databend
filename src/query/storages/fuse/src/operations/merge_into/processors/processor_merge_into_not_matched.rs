@@ -38,7 +38,6 @@ type UnMatchedExprs = Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>;
 struct InsertDataBlockMutation {
     op: BlockOperator,
     split_mutator: SplitByExprMutator,
-    source_chema: DataSchemaRef,
 }
 
 // need to evaluate expression and
@@ -78,7 +77,6 @@ impl MergeIntoNotMatchedProcessor {
                     };
                     SplitByExprMutator::create(filter, func_ctx.clone())
                 },
-                source_chema: item.0.clone(),
             });
         }
 
@@ -131,9 +129,14 @@ impl Processor for MergeIntoNotMatchedProcessor {
         }
 
         if self.input_port.has_data() {
-            self.input_data = Some(self.input_port.pull_data().unwrap()?);
-            return Ok(Event::Sync);
+            if self.output_data.is_none() {
+                self.input_data = Some(self.input_port.pull_data().unwrap()?);
+                return Ok(Event::Sync);
+            } else {
+                return Ok(Event::NeedConsume);
+            }
         } else {
+            self.input_port.set_need_data();
             return Ok(Event::NeedData);
         }
     }
@@ -144,17 +147,22 @@ impl Processor for MergeIntoNotMatchedProcessor {
                 return Ok(());
             }
             // get an empty data_block but have same schema
-            let mut output_block = data_block.slice(0..0);
+            let mut output_block = None;
             let mut current_block = data_block;
             for op in &self.ops {
                 let (statisfied_block, unstatisfied_block) =
                     op.split_mutator.split_by_expr(current_block)?;
-                // in V1, we make sure the output_schema of each update expr result block is the same
+                // in V1, we make sure the output_schema of each insert expr result block is the same
                 // we will fix it in the future.
-                output_block = DataBlock::concat(&[
-                    output_block,
-                    op.op.execute(&self.func_ctx, statisfied_block)?,
-                ])?;
+                if output_block.is_some() {
+                    output_block = Some(DataBlock::concat(&[
+                        output_block.unwrap(),
+                        op.op.execute(&self.func_ctx, statisfied_block)?,
+                    ])?);
+                } else {
+                    output_block = Some(op.op.execute(&self.func_ctx, statisfied_block)?)
+                }
+
                 if unstatisfied_block.is_empty() {
                     break;
                 } else {
@@ -162,7 +170,9 @@ impl Processor for MergeIntoNotMatchedProcessor {
                 }
             }
             // todo:(JackTan25) fill format data block
-            self.output_data = Some(output_block)
+            if output_block.is_some() {
+                self.output_data = output_block
+            }
         }
         Ok(())
     }

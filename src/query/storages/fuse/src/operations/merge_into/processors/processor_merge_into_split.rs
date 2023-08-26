@@ -149,8 +149,13 @@ impl Processor for MergeIntoSplitProcessor {
                 let (matched_block, not_matched_block) = self
                     .merge_into_split_mutator
                     .split_data_block(&data_block)?;
-                self.output_data_not_matched_data = Some(not_matched_block);
-                self.output_data_matched_data = Some(matched_block);
+                if !matched_block.is_empty() {
+                    self.output_data_matched_data = Some(matched_block);
+                }
+
+                if !not_matched_block.is_empty() {
+                    self.output_data_not_matched_data = Some(not_matched_block);
+                }
             }
         }
         Ok(())

@@ -288,14 +288,10 @@ impl PipelineBuilder {
     }
 
     fn build_merge_into_source(&mut self, merge_into_source: &MergeIntoSource) -> Result<()> {
-        let MergeIntoSource {
-            input,
-            row_id_idx,
-            catalog_info,
-            table_info,
-        } = merge_into_source;
+        let MergeIntoSource { input, row_id_idx } = merge_into_source;
 
         self.build_pipeline(input)?;
+        self.main_pipeline.try_resize(1)?;
         let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
 
         self.main_pipeline
@@ -455,26 +451,24 @@ impl PipelineBuilder {
         );
 
         let mut pipe_items = Vec::with_capacity(2);
-        pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
         pipe_items.push(create_dummy_item());
+        pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
         self.main_pipeline.add_pipe(Pipe::create(
-            self.main_pipeline.input_len(),
-            self.main_pipeline.input_len(),
+            self.main_pipeline.output_len(),
+            self.main_pipeline.output_len(),
             pipe_items,
         ));
 
         let mut pipe_items = Vec::with_capacity(2);
-        pipe_items.push(serialize_block_transform.into_pipe_item());
         pipe_items.push(create_dummy_item());
+        pipe_items.push(serialize_block_transform.into_pipe_item());
         self.main_pipeline.add_pipe(Pipe::create(
-            self.main_pipeline.input_len(),
-            self.main_pipeline.input_len(),
+            self.main_pipeline.output_len(),
+            self.main_pipeline.output_len(),
             pipe_items,
         ));
-        // add
+
         let mut pipe_items = Vec::with_capacity(2);
-        // for unmatched processor insert
-        pipe_items.push(serialize_segment_transform.into_pipe_item());
 
         let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
@@ -488,10 +482,11 @@ impl PipelineBuilder {
             input.output_schema()?.clone(),
             segments.clone(),
         )?);
+        pipe_items.push(serialize_segment_transform.into_pipe_item());
 
         self.main_pipeline.add_pipe(Pipe::create(
-            self.main_pipeline.input_len(),
-            self.main_pipeline.input_len(),
+            self.main_pipeline.output_len(),
+            self.main_pipeline.output_len(),
             pipe_items,
         ));
 

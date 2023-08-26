@@ -760,9 +760,7 @@ impl UnionAll {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MergeIntoSource {
-    // join result: target_columns, source_columns, target_table._row_id
-    pub table_info: TableInfo,
-    pub catalog_info: CatalogInfo,
+    // join result:  source_columns, target_columns, target_table._row_id
     pub input: Box<PhysicalPlan>,
     pub row_id_idx: u32,
 }
