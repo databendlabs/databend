@@ -31,7 +31,7 @@ impl SplitByExprMutator {
         Self { expr, func_ctx }
     }
 
-    // first datablock statisfy expr, the second doesn't
+    // first datablock satisfy expr, the second doesn't
     pub fn split_by_expr(&self, data_block: DataBlock) -> Result<(DataBlock, DataBlock)> {
         if self.expr.is_none() {
             return Ok((data_block, DataBlock::empty()));
