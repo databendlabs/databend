@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 common-arrow = { path = "../../../common/arrow" }
+common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }

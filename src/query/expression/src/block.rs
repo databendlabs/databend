@@ -531,15 +531,11 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn project_with_agg_index(
-        self,
-        projections: &HashSet<usize>,
-        agg_functions_len: usize,
-    ) -> Self {
+    pub fn project_with_agg_index(self, projections: &HashSet<usize>, num_evals: usize) -> Self {
         let mut columns = Vec::with_capacity(projections.len());
-        let agg_functions_offset = self.columns.len() - agg_functions_len;
+        let eval_offset = self.columns.len() - num_evals;
         for (index, column) in self.columns.into_iter().enumerate() {
-            if !projections.contains(&index) && index < agg_functions_offset {
+            if !projections.contains(&index) && index < eval_offset {
                 continue;
             }
             columns.push(column);

@@ -1024,6 +1024,12 @@ fn get_test_suites() -> Vec<TestSuite> {
             index: "select sum(a), approx_count_distinct(b) from t",
             is_index_scan: true,
         },
+        // query: eval-agg-scan, index: eval-agg-scan with both scalar and agg funcs
+        TestSuite {
+            query: "select sum(a), to_string(b) as bs from t group by bs",
+            index: "select sum(a), to_string(b) as bs from t group by bs",
+            is_index_scan: true,
+        },
     ]
 }
 
