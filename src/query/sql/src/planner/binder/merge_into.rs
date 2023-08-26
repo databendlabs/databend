@@ -266,7 +266,7 @@ impl Binder {
         column_entries: &Vec<ColumnEntry>,
     ) -> Result<MatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
-            let (scalar_expr, _) = scalar_binder.bind(&expr).await?;
+            let (scalar_expr, _) = scalar_binder.bind(expr).await?;
             for idx in scalar_expr.used_columns() {
                 columns.insert(idx);
             }
@@ -333,7 +333,7 @@ impl Binder {
         table_schema: TableSchemaRef,
     ) -> Result<UnmatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
-            let (scalar_expr, _) = scalar_binder.bind(&expr).await?;
+            let (scalar_expr, _) = scalar_binder.bind(expr).await?;
             for idx in scalar_expr.used_columns() {
                 columns.insert(idx);
             }

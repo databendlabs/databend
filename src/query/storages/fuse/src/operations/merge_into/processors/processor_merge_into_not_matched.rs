@@ -71,10 +71,7 @@ impl MergeIntoNotMatchedProcessor {
                     projections: Some(eval_projections),
                 },
                 split_mutator: {
-                    let filter = match &item.1 {
-                        None => None,
-                        Some(expr) => Some(expr.as_expr(&BUILTIN_FUNCTIONS)),
-                    };
+                    let filter = item.1.as_ref().map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS));
                     SplitByExprMutator::create(filter, func_ctx.clone())
                 },
             });
@@ -86,7 +83,7 @@ impl MergeIntoNotMatchedProcessor {
             ops,
             input_data: None,
             output_data: None,
-            func_ctx: func_ctx.clone(),
+            func_ctx,
         })
     }
 
@@ -131,13 +128,13 @@ impl Processor for MergeIntoNotMatchedProcessor {
         if self.input_port.has_data() {
             if self.output_data.is_none() {
                 self.input_data = Some(self.input_port.pull_data().unwrap()?);
-                return Ok(Event::Sync);
+                Ok(Event::Sync)
             } else {
-                return Ok(Event::NeedConsume);
+                Ok(Event::NeedConsume)
             }
         } else {
             self.input_port.set_need_data();
-            return Ok(Event::NeedData);
+            Ok(Event::NeedData)
         }
     }
 

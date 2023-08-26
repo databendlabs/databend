@@ -34,7 +34,7 @@ impl SplitByExprMutator {
     // first datablock satisfy expr, the second doesn't
     pub fn split_by_expr(&self, data_block: DataBlock) -> Result<(DataBlock, DataBlock)> {
         if self.expr.is_none() {
-            return Ok((data_block, DataBlock::empty()));
+            Ok((data_block, DataBlock::empty()))
         } else {
             let filter = self.expr.as_ref().unwrap();
             assert_eq!(filter.data_type(), &DataType::Boolean);

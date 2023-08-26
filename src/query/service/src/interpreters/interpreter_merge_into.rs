@@ -111,7 +111,7 @@ impl MergeIntoInterpreter {
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
 
         // build source for MergeInto
-        let join_input = builder.build(&**input, *columns_set.clone()).await?;
+        let join_input = builder.build(input, *columns_set.clone()).await?;
 
         // find row_id column index
         let join_output_schema = join_input.output_schema()?;
@@ -129,8 +129,8 @@ impl MergeIntoInterpreter {
         };
 
         let mut found_row_id = false;
-        for (idx, data_filed) in join_output_schema.fields().into_iter().enumerate() {
-            if data_filed.name().to_string() == row_id_idx.to_string() {
+        for (idx, data_filed) in join_output_schema.fields().iter().enumerate() {
+            if *data_filed.name() == row_id_idx.to_string() {
                 row_id_idx = idx;
                 found_row_id = true;
                 break;
@@ -190,10 +190,7 @@ impl MergeIntoInterpreter {
 
         // the first option is used for condition
         // the second option is used to distinct update and delete
-        let mut matched =
-            Vec::<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>::with_capacity(
-                matched_evaluators.len(),
-            );
+        let mut matched = Vec::with_capacity(matched_evaluators.len());
 
         // transform matched for delete/update
         for item in matched_evaluators {

@@ -171,9 +171,9 @@ impl MergeIntoStmt {
 
     pub fn check_multi_match_clauses_semantic(clauses: &Vec<MatchedClause>) -> Result<()> {
         // check match_clauses
-        if clauses.len() > 0 {
-            for i in 0..clauses.len() - 1 {
-                if clauses[i].selection.is_none() {
+        if !clauses.is_empty() {
+            for clause in clauses.iter() {
+                if clause.selection.is_none() {
                     return Err(ErrorCode::SemanticError(
                         "when there are multi matched clauses, we must have a condition for every one except the last one".to_string(),
                     ));
@@ -185,9 +185,9 @@ impl MergeIntoStmt {
 
     pub fn check_multi_unmatch_clauses_semantic(clauses: &Vec<UnmatchedClause>) -> Result<()> {
         // check unmatch_clauses
-        if clauses.len() > 0 {
-            for i in 0..clauses.len() - 1 {
-                if clauses[i].selection.is_none() {
+        if !clauses.is_empty() {
+            for clause in clauses.iter() {
+                if clause.selection.is_none() {
                     return Err(ErrorCode::SemanticError(
                         "when there are multi unmatched clauses, we must have a condition for every one except the last one".to_string(),
                     ));
@@ -230,7 +230,7 @@ impl MergeSource {
                 source: StreamingSource {
                     settings: settings.clone(),
                     on_error_mode: on_error_mode.clone(),
-                    start: start.clone(),
+                    start: *start,
                 },
                 alias: None,
             },

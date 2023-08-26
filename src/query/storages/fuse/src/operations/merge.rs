@@ -19,9 +19,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_pipeline_core::pipe::PipeItem;
+use common_sql::executor::MatchExpr;
 use storages_common_table_meta::meta::Location;
 
-use super::merge_into::MatchExpr;
 use super::merge_into::MatchedAggregator;
 use super::mutation::SegmentIndex;
 use crate::io::BlockBuilder;
@@ -48,7 +48,7 @@ impl FuseTable {
             matched,
             self.table_info.schema(),
             input_schema,
-            self.get_operator().clone(),
+            self.get_operator(),
             self.get_write_settings(),
             read_settings,
             block_builder,

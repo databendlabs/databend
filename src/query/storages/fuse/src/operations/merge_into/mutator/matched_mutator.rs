@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -33,12 +34,11 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
-use common_expression::FieldIndex;
 use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
+use common_sql::executor::MatchExpr;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -62,8 +62,6 @@ use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::read_block;
 use crate::operations::BlockMetaIndex;
-
-pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
 
 enum MutationKind {
     Update(UpdateDataBlockMutation),
@@ -90,22 +88,26 @@ struct AggregationContext {
     block_reader: Arc<BlockReader>,
 }
 
+type RemainMap = HashMap<usize, (Vec<usize>, Vec<usize>)>;
+type UpdatedMap = HashMap<usize, (Vec<usize>, DataBlock)>;
+
 pub struct MatchedAggregator {
     io_request_semaphore: Arc<Semaphore>,
     segment_reader: CompactSegmentInfoReader,
     segment_locations: AHashMap<SegmentIndex, Location>,
     // (update_idx,(updated_columns,remain_columns))
-    remain_projections_map: Arc<HashMap<usize, (Vec<usize>, Vec<usize>)>>,
+    remain_projections_map: Arc<RemainMap>,
     // block_mutator, store new data after update,
     // BlockMetaIndex => (update_idx,(block_offsets,new_data))
     // todo: (JackTan25) need to add precomputed expr for update to optimize
-    updatede_block: HashMap<u64, HashMap<usize, (Vec<usize>, DataBlock)>>,
+    updatede_block: HashMap<u64, UpdatedMap>,
     // store the row_id which is deleted/updated
     block_mutation_row_offset: HashMap<u64, HashSet<usize>>,
     aggregation_ctx: Arc<AggregationContext>,
 }
 
 impl MatchedAggregator {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
         row_id_idx: usize,
@@ -138,10 +140,7 @@ impl MatchedAggregator {
         for (expr_idx, item) in matched.iter().enumerate() {
             // delete
             if item.1.is_none() {
-                let filter = match &item.0 {
-                    None => None,
-                    Some(expr) => Some(expr.as_expr(&BUILTIN_FUNCTIONS)),
-                };
+                let filter = item.0.as_ref().map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS));
                 ops.push(MutationKind::Delete(DeleteDataBlockMutation {
                     split_mutator: SplitByExprMutator::create(
                         filter.clone(),
@@ -175,10 +174,10 @@ impl MatchedAggregator {
 
                 remain_projections_map
                     .insert(expr_idx, (collected_projections, remain_projections));
-                let filter = match &item.0 {
-                    None => None,
-                    Some(condition) => Some(condition.as_expr(&BUILTIN_FUNCTIONS)),
-                };
+                let filter = item
+                    .0
+                    .as_ref()
+                    .map(|condition| condition.as_expr(&BUILTIN_FUNCTIONS));
 
                 ops.push(MutationKind::Update(UpdateDataBlockMutation {
                     op: BlockOperator::Map {
@@ -310,9 +309,8 @@ impl MatchedAggregator {
         for prefix in self.block_mutation_row_offset.keys() {
             let (segment_idx, _) = split_prefix(*prefix);
             let segment_idx = segment_idx as usize;
-            if segment_infos.contains_key(&segment_idx) {
-                continue;
-            } else {
+
+            if let Entry::Vacant(e) = segment_infos.entry(segment_idx) {
                 let (path, ver) = self.segment_locations.get(&segment_idx).ok_or_else(|| {
                     ErrorCode::Internal(format!(
                         "unexpected, segment (idx {}) not found, during applying mutation log",
@@ -329,7 +327,9 @@ impl MatchedAggregator {
 
                 let compact_segment_info = self.segment_reader.read(&load_param).await?;
                 let segment_info: SegmentInfo = compact_segment_info.try_into()?;
-                segment_infos.insert(segment_idx, segment_info);
+                e.insert(segment_info);
+            } else {
+                continue;
             }
         }
 
@@ -391,8 +391,8 @@ impl AggregationContext {
         segment_idx: SegmentIndex,
         block_idx: BlockIndex,
         block_meta: &BlockMeta,
-        block_updated: Option<HashMap<usize, (Vec<usize>, DataBlock)>>,
-        remain_projections: Arc<HashMap<usize, (Vec<usize>, Vec<usize>)>>,
+        block_updated: Option<UpdatedMap>,
+        remain_projections: Arc<RemainMap>,
         modified_offsets: HashSet<usize>,
     ) -> Result<Option<MutationLogEntry>> {
         info!(
@@ -487,11 +487,8 @@ impl AggregationContext {
 fn get_row_id(data_block: &DataBlock, row_id_idx: usize) -> Result<Buffer<u64>> {
     let row_id_col = data_block.get_by_offset(row_id_idx);
     match row_id_col.value.as_column() {
-        Some(column) => match column {
-            Column::Nullable(boxed) => match &boxed.column {
-                Column::Number(NumberColumn::UInt64(data)) => Ok(data.clone()),
-                _ => Err(ErrorCode::BadArguments("row id is not uint64")),
-            },
+        Some(Column::Nullable(boxed)) => match &boxed.column {
+            Column::Number(NumberColumn::UInt64(data)) => Ok(data.clone()),
             _ => Err(ErrorCode::BadArguments("row id is not uint64")),
         },
         _ => Err(ErrorCode::BadArguments("row id is not uint64")),

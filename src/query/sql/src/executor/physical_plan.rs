@@ -60,6 +60,8 @@ use crate::IndexType;
 
 pub type ColumnID = String;
 
+pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
     /// A unique id of operator in a `PhysicalPlan` tree.
@@ -774,7 +776,7 @@ pub struct MergeInto {
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     // the first option stands for the condition
     // the second option stands for update/delete
-    pub matched: Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>,
+    pub matched: MatchExpr,
     pub row_id_idx: usize,
     pub segments: Vec<(usize, Location)>,
 }

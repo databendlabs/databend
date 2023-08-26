@@ -54,15 +54,13 @@ impl MergeIntoSplitMutator {
                 } else {
                     matched_block = Some(DataBlock::concat(&[matched_block.unwrap(), single_row])?);
                 }
+            } else if not_matched_block.is_none() {
+                not_matched_block = Some(single_row);
             } else {
-                if not_matched_block.is_none() {
-                    not_matched_block = Some(single_row);
-                } else {
-                    not_matched_block = Some(DataBlock::concat(&[
-                        not_matched_block.unwrap(),
-                        single_row,
-                    ])?);
-                }
+                not_matched_block = Some(DataBlock::concat(&[
+                    not_matched_block.unwrap(),
+                    single_row,
+                ])?);
             }
         }
         match (matched_block, not_matched_block) {

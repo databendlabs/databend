@@ -422,7 +422,7 @@ impl PipelineBuilder {
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
             unmatched.clone(),
-            input.output_schema()?.clone(),
+            input.output_schema()?,
             self.ctx.get_function_context()?,
         )?;
 
@@ -446,22 +446,26 @@ impl PipelineBuilder {
             self.ctx.clone(),
             InputPort::create(),
             OutputPort::create(),
-            &table,
+            table,
             block_thresholds,
         );
 
-        let mut pipe_items = Vec::with_capacity(2);
-        pipe_items.push(create_dummy_item());
-        pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
+        let pipe_items = vec![
+            create_dummy_item(),
+            merge_into_not_matched_processor.into_pipe_item(),
+        ];
+
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
             self.main_pipeline.output_len(),
             pipe_items,
         ));
 
-        let mut pipe_items = Vec::with_capacity(2);
-        pipe_items.push(create_dummy_item());
-        pipe_items.push(serialize_block_transform.into_pipe_item());
+        let pipe_items = vec![
+            create_dummy_item(),
+            serialize_block_transform.into_pipe_item(),
+        ];
+
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
             self.main_pipeline.output_len(),
@@ -479,7 +483,7 @@ impl PipelineBuilder {
             io_request_semaphore,
             *row_id_idx,
             matched.clone(),
-            input.output_schema()?.clone(),
+            input.output_schema()?,
             segments.clone(),
         )?);
         pipe_items.push(serialize_segment_transform.into_pipe_item());
