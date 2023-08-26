@@ -491,8 +491,8 @@ impl PipelineBuilder {
         ));
 
         // todo:(JackTan25): process filling default columns
-        // because the datablock we recieve here may have different
-        // schema, so we can't just add build_filling_defalut_columns
+        // because the datablock we receive here may have different
+        // schema, so we can't just add build_filling_default_columns
         // to solve it simply. we will add new processor in the later pr.
         Ok(())
     }

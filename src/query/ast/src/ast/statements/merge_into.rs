@@ -169,13 +169,13 @@ impl MergeIntoStmt {
         (match_clauses, unmatch_clauses)
     }
 
-    pub fn check_multi_match_clauses_semantic(cluases: &Vec<MatchedClause>) -> Result<()> {
+    pub fn check_multi_match_clauses_semantic(clauses: &Vec<MatchedClause>) -> Result<()> {
         // check match_clauses
-        if cluases.len() > 0 {
-            for i in 0..cluases.len() - 1 {
-                if cluases[i].selection.is_none() {
+        if clauses.len() > 0 {
+            for i in 0..clauses.len() - 1 {
+                if clauses[i].selection.is_none() {
                     return Err(ErrorCode::SemanticError(
-                        "when there are multi matched cluases, we must have a condition for every one except the last one".to_string(),
+                        "when there are multi matched clauses, we must have a condition for every one except the last one".to_string(),
                     ));
                 }
             }
@@ -183,13 +183,13 @@ impl MergeIntoStmt {
         Ok(())
     }
 
-    pub fn check_multi_unmatch_clauses_semantic(cluases: &Vec<UnmatchedClause>) -> Result<()> {
+    pub fn check_multi_unmatch_clauses_semantic(clauses: &Vec<UnmatchedClause>) -> Result<()> {
         // check unmatch_clauses
-        if cluases.len() > 0 {
-            for i in 0..cluases.len() - 1 {
-                if cluases[i].selection.is_none() {
+        if clauses.len() > 0 {
+            for i in 0..clauses.len() - 1 {
+                if clauses[i].selection.is_none() {
                     return Err(ErrorCode::SemanticError(
-                        "when there are multi unmatched cluases, we must have a condition for every one except the last one".to_string(),
+                        "when there are multi unmatched clauses, we must have a condition for every one except the last one".to_string(),
                     ));
                 }
             }

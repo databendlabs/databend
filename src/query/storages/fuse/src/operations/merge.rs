@@ -42,7 +42,7 @@ impl FuseTable {
         segment_locations: Vec<(SegmentIndex, Location)>,
     ) -> Result<PipeItem> {
         let read_settings = ReadSettings::from_ctx(&ctx)?;
-        let aggragator = MatchedAggregator::create(
+        let aggregator = MatchedAggregator::create(
             ctx.clone(),
             row_id_idx,
             matched,
@@ -55,6 +55,6 @@ impl FuseTable {
             io_request_semaphore,
             segment_locations,
         )?;
-        Ok(aggragator.into_pipe_item())
+        Ok(aggregator.into_pipe_item())
     }
 }

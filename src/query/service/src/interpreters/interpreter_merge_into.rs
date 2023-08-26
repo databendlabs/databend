@@ -288,7 +288,7 @@ impl MergeIntoInterpreter {
             snapshot: (*base_snapshot).clone(),
             table_info: table_info.clone(),
             catalog_info: catalog_.info(),
-            // let's use update first, we will do some optimizeations and select exact stragety
+            // let's use update first, we will do some optimizeations and select exact strategy
             mutation_kind: MutationKind::Update,
         }));
 

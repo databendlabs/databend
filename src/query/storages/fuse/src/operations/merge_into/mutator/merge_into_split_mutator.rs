@@ -77,7 +77,7 @@ impl MergeIntoSplitMutator {
 
     fn is_matched(&mut self, row_id_column: &BlockEntry, row_idx: usize) -> Result<bool> {
         match row_id_column.value.index(row_idx).ok_or_else(|| {
-            ErrorCode::Internal("can't get row_id_col when do merge into opertaions")
+            ErrorCode::Internal("can't get row_id_col when do merge into operations")
         })? {
             ScalarRef::Null => Ok(false),
             ScalarRef::Number(NumberScalar::UInt64(v)) => {

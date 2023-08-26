@@ -219,15 +219,15 @@ impl MatchedAggregator {
         for (expr_idx, op) in self.aggregation_ctx.ops.iter().enumerate() {
             match op {
                 MutationKind::Update(update_mutation) => {
-                    let (statisfied_block, unstatisfied_block) =
+                    let (satisfied_block, unsatisfied_block) =
                         update_mutation.split_mutator.split_by_expr(current_block)?;
 
-                    if !statisfied_block.is_empty() {
+                    if !satisfied_block.is_empty() {
                         let row_ids =
-                            get_row_id(&statisfied_block, self.aggregation_ctx.row_id_idx)?;
+                            get_row_id(&satisfied_block, self.aggregation_ctx.row_id_idx)?;
                         let updated_block = update_mutation
                             .op
-                            .execute(&self.aggregation_ctx.func_ctx, statisfied_block)?;
+                            .execute(&self.aggregation_ctx.func_ctx, satisfied_block)?;
                         // record the modified block offsets
                         for (idx, row_id) in row_ids.iter().enumerate() {
                             let (prefix, offset) = split_row_id(*row_id);
@@ -267,24 +267,24 @@ impl MatchedAggregator {
                         }
                     }
 
-                    if unstatisfied_block.is_empty() {
+                    if unsatisfied_block.is_empty() {
                         return Ok(());
                     }
 
-                    current_block = unstatisfied_block;
+                    current_block = unsatisfied_block;
                 }
 
                 MutationKind::Delete(delete_mutation) => {
-                    let (statisfied_block, unstatisfied_block) =
+                    let (satisfied_block, unsatisfied_block) =
                         delete_mutation.split_mutator.split_by_expr(current_block)?;
 
-                    if unstatisfied_block.is_empty() {
+                    if unsatisfied_block.is_empty() {
                         return Ok(());
                     }
 
-                    current_block = unstatisfied_block;
+                    current_block = unsatisfied_block;
 
-                    let row_ids = get_row_id(&statisfied_block, self.aggregation_ctx.row_id_idx)?;
+                    let row_ids = get_row_id(&satisfied_block, self.aggregation_ctx.row_id_idx)?;
 
                     // record the modified block offsets
                     for row_id in row_ids {
