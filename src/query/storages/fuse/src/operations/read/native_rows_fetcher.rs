@@ -102,19 +102,23 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
                 idx_map.insert((*p, *page), idx_map.len());
             }
         }
-        // part_set.len() = parts_per_thread * max_threads + remain
+        // parts_per_thread = num_parts / max_threads
+        // remain = num_parts % max_threads
         // task distribution:
         //   Part number of each task   |       Task number
         // ------------------------------------------------------
         //    parts_per_thread + 1      |         remain
         //      parts_per_thread        |   max_threads - remain
         let num_parts = part_set.len();
-        let parts_per_thread = num_parts / self.max_threads;
-        let remain = num_parts % self.max_threads;
         let mut tasks = Vec::with_capacity(self.max_threads);
         // Fetch blocks in parallel.
-        for i in 0..remain {
-            let parts = part_set[i * (parts_per_thread + 1)..(i + 1) * (parts_per_thread + 1)]
+        for i in 0..self.max_threads {
+            let begin = num_parts * i / self.max_threads;
+            let end = num_parts * (i + 1) / self.max_threads;
+            if begin == end {
+                continue;
+            }
+            let parts = part_set[begin..end]
                 .iter()
                 .map(|(idx, pages)| (self.part_map[idx].0.clone(), pages.clone()))
                 .collect::<Vec<_>>();
@@ -124,28 +128,13 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
                 self.column_leaves.clone(),
             ))
         }
-        if parts_per_thread > 0 {
-            let offset = remain * (parts_per_thread + 1);
-            for i in 0..(self.max_threads - remain) {
-                let parts = part_set
-                    [offset + i * parts_per_thread..offset + (i + 1) * parts_per_thread]
-                    .iter()
-                    .map(|(idx, pages)| (self.part_map[idx].0.clone(), pages.clone()))
-                    .collect::<Vec<_>>();
-                tasks.push(Self::fetch_blocks(
-                    self.reader.clone(),
-                    parts,
-                    self.column_leaves.clone(),
-                ))
-            }
-        }
 
         let num_task = tasks.len();
         let blocks = execute_futures_in_parallel(
             tasks,
             num_task,
             num_task * 2,
-            "parqeut rows fetch".to_string(),
+            "native rows fetch".to_string(),
         )
         .await?
         .into_iter()

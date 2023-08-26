@@ -88,19 +88,23 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
             .enumerate()
             .map(|(i, p)| (*p, i))
             .collect::<HashMap<_, _>>();
-        // part_set.len() = parts_per_thread * max_threads + remain
+        // parts_per_thread = num_parts / max_threads
+        // remain = num_parts % max_threads
         // task distribution:
         //   Part number of each task   |       Task number
         // ------------------------------------------------------
         //    parts_per_thread + 1      |         remain
         //      parts_per_thread        |   max_threads - remain
         let num_parts = part_set.len();
-        let parts_per_thread = num_parts / self.max_threads;
-        let remain = num_parts % self.max_threads;
         let mut tasks = Vec::with_capacity(self.max_threads);
         // Fetch blocks in parallel.
-        for i in 0..remain {
-            let parts = part_set[i * (parts_per_thread + 1)..(i + 1) * (parts_per_thread + 1)]
+        for i in 0..self.max_threads {
+            let begin = num_parts * i / self.max_threads;
+            let end = num_parts * (i + 1) / self.max_threads;
+            if begin == end {
+                continue;
+            }
+            let parts = part_set[begin..end]
                 .iter()
                 .map(|idx| self.part_map[idx].clone())
                 .collect::<Vec<_>>();
@@ -110,22 +114,6 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
                 self.uncompressed_buffers[i].clone(),
                 self.settings,
             ))
-        }
-        if parts_per_thread > 0 {
-            let offset = remain * (parts_per_thread + 1);
-            for i in 0..(self.max_threads - remain) {
-                let parts = part_set
-                    [offset + i * parts_per_thread..offset + (i + 1) * parts_per_thread]
-                    .iter()
-                    .map(|idx| self.part_map[idx].clone())
-                    .collect::<Vec<_>>();
-                tasks.push(Self::fetch_blocks(
-                    self.reader.clone(),
-                    parts,
-                    self.uncompressed_buffers[i].clone(),
-                    self.settings,
-                ))
-            }
         }
 
         let num_task = tasks.len();
