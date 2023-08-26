@@ -149,3 +149,15 @@ select * from t1 order by a;
 1 b1 c_5
 3 b_2 c_6
 4 b_8 c_8
+
+statement ok
+merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then delete when not matched and t2.c = 'c_9' then insert (a,b,c) values(t2.a,t2.b,t2.c);;
+
+query TTT
+select * from t1 order by a;
+----
+1 b1 c_5
+5 b_9 c_9
+
+statement ok
+set enable_unstable_merge_into = 0;
