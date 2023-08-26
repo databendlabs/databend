@@ -24,6 +24,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_storage::common_metrics::merge_into::metrics_inc_merge_into_matched_rows;
+use common_storage::common_metrics::merge_into::metrics_inc_merge_into_unmatched_rows;
 
 use crate::operations::merge_into::mutator::MergeIntoSplitMutator;
 
@@ -150,10 +152,12 @@ impl Processor for MergeIntoSplitProcessor {
                     .merge_into_split_mutator
                     .split_data_block(&data_block)?;
                 if !matched_block.is_empty() {
+                    metrics_inc_merge_into_matched_rows(matched_block.num_rows() as u32);
                     self.output_data_matched_data = Some(matched_block);
                 }
 
                 if !not_matched_block.is_empty() {
+                    metrics_inc_merge_into_unmatched_rows(not_matched_block.num_rows() as u32);
                     self.output_data_not_matched_data = Some(not_matched_block);
                 }
             }

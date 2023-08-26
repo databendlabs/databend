@@ -39,6 +39,7 @@ use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use common_sql::executor::MatchExpr;
+use common_storage::common_metrics::merge_into::metrics_inc_merge_into_replace_blocks_counter;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -277,12 +278,6 @@ impl MatchedAggregator {
                     let (satisfied_block, unsatisfied_block) =
                         delete_mutation.split_mutator.split_by_expr(current_block)?;
 
-                    if unsatisfied_block.is_empty() {
-                        return Ok(());
-                    }
-
-                    current_block = unsatisfied_block;
-
                     let row_ids = get_row_id(&satisfied_block, self.aggregation_ctx.row_id_idx)?;
 
                     // record the modified block offsets
@@ -294,8 +289,14 @@ impl MatchedAggregator {
                             .and_modify(|v| {
                                 v.insert(offset as usize);
                             })
-                            .or_insert(HashSet::new());
+                            .or_insert(vec![offset as usize].into_iter().collect());
                     }
+
+                    if unsatisfied_block.is_empty() {
+                        return Ok(());
+                    }
+
+                    current_block = unsatisfied_block;
                 }
             }
         }
@@ -471,6 +472,7 @@ impl AggregationContext {
         let data_accessor = self.data_accessor.clone();
         write_data(new_block_raw_data, &data_accessor, &new_block_location).await?;
 
+        metrics_inc_merge_into_replace_blocks_counter(new_block_meta.row_count as u32);
         // generate log
         let mutation = MutationLogEntry::ReplacedBlock {
             index: BlockMetaIndex {

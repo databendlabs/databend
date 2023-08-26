@@ -171,7 +171,7 @@ impl MergeIntoStmt {
 
     pub fn check_multi_match_clauses_semantic(clauses: &Vec<MatchedClause>) -> Result<()> {
         // check match_clauses
-        if !clauses.is_empty() {
+        if clauses.len() > 1 {
             for clause in clauses.iter() {
                 if clause.selection.is_none() {
                     return Err(ErrorCode::SemanticError(
@@ -185,7 +185,7 @@ impl MergeIntoStmt {
 
     pub fn check_multi_unmatch_clauses_semantic(clauses: &Vec<UnmatchedClause>) -> Result<()> {
         // check unmatch_clauses
-        if !clauses.is_empty() {
+        if clauses.len() > 1 {
             for clause in clauses.iter() {
                 if clause.selection.is_none() {
                     return Err(ErrorCode::SemanticError(
