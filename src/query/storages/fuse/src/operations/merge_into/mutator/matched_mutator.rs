@@ -277,19 +277,21 @@ impl MatchedAggregator {
                 MutationKind::Delete(delete_mutation) => {
                     let (satisfied_block, unsatisfied_block) =
                         delete_mutation.split_mutator.split_by_expr(current_block)?;
+                    if !satisfied_block.is_empty() {
+                        let row_ids =
+                            get_row_id(&satisfied_block, self.aggregation_ctx.row_id_idx)?;
 
-                    let row_ids = get_row_id(&satisfied_block, self.aggregation_ctx.row_id_idx)?;
+                        // record the modified block offsets
+                        for row_id in row_ids {
+                            let (prefix, offset) = split_row_id(row_id);
 
-                    // record the modified block offsets
-                    for row_id in row_ids {
-                        let (prefix, offset) = split_row_id(row_id);
-
-                        self.block_mutation_row_offset
-                            .entry(prefix)
-                            .and_modify(|v| {
-                                v.insert(offset as usize);
-                            })
-                            .or_insert(vec![offset as usize].into_iter().collect());
+                            self.block_mutation_row_offset
+                                .entry(prefix)
+                                .and_modify(|v| {
+                                    v.insert(offset as usize);
+                                })
+                                .or_insert(vec![offset as usize].into_iter().collect());
+                        }
                     }
 
                     if unsatisfied_block.is_empty() {
@@ -467,6 +469,15 @@ impl AggregationContext {
 
         // persistent data
         let new_block_meta = serialized.block_meta;
+        if new_block_meta.row_count == 0 {
+            return Ok(Some(MutationLogEntry::DeletedBlock {
+                index: BlockMetaIndex {
+                    segment_idx,
+                    block_idx,
+                },
+            }));
+        }
+
         let new_block_location = new_block_meta.location.0.clone();
         let new_block_raw_data = serialized.block_raw_data;
         let data_accessor = self.data_accessor.clone();

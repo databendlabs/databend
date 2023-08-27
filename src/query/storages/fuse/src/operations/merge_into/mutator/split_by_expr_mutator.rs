@@ -20,6 +20,7 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_sql::executor::cast_expr_to_non_null_boolean;
 
 pub struct SplitByExprMutator {
     expr: Option<Expr>,
@@ -36,13 +37,13 @@ impl SplitByExprMutator {
         if self.expr.is_none() {
             Ok((data_block, DataBlock::empty()))
         } else {
-            let filter = self.expr.as_ref().unwrap();
+            let filter: Expr = cast_expr_to_non_null_boolean(self.expr.as_ref().unwrap().clone())?;
             assert_eq!(filter.data_type(), &DataType::Boolean);
 
             let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
             let predicates = evaluator
-                .run(filter)
+                .run(&filter)
                 .map_err(|e| e.add_message("eval filter failed:"))?
                 .try_downcast::<BooleanType>()
                 .unwrap();

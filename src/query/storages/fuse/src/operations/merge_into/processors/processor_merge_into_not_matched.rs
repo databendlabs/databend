@@ -152,13 +152,15 @@ impl Processor for MergeIntoNotMatchedProcessor {
                     op.split_mutator.split_by_expr(current_block)?;
                 // in V1, we make sure the output_schema of each insert expr result block is the same
                 // we will fix it in the future.
-                if output_block.is_some() {
-                    output_block = Some(DataBlock::concat(&[
-                        output_block.unwrap(),
-                        op.op.execute(&self.func_ctx, satisfied_block)?,
-                    ])?);
-                } else {
-                    output_block = Some(op.op.execute(&self.func_ctx, satisfied_block)?)
+                if !satisfied_block.is_empty() {
+                    if output_block.is_some() {
+                        output_block = Some(DataBlock::concat(&[
+                            output_block.unwrap(),
+                            op.op.execute(&self.func_ctx, satisfied_block)?,
+                        ])?);
+                    } else {
+                        output_block = Some(op.op.execute(&self.func_ctx, satisfied_block)?)
+                    }
                 }
 
                 if unsatisfied_block.is_empty() {
