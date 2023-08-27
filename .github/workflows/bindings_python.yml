@@ -26,98 +26,46 @@ env:
   RUNNER_PROVIDER: github
 
 jobs:
-  builds:
-    name: build-${{ matrix.target.name }}
-    runs-on: ${{ matrix.target.runs }}
+  build_linux:
+    name: build-${{ matrix.target }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         target:
-          - { name: x86_64-unknown-linux-gnu, runs: ubuntu-latest }
-          - { name: aarch64-unknown-linux-gnu, runs: ubuntu-latest }
-          - { name: x86_64-apple-darwin, runs: macos-11 }
-          - { name: aarch64-apple-darwin, runs: macos-11 }
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
-      - name: Generate version
-        working-directory: src/bendpy
-        run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            GIT_TAG=$(git describe --tags --abbrev=0)
-          else
-            GIT_TAG=${{ inputs.tag }}
-          fi
-          VERSION=`echo ${GIT_TAG} | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+'`
-
-          echo "building tag and version: $GIT_TAG $VERSION"
-          sed "s#version = \"0.0.0\"#version = \"$VERSION\"#g" Cargo.toml > Cargo.toml.bak
-          mv Cargo.toml.bak Cargo.toml
-
-      - name: Get Toolchain
-        id: toolchain
-        run: |
-          bash ./scripts/setup/dev_setup.sh -yb
-          RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
-          echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" >> $GITHUB_OUTPUT
-
-      # NOTE: for exporting ACTIONS_RUNTIME_TOKEN and ACTIONS_CACHE_URL
-      - name: Expose GitHub Runtime
-        uses: crazy-max/ghaction-github-runtime@v2
-        if: env.RUNNER_PROVIDER == 'github'
-
-      - name: Get opts
-        id: opts
-        run: |
-          echo "DOCKER_OPTS=--env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=true" >> $GITHUB_OUTPUT
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "BUILD_ARGS=--strip --out dist" >> $GITHUB_OUTPUT
-            echo "BUILD_PROFILE=debug" >> $GITHUB_ENV
-          else
-            echo "BUILD_ARGS=--release --strip --out dist" >> $GITHUB_OUTPUT
-            echo "BUILD_PROFILE=release" >> $GITHUB_ENV
-          fi
-
-      - name: Cross setup
-        if: matrix.target.runs == 'macos-11'
-        shell: bash
-        run: |
-          echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
-          echo "JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000" >> $GITHUB_ENV
-
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
+      - uses: ./.github/actions/build_bindings_python
         with:
-          rust-toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
-          working-directory: src/bendpy
-          target: ${{ matrix.target.name }}
-          manylinux: auto
-          # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
-          rustup-components: rust-std rustfmt
-          args: ${{ steps.opts.outputs.BUILD_ARGS }}
-          docker-options: ${{ steps.opts.outputs.DOCKER_OPTS }}
-          before-script-linux: ../../scripts/setup/dev_setup.sh -yb
+          target: ${{ matrix.target }}
+          version: ${{ inputs.tag }}
 
-      - name: Run tests
-        working-directory: src/bendpy
-        if: matrix.target.name == 'x86_64-unknown-linux-gnu'
-        run: |
-          pip install dist/*.whl
-          pip install pytest pyarrow pandas polars
-          pytest -v tests/*
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
+  build_macos:
+    name: build-${{ matrix.target }}
+    if: github.event_name != 'pull_request'
+    runs-on: macos-11
+    strategy:
+      matrix:
+        target:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v3
         with:
-          name: dist
-          path: src/bendpy/dist/*.whl
+          fetch-depth: 0
+      - uses: ./.github/actions/build_bindings_python
+        with:
+          target: ${{ matrix.target }}
+          version: ${{ inputs.tag }}
 
   release:
     # publish release only the version endsWith 0
     if: endsWith(inputs.tag, '0')
     name: Publish to PyPI
-    needs: builds
+    needs: [build_linux, build_macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v3

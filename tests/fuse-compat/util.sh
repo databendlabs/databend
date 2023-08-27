@@ -25,7 +25,7 @@ download_binary() {
         echo " === Download binary ver: $ver"
         echo " === Download binary url: $url"
 
-        curl -L "$url" >"$fn"
+        curl --connect-timeout 5 --retry 5 --retry-delay 0 -L "$url" -o "$fn"
         # or:
         # wget -q "$url" -o "$fn"
     fi

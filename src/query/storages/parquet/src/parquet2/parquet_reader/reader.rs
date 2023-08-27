@@ -45,7 +45,7 @@ use super::Parquet2PartData;
 use crate::parquet2::parquet_reader::deserialize::try_next_block;
 use crate::parquet2::parquet_table::arrow_to_table_schema;
 use crate::parquet2::projection::project_parquet_schema;
-use crate::parquet_part::Parquet2RowGroupPart;
+use crate::parquet2::Parquet2RowGroupPart;
 use crate::ParquetPart;
 
 /// The reader to parquet files with a projected schema.
@@ -274,7 +274,7 @@ impl Parquet2Reader {
             ParquetPart::Parquet2RowGroup(part) => Ok(Parquet2PartData::RowGroup(
                 self.row_group_readers_from_blocking_io(part, &self.operator().blocking())?,
             )),
-            ParquetPart::SmallFiles(part) => {
+            ParquetPart::ParquetFiles(part) => {
                 let op = self.operator().blocking();
                 let mut buffers = Vec::with_capacity(part.files.len());
                 for path in &part.files {
@@ -284,7 +284,7 @@ impl Parquet2Reader {
                 metrics_inc_copy_read_size_bytes(part.compressed_size());
                 Ok(Parquet2PartData::SmallFiles(buffers))
             }
-            ParquetPart::ParquetRSFile(_) => unreachable!(),
+            ParquetPart::ParquetRSRowGroup(_) => unreachable!(),
         }
     }
 
@@ -330,7 +330,7 @@ impl Parquet2Reader {
                 let readers = readers.into_iter().collect::<IndexedReaders>();
                 Ok(Parquet2PartData::RowGroup(readers))
             }
-            ParquetPart::SmallFiles(part) => {
+            ParquetPart::ParquetFiles(part) => {
                 let mut join_handlers = Vec::with_capacity(part.files.len());
                 for (path, _) in part.files.iter() {
                     let op = self.operator().clone();
@@ -348,7 +348,7 @@ impl Parquet2Reader {
 
                 Ok(Parquet2PartData::SmallFiles(buffers))
             }
-            ParquetPart::ParquetRSFile(_) => unreachable!(),
+            ParquetPart::ParquetRSRowGroup(_) => unreachable!(),
         }
     }
 }

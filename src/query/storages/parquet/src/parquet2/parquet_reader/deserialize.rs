@@ -37,7 +37,7 @@ use log::debug;
 
 use super::filter::FilterState;
 use crate::parquet2::parquet_reader::Parquet2Reader;
-use crate::parquet_part::ColumnMeta;
+use crate::parquet2::partition::ColumnMeta;
 
 impl Parquet2Reader {
     /// The number of columns can be greater than 1 because the it may be a nested type.
