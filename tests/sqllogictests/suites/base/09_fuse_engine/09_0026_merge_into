@@ -1,5 +1,5 @@
 statement ok
-set enable_unstable_merge_into = 1;
+set enable_experimental_merge_into = 1;
 
 statement ok
 drop table if exists t1;
@@ -160,4 +160,4 @@ select * from t1 order by a;
 5 b_9 c_9
 
 statement ok
-set enable_unstable_merge_into = 0;
+set enable_experimental_merge_into = 0;

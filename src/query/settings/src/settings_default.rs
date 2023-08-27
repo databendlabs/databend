@@ -326,7 +326,7 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("enable_unstable_merge_into", DefaultSettingValue {
+                ("enable_experimental_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable unstable merge into.",
                     possible_values: None,

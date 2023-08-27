@@ -384,12 +384,12 @@ impl Settings {
         self.try_set_u64("enable_distributed_copy_into", u64::from(val))
     }
 
-    pub fn get_enable_unstable_merge_into(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_unstable_merge_into")? != 0)
+    pub fn get_enable_experimental_merge_into(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_merge_into")? != 0)
     }
 
-    pub fn set_enable_unstable_merge_into(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_unstable_merge_into", u64::from(val))
+    pub fn set_enable_experimental_merge_into(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_experimental_merge_into", u64::from(val))
     }
 
     pub fn get_enable_distributed_replace(&self) -> Result<bool> {
