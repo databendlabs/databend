@@ -437,7 +437,10 @@ impl AggregationContext {
                 let mut projection = (0..collected.len()).collect::<Vec<_>>();
                 projection.sort_by_key(|&i| collected[i]);
                 let sort_operator = BlockOperator::Project { projection };
-                res_blocks.push(sort_operator.execute(&self.func_ctx, updated_block)?);
+                let res_block = sort_operator.execute(&self.func_ctx, updated_block)?;
+                if !res_block.is_empty() {
+                    res_blocks.push(res_block);
+                }
             }
         }
 
@@ -450,7 +453,19 @@ impl AggregationContext {
                 bitmap.push(true);
             }
         }
-        res_blocks.push(origin_data_block.filter_with_bitmap(&bitmap.into())?);
+        let res_block = origin_data_block.filter_with_bitmap(&bitmap.into())?;
+        if !res_block.is_empty() {
+            res_blocks.push(res_block);
+        }
+
+        if res_blocks.is_empty() {
+            return Ok(Some(MutationLogEntry::DeletedBlock {
+                index: BlockMetaIndex {
+                    segment_idx,
+                    block_idx,
+                },
+            }));
+        }
         let res_block = DataBlock::concat(&res_blocks)?;
 
         // serialization and compression is cpu intensive, send them to dedicated thread pool
@@ -471,15 +486,6 @@ impl AggregationContext {
 
         // persistent data
         let new_block_meta = serialized.block_meta;
-        if new_block_meta.row_count == 0 {
-            return Ok(Some(MutationLogEntry::DeletedBlock {
-                index: BlockMetaIndex {
-                    segment_idx,
-                    block_idx,
-                },
-            }));
-        }
-
         let new_block_location = new_block_meta.location.0.clone();
         let new_block_raw_data = serialized.block_raw_data;
         let data_accessor = self.data_accessor.clone();
