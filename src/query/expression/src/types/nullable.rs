@@ -29,6 +29,7 @@ use crate::utils::arrow::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
+use crate::ColumnVec;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -203,6 +204,12 @@ impl<T: ArgType> ArgType for NullableType<T> {
 pub struct NullableColumn<T: ValueType> {
     pub column: T::Column,
     pub validity: Bitmap,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NullableColumnVec {
+    pub column: ColumnVec,
+    pub validity: ColumnVec,
 }
 
 impl<T: ValueType> NullableColumn<T> {

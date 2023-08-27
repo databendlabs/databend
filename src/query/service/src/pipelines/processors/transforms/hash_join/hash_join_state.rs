@@ -19,7 +19,8 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
-use common_expression::Column;
+use common_expression::types::DataType;
+use common_expression::ColumnVec;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::HashMethodFixedKeys;
@@ -93,7 +94,8 @@ pub struct HashJoinState {
     pub(crate) build_num_rows: Arc<SyncUnsafeCell<usize>>,
     /// Data of the build side.
     pub(crate) chunks: Arc<SyncUnsafeCell<Vec<DataBlock>>>,
-    pub(crate) build_columns: Arc<SyncUnsafeCell<Vec<Vec<Column>>>>,
+    pub(crate) build_columns: Arc<SyncUnsafeCell<Vec<ColumnVec>>>,
+    pub(crate) build_columns_data_type: Arc<SyncUnsafeCell<Vec<DataType>>>,
     // Use the column of probe side to construct build side column.
     // (probe index, (is probe column nullable, is build column nullable))
     pub(crate) probe_to_build: Arc<Vec<(usize, (bool, bool))>>,
@@ -133,6 +135,7 @@ impl HashJoinState {
             build_num_rows: Arc::new(SyncUnsafeCell::new(0)),
             chunks: Arc::new(SyncUnsafeCell::new(Vec::new())),
             build_columns: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            build_columns_data_type: Arc::new(SyncUnsafeCell::new(Vec::new())),
             probe_to_build: Arc::new(probe_to_build.to_vec()),
             is_build_projected: Arc::new(AtomicBool::new(true)),
             outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),

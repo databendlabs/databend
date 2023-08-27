@@ -122,6 +122,8 @@ impl HashJoinProbeState {
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
 
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
+        let build_columns_data_type =
+            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
         let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
         let is_build_projected = self
@@ -164,6 +166,7 @@ impl HashJoinProbeState {
                         Some(self.hash_join_state.row_space.gather(
                             local_build_indexes,
                             build_columns,
+                            build_columns_data_type,
                             build_num_rows,
                         )?)
                     } else {
@@ -244,6 +247,7 @@ impl HashJoinProbeState {
             Some(self.hash_join_state.row_space.gather(
                 &local_build_indexes[0..matched_num],
                 build_columns,
+                build_columns_data_type,
                 build_num_rows,
             )?)
         } else {

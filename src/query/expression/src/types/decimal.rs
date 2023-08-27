@@ -226,6 +226,12 @@ pub enum DecimalColumn {
     Decimal256(Buffer<i256>, DecimalSize),
 }
 
+#[derive(Clone, PartialEq, EnumAsInner, Debug)]
+pub enum DecimalColumnVec {
+    Decimal128(Vec<Buffer<i128>>, DecimalSize),
+    Decimal256(Vec<Buffer<i256>>, DecimalSize),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
 pub enum DecimalColumnBuilder {
     Decimal128(Vec<i128>, DecimalSize),

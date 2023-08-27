@@ -15,10 +15,14 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::ColumnVec;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::Value;
 use common_hashtable::RowPtr;
 use common_sql::ColumnSet;
 use common_storages_fuse::TableContext;
@@ -58,19 +62,25 @@ impl RowSpace {
     pub fn gather(
         &self,
         row_ptrs: &[RowPtr],
-        data_blocks: &[Vec<Column>],
+        build_columns: &[ColumnVec],
+        build_columns_data_type: &[DataType],
         num_rows: &usize,
     ) -> Result<DataBlock> {
-        let mut indices = Vec::with_capacity(row_ptrs.len());
-
-        for row_ptr in row_ptrs {
-            indices.push((row_ptr.chunk_index, row_ptr.row_index, 1usize));
-        }
-
         if *num_rows != 0 {
-            let data_block =
-                DataBlock::hash_join_take_blocks(data_blocks, indices.as_slice(), indices.len());
-            Ok(data_block)
+            let num_columns = build_columns.len();
+            let result_columns = (0..num_columns)
+                .map(|index| {
+                    let data_type = &build_columns_data_type[index];
+                    let column = Column::take_column_vec_indices(
+                        &build_columns[index],
+                        data_type.clone(),
+                        row_ptrs,
+                        *num_rows,
+                    );
+                    BlockEntry::new(data_type.clone(), Value::Column(column))
+                })
+                .collect();
+            Ok(DataBlock::new(result_columns, row_ptrs.len()))
         } else {
             Ok(DataBlock::empty_with_schema(self.build_schema.clone()))
         }

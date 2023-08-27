@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::ColumnVec;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::HashMethod;
@@ -585,7 +586,10 @@ impl HashJoinBuildState {
             let data_blocks = unsafe { &mut *self.hash_join_state.chunks.get() };
             if !data_blocks.is_empty() {
                 let num_columns = data_blocks[0].num_columns();
-                let columns: Vec<Vec<Column>> = (0..num_columns)
+                let columns_data_type: Vec<DataType> = (0..num_columns)
+                    .map(|index| data_blocks[0].get_by_offset(index).data_type.clone())
+                    .collect();
+                let columns: Vec<ColumnVec> = (0..num_columns)
                     .map(|index| {
                         let columns = data_blocks
                             .iter()
@@ -602,10 +606,13 @@ impl HashJoinBuildState {
                                 Value::Column(c) => c.clone(),
                             })
                             .collect();
-                        full_columns
+                        Column::take_downcast(&full_columns, columns[0].0.data_type.clone())
                     })
                     .collect();
+                let build_columns_data_type =
+                    unsafe { &mut *self.hash_join_state.build_columns_data_type.get() };
                 let build_columns = unsafe { &mut *self.hash_join_state.build_columns.get() };
+                *build_columns_data_type = columns_data_type;
                 *build_columns = columns;
             }
             let mut build_done = self.hash_join_state.build_done.lock();

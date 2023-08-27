@@ -289,6 +289,8 @@ impl HashJoinProbeState {
         let mut result_blocks = vec![];
 
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
+        let build_columns_data_type =
+            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
         let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
         let is_build_projected = self
             .hash_join_state
@@ -347,6 +349,7 @@ impl HashJoinProbeState {
                 let mut unmatched_build_block = self.hash_join_state.row_space.gather(
                     &build_indexes[0..build_indexes_occupied],
                     build_columns,
+                    build_columns_data_type,
                     &build_num_rows,
                 )?;
 
@@ -397,6 +400,8 @@ impl HashJoinProbeState {
         let mut result_blocks = vec![];
 
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
+        let build_columns_data_type =
+            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
         let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
 
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
@@ -429,6 +434,7 @@ impl HashJoinProbeState {
             result_blocks.push(self.hash_join_state.row_space.gather(
                 &build_indexes[0..build_indexes_occupied],
                 build_columns,
+                build_columns_data_type,
                 &build_num_rows,
             )?);
             build_indexes_occupied = 0;
@@ -447,6 +453,8 @@ impl HashJoinProbeState {
         let mut result_blocks = vec![];
 
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
+        let build_columns_data_type =
+            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
         let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
 
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
@@ -479,6 +487,7 @@ impl HashJoinProbeState {
             result_blocks.push(self.hash_join_state.row_space.gather(
                 &build_indexes[0..build_indexes_occupied],
                 build_columns,
+                build_columns_data_type,
                 &build_num_rows,
             )?);
             build_indexes_occupied = 0;
@@ -493,6 +502,8 @@ impl HashJoinProbeState {
         let mut result_blocks = vec![];
 
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
+        let build_columns_data_type =
+            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
         let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
 
         let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
@@ -554,6 +565,7 @@ impl HashJoinProbeState {
             let build_block = self.hash_join_state.row_space.gather(
                 &build_indexes[0..build_indexes_occupied],
                 build_columns,
+                build_columns_data_type,
                 &build_num_rows,
             )?;
             result_blocks.push(self.merge_eq_block(
