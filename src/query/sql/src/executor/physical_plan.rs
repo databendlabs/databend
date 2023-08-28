@@ -674,6 +674,7 @@ pub struct Exchange {
     pub input: Box<PhysicalPlan>,
     pub kind: FragmentKind,
     pub keys: Vec<RemoteExpr>,
+    pub ignore_exchange: bool,
 }
 
 impl Exchange {
@@ -727,6 +728,7 @@ pub struct ExchangeSink {
     pub destination_fragment_id: usize,
     /// Addresses of destination nodes
     pub query_id: String,
+    pub ignore_exchange: bool,
 }
 
 impl ExchangeSink {

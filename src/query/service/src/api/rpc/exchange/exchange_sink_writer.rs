@@ -24,6 +24,8 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::AsyncSink;
 use common_pipeline_sinks::AsyncSinker;
+use common_pipeline_sinks::Sink;
+use common_pipeline_sinks::Sinker;
 
 use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
 use crate::api::rpc::flight_client::FlightSender;
@@ -44,7 +46,9 @@ impl AsyncSink for ExchangeWriterSink {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
-        self.flight_sender.close();
+        let (tx, _) = async_channel::bounded(1);
+        let mut empty = FlightSender::create(tx);
+        std::mem::swap(&mut self.flight_sender, &mut empty);
         Ok(())
     }
 
@@ -74,20 +78,48 @@ impl AsyncSink for ExchangeWriterSink {
     }
 }
 
-pub fn create_writer_item(exchange: FlightSender) -> PipeItem {
+pub struct IgnoreExchangeSink {
+    flight_sender: FlightSender,
+}
+
+impl IgnoreExchangeSink {
+    pub fn create(input: Arc<InputPort>, flight_sender: FlightSender) -> Box<dyn Processor> {
+        Sinker::create(input, IgnoreExchangeSink { flight_sender })
+    }
+}
+
+impl Sink for IgnoreExchangeSink {
+    const NAME: &'static str = "ExchangeWriterSink";
+
+    fn on_finish(&mut self) -> Result<()> {
+        let (tx, _) = async_channel::bounded(1);
+        let mut empty = FlightSender::create(tx);
+        std::mem::swap(&mut self.flight_sender, &mut empty);
+        Ok(())
+    }
+
+    fn consume(&mut self, _: DataBlock) -> Result<()> {
+        Ok(())
+    }
+}
+
+pub fn create_writer_item(exchange: FlightSender, ignore: bool) -> PipeItem {
     let input = InputPort::create();
     PipeItem::create(
-        ProcessorPtr::create(ExchangeWriterSink::create(input.clone(), exchange)),
+        match ignore {
+            true => ProcessorPtr::create(IgnoreExchangeSink::create(input.clone(), exchange)),
+            false => ProcessorPtr::create(ExchangeWriterSink::create(input.clone(), exchange)),
+        },
         vec![input],
         vec![],
     )
 }
 
-pub fn create_writer_items(exchanges: Vec<FlightSender>) -> Vec<PipeItem> {
+pub fn create_writer_items(exchanges: Vec<FlightSender>, ignore: bool) -> Vec<PipeItem> {
     let mut items = Vec::with_capacity(exchanges.len());
 
     for exchange in exchanges {
-        items.push(create_writer_item(exchange));
+        items.push(create_writer_item(exchange, ignore));
     }
 
     items

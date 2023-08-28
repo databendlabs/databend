@@ -287,6 +287,7 @@ pub trait PhysicalPlanReplacer {
             input: Box::new(input),
             kind: plan.kind.clone(),
             keys: plan.keys.clone(),
+            ignore_exchange: plan.ignore_exchange,
         }))
     }
 
@@ -308,6 +309,7 @@ pub trait PhysicalPlanReplacer {
             keys: plan.keys.clone(),
             destination_fragment_id: plan.destination_fragment_id,
             query_id: plan.query_id.clone(),
+            ignore_exchange: plan.ignore_exchange,
         }))
     }
 

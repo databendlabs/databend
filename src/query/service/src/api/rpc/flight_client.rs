@@ -193,6 +193,7 @@ impl FlightReceiver {
     }
 }
 
+#[derive(Clone)]
 pub struct FlightSender {
     tx: Sender<Result<FlightData, Status>>,
 }
@@ -200,6 +201,10 @@ pub struct FlightSender {
 impl FlightSender {
     pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
         FlightSender { tx }
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.tx.is_closed()
     }
 
     #[async_backtrace::framed]

@@ -43,7 +43,7 @@ use common_meta_app::tenant::TenantQuota;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
-use common_tracing::QueryLogConfig;
+use common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
 use common_tracing::TracingConfig;
 use common_users::idm_config::IDMConfig as InnerIDMConfig;
@@ -473,7 +473,7 @@ impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
         }
 
         Ok(InnerCatalogHiveConfig {
-            address: self.address,
+            metastore_address: self.address,
             protocol: self.protocol.parse()?,
         })
     }
@@ -482,7 +482,7 @@ impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
 impl From<InnerCatalogHiveConfig> for CatalogsHiveConfig {
     fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
-            address: inner.address,
+            address: inner.metastore_address,
             protocol: inner.protocol.to_string(),
 
             // Deprecated fields
@@ -507,7 +507,7 @@ impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
         }
 
         Ok(InnerCatalogHiveConfig {
-            address: self.address,
+            metastore_address: self.address,
             protocol: self.protocol.parse()?,
         })
     }
@@ -516,7 +516,7 @@ impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
 impl From<InnerCatalogHiveConfig> for HiveCatalogConfig {
     fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
-            address: inner.address,
+            address: inner.metastore_address,
             protocol: inner.protocol.to_string(),
 
             // Deprecated fields
@@ -1685,9 +1685,9 @@ pub struct LogConfig {
     #[clap(skip)]
     pub log_dir: Option<String>,
 
-    /// Log file dir
-    #[clap(long = "log-query-enabled")]
-    pub query_enabled: bool,
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
+    pub query_enabled: Option<bool>,
 
     /// Deprecated fields, used for catching error, will be removed later.
     #[clap(skip)]
@@ -1698,6 +1698,9 @@ pub struct LogConfig {
 
     #[clap(flatten)]
     pub stderr: StderrLogConfig,
+
+    #[clap(flatten)]
+    pub query: QueryLogConfig,
 }
 
 impl Default for LogConfig {
@@ -1720,9 +1723,14 @@ impl TryInto<InnerLogConfig> for LogConfig {
                 "`log_level` is deprecated, use `level` instead".to_string(),
             ));
         }
+        if self.query_enabled.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`query_enabled` is deprecated, use `query.on` instead".to_string(),
+            ));
+        }
         if self.log_query_enabled.is_some() {
             return Err(ErrorCode::InvalidConfig(
-                "`log_query_enabled` is deprecated, use `query_enabled` instead".to_string(),
+                "`log_query_enabled` is deprecated, use `query.on` instead".to_string(),
             ));
         }
 
@@ -1734,10 +1742,15 @@ impl TryInto<InnerLogConfig> for LogConfig {
             file.dir = self.dir.to_string();
         }
 
-        let query = QueryLogConfig {
-            on: true,
-            dir: format!("{}/query-details", &file.dir),
-        };
+        let mut query: InnerQueryLogConfig = self.query.try_into()?;
+        if query.dir.is_empty() {
+            if file.dir.is_empty() {
+                return Err(ErrorCode::InvalidConfig(
+                    "`dir` or `file.dir` must be set when `query.dir` is empty".to_string(),
+                ));
+            }
+            query.dir = format!("{}/query-details", &file.dir);
+        }
 
         let tracing = TracingConfig::from_env();
 
@@ -1755,13 +1768,14 @@ impl From<InnerLogConfig> for LogConfig {
         Self {
             level: inner.file.level.clone(),
             dir: inner.file.dir.clone(),
-            query_enabled: false,
             file: inner.file.into(),
             stderr: inner.stderr.into(),
+            query: inner.query.into(),
 
             // Deprecated fields
             log_dir: None,
             log_level: None,
+            query_enabled: None,
             log_query_enabled: None,
         }
     }
@@ -1861,6 +1875,49 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
             stderr_on: inner.on,
             stderr_level: inner.level,
             stderr_format: inner.format,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct QueryLogConfig {
+    #[clap(long = "query-log-on", default_value = "true")]
+    #[serde(rename = "on")]
+    pub query_log_on: bool,
+
+    /// Query Log file dir
+    #[clap(
+        long = "query-log-dir",
+        default_value = "",
+        help = "Default to <log-file-dir>/query-details"
+    )]
+    #[serde(rename = "dir")]
+    pub query_log_dir: String,
+}
+
+impl Default for QueryLogConfig {
+    fn default() -> Self {
+        InnerQueryLogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerQueryLogConfig> for QueryLogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerQueryLogConfig> {
+        Ok(InnerQueryLogConfig {
+            on: self.query_log_on,
+            dir: self.query_log_dir,
+        })
+    }
+}
+
+impl From<InnerQueryLogConfig> for QueryLogConfig {
+    fn from(inner: InnerQueryLogConfig) -> Self {
+        Self {
+            query_log_on: inner.on,
+            query_log_dir: inner.dir,
         }
     }
 }
