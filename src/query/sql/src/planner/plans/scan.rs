@@ -61,7 +61,7 @@ pub struct AggIndexInfo {
     pub selection: Vec<ScalarItem>,
     pub predicates: Vec<ScalarExpr>,
     pub is_agg: bool,
-    pub agg_functions_len: usize,
+    pub num_agg_funcs: usize,
 }
 
 impl AggIndexInfo {

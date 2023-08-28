@@ -22,7 +22,7 @@ runs:
         bash ./tests/compat/test-compat.sh
 
     - name: Upload failure
-      if: failure() || cancelled()
+      if: failure()
       uses: ./.github/actions/artifact_failure
       with:
         name: test-compat
