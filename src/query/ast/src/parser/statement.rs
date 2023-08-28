@@ -173,7 +173,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 hints: opt_hints,
                 catalog,
                 database,
-                table,
+                table_ident: table,
                 source,
                 alias_target,
                 join_expr,

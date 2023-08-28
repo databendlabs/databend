@@ -17,7 +17,6 @@ use std::fmt::Formatter;
 
 use common_exception::Span;
 
-use super::StreamingSource;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::ColumnID;

@@ -74,7 +74,7 @@ impl Binder {
         let MergeIntoStmt {
             catalog,
             database,
-            table,
+            table_ident,
             source,
             alias_target,
             join_expr,
@@ -96,26 +96,17 @@ impl Binder {
         MergeIntoStmt::check_multi_match_clauses_semantic(&matched_clauses)?;
         MergeIntoStmt::check_multi_unmatch_clauses_semantic(&unmatched_clauses)?;
 
-        let catalog_name = catalog.as_ref().map_or_else(
-            || self.ctx.get_current_catalog(),
-            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
-        );
+        let (catalog_name, database_name, table_name) =
+            self.normalize_object_identifier_triple(catalog, database, table_ident);
 
-        let database_name = database.as_ref().map_or_else(
-            || self.ctx.get_current_database(),
-            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
-        );
-
-        let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
-
-        let fuse_table = self
+        let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
-        let table_id = fuse_table.get_id();
-        let table_schema = fuse_table.schema();
+        let table_id = table.get_id();
+        let table_schema = table.schema();
         // Todo: (JackTan25) support computed expr
-        for filed in fuse_table.schema().fields() {
+        for filed in table.schema().fields() {
             if filed.computed_expr().is_some() {
                 return Err(ErrorCode::Unimplemented(
                     "merge into doesn't support computed expr for now",
@@ -127,7 +118,7 @@ impl Binder {
             span: None,
             catalog: catalog.clone(),
             database: database.clone(),
-            table: table.clone(),
+            table: table_ident.clone(),
             alias: alias_target.clone(),
             travel_point: None,
             pivot: None,
@@ -138,7 +129,7 @@ impl Binder {
         let source_data = source.transform_table_reference();
 
         // bind source data
-        let (left_child, mut left_context) = self
+        let (source_expr, mut left_context) = self
             .bind_merge_into_source(bind_context, None, &source.clone())
             .await?;
 
@@ -146,7 +137,7 @@ impl Binder {
         let mut columns_set = left_context.column_set();
 
         // bind table for target table
-        let (mut right_child, mut right_context) = self
+        let (mut target_expr, mut right_context) = self
             .bind_single_table(&mut left_context, &target_table)
             .await?;
 
@@ -169,8 +160,8 @@ impl Binder {
         let column_binding = right_context
             .add_internal_column_binding(&row_id_column_binding, self.metadata.clone())?;
 
-        right_child =
-            SExpr::add_internal_column_index(&right_child, table_index, column_binding.index);
+        target_expr =
+            SExpr::add_internal_column_index(&target_expr, table_index, column_binding.index);
 
         self.metadata
             .write()
@@ -191,8 +182,8 @@ impl Binder {
                 bind_context,
                 left_context,
                 right_context.clone(),
-                left_child,
-                right_child,
+                source_expr,
+                target_expr,
                 &join,
             )
             .await?;

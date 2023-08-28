@@ -85,7 +85,7 @@ pub struct MergeIntoStmt {
     pub hints: Option<Hint>,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
-    pub table: Identifier,
+    pub table_ident: Identifier,
     pub source: MergeSource,
     // alias_target is belong to target
     pub alias_target: Option<TableAlias>,
@@ -101,7 +101,7 @@ impl Display for MergeIntoStmt {
             self.catalog
                 .iter()
                 .chain(&self.database)
-                .chain(Some(&self.table)),
+                .chain(Some(&self.table_ident)),
         )?;
 
         write!(f, " USING {} ON {}", self.source, self.join_expr)?;
@@ -222,9 +222,9 @@ impl MergeSource {
     pub fn transform_table_reference(&self) -> TableReference {
         match self {
             Self::StreamingV2 {
-                settings,
-                on_error_mode,
-                start,
+                settings: _,
+                on_error_mode: _,
+                start: _,
             } => unimplemented!(),
 
             Self::Select { query } => TableReference::Subquery {
