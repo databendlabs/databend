@@ -81,10 +81,8 @@ impl SnapshotChanges {
                 return true;
             }
         }
-        for o in &other.removed_segment_indexes {
-            if self.removed_segment_indexes.contains(o) {
-                return true;
-            }
+        if Self::is_slice_intersect(&self.removed_segment_indexes, &other.removed_segment_indexes) {
+            return true;
         }
         false
     }
