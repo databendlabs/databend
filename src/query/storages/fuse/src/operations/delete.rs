@@ -130,7 +130,11 @@ impl FuseTable {
 
                 // deleting the whole table... just a truncate
                 let purge = false;
-                return self.do_truncate(ctx.clone(), purge).await.map(|_| None);
+                if is_explain_delete {
+                    return Ok(None);
+                } else {
+                    return self.do_truncate(ctx.clone(), purge).await.map(|_| None);
+                }
             }
         }
         let projection = Projection::Columns(col_indices);
