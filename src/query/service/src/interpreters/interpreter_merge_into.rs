@@ -121,7 +121,7 @@ impl MergeIntoInterpreter {
             .row_id_index_by_table_index(*target_table_idx)
         {
             None => {
-                return Err(ErrorCode::InValidRowIdIndex(
+                return Err(ErrorCode::InvalidRowIdIndex(
                     "can't get internal row_id_idx when running merge into",
                 ));
             }
@@ -139,7 +139,7 @@ impl MergeIntoInterpreter {
 
         // we can't get row_id_idx, throw an exception
         if !found_row_id {
-            return Err(ErrorCode::InValidRowIdIndex(
+            return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_id_idx when running merge into",
             ));
         }
