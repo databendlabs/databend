@@ -85,13 +85,12 @@ impl Interpreter for UpdateInterpreter {
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
         let table_info = tbl.get_table_info().clone();
         let explain_pipeline = self.explain_pipeline;
-        let handler;
         // Add table lock heartbeat.
-        if !explain_pipeline {
-            handler = TableLockHandlerWrapper::instance(self.ctx.clone());
+        let handler = if !explain_pipeline {
+            TableLockHandlerWrapper::instance(self.ctx.clone())
         } else {
-            handler = Arc::new(TableLockHandlerWrapper::new(Box::new(DummyTableLock {})));
-        }
+            Arc::new(TableLockHandlerWrapper::new(Box::new(DummyTableLock {})))
+        };
 
         let mut heartbeat = handler
             .try_lock(self.ctx.clone(), table_info.clone())
