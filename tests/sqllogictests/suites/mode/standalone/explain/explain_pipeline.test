@@ -19,6 +19,26 @@ EmptySink × 1 processor
   DeserializeDataTransform × 1 processor
     SyncReadParquetDataSource × 1 processor
 
+statement ok
+insert into t1 values(1,2);
+
+onlyif mysql
+query T
+explain pipeline update t1 set a = 1 where a = 1;
+----
+CommitSink × 1 processor
+  MutationAggregator × 1 processor
+    TransformSerializeBlock × 1 processor
+      MutationSource × 1 processor
+
+onlyif mysql
+query T
+explain pipeline delete from t1 where a = 1;
+----
+CommitSink × 1 processor
+  MutationAggregator × 1 processor
+    TransformSerializeBlock × 1 processor
+      MutationSource × 1 processor
 
 statement ok
 drop table t1
