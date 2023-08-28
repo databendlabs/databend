@@ -16,13 +16,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
 use common_expression::ColumnVec;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::Value;
 use common_hashtable::RowPtr;
 use common_sql::ColumnSet;
 use common_storages_fuse::TableContext;
@@ -67,20 +64,13 @@ impl RowSpace {
         num_rows: &usize,
     ) -> Result<DataBlock> {
         if *num_rows != 0 {
-            let num_columns = build_columns.len();
-            let result_columns = (0..num_columns)
-                .map(|index| {
-                    let data_type = &build_columns_data_type[index];
-                    let column = Column::take_column_vec_indices(
-                        &build_columns[index],
-                        data_type.clone(),
-                        row_ptrs,
-                        *num_rows,
-                    );
-                    BlockEntry::new(data_type.clone(), Value::Column(column))
-                })
-                .collect();
-            Ok(DataBlock::new(result_columns, row_ptrs.len()))
+            let data_block = DataBlock::take_column_vec(
+                build_columns,
+                build_columns_data_type,
+                row_ptrs,
+                row_ptrs.len(),
+            );
+            Ok(data_block)
         } else {
             Ok(DataBlock::empty_with_schema(self.build_schema.clone()))
         }

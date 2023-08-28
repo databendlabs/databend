@@ -109,6 +109,30 @@ impl DataBlock {
         DataBlock::new(result_columns, result_size)
     }
 
+    pub fn take_column_vec(
+        build_columns: &[ColumnVec],
+        build_columns_data_type: &[DataType],
+        indices: &[RowPtr],
+        result_size: usize,
+    ) -> Self {
+        debug_assert!(!build_columns.is_empty());
+
+        let num_columns = build_columns.len();
+        let result_columns = (0..num_columns)
+            .map(|index| {
+                let data_type = &build_columns_data_type[index];
+                let column = Column::take_column_vec_indices(
+                    &build_columns[index],
+                    data_type.clone(),
+                    indices,
+                    result_size,
+                );
+                BlockEntry::new(data_type.clone(), Value::Column(column))
+            })
+            .collect();
+        DataBlock::new(result_columns, result_size)
+    }
+
     pub fn take_by_slice_limit(
         block: &DataBlock,
         slice: (usize, usize),
