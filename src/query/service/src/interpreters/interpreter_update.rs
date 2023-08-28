@@ -28,6 +28,7 @@ use common_sql::binder::ColumnBindingBuilder;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::Visibility;
 use log::debug;
+use table_lock::DummyTableLock;
 use table_lock::TableLockHandlerWrapper;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -84,16 +85,17 @@ impl Interpreter for UpdateInterpreter {
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
         let table_info = tbl.get_table_info().clone();
         let explain_pipeline = self.explain_pipeline;
-        let mut heartbeat = None;
+        let handler;
+        // Add table lock heartbeat.
         if !explain_pipeline {
-            // Add table lock heartbeat.
-            let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-            heartbeat = Some(
-                handler
-                    .try_lock(self.ctx.clone(), table_info.clone())
-                    .await?,
-            );
+            handler = TableLockHandlerWrapper::instance(self.ctx.clone());
+        } else {
+            handler = Arc::new(TableLockHandlerWrapper::new(Box::new(DummyTableLock {})));
         }
+
+        let mut heartbeat = handler
+            .try_lock(self.ctx.clone(), table_info.clone())
+            .await?;
 
         // refresh table.
         let tbl = self
@@ -199,14 +201,14 @@ impl Interpreter for UpdateInterpreter {
 
         if build_res.main_pipeline.is_empty() {
             if !explain_pipeline {
-                heartbeat.unwrap().shutdown().await?;
+                heartbeat.shutdown().await?;
             }
         } else {
             build_res.main_pipeline.set_on_finished(move |may_error| {
                 if !explain_pipeline {
                     // shutdown table lock heartbeat.
                     GlobalIORuntime::instance()
-                        .block_on(async move { heartbeat.unwrap().shutdown().await })?;
+                        .block_on(async move { heartbeat.shutdown().await })?;
                 }
                 match may_error {
                     None => Ok(()),

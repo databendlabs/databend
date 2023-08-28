@@ -15,6 +15,7 @@
 mod table_lock_handler;
 mod table_lock_heartbeat;
 
+pub use table_lock_handler::DummyTableLock;
 pub use table_lock_handler::TableLockHandler;
 pub use table_lock_handler::TableLockHandlerWrapper;
 pub use table_lock_heartbeat::TableLockHeartbeat;

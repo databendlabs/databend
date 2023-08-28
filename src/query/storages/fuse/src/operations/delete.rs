@@ -76,6 +76,7 @@ impl FuseTable {
         filters: Option<DeletionFilters>,
         col_indices: Vec<usize>,
         query_row_id_col: bool,
+        is_explain_delete: bool,
     ) -> Result<Option<(Partitions, TableSnapshot)>> {
         let snapshot_opt = self.read_table_snapshot().await?;
 
@@ -102,7 +103,11 @@ impl FuseTable {
                 ctx.get_write_progress().incr(&progress_values);
                 // deleting the whole table... just a truncate
                 let purge = false;
-                return self.do_truncate(ctx.clone(), purge).await.map(|_| None);
+                if is_explain_delete {
+                    return Ok(None);
+                } else {
+                    return self.do_truncate(ctx.clone(), purge).await.map(|_| None);
+                }
             }
             Some(filters) => filters,
         };
