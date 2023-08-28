@@ -428,6 +428,7 @@ impl PhysicalPlanBuilder {
                                 PhysicalPlan::Exchange(PhysicalExchange {
                                     plan_id: self.next_plan_id(),
                                     kind,
+                                    ignore_exchange: false,
                                     input: Box::new(PhysicalPlan::AggregatePartial(
                                         aggregate_partial,
                                     )),
@@ -685,6 +686,7 @@ impl PhysicalPlanBuilder {
                     input,
                     kind,
                     keys,
+                    ignore_exchange: false,
                 }))
             }
 
@@ -1843,7 +1845,7 @@ impl PhysicalPlanBuilder {
             actual_table_field_len: source_fields.len(),
             is_agg: agg.is_agg,
             projection,
-            agg_functions_len: agg.agg_functions_len,
+            num_agg_funcs: agg.num_agg_funcs,
         })
     }
 

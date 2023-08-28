@@ -299,6 +299,7 @@ impl DeleteInterpreter {
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: vec![],
+                ignore_exchange: false,
             });
         }
 

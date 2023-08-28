@@ -52,7 +52,7 @@ impl BlockReader {
     #[async_backtrace::framed]
     pub async fn async_read_native_columns_data(
         &self,
-        part: PartInfoPtr,
+        part: &PartInfoPtr,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<NativeSourceData> {
         // Perf
@@ -60,7 +60,7 @@ impl BlockReader {
             metrics_inc_remote_io_read_parts(1);
         }
 
-        let part = FusePartInfo::from_part(&part)?;
+        let part = FusePartInfo::from_part(part)?;
         let mut join_handlers = Vec::with_capacity(self.project_column_nodes.len());
 
         for (index, column_node) in self.project_column_nodes.iter().enumerate() {
@@ -126,11 +126,15 @@ impl BlockReader {
     ) -> Result<(usize, Vec<NativeReader<Reader>>)> {
         let mut native_readers = Vec::with_capacity(metas.len());
         for meta in metas {
-            let (offset, length) = meta.offset_length();
             let mut native_meta = meta.as_native().unwrap().clone();
             if let Some(range) = &range {
                 native_meta = native_meta.slice(range.start, range.end);
             }
+
+            let (offset, length) = (
+                native_meta.offset,
+                native_meta.pages.iter().map(|p| p.length).sum::<u64>(),
+            );
 
             let reader = op.range_read(path, offset..offset + length).await?;
             let reader: Reader = Box::new(std::io::Cursor::new(reader));
@@ -144,10 +148,10 @@ impl BlockReader {
 
     pub fn sync_read_native_columns_data(
         &self,
-        part: PartInfoPtr,
+        part: &PartInfoPtr,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<NativeSourceData> {
-        let part = FusePartInfo::from_part(&part)?;
+        let part = FusePartInfo::from_part(part)?;
 
         let mut results: BTreeMap<usize, Vec<NativeReader<Reader>>> = BTreeMap::new();
         for (index, column_node) in self.project_column_nodes.iter().enumerate() {

@@ -48,6 +48,7 @@ pub struct MergeExchangeParams {
     pub fragment_id: usize,
     pub destination_id: String,
     pub schema: DataSchemaRef,
+    pub ignore_exchange: bool,
     pub exchange_injector: Arc<dyn ExchangeInjector>,
 }
 

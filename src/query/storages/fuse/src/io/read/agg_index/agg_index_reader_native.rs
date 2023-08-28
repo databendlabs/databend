@@ -57,7 +57,7 @@ impl AggIndexReader {
                 );
                 let res = self
                     .reader
-                    .sync_read_native_columns_data(part, &None)
+                    .sync_read_native_columns_data(&part, &None)
                     .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
                     .ok()?;
                 Some(res)
@@ -108,7 +108,7 @@ impl AggIndexReader {
                 );
                 let res = self
                     .reader
-                    .async_read_native_columns_data(part, &None)
+                    .async_read_native_columns_data(&part, &None)
                     .await
                     .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
                     .ok()?;

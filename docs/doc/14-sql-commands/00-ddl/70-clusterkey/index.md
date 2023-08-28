@@ -1,6 +1,5 @@
 ---
 title: Understanding Cluster Key
-sidebar_position: 1
 slug: ./
 ---
 

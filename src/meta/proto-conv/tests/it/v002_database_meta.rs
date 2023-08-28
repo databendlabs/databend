@@ -51,6 +51,7 @@ fn test_decode_v2_database_meta() -> anyhow::Result<()> {
         drop_on: None,
         shared_by: BTreeSet::from_iter(vec![1].into_iter()),
         from_share: None,
+        owner: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

@@ -154,3 +154,12 @@ endpoints = ["192.168.1.100:9191","192.168.1.101:9191","192.168.1.102:9191"]
 ```shell
 ./databend-query -c ../configs/databend-query.toml > query.log 2>&1 &
 ```
+
+## Next Steps
+
+After deploying Databend, you might need to learn about the following topics:
+
+- [SQL Clients](/doc/integrations/clients): Learn to connect to Databend using SQL clients.
+- [Manage Settings](../../13-sql-reference/42-manage-settings.md): Optimize Databend for your needs. 
+- [Load & Unload Data](/doc/load): Manage data import/export in Databend.
+- [Visualize](/doc/integrations): Integrate Databend with visualization tools for insights.
