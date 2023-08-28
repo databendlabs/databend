@@ -50,9 +50,6 @@ use crate::ScalarExpr;
 
 // implementation of merge into for now:
 //      use an left outer join for target_source and source.
-//  target_table: (a,b)
-//  source: (b,c)
-// Merge into target_table using source on target_table.a = source.b
 impl Binder {
     #[allow(warnings)]
     #[async_backtrace::framed]

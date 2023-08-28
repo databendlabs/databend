@@ -168,7 +168,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             join_expr,
             merge_options,
         )| {
-            // we can get the target_table_reference in later, it doesn't matter.
             Statement::MergeInto(MergeIntoStmt {
                 hints: opt_hints,
                 catalog,
