@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Not;
+
 use common_exception::Result;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
@@ -21,7 +23,6 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
-
 pub struct SplitByExprMutator {
     expr: Option<Expr>,
     func_ctx: FunctionContext,
@@ -48,7 +49,10 @@ impl SplitByExprMutator {
                 .try_downcast::<BooleanType>()
                 .unwrap();
             let filter = predicates.into_column().unwrap();
-            data_block.split_filter_with_bitmap(&filter)
+            Ok((
+                data_block.clone().filter_with_bitmap(&filter)?,
+                data_block.filter_with_bitmap(&filter.not())?,
+            ))
         }
     }
 }

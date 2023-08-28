@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Not;
-
 use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
 use common_arrow::arrow::bitmap::utils::BitChunksExact;
 use common_arrow::arrow::bitmap::Bitmap;
@@ -68,50 +66,6 @@ impl DataBlock {
                     })
                     .collect();
                 Ok(DataBlock::new(after_columns, self.num_rows() - count_zeros))
-            }
-        }
-    }
-
-    pub fn split_filter_with_bitmap(self, bitmap: &Bitmap) -> Result<(DataBlock, DataBlock)> {
-        let num_rows = self.num_rows();
-        if num_rows == 0 {
-            return Ok((self, DataBlock::empty()));
-        }
-
-        let count_zeros = bitmap.unset_bits();
-        if count_zeros == num_rows {
-            return Ok((DataBlock::empty(), self));
-        }
-        match count_zeros {
-            0 => Ok((self, DataBlock::empty())),
-            _ => {
-                let after_columns_one = self
-                    .columns()
-                    .iter()
-                    .map(|entry| match &entry.value {
-                        Value::Column(c) => {
-                            let value = Value::Column(Column::filter(c, bitmap));
-                            BlockEntry::new(entry.data_type.clone(), value)
-                        }
-                        _ => entry.clone(),
-                    })
-                    .collect();
-
-                let after_columns_zero = self
-                    .columns()
-                    .iter()
-                    .map(|entry| match &entry.value {
-                        Value::Column(c) => {
-                            let value = Value::Column(Column::filter(c, &bitmap.not()));
-                            BlockEntry::new(entry.data_type.clone(), value)
-                        }
-                        _ => entry.clone(),
-                    })
-                    .collect();
-                Ok((
-                    DataBlock::new(after_columns_one, self.num_rows() - count_zeros),
-                    DataBlock::new(after_columns_zero, count_zeros),
-                ))
             }
         }
     }
