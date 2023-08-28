@@ -73,10 +73,8 @@ pub struct SnapshotChanges {
 
 impl SnapshotChanges {
     pub fn check_intersect(&self, other: &SnapshotChanges) -> bool {
-        for o in &other.appended_segments {
-            if self.appended_segments.contains(o) {
-                return true;
-            }
+        if Self::is_slice_intersect(&self.appended_segments, &other.appended_segments) {
+            return true;
         }
         for o in &other.replaced_segments {
             if self.replaced_segments.contains_key(o.0) {
@@ -85,6 +83,17 @@ impl SnapshotChanges {
         }
         for o in &other.removed_segment_indexes {
             if self.removed_segment_indexes.contains(o) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn is_slice_intersect<T: Eq + std::hash::Hash>(l: &[T], r: &[T]) -> bool {
+        let (l, r) = if l.len() > r.len() { (l, r) } else { (r, l) };
+        let l = l.iter().collect::<HashSet<_>>();
+        for x in r {
+            if l.contains(x) {
                 return true;
             }
         }
