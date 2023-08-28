@@ -206,7 +206,7 @@ impl Column {
             Column::Number(column) => with_number_mapped_type!(|UInt8| match column {
                 NumberColumn::UInt8(_) => {
                     let builder = NumberType::<UInt8>::create_builder(result_size, &[]);
-                    Self::take_block_value_ref_types::<NumberType<UInt8>>(columns, builder, indices)
+                    Self::take_block_value_types::<NumberType<UInt8>>(columns, builder, indices)
                 }
             }),
             Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
@@ -231,19 +231,19 @@ impl Column {
             }),
             Column::Boolean(_) => {
                 let builder = BooleanType::create_builder(result_size, &[]);
-                Self::take_block_value_ref_types::<BooleanType>(columns, builder, indices)
+                Self::take_block_value_types::<BooleanType>(columns, builder, indices)
             }
             Column::String(_) => {
                 let builder = StringType::create_builder(result_size, &[]);
-                Self::take_block_value_ref_types::<StringType>(columns, builder, indices)
+                Self::take_block_value_types::<StringType>(columns, builder, indices)
             }
             Column::Timestamp(_) => {
                 let builder = TimestampType::create_builder(result_size, &[]);
-                Self::take_block_value_ref_types::<TimestampType>(columns, builder, indices)
+                Self::take_block_value_types::<TimestampType>(columns, builder, indices)
             }
             Column::Date(_) => {
                 let builder = DateType::create_builder(result_size, &[]);
-                Self::take_block_value_ref_types::<DateType>(columns, builder, indices)
+                Self::take_block_value_types::<DateType>(columns, builder, indices)
             }
             Column::Array(column) => {
                 dbg!(column.values.data_type(), &datatype);
@@ -277,7 +277,7 @@ impl Column {
             }
             Column::Bitmap(_) => {
                 let builder = BitmapType::create_builder(result_size, &[]);
-                Self::take_block_value_ref_types::<BitmapType>(columns, builder, indices)
+                Self::take_block_value_types::<BitmapType>(columns, builder, indices)
             }
             Column::Nullable(_) => {
                 let inner_ty = datatype.as_nullable().unwrap();
@@ -342,12 +342,12 @@ impl Column {
             }
             Column::Variant(_) => {
                 let builder = VariantType::create_builder(result_size, &[]);
-                Self::take_block_value_ref_types::<VariantType>(columns, builder, indices)
+                Self::take_block_value_types::<VariantType>(columns, builder, indices)
             }
         }
     }
 
-    pub fn take_downcast(columns: &[Column], datatype: DataType) -> ColumnVec {
+    pub fn take_downcast_column_vec(columns: &[Column], datatype: DataType) -> ColumnVec {
         match &columns[0] {
             Column::Null { .. } => ColumnVec::Null,
             Column::EmptyArray { .. } => ColumnVec::EmptyArray,
@@ -503,9 +503,11 @@ impl Column {
                     })
                     .collect::<Vec<_>>();
 
-                let inner_column = Self::take_downcast(&inner_columns, *inner_ty.clone());
+                let inner_column =
+                    Self::take_downcast_column_vec(&inner_columns, *inner_ty.clone());
 
-                let inner_bitmap = Self::take_downcast(&inner_bitmaps, DataType::Boolean);
+                let inner_bitmap =
+                    Self::take_downcast_column_vec(&inner_bitmaps, DataType::Boolean);
 
                 ColumnVec::Nullable(Box::new(NullableColumnVec {
                     column: inner_column,
@@ -530,7 +532,7 @@ impl Column {
                             .iter()
                             .map(|c| c[idx].clone())
                             .collect::<Vec<_>>();
-                        Self::take_downcast(&sub_columns, ty.clone())
+                        Self::take_downcast_column_vec(&sub_columns, ty.clone())
                     })
                     .collect();
 
@@ -683,25 +685,6 @@ impl Column {
                 )
             };
             T::push_item(&mut builder, val.clone());
-        }
-        T::upcast_column(T::build_column(builder))
-    }
-
-    fn take_block_value_ref_types<T: ValueType>(
-        columns: &[Column],
-        mut builder: T::ColumnBuilder,
-        indices: &[BlockRowIndex],
-    ) -> Column {
-        let columns = columns
-            .iter()
-            .map(|col| T::try_downcast_column_ref(col).unwrap())
-            .collect_vec();
-        for &(block_index, row, times) in indices {
-            let val =
-                unsafe { T::index_column_unchecked(columns[block_index as usize], row as usize) };
-            for _ in 0..times {
-                T::push_item(&mut builder, val.clone())
-            }
         }
         T::upcast_column(T::build_column(builder))
     }

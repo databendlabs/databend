@@ -64,10 +64,6 @@ impl ValueType for StringType {
         col.as_string().cloned()
     }
 
-    fn try_downcast_column_ref<'a>(col: &'a Column) -> Option<&'a Self::Column> {
-        col.as_string()
-    }
-
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         domain.as_string().map(StringDomain::clone)
     }

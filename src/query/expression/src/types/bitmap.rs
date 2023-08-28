@@ -59,10 +59,6 @@ impl ValueType for BitmapType {
         col.as_bitmap().cloned()
     }
 
-    fn try_downcast_column_ref<'a>(col: &'a Column) -> Option<&Self::Column> {
-        col.as_bitmap()
-    }
-
     fn try_downcast_builder<'a>(
         builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder> {

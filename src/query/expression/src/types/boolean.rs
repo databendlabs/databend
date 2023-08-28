@@ -66,13 +66,6 @@ impl ValueType for BooleanType {
         }
     }
 
-    fn try_downcast_column_ref<'a>(col: &'a Column) -> Option<&Self::Column> {
-        match col {
-            Column::Boolean(column) => Some(column),
-            _ => None,
-        }
-    }
-
     fn try_downcast_builder<'a>(
         builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder> {

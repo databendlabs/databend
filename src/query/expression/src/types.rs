@@ -281,7 +281,6 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>>;
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column>;
-    fn try_downcast_column_ref<'a>(col: &'a Column) -> Option<&Self::Column>;
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
 
     /// Downcast `ColumnBuilder` to a mutable reference of its inner builder type.

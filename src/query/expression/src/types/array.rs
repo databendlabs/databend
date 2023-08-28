@@ -65,10 +65,6 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         ArrayColumn::try_downcast(col.as_array()?)
     }
 
-    fn try_downcast_column_ref<'a>(_col: &'a Column) -> Option<&Self::Column> {
-        unimplemented!()
-    }
-
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
             Domain::Array(Some(domain)) => Some(Some(T::try_downcast_domain(domain)?)),

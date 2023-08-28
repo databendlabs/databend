@@ -69,10 +69,6 @@ impl<T: ValueType> ValueType for NullableType<T> {
         NullableColumn::try_downcast(col.as_nullable()?)
     }
 
-    fn try_downcast_column_ref<'a>(_col: &'a Column) -> Option<&Self::Column> {
-        unimplemented!()
-    }
-
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
             Domain::Nullable(NullableDomain {

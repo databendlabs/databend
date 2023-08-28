@@ -61,13 +61,6 @@ impl ValueType for NullType {
         }
     }
 
-    fn try_downcast_column_ref<'a>(col: &'a Column) -> Option<&'a Self::Column> {
-        match col {
-            Column::Null { len } => Some(len),
-            _ => None,
-        }
-    }
-
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
             Domain::Nullable(NullableDomain {

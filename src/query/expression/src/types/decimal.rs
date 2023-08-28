@@ -77,15 +77,6 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         }
     }
 
-    fn try_downcast_column_ref<'a>(col: &'a Column) -> Option<&Self::Column> {
-        let down_col = Num::try_downcast_column_ref(col);
-        if let Some(col) = down_col {
-            Some(col.0)
-        } else {
-            None
-        }
-    }
-
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         Num::try_downcast_domain(domain.as_decimal()?)
     }
@@ -294,7 +285,6 @@ pub trait Decimal:
     fn to_float64(self, scale: u8) -> f64;
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
-    fn try_downcast_column_ref<'a>(column: &'a Column) -> Option<(&'a Buffer<Self>, DecimalSize)>;
     fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>>;
 
     fn try_downcast_scalar(scalar: &DecimalScalar) -> Option<Self>;
@@ -426,14 +416,6 @@ impl Decimal for i128 {
         let column = column.as_decimal()?;
         match column {
             DecimalColumn::Decimal128(c, size) => Some((c.clone(), *size)),
-            _ => None,
-        }
-    }
-
-    fn try_downcast_column_ref<'a>(column: &'a Column) -> Option<(&'a Buffer<Self>, DecimalSize)> {
-        let column = column.as_decimal()?;
-        match column {
-            DecimalColumn::Decimal128(c, size) => Some((c, *size)),
             _ => None,
         }
     }
@@ -578,14 +560,6 @@ impl Decimal for i256 {
         let column = column.as_decimal()?;
         match column {
             DecimalColumn::Decimal256(c, size) => Some((c.clone(), *size)),
-            _ => None,
-        }
-    }
-
-    fn try_downcast_column_ref<'a>(column: &'a Column) -> Option<(&'a Buffer<Self>, DecimalSize)> {
-        let column = column.as_decimal()?;
-        match column {
-            DecimalColumn::Decimal256(c, size) => Some((c, *size)),
             _ => None,
         }
     }

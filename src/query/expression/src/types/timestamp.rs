@@ -96,13 +96,6 @@ impl ValueType for TimestampType {
         }
     }
 
-    fn try_downcast_column_ref<'a>(col: &'a Column) -> Option<&'a Self::Column> {
-        match col {
-            Column::Timestamp(column) => Some(column),
-            _ => None,
-        }
-    }
-
     fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<i64>> {
         domain.as_timestamp().map(SimpleDomain::clone)
     }

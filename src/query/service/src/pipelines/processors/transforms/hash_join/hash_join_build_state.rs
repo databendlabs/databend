@@ -606,7 +606,10 @@ impl HashJoinBuildState {
                                 Value::Column(c) => c.clone(),
                             })
                             .collect();
-                        Column::take_downcast(&full_columns, columns[0].0.data_type.clone())
+                        Column::take_downcast_column_vec(
+                            &full_columns,
+                            columns[0].0.data_type.clone(),
+                        )
                     })
                     .collect();
                 let build_columns_data_type =

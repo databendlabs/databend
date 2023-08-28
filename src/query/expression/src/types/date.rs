@@ -90,13 +90,6 @@ impl ValueType for DateType {
         }
     }
 
-    fn try_downcast_column_ref<'a>(col: &'a Column) -> Option<&Self::Column> {
-        match col {
-            Column::Date(column) => Some(column),
-            _ => None,
-        }
-    }
-
     fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<i32>> {
         domain.as_date().map(SimpleDomain::clone)
     }
