@@ -66,7 +66,7 @@ impl BuildSpillState {
 impl BuildSpillState {
     // Start to spill `input_data`.
     // Todo: add unit tests for the method.
-    pub(crate) fn spill(&mut self) -> Result<()> {
+    pub(crate) async fn spill(&mut self) -> Result<()> {
         let mut rows_size = 0;
         self.spiller.input_data.iter().for_each(|block| {
             rows_size += block.num_rows();
@@ -102,7 +102,7 @@ impl BuildSpillState {
                 .push((*partition_id, partition_block));
         }
 
-        self.spiller.spill()
+        self.spiller.spill().await
     }
 
     // Get all hashes for input data.

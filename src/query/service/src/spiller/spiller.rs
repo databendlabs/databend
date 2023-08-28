@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
+use common_base::base::GlobalUniqName;
 use common_exception::Result;
+use common_expression::arrow::serialize_column;
 use common_expression::DataBlock;
 use opendal::Operator;
 use parking_lot::RwLock;
@@ -57,6 +61,8 @@ pub struct Spiller {
     pub(crate) spilled_partition_set: Vec<u8>,
     /// Key is partition id, value is rows which have same partition id
     pub(crate) partitions: Vec<(u8, DataBlock)>,
+    /// Record the location of the spilled partitions
+    pub(crate) partition_location: HashMap<u8, String>,
 }
 
 impl Spiller {
@@ -72,11 +78,32 @@ impl Spiller {
             partition_set: vec![],
             spilled_partition_set: vec![],
             partitions: vec![],
+            partition_location: Default::default(),
         }
     }
 
     /// Spill partition set
-    pub fn spill(&self) -> Result<()> {
-        todo!()
+    pub async fn spill(&mut self) -> Result<()> {
+        for (partition_id, partition) in self.partitions.iter() {
+            let unique_name = GlobalUniqName::unique();
+            let location = format!("{}/{}", self.config.location_prefix, unique_name);
+            // Record the location of the spilled partition
+            self.partition_location.insert(*partition_id, location.clone());
+            self.spilled_partition_set.push(*partition_id);
+            let columns = partition.columns().to_vec();
+            let mut columns_data = Vec::with_capacity(columns.len());
+            for column in columns.into_iter() {
+                let column = column.value.as_column().unwrap();
+                let column_data = serialize_column(column);
+                columns_data.push(column_data);
+            }
+
+            let mut writer = self.operator.writer(location.as_str()).await?;
+            for data in columns_data.into_iter() {
+                writer.write(data).await?;
+            }
+            writer.close().await?;
+        }
+        Ok(())
     }
 }

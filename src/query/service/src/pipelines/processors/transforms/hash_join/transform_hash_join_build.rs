@@ -108,8 +108,7 @@ impl Processor for TransformHashJoinBuild {
                 true => Ok(Event::Finished),
             },
             HashJoinBuildStep::FastReturn => Ok(Event::Finished),
-            HashJoinBuildStep::WaitSpill => Ok(Event::Async),
-            HashJoinBuildStep::Spill => todo!(),
+            HashJoinBuildStep::WaitSpill | HashJoinBuildStep::Spill => Ok(Event::Async),
         }
     }
 
@@ -156,8 +155,9 @@ impl Processor for TransformHashJoinBuild {
                     self.build_state.build_done()
                 }
             }
-            HashJoinBuildStep::Spill => self.spill_state.as_mut().unwrap().spill(),
-            HashJoinBuildStep::FastReturn | HashJoinBuildStep::WaitSpill => unreachable!(),
+            HashJoinBuildStep::FastReturn
+            | HashJoinBuildStep::WaitSpill
+            | HashJoinBuildStep::Spill => unreachable!(),
         }
     }
 
@@ -181,7 +181,10 @@ impl Processor for TransformHashJoinBuild {
                     .await;
                 self.step = HashJoinBuildStep::Spill
             }
-            _ => unreachable!(),
+            HashJoinBuildStep::Spill => {
+                self.spill_state.as_mut().unwrap().spill().await?;
+            }
+            _ => {}
         }
         Ok(())
     }
