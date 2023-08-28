@@ -43,6 +43,7 @@ fn test_variant() {
     test_json_path_query_first(file);
     test_json_to_string(file);
     test_json_pretty(file);
+    test_json_strip_nulls(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -708,6 +709,21 @@ fn test_json_pretty(file: &mut impl Write) {
     run_ast(
         file,
         r#"json_pretty(parse_json('{"a":1,"b":true,"c":["1","2","3"],"d":{"a":1,"b":[1,2,3],"c":{"a":1,"b":2}}}'))"#,
+        &[],
+    );
+}
+
+fn test_json_strip_nulls(file: &mut impl Write) {
+    run_ast(file, r#"json_strip_nulls(parse_json('true'))"#, &[]);
+    run_ast(file, r#"json_strip_nulls(parse_json('null'))"#, &[]);
+    run_ast(
+        file,
+        r#"json_strip_nulls(parse_json('[1, 2, 3, null]'))"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_strip_nulls(parse_json('{"a":null, "b": {"c": 1, "d": null}, "c": [{"a": 1, "b": null}]}'))"#,
         &[],
     );
 }
