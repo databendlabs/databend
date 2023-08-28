@@ -83,11 +83,15 @@ pub struct DeleteInterpreter {
 
 impl DeleteInterpreter {
     /// Create the DeleteInterpreter from DeletePlan
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<Self> {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        plan: DeletePlan,
+        is_explain_pipeline: bool,
+    ) -> Result<Self> {
         Ok(DeleteInterpreter {
             ctx,
             plan,
-            explain_pipeline: false,
+            explain_pipeline: is_explain_pipeline,
         })
     }
 }
@@ -281,10 +285,6 @@ impl Interpreter for DeleteInterpreter {
         }
 
         Ok(build_res)
-    }
-
-    fn set_explain_pipeline(&mut self) {
-        self.explain_pipeline = true
     }
 }
 

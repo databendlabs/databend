@@ -48,11 +48,15 @@ pub struct UpdateInterpreter {
 
 impl UpdateInterpreter {
     /// Create the UpdateInterpreter from UpdatePlan
-    pub fn try_create(ctx: Arc<QueryContext>, plan: UpdatePlan) -> Result<Self> {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        plan: UpdatePlan,
+        is_explain_pipeline: bool,
+    ) -> Result<Self> {
         Ok(UpdateInterpreter {
             ctx,
             plan,
-            explain_pipeline: false,
+            explain_pipeline: is_explain_pipeline,
         })
     }
 }
@@ -211,9 +215,5 @@ impl Interpreter for UpdateInterpreter {
             });
         }
         Ok(build_res)
-    }
-
-    fn set_explain_pipeline(&mut self) {
-        self.explain_pipeline = true
     }
 }

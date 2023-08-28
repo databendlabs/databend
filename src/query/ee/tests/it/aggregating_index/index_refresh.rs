@@ -51,7 +51,7 @@ async fn execute_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<SendableDataBl
 }
 
 async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDataBlockStream> {
-    let interpreter = InterpreterFactory::get(ctx.clone(), plan).await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), plan, false).await?;
     interpreter.execute(ctx).await
 }
 

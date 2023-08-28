@@ -253,7 +253,7 @@ pub async fn clickhouse_handler_get(
     let format = get_format_with_default(extras.format, default_format)?;
 
     context.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
-    let interpreter = InterpreterFactory::get(context.clone(), &plan)
+    let interpreter = InterpreterFactory::get(context.clone(), &plan, false)
         .await
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;
@@ -416,7 +416,7 @@ pub async fn clickhouse_handler_post(
     };
 
     let format = get_format_with_default(extras.format, default_format)?;
-    let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
+    let interpreter = InterpreterFactory::get(ctx.clone(), &plan, false)
         .await
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;

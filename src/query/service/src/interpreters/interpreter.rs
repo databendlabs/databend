@@ -115,9 +115,6 @@ pub trait Interpreter: Sync + Send {
             self.name()
         )))
     }
-
-    /// for dml, if we use explain pipeline, no need to lock table and shutdown table lock heartbeat.
-    fn set_explain_pipeline(&mut self) {}
 }
 
 pub type InterpreterPtr = Arc<dyn Interpreter>;

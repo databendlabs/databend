@@ -63,7 +63,7 @@ pub struct LoadResponse {
 #[allow(clippy::manual_async_fn)]
 fn execute_query(context: Arc<QueryContext>, plan: Plan) -> impl Future<Output = Result<()>> {
     async move {
-        let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
+        let interpreter = InterpreterFactory::get(context.clone(), &plan, false).await?;
 
         let mut data_stream = interpreter.execute(context).await?;
 

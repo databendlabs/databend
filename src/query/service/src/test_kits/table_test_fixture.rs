@@ -609,7 +609,7 @@ pub async fn expects_ok(
 pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<SendableDataBlockStream> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(query).await?;
-    let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    let executor = InterpreterFactory::get(ctx.clone(), &plan, false).await?;
     executor.execute(ctx.clone()).await
 }
 
@@ -640,7 +640,7 @@ pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
 }
 
 pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()> {
-    let delete_interpreter = DeleteInterpreter::try_create(ctx.clone(), plan.clone())?;
+    let delete_interpreter = DeleteInterpreter::try_create(ctx.clone(), plan.clone(), false)?;
     delete_interpreter.execute(ctx).await?;
     Ok(())
 }

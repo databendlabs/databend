@@ -40,7 +40,7 @@ async fn get_interpreter(
     sql: &str,
 ) -> Result<(InterpreterPtr, DataSchemaRef)> {
     let plan = plan_sql(ctx.clone(), sql).await?;
-    let it = InterpreterFactory::get(ctx, &plan).await?;
+    let it = InterpreterFactory::get(ctx, &plan, false).await?;
     Ok((it, plan.schema()))
 }
 
@@ -50,7 +50,7 @@ async fn execute_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<SendableDataBl
 }
 
 async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDataBlockStream> {
-    let interpreter = InterpreterFactory::get(ctx.clone(), plan).await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), plan, false).await?;
     interpreter.execute(ctx).await
 }
 

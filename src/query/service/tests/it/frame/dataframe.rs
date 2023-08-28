@@ -375,7 +375,7 @@ use tokio_stream::StreamExt;
 //     let (plan, _) = planner.plan_sql(sql).await.unwrap();
 //
 //     let df_plan = df.into_plan(false)?;
-//     let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await.unwrap();
+//     let interpreter = InterpreterFactory::get(ctx.clone(), &plan,false).await.unwrap();
 //     let stream = interpreter.execute(ctx.clone()).await.unwrap();
 //     let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
 //     let interpreter = InterpreterFactory::get(ctx.clone(), &df_plan)
@@ -413,7 +413,9 @@ async fn test_box_display() {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _) = planner.plan_sql(sql).await.unwrap();
 
-        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await.unwrap();
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan, false)
+            .await
+            .unwrap();
         let stream = interpreter.execute(ctx.clone()).await.unwrap();
         let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
         let schema = plan.schema();

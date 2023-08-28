@@ -57,7 +57,7 @@ impl PyDataFrame {
     }
 
     async fn df_collect(&self) -> Result<Vec<DataBlock>> {
-        let interpreter = InterpreterFactory::get(self.ctx.clone(), &self.df).await?;
+        let interpreter = InterpreterFactory::get(self.ctx.clone(), &self.df, false).await?;
         let stream = interpreter.execute(self.ctx.clone()).await?;
         let blocks = stream.map(|v| v.unwrap()).collect::<Vec<_>>().await;
         Ok(blocks)

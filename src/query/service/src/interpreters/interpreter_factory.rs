@@ -53,17 +53,25 @@ pub struct InterpreterFactory;
 /// Such as: Plan::Query -> InterpreterSelectV2
 impl InterpreterFactory {
     #[async_backtrace::framed]
-    pub async fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
+    pub async fn get(
+        ctx: Arc<QueryContext>,
+        plan: &Plan,
+        is_explain_pipeline: bool,
+    ) -> Result<InterpreterPtr> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
         access_checker.check(plan).await.map_err(|e| {
             error!("Access.denied(v2): {:?}", e);
             e
         })?;
-        Self::get_inner(ctx, plan)
+        Self::get_inner(ctx, plan, is_explain_pipeline)
     }
 
-    pub fn get_inner(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
+    pub fn get_inner(
+        ctx: Arc<QueryContext>,
+        plan: &Plan,
+        is_explain_pipeline: bool,
+    ) -> Result<InterpreterPtr> {
         match plan {
             Plan::Query {
                 s_expr,
@@ -269,11 +277,13 @@ impl InterpreterFactory {
             Plan::Delete(delete) => Ok(Arc::new(DeleteInterpreter::try_create(
                 ctx,
                 *delete.clone(),
+                is_explain_pipeline,
             )?)),
 
             Plan::Update(update) => Ok(Arc::new(UpdateInterpreter::try_create(
                 ctx,
                 *update.clone(),
+                is_explain_pipeline,
             )?)),
 
             // Roles

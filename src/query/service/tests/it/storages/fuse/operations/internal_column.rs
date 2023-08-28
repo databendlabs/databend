@@ -190,7 +190,7 @@ async fn test_internal_column() -> Result<()> {
     let query = format!("optimize table {db}.{tbl} compact");
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(&query).await?;
-    let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), &plan, false).await?;
     let data_stream = interpreter.execute(ctx.clone()).await?;
     let _ = data_stream.try_collect::<Vec<_>>().await;
 
