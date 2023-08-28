@@ -225,15 +225,7 @@ impl MergeSource {
                 settings,
                 on_error_mode,
                 start,
-            } => TableReference::StreamingV2SourceReference {
-                span: None,
-                source: StreamingSource {
-                    settings: settings.clone(),
-                    on_error_mode: on_error_mode.clone(),
-                    start: *start,
-                },
-                alias: None,
-            },
+            } => unimplemented!(),
 
             Self::Select { query } => TableReference::Subquery {
                 span: None,

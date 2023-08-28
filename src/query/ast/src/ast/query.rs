@@ -270,12 +270,6 @@ pub enum TableReference {
         options: SelectStageOptions,
         alias: Option<TableAlias>,
     },
-    // for merge into source
-    StreamingV2SourceReference {
-        span: Span,
-        source: StreamingSource,
-        alias: Option<TableAlias>,
-    },
 }
 
 impl TableReference {
@@ -415,11 +409,6 @@ impl Display for Unpivot {
 impl Display for TableReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            TableReference::StreamingV2SourceReference {
-                span: _,
-                source: _,
-                alias: _,
-            } => unimplemented!(),
             TableReference::Table {
                 span: _,
                 catalog,

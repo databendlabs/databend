@@ -165,13 +165,6 @@ impl Binder {
         table_ref: &TableReference,
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
-            TableReference::StreamingV2SourceReference {
-                span: _,
-                source: _,
-                alias: _,
-            } => {
-                unimplemented!()
-            }
             TableReference::Table {
                 span,
                 catalog,

@@ -305,11 +305,6 @@ fn pretty_window_def(def: WindowDefinition) -> RcDoc<'static> {
 
 pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
     match table {
-        TableReference::StreamingV2SourceReference {
-            span: _,
-            source: _,
-            alias: _,
-        } => unimplemented!(),
         TableReference::Table {
             span: _,
             catalog,

@@ -2610,11 +2610,6 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_table_reference(&mut self, table: &'ast TableReference) {
         match table {
-            TableReference::StreamingV2SourceReference {
-                span: _,
-                source: _,
-                alias: _,
-            } => unimplemented!(),
             TableReference::Table {
                 span: _,
                 catalog,

@@ -218,11 +218,6 @@ pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a Selec
 
 pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a TableReference) {
     match table_ref {
-        TableReference::StreamingV2SourceReference {
-            span: _,
-            source: _,
-            alias: _,
-        } => unimplemented!(),
         TableReference::Table {
             catalog,
             database,
