@@ -265,14 +265,14 @@ impl Interpreter for DeleteInterpreter {
                 build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                     .await?;
         }
-        let explian_pipeline = self.explain_pipeline;
+        let explain_pipeline = self.explain_pipeline;
         if build_res.main_pipeline.is_empty() {
             if !explain_pipeline {
                 heartbeat.unwrap().shutdown().await?;
             }
         } else {
             build_res.main_pipeline.set_on_finished(move |may_error| {
-                if !explian_pipeline {
+                if !explain_pipeline {
                     // shutdown table lock heartbeat.
                     GlobalIORuntime::instance()
                         .block_on(async move { heartbeat.unwrap().shutdown().await })?;
