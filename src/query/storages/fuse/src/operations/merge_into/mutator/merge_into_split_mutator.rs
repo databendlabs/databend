@@ -42,14 +42,14 @@ impl MergeIntoSplitMutator {
             DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
         );
 
-        let filter = match row_id_column.value.clone().wrap_nullable(None) {
+        let filter = match &row_id_column.value {
             common_expression::Value::Scalar(_) => {
                 return Err(ErrorCode::InvalidRowIdIndex(
                     "row id column should be a column, but it's a scalar",
                 ));
             }
             common_expression::Value::Column(c) => match c {
-                common_expression::Column::Nullable(c2) => c2.validity,
+                common_expression::Column::Nullable(c2) => c2.validity.clone(),
                 _ => {
                     return Err(ErrorCode::InvalidRowIdIndex(
                         "row id column should be a column, but it's a scalar",
