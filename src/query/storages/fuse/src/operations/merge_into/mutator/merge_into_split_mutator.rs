@@ -42,8 +42,6 @@ impl MergeIntoSplitMutator {
             DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
         );
 
-        let mut matched_block: Option<DataBlock> = None;
-        let mut not_matched_block: Option<DataBlock> = None;
         let filter = match row_id_column.value.clone().wrap_nullable(None) {
             common_expression::Value::Scalar(_) => {
                 return Err(ErrorCode::InvalidRowIdIndex(
