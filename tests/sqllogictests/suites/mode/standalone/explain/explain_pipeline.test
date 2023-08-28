@@ -41,7 +41,7 @@ CommitSink × 1 processor
       MutationSource × 1 processor
 
 statement ok
-explain pipeline delete from t1；
+explain pipeline delete from t1;
 
 query II
 select * from t1;
