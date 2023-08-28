@@ -44,8 +44,6 @@ pub use fuse_table::FuseTable;
 pub use io::MergeIOReadResult;
 pub use pruning::SegmentLocation;
 
-pub use crate::metrics::metrics_inc_deletion_build_pipeline_milliseconds;
-
 mod sessions {
     pub use common_catalog::table_context::TableContext;
 }

@@ -184,14 +184,6 @@ pub fn metrics_inc_deletion_block_range_pruned_nums(c: u64) {
     increment_gauge!(key!("deletion_block_range_pruned_nums"), c as f64);
 }
 
-pub fn metrics_inc_deletion_pruning_milliseconds(c: u64) {
-    increment_gauge!(key!("deletion_pruning_milliseconds"), c as f64);
-}
-
-pub fn metrics_inc_deletion_build_pipeline_milliseconds(c: u64) {
-    increment_gauge!(key!("deletion_build_pipeline_milliseconds"), c as f64);
-}
-
 pub fn metrics_inc_deletion_segment_range_purned_whole_segment_nums(c: u64) {
     increment_gauge!(
         key!("deletion_segment_range_pruned_whole_segment_nums"),

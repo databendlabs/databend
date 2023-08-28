@@ -54,7 +54,6 @@ use common_sql::MetadataRef;
 use common_sql::ScalarExpr;
 use common_sql::Visibility;
 use common_storages_factory::Table;
-use common_storages_fuse::metrics_inc_deletion_build_pipeline_milliseconds;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
 use log::debug;
@@ -247,11 +246,9 @@ impl Interpreter for DeleteInterpreter {
                 query_row_id_col,
             )?;
 
-            let start = std::time::Instant::now();
             build_res =
                 build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                     .await?;
-            metrics_inc_deletion_build_pipeline_milliseconds(start.elapsed().as_millis() as u64);
         }
 
         if build_res.main_pipeline.is_empty() {
