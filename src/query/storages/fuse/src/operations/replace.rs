@@ -119,7 +119,7 @@ impl FuseTable {
                 self.operator.clone(),
                 self.table_info.schema(),
                 self.get_write_settings(),
-                read_settings.clone(),
+                read_settings,
                 block_builder.clone(),
                 io_request_semaphore.clone(),
             )?;
