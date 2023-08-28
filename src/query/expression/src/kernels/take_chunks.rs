@@ -692,7 +692,6 @@ impl Column {
             .iter()
             .map(|col| T::try_downcast_column(col).unwrap())
             .collect_vec();
-        dbg!(&columns);
         for &(block_index, row, times) in indices {
             let val =
                 unsafe { T::index_column_unchecked(&columns[block_index as usize], row as usize) };
