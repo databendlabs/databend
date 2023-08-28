@@ -51,6 +51,7 @@ use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::metrics::metrics_inc_deletion_block_range_pruned_nums;
 use crate::metrics::metrics_inc_deletion_block_range_pruned_whole_block_nums;
+use crate::metrics::metrics_inc_deletion_pruning_milliseconds;
 use crate::metrics::metrics_inc_deletion_segment_range_purned_whole_segment_nums;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationAction;
@@ -288,6 +289,7 @@ impl FuseTable {
         with_origin: bool,
         is_delete: bool,
     ) -> Result<(Partitions, MutationTaskInfo)> {
+        let start = std::time::Instant::now();
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
             filter: filter.clone(),
@@ -405,6 +407,7 @@ impl FuseTable {
         metrics_inc_deletion_block_range_pruned_nums(block_nums - part_num as u64);
         metrics_inc_deletion_block_range_pruned_whole_block_nums(num_whole_block_mutation as u64);
         metrics_inc_deletion_segment_range_purned_whole_segment_nums(segment_num as u64);
+        metrics_inc_deletion_pruning_milliseconds(start.elapsed().as_millis() as u64);
         Ok((parts, MutationTaskInfo {
             total_tasks: part_num,
             num_whole_block_mutation,

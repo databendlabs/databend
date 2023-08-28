@@ -32,7 +32,6 @@ pub mod statistics;
 pub mod table_functions;
 
 mod metrics;
-
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
@@ -44,6 +43,8 @@ pub use fuse_table::FuseStorageFormat;
 pub use fuse_table::FuseTable;
 pub use io::MergeIOReadResult;
 pub use pruning::SegmentLocation;
+
+pub use crate::metrics::metrics_inc_deletion_build_pipeline_milliseconds;
 
 mod sessions {
     pub use common_catalog::table_context::TableContext;
