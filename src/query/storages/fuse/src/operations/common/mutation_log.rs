@@ -123,7 +123,7 @@ fn merge_conflict_resolve_context(
             ConflictResolveContext::ModifiedSegmentExistsInLatest(l),
             ConflictResolveContext::ModifiedSegmentExistsInLatest(r),
         ) => {
-            debug_assert!(l.check_intersect(&r));
+            assert!(l.check_intersect(&r));
 
             ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
                 removed_segment_indexes: l
