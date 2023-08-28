@@ -47,11 +47,11 @@ use opendal::Operator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 
+use super::partition::ColumnMeta;
+use super::Parquet2RowGroupPart;
 use crate::parquet2::statistics::collect_row_group_stats;
 use crate::parquet2::statistics::BatchStatistics;
 use crate::parquet_part::collect_small_file_parts;
-use crate::parquet_part::ColumnMeta;
-use crate::parquet_part::Parquet2RowGroupPart;
 use crate::parquet_part::ParquetPart;
 
 /// Prune parquet row groups and pages.

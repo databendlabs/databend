@@ -745,7 +745,9 @@ share_endpoint_address = ""
 [log]
 level = "INFO"
 dir = "./.databend/logs"
-query_enabled = false
+
+[log.query]
+on = false
 
 [meta]
 endpoints = ["0.0.0.0:9191"]
@@ -840,6 +842,8 @@ path = "_cache"
             let cfg = InnerConfig::load_for_test()
                 .expect("config load success")
                 .into_config();
+
+            assert!(!cfg.log.query.query_log_on);
 
             assert_eq!("tenant_id_from_env", cfg.query.tenant_id);
             assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
