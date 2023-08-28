@@ -17,7 +17,7 @@ echo "drop stage if exists s1;" | $MYSQL_CLIENT_CONNECT
 echo "create stage s1 url = '${DATADIR}' FILE_FORMAT = (type = TSV);"  | $MYSQL_CLIENT_CONNECT
 
 echo '--- copy 1'
-echo "copy into t1 from (select (t.id+1), age from @s1 t)  FILE_FORMAT = (type = parquet) PATTERN='.*parquet';" | $MYSQL_CLIENT_CONNECT
+echo "copy into t1 from (select (t.id+1), age from @s1 t)  FILE_FORMAT = (type = parquet) PATTERN='.*parquet';" | $MYSQL_CLIENT_CONNECT | wc -l
 echo "select * from t1 order by id;" | $MYSQL_CLIENT_CONNECT
 
 echo '--- copy 2'
@@ -25,7 +25,7 @@ echo "copy into t1 from (select (t.id+1), age from @s1 t)  FILE_FORMAT = (type =
 echo "select * from t1 order by id;" | $MYSQL_CLIENT_CONNECT
 
 echo '--- copy 3'
-echo "copy into t1 from (select (t.id+1), age from @s1 t)  FILE_FORMAT = (type = parquet)  PATTERN='.*parquet' force=true;" | $MYSQL_CLIENT_CONNECT
+echo "copy into t1 from (select (t.id+1), age from @s1 t)  FILE_FORMAT = (type = parquet)  PATTERN='.*parquet' force=true;" | $MYSQL_CLIENT_CONNECT | wc -l
 echo "select * from t1 order by id;" | $MYSQL_CLIENT_CONNECT
 
 echo '--- copy XML'
@@ -43,7 +43,7 @@ echo "select * from t2 order by a;" | $MYSQL_CLIENT_CONNECT
 
 echo '--- copy from uri with transform'
 echo "truncate table t2;" | $MYSQL_CLIENT_CONNECT
-echo "copy into t2 from (select (t.id+1) from '${DATADIR}' t)  PATTERN='.*parquet';" | $MYSQL_CLIENT_CONNECT
+echo "copy into t2 from (select (t.id+1) from '${DATADIR}' t)  PATTERN='.*parquet';" | $MYSQL_CLIENT_CONNECT | wc -l
 echo "select * from t2 order by a;" | $MYSQL_CLIENT_CONNECT
 
 rm -rf ${DATADIR_PATH}
