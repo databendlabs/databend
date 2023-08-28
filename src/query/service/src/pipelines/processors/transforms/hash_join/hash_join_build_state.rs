@@ -96,8 +96,6 @@ pub struct HashJoinBuildState {
     pub(crate) build_worker_num: Arc<AtomicU32>,
     /// Tasks for building hash table.
     pub(crate) build_hash_table_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
-    /// Spill related states
-    pub(crate) spill_state: BuildSpillState,
 }
 
 impl HashJoinBuildState {
@@ -106,14 +104,12 @@ impl HashJoinBuildState {
         build_keys: &[RemoteExpr],
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
-        spill_coordinator: Arc<BuildSpillCoordinator>,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone())
             .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
-        let spill_state = BuildSpillState::create(ctx.clone(), spill_coordinator);
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             hash_join_state,
@@ -127,18 +123,13 @@ impl HashJoinBuildState {
             build_projections: Arc::new(build_projections.clone()),
             build_worker_num: Arc::new(Default::default()),
             build_hash_table_tasks: Arc::new(Default::default()),
-            spill_state,
         }))
     }
 
     /// Add input `DataBlock` to `hash_join_state.row_space`.
     /// The return value means whether need to spill.
     /// if added, return false, otherwise return true.
-    pub fn build(&mut self, input: DataBlock) -> Result<bool> {
-        // Check if need to spill
-        if self.check_need_spill(&input)? {
-            return Ok(true);
-        }
+    pub fn build(&self, input: DataBlock) -> Result<bool> {
         let mut buffer = self.hash_join_state.row_space.buffer.write();
         let mut buffer_row_size = self.hash_join_state.row_space.buffer_row_size.write();
         *buffer_row_size += input.num_rows();
@@ -213,12 +204,6 @@ impl HashJoinBuildState {
         let mut count = self.hash_join_state.hash_table_builders.lock();
         *count += 1;
         self.build_worker_num.fetch_add(1, Ordering::Relaxed);
-        let mut count = self
-            .spill_state
-            .spill_coordinator
-            .total_builder_count
-            .write();
-        *count += 1;
         Ok(())
     }
 

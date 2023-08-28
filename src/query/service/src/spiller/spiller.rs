@@ -51,8 +51,10 @@ pub struct Spiller {
     spiller_state: SpillerState,
     /// DataBlocks need to be spilled for the processor
     pub(crate) input_data: Vec<DataBlock>,
-    /// Partition set
+    /// Partition set, which records there are how many partitions.
     pub(crate) partition_set: Vec<u8>,
+    /// Spilled partition set, after one partition is spilled, it will be added to this set.
+    pub(crate) spilled_partition_set: Vec<u8>,
     /// Key is partition id, value is rows which have same partition id
     pub(crate) partitions: Vec<(u8, DataBlock)>,
 }
@@ -68,6 +70,7 @@ impl Spiller {
             spiller_state: SpillerState {},
             input_data: Default::default(),
             partition_set: vec![],
+            spilled_partition_set: vec![],
             partitions: vec![],
         }
     }

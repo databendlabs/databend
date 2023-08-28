@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -20,7 +21,6 @@ use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::HashMethodKind;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_hashtable::HashMap;
 use common_storage::DataOperator;
 use parking_lot::RwLock;
 
@@ -34,6 +34,8 @@ use crate::spiller::SpillerConfig;
 
 /// Define some states for hash join build spilling
 pub struct BuildSpillState {
+    /// Hash join build state
+    pub(crate) build_state: Arc<HashJoinBuildState>,
     /// Spilling memory threshold
     pub(crate) spill_memory_threshold: usize,
     /// Hash join build spilling coordinator
@@ -43,11 +45,16 @@ pub struct BuildSpillState {
 }
 
 impl BuildSpillState {
-    pub fn create(_ctx: Arc<QueryContext>, spill_coordinator: Arc<BuildSpillCoordinator>) -> Self {
+    pub fn create(
+        _ctx: Arc<QueryContext>,
+        spill_coordinator: Arc<BuildSpillCoordinator>,
+        build_state: Arc<HashJoinBuildState>,
+    ) -> Self {
         let spill_config = SpillerConfig::create("hash_join_build_spill".to_string());
         let operator = DataOperator::instance().operator();
         let spiller = Spiller::create(operator, spill_config);
         Self {
+            build_state,
             spill_memory_threshold: 1024,
             spill_coordinator,
             spiller,
@@ -56,26 +63,23 @@ impl BuildSpillState {
 }
 
 /// Define some spill-related APIs for hash join build
-impl HashJoinBuildState {
+impl BuildSpillState {
     // Start to spill `input_data`.
+    // Todo: add unit tests for the method.
     pub(crate) fn spill(&mut self) -> Result<()> {
         let mut rows_size = 0;
-        self.spill_state
-            .spiller
-            .input_data
-            .iter()
-            .for_each(|block| {
-                rows_size += block.num_rows();
-            });
+        self.spiller.input_data.iter().for_each(|block| {
+            rows_size += block.num_rows();
+        });
         // Hash values for all rows in input data.
         let mut hashes = Vec::with_capacity(rows_size);
-        let block = DataBlock::concat(&self.spill_state.spiller.input_data)?;
+        let block = DataBlock::concat(&self.spiller.input_data)?;
         self.get_hashes(&block, &mut hashes)?;
         // Ensure which partition each row belongs to. Currently we limit the maximum number of partitions to 8.
         // We read the first 3 bits of the hash value as the partition id.
 
         // partition_id -> row indexes
-        let mut partition_map = std::collections::HashMap::with_capacity(8);
+        let mut partition_map = HashMap::with_capacity(8);
         for (row_idx, hash) in hashes.iter().enumerate() {
             let partition_id = *hash as u8 & 0b0000_0111;
             partition_map
@@ -86,90 +90,81 @@ impl HashJoinBuildState {
 
         // Take row indexes from block and put them to Spiller `partitions`
         for (partition_id, row_indexes) in partition_map.iter() {
-            self.spill_state.spiller.partition_set.push(*partition_id);
+            self.spiller.partition_set.push(*partition_id);
             let block_row_indexes = row_indexes
                 .iter()
-                .map(|idx| (0, *idx, 1))
+                .map(|idx| (0 as u32, *idx as u32, 1 as usize))
                 .collect::<Vec<_>>();
             let partition_block =
                 DataBlock::take_blocks(&[&block], &block_row_indexes, row_indexes.len());
-            self.spill_state
-                .spiller
+            self.spiller
                 .partitions
                 .push((*partition_id, partition_block));
         }
 
-        self.spill_state.spiller.spill()
+        self.spiller.spill()
     }
 
     // Get all hashes for input data.
     fn get_hashes(&self, block: &DataBlock, hashes: &mut Vec<u64>) -> Result<()> {
-        let func_ctx = self.ctx.get_function_context()?;
+        let func_ctx = self.build_state.ctx.get_function_context()?;
         let mut evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
-        let build_key_columns = self
-            .hash_join_state
-            .hash_join_desc
-            .build_keys
-            .iter()
-            .map(|expr| {
-                let return_type = expr.data_type();
-                Ok(evaluator
-                    .run(expr)?
-                    .convert_to_full_column(return_type, block.num_rows())?)
-            })
-            .collect::<Result<_>>()?;
+        // Use the first column as the key column to generate hash
+        let first_build_key = &self.build_state.hash_join_state.hash_join_desc.build_keys[0];
+        let build_key_column = evaluator.run(first_build_key)?;
+        let build_key_column = build_key_column.as_column().unwrap();
         // Todo: simplify the following code
-        match &*self.method {
+        match &*self.build_state.method {
             HashMethodKind::Serializer(method) => {
-                let rows_iter = method.keys_iter_from_column(build_key_columns)?;
+                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
                 for row in rows_iter.iter() {
                     hashes.push(method.get_hash(row));
                 }
             }
             HashMethodKind::DictionarySerializer(method) => {
-                let rows_iter = method.keys_iter_from_column(build_key_columns)?;
+                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
                 for row in rows_iter.iter() {
                     hashes.push(method.get_hash(row));
                 }
             }
             HashMethodKind::SingleString(method) => {
-                let rows_iter = method.keys_iter_from_column(build_key_columns)?;
+                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
                 for row in rows_iter.iter() {
                     hashes.push(method.get_hash(row));
                 }
             }
             HashMethodKind::KeysU8(method) => {
-                let rows_iter = method.keys_iter_from_column(build_key_columns)?;
+                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
                 for row in rows_iter.iter() {
                     hashes.push(method.get_hash(row));
                 }
             }
             HashMethodKind::KeysU16(method) => {
-                let rows_iter = method.keys_iter_from_column(build_key_columns)?;
+                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
                 for row in rows_iter.iter() {
                     hashes.push(method.get_hash(row));
                 }
             }
             HashMethodKind::KeysU32(method) => {
-                let rows_iter = method.keys_iter_from_column(build_key_columns)?;
+                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
                 for row in rows_iter.iter() {
                     hashes.push(method.get_hash(row));
                 }
             }
             HashMethodKind::KeysU64(method) => {
-                let rows_iter = method.keys_iter_from_column(build_key_columns)?;
+                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
                 for row in rows_iter.iter() {
                     hashes.push(method.get_hash(row));
                 }
             }
             HashMethodKind::KeysU128(method) => {
-                let rows_iter = method.keys_iter_from_column(build_key_columns)?;
+                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
                 for row in rows_iter.iter() {
                     hashes.push(method.get_hash(row));
                 }
             }
             HashMethodKind::KeysU256(method) => {
-                let rows_iter = method.keys_iter_from_column(build_key_columns)?;
+                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
                 for row in rows_iter.iter() {
                     hashes.push(method.get_hash(row));
                 }
@@ -193,7 +188,6 @@ impl HashJoinBuildState {
     // It will be spilled when the memory usage exceeds threshold.
     // If data isn't in partition set, it'll be used to build hash table.
     pub(crate) fn buffer_data(&mut self, input: DataBlock) {
-        let input_data = &mut self.spill_state.spiller.input_data;
-        input_data.push(input)
+        self.spiller.input_data.push(input);
     }
 }

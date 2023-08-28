@@ -20,6 +20,7 @@ use common_expression::DataBlock;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::Processor;
 
@@ -43,6 +44,7 @@ pub struct TransformHashJoinBuild {
     input_data: Option<DataBlock>,
     step: HashJoinBuildStep,
     build_state: Arc<HashJoinBuildState>,
+    spill_state: Option<Box<BuildSpillState>>,
     finalize_finished: bool,
 }
 
@@ -50,13 +52,19 @@ impl TransformHashJoinBuild {
     pub fn try_create(
         input_port: Arc<InputPort>,
         build_state: Arc<HashJoinBuildState>,
+        spill_state: Option<Box<BuildSpillState>>,
     ) -> Result<Box<dyn Processor>> {
+        if let Some(ss) = &spill_state {
+            let mut count = ss.spill_coordinator.total_builder_count.write();
+            *count += 1;
+        }
         build_state.build_attach()?;
         Ok(Box::new(TransformHashJoinBuild {
             input_port,
             input_data: None,
             step: HashJoinBuildStep::Running,
             build_state,
+            spill_state,
             finalize_finished: false,
         }))
     }
@@ -113,34 +121,29 @@ impl Processor for TransformHashJoinBuild {
         match self.step {
             HashJoinBuildStep::Running => {
                 if let Some(data_block) = self.input_data.take() {
-                    let need_spill = self.build_state.build(data_block.clone())?;
-                    if need_spill {
-                        self.step = HashJoinBuildStep::WaitSpill;
-                        self.build_state
-                            .spill_state
-                            .spill_coordinator
-                            .need_spill()?;
-                    } else {
-                        if self
-                            .build_state
-                            .spill_state
-                            .spill_coordinator
-                            .get_need_spill()
-                        {
-                            // even if input can fit into memory, but there exists one processor need to spill,
-                            // then it needs to wait spill.
-                            let wait = self
-                                .build_state
-                                .spill_state
-                                .spill_coordinator
-                                .wait_spill()?;
-                            if wait {
-                                self.build_state.buffer_data(data_block);
-                                self.step = HashJoinBuildStep::WaitSpill;
+                    if let Some(spill_state) = &mut self.spill_state {
+                        // Check if need to spill
+                        let need_spill = spill_state.check_need_spill(&data_block)?;
+                        if need_spill {
+                            self.step = HashJoinBuildStep::WaitSpill;
+                            spill_state.spill_coordinator.need_spill()?;
+                        } else {
+                            if spill_state.spill_coordinator.get_need_spill() {
+                                // even if input can fit into memory, but there exists one processor need to spill,
+                                // then it needs to wait spill.
+                                let wait = spill_state.spill_coordinator.wait_spill()?;
+                                if wait {
+                                    spill_state.buffer_data(data_block);
+                                    self.step = HashJoinBuildStep::WaitSpill;
+                                } else {
+                                    spill_state.spill_input(data_block)?;
+                                }
                             } else {
-                                self.build_state.spill_input(data_block)?;
+                                self.build_state.build(data_block.clone())?;
                             }
                         }
+                    } else {
+                        self.build_state.build(data_block.clone())?;
                     }
                 }
                 Ok(())
@@ -153,7 +156,7 @@ impl Processor for TransformHashJoinBuild {
                     self.build_state.build_done()
                 }
             }
-            HashJoinBuildStep::Spill => self.build_state.spill(),
+            HashJoinBuildStep::Spill => self.spill_state.as_mut().unwrap().spill(),
             HashJoinBuildStep::FastReturn | HashJoinBuildStep::WaitSpill => unreachable!(),
         }
     }
@@ -170,8 +173,9 @@ impl Processor for TransformHashJoinBuild {
                 self.step = HashJoinBuildStep::Finalize;
             }
             HashJoinBuildStep::WaitSpill => {
-                self.build_state
-                    .spill_state
+                self.spill_state
+                    .as_ref()
+                    .unwrap()
                     .spill_coordinator
                     .wait_spill_notify()
                     .await;

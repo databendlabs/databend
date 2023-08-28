@@ -138,6 +138,7 @@ use crate::pipelines::builders::build_append_data_pipeline;
 use crate::pipelines::builders::build_fill_missing_columns_pipeline;
 use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
+use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::TransformHashJoinBuild;
@@ -924,10 +925,22 @@ impl PipelineBuilder {
             &hash_join_plan.build_keys,
             &hash_join_plan.build_projections,
             join_state,
-            spill_coordinator,
         )?;
         let create_sink_processor = |input| {
-            let transform = TransformHashJoinBuild::try_create(input, build_state.clone())?;
+            let spill_state = Box::new(BuildSpillState::create(
+                self.ctx.clone(),
+                spill_coordinator.clone(),
+                build_state.clone(),
+            ));
+            let transform = TransformHashJoinBuild::try_create(
+                input,
+                build_state.clone(),
+                if self.ctx.get_settings().get_enable_join_spill()? {
+                    Some(spill_state)
+                } else {
+                    None
+                },
+            )?;
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
@@ -2037,6 +2050,7 @@ impl PipelineBuilder {
                 ProcessorPtr::create(TransformHashJoinBuild::try_create(
                     input.clone(),
                     self.join_state.as_ref().unwrap().clone(),
+                    None,
                 )?),
                 vec![input],
                 vec![],
