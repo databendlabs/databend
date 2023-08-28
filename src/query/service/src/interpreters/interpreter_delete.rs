@@ -112,13 +112,15 @@ impl Interpreter for DeleteInterpreter {
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
         let table_info = tbl.get_table_info().clone();
         let explain_pipeline = self.explain_pipeline;
-        let mut heartbeat;
+        let mut heartbeat = None;
         if !explain_pipeline {
             // Add table lock heartbeat.
             let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-            heartbeat = handler
-                .try_lock(self.ctx.clone(), table_info.clone())
-                .await?;
+            heartbeat = Some(
+                handler
+                    .try_lock(self.ctx.clone(), table_info.clone())
+                    .await?,
+            );
         }
 
         let catalog = self.ctx.get_catalog(catalog_name).await?;
@@ -262,14 +264,14 @@ impl Interpreter for DeleteInterpreter {
         let explian_pipeline = self.explain_pipeline;
         if build_res.main_pipeline.is_empty() {
             if !explain_pipeline {
-                heartbeat.shutdown().await?;
+                heartbeat.unwrap().shutdown().await?;
             }
         } else {
             build_res.main_pipeline.set_on_finished(move |may_error| {
                 if !explian_pipeline {
                     // shutdown table lock heartbeat.
                     GlobalIORuntime::instance()
-                        .block_on(async move { heartbeat.shutdown().await })?;
+                        .block_on(async move { heartbeat.unwrap().shutdown().await })?;
                 }
                 match may_error {
                     None => Ok(()),

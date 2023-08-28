@@ -116,7 +116,7 @@ pub trait Interpreter: Sync + Send {
         )))
     }
 
-    /// for dml, if we use explain pipeline, no need to shutdown table lock heartbeat.
+    /// for dml, if we use explain pipeline, no need to lock table and shutdown table lock heartbeat.
     fn set_explain_pipeline(&mut self) {}
 }
 
