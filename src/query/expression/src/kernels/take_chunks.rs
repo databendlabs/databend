@@ -203,10 +203,10 @@ impl Column {
             Column::Null { .. } => Column::Null { len: result_size },
             Column::EmptyArray { .. } => Column::EmptyArray { len: result_size },
             Column::EmptyMap { .. } => Column::EmptyMap { len: result_size },
-            Column::Number(column) => with_number_mapped_type!(|UInt8| match column {
-                NumberColumn::UInt8(_) => {
-                    let builder = NumberType::<UInt8>::create_builder(result_size, &[]);
-                    Self::take_block_value_types::<NumberType<UInt8>>(columns, builder, indices)
+            Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
+                NumberColumn::NUM_TYPE(_) => {
+                    let builder = NumberType::<NUM_TYPE>::create_builder(result_size, &[]);
+                    Self::take_block_value_types::<NumberType<NUM_TYPE>>(columns, builder, indices)
                 }
             }),
             Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
@@ -246,9 +246,6 @@ impl Column {
                 Self::take_block_value_types::<DateType>(columns, builder, indices)
             }
             Column::Array(column) => {
-                dbg!(column.values.data_type(), &datatype);
-                let data_type = datatype.as_array().unwrap();
-                dbg!(&data_type);
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::with_capacity(&column.values.data_type(), result_size);
@@ -256,9 +253,6 @@ impl Column {
                 Self::take_block_value_types::<ArrayType<AnyType>>(columns, builder, indices)
             }
             Column::Map(column) => {
-                dbg!(column.values.data_type(), &datatype);
-                let data_type = datatype.as_map().unwrap();
-                dbg!(&data_type);
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
