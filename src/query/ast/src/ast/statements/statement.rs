@@ -303,7 +303,7 @@ impl Display for Statement {
                 selection,
                 hints,
             } => {
-                write!(f, "DELETE FROM {table_reference}")?;
+                write!(f, "DELETE FROM {table_reference} ")?;
                 if let Some(hints) = hints {
                     write!(f, "{} ", hints)?;
                 }
