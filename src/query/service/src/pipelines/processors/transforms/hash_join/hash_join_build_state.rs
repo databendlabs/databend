@@ -134,7 +134,7 @@ impl HashJoinBuildState {
     /// Add input `DataBlock` to `hash_join_state.row_space`.
     /// The return value means whether need to spill.
     /// if added, return false, otherwise return true.
-    pub fn build(&self, input: DataBlock) -> Result<bool> {
+    pub fn build(&mut self, input: DataBlock) -> Result<bool> {
         // Check if need to spill
         if self.check_need_spill(&input)? {
             return Ok(true);
@@ -213,7 +213,11 @@ impl HashJoinBuildState {
         let mut count = self.hash_join_state.hash_table_builders.lock();
         *count += 1;
         self.build_worker_num.fetch_add(1, Ordering::Relaxed);
-        let mut count = self.spill_state.spill_coordinator.total_builder_count.write();
+        let mut count = self
+            .spill_state
+            .spill_coordinator
+            .total_builder_count
+            .write();
         *count += 1;
         Ok(())
     }

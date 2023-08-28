@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Result;
+use common_expression::DataBlock;
 use opendal::Operator;
+use parking_lot::RwLock;
 
 /// Spiller type, currently only supports HashJoin
 enum SpillerType {
@@ -32,6 +35,9 @@ impl SpillerConfig {
     }
 }
 
+/// Spiller state
+pub struct SpillerState {}
+
 /// Spiller is a unified framework for operators which need to spill data from memory.
 /// It provides the following features:
 /// 1. Collection data that needs to be spilled.
@@ -42,6 +48,13 @@ pub struct Spiller {
     operator: Operator,
     config: SpillerConfig,
     spiller_type: SpillerType,
+    spiller_state: SpillerState,
+    /// DataBlocks need to be spilled for the processor
+    pub(crate) input_data: Vec<DataBlock>,
+    /// Partition set
+    pub(crate) partition_set: Vec<u8>,
+    /// Key is partition id, value is rows which have same partition id
+    pub(crate) partitions: Vec<(u8, DataBlock)>,
 }
 
 impl Spiller {
@@ -52,6 +65,15 @@ impl Spiller {
             operator,
             config,
             spiller_type,
+            spiller_state: SpillerState {},
+            input_data: Default::default(),
+            partition_set: vec![],
+            partitions: vec![],
         }
+    }
+
+    /// Spill partition set
+    pub fn spill(&self) -> Result<()> {
+        todo!()
     }
 }

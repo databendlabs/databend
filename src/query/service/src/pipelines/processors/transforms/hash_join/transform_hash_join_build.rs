@@ -116,14 +116,26 @@ impl Processor for TransformHashJoinBuild {
                     let need_spill = self.build_state.build(data_block.clone())?;
                     if need_spill {
                         self.step = HashJoinBuildStep::WaitSpill;
-                        self.build_state.spill_state.spill_coordinator.need_spill()?;
+                        self.build_state
+                            .spill_state
+                            .spill_coordinator
+                            .need_spill()?;
                     } else {
-                        if self.build_state.spill_state.spill_coordinator.get_need_spill() {
+                        if self
+                            .build_state
+                            .spill_state
+                            .spill_coordinator
+                            .get_need_spill()
+                        {
                             // even if input can fit into memory, but there exists one processor need to spill,
                             // then it needs to wait spill.
-                            let wait = self.build_state.spill_state.spill_coordinator.wait_spill()?;
+                            let wait = self
+                                .build_state
+                                .spill_state
+                                .spill_coordinator
+                                .wait_spill()?;
                             if wait {
-                                self.build_state.add_unspilled_data(data_block);
+                                self.build_state.buffer_data(data_block);
                                 self.step = HashJoinBuildStep::WaitSpill;
                             } else {
                                 self.build_state.spill_input(data_block)?;
@@ -158,7 +170,11 @@ impl Processor for TransformHashJoinBuild {
                 self.step = HashJoinBuildStep::Finalize;
             }
             HashJoinBuildStep::WaitSpill => {
-                self.build_state.spill_state.spill_coordinator.wait_spill_notify().await;
+                self.build_state
+                    .spill_state
+                    .spill_coordinator
+                    .wait_spill_notify()
+                    .await;
                 self.step = HashJoinBuildStep::Spill
             }
             _ => unreachable!(),
