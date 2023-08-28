@@ -122,33 +122,37 @@ fn merge_conflict_resolve_context(
         (
             ConflictResolveContext::ModifiedSegmentExistsInLatest(l),
             ConflictResolveContext::ModifiedSegmentExistsInLatest(r),
-        ) => ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
-            removed_segment_indexes: l
-                .removed_segment_indexes
-                .into_iter()
-                .chain(r.removed_segment_indexes.into_iter())
-                .collect(),
-            removed_statistics: merge_statistics(
-                &l.removed_statistics,
-                &r.removed_statistics,
-                default_cluster_key_id,
-            ),
-            appended_segments: l
-                .appended_segments
-                .into_iter()
-                .chain(r.appended_segments)
-                .collect(),
-            replaced_segments: l
-                .replaced_segments
-                .into_iter()
-                .chain(r.replaced_segments)
-                .collect(),
-            merged_statistics: merge_statistics(
-                &l.merged_statistics,
-                &r.merged_statistics,
-                default_cluster_key_id,
-            ),
-        }),
+        ) => {
+            debug_assert!(l.check_intersect(&r));
+
+            ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
+                removed_segment_indexes: l
+                    .removed_segment_indexes
+                    .into_iter()
+                    .chain(r.removed_segment_indexes.into_iter())
+                    .collect(),
+                removed_statistics: merge_statistics(
+                    &l.removed_statistics,
+                    &r.removed_statistics,
+                    default_cluster_key_id,
+                ),
+                appended_segments: l
+                    .appended_segments
+                    .into_iter()
+                    .chain(r.appended_segments)
+                    .collect(),
+                replaced_segments: l
+                    .replaced_segments
+                    .into_iter()
+                    .chain(r.replaced_segments)
+                    .collect(),
+                merged_statistics: merge_statistics(
+                    &l.merged_statistics,
+                    &r.merged_statistics,
+                    default_cluster_key_id,
+                ),
+            })
+        }
         _ => unreachable!(
             "conflict resolve context to be merged should both be ModifiedSegmentExistsInLatest"
         ),

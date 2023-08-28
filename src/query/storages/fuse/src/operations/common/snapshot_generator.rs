@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -68,6 +69,27 @@ pub struct SnapshotChanges {
 
     pub merged_statistics: Statistics,
     pub removed_statistics: Statistics,
+}
+
+impl SnapshotChanges {
+    pub fn check_intersect(&self, other: &SnapshotChanges) -> bool {
+        for o in &other.appended_segments {
+            if self.appended_segments.contains(o) {
+                return true;
+            }
+        }
+        for o in &other.replaced_segments {
+            if self.replaced_segments.contains_key(o.0) {
+                return true;
+            }
+        }
+        for o in &other.removed_segment_indexes {
+            if self.removed_segment_indexes.contains(o) {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
