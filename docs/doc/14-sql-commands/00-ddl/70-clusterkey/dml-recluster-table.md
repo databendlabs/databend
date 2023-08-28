@@ -48,7 +48,7 @@ insert into t values(4,4);
 
 select * from clustering_information('default','t')\G
 *************************** 1. row ***************************
-        cluster_by_keys: ((a + 1))
+            cluster_key: ((a + 1))
       total_block_count: 3
    constant_block_count: 1
 unclustered_block_count: 0
@@ -61,7 +61,7 @@ ALTER TABLE t RECLUSTER FINAL WHERE a != 4;
 
 select * from clustering_information('default','t')\G
 *************************** 1. row ***************************
-        cluster_by_keys: ((a + 1))
+            cluster_key: ((a + 1))
       total_block_count: 2
    constant_block_count: 1
 unclustered_block_count: 0
