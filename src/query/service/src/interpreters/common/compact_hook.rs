@@ -119,14 +119,17 @@ async fn compact_table(
         &compact_target.database,
         &compact_target.table,
     )?;
-    let optimize_interpreter =
-        OptimizeTableInterpreter::try_create(ctx.clone(), OptimizeTablePlan {
+    let optimize_interpreter = OptimizeTableInterpreter::try_create(
+        ctx.clone(),
+        OptimizeTablePlan {
             catalog: compact_target.catalog,
             database: compact_target.database,
             table: compact_target.table,
             action: OptimizeTableAction::CompactBlocks,
             limit: None,
-        })?;
+        },
+        false,
+    )?;
 
     let mut build_res = optimize_interpreter.execute2().await?;
 

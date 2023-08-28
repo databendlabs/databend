@@ -36,11 +36,20 @@ use crate::sessions::TableContext;
 pub struct OptimizeTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: OptimizeTablePlan,
+    is_explain_pipeline: bool,
 }
 
 impl OptimizeTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: OptimizeTablePlan) -> Result<Self> {
-        Ok(OptimizeTableInterpreter { ctx, plan })
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        plan: OptimizeTablePlan,
+        is_explain_pipeline: bool,
+    ) -> Result<Self> {
+        Ok(OptimizeTableInterpreter {
+            ctx,
+            plan,
+            is_explain_pipeline,
+        })
     }
 }
 
@@ -96,14 +105,18 @@ impl OptimizeTableInterpreter {
         }
 
         let mut compact_pipeline = Pipeline::create();
-        table
-            .compact(
-                self.ctx.clone(),
-                target,
-                self.plan.limit,
-                &mut compact_pipeline,
-            )
-            .await?;
+        // if it's compact_segments, we need to avoid this because it will
+        // do compact really.
+        if !self.is_explain_pipeline {
+            table
+                .compact(
+                    self.ctx.clone(),
+                    target,
+                    self.plan.limit,
+                    &mut compact_pipeline,
+                )
+                .await?;
+        }
 
         let mut build_res = PipelineBuildResult::create();
         let settings = self.ctx.get_settings();

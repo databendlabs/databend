@@ -49,4 +49,20 @@ select * from t1;
 1 2
 
 statement ok
+insert into t1 values(1,2);
+
+query I
+select count(*) from fuse_segment('default','t1');
+----
+2
+
+statement ok
+explain pipeline optimize table t1 compact segment;
+
+query I
+select count(*) from fuse_segment('default','t1');
+----
+2
+
+statement ok
 drop table t1
