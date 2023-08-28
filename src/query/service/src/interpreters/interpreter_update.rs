@@ -43,12 +43,17 @@ use crate::sql::plans::UpdatePlan;
 pub struct UpdateInterpreter {
     ctx: Arc<QueryContext>,
     plan: UpdatePlan,
+    explain_pipeline: bool,
 }
 
 impl UpdateInterpreter {
     /// Create the UpdateInterpreter from UpdatePlan
     pub fn try_create(ctx: Arc<QueryContext>, plan: UpdatePlan) -> Result<Self> {
-        Ok(UpdateInterpreter { ctx, plan })
+        Ok(UpdateInterpreter {
+            ctx,
+            plan,
+            explain_pipeline: false,
+        })
     }
 }
 
@@ -74,12 +79,15 @@ impl Interpreter for UpdateInterpreter {
 
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
         let table_info = tbl.get_table_info().clone();
-
-        // Add table lock heartbeat.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), table_info.clone())
-            .await?;
+        let explain_pipeline = self.explain_pipeline;
+        let mut heartbeat;
+        if !explain_pipeline {
+            // Add table lock heartbeat.
+            let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
+            heartbeat = handler
+                .try_lock(self.ctx.clone(), table_info.clone())
+                .await?;
+        }
 
         // refresh table.
         let tbl = self
@@ -184,11 +192,16 @@ impl Interpreter for UpdateInterpreter {
         .await?;
 
         if build_res.main_pipeline.is_empty() {
-            heartbeat.shutdown().await?;
+            if !explain_pipeline {
+                heartbeat.shutdown().await?;
+            }
         } else {
             build_res.main_pipeline.set_on_finished(move |may_error| {
-                // shutdown table lock heartbeat.
-                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
+                if !explain_pipeline {
+                    // shutdown table lock heartbeat.
+                    GlobalIORuntime::instance()
+                        .block_on(async move { heartbeat.shutdown().await })?;
+                }
                 match may_error {
                     None => Ok(()),
                     Some(error_code) => Err(error_code.clone()),
@@ -196,5 +209,9 @@ impl Interpreter for UpdateInterpreter {
             });
         }
         Ok(build_res)
+    }
+
+    fn set_explain_pipeline(&mut self) {
+        self.explain_pipeline = true
     }
 }

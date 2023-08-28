@@ -125,6 +125,7 @@ impl Interpreter for ExplainInterpreter {
 
             ExplainKind::Pipeline => {
                 let interpter = InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
+                interpter.set_explain_pipeline();
                 let pipeline = interpter.execute2().await?;
                 Self::format_pipeline(&pipeline)
             }

@@ -78,12 +78,17 @@ use crate::stream::PullingExecutorStream;
 pub struct DeleteInterpreter {
     ctx: Arc<QueryContext>,
     plan: DeletePlan,
+    explain_pipeline: bool,
 }
 
 impl DeleteInterpreter {
     /// Create the DeleteInterpreter from DeletePlan
     pub fn try_create(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<Self> {
-        Ok(DeleteInterpreter { ctx, plan })
+        Ok(DeleteInterpreter {
+            ctx,
+            plan,
+            explain_pipeline: false,
+        })
     }
 }
 
@@ -106,12 +111,15 @@ impl Interpreter for DeleteInterpreter {
 
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
         let table_info = tbl.get_table_info().clone();
-
-        // Add table lock heartbeat.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), table_info.clone())
-            .await?;
+        let explain_pipeline = self.explain_pipeline;
+        let mut heartbeat;
+        if !explain_pipeline {
+            // Add table lock heartbeat.
+            let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
+            heartbeat = handler
+                .try_lock(self.ctx.clone(), table_info.clone())
+                .await?;
+        }
 
         let catalog = self.ctx.get_catalog(catalog_name).await?;
         let catalog_info = catalog.info();
@@ -251,13 +259,18 @@ impl Interpreter for DeleteInterpreter {
                 build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                     .await?;
         }
-
+        let explian_pipeline = self.explain_pipeline;
         if build_res.main_pipeline.is_empty() {
-            heartbeat.shutdown().await?;
+            if !explain_pipeline {
+                heartbeat.shutdown().await?;
+            }
         } else {
             build_res.main_pipeline.set_on_finished(move |may_error| {
-                // shutdown table lock heartbeat.
-                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
+                if !explian_pipeline {
+                    // shutdown table lock heartbeat.
+                    GlobalIORuntime::instance()
+                        .block_on(async move { heartbeat.shutdown().await })?;
+                }
                 match may_error {
                     None => Ok(()),
                     Some(error_code) => Err(error_code.clone()),
@@ -266,6 +279,10 @@ impl Interpreter for DeleteInterpreter {
         }
 
         Ok(build_res)
+    }
+
+    fn set_explain_pipeline(&mut self) {
+        self.explain_pipeline = true
     }
 }
 
