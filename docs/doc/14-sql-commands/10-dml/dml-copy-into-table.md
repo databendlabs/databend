@@ -210,7 +210,7 @@ When importing large volumes of data, such as logs, it is recommended to set bot
 
 ### Output
 
-The command returns the following columns:
+COPY INTO provides a summary of the data loading results with these columns:
 
 | Column           | DataType | Nullable | Description                                |
 |------------------|----------|----------|--------------------------------------------|
