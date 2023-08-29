@@ -6403,14 +6403,13 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.2.3"
-source = "git+https://github.com/datafuselabs/jsonb?rev=cb4b1eb#cb4b1ebde906a56b82b064b639fcfcf989e0f235"
+source = "git+https://github.com/datafuselabs/jsonb?rev=77a5920#77a5920a52a3d7cacd1da48f959fb42e2bc62e3e"
 dependencies = [
  "byteorder",
  "fast-float",
  "nom",
  "ordered-float 3.7.0",
  "rand 0.8.5",
- "serde",
  "serde_json",
 ]
 

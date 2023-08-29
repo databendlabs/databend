@@ -138,7 +138,7 @@ impl SyncSource for ReadNativeDataSource<true> {
                     {
                         let mut source_data = self
                             .block_reader
-                            .sync_read_native_columns_data(part.clone(), &ignore_column_ids)?;
+                            .sync_read_native_columns_data(&part, &ignore_column_ids)?;
                         source_data.append(&mut virtual_source_data);
                         return Ok(Some(DataBlock::empty_with_meta(
                             NativeDataSourceMeta::create(vec![part.clone()], vec![
@@ -151,7 +151,7 @@ impl SyncSource for ReadNativeDataSource<true> {
                 Ok(Some(DataBlock::empty_with_meta(
                     NativeDataSourceMeta::create(vec![part.clone()], vec![DataSource::Normal(
                         self.block_reader
-                            .sync_read_native_columns_data(part, &None)?,
+                            .sync_read_native_columns_data(&part, &None)?,
                     )]),
                 )))
             }
@@ -229,10 +229,7 @@ impl Processor for ReadNativeDataSource<false> {
                                 virtual_reader.read_native_data(&loc).await
                             {
                                 let mut source_data = block_reader
-                                    .async_read_native_columns_data(
-                                        part.clone(),
-                                        &ignore_column_ids,
-                                    )
+                                    .async_read_native_columns_data(&part, &ignore_column_ids)
                                     .await?;
                                 source_data.append(&mut virtual_source_data);
                                 return Ok(DataSource::Normal(source_data));
@@ -241,7 +238,7 @@ impl Processor for ReadNativeDataSource<false> {
 
                         Ok(DataSource::Normal(
                             block_reader
-                                .async_read_native_columns_data(part, &None)
+                                .async_read_native_columns_data(&part, &None)
                                 .await?,
                         ))
                     }));
