@@ -121,10 +121,12 @@ impl Binder {
         child: SExpr,
     ) -> Result<SExpr> {
         bind_context.set_expr_context(ExprContext::SelectClause);
+        dbg!(scalars);
         let mut scalars = scalars
             .iter()
             .map(|(_, item)| {
                 if bind_context.in_grouping {
+                    dbg!(&item.scalar);
                     let grouping_checker = GroupingChecker::new(bind_context);
                     let scalar = grouping_checker.resolve(&item.scalar, None)?;
                     Ok(ScalarItem {
