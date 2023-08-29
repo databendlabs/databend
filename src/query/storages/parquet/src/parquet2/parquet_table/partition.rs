@@ -154,7 +154,11 @@ impl Parquet2Table {
         };
 
         pruner
-            .read_and_prune_partitions(self.operator.clone(), &file_locations)
+            .read_and_prune_partitions(
+                self.operator.clone(),
+                &file_locations,
+                ctx.get_settings().get_max_threads()? as usize,
+            )
             .await
     }
 }
