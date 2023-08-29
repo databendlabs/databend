@@ -23,6 +23,7 @@ use chrono::TimeZone;
 use chrono::Utc;
 use common_ast::ast::Indirection;
 use common_ast::ast::Join;
+use common_ast::ast::MergeSource;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::Statement;
@@ -569,6 +570,25 @@ impl Binder {
                     .await
             }
             TableReference::Join { .. } => unreachable!(),
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_merge_into_source(
+        &mut self,
+        bind_context: &mut BindContext,
+        _span: Span,
+        source: &MergeSource,
+    ) -> Result<(SExpr, BindContext)> {
+        // merge source has three kinds type
+        // a. values b. streamingV2 c. query
+        match source {
+            MergeSource::Select { query } => self.bind_query(bind_context, query).await,
+            MergeSource::StreamingV2 {
+                settings: _,
+                on_error_mode: _,
+                start: _,
+            } => unimplemented!(),
         }
     }
 

@@ -90,6 +90,8 @@ use common_sql::executor::HashJoin;
 use common_sql::executor::Lambda;
 use common_sql::executor::Limit;
 use common_sql::executor::MaterializedCte;
+use common_sql::executor::MergeInto;
+use common_sql::executor::MergeIntoSource;
 use common_sql::executor::MutationAggregate;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
@@ -113,6 +115,8 @@ use common_storage::DataOperator;
 use common_storages_factory::Table;
 use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
+use common_storages_fuse::operations::merge_into::MergeIntoNotMatchedProcessor;
+use common_storages_fuse::operations::merge_into::MergeIntoSplitProcessor;
 use common_storages_fuse::operations::replace_into::BroadcastProcessor;
 use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
 use common_storages_fuse::operations::replace_into::UnbranchedReplaceIntoProcessor;
@@ -260,6 +264,10 @@ impl PipelineBuilder {
             PhysicalPlan::AsyncSourcer(async_sourcer) => self.build_async_sourcer(async_sourcer),
             PhysicalPlan::Deduplicate(deduplicate) => self.build_deduplicate(deduplicate),
             PhysicalPlan::ReplaceInto(replace) => self.build_replace_into(replace),
+            PhysicalPlan::MergeInto(merge_into) => self.build_merge_into(merge_into),
+            PhysicalPlan::MergeIntoSource(merge_into_source) => {
+                self.build_merge_into_source(merge_into_source)
+            }
         }
     }
 
@@ -279,6 +287,19 @@ impl PipelineBuilder {
         Ok(cast_needed)
     }
 
+    fn build_merge_into_source(&mut self, merge_into_source: &MergeIntoSource) -> Result<()> {
+        let MergeIntoSource { input, row_id_idx } = merge_into_source;
+
+        self.build_pipeline(input)?;
+        self.main_pipeline.try_resize(1)?;
+        let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
+
+        self.main_pipeline
+            .add_pipe(merge_into_split_processor.into_pipe());
+
+        Ok(())
+    }
+
     fn build_deduplicate(&mut self, deduplicate: &Deduplicate) -> Result<()> {
         let Deduplicate {
             input,
@@ -292,6 +313,7 @@ impl PipelineBuilder {
             table_schema,
             need_insert,
         } = deduplicate;
+
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
@@ -381,6 +403,101 @@ impl PipelineBuilder {
             self.main_pipeline
                 .add_pipe(replace_into_processor.into_pipe());
         }
+        Ok(())
+    }
+
+    fn build_merge_into(&mut self, merge_into: &MergeInto) -> Result<()> {
+        let MergeInto {
+            input,
+            table_info,
+            catalog_info,
+            unmatched,
+            matched,
+            row_id_idx,
+            segments,
+        } = merge_into;
+        self.build_pipeline(input)?;
+        let tbl = self
+            .ctx
+            .build_table_by_table_info(catalog_info, table_info, None)?;
+        let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
+            unmatched.clone(),
+            input.output_schema()?,
+            self.ctx.get_function_context()?,
+        )?;
+
+        let table = FuseTable::try_from_table(tbl.as_ref())?;
+        let block_thresholds = table.get_block_thresholds();
+
+        let cluster_stats_gen =
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds)?;
+
+        // append data for unmatched data
+        let serialize_block_transform = TransformSerializeBlock::try_create(
+            self.ctx.clone(),
+            InputPort::create(),
+            OutputPort::create(),
+            table,
+            cluster_stats_gen,
+        )?;
+        let block_builder = serialize_block_transform.get_block_builder();
+
+        let serialize_segment_transform = TransformSerializeSegment::new(
+            self.ctx.clone(),
+            InputPort::create(),
+            OutputPort::create(),
+            table,
+            block_thresholds,
+        );
+
+        let pipe_items = vec![
+            create_dummy_item(),
+            merge_into_not_matched_processor.into_pipe_item(),
+        ];
+
+        self.main_pipeline.add_pipe(Pipe::create(
+            self.main_pipeline.output_len(),
+            self.main_pipeline.output_len(),
+            pipe_items,
+        ));
+
+        let pipe_items = vec![
+            create_dummy_item(),
+            serialize_block_transform.into_pipe_item(),
+        ];
+
+        self.main_pipeline.add_pipe(Pipe::create(
+            self.main_pipeline.output_len(),
+            self.main_pipeline.output_len(),
+            pipe_items,
+        ));
+
+        let mut pipe_items = Vec::with_capacity(2);
+
+        let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
+        let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+        // for matched update and delete
+        pipe_items.push(table.matched_mutator(
+            self.ctx.clone(),
+            block_builder,
+            io_request_semaphore,
+            *row_id_idx,
+            matched.clone(),
+            input.output_schema()?,
+            segments.clone(),
+        )?);
+        pipe_items.push(serialize_segment_transform.into_pipe_item());
+
+        self.main_pipeline.add_pipe(Pipe::create(
+            self.main_pipeline.output_len(),
+            self.main_pipeline.output_len(),
+            pipe_items,
+        ));
+
+        // todo:(JackTan25): process filling default columns
+        // because the datablock we receive here may have different
+        // schema, so we can't just add build_filling_default_columns
+        // to solve it simply. we will add new processor in the later pr.
         Ok(())
     }
 

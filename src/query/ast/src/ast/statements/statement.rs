@@ -19,6 +19,7 @@ use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 
+use super::merge_into::MergeIntoStmt;
 use super::*;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Expr;
@@ -76,7 +77,7 @@ pub enum Statement {
 
     Insert(InsertStmt),
     Replace(ReplaceStmt),
-
+    MergeInto(MergeIntoStmt),
     Delete {
         hints: Option<Hint>,
         table_reference: TableReference,
@@ -298,6 +299,7 @@ impl Display for Statement {
             Statement::Query(query) => write!(f, "{query}")?,
             Statement::Insert(insert) => write!(f, "{insert}")?,
             Statement::Replace(replace) => write!(f, "{replace}")?,
+            Statement::MergeInto(merge_into) => write!(f, "{merge_into}")?,
             Statement::Delete {
                 table_reference,
                 selection,
