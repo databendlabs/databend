@@ -193,7 +193,7 @@ impl BuildSpillState {
         for (row_idx, hash) in hashes.iter().enumerate() {
             let partition_id = *hash as u8 & 0b0000_0111;
             if self.spiller.spilled_partition_set.contains(&partition_id) {
-                let location = self.spiller.partition_location.get(&partition_id).unwrap();
+                let location = self.spiller.get_partition_location(partition_id).unwrap();
                 // the row can be directly spilled to corresponding partition
                 rows_location
                     .entry(location)
@@ -215,7 +215,7 @@ impl BuildSpillState {
             );
             // Spill block with location
             self.spiller
-                .spill_with_location(location.as_str(), &data_block)?;
+                .spill_with_location(location.as_str(), &data_block).await?;
         }
         // Return unspilled data
         let unspilled_block_row_indexes = unspilled_row_index

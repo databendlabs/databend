@@ -135,4 +135,9 @@ impl Spiller {
     pub fn is_any_spilled(&self) -> bool {
         !self.spilled_partition_set.is_empty()
     }
+
+    /// Get location of a specific partition
+    pub fn get_partition_location(&self, partition_id: u8) -> Option<String> {
+        self.partition_location.get(&partition_id).cloned()
+    }
 }

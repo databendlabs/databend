@@ -34,8 +34,10 @@ enum HashJoinBuildStep {
     FastReturn,
     // Wait to spill
     WaitSpill,
-    // Start to spill
-    Spill,
+    // Start the first spill
+    FirstSpill,
+    // Following spill after the first spill
+    FollowSpill,
 }
 
 pub struct TransformHashJoinBuild {
@@ -45,6 +47,7 @@ pub struct TransformHashJoinBuild {
     step: HashJoinBuildStep,
     build_state: Arc<HashJoinBuildState>,
     spill_state: Option<Box<BuildSpillState>>,
+    spill_data: Option<DataBlock>,
     finalize_finished: bool,
 }
 
@@ -65,6 +68,7 @@ impl TransformHashJoinBuild {
             step: HashJoinBuildStep::Running,
             build_state,
             spill_state,
+            spill_data: None,
             finalize_finished: false,
         }))
     }
@@ -108,7 +112,9 @@ impl Processor for TransformHashJoinBuild {
                 true => Ok(Event::Finished),
             },
             HashJoinBuildStep::FastReturn => Ok(Event::Finished),
-            HashJoinBuildStep::WaitSpill | HashJoinBuildStep::Spill => Ok(Event::Async),
+            HashJoinBuildStep::WaitSpill
+            | HashJoinBuildStep::FirstSpill
+            | HashJoinBuildStep::FollowSpill => Ok(Event::Async),
         }
     }
 
@@ -137,14 +143,16 @@ impl Processor for TransformHashJoinBuild {
                                 } else {
                                     // Make `need_spill` to false for `SpillCoordinator`
                                     spill_state.spill_coordinator.no_need_spill();
-                                    self.step = HashJoinBuildStep::Spill;
+                                    self.step = HashJoinBuildStep::FirstSpill;
                                 }
                             } else {
                                 // If the processor had spilled data, we should continue to spill
                                 if spill_state.spiller.is_any_spilled() {
-                                    data_block = spill_state.spill_input(data_block)?;
+                                    self.step = HashJoinBuildStep::FollowSpill;
+                                    self.spill_data = Some(data_block);
+                                } else {
+                                    self.build_state.build(data_block.clone())?;
                                 }
-                                self.build_state.build(data_block.clone())?;
                             }
                         }
                     } else {
@@ -163,7 +171,8 @@ impl Processor for TransformHashJoinBuild {
             }
             HashJoinBuildStep::FastReturn
             | HashJoinBuildStep::WaitSpill
-            | HashJoinBuildStep::Spill => unreachable!(),
+            | HashJoinBuildStep::FirstSpill
+            | HashJoinBuildStep::FollowSpill => unreachable!(),
         }
     }
 
@@ -185,12 +194,22 @@ impl Processor for TransformHashJoinBuild {
                     .spill_coordinator
                     .wait_spill_notify()
                     .await;
-                self.step = HashJoinBuildStep::Spill
+                self.step = HashJoinBuildStep::FirstSpill
             }
-            HashJoinBuildStep::Spill => {
+            HashJoinBuildStep::FirstSpill => {
                 self.spill_state.as_mut().unwrap().spill().await?;
                 // After spill, the processor should continue to run, and process incoming data.
                 // FIXME: We should wait all processors finish spill, and then continue to run.
+                self.step = HashJoinBuildStep::Running;
+            }
+            HashJoinBuildStep::FollowSpill => {
+                if let Some(data) = self.spill_data.take() {
+                    let unspilled_data =
+                        self.spill_state.as_mut().unwrap().spill_input(data).await?;
+                    if !unspilled_data.is_empty() {
+                        self.build_state.build(unspilled_data)?;
+                    }
+                }
                 self.step = HashJoinBuildStep::Running;
             }
             _ => {}
