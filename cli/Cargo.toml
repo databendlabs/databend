@@ -13,7 +13,7 @@ repository = { workspace = true }
 [dependencies]
 databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
 
-anyhow = "1.0.71"
+anyhow = "1.0.75"
 async-trait = "0.1.68"
 chrono = { version = "0.4.26", default-features = false, features = ["clock"] }
 clap = { version = "4.3.4", features = ["derive", "env"] }
