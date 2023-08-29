@@ -15,6 +15,8 @@
 use std::collections::HashSet;
 use std::ops::Not;
 
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -42,17 +44,23 @@ impl MergeIntoSplitMutator {
             DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
         );
 
-        let filter = match &row_id_column.value {
-            common_expression::Value::Scalar(_) => {
-                return Err(ErrorCode::InvalidRowIdIndex(
-                    "row id column should be a column, but it's a scalar",
-                ));
+        let filter: Bitmap = match &row_id_column.value {
+            common_expression::Value::Scalar(scalar) => {
+                let mut mutable_bitmap = MutableBitmap::new();
+                if scalar.is_null() {
+                    mutable_bitmap.push(false)
+                } else {
+                    mutable_bitmap.push(true)
+                }
+                mutable_bitmap.into()
             }
-            common_expression::Value::Column(c) => match c {
-                common_expression::Column::Nullable(c2) => c2.validity.clone(),
+            common_expression::Value::Column(column) => match column {
+                common_expression::Column::Nullable(nullable_column) => {
+                    nullable_column.validity.clone()
+                }
                 _ => {
                     return Err(ErrorCode::InvalidRowIdIndex(
-                        "row id column should be a column, but it's a scalar",
+                        "row id column should be a nullable column, but it's a normal column",
                     ));
                 }
             },
