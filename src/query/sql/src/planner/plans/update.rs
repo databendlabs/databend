@@ -64,6 +64,7 @@ impl UpdatePlan {
         ctx: Arc<dyn TableContext>,
         schema: DataSchema,
         col_indices: Vec<usize>,
+        use_column_name_index: bool,
     ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
         let column = ColumnBindingBuilder::new(
             PREDICATE_COLUMN_NAME.to_string(),
@@ -113,9 +114,13 @@ impl UpdatePlan {
                         arguments: vec![predicate.clone(), left, right],
                     })
                 };
-                let expr = scalar
-                    .as_expr()?
-                    .project_column_ref(|col| col.column_name.clone());
+                let expr = scalar.as_expr()?.project_column_ref(|col| {
+                    if use_column_name_index {
+                        col.column_name.clone()
+                    } else {
+                        col.index.to_string()
+                    }
+                });
                 let (expr, _) =
                     ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
                 acc.push((*index, expr.as_remote_expr()));

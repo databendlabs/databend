@@ -21,18 +21,15 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::transform_accumulating_async::AsyncAccumulatingTransform;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 
-use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
-pub use crate::operations::replace_into::mutator::merge_into_mutator::MergeIntoOperationAggregator;
+use crate::operations::merge_into::mutator::MatchedAggregator;
 
 #[async_trait::async_trait]
-impl AsyncAccumulatingTransform for MergeIntoOperationAggregator {
-    const NAME: &'static str = "MergeIntoMutationAggregator";
+impl AsyncAccumulatingTransform for MatchedAggregator {
+    const NAME: &'static str = "MatchedAggregator";
 
     #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
-        // accumulate mutations
-        let merge_into_operation = MergeIntoOperation::try_from(data)?;
-        self.accumulate(merge_into_operation).await?;
+        self.accumulate(data).await?;
         // no partial output
         Ok(None)
     }
@@ -45,7 +42,7 @@ impl AsyncAccumulatingTransform for MergeIntoOperationAggregator {
     }
 }
 
-impl MergeIntoOperationAggregator {
+impl MatchedAggregator {
     pub fn into_pipe_item(self) -> PipeItem {
         let input = InputPort::create();
         let output = OutputPort::create();

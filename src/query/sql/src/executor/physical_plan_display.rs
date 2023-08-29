@@ -25,6 +25,8 @@ use super::Deduplicate;
 use super::DeletePartial;
 use super::DistributedInsertSelect;
 use super::FinalCommit;
+use super::MergeInto;
+use super::MergeIntoSource;
 use super::MutationAggregate;
 use super::ProjectSet;
 use super::ReplaceInto;
@@ -95,6 +97,8 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::AsyncSourcer(async_sourcer) => write!(f, "{}", async_sourcer)?,
             PhysicalPlan::Deduplicate(deduplicate) => write!(f, "{}", deduplicate)?,
             PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
+            PhysicalPlan::MergeIntoSource(merge_into_source) => write!(f, "{}", merge_into_source)?,
+            PhysicalPlan::MergeInto(merge_into) => write!(f, "{}", merge_into)?,
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
@@ -450,6 +454,18 @@ impl Display for Deduplicate {
 impl Display for ReplaceInto {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Replace")
+    }
+}
+
+impl Display for MergeInto {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MergeInto")
+    }
+}
+
+impl Display for MergeIntoSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MergeIntoSource")
     }
 }
 
