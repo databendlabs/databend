@@ -268,6 +268,20 @@ pub enum NumberColumn {
     Float64(Buffer<F64>),
 }
 
+#[derive(Clone, PartialEq, EnumAsInner, Debug)]
+pub enum NumberColumnVec {
+    UInt8(Vec<Buffer<u8>>),
+    UInt16(Vec<Buffer<u16>>),
+    UInt32(Vec<Buffer<u32>>),
+    UInt64(Vec<Buffer<u64>>),
+    Int8(Vec<Buffer<i8>>),
+    Int16(Vec<Buffer<i16>>),
+    Int32(Vec<Buffer<i32>>),
+    Int64(Vec<Buffer<i64>>),
+    Float32(Vec<Buffer<F32>>),
+    Float64(Vec<Buffer<F64>>),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
 pub enum NumberColumnBuilder {
     UInt8(Vec<u8>),
