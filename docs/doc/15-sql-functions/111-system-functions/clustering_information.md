@@ -21,7 +21,7 @@ INSERT INTO mytable VALUES(4,4);
 
 SELECT * FROM CLUSTERING_INFORMATION('default','mytable')\G
 *************************** 1. row ***************************
-        cluster_by_keys: ((a + 1))
+            cluster_key: ((a + 1))
       total_block_count: 3
    constant_block_count: 1
 unclustered_block_count: 0
@@ -32,7 +32,7 @@ unclustered_block_count: 0
 
 | Parameter               	| Description                                                                                                            	|
 |-------------------------	|------------------------------------------------------------------------------------------------------------------------	|
-| cluster_by_keys         	| The defined cluster key.                                                                                               	|
+| cluster_key         	| The defined cluster key.                                                                                               	|
 | total_block_count       	| The current count of blocks.                                                                                           	|
 | constant_block_count    	| The count of blocks where min/max values are equal, meaning each block contains only one (group of) cluster_key value. 	|
 | unclustered_block_count 	| The count of blocks that have not yet been clustered.                                                                  	|
