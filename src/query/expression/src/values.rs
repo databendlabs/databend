@@ -56,6 +56,7 @@ use crate::types::decimal::DecimalScalar;
 use crate::types::decimal::DecimalSize;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
+use crate::types::nullable::NullableColumnVec;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberColumnBuilder;
@@ -78,6 +79,8 @@ use crate::utils::arrow::constant_bitmap;
 use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
 use crate::utils::FromData;
+use crate::values::decimal::DecimalColumnVec;
+use crate::values::map::KvPair;
 use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
@@ -149,6 +152,25 @@ pub enum Column {
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple(Vec<Column>),
     Variant(StringColumn),
+}
+
+#[derive(Clone, EnumAsInner, Debug, PartialEq)]
+pub enum ColumnVec {
+    Null,
+    EmptyArray,
+    EmptyMap,
+    Number(NumberColumnVec),
+    Decimal(DecimalColumnVec),
+    Boolean(Vec<Bitmap>),
+    String(Vec<StringColumn>),
+    Timestamp(Vec<Buffer<i64>>),
+    Date(Vec<Buffer<i32>>),
+    Array(Vec<ArrayColumn<AnyType>>),
+    Map(Vec<ArrayColumn<KvPair<AnyType, AnyType>>>),
+    Bitmap(Vec<StringColumn>),
+    Nullable(Box<NullableColumnVec>),
+    Tuple(Vec<ColumnVec>),
+    Variant(Vec<StringColumn>),
 }
 
 #[derive(Debug, Clone, EnumAsInner)]

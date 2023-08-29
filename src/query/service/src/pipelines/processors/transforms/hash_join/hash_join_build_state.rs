@@ -26,6 +26,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::ColumnVec;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::HashMethod;
@@ -34,6 +36,7 @@ use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
 use common_expression::KeysState;
 use common_expression::RemoteExpr;
+use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashMap;
 use common_hashtable::RawEntry;
@@ -44,6 +47,7 @@ use common_hashtable::STRING_EARLY_SIZE;
 use common_sql::plans::JoinType;
 use common_sql::ColumnSet;
 use ethnum::U256;
+use itertools::Itertools;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -579,6 +583,43 @@ impl HashJoinBuildState {
         let mut count = self.hash_join_state.hash_table_builders.lock();
         *count -= 1;
         if *count == 0 {
+            let data_blocks = unsafe { &mut *self.hash_join_state.chunks.get() };
+            if !data_blocks.is_empty()
+                && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross
+            {
+                let num_columns = data_blocks[0].num_columns();
+                let columns_data_type: Vec<DataType> = (0..num_columns)
+                    .map(|index| data_blocks[0].get_by_offset(index).data_type.clone())
+                    .collect();
+                let columns: Vec<ColumnVec> = (0..num_columns)
+                    .map(|index| {
+                        let columns = data_blocks
+                            .iter()
+                            .map(|block| (block.get_by_offset(index), block.num_rows()))
+                            .collect_vec();
+                        let full_columns: Vec<Column> = columns
+                            .iter()
+                            .map(|(entry, rows)| match &entry.value {
+                                Value::Scalar(s) => {
+                                    let builder =
+                                        ColumnBuilder::repeat(&s.as_ref(), *rows, &entry.data_type);
+                                    builder.build()
+                                }
+                                Value::Column(c) => c.clone(),
+                            })
+                            .collect();
+                        Column::take_downcast_column_vec(
+                            &full_columns,
+                            columns[0].0.data_type.clone(),
+                        )
+                    })
+                    .collect();
+                let build_columns_data_type =
+                    unsafe { &mut *self.hash_join_state.build_columns_data_type.get() };
+                let build_columns = unsafe { &mut *self.hash_join_state.build_columns.get() };
+                *build_columns_data_type = columns_data_type;
+                *build_columns = columns;
+            }
             let mut build_done = self.hash_join_state.build_done.lock();
             *build_done = true;
             self.hash_join_state.build_done_notify.notify_waiters();
