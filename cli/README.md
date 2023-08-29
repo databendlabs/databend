@@ -90,6 +90,13 @@ Bye
 2
 ```
 
+### Put local files into stage
+
+```
+create stage s_temp;
+put fs:///tmp/a*.txt @s_temp/abc;
+```
+
 ## Features
 
 - basic keywords highlight

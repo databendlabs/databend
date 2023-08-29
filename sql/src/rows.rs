@@ -106,6 +106,10 @@ impl Row {
     pub fn values(&self) -> &[Value] {
         &self.0
     }
+
+    pub fn from_vec(values: Vec<Value>) -> Self {
+        Self(values)
+    }
 }
 
 impl IntoIterator for Row {

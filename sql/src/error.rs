@@ -124,6 +124,18 @@ impl From<std::io::Error> for Error {
     }
 }
 
+impl From<glob::GlobError> for Error {
+    fn from(e: glob::GlobError) -> Self {
+        Error::IO(e.to_string())
+    }
+}
+
+impl From<glob::PatternError> for Error {
+    fn from(e: glob::PatternError) -> Self {
+        Error::Parsing(e.to_string())
+    }
+}
+
 #[cfg(feature = "flight-sql")]
 impl From<tonic::Status> for Error {
     fn from(e: tonic::Status) -> Self {

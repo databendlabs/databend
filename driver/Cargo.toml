@@ -33,6 +33,8 @@ databend-sql = { workspace = true }
 async-trait = "0.1.68"
 chrono = { version = "0.4.26", default-features = false, features = ["clock"] }
 dyn-clone = "1.0.11"
+futures = "0.3.28"
+glob = "0.3.1"
 http = "0.2.9"
 percent-encoding = "2.3.0"
 serde = { version = "1.0.164", default-features = false, features = ["derive"] }

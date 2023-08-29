@@ -205,7 +205,12 @@ impl Session {
             return vec![];
         }
 
-        if self.query.is_empty() && (line.starts_with('.') || line == "exit" || line == "quit") {
+        if self.query.is_empty()
+            && (line.starts_with('.')
+                || line == "exit"
+                || line == "quit"
+                || line.to_uppercase().starts_with("PUT"))
+        {
             return vec![line.to_owned()];
         }
 
@@ -316,13 +321,33 @@ impl Session {
                 }
                 Ok(false)
             }
-            _ => {
+            other => {
                 let replace_newline = !if self.settings.replace_newline {
                     false
                 } else {
                     replace_newline_in_box_display(query)
                 };
-                let (schema, data) = self.conn.query_iter_ext(query).await?;
+
+                let (schema, data) = match other.0 {
+                    QueryKind::Put => {
+                        let args: Vec<String> = get_put_get_args(query);
+                        if args.len() != 3 {
+                            eprintln!("Put args are invalid, must be 2 argruments");
+                            return Ok(false);
+                        }
+                        self.conn.put_files(&args[1], &args[2]).await?
+                    }
+                    QueryKind::Get => {
+                        let args: Vec<String> = get_put_get_args(query);
+                        if args.len() != 3 {
+                            eprintln!("Put args are invalid, must be 2 argruments");
+                            return Ok(false);
+                        }
+                        self.conn.get_files(&args[1], &args[2]).await?
+                    }
+                    _ => self.conn.query_iter_ext(query).await?,
+                };
+
                 let mut displayer = FormatDisplay::new(
                     &self.settings,
                     query,
@@ -413,6 +438,8 @@ pub enum QueryKind {
     Query,
     Update,
     Explain,
+    Put,
+    Get,
 }
 
 impl From<&str> for QueryKind {
@@ -421,6 +448,8 @@ impl From<&str> for QueryKind {
         match tz.next() {
             Some(Ok(t)) => match t.kind {
                 TokenKind::EXPLAIN => QueryKind::Explain,
+                TokenKind::PUT => QueryKind::Put,
+                TokenKind::GET => QueryKind::Get,
                 TokenKind::ALTER
                 | TokenKind::DELETE
                 | TokenKind::UPDATE
@@ -434,6 +463,13 @@ impl From<&str> for QueryKind {
             _ => QueryKind::Query,
         }
     }
+}
+
+fn get_put_get_args(query: &str) -> Vec<String> {
+    query
+        .split_ascii_whitespace()
+        .map(|x| x.to_owned())
+        .collect()
 }
 
 fn replace_newline_in_box_display(query: &str) -> bool {

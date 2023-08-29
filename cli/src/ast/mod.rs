@@ -17,7 +17,13 @@ mod tokenizer;
 use sqlformat::{Indent, QueryParams};
 pub use tokenizer::*;
 
+use crate::session::QueryKind;
+
 pub fn format_query(query: &str) -> String {
+    let kind = QueryKind::from(query);
+    if kind == QueryKind::Put || kind == QueryKind::Get {
+        return query.to_owned();
+    }
     let options = sqlformat::FormatOptions {
         indent: Indent::Spaces(2),
         uppercase: true,

@@ -144,6 +144,10 @@ impl Schema {
     pub fn fields(&self) -> &[Field] {
         &self.0
     }
+
+    pub fn from_vec(fields: Vec<Field>) -> Self {
+        Self(fields)
+    }
 }
 
 impl TryFrom<&TypeDesc<'_>> for DataType {

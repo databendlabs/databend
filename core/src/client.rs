@@ -80,7 +80,7 @@ impl TryFrom<&str> for StageLocation {
 
 #[derive(Clone)]
 pub struct APIClient {
-    cli: HttpClient,
+    pub cli: HttpClient,
     endpoint: Url,
     pub host: String,
     pub port: u16,
@@ -437,7 +437,7 @@ impl APIClient {
         }
     }
 
-    async fn upload_to_stage_with_stream(
+    pub async fn upload_to_stage_with_stream(
         &self,
         stage_location: &str,
         data: impl AsyncRead + Send + Sync + 'static,

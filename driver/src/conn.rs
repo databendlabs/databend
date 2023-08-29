@@ -97,5 +97,25 @@ pub trait Connection: DynClone + Send + Sync {
         file_format_options: Option<BTreeMap<&str, &str>>,
         copy_options: Option<BTreeMap<&str, &str>>,
     ) -> Result<QueryProgress>;
+
+    async fn put_files(
+        &self,
+        _local_file: &str,
+        _stage_path: &str,
+    ) -> Result<(Schema, RowProgressIterator)> {
+        Err(Error::IO(
+            "PUT statement only available in HTTP API".to_owned(),
+        ))
+    }
+
+    async fn get_files(
+        &self,
+        _stage_path: &str,
+        _local_file: &str,
+    ) -> Result<(Schema, RowProgressIterator)> {
+        Err(Error::IO(
+            "GET statement only available in HTTP API".to_owned(),
+        ))
+    }
 }
 dyn_clone::clone_trait_object!(Connection);

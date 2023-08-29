@@ -476,6 +476,8 @@ pub enum TokenKind {
     TABLE_FUNCTIONS,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
+    #[token("GET", ignore(ascii_case))]
+    GET,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
@@ -634,6 +636,8 @@ pub enum TokenKind {
     PROCESSLIST,
     #[token("PURGE", ignore(ascii_case))]
     PURGE,
+    #[token("PUT", ignore(ascii_case))]
+    PUT,
     #[token("QUARTER", ignore(ascii_case))]
     QUARTER,
     #[token("QUERY", ignore(ascii_case))]
