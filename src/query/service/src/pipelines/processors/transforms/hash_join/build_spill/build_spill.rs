@@ -176,7 +176,40 @@ impl BuildSpillState {
     // Check if need to spill.
     // Notes: even if input can fit into memory, but there exists one processor need to spill, then it needs to wait spill.
     pub(crate) fn check_need_spill(&self, input: &DataBlock) -> Result<bool> {
-        todo!()
+        let settings = self.build_state.ctx.get_settings();
+        let enable_spill = settings.get_enable_join_spill()?;
+        let spill_threshold = settings.get_join_spilling_threshold()?;
+        if !enable_spill || self.spiller.is_all_spilled() {
+            return Ok(false);
+        }
+
+        if self.spiller.input_data.is_empty() {
+            return Ok(false);
+        }
+
+        let mut total_bytes = input.memory_size();
+
+        for block in self
+            .build_state
+            .hash_join_state
+            .row_space
+            .buffer
+            .read()
+            .iter()
+        {
+            total_bytes += block.memory_size();
+        }
+
+        let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
+        for block in chunks.iter() {
+            total_bytes += block.memory_size();
+        }
+
+        if total_bytes > spill_threshold {
+            return Ok(true);
+        }
+
+        Ok(false)
     }
 
     // Directly spill input data without buffering.
@@ -215,7 +248,8 @@ impl BuildSpillState {
             );
             // Spill block with location
             self.spiller
-                .spill_with_location(location.as_str(), &data_block).await?;
+                .spill_with_location(location.as_str(), &data_block)
+                .await?;
         }
         // Return unspilled data
         let unspilled_block_row_indexes = unspilled_row_index
