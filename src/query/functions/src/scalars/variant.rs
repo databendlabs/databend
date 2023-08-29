@@ -71,6 +71,7 @@ use jsonb::is_object;
 use jsonb::jsonpath::parse_json_path;
 use jsonb::object_keys;
 use jsonb::parse_value;
+use jsonb::strip_nulls;
 use jsonb::to_bool;
 use jsonb::to_f64;
 use jsonb::to_i64;
@@ -914,6 +915,23 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let s = to_pretty_string(val);
             output.put_slice(s.as_bytes());
+            output.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg(
+        "json_strip_nulls",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            if let Err(err) = strip_nulls(val, &mut output.data) {
+                ctx.set_error(output.len(), err.to_string());
+            };
             output.commit_row();
         }),
     );
