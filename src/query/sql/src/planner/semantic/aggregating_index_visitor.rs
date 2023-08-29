@@ -25,7 +25,6 @@ use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
 use common_ast::ast::Window;
 use common_ast::walk_expr;
-use common_ast::walk_query;
 use common_ast::walk_select_target;
 use common_ast::walk_select_target_mut;
 use common_ast::Visitor;
@@ -172,7 +171,7 @@ impl<'ast> Visitor<'ast> for AggregatingIndexChecker {
 
         // is agg func but not support now.
         if AggregateFunctionFactory::instance().contains(&name.name)
-            && !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&&**&name.name)
+            && !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&&*name.name.to_lowercase())
         {
             self.not_support = true;
             return;
@@ -236,6 +235,10 @@ impl<'ast> Visitor<'ast> for AggregatingIndexChecker {
             return;
         }
 
-        walk_query(self, query);
+        self.visit_set_expr(&query.body);
+
+        for order_by in &query.order_by {
+            self.visit_order_by(order_by);
+        }
     }
 }

@@ -40,10 +40,8 @@ impl<'a> GroupingChecker<'a> {
     }
 
     pub fn resolve(&self, scalar: &ScalarExpr, span: Span) -> Result<ScalarExpr> {
-        dbg!(scalar);
         if let Some(index) = self.bind_context.aggregate_info.group_items_map.get(scalar) {
             let column = &self.bind_context.aggregate_info.group_items[*index];
-            dbg!(column);
             let mut column_binding = if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar
             {
                 column_ref.column.clone()
@@ -70,16 +68,8 @@ impl<'a> GroupingChecker<'a> {
             .into());
         }
 
-        dbg!(&scalar);
         match scalar {
             ScalarExpr::BoundColumnRef(column) => {
-                dbg!(column);
-                dbg!(
-                    self.bind_context
-                        .aggregate_info
-                        .aggregate_functions_map
-                        .keys()
-                );
                 if self
                     .bind_context
                     .aggregate_info
