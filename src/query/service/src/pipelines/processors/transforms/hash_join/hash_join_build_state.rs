@@ -618,7 +618,6 @@ impl HashJoinBuildState {
                 *build_columns_data_type = columns_data_type;
                 *build_columns = columns;
             }
-            *data_blocks = vec![];
             let mut build_done = self.hash_join_state.build_done.lock();
             *build_done = true;
             self.hash_join_state.build_done_notify.notify_waiters();
