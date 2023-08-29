@@ -208,6 +208,19 @@ copyOptions ::=
 When importing large volumes of data, such as logs, it is recommended to set both `PURGE` and `FORCE` to True. This ensures efficient data import without the need for interaction with the Meta server (updating the copied-files set). However, it is important to be aware that this may lead to duplicate data imports.
 :::
 
+### Output
+
+The command returns the following columns:
+
+| Column           | DataType | Nullable | Description                                |
+|------------------|----------|----------|--------------------------------------------|
+| FILE             | VARCHAR  | No       | The relative path to the source file       |
+| ROWS_LOADED      | INT      | NO       | Number of rows loaded from the source file |
+| ERRORS_SEEN      | INT      | NO       | Number of error rows in the source file    |
+| FIRST_ERROR      | VARCHAR  | YES      | First error of the source file             |
+| FIRST_ERROR_LINE | INT      | YES      | Line number of the first error             |
+
+
 ## Examples
 
 ### 1. Loading Data from an Internal Stage
