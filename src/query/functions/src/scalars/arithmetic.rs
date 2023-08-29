@@ -517,11 +517,12 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
                         },
                         vectorize_with_builder_1_arg::<NumberType<u64>, NumberType<i64>>(
                             |a, output, ctx| {
-                                if a < std::i64::MIN as i128 || a > std::i64::MAX as i128 {
+                                let val = (a as i128).wrapping_neg();
+                                if val < std::i64::MIN as i128 || val > std::i64::MAX as i128 {
                                     ctx.set_error(output.len(), "number overflowed");
                                     output.push(0);
                                 } else {
-                                    output.push(-(a as i64));
+                                    output.push(val as i64);
                                 }
                             },
                         ),
