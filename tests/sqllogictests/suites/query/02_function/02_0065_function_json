@@ -1,0 +1,19 @@
+query T
+SELECT json_strip_nulls(parse_json('null'))
+----
+null
+
+query T
+SELECT json_strip_nulls(parse_json('true'))
+----
+true
+
+query T
+SELECT json_strip_nulls(parse_json('[1,2,3,null]'))
+----
+[1,2,3,null]
+
+query T
+SELECT json_strip_nulls(parse_json('{"a":1,"b":null,"c":{"a":1,"b":null},"d":[{"a":1,"b":null},{"a":2,"b":3}]}'))
+----
+{"a":1,"c":{"a":1},"d":[{"a":1},{"a":2,"b":3}]}
