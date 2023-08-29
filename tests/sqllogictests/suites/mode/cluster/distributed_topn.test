@@ -96,6 +96,7 @@ Limit
 
 query T
 EXPLAIN SELECT number from numbers(1000) limit 100, 10;
+----
 Limit
 ├── output columns: [numbers.number (#0)]
 ├── limit: 10
@@ -121,6 +122,7 @@ Limit
 
 query T
 EXPLAIN SELECT number from numbers(1000) limit 100, 10;
+----
 Limit
 ├── output columns: [numbers.number (#0)]
 ├── limit: 10
