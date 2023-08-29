@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cell::SyncUnsafeCell;
+use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -104,6 +105,10 @@ pub struct HashJoinState {
     pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
     /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
     pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
+    /// Spill partition set
+    pub(crate) spill_partition: Arc<RwLock<HashSet<u8>>>,
+    /// After all probe processors finish spill, notify build processors.
+    pub(crate) probe_spill_done: Arc<Notify>,
 }
 
 impl HashJoinState {
@@ -140,6 +145,8 @@ impl HashJoinState {
             is_build_projected: Arc::new(AtomicBool::new(true)),
             outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            spill_partition: Default::default(),
+            probe_spill_done: Arc::new(Default::default()),
         }))
     }
 
@@ -181,5 +188,14 @@ impl HashJoinState {
 
     pub fn need_mark_scan(&self) -> bool {
         matches!(self.hash_join_desc.join_type, JoinType::LeftMark)
+    }
+
+    pub fn set_spilled_partition(&self, partitions: &HashSet<u8>) {
+        let mut spill_partition = self.spill_partition.write();
+        *spill_partition = partitions.clone();
+    }
+
+    pub(crate) async fn wait_probe_spill(&self) {
+        self.probe_spill_done.notified().await;
     }
 }

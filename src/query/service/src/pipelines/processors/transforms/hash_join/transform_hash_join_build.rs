@@ -38,6 +38,8 @@ enum HashJoinBuildStep {
     FirstSpill,
     // Following spill after the first spill
     FollowSpill,
+    // Wait probe
+    WaitProbe,
 }
 
 pub struct TransformHashJoinBuild {
@@ -109,12 +111,26 @@ impl Processor for TransformHashJoinBuild {
             }
             HashJoinBuildStep::Finalize => match self.finalize_finished {
                 false => Ok(Event::Sync),
-                true => Ok(Event::Finished),
+                true => {
+                    // If join spill is enabled, we should wait probe to spill.
+                    // Then restore data from disk and build hash table, util all spilled data are processed.
+                    if let Some(spill_state) = &mut self.spill_state {
+                        // Send spilled partition to `HashJoinState`, used by probe spill.
+                        self.build_state
+                            .hash_join_state
+                            .set_spilled_partition(&spill_state.spiller.spilled_partition_set);
+                        self.step = HashJoinBuildStep::WaitProbe;
+                        Ok(Event::Async)
+                    } else {
+                        Ok(Event::Finished)
+                    }
+                }
             },
             HashJoinBuildStep::FastReturn => Ok(Event::Finished),
             HashJoinBuildStep::WaitSpill
             | HashJoinBuildStep::FirstSpill
-            | HashJoinBuildStep::FollowSpill => Ok(Event::Async),
+            | HashJoinBuildStep::FollowSpill
+            | HashJoinBuildStep::WaitProbe => Ok(Event::Async),
         }
     }
 
@@ -172,7 +188,8 @@ impl Processor for TransformHashJoinBuild {
             HashJoinBuildStep::FastReturn
             | HashJoinBuildStep::WaitSpill
             | HashJoinBuildStep::FirstSpill
-            | HashJoinBuildStep::FollowSpill => unreachable!(),
+            | HashJoinBuildStep::FollowSpill
+            | HashJoinBuildStep::WaitProbe => unreachable!(),
         }
     }
 
@@ -211,6 +228,10 @@ impl Processor for TransformHashJoinBuild {
                     }
                 }
                 self.step = HashJoinBuildStep::Running;
+            }
+            HashJoinBuildStep::WaitProbe => {
+                self.build_state.hash_join_state.wait_probe_spill().await;
+                todo!()
             }
             _ => {}
         }

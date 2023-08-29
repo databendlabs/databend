@@ -58,6 +58,10 @@ pub struct HashJoinProbeState {
     /// (Note: it doesn't mean the processor has finished its work, it just means it has finished probe hash table.)
     /// When the counter is 0, processors will go to next phase's work
     pub(crate) probe_workers: Mutex<usize>,
+    /// Record spill workers
+    pub(crate) spill_workers: Mutex<usize>,
+    /// After `spill_workers` is 0, it will be set as true.
+    pub(crate) spill_done: Mutex<bool>,
     /// After `probe_workers` is 0, it will be set as true.
     pub(crate) probe_done: Mutex<bool>,
     /// Notify processors `probe hash table` is done. They can go to next phase.
@@ -91,6 +95,8 @@ impl HashJoinProbeState {
             ctx,
             hash_join_state,
             probe_workers: Mutex::new(0),
+            spill_workers: Mutex::new(0),
+            spill_done: Default::default(),
             probe_done: Mutex::new(false),
             probe_done_notify: Arc::new(Notify::new()),
             probe_schema,
@@ -231,6 +237,8 @@ impl HashJoinProbeState {
     pub fn probe_attach(&self) -> Result<()> {
         let mut count = self.probe_workers.lock();
         *count += 1;
+        let mut count = self.spill_workers.lock();
+        *count += 1;
         Ok(())
     }
 
@@ -246,6 +254,18 @@ impl HashJoinProbeState {
             self.probe_done_notify.notify_waiters();
         }
         Ok(())
+    }
+
+    pub fn finish_spill(&self) {
+        let mut count = self.spill_workers.lock();
+        *count -= 1;
+        if *count == 0 {
+            // Set spill done
+            let mut spill_done = self.spill_done.lock();
+            *spill_done = true;
+            // All probe processors have finished spill, notify build processors to work
+            self.hash_join_state.probe_spill_done.notify_waiters();
+        }
     }
 
     pub fn generate_final_scan_task(&self) -> Result<()> {

@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -39,6 +40,8 @@ enum HashJoinProbeStep {
     FinalScan,
     // The fast return step indicates we can directly finish the probe phase.
     FastReturn,
+    // Spill step is used to spill the probe side data.
+    Spill,
 }
 
 pub struct TransformHashJoinProbe {
@@ -100,6 +103,69 @@ impl TransformHashJoinProbe {
         }
         Ok(())
     }
+
+    // Run the probe phase with spilled data.
+    fn run_with_spilled_data(&mut self) -> Result<Event> {
+        todo!("run_with_spilled_data")
+    }
+
+    fn run(&mut self) -> Result<Event> {
+        if self.output_port.is_finished() {
+            self.input_port.finish();
+
+            if self.join_probe_state.hash_join_state.need_outer_scan()
+                || self.join_probe_state.hash_join_state.need_mark_scan()
+            {
+                self.join_probe_state.probe_done()?;
+            }
+
+            return Ok(Event::Finished);
+        }
+
+        if !self.output_port.can_push() {
+            self.input_port.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
+
+        if !self.output_data_blocks.is_empty() {
+            let data = self
+                .output_data_blocks
+                .pop_front()
+                .unwrap()
+                .project(&self.projections);
+            self.output_port.push_data(Ok(data));
+            return Ok(Event::NeedConsume);
+        }
+
+        if !self.input_data.is_empty() {
+            return Ok(Event::Sync);
+        }
+
+        if self.input_port.has_data() {
+            let data = self.input_port.pull_data().unwrap()?;
+            // Split data to `block_size` rows per sub block.
+            let (sub_blocks, remain_block) = data.split_by_rows(self.max_block_size);
+            self.input_data.extend(sub_blocks);
+            if let Some(remain) = remain_block {
+                self.input_data.push_back(remain);
+            }
+            return Ok(Event::Sync);
+        }
+
+        if self.input_port.is_finished() {
+            return if self.join_probe_state.hash_join_state.need_outer_scan()
+                || self.join_probe_state.hash_join_state.need_mark_scan()
+            {
+                self.join_probe_state.probe_done()?;
+                Ok(Event::Async)
+            } else {
+                self.output_port.finish();
+                Ok(Event::Finished)
+            };
+        }
+        self.input_port.set_need_data();
+        Ok(Event::NeedData)
+    }
 }
 
 #[async_trait::async_trait]
@@ -115,66 +181,39 @@ impl Processor for TransformHashJoinProbe {
     fn event(&mut self) -> Result<Event> {
         match self.step {
             HashJoinProbeStep::WaitBuild => Ok(Event::Async),
+            HashJoinProbeStep::Spill => {
+                if !self.input_data.is_empty() {
+                    return Ok(Event::Async);
+                }
+
+                if self.input_port.has_data() {
+                    let data = self.input_port.pull_data().unwrap()?;
+                    self.input_data.push_back(data);
+                    return Ok(Event::Async);
+                }
+
+                if self.input_port.is_finished() {
+                    self.join_probe_state.finish_spill();
+                    // Wait build side to build hash table
+                    self.step = HashJoinProbeStep::WaitBuild;
+                }
+                Ok(Event::Async)
+            }
             HashJoinProbeStep::FastReturn => {
                 self.output_port.finish();
                 Ok(Event::Finished)
             }
             HashJoinProbeStep::Running => {
-                if self.output_port.is_finished() {
-                    self.input_port.finish();
-
-                    if self.join_probe_state.hash_join_state.need_outer_scan()
-                        || self.join_probe_state.hash_join_state.need_mark_scan()
-                    {
-                        self.join_probe_state.probe_done()?;
-                    }
-
-                    return Ok(Event::Finished);
+                if self
+                    .join_probe_state
+                    .ctx
+                    .get_settings()
+                    .get_enable_join_spill()?
+                {
+                    self.run_with_spilled_data()
+                } else {
+                    self.run()
                 }
-
-                if !self.output_port.can_push() {
-                    self.input_port.set_not_need_data();
-                    return Ok(Event::NeedConsume);
-                }
-
-                if !self.output_data_blocks.is_empty() {
-                    let data = self
-                        .output_data_blocks
-                        .pop_front()
-                        .unwrap()
-                        .project(&self.projections);
-                    self.output_port.push_data(Ok(data));
-                    return Ok(Event::NeedConsume);
-                }
-
-                if !self.input_data.is_empty() {
-                    return Ok(Event::Sync);
-                }
-
-                if self.input_port.has_data() {
-                    let data = self.input_port.pull_data().unwrap()?;
-                    // Split data to `block_size` rows per sub block.
-                    let (sub_blocks, remain_block) = data.split_by_rows(self.max_block_size);
-                    self.input_data.extend(sub_blocks);
-                    if let Some(remain) = remain_block {
-                        self.input_data.push_back(remain);
-                    }
-                    return Ok(Event::Sync);
-                }
-
-                if self.input_port.is_finished() {
-                    return if self.join_probe_state.hash_join_state.need_outer_scan()
-                        || self.join_probe_state.hash_join_state.need_mark_scan()
-                    {
-                        self.join_probe_state.probe_done()?;
-                        Ok(Event::Async)
-                    } else {
-                        self.output_port.finish();
-                        Ok(Event::Finished)
-                    };
-                }
-                self.input_port.set_need_data();
-                Ok(Event::NeedData)
             }
             HashJoinProbeStep::FinalScan => {
                 if self.output_port.is_finished() {
@@ -227,7 +266,9 @@ impl Processor for TransformHashJoinProbe {
                 }
                 Ok(())
             }
-            HashJoinProbeStep::WaitBuild | HashJoinProbeStep::FastReturn => unreachable!(),
+            HashJoinProbeStep::WaitBuild
+            | HashJoinProbeStep::FastReturn
+            | HashJoinProbeStep::Spill => unreachable!(),
         }
     }
 
@@ -271,7 +312,18 @@ impl Processor for TransformHashJoinProbe {
                     }
                     return Ok(());
                 }
-                self.step = HashJoinProbeStep::Running;
+                // If join spill is enable, next step is spill
+                if self
+                    .join_probe_state
+                    .ctx
+                    .get_settings()
+                    .get_enable_join_spill()?
+                    && !*self.join_probe_state.spill_done.lock()
+                {
+                    self.step = HashJoinProbeStep::Spill;
+                } else {
+                    self.step = HashJoinProbeStep::Running;
+                }
             }
             HashJoinProbeStep::Running => {
                 self.join_probe_state.wait_probe_finish().await?;
@@ -280,6 +332,9 @@ impl Processor for TransformHashJoinProbe {
                 } else {
                     self.step = HashJoinProbeStep::FinalScan;
                 }
+            }
+            HashJoinProbeStep::Spill => {
+                todo!("spill")
             }
             HashJoinProbeStep::FinalScan | HashJoinProbeStep::FastReturn => unreachable!(),
         };
