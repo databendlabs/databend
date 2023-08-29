@@ -584,7 +584,7 @@ impl HashJoinBuildState {
         *count -= 1;
         if *count == 0 {
             let data_blocks = unsafe { &mut *self.hash_join_state.chunks.get() };
-            if !data_blocks.is_empty() {
+            if !data_blocks.is_empty() && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross {
                 let num_columns = data_blocks[0].num_columns();
                 let columns_data_type: Vec<DataType> = (0..num_columns)
                     .map(|index| data_blocks[0].get_by_offset(index).data_type.clone())
