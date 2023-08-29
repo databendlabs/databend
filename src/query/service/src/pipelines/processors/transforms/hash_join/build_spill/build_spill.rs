@@ -96,7 +96,7 @@ impl BuildSpillState {
                 .map(|idx| (0 as u32, *idx as u32, 1 as usize))
                 .collect::<Vec<_>>();
             let partition_block =
-                DataBlock::take_blocks(&[&block], &block_row_indexes, row_indexes.len());
+                DataBlock::take_blocks(&[block.clone()], &block_row_indexes, row_indexes.len());
             self.spiller
                 .partitions
                 .push((*partition_id, partition_block));
@@ -179,9 +179,54 @@ impl BuildSpillState {
         todo!()
     }
 
-    // Directly spill input data if all partitions have been spilled.
-    pub(crate) fn spill_input(&self, data_block: DataBlock) -> Result<()> {
-        todo!()
+    // Directly spill input data without buffering.
+    // Return unspilled data.
+    pub(crate) async fn spill_input(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+        // Save the row index which is not spilled.
+        let mut unspilled_row_index = Vec::with_capacity(data_block.num_rows());
+        // Compute the hash value for each row.
+        let mut hashes = Vec::with_capacity(data_block.num_rows());
+        self.get_hashes(&data_block, &mut hashes)?;
+        // Key is location, value is row indexes
+        let mut rows_location = HashMap::new();
+        // Classify rows to spill or not spill.
+        for (row_idx, hash) in hashes.iter().enumerate() {
+            let partition_id = *hash as u8 & 0b0000_0111;
+            if self.spiller.spilled_partition_set.contains(&partition_id) {
+                let location = self.spiller.partition_location.get(&partition_id).unwrap();
+                // the row can be directly spilled to corresponding partition
+                rows_location
+                    .entry(location)
+                    .and_modify(|v: &mut Vec<usize>| v.push(row_idx))
+                    .or_insert(vec![row_idx]);
+            } else {
+                unspilled_row_index.push(row_idx);
+            }
+        }
+        for (location, row_indexes) in rows_location.iter() {
+            let block_row_indexes = row_indexes
+                .iter()
+                .map(|idx| (0 as u32, *idx as u32, 1 as usize))
+                .collect::<Vec<_>>();
+            let block = DataBlock::take_blocks(
+                &[data_block.clone()],
+                &block_row_indexes,
+                row_indexes.len(),
+            );
+            // Spill block with location
+            self.spiller
+                .spill_with_location(location.as_str(), &data_block)?;
+        }
+        // Return unspilled data
+        let unspilled_block_row_indexes = unspilled_row_index
+            .iter()
+            .map(|idx| (0 as u32, *idx as u32, 1 as usize))
+            .collect::<Vec<_>>();
+        Ok(DataBlock::take_blocks(
+            &[data_block.clone()],
+            &unspilled_block_row_indexes,
+            unspilled_row_index.len(),
+        ))
     }
 
     // Buffer the input data for the join build processor

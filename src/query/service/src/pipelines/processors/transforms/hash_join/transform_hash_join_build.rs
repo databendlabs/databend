@@ -119,7 +119,7 @@ impl Processor for TransformHashJoinBuild {
     fn process(&mut self) -> Result<()> {
         match self.step {
             HashJoinBuildStep::Running => {
-                if let Some(data_block) = self.input_data.take() {
+                if let Some(mut data_block) = self.input_data.take() {
                     if let Some(spill_state) = &mut self.spill_state {
                         // Check if need to spill
                         let need_spill = spill_state.check_need_spill(&data_block)?;
@@ -135,9 +135,15 @@ impl Processor for TransformHashJoinBuild {
                                     spill_state.buffer_data(data_block);
                                     self.step = HashJoinBuildStep::WaitSpill;
                                 } else {
-                                    spill_state.spill_input(data_block)?;
+                                    // Make `need_spill` to false for `SpillCoordinator`
+                                    spill_state.spill_coordinator.no_need_spill();
+                                    self.step = HashJoinBuildStep::Spill;
                                 }
                             } else {
+                                // If the processor had spilled data, we should continue to spill
+                                if spill_state.spiller.is_any_spilled() {
+                                    data_block = spill_state.spill_input(data_block)?;
+                                }
                                 self.build_state.build(data_block.clone())?;
                             }
                         }
@@ -183,6 +189,9 @@ impl Processor for TransformHashJoinBuild {
             }
             HashJoinBuildStep::Spill => {
                 self.spill_state.as_mut().unwrap().spill().await?;
+                // After spill, the processor should continue to run, and process incoming data.
+                // FIXME: We should wait all processors finish spill, and then continue to run.
+                self.step = HashJoinBuildStep::Running;
             }
             _ => {}
         }

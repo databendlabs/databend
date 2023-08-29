@@ -58,8 +58,6 @@ use crate::pipelines::processors::transforms::hash_join::hash_join_state::FixedK
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::SingleStringHashJoinHashTable;
-use crate::pipelines::processors::HashJoinState;
-use crate::pipelines::processors::transforms::hash_join::row::Chunk;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;

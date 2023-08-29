@@ -48,9 +48,8 @@ impl BuildSpillCoordinator {
     }
 
     // Start to spill.
-    fn spill(&self) -> Result<()> {
+    pub(crate) fn notify_spill(&self) {
         self.notify_spill.notify_waiters();
-        todo!()
     }
 
     // Called by hash join build processor, if current processor need to spill, then set `need_spill` to true.
@@ -66,7 +65,7 @@ impl BuildSpillCoordinator {
             let mut waiting_spill_count = self.waiting_spill_count.write();
             *waiting_spill_count += 1;
             if *waiting_spill_count == *self.total_builder_count.read() {
-                self.spill()?;
+                self.notify_spill();
                 // No need to wait spill, the processor is the last one
                 return Ok(false);
             }
@@ -77,6 +76,11 @@ impl BuildSpillCoordinator {
     // Get the need_spill flag.
     pub fn get_need_spill(&self) -> bool {
         self.need_spill.load(Ordering::SeqCst)
+    }
+
+    // Set the need_spill flag to false.
+    pub fn no_need_spill(&self) {
+        self.need_spill.store(false, Ordering::SeqCst);
     }
 
     // Wait for notify to spill

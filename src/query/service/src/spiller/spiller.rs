@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use common_base::base::GlobalUniqName;
 use common_exception::Result;
@@ -58,7 +59,7 @@ pub struct Spiller {
     /// Partition set, which records there are how many partitions.
     pub(crate) partition_set: Vec<u8>,
     /// Spilled partition set, after one partition is spilled, it will be added to this set.
-    pub(crate) spilled_partition_set: Vec<u8>,
+    pub(crate) spilled_partition_set: HashSet<u8>,
     /// Key is partition id, value is rows which have same partition id
     pub(crate) partitions: Vec<(u8, DataBlock)>,
     /// Record the location of the spilled partitions
@@ -76,7 +77,7 @@ impl Spiller {
             spiller_state: SpillerState {},
             input_data: Default::default(),
             partition_set: vec![],
-            spilled_partition_set: vec![],
+            spilled_partition_set: Default::default(),
             partitions: vec![],
             partition_location: Default::default(),
         }
@@ -88,8 +89,9 @@ impl Spiller {
             let unique_name = GlobalUniqName::unique();
             let location = format!("{}/{}", self.config.location_prefix, unique_name);
             // Record the location of the spilled partition
-            self.partition_location.insert(*partition_id, location.clone());
-            self.spilled_partition_set.push(*partition_id);
+            self.partition_location
+                .insert(*partition_id, location.clone());
+            self.spilled_partition_set.insert(*partition_id);
             let columns = partition.columns().to_vec();
             let mut columns_data = Vec::with_capacity(columns.len());
             for column in columns.into_iter() {
@@ -105,5 +107,32 @@ impl Spiller {
             writer.close().await?;
         }
         Ok(())
+    }
+
+    /// Spill data block with location
+    pub async fn spill_with_location(&mut self, loc: &str, data: &DataBlock) -> Result<()> {
+        let mut writer = self.operator.writer(loc).await?;
+        let columns = data.columns().to_vec();
+        let mut columns_data = Vec::with_capacity(columns.len());
+        for column in columns.into_iter() {
+            let column = column.value.as_column().unwrap();
+            let column_data = serialize_column(column);
+            columns_data.push(column_data);
+        }
+        for data in columns_data.into_iter() {
+            writer.write(data).await?;
+        }
+        writer.close().await?;
+        Ok(())
+    }
+
+    /// Check if all partitions have been spilled
+    pub fn is_all_spilled(&self) -> bool {
+        self.partition_set.len() == self.spilled_partition_set.len()
+    }
+
+    /// Check if any partition has been spilled
+    pub fn is_any_spilled(&self) -> bool {
+        !self.spilled_partition_set.is_empty()
     }
 }
