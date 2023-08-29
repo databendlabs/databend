@@ -183,6 +183,7 @@ impl TopNPushDownOptimizer {
 
         limit.limit = limit.limit.map(|v| v + limit.offset);
         limit.offset = 0;
+        limit.before_exchange = true;
 
         debug_assert!(exchange_sexpr.children.len() == 1);
         let child = exchange_sexpr.child(0)?.clone();

@@ -95,7 +95,7 @@ Limit
         └── estimated rows: 1000.00
 
 query T
-EXPLAIN SELECT number from numbers(1000) limit 10 offset 100;
+EXPLAIN SELECT number from numbers(1000) limit 100, 10;
 Limit
 ├── output columns: [numbers.number (#0)]
 ├── limit: 10
@@ -120,7 +120,7 @@ Limit
             └── estimated rows: 1000.00
 
 query T
-EXPLAIN SELECT number from numbers(1000) limit 10 offset 100;
+EXPLAIN SELECT number from numbers(1000) limit 100, 10;
 Limit
 ├── output columns: [numbers.number (#0)]
 ├── limit: 10
