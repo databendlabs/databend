@@ -51,9 +51,10 @@ impl HashJoinProbeState {
 
         let mut matched_num = 0;
         let mut result_blocks = vec![];
-        let mut probe_indexes_len = 0;
 
-        let data_blocks = unsafe { &*self.hash_join_state.chunks.get() };
+        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
+        let build_columns_data_type =
+            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
         let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
         let right_single_scan_map =
@@ -85,9 +86,11 @@ impl HashJoinProbeState {
             if match_count == 0 {
                 continue;
             }
-            matched_num += match_count;
-            local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-            probe_indexes_len += 1;
+
+            for _ in 0..match_count {
+                local_probe_indexes[matched_num] = i as u32;
+                matched_num += 1;
+            }
             if matched_num >= max_block_size {
                 loop {
                     // The matched_num must be equal to max_block_size.
@@ -99,11 +102,7 @@ impl HashJoinProbeState {
                     }
 
                     let probe_block = if is_probe_projected {
-                        let probe_block = DataBlock::take_compacted_indices(
-                            input,
-                            &local_probe_indexes[0..probe_indexes_len],
-                            max_block_size,
-                        )?;
+                        let probe_block = DataBlock::take(input, local_probe_indexes)?;
 
                         // The join type is right join, we need to wrap nullable for probe side.
                         let nullable_columns = probe_block
@@ -118,7 +117,8 @@ impl HashJoinProbeState {
                     let build_block = if is_build_projected {
                         Some(self.hash_join_state.row_space.gather(
                             local_build_indexes,
-                            data_blocks,
+                            build_columns,
+                            build_columns_data_type,
                             build_num_rows,
                         )?)
                     } else {
@@ -205,8 +205,6 @@ impl HashJoinProbeState {
                             }
                         }
                     }
-
-                    probe_indexes_len = 0;
                     matched_num = 0;
 
                     if incomplete_ptr == 0 {
@@ -223,9 +221,10 @@ impl HashJoinProbeState {
                         break;
                     }
 
-                    matched_num += match_count;
-                    local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-                    probe_indexes_len += 1;
+                    for _ in 0..match_count {
+                        local_probe_indexes[matched_num] = i as u32;
+                        matched_num += 1;
+                    }
 
                     if matched_num < max_block_size {
                         break;
@@ -234,16 +233,12 @@ impl HashJoinProbeState {
             }
         }
 
-        if probe_indexes_len == 0 {
+        if matched_num == 0 {
             return Ok(result_blocks);
         }
 
         let probe_block = if is_probe_projected {
-            let probe_block = DataBlock::take_compacted_indices(
-                input,
-                &local_probe_indexes[0..probe_indexes_len],
-                matched_num,
-            )?;
+            let probe_block = DataBlock::take(input, &local_probe_indexes[0..matched_num])?;
 
             // The join type is right join, we need to wrap nullable for probe side.
             let mut validity = MutableBitmap::new();
@@ -261,7 +256,8 @@ impl HashJoinProbeState {
         let build_block = if is_build_projected {
             Some(self.hash_join_state.row_space.gather(
                 &local_build_indexes[0..matched_num],
-                data_blocks,
+                build_columns,
+                build_columns_data_type,
                 build_num_rows,
             )?)
         } else {

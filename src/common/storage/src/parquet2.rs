@@ -87,35 +87,36 @@ async fn read_parquet_metas_batch(
 pub async fn read_parquet_metas_in_parallel(
     op: Operator,
     file_infos: Vec<(String, u64)>,
-    thread_nums: usize,
-    permit_nums: usize,
+    num_threads: usize,
     max_memory_usage: u64,
 ) -> Result<Vec<FileMetaData>> {
-    let batch_size = 100;
-    if file_infos.len() <= batch_size {
-        read_parquet_metas_batch(file_infos, op.clone(), max_memory_usage).await
-    } else {
-        let mut chunks = file_infos.chunks(batch_size);
+    let num_files = file_infos.len();
+    let mut tasks = Vec::with_capacity(num_threads);
 
-        let tasks = std::iter::from_fn(move || {
-            chunks.next().map(|location| {
-                read_parquet_metas_batch(location.to_vec(), op.clone(), max_memory_usage)
-            })
-        });
-
-        let result = execute_futures_in_parallel(
-            tasks,
-            thread_nums,
-            permit_nums,
-            "read-parquet-metas-worker".to_owned(),
-        )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<Vec<_>>>>()?
-        .into_iter()
-        .flatten()
-        .collect();
-
-        Ok(result)
+    // Equally distribute the tasks
+    for i in 0..num_threads {
+        let begin = num_files * i / num_threads;
+        let end = num_files * (i + 1) / num_threads;
+        if begin == end {
+            continue;
+        }
+        let file_infos = file_infos[begin..end].to_vec();
+        let op = op.clone();
+        tasks.push(read_parquet_metas_batch(file_infos, op, max_memory_usage));
     }
+
+    let result = execute_futures_in_parallel(
+        tasks,
+        num_threads,
+        num_threads * 2,
+        "read-parquet-metas-worker".to_owned(),
+    )
+    .await?
+    .into_iter()
+    .collect::<Result<Vec<Vec<_>>>>()?
+    .into_iter()
+    .flatten()
+    .collect();
+
+    Ok(result)
 }

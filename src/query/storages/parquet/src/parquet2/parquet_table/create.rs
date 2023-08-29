@@ -20,43 +20,49 @@ use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::StageInfo;
 use common_storage::infer_schema_with_extension;
+use common_storage::init_stage_operator;
+use common_storage::read_parquet_metas_in_parallel;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
 
 use super::table::create_parquet_table_info;
 use super::Parquet2Table;
-use crate::parquet2::parquet_table::table::blocking_get_parquet2_file_meta;
 use crate::parquet2::parquet_table::table::create_parquet2_statistics_provider;
 
 impl Parquet2Table {
-    pub fn blocking_create(
-        operator: Operator,
-        read_options: ParquetReadOptions,
+    #[async_backtrace::framed]
+    pub async fn create(
+        ctx: Arc<dyn TableContext>,
         stage_info: StageInfo,
         files_info: StageFilesInfo,
+        read_options: ParquetReadOptions,
         files_to_read: Option<Vec<StageFileInfo>>,
     ) -> Result<Arc<dyn Table>> {
+        let operator = init_stage_operator(&stage_info)?;
         let first_file = match &files_to_read {
             Some(files) => files[0].path.clone(),
-            None => files_info.blocking_first_file(&operator)?.path,
+            None => files_info.first_file(&operator).await?.path.clone(),
         };
 
         let (arrow_schema, schema_descr, compression_ratio) =
-            Self::blocking_prepare_metas(&first_file, operator.clone())?;
+            Self::prepare_metas(&first_file, operator.clone()).await?;
 
         // TODO(Dousir9): collect more information for read partitions.
-        let file_metas = blocking_get_parquet2_file_meta(
+        let file_metas = get_parquet2_file_meta(
+            ctx,
             &files_to_read,
             &files_info,
             &operator,
             &schema_descr,
             &first_file,
-        )?;
+        )
+        .await?;
         let column_statistics_provider =
             create_parquet2_statistics_provider(file_metas, &arrow_schema)?;
 
@@ -65,9 +71,9 @@ impl Parquet2Table {
         Ok(Arc::new(Parquet2Table {
             table_info,
             arrow_schema,
-            schema_descr,
             operator,
             read_options,
+            schema_descr,
             stage_info,
             files_info,
             files_to_read,
@@ -77,23 +83,80 @@ impl Parquet2Table {
         }))
     }
 
-    fn blocking_prepare_metas(
+    #[async_backtrace::framed]
+    async fn prepare_metas(
         path: &str,
         operator: Operator,
     ) -> Result<(ArrowSchema, SchemaDescriptor, f64)> {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let mut reader = operator.blocking().reader(path)?;
-        let first_meta = pread::read_metadata(&mut reader).map_err(|e| {
+        let mut reader = operator.reader(path).await?;
+        let first_meta = pread::read_metadata_async(&mut reader).await.map_err(|e| {
             ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
         })?;
-
         let arrow_schema = infer_schema_with_extension(&first_meta)?;
         let compression_ratio = get_compression_ratio(&first_meta);
         let schema_descr = first_meta.schema_descr;
         Ok((arrow_schema, schema_descr, compression_ratio))
     }
+}
+
+pub(super) async fn get_parquet2_file_meta(
+    ctx: Arc<dyn TableContext>,
+    files_to_read: &Option<Vec<StageFileInfo>>,
+    files_info: &StageFilesInfo,
+    operator: &Operator,
+    expect_schema: &SchemaDescriptor,
+    schema_from: &str,
+) -> Result<Vec<FileMetaData>> {
+    let locations = match files_to_read {
+        Some(files) => files
+            .iter()
+            .map(|f| (f.path.clone(), f.size))
+            .collect::<Vec<_>>(),
+        None => files_info
+            .list(operator, false, None)
+            .await?
+            .into_iter()
+            .map(|f| (f.path, f.size))
+            .collect::<Vec<_>>(),
+    };
+
+    // Read parquet meta data, async reading.
+    let max_threads = ctx.get_settings().get_max_threads()? as usize;
+    let max_memory_usage = ctx.get_settings().get_max_memory_usage()?;
+    let file_metas = read_parquet_metas_in_parallel(
+        operator.clone(),
+        locations.clone(),
+        max_threads,
+        max_memory_usage,
+    )
+    .await?;
+    for (idx, file_meta) in file_metas.iter().enumerate() {
+        check_parquet_schema(
+            expect_schema,
+            file_meta.schema(),
+            &locations[idx].0,
+            schema_from,
+        )?;
+    }
+    Ok(file_metas)
+}
+
+pub fn check_parquet_schema(
+    expect: &SchemaDescriptor,
+    actual: &SchemaDescriptor,
+    path: &str,
+    schema_from: &str,
+) -> Result<()> {
+    if expect.fields() != actual.fields() || expect.columns() != actual.columns() {
+        return Err(ErrorCode::BadBytes(format!(
+            "infer schema from '{}', but get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
+            schema_from, path, expect, actual
+        )));
+    }
+    Ok(())
 }
 
 pub fn get_compression_ratio(filemeta: &FileMetaData) -> f64 {
