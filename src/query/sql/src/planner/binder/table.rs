@@ -588,6 +588,7 @@ impl Binder {
                 let read_options = ParquetReadOptions::default();
                 if use_parquet2 {
                     Parquet2Table::create(
+                        table_ctx.clone(),
                         stage_info.clone(),
                         files_info,
                         read_options,
