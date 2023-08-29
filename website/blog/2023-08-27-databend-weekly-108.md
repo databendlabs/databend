@@ -40,13 +40,13 @@ authors:
 
 Stay connected with the latest news about Databend.
 
-### Multiple Catalog
+### Multiple Catalogs
 
-A catalog in Databend is a fundamental organizational concept that assists in efficiently managing and accessing your data sources. 
+Catalog is a fundamental organizational concept in Databend and assists in efficiently managing and accessing your data sources. 
 
-Databend provides the ability called Multiple Catalog, which currently supports two types of external catalogs: Apache Iceberg and Apache Hive.
+Databend allows Multiple Catalogs and currently supports two types of external catalogs: Apache Iceberg and Apache Hive.
 
-By mounting external catalogs, there is no need to load data into Databend in order to perform efficient queries.
+With external catalogs, there's no longer a need to load your external data into Databend before querying
 
 ```sql
 -- Create a Hive catalog
@@ -73,7 +73,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 Profile-guided optimization (PGO) is a common compilation optimization technique that utilizes profiling information collected during program runtime to guide the compiler in making optimizations, thereby improving program performance.
 
-According to the [tests](https://github.com/datafuselabs/databend/issues/9387#issuecomment-1566210063), PGO boosts Databend performance by up to 10%. The performance benefits depend on your typical workload. You can try applying PGO techniques to optimize the performance of your Databend cluster.
+According to the [tests](https://github.com/datafuselabs/databend/issues/9387#issuecomment-1566210063), PGO boosts Databend performance by up to 10%. The actual performance depends on your workloads. Try PGO for your Databend cluster.
 
 If you are interested in learning more, please check out the resources listed below:
 
@@ -83,8 +83,8 @@ If you are interested in learning more, please check out the resources listed be
 
 We have also made these improvements to Databend that we hope you will find helpful:
 
-- Implemented the `json_pretty` function.
-- Improved performance of inner join.
+- Introduced the `json_pretty` function.
+- Improved performance of Inner Join.
 - Added more metrics to the HTTP query interface.
 - Implemented support for `SHOW DATABASES` and `SHOW TABLES` in Hive Catalog.
 - Read [Blog | Revolutionizing Data Archival and Query Performance for Pharmaceutical Group](https://databend.rs/blog/2023-08-24-cdh) to check out how Databend played a pivotal role in transforming data archiving and query performance for a Pharmaceutical Group.
@@ -97,7 +97,7 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 [SQLsmith](https://github.com/anse1/sqlsmith) focuses on generating random, type-aware and column-aware SQL queries that can often pass semantic checks, thereby further testing the execution logic of databases.
 
-In the past, Databend has supported SQLancer and traditional fuzz testing with [LibAFL](https://github.com/AFLplusplus/LibAFL). The Databend team plans to introduce SQLsmith to implement domain-aware fuzz testing, providing more comprehensive and targeted test results to increase the likelihood of discovering vulnerabilities.
+In the past, Databend added support for SQLancer and traditional fuzz testing with [LibAFL](https://github.com/AFLplusplus/LibAFL). The Databend team now plans to introduce SQLsmith for domain-aware fuzz testing, which will provide more comprehensive and targeted test results to increase the likelihood of discovering vulnerabilities.
 
 [Issue #12576 | Feature: Using sqlsmith to support sql fuzzy testing](https://github.com/datafuselabs/databend/issues/12576)
 
