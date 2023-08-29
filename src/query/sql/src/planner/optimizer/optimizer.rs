@@ -180,7 +180,7 @@ pub fn optimize_query(
     Ok(result)
 }
 
-// TODO(leiysky): reuse the optimization logic with `optimize_query`
+// TODO(leiysky): reuse the optimization logic with `optimize_query`.
 fn get_optimized_memo(
     ctx: Arc<dyn TableContext>,
     s_expr: SExpr,
