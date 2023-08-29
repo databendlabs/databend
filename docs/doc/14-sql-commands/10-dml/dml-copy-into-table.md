@@ -217,7 +217,7 @@ COPY INTO provides a summary of the data loading results with these columns:
 | FILE             | VARCHAR  | No       | The relative path to the source file       |
 | ROWS_LOADED      | INT      | NO       | The number of rows loaded from the source file. |
 | ERRORS_SEEN      | INT      | NO       | Number of error rows in the source file    |
-| FIRST_ERROR      | VARCHAR  | YES      | First error of the source file             |
+| FIRST_ERROR      | VARCHAR  | YES      | The first error found in the source file.             |
 | FIRST_ERROR_LINE | INT      | YES      | Line number of the first error             |
 
 
