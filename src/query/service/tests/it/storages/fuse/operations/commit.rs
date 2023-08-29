@@ -96,7 +96,9 @@ use common_meta_types::MetaId;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
+use common_storage::CopyStatus;
 use common_storage::DataOperator;
+use common_storage::FileStatus;
 use common_storage::StageFileInfo;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -604,6 +606,14 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_segment_locations(&self) -> Result<Vec<Location>> {
+        todo!()
+    }
+
+    fn add_file_status(&self, _file_path: &str, _file_status: FileStatus) -> Result<()> {
+        todo!()
+    }
+
+    fn get_copy_status(&self) -> Arc<CopyStatus> {
         todo!()
     }
 }

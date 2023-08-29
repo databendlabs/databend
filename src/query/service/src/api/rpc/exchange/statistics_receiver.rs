@@ -21,6 +21,7 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::match_join_handle;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use futures_util::future::select;
 use futures_util::future::Either;
@@ -126,6 +127,11 @@ impl StatisticsReceiver {
                     progress_info.inc(ctx);
                 }
 
+                Ok(false)
+            }
+            Ok(Some(DataPacket::CopyStatus(status))) => {
+                log::info!("merge CopyStatus for {} files", status.files.len());
+                ctx.get_copy_status().merge(status);
                 Ok(false)
             }
         }

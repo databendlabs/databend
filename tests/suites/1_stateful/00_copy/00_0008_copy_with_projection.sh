@@ -42,7 +42,7 @@ tests=(
 for i in "${tests[@]}"; do
   echo "truncate table test_copy_p3" | $MYSQL_CLIENT_CONNECT
   echo "$i"
-  echo "$i" | $MYSQL_CLIENT_CONNECT
+  echo "$i" | $MYSQL_CLIENT_CONNECT | wc -l
   echo "select * from test_copy_p3" | $MYSQL_CLIENT_CONNECT
 done
 

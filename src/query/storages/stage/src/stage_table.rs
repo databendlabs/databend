@@ -190,6 +190,7 @@ impl Table for StageTable {
             m
         });
         let input_ctx = Arc::new(InputContext::try_create_from_copy(
+            ctx.clone(),
             operator,
             settings,
             schema,
