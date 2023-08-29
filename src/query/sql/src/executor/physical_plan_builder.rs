@@ -1539,7 +1539,7 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         let next_plan_id = self.next_plan_id();
         let metadata = self.metadata.read().clone();
-        if metadata.lazy_columns().is_empty() {
+        if limit.before_exchange || metadata.lazy_columns().is_empty() {
             return Ok(PhysicalPlan::Limit(Limit {
                 plan_id: next_plan_id,
                 input: Box::new(input_plan),
@@ -1572,7 +1572,7 @@ impl PhysicalPlanBuilder {
             .cloned()
             .collect::<Vec<_>>();
 
-        if lazy_columns.is_empty() {
+        if limit.before_exchange || lazy_columns.is_empty() {
             // If there is no lazy column, we don't need to build a `RowFetch` plan.
             return Ok(PhysicalPlan::Limit(Limit {
                 plan_id: next_plan_id,
