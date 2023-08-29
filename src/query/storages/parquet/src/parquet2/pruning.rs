@@ -41,6 +41,8 @@ use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_storage::read_parquet_metas_in_parallel;
 use common_storage::ColumnNodes;
+use common_storage::CopyStatus;
+use common_storage::FileStatus;
 use log::info;
 use opendal::Operator;
 use storages_common_pruner::RangePruner;
@@ -211,6 +213,8 @@ impl PartitionPruner {
         operator: Operator,
         locations: &Vec<(String, u64)>,
         num_threads: usize,
+        copy_status: &Arc<CopyStatus>,
+        is_copy: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         // part stats
         let mut stats = PartStatistics::default();
@@ -242,12 +246,17 @@ impl PartitionPruner {
 
         // If one row group does not have stats, we cannot use the stats for topk optimization.
         for (file_id, file_meta) in file_metas.into_iter().enumerate() {
+            let path = &large_files[file_id].0;
+            if is_copy {
+                copy_status.add_chunk(path, FileStatus {
+                    num_rows_loaded: file_meta.num_rows,
+                    error: None,
+                });
+            }
             stats.partitions_total += file_meta.row_groups.len();
-            let (sub_stats, parts) = self.read_and_prune_file_meta(
-                &large_files[file_id].0,
-                file_meta,
-                operator.clone(),
-            )?;
+            let (sub_stats, parts) =
+                self.read_and_prune_file_meta(path, file_meta, operator.clone())?;
+
             for p in parts {
                 max_compression_ratio = max_compression_ratio
                     .max(p.uncompressed_size() as f64 / p.compressed_size() as f64);

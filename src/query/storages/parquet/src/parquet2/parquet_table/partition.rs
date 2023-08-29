@@ -158,6 +158,8 @@ impl Parquet2Table {
                 self.operator.clone(),
                 &file_locations,
                 ctx.get_settings().get_max_threads()? as usize,
+                &ctx.get_copy_status(),
+                ctx.get_query_kind().eq_ignore_ascii_case("copy"),
             )
             .await
     }

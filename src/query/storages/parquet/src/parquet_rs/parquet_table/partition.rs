@@ -25,6 +25,8 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storage::CopyStatus;
+use common_storage::FileStatus;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::RowSelector;
 use parquet::arrow::async_reader::AsyncFileReader;
@@ -63,7 +65,6 @@ impl ParquetRSTable {
         };
 
         let settings = ctx.get_settings();
-
         let pruner = Arc::new(ParquetRSPruner::try_create(
             ctx.get_function_context()?,
             self.schema(),
@@ -75,6 +76,11 @@ impl ParquetRSTable {
         // The second field of `file_locations` is size of the file.
         // It will be used for judging if we need to read small parquet files at once to reduce IO.
 
+        let copy_status = if ctx.get_query_kind().eq_ignore_ascii_case("copy") {
+            Some(ctx.get_copy_status())
+        } else {
+            None
+        };
         read_and_prune_metas_in_parallel(
             self.operator.clone(),
             file_locations,
@@ -83,6 +89,7 @@ impl ParquetRSTable {
             self.schema_from.clone(),
             settings.get_max_threads()? as usize,
             settings.get_max_memory_usage()?,
+            copy_status,
         )
         .await
     }
@@ -183,10 +190,17 @@ async fn read_parquet_metas_batch(
     expect: SchemaDescPtr,
     schema_from: String,
     max_memory_usage: u64,
+    copy_status: Option<Arc<CopyStatus>>,
 ) -> Result<Vec<(String, Arc<ParquetMetaData>)>> {
     let mut metas = Vec::with_capacity(file_infos.len());
     for (path, _size) in file_infos {
         let meta = load_and_check_parquet_meta(&path, op.clone(), &expect, &schema_from).await?;
+        if let Some(copy_status) = &copy_status {
+            copy_status.add_chunk(&path, FileStatus {
+                num_rows_loaded: meta.file_metadata().num_rows() as usize,
+                error: None,
+            });
+        }
         metas.push((path, meta));
     }
     let used = GLOBAL_MEM_STAT.get_memory_usage();
@@ -201,6 +215,7 @@ async fn read_parquet_metas_batch(
 }
 
 #[async_backtrace::framed]
+#[allow(clippy::too_many_arguments)]
 pub async fn read_and_prune_metas_in_parallel(
     op: Operator,
     file_infos: Vec<(String, u64)>,
@@ -209,6 +224,7 @@ pub async fn read_and_prune_metas_in_parallel(
     schema_from: String,
     num_threads: usize,
     max_memory_usage: u64,
+    copy_status: Option<Arc<CopyStatus>>,
 ) -> Result<(PartStatistics, Partitions)> {
     let num_files = file_infos.len();
     let mut tasks = Vec::with_capacity(num_threads);
@@ -225,10 +241,17 @@ pub async fn read_and_prune_metas_in_parallel(
         let op = op.clone();
         let expect = expect.clone();
         let schema_from = schema_from.clone();
+        let copy_status = copy_status.clone();
         tasks.push(async move {
-            let metas =
-                read_parquet_metas_batch(file_infos, op, expect, schema_from, max_memory_usage)
-                    .await?;
+            let metas = read_parquet_metas_batch(
+                file_infos,
+                op,
+                expect,
+                schema_from,
+                max_memory_usage,
+                copy_status,
+            )
+            .await?;
             prune_and_generate_partitions(&pruner, metas)
         });
     }
