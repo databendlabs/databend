@@ -18,7 +18,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_arrow::parquet::metadata::ColumnDescriptor;
-use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::plan::block_idx_in_segment;
 use common_catalog::plan::split_prefix;
 use common_catalog::plan::split_row_id;
@@ -30,7 +29,6 @@ use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnNodes;
-use itertools::Itertools;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::TableSnapshot;
 
@@ -48,13 +46,10 @@ pub(super) struct NativeRowsFetcher<const BLOCKING_IO: bool> {
     projection: Projection,
     schema: TableSchemaRef,
     reader: Arc<BlockReader>,
-    column_leaves: Arc<Vec<Vec<ColumnDescriptor>>>,
+    column_leaves: Vec<Vec<ColumnDescriptor>>,
 
     // The value contains part info and the page size of the corresponding block file.
     part_map: HashMap<u64, (PartInfoPtr, u64)>,
-
-    // To control the parallelism of fetching blocks.
-    max_threads: usize,
 }
 
 #[async_trait::async_trait]
@@ -85,63 +80,16 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
                 .or_insert(HashSet::from([page_idx]));
             row_set.push((prefix, page_idx, idx_within_page));
         }
-
-        // Read blocks in `prefix` order.
         let part_set = part_set
             .into_iter()
-            .sorted_by_key(|(k, _)| *k)
             .map(|(k, v)| {
                 let mut v = v.into_iter().collect::<Vec<_>>();
                 v.sort();
                 (k, v)
             })
-            .collect::<Vec<_>>();
-        let mut idx_map = HashMap::with_capacity(part_set.len());
-        for (p, pages) in part_set.iter() {
-            for page in pages {
-                idx_map.insert((*p, *page), idx_map.len());
-            }
-        }
-        // parts_per_thread = num_parts / max_threads
-        // remain = num_parts % max_threads
-        // task distribution:
-        //   Part number of each task   |       Task number
-        // ------------------------------------------------------
-        //    parts_per_thread + 1      |         remain
-        //      parts_per_thread        |   max_threads - remain
-        let num_parts = part_set.len();
-        let mut tasks = Vec::with_capacity(self.max_threads);
-        // Fetch blocks in parallel.
-        for i in 0..self.max_threads {
-            let begin = num_parts * i / self.max_threads;
-            let end = num_parts * (i + 1) / self.max_threads;
-            if begin == end {
-                continue;
-            }
-            let parts = part_set[begin..end]
-                .iter()
-                .map(|(idx, pages)| (self.part_map[idx].0.clone(), pages.clone()))
-                .collect::<Vec<_>>();
-            tasks.push(Self::fetch_blocks(
-                self.reader.clone(),
-                parts,
-                self.column_leaves.clone(),
-            ))
-        }
+            .collect();
 
-        let num_task = tasks.len();
-        let blocks = execute_futures_in_parallel(
-            tasks,
-            num_task,
-            num_task * 2,
-            "native rows fetch".to_string(),
-        )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
+        let (blocks, idx_map) = self.fetch_blocks(part_set).await?;
         let indices = row_set
             .iter()
             .map(|(prefix, page_idx, idx)| {
@@ -163,8 +111,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
         table: Arc<FuseTable>,
         projection: Projection,
         reader: Arc<BlockReader>,
-        column_leaves: Arc<Vec<Vec<ColumnDescriptor>>>,
-        max_threads: usize,
+        column_leaves: Vec<Vec<ColumnDescriptor>>,
     ) -> Self {
         let schema = table.schema();
         let segment_reader =
@@ -179,7 +126,6 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             reader,
             column_leaves,
             part_map: HashMap::new(),
-            max_threads,
         }
     }
 
@@ -227,17 +173,16 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
     }
 
     fn build_blocks(
-        reader: &BlockReader,
+        &self,
         mut chunks: NativeSourceData,
         needed_pages: &[u64],
-        column_leaves: &[Vec<ColumnDescriptor>],
     ) -> Result<Vec<DataBlock>> {
         let mut array_iters = BTreeMap::new();
 
-        for (index, column_node) in reader.project_column_nodes.iter().enumerate() {
+        for (index, column_node) in self.reader.project_column_nodes.iter().enumerate() {
             let readers = chunks.remove(&index).unwrap();
             if !readers.is_empty() {
-                let leaves = column_leaves.get(index).unwrap().clone();
+                let leaves = self.column_leaves.get(index).unwrap().clone();
                 let array_iter = BlockReader::build_array_iter(column_node, leaves, readers)?;
                 array_iters.insert(index, array_iter);
             }
@@ -259,7 +204,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
                 arrays.push((*index, array));
             }
             offset = *page + 1;
-            let block = reader.build_block(arrays, None)?;
+            let block = self.reader.build_block(arrays, None)?;
             blocks.push(block);
         }
 
@@ -269,29 +214,43 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
     #[allow(clippy::type_complexity)]
     #[async_backtrace::framed]
     async fn fetch_blocks(
-        reader: Arc<BlockReader>,
-        parts: Vec<(PartInfoPtr, Vec<u64>)>,
-        column_leaves: Arc<Vec<Vec<ColumnDescriptor>>>,
-    ) -> Result<Vec<DataBlock>> {
-        let mut chunks = Vec::with_capacity(parts.len());
+        &self,
+        part_set: HashMap<u64, Vec<u64>>,
+    ) -> Result<(Vec<DataBlock>, HashMap<(u64, u64), usize>)> {
+        let mut chunks = Vec::with_capacity(part_set.len());
         if BLOCKING_IO {
-            for (part, _) in parts.iter() {
-                let chunk = reader.sync_read_native_columns_data(part, &None)?;
-                chunks.push(chunk);
+            for (prefix, needed_pages) in part_set.into_iter() {
+                let part = self.part_map[&prefix].0.clone();
+                let chunk = self.reader.sync_read_native_columns_data(part, &None)?;
+                chunks.push((prefix, chunk, needed_pages));
             }
         } else {
-            for (part, _) in parts.iter() {
-                let chunk = reader.async_read_native_columns_data(part, &None).await?;
-                chunks.push(chunk);
+            for (prefix, needed_pages) in part_set.into_iter() {
+                let part = self.part_map[&prefix].0.clone();
+                let chunk = self
+                    .reader
+                    .async_read_native_columns_data(part, &None)
+                    .await?;
+                chunks.push((prefix, chunk, needed_pages));
             }
         }
-        let num_blocks = parts.iter().map(|(_, p)| p.len()).sum::<usize>();
+        let num_blocks = chunks
+            .iter()
+            .map(|(_, _, pages)| pages.len())
+            .sum::<usize>();
+        let mut idx_map = HashMap::with_capacity(num_blocks);
         let mut blocks = Vec::with_capacity(num_blocks);
-        for (chunk, (_, needed_pages)) in chunks.into_iter().zip(parts.iter()) {
-            let fetched_blocks = Self::build_blocks(&reader, chunk, needed_pages, &column_leaves)?;
-            blocks.extend(fetched_blocks);
+
+        let mut offset = 0_usize;
+        for (prefix, chunk, needed_pages) in chunks.into_iter() {
+            let fetched_blocks = self.build_blocks(chunk, &needed_pages)?;
+            for (block, page) in fetched_blocks.into_iter().zip(needed_pages) {
+                idx_map.insert((prefix, page), offset);
+                offset += 1;
+                blocks.push(block);
+            }
         }
 
-        Ok(blocks)
+        Ok((blocks, idx_map))
     }
 }

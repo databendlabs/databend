@@ -55,22 +55,20 @@ pub fn build_row_fetcher_pipeline(
         .to_owned();
     let fuse_table = Arc::new(fuse_table);
     let block_reader = fuse_table.create_block_reader(projection.clone(), false, ctx.clone())?;
-    let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
-    match &fuse_table.storage_format {
-        FuseStorageFormat::Native => {
-            let mut column_leaves = Vec::with_capacity(block_reader.project_column_nodes.len());
-            for column_node in &block_reader.project_column_nodes {
-                let leaves: Vec<ColumnDescriptor> = column_node
-                    .leaf_indices
-                    .iter()
-                    .map(|i| block_reader.parquet_schema_descriptor.columns()[*i].clone())
-                    .collect::<Vec<_>>();
-                column_leaves.push(leaves);
-            }
-            let column_leaves = Arc::new(column_leaves);
-            pipeline.add_transform(|input, output| {
-                Ok(if block_reader.support_blocking_api() {
+    pipeline.add_transform(|input, output| {
+        Ok(match &fuse_table.storage_format {
+            FuseStorageFormat::Native => {
+                let mut column_leaves = Vec::with_capacity(block_reader.project_column_nodes.len());
+                for column_node in &block_reader.project_column_nodes {
+                    let leaves: Vec<ColumnDescriptor> = column_node
+                        .leaf_indices
+                        .iter()
+                        .map(|i| block_reader.parquet_schema_descriptor.columns()[*i].clone())
+                        .collect::<Vec<_>>();
+                    column_leaves.push(leaves);
+                }
+                if block_reader.support_blocking_api() {
                     TransformRowsFetcher::create(
                         input,
                         output,
@@ -79,8 +77,7 @@ pub fn build_row_fetcher_pipeline(
                             fuse_table.clone(),
                             projection.clone(),
                             block_reader.clone(),
-                            column_leaves.clone(),
-                            max_threads,
+                            column_leaves,
                         ),
                     )
                 } else {
@@ -92,19 +89,16 @@ pub fn build_row_fetcher_pipeline(
                             fuse_table.clone(),
                             projection.clone(),
                             block_reader.clone(),
-                            column_leaves.clone(),
-                            max_threads,
+                            column_leaves,
                         ),
                     )
-                })
-            })
-        }
-        FuseStorageFormat::Parquet => {
-            let buffer_size: usize =
-                ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
-            let read_settings = ReadSettings::from_ctx(&ctx)?;
-            pipeline.add_transform(|input, output| {
-                Ok(if block_reader.support_blocking_api() {
+                }
+            }
+            FuseStorageFormat::Parquet => {
+                let buffer_size =
+                    ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
+                let read_settings = ReadSettings::from_ctx(&ctx)?;
+                if block_reader.support_blocking_api() {
                     TransformRowsFetcher::create(
                         input,
                         output,
@@ -115,7 +109,6 @@ pub fn build_row_fetcher_pipeline(
                             block_reader.clone(),
                             read_settings,
                             buffer_size,
-                            max_threads,
                         ),
                     )
                 } else {
@@ -129,13 +122,12 @@ pub fn build_row_fetcher_pipeline(
                             block_reader.clone(),
                             read_settings,
                             buffer_size,
-                            max_threads,
                         ),
                     )
-                })
-            })
-        }
-    }
+                }
+            }
+        })
+    })
 }
 
 #[async_trait::async_trait]

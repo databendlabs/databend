@@ -54,7 +54,7 @@ impl AggIndexReader {
                 );
                 let res = self
                     .reader
-                    .sync_read_columns_data_by_merge_io(read_settings, &part, &None)
+                    .sync_read_columns_data_by_merge_io(read_settings, part.clone(), &None)
                     .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
                     .ok()?;
                 Some((part, res))

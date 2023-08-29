@@ -97,10 +97,10 @@ impl BlockReader {
     pub fn sync_read_columns_data_by_merge_io(
         &self,
         settings: &ReadSettings,
-        part: &PartInfoPtr,
+        part: PartInfoPtr,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<MergeIOReadResult> {
-        let part = FusePartInfo::from_part(part)?;
+        let part = FusePartInfo::from_part(&part)?;
         let column_array_cache = CacheManager::instance().get_table_data_array_cache();
 
         let mut ranges = vec![];
