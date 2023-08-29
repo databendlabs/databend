@@ -63,7 +63,8 @@ pub struct Spiller {
     /// Key is partition id, value is rows which have same partition id
     pub(crate) partitions: Vec<(u8, DataBlock)>,
     /// Record the location of the spilled partitions
-    pub(crate) partition_location: HashMap<u8, String>,
+    /// 1 partition -> N partition files
+    pub(crate) partition_location: HashMap<u8, Vec<String>>,
 }
 
 impl Spiller {
@@ -85,33 +86,25 @@ impl Spiller {
 
     /// Spill partition set
     pub async fn spill(&mut self) -> Result<()> {
-        for (partition_id, partition) in self.partitions.iter() {
-            let unique_name = GlobalUniqName::unique();
-            let location = format!("{}/{}", self.config.location_prefix, unique_name);
-            // Record the location of the spilled partition
-            self.partition_location
-                .insert(*partition_id, location.clone());
+        let partitions = self.partitions.clone();
+        for (partition_id, partition) in partitions.iter() {
             self.spilled_partition_set.insert(*partition_id);
-            let columns = partition.columns().to_vec();
-            let mut columns_data = Vec::with_capacity(columns.len());
-            for column in columns.into_iter() {
-                let column = column.value.as_column().unwrap();
-                let column_data = serialize_column(column);
-                columns_data.push(column_data);
-            }
-
-            let mut writer = self.operator.writer(location.as_str()).await?;
-            for data in columns_data.into_iter() {
-                writer.write(data).await?;
-            }
-            writer.close().await?;
+            self.spill_with_partition(partition_id, partition).await?;
         }
         Ok(())
     }
 
     /// Spill data block with location
-    pub async fn spill_with_location(&mut self, loc: &str, data: &DataBlock) -> Result<()> {
-        let mut writer = self.operator.writer(loc).await?;
+    pub async fn spill_with_partition(&mut self, p_id: &u8, data: &DataBlock) -> Result<()> {
+        let unique_name = GlobalUniqName::unique();
+        let location = format!("{}/{}", self.config.location_prefix, unique_name);
+        self.partition_location
+            .entry(*p_id)
+            .and_modify(|locs| {
+                locs.push(location.clone());
+            })
+            .or_insert(vec![location.clone()]);
+        let mut writer = self.operator.writer(location.as_str()).await?;
         let columns = data.columns().to_vec();
         let mut columns_data = Vec::with_capacity(columns.len());
         for column in columns.into_iter() {
@@ -134,10 +127,5 @@ impl Spiller {
     /// Check if any partition has been spilled
     pub fn is_any_spilled(&self) -> bool {
         !self.spilled_partition_set.is_empty()
-    }
-
-    /// Get location of a specific partition
-    pub fn get_partition_location(&self, partition_id: u8) -> Option<String> {
-        self.partition_location.get(&partition_id).cloned()
     }
 }

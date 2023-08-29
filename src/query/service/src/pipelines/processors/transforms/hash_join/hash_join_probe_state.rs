@@ -263,6 +263,14 @@ impl HashJoinProbeState {
             // Set spill done
             let mut spill_done = self.spill_done.lock();
             *spill_done = true;
+            // Set partition id to `HashJoinState`
+            let mut partition_id = self.hash_join_state.partition_id.write();
+            // Pick the max partition id
+            let mut spill_partition = self.hash_join_state.spill_partition.write();
+            if let Some(id) = spill_partition.iter().next().cloned() {
+                spill_partition.remove(&id);
+                *partition_id = id;
+            };
             // All probe processors have finished spill, notify build processors to work
             self.hash_join_state.probe_spill_done.notify_waiters();
         }

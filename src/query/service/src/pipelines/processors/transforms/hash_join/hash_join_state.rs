@@ -109,6 +109,9 @@ pub struct HashJoinState {
     pub(crate) spill_partition: Arc<RwLock<HashSet<u8>>>,
     /// After all probe processors finish spill, notify build processors.
     pub(crate) probe_spill_done: Arc<Notify>,
+    /// After all build processors finish spill, will pick a partition
+    /// tell build processors to restore data in the partition
+    pub(crate) partition_id: Arc<RwLock<u8>>,
 }
 
 impl HashJoinState {
@@ -147,6 +150,7 @@ impl HashJoinState {
             mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             spill_partition: Default::default(),
             probe_spill_done: Arc::new(Default::default()),
+            partition_id: Arc::new(Default::default()),
         }))
     }
 
