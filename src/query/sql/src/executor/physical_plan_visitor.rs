@@ -31,6 +31,8 @@ use super::Filter;
 use super::HashJoin;
 use super::Lambda;
 use super::Limit;
+use super::MergeInto;
+use super::MergeIntoSource;
 use super::MutationAggregate;
 use super::PhysicalPlan;
 use super::Project;
@@ -79,6 +81,8 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::AsyncSourcer(plan) => self.replace_async_sourcer(plan),
             PhysicalPlan::Deduplicate(plan) => self.replace_deduplicate(plan),
             PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
+            PhysicalPlan::MergeInto(plan) => self.replace_merge_into(plan),
+            PhysicalPlan::MergeIntoSource(plan) => self.replace_merge_into_source(plan),
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
             PhysicalPlan::FinalCommit(plan) => self.replace_final_commit(plan),
@@ -408,6 +412,22 @@ pub trait PhysicalPlanReplacer {
         )))
     }
 
+    fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::MergeInto(MergeInto {
+            input: Box::new(input),
+            ..plan.clone()
+        }))
+    }
+
+    fn replace_merge_into_source(&mut self, plan: &MergeIntoSource) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::MergeIntoSource(MergeIntoSource {
+            input: Box::new(input),
+            ..plan.clone()
+        }))
+    }
+
     fn replace_project_set(&mut self, plan: &ProjectSet) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::ProjectSet(ProjectSet {
@@ -535,6 +555,12 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::ReplaceInto(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MergeIntoSource(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MergeInto(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MaterializedCte(plan) => {

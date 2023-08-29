@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod copy;
-pub mod merge_into;
-mod storage_metrics;
+mod mutator;
+mod processors;
 
-pub use storage_metrics::StorageMetrics;
-pub use storage_metrics::StorageMetricsLayer;
+pub use mutator::MatchedAggregator;
+pub use processors::MergeIntoNotMatchedProcessor;
+pub use processors::MergeIntoSplitProcessor;
