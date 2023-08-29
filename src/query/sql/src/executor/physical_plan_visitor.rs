@@ -400,10 +400,12 @@ pub trait PhysicalPlanReplacer {
         plan: &crate::executor::FinalCommit,
     ) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::FinalCommit(crate::executor::FinalCommit {
-            input: Box::new(input),
-            ..plan.clone()
-        }))
+        Ok(PhysicalPlan::FinalCommit(Box::new(
+            crate::executor::FinalCommit {
+                input: Box::new(input),
+                ..plan.clone()
+            },
+        )))
     }
 
     fn replace_project_set(&mut self, plan: &ProjectSet) -> Result<PhysicalPlan> {

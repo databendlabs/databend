@@ -1009,7 +1009,7 @@ pub enum PhysicalPlan {
     AsyncSourcer(AsyncSourcerPlan),
     Deduplicate(Deduplicate),
     ReplaceInto(ReplaceInto),
-    FinalCommit(FinalCommit),
+    FinalCommit(Box<FinalCommit>),
 }
 
 impl PhysicalPlan {

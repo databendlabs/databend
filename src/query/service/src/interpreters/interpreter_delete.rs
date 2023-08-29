@@ -300,12 +300,12 @@ impl DeleteInterpreter {
             });
         }
 
-        Ok(PhysicalPlan::FinalCommit(FinalCommit {
+        Ok(PhysicalPlan::FinalCommit(Box::new(FinalCommit {
             input: Box::new(root),
             snapshot,
             table_info,
             catalog_info,
-        }))
+        })))
     }
 }
 
