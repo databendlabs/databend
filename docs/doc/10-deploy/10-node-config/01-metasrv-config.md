@@ -1,8 +1,5 @@
 ---
-title: Databend Meta Service Configuration
-sidebar_label: Meta Service Configuration
-description: 
-  Databend Meta Service Configuration
+title: Meta Configurations
 ---
 
 A `databend-meta` server is configured with a config file in `toml`: `databend-meta --config-file databend-meta.toml`.
@@ -113,3 +110,5 @@ Defines raft behaviors on raft-storage and the state machine.
 
   `join` is only used for an uninitialized node.
   `join` will be ignored if the node is already initialized.
+
+## Configuring Meta Node with Environment Variables
