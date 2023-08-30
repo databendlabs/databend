@@ -1,0 +1,21 @@
+query I
+select $2 from @data/csv (files=>('select.csv'), file_format=>'csv') order by $1
+----
+(empty)
+b
+c
+
+query T
+select a.$1 from @data/csv (files=>('select.csv'), file_format=>'csv') a order by $1
+----
+1
+2
+3
+
+# SemanticError. Code: 1065, Text = select columns from csv file must in the form of $<column_position>.
+query error 1065
+select * from @data/csv (files=>('select.csv'), file_format=>'csv')
+
+# SemanticError. Code: 1065, Text = can not select * from csv/ndjson file.
+query error 1065
+select *, $1 from @data/csv (files=>('select.csv'), file_format=>'csv')
