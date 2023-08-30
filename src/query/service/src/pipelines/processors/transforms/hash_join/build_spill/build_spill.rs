@@ -29,8 +29,9 @@ use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::sessions::QueryContext;
-use crate::spiller::{Spiller, SpillerType};
+use crate::spiller::Spiller;
 use crate::spiller::SpillerConfig;
+use crate::spiller::SpillerType;
 
 /// Define some states for hash join build spilling
 pub struct BuildSpillState {
