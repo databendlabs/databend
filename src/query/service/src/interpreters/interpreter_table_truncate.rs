@@ -40,9 +40,9 @@ impl TruncateTableInterpreter {
         Ok(TruncateTableInterpreter {
             ctx,
             purge: plan.purge,
-            table_name: plan.table.clone(),
-            catalog_name: plan.catalog.clone(),
-            database_name: plan.database.clone(),
+            table_name: plan.table,
+            catalog_name: plan.catalog,
+            database_name: plan.database,
             proxy_to_cluster: true,
         })
     }
@@ -51,9 +51,9 @@ impl TruncateTableInterpreter {
         Ok(TruncateTableInterpreter {
             ctx,
             purge: packet.purge,
-            table_name: packet.table_name.clone(),
-            catalog_name: packet.catalog_name.clone(),
-            database_name: packet.database_name.clone(),
+            table_name: packet.table_name,
+            catalog_name: packet.catalog_name,
+            database_name: packet.database_name,
             proxy_to_cluster: false,
         })
     }
