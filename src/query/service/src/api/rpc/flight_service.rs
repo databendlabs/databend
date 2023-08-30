@@ -45,6 +45,8 @@ use tonic::Streaming;
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::request_builder::RequestGetter;
 use crate::api::DataExchangeManager;
+use crate::interpreters::Interpreter;
+use crate::interpreters::TruncateTableInterpreter;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
@@ -217,6 +219,19 @@ impl FlightService for DatabendQueryFlightService {
 
                     FlightResult { body: vec![] }
                 }
+                FlightAction::TruncateTable(truncate_table) => {
+                    let config = GlobalConfig::instance();
+                    let session_manager = SessionManager::instance();
+                    let settings = Settings::create(config.query.tenant_id.clone());
+                    let session =
+                        session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
+                    let ctx = session.create_query_context().await?;
+
+                    let interpreter =
+                        TruncateTableInterpreter::from_flight(ctx, truncate_table.packet)?;
+                    interpreter.execute2().await?;
+                    FlightResult { body: vec![] }
+                }
             };
 
             Ok(RawResponse::new(
@@ -242,7 +257,7 @@ impl FlightService for DatabendQueryFlightService {
                 ])) as FlightStream<ActionType>
             ))
         }
-        .in_span(root)
-        .await
+            .in_span(root)
+            .await
     }
 }

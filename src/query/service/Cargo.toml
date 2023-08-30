@@ -121,7 +121,8 @@ ctor = "0.1.26"
 dashmap = "5.4"
 ethnum = { workspace = true }
 futures = "0.3.24"
-futures-util = "0.3.24"
+futures-util = { workspace = true }
+
 h2 = "0.3.17"
 headers = "0.3.8"
 http = "0.2.8"

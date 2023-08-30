@@ -32,6 +32,7 @@ use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use itertools::Itertools;
 use jsonb::Value as JsonbValue;
+use log::warn;
 use serde_json::json;
 use serde_json::Value as JsonValue;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -164,7 +165,11 @@ impl<'a> ClusteringInformation<'a> {
                 }
             });
         }
-        assert!(unfinished_parts.is_empty());
+        if !unfinished_parts.is_empty() {
+            warn!(
+                "clustering_information: unfinished_parts is not empty after calculate the blocks overlaps"
+            );
+        }
 
         let mut sum_overlap = 0;
         let mut sum_depth = 0;

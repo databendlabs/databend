@@ -357,6 +357,10 @@ pub trait Table: Sync + Send {
     fn result_can_be_cached(&self) -> bool {
         false
     }
+
+    fn broadcast_truncate_to_cluster(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait::async_trait]
@@ -450,6 +454,7 @@ pub struct DeletionFilters {
 }
 
 use std::collections::HashMap;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct Parquet2TableColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
