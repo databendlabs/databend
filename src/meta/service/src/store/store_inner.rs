@@ -58,6 +58,7 @@ use common_meta_types::SnapshotMeta;
 use common_meta_types::StorageError;
 use common_meta_types::StorageIOError;
 use common_meta_types::Vote;
+use futures::Stream;
 use log::as_display;
 use log::debug;
 use log::info;
@@ -230,6 +231,8 @@ impl StoreInner {
 
         let mut snapshot_store = self.snapshot_store();
 
+        let strm = snapshot_view.export().await;
+
         // Move heavy load to a blocking thread pool.
         let (snapshot_id, snapshot_size) = tokio::task::block_in_place({
             let sto = &mut snapshot_store;
@@ -238,7 +241,7 @@ impl StoreInner {
 
             move || {
                 Self::testing_sleep("write", sleep);
-                Self::write_snapshot(sto, meta, snapshot_view.export())
+                futures::executor::block_on(Self::write_snapshot(sto, meta, strm))
             }
         })?;
 
@@ -327,7 +330,8 @@ impl StoreInner {
 
             move || {
                 Self::testing_sleep("compact", sleep);
-                s.compact();
+                // TODO: this is a future never returning Pending:
+                futures::executor::block_on(s.compact())
             }
         });
 
@@ -340,16 +344,19 @@ impl StoreInner {
         snapshot_view
     }
 
-    fn write_snapshot(
+    async fn write_snapshot(
         snapshot_store: &mut SnapshotStoreV002,
         snapshot_meta: SnapshotMeta,
-        data: impl IntoIterator<Item = RaftStoreEntry>,
+        entry_stream: impl Stream<Item = RaftStoreEntry>,
     ) -> Result<(MetaSnapshotId, u64), SnapshotStoreError> {
         let mut writer = snapshot_store.new_writer()?;
 
-        writer.write_entries::<io::Error>(data).map_err(|e| {
-            SnapshotStoreError::write(e).with_meta("serialize entries", &snapshot_meta)
-        })?;
+        writer
+            .write_entries::<io::Error>(entry_stream)
+            .await
+            .map_err(|e| {
+                SnapshotStoreError::write(e).with_meta("serialize entries", &snapshot_meta)
+            })?;
 
         let (snapshot_id, file_size) = writer
             .commit(None)
