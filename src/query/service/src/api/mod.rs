@@ -39,10 +39,12 @@ pub use rpc::HashFlightScatter;
 pub use rpc::InitNodesChannelPacket;
 pub use rpc::MergeExchange;
 pub use rpc::MergeExchangeParams;
+pub use rpc::Packet;
 pub use rpc::QueryFragmentsPlanPacket;
 pub use rpc::ShuffleDataExchange;
 pub use rpc::ShuffleExchangeParams;
 pub use rpc::TransformExchangeDeserializer;
+pub use rpc::TruncateTablePacket;
 pub use rpc_service::RpcService;
 
 pub mod http;
