@@ -122,7 +122,7 @@ impl ParquetRSReader {
                     .filter
                     .as_expr(&BUILTIN_FUNCTIONS)
                     .project_column_ref(|name| schema.index_of(name).unwrap());
-                let projection = prewhere.prewhere_columns.to_arrow_projection(schema_desc);
+                let (projection, _) = prewhere.prewhere_columns.to_arrow_projection(schema_desc);
                 let schema = to_arrow_schema(&schema);
                 let batch_schema =
                     parquet_to_arrow_schema_by_columns(schema_desc, projection.clone(), None)?;
@@ -140,7 +140,8 @@ impl ParquetRSReader {
             })
             .transpose()?;
         // Build projection mask and field paths for transforming `RecordBatch` to output block.
-        let projection = output_projection.to_arrow_projection(schema_desc);
+        // The number of columns in `output_projection` may be less than the number of actual read columns.
+        let (projection, _) = output_projection.to_arrow_projection(schema_desc);
         let batch_schema =
             parquet_to_arrow_schema_by_columns(schema_desc, projection.clone(), None)?;
         let output_schema = to_arrow_schema(&output_projection.project_schema(&table_schema));

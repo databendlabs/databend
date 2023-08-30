@@ -113,7 +113,7 @@ fn test_to_projection_mask() -> Result<()> {
     ];
 
     for (projection, expected_mask) in test_cases.iter() {
-        let mask = projection.to_arrow_projection(&schema_desc);
+        let (mask, _) = projection.to_arrow_projection(&schema_desc);
         for leaf in expected_mask {
             assert!(
                 mask.leaf_included(*leaf),

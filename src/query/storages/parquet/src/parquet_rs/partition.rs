@@ -95,23 +95,20 @@ pub struct ParquetRSRowGroupPart {
     pub meta: RowGroupMetaData,
     pub selectors: Option<Vec<SerdeRowSelector>>,
     pub page_locations: Option<Vec<Vec<SerdePageLocation>>>,
+    // `uncompressed_size` and `compressed_size` are the sizes of the actually read columns.
+    pub uncompressed_size: u64,
+    pub compressed_size: u64,
 }
 
 impl Eq for ParquetRSRowGroupPart {}
 
 impl ParquetRSRowGroupPart {
-    // TODO(parquet): change to size after projection.
     pub fn uncompressed_size(&self) -> u64 {
-        self.meta
-            .columns()
-            .iter()
-            .map(|col| col.uncompressed_size() as u64)
-            .sum()
+        self.uncompressed_size
     }
 
-    // TODO(parquet): change to size after projection.
     pub fn compressed_size(&self) -> u64 {
-        self.meta.total_byte_size() as u64
+        self.compressed_size
     }
 }
 

@@ -22,6 +22,7 @@ use std::sync::Arc;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -36,10 +37,6 @@ pub enum ParquetPart {
 }
 
 impl ParquetPart {
-    pub fn convert_to_part_info(self) -> PartInfoPtr {
-        Arc::new(Box::new(self))
-    }
-
     pub fn uncompressed_size(&self) -> u64 {
         match self {
             ParquetPart::Parquet2RowGroup(r) => r.uncompressed_size(),
@@ -116,7 +113,7 @@ pub(crate) fn collect_small_file_parts(
     small_files: Vec<(String, u64)>,
     mut max_compression_ratio: f64,
     mut max_compressed_size: u64,
-    partitions: &mut Vec<ParquetPart>,
+    partitions: &mut Partitions,
     stats: &mut PartStatistics,
     num_columns_to_read: usize,
 ) {
@@ -135,10 +132,12 @@ pub(crate) fn collect_small_file_parts(
     let mut make_small_files_part = |files: Vec<(String, u64)>, part_size| {
         let estimated_uncompressed_size = (part_size as f64 / max_compression_ratio) as u64;
         num_small_files -= files.len();
-        partitions.push(ParquetPart::ParquetFiles(ParquetFilesPart {
-            files,
-            estimated_uncompressed_size,
-        }));
+        partitions.partitions.push(Arc::new(
+            Box::new(ParquetPart::ParquetFiles(ParquetFilesPart {
+                files,
+                estimated_uncompressed_size,
+            })) as Box<dyn PartInfo>,
+        ));
         stats.partitions_scanned += 1;
         stats.partitions_total += 1;
     };
