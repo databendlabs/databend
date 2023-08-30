@@ -64,6 +64,7 @@ impl BuildSpillState {
 
 /// Define some spill-related APIs for hash join build
 impl BuildSpillState {
+    #[async_backtrace::framed]
     // Start to spill `input_data`.
     // Todo: add unit tests for the method.
     pub(crate) async fn spill(&mut self) -> Result<()> {
@@ -212,6 +213,7 @@ impl BuildSpillState {
         Ok(false)
     }
 
+    #[async_backtrace::framed]
     // Directly spill input data without buffering.
     // Return unspilled data.
     pub(crate) async fn spill_input(&mut self, data_block: DataBlock) -> Result<DataBlock> {

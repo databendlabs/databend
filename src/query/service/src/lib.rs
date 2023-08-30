@@ -32,6 +32,7 @@
 #![feature(hash_drain_filter)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(iterator_try_collect)]
+#![feature(let_chains)]
 
 extern crate core;
 

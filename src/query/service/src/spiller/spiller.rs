@@ -17,6 +17,7 @@ use std::collections::HashSet;
 
 use common_base::base::GlobalUniqName;
 use common_exception::Result;
+use common_expression::arrow::deserialize_column;
 use common_expression::arrow::serialize_column;
 use common_expression::DataBlock;
 use opendal::Operator;
@@ -65,6 +66,8 @@ pub struct Spiller {
     /// Record the location of the spilled partitions
     /// 1 partition -> N partition files
     pub(crate) partition_location: HashMap<u8, Vec<String>>,
+    /// Record columns layout for spilled data, will be used when read data from disk
+    pub(crate) columns_layout: Vec<usize>,
 }
 
 impl Spiller {
@@ -81,9 +84,11 @@ impl Spiller {
             spilled_partition_set: Default::default(),
             partitions: vec![],
             partition_location: Default::default(),
+            columns_layout: vec![],
         }
     }
 
+    #[async_backtrace::framed]
     /// Spill partition set
     pub async fn spill(&mut self) -> Result<()> {
         let partitions = self.partitions.clone();
@@ -94,6 +99,7 @@ impl Spiller {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     /// Spill data block with location
     pub async fn spill_with_partition(&mut self, p_id: &u8, data: &DataBlock) -> Result<()> {
         let unique_name = GlobalUniqName::unique();
@@ -110,6 +116,7 @@ impl Spiller {
         for column in columns.into_iter() {
             let column = column.value.as_column().unwrap();
             let column_data = serialize_column(column);
+            self.columns_layout.push(column_data.len());
             columns_data.push(column_data);
         }
         for data in columns_data.into_iter() {
@@ -117,6 +124,26 @@ impl Spiller {
         }
         writer.close().await?;
         Ok(())
+    }
+
+    #[async_backtrace::framed]
+    /// Read spilled data with partition id
+    pub async fn read_spilled_data(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
+        debug_assert!(self.partition_location.contains_key(p_id));
+        let files = self.partition_location.get(p_id).unwrap();
+        let mut spilled_data = Vec::with_capacity(files.len());
+        // Make it parallel
+        for file in files.iter() {
+            let data = self.operator.read(file).await?;
+            let mut begin = 0;
+            let mut columns = Vec::with_capacity(self.columns_layout.len());
+            for column_layout in self.columns_layout.iter() {
+                columns.push(deserialize_column(&data[begin..begin + column_layout]).unwrap());
+                begin += column_layout;
+            }
+            spilled_data.push(DataBlock::new_from_columns(columns));
+        }
+        Ok(spilled_data)
     }
 
     /// Check if all partitions have been spilled

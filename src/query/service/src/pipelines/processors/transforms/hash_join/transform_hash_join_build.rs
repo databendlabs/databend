@@ -74,6 +74,13 @@ impl TransformHashJoinBuild {
             finalize_finished: false,
         }))
     }
+
+    fn reset(&mut self) -> Result<()> {
+        self.build_state.build_attach()?;
+        self.step = HashJoinBuildStep::Running;
+        self.finalize_finished = false;
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -142,7 +149,7 @@ impl Processor for TransformHashJoinBuild {
         match self.step {
             HashJoinBuildStep::Running => {
                 if let Some(mut data_block) = self.input_data.take() {
-                    if let Some(spill_state) = &mut self.spill_state {
+                    if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.is_any_spilled(){
                         // Check if need to spill
                         let need_spill = spill_state.check_need_spill(&data_block)?;
                         if need_spill {
@@ -231,7 +238,20 @@ impl Processor for TransformHashJoinBuild {
             }
             HashJoinBuildStep::WaitProbe => {
                 self.build_state.hash_join_state.wait_probe_spill().await;
-                todo!()
+                // Currently, each processor will read its own partition
+                // Note: we assume that the partition files will fit into memory
+                // later, will introduce multiple level spill or other way to handle this.
+                // Todo: we should shuffle partitions files and distribute them to each processor and make processors load balanced.
+                let partition_id = *self.build_state.hash_join_state.partition_id.read();
+                let spilled_data = self
+                    .spill_state
+                    .as_ref()
+                    .unwrap()
+                    .spiller
+                    .read_spilled_data(&partition_id)
+                    .await?;
+                self.input_data = Some(DataBlock::concat(&spilled_data)?);
+                self.reset()?;
             }
             _ => {}
         }
