@@ -81,6 +81,7 @@ sentry = { version = "0.31.5", default-features = false, features = [
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = "0.1.0"
+futures = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = "0.1.10"
 tonic = { workspace = true }

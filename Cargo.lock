@@ -3619,6 +3619,7 @@ dependencies = [
  "databend-meta",
  "databend-query",
  "enterprise-query",
+ "futures",
  "limits-rs",
  "log",
  "minitrace",

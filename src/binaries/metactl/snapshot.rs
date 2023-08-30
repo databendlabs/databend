@@ -95,7 +95,7 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
 }
 
 /// Import from lines of exported data and Return the max log id that is found.
-fn import_lines<B: BufRead + 'static>(
+async fn import_lines<B: BufRead + 'static>(
     config: &Config,
     lines: Lines<B>,
 ) -> anyhow::Result<Option<LogId>> {
@@ -127,7 +127,7 @@ fn import_lines<B: BufRead + 'static>(
     let max_log_id = match version {
         DataVersion::V0 => import_v0_or_v001(config, it)?,
         DataVersion::V001 => import_v0_or_v001(config, it)?,
-        DataVersion::V002 => import_v002(config, it)?,
+        DataVersion::V002 => import_v002(config, it).await?,
     };
 
     Ok(max_log_id)
@@ -201,7 +201,7 @@ fn import_v0_or_v001(
 /// While importing, the max log id is also returned.
 ///
 /// It write logs and related entries to sled trees, and state_machine entries to a snapshot.
-fn import_v002(
+async fn import_v002(
     config: &Config,
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
@@ -223,7 +223,9 @@ fn import_v002(
 
         if tree_name.starts_with("state_machine/") {
             // Write to snapshot
-            writer.write_entries::<io::Error>([kv_entry])?;
+            writer
+                .write_entries::<io::Error>(futures::stream::iter([kv_entry]))
+                .await?;
         } else {
             // Write to sled tree
             if !trees.contains_key(&tree_name) {
@@ -269,13 +271,13 @@ async fn import_from_stdin_or_file(config: &Config) -> anyhow::Result<Option<Log
     let max_log_id = if restore.is_empty() {
         let lines = io::stdin().lines();
 
-        import_lines(config, lines)?
+        import_lines(config, lines).await?
     } else {
         let file = File::open(restore)?;
         let reader = BufReader::new(file);
         let lines = reader.lines();
 
-        import_lines(config, lines)?
+        import_lines(config, lines).await?
     };
 
     upgrade(config).await?;
