@@ -1,8 +1,5 @@
 ---
-title: Query Server Configurations
-sidebar_label: Query Server Configurations
-description:
-  Query Server Configuration
+title: Query Configurations
 ---
 
 The configuration file `databend-query.toml` contains settings for configuring the Databend query server. Additionally, you can configure more settings for the query server with the script `databend-query`. To find out the available settings with the script, refer to the script's help information:
@@ -245,65 +242,4 @@ data_cache_storage = "disk"
 path = "./databend/_cache"
 # max bytes of cached data 20G
 max_bytes = 21474836480
-```
-
-## A Full databend-query.toml Config File Sample
-
-For ease of experience, set all hosts to 0.0.0.0. Exercise caution when setting host if the application is in production.
-
-```toml title="databend-query.toml"
-# Logging
-[log.file]
-on = true
-dir = "./.databend/logs"
-level = "INFO"
-format = "json"
-
-[log.stderr]
-on = false
-level = "DEBUG"
-format = "text"
-
-# Meta Service
-[meta]
-endpoints = ["0.0.0.0:9191"]
-username = "root"
-password = "root"
-client_timeout_in_second = 60
-auto_sync_interval = 60
-
-[query]
-# For admin RESET API.
-admin_api_address = "0.0.0.0:8001"
-
-# Metrics.
-metric_api_address = "0.0.0.0:7071"
-
-# Cluster flight RPC.
-flight_api_address = "0.0.0.0:9091"
-
-# Query MySQL Handler.
-mysql_handler_host = "0.0.0.0"
-mysql_handler_port = 3307
-
-# Query ClickHouse HTTP Handler.
-clickhouse_http_handler_host = "0.0.0.0"
-clickhouse_http_handler_port = 9001
-
-# Query HTTP Handler.
-http_handler_host = "0.0.0.0"
-http_handler_port = 8000
-
-tenant_id = "tenant1"
-cluster_id = "cluster1"
-
-[storage]
-# s3
-type = "s3"
-
-[storage.s3]
-bucket = "databend"
-endpoint_url = "https://s3.amazonaws.com"
-access_key_id = "<your-key-id>"
-secret_access_key = "<your-access-key>"
 ```
