@@ -22,6 +22,7 @@ use common_pipeline_core::Pipeline;
 
 use super::ParquetRSTable;
 use crate::parquet_rs::source::ParquetSource;
+use crate::utils::calc_parallelism;
 use crate::ParquetRSReader;
 
 impl ParquetRSTable {
@@ -33,8 +34,6 @@ impl ParquetRSTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let parts_len = plan.parts.len();
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let max_threads = std::cmp::min(parts_len, max_threads);
 
         let table_schema: TableSchemaRef = self.table_info.schema();
         let reader = Arc::new(ParquetRSReader::create_with_parquet_schema(
@@ -47,12 +46,13 @@ impl ParquetRSTable {
             false,
         )?);
 
+        let num_threads = calc_parallelism(&ctx, plan)?;
+
         // TODO(parquet):
         // - introduce Top-K optimization.
-        // - adjust parallelism by data sizes.
         pipeline.add_source(
             |output| ParquetSource::create(ctx.clone(), output, reader.clone()),
-            max_threads.max(1),
+            num_threads,
         )
     }
 }
