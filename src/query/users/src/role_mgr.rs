@@ -141,7 +141,7 @@ impl UserApiProvider {
     pub async fn grant_ownership_to_role(
         &self,
         tenant: &str,
-        from: &String,
+        from: Option<&String>,
         to: &String,
         object: GrantObject,
     ) -> Result<()> {

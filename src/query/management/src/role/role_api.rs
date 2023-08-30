@@ -40,8 +40,12 @@ pub trait RoleApi: Sync + Send {
     ///
     /// Seq number ensures there is no other write happens between get and set.
     #[allow(clippy::ptr_arg)]
-    async fn grant_ownership(&self, from: &String, to: &String, object: &GrantObject)
-    -> Result<()>;
+    async fn grant_ownership(
+        &self,
+        from: Option<&String>,
+        to: &String,
+        object: &GrantObject,
+    ) -> Result<()>;
 
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<()>;
 }
