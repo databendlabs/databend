@@ -36,7 +36,7 @@ Note: without the `--db` argument, the exported data will output to the stdio in
 ### Export from a running server
 
 Similar to exporting from data dir, but with the service endpoint argument `--grpc-api-address <ip:port>` in place of the `--raft-dir`,
-where `<ip:port>` is the `grpc_api_address` in [databend-meta config.toml](./15-metasrv-config.md), e.g.:
+where `<ip:port>` is the `grpc_api_address` in [databend-meta.toml](https://github.com/datafuselabs/databend/blob/main/scripts/distribution/configs/databend-meta.toml), e.g.:
 
 ```shell
 ./target/debug/databend-metactl --export --grpc-api-address "127.0.0.1:9191" --db <output_fn>
