@@ -217,6 +217,7 @@ impl HttpQuery {
     ) -> Result<Arc<HttpQuery>> {
         let http_query_manager = HttpQueryManager::instance();
 
+        // If session_id is specified, the new query will be attached in the same session.
         let session = if let Some(id) = &request.session_id {
             let session = http_query_manager.get_session(id).await.ok_or_else(|| {
                 ErrorCode::UnknownSession(format!("unknown session-id {}, maybe expired", id))
@@ -245,6 +246,10 @@ impl HttpQuery {
             ctx.get_session(SessionType::HTTPQuery)
         };
 
+        // Read the session variables in the request, and set them to the current session.
+        // the session variables includes:
+        // - the current database
+        // - the session-level settings, like max_threads
         if let Some(session_conf) = &request.session {
             if let Some(db) = &session_conf.database {
                 session.set_current_database(db.clone());
@@ -275,20 +280,31 @@ impl HttpQuery {
 
         let deduplicate_label = &ctx.deduplicate_label;
         let user_agent = &ctx.user_agent;
+        let query_id = ctx.query_id.clone();
         let ctx = session.create_query_context().await?;
 
+        // Deduplicate label is used on the DML queries which may be retried by the client.
+        // It can be used to avoid the duplicated execution of the DML queries.
         if let Some(label) = deduplicate_label {
             ctx.get_settings().set_deduplicate_label(label.clone())?;
         }
         if let Some(ua) = user_agent {
             ctx.set_ua(ua.clone());
         }
+        if let Some(query_id) = query_id {
+            // TODO: validate the query_id to be uuid format
+            ctx.set_id(query_id);
+        }
 
         let session_id = session.get_id().clone();
-        let id = ctx.get_id();
+        let query_id = ctx.get_id();
         let sql = &request.sql;
-        info!(query_id = id, session_id = session_id, sql = sql; "run");
+        info!(query_id = query_id, session_id = session_id, sql = sql; "create query");
 
+        // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
+        // When stage attachment is specified, the query may looks like `INSERT INTO mytbl VALUES;`,
+        // and the data in the stage attachment (which is mostly a s3 path) will be inserted into
+        // the table.
         match &request.stage_attachment {
             Some(attachment) => ctx.attach_stage(StageAttachment {
                 location: attachment.location.clone(),
@@ -301,7 +317,7 @@ impl HttpQuery {
         let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
         let start_time = Instant::now();
         let state = Arc::new(RwLock::new(Executor {
-            query_id: id.clone(),
+            query_id: query_id.clone(),
             start_time,
             state: ExecuteState::Starting(ExecuteStarting { ctx: ctx.clone() }),
         }));
@@ -309,8 +325,8 @@ impl HttpQuery {
         let state_clone = state.clone();
         let ctx_clone = ctx.clone();
         let sql = request.sql.clone();
-        let query_id = id.clone();
-        let query_id_clone = id.clone();
+        let query_id = query_id.clone();
+        let query_id_clone = query_id.clone();
 
         let (plan, plan_extras) = ExecuteState::plan_sql(&sql, ctx.clone()).await?;
         let schema = plan.schema();
@@ -356,7 +372,7 @@ impl HttpQuery {
             format_settings,
         )));
         let query = HttpQuery {
-            id,
+            id: query_id,
             session_id,
             request,
             state,
