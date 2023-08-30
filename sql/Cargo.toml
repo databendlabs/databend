@@ -23,11 +23,11 @@ serde_json = { version = "1.0.97", default-features = false, features = ["std"] 
 tokio-stream = "0.1.14"
 url = { version = "2.4.0", default-features = false }
 
-arrow = { version = "41.0.0" }
-arrow-array = { version = "41.0.0", optional = true }
-arrow-cast = { version = "41.0.0", features = ["prettyprint"], optional = true }
-arrow-flight = { version = "41.0.0", features = ["flight-sql-experimental"], optional = true }
-arrow-schema = { version = "41.0.0", optional = true }
+arrow = { version = "45.0.0" }
+arrow-array = { version = "45.0.0", optional = true }
+arrow-cast = { version = "45.0.0", features = ["prettyprint"], optional = true }
+arrow-flight = { version = "45.0.0", features = ["flight-sql-experimental"], optional = true }
+arrow-schema = { version = "45.0.0", optional = true }
 glob = "0.3.1"
 tonic = { version = "0.9.2", default-features = false, features = [
     "transport",
