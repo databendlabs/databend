@@ -196,6 +196,10 @@ impl QueryContext {
         Ok(())
     }
 
+    pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
+        self.shared.attach_table(catalog, database, name, table)
+    }
+
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
         DataExchangeManager::instance()
     }
