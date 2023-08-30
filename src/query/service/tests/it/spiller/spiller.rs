@@ -15,7 +15,7 @@
 use common_base::base::tokio;
 use common_base::base::tokio::fs;
 use common_base::base::GlobalInstance;
-use common_config::GlobalConfig;
+
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_expression::types::DataType;

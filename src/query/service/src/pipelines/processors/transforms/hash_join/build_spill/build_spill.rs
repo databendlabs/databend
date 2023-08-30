@@ -22,7 +22,7 @@ use common_expression::Evaluator;
 use common_expression::HashMethodKind;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_storage::DataOperator;
-use parking_lot::RwLock;
+
 
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -110,7 +110,7 @@ impl BuildSpillState {
     // Get all hashes for input data.
     fn get_hashes(&self, block: &DataBlock, hashes: &mut Vec<u64>) -> Result<()> {
         let func_ctx = self.build_state.ctx.get_function_context()?;
-        let mut evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
         // Use the first column as the key column to generate hash
         let first_build_key = &self.build_state.hash_join_state.hash_join_desc.build_keys[0];
         let build_key_column = evaluator.run(first_build_key)?;

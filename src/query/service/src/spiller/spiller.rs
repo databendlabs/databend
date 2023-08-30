@@ -21,7 +21,7 @@ use common_expression::arrow::deserialize_column;
 use common_expression::arrow::serialize_column;
 use common_expression::DataBlock;
 use opendal::Operator;
-use parking_lot::RwLock;
+
 
 /// Spiller type, currently only supports HashJoin
 pub enum SpillerType {

@@ -20,7 +20,7 @@ use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
 use parking_lot::RwLock;
 
-use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
+
 
 /// Coordinate all hash join build processors to spill.
 /// It's shared by all hash join build processors.

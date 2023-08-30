@@ -148,7 +148,7 @@ impl Processor for TransformHashJoinBuild {
     fn process(&mut self) -> Result<()> {
         match self.step {
             HashJoinBuildStep::Running => {
-                if let Some(mut data_block) = self.input_data.take() {
+                if let Some(data_block) = self.input_data.take() {
                     if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.is_any_spilled(){
                         // Check if need to spill
                         let need_spill = spill_state.check_need_spill(&data_block)?;
