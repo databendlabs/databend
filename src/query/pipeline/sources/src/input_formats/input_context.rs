@@ -23,6 +23,7 @@ use std::sync::Mutex;
 
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::Progress;
+use common_catalog::table_context::TableContext;
 use common_compress::CompressAlgorithm;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -38,6 +39,7 @@ use common_meta_app::principal::StageFileCompression;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::InputError;
 use common_settings::Settings;
+use common_storage::FileStatus;
 use dashmap::DashMap;
 use opendal::Operator;
 
@@ -108,6 +110,7 @@ impl InputSource {
 }
 
 pub struct InputContext {
+    pub table_context: Arc<dyn TableContext>,
     pub plan: InputPlan,
     pub schema: TableSchemaRef,
     pub source: InputSource,
@@ -157,6 +160,7 @@ impl InputContext {
 
     #[allow(clippy::too_many_arguments)]
     pub fn try_create_from_copy(
+        table_context: Arc<dyn TableContext>,
         operator: Operator,
         settings: Arc<Settings>,
         schema: TableSchemaRef,
@@ -180,6 +184,7 @@ impl InputContext {
         let format = Self::get_input_format(&file_format_params)?;
 
         Ok(InputContext {
+            table_context,
             format,
             schema,
             splits,
@@ -200,6 +205,7 @@ impl InputContext {
 
     #[async_backtrace::framed]
     pub async fn try_create_from_insert_clickhouse(
+        table_context: Arc<dyn TableContext>,
         format_name: &str,
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
@@ -234,6 +240,7 @@ impl InputContext {
         };
 
         Ok(InputContext {
+            table_context,
             format,
             schema,
             settings,
@@ -255,6 +262,7 @@ impl InputContext {
     #[async_backtrace::framed]
     #[allow(clippy::too_many_arguments)]
     pub async fn try_create_from_insert_file_format(
+        table_context: Arc<dyn TableContext>,
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
         file_format_params: FileFormatParams,
@@ -274,6 +282,7 @@ impl InputContext {
         };
 
         Ok(InputContext {
+            table_context,
             format,
             schema,
             settings,
@@ -389,11 +398,13 @@ impl InputContext {
         None
     }
 
+    /// the line start from 0, it will be increased by 1 right before output
     pub fn on_error(
         &self,
         e: ErrorCode,
         columns: Option<(&mut [ColumnBuilder], usize)>,
-        local_error_map: Option<&mut HashMap<u16, InputError>>,
+        file_status: &mut FileStatus,
+        line: usize,
     ) -> Result<()> {
         if let Some((columns, num_rows)) = columns {
             columns.iter_mut().for_each(|c| {
@@ -408,11 +419,7 @@ impl InputContext {
 
         match &self.on_error_mode {
             OnErrorMode::Continue => {
-                if let Some(m) = local_error_map {
-                    m.entry(e.code())
-                        .and_modify(|input_error| input_error.num += 1)
-                        .or_insert(InputError { err: e, num: 1 });
-                }
+                file_status.add_error(e, line);
                 Ok(())
             }
             OnErrorMode::AbortNum(abort_num) => {
