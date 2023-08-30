@@ -2046,16 +2046,16 @@ Functions overloads:
 1 md5(String NULL) :: String NULL
 0 minus(UInt8) :: Int16
 1 minus(UInt8 NULL) :: Int16 NULL
-2 minus(Int8) :: Int8
-3 minus(Int8 NULL) :: Int8 NULL
+2 minus(Int8) :: Int16
+3 minus(Int8 NULL) :: Int16 NULL
 4 minus(UInt16) :: Int32
 5 minus(UInt16 NULL) :: Int32 NULL
-6 minus(Int16) :: Int16
-7 minus(Int16 NULL) :: Int16 NULL
+6 minus(Int16) :: Int32
+7 minus(Int16 NULL) :: Int32 NULL
 8 minus(UInt32) :: Int64
 9 minus(UInt32 NULL) :: Int64 NULL
-10 minus(Int32) :: Int32
-11 minus(Int32 NULL) :: Int32 NULL
+10 minus(Int32) :: Int64
+11 minus(Int32 NULL) :: Int64 NULL
 12 minus(UInt64) :: Int64
 13 minus(UInt64 NULL) :: Int64 NULL
 14 minus(Int64) :: Int64

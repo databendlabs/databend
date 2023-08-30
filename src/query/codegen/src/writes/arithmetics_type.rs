@@ -248,11 +248,7 @@ fn arithmetic_coercion(a: NumberDataType, b: NumberDataType, op: OP) -> NumberDa
 }
 
 fn neg_coercion(a: NumberDataType) -> NumberDataType {
-    let bit_width = if a.is_signed() {
-        a.bit_width()
-    } else {
-        next_bit_width(a.bit_width())
-    };
+    let bit_width = next_bit_width(a.bit_width());
 
     NumberDataType::new(bit_width, true, a.is_float())
 }

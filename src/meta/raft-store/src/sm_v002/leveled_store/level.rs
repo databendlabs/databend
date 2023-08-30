@@ -32,7 +32,7 @@ pub struct Level {
 
 impl<K> MultiLevelMap<K> for Level
 where
-    K: Ord + fmt::Debug,
+    K: Ord + fmt::Debug + Send + Sync + 'static,
     LevelData: MapApi<K>,
 {
     type API = LevelData;

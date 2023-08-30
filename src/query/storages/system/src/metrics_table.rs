@@ -44,6 +44,7 @@ impl SyncSystemTable for MetricsTable {
     const NAME: &'static str = "system.metrics";
     // Allow distributed query.
     const IS_LOCAL: bool = false;
+    const BROADCAST_TRUNCATE: bool = true;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
