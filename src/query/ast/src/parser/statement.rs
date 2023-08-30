@@ -151,6 +151,36 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let merge = map(
+        rule! {
+            MERGE ~ #hint? ~ INTO ~ #period_separated_idents_1_to_3  ~ #table_alias? ~ USING
+            ~ #merge_source  ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
+        },
+        |(
+            _,
+            opt_hints,
+            _,
+            (catalog, database, table),
+            alias_target,
+            _,
+            source,
+            _,
+            join_expr,
+            merge_options,
+        )| {
+            Statement::MergeInto(MergeIntoStmt {
+                hints: opt_hints,
+                catalog,
+                database,
+                table_ident: table,
+                source,
+                alias_target,
+                join_expr,
+                merge_options,
+            })
+        },
+    );
+
     let delete = map(
         rule! {
             DELETE ~ #hint? ~ FROM ~ #table_reference_only
@@ -777,12 +807,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let create_virtual_columns = map(
+    let create_virtual_column = map(
         rule! {
-            CREATE ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+            CREATE ~ VIRTUAL ~ COLUMN ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
-            Statement::CreateVirtualColumns(CreateVirtualColumnsStmt {
+            Statement::CreateVirtualColumn(CreateVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -791,12 +821,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let alter_virtual_columns = map(
+    let alter_virtual_column = map(
         rule! {
-            ALTER ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+            ALTER ~ VIRTUAL ~ COLUMN ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
-            Statement::AlterVirtualColumns(AlterVirtualColumnsStmt {
+            Statement::AlterVirtualColumn(AlterVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -805,12 +835,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let drop_virtual_columns = map(
+    let drop_virtual_column = map(
         rule! {
-            DROP ~ VIRTUAL ~ COLUMNS ~ FOR ~ #period_separated_idents_1_to_3
+            DROP ~ VIRTUAL ~ COLUMN ~ FOR ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, _, (catalog, database, table))| {
-            Statement::DropVirtualColumns(DropVirtualColumnsStmt {
+            Statement::DropVirtualColumn(DropVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -818,12 +848,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let generate_virtual_columns = map(
+    let refresh_virtual_column = map(
         rule! {
-            GENERATE ~ VIRTUAL ~ COLUMNS ~ FOR ~ #period_separated_idents_1_to_3
+            REFRESH ~ VIRTUAL ~ COLUMN ~ FOR ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, _, (catalog, database, table))| {
-            Statement::GenerateVirtualColumns(GenerateVirtualColumnsStmt {
+            Statement::RefreshVirtualColumn(RefreshVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -1460,6 +1490,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #replace : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
         ),
         rule!(
             #set_variable : "`SET <variable> = <value>`"
@@ -1498,10 +1529,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
         ),
         rule!(
-            #create_virtual_columns: "`CREATE VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
-            | #alter_virtual_columns: "`ALTER VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
-            | #drop_virtual_columns: "`DROP VIRTUAL COLUMNS FOR [<database>.]<table>`"
-            | #generate_virtual_columns: "`GENERATE VIRTUAL COLUMNS FOR [<database>.]<table>`"
+            #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
+            | #alter_virtual_column: "`ALTER VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
+            | #drop_virtual_column: "`DROP VIRTUAL COLUMN FOR [<database>.]<table>`"
+            | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
         ),
         rule!(
             #show_users : "`SHOW USERS`"
@@ -1629,6 +1660,28 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         #streaming
         | #streaming_v2
         | #values
+        | #query
+    )(i)
+}
+
+pub fn merge_source(i: Input) -> IResult<MergeSource> {
+    let streaming_v2 = map(
+        rule! {
+           #file_format_clause  ~ ( ON_ERROR ~ "=" ~ #ident)? ~  #rest_str
+        },
+        |(options, on_error_opt, (_, start))| MergeSource::StreamingV2 {
+            settings: options,
+            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
+            start,
+        },
+    );
+
+    let query = map(query, |query| MergeSource::Select {
+        query: Box::new(query),
+    });
+
+    rule!(
+          #streaming_v2
         | #query
     )(i)
 }
@@ -1837,6 +1890,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Set, rule! { SET }),
         value(UserPrivilegeType::Drop, rule! { DROP }),
         value(UserPrivilegeType::Create, rule! { CREATE }),
+        value(UserPrivilegeType::Ownership, rule! { OWNERSHIP }),
     ))(i)
 }
 
@@ -2144,6 +2198,67 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #recluster_table
         | #revert_table
         | #set_table_options
+    )(i)
+}
+
+pub fn match_clause(i: Input) -> IResult<MergeOption> {
+    map(
+        rule! {
+            WHEN ~ MATCHED ~ (AND ~ #expr)? ~ THEN ~ #match_operation
+        },
+        |(_, _, expr_op, _, match_operation)| match expr_op {
+            Some(expr) => MergeOption::Match(MatchedClause {
+                selection: Some(expr.1),
+                operation: match_operation,
+            }),
+            None => MergeOption::Match(MatchedClause {
+                selection: None,
+                operation: match_operation,
+            }),
+        },
+    )(i)
+}
+
+fn match_operation(i: Input) -> IResult<MatchOperation> {
+    alt((
+        value(MatchOperation::Delete, rule! {DELETE}),
+        map(
+            rule! {
+                UPDATE ~ SET ~ ^#comma_separated_list1(merge_update_expr)
+            },
+            |(_, _, update_list)| MatchOperation::Update { update_list },
+        ),
+    ))(i)
+}
+
+pub fn unmatch_clause(i: Input) -> IResult<MergeOption> {
+    map(
+        rule! {
+            WHEN ~ NOT ~ MATCHED ~ (AND ~ #expr)?  ~ THEN ~ INSERT ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ VALUES ~ ^#row_values
+        },
+        |(_, _, _, expr_op, _, _, columns_op, _, values)| {
+            let selection = match expr_op {
+                Some(e) => Some(e.1),
+                None => None,
+            };
+            match columns_op {
+                Some(columns) => MergeOption::Unmatch(UnmatchedClause {
+                    insert_operation: InsertOperation {
+                        columns: Some(columns.1),
+                        values,
+                    },
+                    selection,
+                }),
+                None => MergeOption::Unmatch(UnmatchedClause {
+                    insert_operation: InsertOperation {
+                        columns: None,
+                        values,
+                    },
+                    selection,
+                }),
+            }
+        },
     )(i)
 }
 
@@ -2531,4 +2646,16 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
     map(rule! { ( #ident ~ "=" ~ ^#expr ) }, |(name, _, expr)| {
         UpdateExpr { name, expr }
     })(i)
+}
+
+pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
+    map(
+        rule! { ( #period_separated_idents_1_to_3 ~ "=" ~ ^#expr ) },
+        |((catalog, table, name), _, expr)| MergeUpdateExpr {
+            catalog,
+            table,
+            name,
+            expr,
+        },
+    )(i)
 }

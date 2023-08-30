@@ -25,10 +25,12 @@ use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
+use common_ast::walk_query;
 use common_ast::walk_statement_mut;
 use common_ast::Dialect;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunctionFactory;
 use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
@@ -42,6 +44,7 @@ use crate::plans::CreateIndexPlan;
 use crate::plans::DropIndexPlan;
 use crate::plans::Plan;
 use crate::plans::RefreshIndexPlan;
+use crate::AggregatingIndexChecker;
 use crate::AggregatingIndexRewriter;
 use crate::BindContext;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
@@ -62,7 +65,10 @@ impl Binder {
         } = stmt;
 
         // check if query support index
-        Self::check_index_support(query)?;
+        let mut agg_index_checker = AggregatingIndexChecker::default();
+        walk_query(&mut agg_index_checker, query);
+        // todo(ariesdevil): do all check using `AggregatingIndexChecker`
+        Self::check_index_support(query, agg_index_checker.has_no_deterministic_func)?;
 
         let index_name = self.normalize_object_identifier(index_name);
 
@@ -167,6 +173,7 @@ impl Binder {
     ) -> Result<RefreshIndexPlan> {
         let tokens = tokenize_sql(&index_meta.query)?;
         let (mut stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+
         // rewrite aggregate function
         // The file name and block only correspond to each other at the time of table_scan,
         // after multiple transformations, this correspondence does not exist,
@@ -174,11 +181,10 @@ impl Binder {
         // to generate the index file corresponding to the source table data file,
         // so we rewrite the sql here to add `_block_name` to select targets,
         // so that we inline the file name into the data block.
-        let mut index_rewriter = AggregatingIndexRewriter {
-            // note: if user already use the `_block_name` in their sql
-            // we no need add it and **MUST NOT** drop this column in sink phase.
-            user_defined_block_name: false,
-        };
+
+        // NOTE: if user already use the `_block_name` in their sql
+        // we no need add it and **MUST NOT** drop this column in sink phase.
+        let mut index_rewriter = AggregatingIndexRewriter::default();
         walk_statement_mut(&mut index_rewriter, &mut stmt);
 
         bind_context.planning_agg_index = true;
@@ -220,11 +226,16 @@ impl Binder {
         Ok(plan)
     }
 
-    fn check_index_support(query: &Query) -> Result<()> {
+    fn check_index_support(query: &Query, has_no_deterministic_func: bool) -> Result<()> {
         let err = Err(ErrorCode::UnsupportedIndex(format!(
-            "Currently create aggregating index just support simple query, like: {}",
-            "SELECT ... FROM ... WHERE ... GROUP BY ..."
+            "Currently create aggregating index just support simple query, like: {},\
+             and non-deterministic functions are not support like: NOW()",
+            "SELECT ... FROM ... WHERE ... GROUP BY ...",
         )));
+
+        if has_no_deterministic_func {
+            return err;
+        }
 
         if query.with.is_some() || !query.order_by.is_empty() || !query.limit.is_empty() {
             return err;
@@ -248,6 +259,9 @@ impl Binder {
                     return err;
                 }
                 if let Some(fn_name) = target.function_call_name() {
+                    if !AggregateFunctionFactory::instance().contains(&fn_name) {
+                        continue;
+                    }
                     if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&&*fn_name) {
                         return Err(ErrorCode::UnsupportedIndex(format!(
                             "Currently create aggregating index just support these aggregate functions: {}",

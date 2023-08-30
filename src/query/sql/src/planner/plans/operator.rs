@@ -109,7 +109,6 @@ pub enum RelOperator {
     MaterializedCte(MaterializedCte),
     Lambda(Lambda),
     ConstantTableScan(ConstantTableScan),
-
     Pattern(PatternPlan),
 }
 

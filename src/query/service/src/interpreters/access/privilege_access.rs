@@ -142,7 +142,7 @@ impl AccessChecker for PrivilegeAccess {
             }
 
             // Virtual Column.
-            Plan::CreateVirtualColumns(plan) => {
+            Plan::CreateVirtualColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -154,7 +154,7 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::AlterVirtualColumns(plan) => {
+            Plan::AlterVirtualColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -166,7 +166,7 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::DropVirtualColumns(plan) => {
+            Plan::DropVirtualColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -178,7 +178,7 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::GenerateVirtualColumns(plan) => {
+            Plan::RefreshVirtualColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -430,6 +430,18 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Replace(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete],
+                    )
+                    .await?;
+            }
+            Plan::MergeInto(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(

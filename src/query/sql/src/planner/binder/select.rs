@@ -24,7 +24,6 @@ use common_ast::ast::Expr;
 use common_ast::ast::Expr::Array;
 use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
-use common_ast::ast::Indirection;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
@@ -318,29 +317,7 @@ impl Binder {
                 )
                 .await
             }
-            SetExpr::Values { span, values } => {
-                // rewrite values clause as select stmt
-                let stmt = SelectStmt {
-                    span: *span,
-                    hints: None,
-                    distinct: false,
-                    select_list: vec![SelectTarget::QualifiedName {
-                        qualified: vec![Indirection::Star(None)],
-                        exclude: None,
-                    }],
-                    from: vec![TableReference::Values {
-                        span: None,
-                        values: values.clone(),
-                        alias: None,
-                    }],
-                    selection: None,
-                    group_by: None,
-                    having: None,
-                    window_list: None,
-                };
-                self.bind_select_stmt(bind_context, &stmt, order_by, limit)
-                    .await
-            }
+            SetExpr::Values { span, values } => self.bind_values(bind_context, *span, values).await,
         }
     }
 
@@ -386,7 +363,7 @@ impl Binder {
         };
 
         let (mut s_expr, bind_context) = match query.body {
-            SetExpr::Select(_) | SetExpr::Query(_) | SetExpr::Values { .. } => {
+            SetExpr::Select(_) | SetExpr::Query(_) => {
                 self.bind_set_expr(
                     bind_context,
                     &query.body,
@@ -395,7 +372,7 @@ impl Binder {
                 )
                 .await?
             }
-            SetExpr::SetOperation(_) => {
+            SetExpr::SetOperation(_) | SetExpr::Values { .. } => {
                 let (mut s_expr, mut bind_context) = self
                     .bind_set_expr(bind_context, &query.body, &[], limit.unwrap_or_default())
                     .await?;

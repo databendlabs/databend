@@ -419,7 +419,7 @@ pub trait VisitorMut: Sized {
 
     fn visit_insert(&mut self, _insert: &mut InsertStmt) {}
     fn visit_replace(&mut self, _replace: &mut ReplaceStmt) {}
-
+    fn visit_merge_into(&mut self, _merge_into: &mut MergeIntoStmt) {}
     fn visit_insert_source(&mut self, _insert_source: &mut InsertSource) {}
 
     fn visit_delete(
@@ -502,13 +502,13 @@ pub trait VisitorMut: Sized {
     fn visit_drop_index(&mut self, _stmt: &mut DropIndexStmt) {}
     fn visit_refresh_index(&mut self, _stmt: &mut RefreshIndexStmt) {}
 
-    fn visit_create_virtual_columns(&mut self, _stmt: &mut CreateVirtualColumnsStmt) {}
+    fn visit_create_virtual_column(&mut self, _stmt: &mut CreateVirtualColumnStmt) {}
 
-    fn visit_alter_virtual_columns(&mut self, _stmt: &mut AlterVirtualColumnsStmt) {}
+    fn visit_alter_virtual_column(&mut self, _stmt: &mut AlterVirtualColumnStmt) {}
 
-    fn visit_drop_virtual_columns(&mut self, _stmt: &mut DropVirtualColumnsStmt) {}
+    fn visit_drop_virtual_column(&mut self, _stmt: &mut DropVirtualColumnStmt) {}
 
-    fn visit_generate_virtual_columns(&mut self, _stmt: &mut GenerateVirtualColumnsStmt) {}
+    fn visit_refresh_virtual_column(&mut self, _stmt: &mut RefreshVirtualColumnStmt) {}
 
     fn visit_show_users(&mut self) {}
 

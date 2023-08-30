@@ -539,8 +539,6 @@ pub enum TokenKind {
     SET_VAR,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
-    #[token("GENERATE", ignore(ascii_case))]
-    GENERATE,
     #[token("GENERATED", ignore(ascii_case))]
     GENERATED,
     #[token("GLOBAL", ignore(ascii_case))]
@@ -746,6 +744,12 @@ pub enum TokenKind {
     RENAME,
     #[token("REPLACE", ignore(ascii_case))]
     REPLACE,
+    #[token("MERGE", ignore(ascii_case))]
+    MERGE,
+    #[token("MATCHED", ignore(ascii_case))]
+    MATCHED,
+    #[token("UNMATCHED", ignore(ascii_case))]
+    UNMATCHED,
     #[token("ROW", ignore(ascii_case))]
     ROW,
     #[token("ROWS", ignore(ascii_case))]
@@ -998,6 +1002,8 @@ pub enum TokenKind {
     ROLLUP,
     #[token("INDEXES", ignore(ascii_case))]
     INDEXES,
+    #[token("OWNERSHIP", ignore(ascii_case))]
+    OWNERSHIP,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

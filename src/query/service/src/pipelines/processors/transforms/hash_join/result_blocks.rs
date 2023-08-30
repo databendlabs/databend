@@ -23,11 +23,11 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_hashtable::HashJoinHashtableLike;
 
-use super::JoinHashTable;
 use super::ProbeState;
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::sql::planner::plans::JoinType;
 
-impl JoinHashTable {
+impl HashJoinProbeState {
     pub(crate) fn result_blocks<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
@@ -40,7 +40,7 @@ impl JoinHashTable {
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
-        match self.hash_join_desc.join_type {
+        match self.hash_join_state.hash_join_desc.join_type {
             JoinType::Inner => self.probe_inner_join(
                 hash_table,
                 probe_state,
@@ -49,7 +49,12 @@ impl JoinHashTable {
                 is_probe_projected,
             ),
             JoinType::LeftSemi => {
-                if self.hash_join_desc.other_predicate.is_none() {
+                if self
+                    .hash_join_state
+                    .hash_join_desc
+                    .other_predicate
+                    .is_none()
+                {
                     self.left_semi_anti_join::<true, _, _>(
                         hash_table,
                         probe_state,
@@ -67,7 +72,12 @@ impl JoinHashTable {
                 }
             }
             JoinType::LeftAnti => {
-                if self.hash_join_desc.other_predicate.is_none() {
+                if self
+                    .hash_join_state
+                    .hash_join_desc
+                    .other_predicate
+                    .is_none()
+                {
                     self.left_semi_anti_join::<false, _, _>(
                         hash_table,
                         probe_state,
@@ -85,7 +95,12 @@ impl JoinHashTable {
                 }
             }
             JoinType::RightSemi => {
-                if self.hash_join_desc.other_predicate.is_none() {
+                if self
+                    .hash_join_state
+                    .hash_join_desc
+                    .other_predicate
+                    .is_none()
+                {
                     self.probe_right_semi_join::<_, _>(hash_table, probe_state, keys_iter)
                 } else {
                     self.probe_right_semi_join_with_conjunct::<_, _>(
@@ -98,7 +113,12 @@ impl JoinHashTable {
                 }
             }
             JoinType::RightAnti => {
-                if self.hash_join_desc.other_predicate.is_none() {
+                if self
+                    .hash_join_state
+                    .hash_join_desc
+                    .other_predicate
+                    .is_none()
+                {
                     self.probe_right_anti_join::<_, _>(hash_table, probe_state, keys_iter)
                 } else {
                     self.probe_right_anti_join_with_conjunct::<_, _>(
@@ -112,7 +132,12 @@ impl JoinHashTable {
             }
             // Single join is similar to left join, but the result is a single row.
             JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
-                if self.hash_join_desc.other_predicate.is_none() {
+                if self
+                    .hash_join_state
+                    .hash_join_desc
+                    .other_predicate
+                    .is_none()
+                {
                     self.probe_left_join::<_, _>(
                         hash_table,
                         probe_state,
@@ -147,7 +172,12 @@ impl JoinHashTable {
             //    so equi-condition is t1.b = subquery_5, and non-equi-condition is t1.a = t2.a.
             // 3. Correlated Exists subquery： only have one kind of join condition, equi-condition.
             //    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
-            JoinType::LeftMark => match self.hash_join_desc.other_predicate.is_none() {
+            JoinType::LeftMark => match self
+                .hash_join_state
+                .hash_join_desc
+                .other_predicate
+                .is_none()
+            {
                 true => self.probe_left_mark_join(hash_table, probe_state, keys_iter, input),
                 false => self.probe_left_mark_join_with_conjunct(
                     hash_table,
@@ -157,7 +187,12 @@ impl JoinHashTable {
                     is_probe_projected,
                 ),
             },
-            JoinType::RightMark => match self.hash_join_desc.other_predicate.is_none() {
+            JoinType::RightMark => match self
+                .hash_join_state
+                .hash_join_desc
+                .other_predicate
+                .is_none()
+            {
                 true => self.probe_right_mark_join(
                     hash_table,
                     probe_state,
@@ -175,7 +210,7 @@ impl JoinHashTable {
             },
             _ => Err(ErrorCode::Unimplemented(format!(
                 "{} is unimplemented",
-                self.hash_join_desc.join_type
+                self.hash_join_state.hash_join_desc.join_type
             ))),
         }
     }
@@ -185,11 +220,14 @@ impl JoinHashTable {
         input: DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>> {
-        if self.hash_join_desc.join_type == JoinType::LeftAnti {
+        if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftAnti {
             return Ok(vec![input]);
         }
         let input_num_rows = input.num_rows();
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
         let probe_block = if is_probe_projected {
             Some(input)
         } else {
@@ -197,7 +235,8 @@ impl JoinHashTable {
         };
         let build_block = if is_build_projected {
             let null_build_block = DataBlock::new(
-                self.row_space
+                self.hash_join_state
+                    .row_space
                     .build_schema
                     .fields()
                     .iter()

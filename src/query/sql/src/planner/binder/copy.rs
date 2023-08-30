@@ -120,6 +120,7 @@ impl<'a> Binder {
                     database_name,
                     table_name,
                     validation_mode,
+                    from_attachment: false,
                     force: stmt.force,
                     stage_table_info: StageTableInfo {
                         schema: stage_schema,
@@ -200,6 +201,7 @@ impl<'a> Binder {
                     database_name,
                     table_name,
                     validation_mode,
+                    from_attachment: false,
                     force: stmt.force,
                     stage_table_info: StageTableInfo {
                         schema: stage_schema,
@@ -353,6 +355,7 @@ impl<'a> Binder {
                     catalog_info,
                     database_name,
                     table_name,
+                    from_attachment: false,
                     required_source_schema: required_values_schema.clone(),
                     required_values_schema: required_values_schema.clone(),
                     values_consts: vec![],
@@ -468,8 +471,7 @@ impl<'a> Binder {
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let catalog_info = catalog.info();
 
-        let (mut stage_info, files_info) = self.bind_attachment(attachment).await?;
-        stage_info.copy_options.purge = true;
+        let (stage_info, files_info) = self.bind_attachment(attachment).await?;
 
         let stage_schema = infer_table_schema(&data_schema)?;
 
@@ -477,6 +479,7 @@ impl<'a> Binder {
             catalog_info,
             database_name,
             table_name,
+            from_attachment: true,
             required_source_schema: data_schema.clone(),
             required_values_schema,
             values_consts: const_columns,

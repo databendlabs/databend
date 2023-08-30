@@ -12,18 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartInfo;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_settings::ReplaceIntoShuffleStrategy;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::Deduplicate;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::QuerySource;
 use common_sql::executor::ReplaceInto;
+use common_storages_fuse::operations::Mutation;
 use common_storages_fuse::TableContext;
 use storages_common_table_meta::meta::BlockSlotDescription;
 use storages_common_table_meta::meta::Location;
@@ -191,16 +196,61 @@ impl PlanFragment {
             PhysicalPlan::DeletePartial(plan) => plan,
             _ => unreachable!("logic error"),
         };
-        let partitions = &plan.parts;
-        let executors = Fragmenter::get_executors(ctx);
+        let partitions: &Partitions = &plan.parts;
+        let executors = Fragmenter::get_executors(ctx.clone());
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
-        let partition_reshuffle = partitions.reshuffle(executors)?;
 
-        for (executor, parts) in partition_reshuffle.iter() {
+        // collect partitions by segment index
+        // finally, these code will be removed, after the pruning is refactored
+        let mut deleted_segments: Vec<Arc<Box<dyn PartInfo>>> = vec![];
+        let mut blocks_group_by_segment_index: HashMap<usize, Vec<Arc<Box<dyn PartInfo>>>> =
+            HashMap::new();
+        for part in &partitions.partitions {
+            // safe to unwrap because we know the type of plan is DeletePartial
+            let part_downcast: &Mutation = part.as_ref().as_ref().as_any().downcast_ref().unwrap();
+            match part_downcast {
+                Mutation::MutationDeletedSegment(_) => {
+                    deleted_segments.push(part.clone());
+                }
+                Mutation::MutationPartInfo(part_info) => {
+                    let segment_index: usize = part_info.index.segment_idx;
+                    let blocks = blocks_group_by_segment_index
+                        .entry(segment_index)
+                        .or_insert_with(Vec::new);
+                    blocks.push(part.clone());
+                }
+            }
+        }
+        let segments_reshuffle = Self::reshuffle(
+            executors,
+            blocks_group_by_segment_index
+                .into_iter()
+                .map(|x| x.1)
+                .collect(),
+        )?;
+        let mut partition_reshuffle = segments_reshuffle
+            .into_iter()
+            .map(|(k, v)| {
+                let mut parts = vec![];
+                for mut segment_parts in v {
+                    parts.append(&mut segment_parts);
+                }
+                (k, parts)
+            })
+            .collect::<HashMap<_, _>>();
+        partition_reshuffle
+            .entry(Fragmenter::get_local_executor(ctx))
+            .or_insert_with(Vec::new)
+            .append(&mut deleted_segments);
+        for (executor, parts) in partition_reshuffle.into_iter() {
             let mut plan = self.plan.clone();
 
             let mut replace_delete_partial = ReplaceDeletePartial {
-                partitions: parts.clone(),
+                partitions: Partitions {
+                    kind: PartitionsShuffleKind::Mod,
+                    partitions: parts,
+                    is_lazy: false,
+                },
             };
             plan = replace_delete_partial.replace(&plan)?;
 
@@ -224,28 +274,85 @@ impl PlanFragment {
         let executors = Fragmenter::get_executors(ctx.clone());
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
         let local_id = &ctx.get_cluster().local_id;
-        let num_slots = executors.len();
+        match ctx.get_settings().get_replace_into_shuffle_strategy()? {
+            ReplaceIntoShuffleStrategy::SegmentLevelShuffling => {
+                let partition_reshuffle = Self::reshuffle(executors, partitions.clone())?;
+                for (executor, parts) in partition_reshuffle.iter() {
+                    let mut plan = self.plan.clone();
+                    let need_insert = executor == local_id;
 
-        // assign all the segment locations to each one of the executors,
-        // but for each segment, one executor only need to take part of the blocks
-        for (executor_idx, executor) in executors.into_iter().enumerate() {
-            let mut plan = self.plan.clone();
-            let need_insert = &executor == local_id;
-            let mut replace_replace_into = ReplaceReplaceInto {
-                partitions: partitions.clone(),
-                slot: Some(BlockSlotDescription {
-                    num_slots,
-                    slot: executor_idx as u32,
-                }),
-                need_insert,
-            };
-            plan = replace_replace_into.replace(&plan)?;
+                    let mut replace_replace_into = ReplaceReplaceInto {
+                        partitions: parts.clone(),
+                        slot: None,
+                        need_insert,
+                    };
+                    plan = replace_replace_into.replace(&plan)?;
 
-            fragment_actions
-                .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+                    fragment_actions
+                        .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+                }
+            }
+            ReplaceIntoShuffleStrategy::BlockLevelShuffling => {
+                let num_slots = executors.len();
+                // assign all the segment locations to each one of the executors,
+                // but for each segment, one executor only need to take part of the blocks
+                for (executor_idx, executor) in executors.iter().enumerate() {
+                    let mut plan = self.plan.clone();
+                    let need_insert = executor == local_id;
+                    let mut replace_replace_into = ReplaceReplaceInto {
+                        partitions: partitions.clone(),
+                        slot: Some(BlockSlotDescription {
+                            num_slots,
+                            slot: executor_idx as u32,
+                        }),
+                        need_insert,
+                    };
+                    plan = replace_replace_into.replace(&plan)?;
+
+                    fragment_actions
+                        .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+                }
+            }
+        }
+        Ok(fragment_actions)
+    }
+
+    fn reshuffle<T: Clone>(
+        executors: Vec<String>,
+        partitions: Vec<T>,
+    ) -> Result<HashMap<String, Vec<T>>> {
+        let num_parts = partitions.len();
+        let num_executors = executors.len();
+        let mut executors_sorted = executors;
+        executors_sorted.sort();
+
+        let mut parts = partitions
+            .into_iter()
+            .enumerate()
+            .map(|(idx, p)| (idx % num_executors, p))
+            .collect::<Vec<_>>();
+        parts.sort_by(|a, b| a.0.cmp(&b.0));
+        let partitions: Vec<_> = parts.into_iter().map(|x| x.1).collect();
+
+        let mut executor_part = HashMap::default();
+        // the first num_parts % num_executors get parts_per_node parts
+        // the remaining get parts_per_node - 1 parts
+        let parts_per_node = (num_parts + num_executors - 1) / num_executors;
+        for (idx, executor) in executors_sorted.iter().enumerate() {
+            let begin = parts_per_node * idx;
+            let end = num_parts.min(parts_per_node * (idx + 1));
+            let parts = partitions[begin..end].to_vec();
+            executor_part.insert(executor.clone(), parts);
+            if end == num_parts && idx < num_executors - 1 {
+                // reach here only when num_executors > num_parts
+                executors_sorted[(idx + 1)..].iter().for_each(|executor| {
+                    executor_part.insert(executor.clone(), vec![]);
+                });
+                break;
+            }
         }
 
-        Ok(fragment_actions)
+        Ok(executor_part)
     }
 
     fn get_read_source(&self) -> Result<DataSourcePlan> {

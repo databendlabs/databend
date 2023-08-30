@@ -15,6 +15,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -22,22 +24,24 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use opendal::Reader;
-use parquet::arrow::async_reader::ParquetRecordBatchStream;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 
 use super::parquet_reader::ParquetRSReader;
 use crate::ParquetPart;
 
 pub struct ParquetSource {
+    // Source processor related fields.
+    output: Arc<OutputPort>,
+    scan_progress: Arc<Progress>,
+
     // Used for event transforming.
     ctx: Arc<dyn TableContext>,
-    output: Arc<OutputPort>,
     generated_data: Option<DataBlock>,
     is_finished: bool,
 
     // Used to read parquet.
     reader: Arc<ParquetRSReader>,
-    stream: Option<ParquetRecordBatchStream<Reader>>,
+    batch_reader: Option<ParquetRecordBatchReader>,
 }
 
 impl ParquetSource {
@@ -46,11 +50,13 @@ impl ParquetSource {
         output: Arc<OutputPort>,
         reader: Arc<ParquetRSReader>,
     ) -> Result<ProcessorPtr> {
+        let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(Self {
-            ctx,
             output,
+            scan_progress,
+            ctx,
             reader,
-            stream: None,
+            batch_reader: None,
             generated_data: None,
             is_finished: false,
         })))
@@ -84,6 +90,11 @@ impl Processor for ParquetSource {
         match self.generated_data.take() {
             None => Ok(Event::Async),
             Some(data_block) => {
+                let progress_values = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+                self.scan_progress.incr(&progress_values);
                 self.output.push_data(Ok(data_block));
                 Ok(Event::NeedConsume)
             }
@@ -92,22 +103,19 @@ impl Processor for ParquetSource {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        if let Some(mut stream) = self.stream.take() {
-            if let Some(block) = self.reader.read_block(&mut stream).await? {
+        if let Some(mut reader) = self.batch_reader.take() {
+            if let Some(block) = self.reader.read_block(&mut reader).await? {
                 self.generated_data = Some(block);
-                self.stream = Some(stream);
+                self.batch_reader = Some(reader);
             }
             // else:
             // If `read_block` returns `None`, it means the stream is finished.
             // And we should try to build another stream (in next event loop).
         } else if let Some(part) = self.ctx.get_partition() {
             match ParquetPart::from_part(&part)? {
-                ParquetPart::ParquetRSFile(file) => {
-                    let stream = self
-                        .reader
-                        .prepare_data_stream(self.ctx.clone(), &file.location)
-                        .await?;
-                    self.stream = Some(stream);
+                ParquetPart::ParquetRSRowGroup(part) => {
+                    let reader = self.reader.prepare_row_group_reader(part).await?;
+                    self.batch_reader = reader;
                 }
                 _ => unreachable!(),
             }

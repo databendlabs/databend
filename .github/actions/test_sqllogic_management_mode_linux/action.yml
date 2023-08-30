@@ -30,7 +30,7 @@ runs:
       run: bash ./scripts/ci/ci-run-sqllogic-tests-management-mode.sh ${{ inputs.dirs }}
 
     - name: Upload failure
-      if: failure() || cancelled()
+      if: failure()
       uses: ./.github/actions/artifact_failure
       with:
         name: test-sqllogic-management-${{ inputs.handlers }}-${{ inputs.dirs }}

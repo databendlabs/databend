@@ -6,16 +6,7 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="Introduced: v1.2.25"/>
 
-A well-clustered table may become chaotic in some storage blocks, negatively affecting the query performance. For example, the table continues to experience DML operations (INSERT / UPDATE / DELETE). This command helps reduce the chaos by re-clustering the table.
-
-Databend recommends using the following statement with the [CLUSTERING_INFORMATION](../../../15-sql-functions/111-system-functions/clustering_information.md) function to determine when to re-cluster a table:
-
-```sql
-SELECT If(average_depth > total_block_count * 0.01
-          AND average_depth > 1, 'The table needs recluster now',
-              'The table does not need recluster now')
-FROM   clustering_information('<your_database>', '<your_table>'); 
-```
+Re-clusters a table. For why and when to re-cluster a table, see [Re-clustering Table](index.md#re-clustering-table).
 
 ### Syntax
 
@@ -48,7 +39,7 @@ insert into t values(4,4);
 
 select * from clustering_information('default','t')\G
 *************************** 1. row ***************************
-        cluster_by_keys: ((a + 1))
+            cluster_key: ((a + 1))
       total_block_count: 3
    constant_block_count: 1
 unclustered_block_count: 0
@@ -61,7 +52,7 @@ ALTER TABLE t RECLUSTER FINAL WHERE a != 4;
 
 select * from clustering_information('default','t')\G
 *************************** 1. row ***************************
-        cluster_by_keys: ((a + 1))
+            cluster_key: ((a + 1))
       total_block_count: 2
    constant_block_count: 1
 unclustered_block_count: 0

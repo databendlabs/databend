@@ -94,7 +94,7 @@ pub trait Interpreter: Sync + Send {
 
             ctx.set_executor(complete_executor.get_inner())?;
             complete_executor.execute()?;
-            Ok(Box::pin(DataBlockStream::create(None, vec![])))
+            self.inject_result()
         } else {
             let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
 
@@ -114,6 +114,10 @@ pub trait Interpreter: Sync + Send {
             "UnImplement set_source_pipe_builder method for {:?}",
             self.name()
         )))
+    }
+
+    fn inject_result(&self) -> Result<SendableDataBlockStream> {
+        Ok(Box::pin(DataBlockStream::create(None, vec![])))
     }
 }
 

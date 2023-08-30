@@ -57,6 +57,7 @@ fn new_db_meta_share() -> mt::DatabaseMeta {
             tenant: "tenant".to_string(),
             share_name: "share".to_string(),
         }),
+        owner: None,
     }
 }
 
@@ -71,6 +72,7 @@ fn new_db_meta() -> mt::DatabaseMeta {
         drop_on: None,
         shared_by: BTreeSet::from_iter(vec![1].into_iter()),
         from_share: None,
+        owner: None,
     }
 }
 
@@ -203,6 +205,7 @@ fn new_table_meta() -> mt::TableMeta {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
+        owner: None,
     }
 }
 

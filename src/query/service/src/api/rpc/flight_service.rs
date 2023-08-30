@@ -31,6 +31,7 @@ use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
 use common_base::match_join_handle;
 use common_base::runtime::TrySpawn;
+use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_settings::Settings;
 use common_tracing::func_name;
@@ -172,6 +173,10 @@ impl FlightService for DatabendQueryFlightService {
                     let ctx = session.create_query_context().await?;
                     // Keep query id
                     ctx.set_id(init_query_fragments_plan.executor_packet.query_id.clone());
+                    ctx.attach_query_str(
+                        init_query_fragments_plan.executor_packet.query_kind.clone(),
+                        "".to_string(),
+                    );
 
                     let spawner = ctx.clone();
                     let query_id = init_query_fragments_plan.executor_packet.query_id.clone();

@@ -11,6 +11,7 @@ ERROR 1105 (HY000) at line 1: SemanticError. Code: 1065, Text = select columns f
 ---select *,$1
 ERROR 1105 (HY000) at line 1: SemanticError. Code: 1065, Text = can not select * from csv/ndjson file.
 ---copy
+select.tsv	3	0	NULL	NULL
 1	
 2	b
 3	c
@@ -20,6 +21,7 @@ a\t	a\t
 a\\\t	a\\\t
 a\\	a\\
 ---mysql_text(copy)
+mysql_text.tsv	4	0	NULL	NULL
 a\nb	a\nb
 a\t	a\t
 a\\\t	a\\\t

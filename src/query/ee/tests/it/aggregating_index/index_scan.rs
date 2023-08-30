@@ -117,7 +117,7 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
-    .await?;
+        .await?;
 
     // Refresh Index
     execute_sql(
@@ -285,7 +285,7 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
-    .await?;
+        .await?;
 
     // Refresh Index
     execute_sql(
@@ -425,7 +425,7 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
-    .await?;
+        .await?;
 
     // Refresh Index
     execute_sql(
@@ -611,7 +611,7 @@ async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT SUBSTRING(a, 1, 1) as s, avg(length(a)), min(a) from t GROUP BY s"),
     )
-    .await?;
+        .await?;
 
     // Refresh Index
     execute_sql(
@@ -1010,6 +1010,24 @@ fn get_test_suites() -> Vec<TestSuite> {
         TestSuite {
             query: "select sum(a) + 1, b + 2 from t where b > 1 group by b",
             index: "select b, sum(a) from t where b > 0 group by b",
+            is_index_scan: true,
+        },
+        // query: eval-agg-scan, index: eval-agg-scan without group by
+        TestSuite {
+            query: "select sum(a) from t",
+            index: "select sum(a) from t",
+            is_index_scan: true,
+        },
+        // query: eval-agg-scan, index: eval-agg-scan with multiple agg funcs and without group by
+        TestSuite {
+            query: "select sum(a), approx_count_distinct(b) from t",
+            index: "select sum(a), approx_count_distinct(b) from t",
+            is_index_scan: true,
+        },
+        // query: eval-agg-scan, index: eval-agg-scan with both scalar and agg funcs
+        TestSuite {
+            query: "select sum(a), to_string(b) as bs from t group by bs",
+            index: "select sum(a), to_string(b) as bs from t group by bs",
             is_index_scan: true,
         },
     ]

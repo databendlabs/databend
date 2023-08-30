@@ -60,7 +60,9 @@ use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_sql::IndexType;
 use common_storage::common_metrics::copy::metrics_inc_filter_out_copied_files_request_milliseconds;
+use common_storage::CopyStatus;
 use common_storage::DataOperator;
+use common_storage::FileStatus;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
@@ -721,6 +723,17 @@ impl TableContext for QueryContext {
 
     fn get_segment_locations(&self) -> Result<Vec<Location>> {
         Ok(self.inserted_segment_locs.read().to_vec())
+    }
+
+    fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
+        if self.get_query_kind() == "Copy" {
+            self.shared.copy_status.add_chunk(file_path, file_status);
+        }
+        Ok(())
+    }
+
+    fn get_copy_status(&self) -> Arc<CopyStatus> {
+        self.shared.copy_status.clone()
     }
 }
 

@@ -66,6 +66,9 @@
       flex-wrap: wrap;
       row-gap: 12px;
       .nowItem {
+        &:hover {
+          opacity: 0.9;
+        }
         min-width: 294px;
         color: var(--color-white);
         background-color: var(--blue-5);
@@ -129,6 +132,9 @@
       flex-direction: column;
       row-gap: 12px;
       .button {
+        &:hover {
+          opacity: 0.9;
+        }
         display: flex;
         gap: 8px;
         background-color: var(--color-primary);
