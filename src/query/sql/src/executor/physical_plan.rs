@@ -869,6 +869,7 @@ pub struct DeletePartial {
     pub catalog_info: CatalogInfo,
     pub col_indices: Vec<usize>,
     pub query_row_id_col: bool,
+    pub snapshot: TableSnapshot,
 }
 
 impl DeletePartial {
@@ -961,6 +962,14 @@ pub struct ReplaceInto {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct FinalCommit {
+    pub input: Box<PhysicalPlan>,
+    pub catalog_info: CatalogInfo,
+    pub table_info: TableInfo,
+    pub snapshot: TableSnapshot,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RefreshIndex {
     pub input: Box<PhysicalPlan>,
     pub index_id: u64,
@@ -1023,6 +1032,7 @@ pub enum PhysicalPlan {
     AsyncSourcer(AsyncSourcerPlan),
     Deduplicate(Deduplicate),
     ReplaceInto(ReplaceInto),
+    FinalCommit(Box<FinalCommit>),
     // MergeInto
     MergeIntoSource(MergeIntoSource),
     MergeInto(MergeInto),
@@ -1071,7 +1081,8 @@ impl PhysicalPlan {
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)
-            | PhysicalPlan::ReplaceInto(_) => {
+            | PhysicalPlan::ReplaceInto(_)
+            | PhysicalPlan::FinalCommit(_) => {
                 unreachable!()
             }
         }
@@ -1110,6 +1121,7 @@ impl PhysicalPlan {
             PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::Deduplicate(_)
+            | PhysicalPlan::FinalCommit(_)
             | PhysicalPlan::ReplaceInto(_) => Ok(DataSchemaRef::default()),
         }
     }
@@ -1148,6 +1160,7 @@ impl PhysicalPlan {
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
+            PhysicalPlan::FinalCommit(_) => "FinalCommit".to_string(),
         }
     }
 
@@ -1198,6 +1211,7 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCte(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
+            PhysicalPlan::FinalCommit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
         }
     }
 
@@ -1235,6 +1249,7 @@ impl PhysicalPlan {
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::ConstantTableScan(_)
+            | PhysicalPlan::FinalCommit(_)
             | PhysicalPlan::CteScan(_) => None,
         }
     }

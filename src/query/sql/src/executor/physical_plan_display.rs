@@ -24,6 +24,7 @@ use super::CopyIntoTable;
 use super::Deduplicate;
 use super::DeletePartial;
 use super::DistributedInsertSelect;
+use super::FinalCommit;
 use super::MergeInto;
 use super::MergeIntoSource;
 use super::MutationAggregate;
@@ -101,6 +102,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
+            PhysicalPlan::FinalCommit(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -464,6 +466,12 @@ impl Display for MergeInto {
 impl Display for MergeIntoSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "MergeIntoSource")
+    }
+}
+
+impl Display for FinalCommit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FinalCommit")
     }
 }
 
