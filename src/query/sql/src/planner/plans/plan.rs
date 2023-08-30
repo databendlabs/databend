@@ -31,6 +31,7 @@ use super::DescDatamaskPolicyPlan;
 use super::DropDatamaskPolicyPlan;
 use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
+use super::MergeInto;
 use super::ModifyTableColumnPlan;
 use super::RenameTableColumnPlan;
 use super::SetOptionsPlan;
@@ -192,7 +193,7 @@ pub enum Plan {
     Replace(Box<Replace>),
     Delete(Box<DeletePlan>),
     Update(Box<UpdatePlan>),
-
+    MergeInto(Box<MergeInto>),
     // Views
     CreateView(Box<CreateViewPlan>),
     AlterView(Box<AlterViewPlan>),
@@ -413,6 +414,7 @@ impl Display for Plan {
             Plan::DropNetworkPolicy(_) => write!(f, "DropNetworkPolicy"),
             Plan::DescNetworkPolicy(_) => write!(f, "DescNetworkPolicy"),
             Plan::ShowNetworkPolicies(_) => write!(f, "ShowNetworkPolicies"),
+            Plan::MergeInto(_) => write!(f, "MergeInto"),
         }
     }
 }
@@ -459,6 +461,7 @@ impl Plan {
             Plan::DropNetworkPolicy(plan) => plan.schema(),
             Plan::DescNetworkPolicy(plan) => plan.schema(),
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
+            Plan::Copy(plan) => plan.schema(),
             other => {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())
@@ -492,6 +495,7 @@ impl Plan {
                 | Plan::DescDatamaskPolicy(_)
                 | Plan::DescNetworkPolicy(_)
                 | Plan::ShowNetworkPolicies(_)
+                | Plan::Copy(_)
         )
     }
 }

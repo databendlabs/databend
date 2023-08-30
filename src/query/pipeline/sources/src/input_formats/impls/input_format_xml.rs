@@ -28,7 +28,6 @@ use common_io::cursor_ext::*;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::XmlFileFormatParams;
-use common_pipeline_core::InputError;
 use xml::reader::XmlEvent;
 use xml::ParserConfig;
 
@@ -155,10 +154,7 @@ impl InputFormatTextBase for InputFormatXML {
         AligningStateWholeFile::try_create(ctx, split_info)
     }
 
-    fn deserialize(
-        builder: &mut BlockBuilder<Self>,
-        batch: RowBatch,
-    ) -> Result<HashMap<u16, InputError>> {
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         let field_decoder = builder
             .field_decoder
             .as_any()
@@ -183,7 +179,6 @@ impl InputFormatTextBase for InputFormatXML {
         let mut has_start_row = false;
         // for deal with on_error mode
         let mut num_rows = 0usize;
-        let mut error_map: HashMap<u16, InputError> = HashMap::new();
 
         for e in reader {
             if rows_to_skip != 0 {
@@ -254,11 +249,13 @@ impl InputFormatTextBase for InputFormatXML {
                                     .on_error(
                                         e,
                                         Some((columns, builder.num_rows)),
-                                        Some(&mut error_map),
+                                        &mut builder.file_status,
+                                        num_rows + batch.start_row_in_split,
                                     )
                                     .map_err(|e| xml_error(&e.message(), path, num_rows))?;
                             } else {
                                 builder.num_rows += 1;
+                                builder.file_status.num_rows_loaded += 1;
                             }
                             num_rows += 1;
                             cols.clear();
@@ -277,7 +274,7 @@ impl InputFormatTextBase for InputFormatXML {
                 }
             }
         }
-        Ok(error_map)
+        Ok(())
     }
 }
 

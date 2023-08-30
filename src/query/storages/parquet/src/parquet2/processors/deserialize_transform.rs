@@ -40,6 +40,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_storage::CopyStatus;
+use common_storage::FileStatus;
 use opendal::services::Memory;
 use opendal::Operator;
 
@@ -50,9 +52,9 @@ use crate::parquet2::parquet_reader::Parquet2PartData;
 use crate::parquet2::parquet_reader::Parquet2Reader;
 use crate::parquet2::parquet_table::Parquet2PrewhereInfo;
 use crate::parquet2::pruning::PartitionPruner;
-use crate::parquet_part::Parquet2RowGroupPart;
+use crate::parquet2::Parquet2RowGroupPart;
+use crate::parquet_part::ParquetFilesPart;
 use crate::parquet_part::ParquetPart;
-use crate::parquet_part::ParquetSmallFilesPart;
 
 pub trait SmallFilePrunner: Send + Sync {
     fn prune_one_file(
@@ -86,6 +88,10 @@ pub struct Parquet2DeserializeTransform {
     // Used for reading from small files
     source_reader: Arc<Parquet2Reader>,
     partition_pruner: Arc<PartitionPruner>,
+
+    // used for collect num_rows for small files
+    is_copy: bool,
+    copy_status: Arc<CopyStatus>,
 }
 
 impl Parquet2DeserializeTransform {
@@ -120,6 +126,9 @@ impl Parquet2DeserializeTransform {
                 source_reader,
                 remain_reader,
                 partition_pruner,
+
+                is_copy: ctx.get_query_kind().eq_ignore_ascii_case("copy"),
+                copy_status: ctx.get_copy_status(),
             },
         )))
     }
@@ -140,7 +149,7 @@ impl Parquet2DeserializeTransform {
 
     fn process_small_files(
         &mut self,
-        part: &ParquetSmallFilesPart,
+        part: &ParquetFilesPart,
         buffers: Vec<Vec<u8>>,
     ) -> Result<Vec<DataBlock>> {
         assert_eq!(part.files.len(), buffers.len());
@@ -169,6 +178,13 @@ impl Parquet2DeserializeTransform {
             if let Some(block) = self.process_row_group(&part, &mut readers)? {
                 res.push(block)
             }
+        }
+        if self.is_copy {
+            let num_rows_loaded = res.iter().map(|b| b.num_rows()).sum();
+            self.copy_status.add_chunk(path, FileStatus {
+                num_rows_loaded,
+                error: None,
+            })
         }
         Ok(res)
     }
@@ -382,7 +398,7 @@ impl Processor for Parquet2DeserializeTransform {
                         self.add_block(block)?;
                     }
                 }
-                (ParquetPart::SmallFiles(p), Parquet2PartData::SmallFiles(buffers)) => {
+                (ParquetPart::ParquetFiles(p), Parquet2PartData::SmallFiles(buffers)) => {
                     let blocks = self.process_small_files(p, buffers)?;
                     self.add_block(DataBlock::concat(&blocks)?)?;
                 }

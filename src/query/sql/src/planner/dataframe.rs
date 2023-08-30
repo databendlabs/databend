@@ -327,7 +327,11 @@ impl Dataframe {
     }
 
     pub async fn limit(mut self, limit: Option<usize>, offset: usize) -> Result<Self> {
-        let limit_plan = Limit { limit, offset };
+        let limit_plan = Limit {
+            before_exchange: false,
+            limit,
+            offset,
+        };
         self.s_expr =
             SExpr::create_unary(Arc::new(limit_plan.into()), Arc::new(self.s_expr.clone()));
         Ok(self)

@@ -40,8 +40,8 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::Pipeline;
 use common_storage::DataOperator;
+use common_storages_parquet::ParquetFilesPart;
 use common_storages_parquet::ParquetPart;
-use common_storages_parquet::ParquetRSFilePart;
 use common_storages_parquet::ParquetRSReader;
 use storages_common_pruner::RangePrunerCreator;
 use tokio::sync::OnceCell;
@@ -170,6 +170,7 @@ impl IcebergTable {
             &arrow_schema,
             plan,
             ParquetReadOptions::default(),
+            true,
         )?);
 
         // TODO: we need to support top_k.
@@ -232,10 +233,10 @@ impl IcebergTable {
                             .rel_path(&v.file_path)
                             .expect("file path must be rel to table");
                         Ok(Arc::new(
-                            Box::new(IcebergPartInfo::Parquet(ParquetPart::ParquetRSFile(
-                                ParquetRSFilePart {
-                                    location,
-                                    file_size: v.file_size_in_bytes as u64,
+                            Box::new(IcebergPartInfo::Parquet(ParquetPart::ParquetFiles(
+                                ParquetFilesPart {
+                                    files: vec![(location, v.file_size_in_bytes as u64)],
+                                    estimated_uncompressed_size: v.file_size_in_bytes as u64, // This field is not used here.
                                 },
                             ))) as Box<dyn PartInfo>,
                         ))

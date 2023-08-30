@@ -39,6 +39,10 @@ Databend creates a unique ID for each database and table for storing the snapsho
 
 For effective table optimization, understand when and how to apply various optimization techniques, including segment compaction, block compaction, and purging.
 
+:::note
+When using the COPY INTO or REPLACE INTO command to write data into a table that includes a cluster key, Databend will automatically initiate a re-clustering process, as well as a segment and block compact process.
+:::
+
 In Databend, the perfect block size is `100MB` (uncompressed size) or `1,000,000` rows, and each segment has `1,000` blocks.
 
 ## Segment Compaction

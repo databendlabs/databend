@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod copy;
+pub mod merge_into;
 mod storage_metrics;
 
 pub use storage_metrics::StorageMetrics;

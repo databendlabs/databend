@@ -1,7 +1,16 @@
+wrong_sample.csv	3	4	too many fields, expect 3, got 4, split wrong_sample.csv(110 bytes), row=1=0+1, offset=16=0+16, options=Csv(CsvFileFormatParams { compression: None, headers: 0, field_delimiter: ",", record_delimiter: "\\n", null_display: "\\\\N", nan_display: "NaN", escape: "", quote: "\\"" }), schema=[TableField { name: "id", default_expr: None, data_type: Number(Int32), column_id: 0, computed_expr: None }, TableField { name: "city", default_expr: None, data_type: String, column_id: 1, computed_expr: None }, TableField { name: "score", default_expr: None, data_type: Number(Int32), column_id: 2, computed_expr: None }]	2
+wrong_sample2.csv	4	3	fail to decode column 2 (score Int32): number is not exist, [column_data]=["b1"]	4
+7
+wrong_sample.ndjson	3	1	key must be a string at line 1 column 89	2
+wrong_sample2.ndjson	3	1	key must be a string at line 1 column 89	2
 6
-6
-10
+wrong_sample.tsv	4	2	fail to decode column 1 (b Int32): number is not exist, [column_data]=["b"], row data: "<SINGLE QUOTE>a<TAB>b"	4
+wrong_sample2.tsv	4	2	need 2 columns, find 1 only, row data: "3"	3
+8
+wrong_sample.xml	2	1	fail to parse XML wrong_sample.xml:2 BadBytes. Code: 1046, Text = number is not exist.. column=id value=[34, 98, 34] 	2
+wrong_sample2.xml	2	1	fail to parse XML wrong_sample2.xml:2 BadBytes. Code: 1046, Text = number is not exist.. column=id value=[34, 98, 34] 	2
 4
+/runner/_work/databend/databend/tests/data/wrong_sample.csv	3	0	NULL	NULL
 3
 1
 0

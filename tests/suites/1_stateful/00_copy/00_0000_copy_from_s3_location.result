@@ -1,9 +1,21 @@
+/admin/data/ontime_200.csv	199	0	NULL	NULL
 199	2020.0	769
+/admin/data/ontime_200.csv.gz	199	0	NULL	NULL
 199	2020.0	769
+/admin/data/ontime_200.csv.zst	199	0	NULL	NULL
 199	2020.0	769
+/admin/data/ontime_200.csv.bz2	199	0	NULL	NULL
 199	2020.0	769
+/admin/data/ontime_200.csv.xz	199	0	NULL	NULL
 199	2020.0	769
+/ontime_200.csv	199	0	NULL	NULL
+/ontime_200_v1.csv	199	0	NULL	NULL
 398	2020.0	1538
+ontime_200.csv	199	0	NULL	NULL
+ontime_200_v1.csv	199	0	NULL	NULL
 398	2020.0	1538
+ontime_200.parquet	199	0	NULL	NULL
+ontime_200_v1.parquet	199	0	NULL	NULL
 398	2020.0	1538
+/admin/data/ontime_200.ndjson	199	0	NULL	NULL
 199	2020.0	769

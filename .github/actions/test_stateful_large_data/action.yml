@@ -22,7 +22,7 @@ runs:
         ./scripts/ci/ci-run-stateful-tests-large-data-s3.sh
 
     - name: Upload failure
-      if: failure() || cancelled()
+      if: failure()
       uses: ./.github/actions/artifact_failure
       with:
         name: test-stateful-large-data

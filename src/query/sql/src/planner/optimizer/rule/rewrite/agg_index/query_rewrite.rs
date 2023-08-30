@@ -87,7 +87,7 @@ pub fn try_rewrite(
         let mut new_selection = Vec::with_capacity(query_info.selection.items.len());
         let mut flag = true;
         let mut is_agg = false;
-        let mut agg_functions_len = 0;
+        let mut num_agg_funcs = 0;
 
         match (&query_info.aggregation, &index_info.aggregation) {
             (Some((query_agg, _)), Some(_)) => {
@@ -116,7 +116,7 @@ pub fn try_rewrite(
                     }
                 }
                 if flag {
-                    agg_functions_len = query_agg.aggregate_functions.len();
+                    num_agg_funcs = query_agg.aggregate_functions.len();
                     for agg in query_agg.aggregate_functions.iter() {
                         if let Some(mut rewritten) = try_create_column_binding(
                             &index_selection,
@@ -259,7 +259,7 @@ pub fn try_rewrite(
             predicates: new_predicates,
             schema: TableSchemaRefExt::create(index_fields),
             is_agg,
-            agg_functions_len,
+            num_agg_funcs,
         })?;
 
         info!("Use aggregating index: {sql}");

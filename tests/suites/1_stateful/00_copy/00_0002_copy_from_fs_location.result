@@ -1,9 +1,18 @@
+/runner/_work/databend/databend/tests/data/ontime_200.csv	199	0	NULL	NULL
 199	2020.0	769
+/runner/_work/databend/databend/tests/data/ontime_200.csv.gz	199	0	NULL	NULL
 199	2020.0	769
+/runner/_work/databend/databend/tests/data/ontime_200.csv.zst	199	0	NULL	NULL
 199	2020.0	769
+/runner/_work/databend/databend/tests/data/ontime_200.csv.bz2	199	0	NULL	NULL
 199	2020.0	769
+/runner/_work/databend/databend/tests/data/ontime_200.csv.xz	199	0	NULL	NULL
 199	2020.0	769
+ontime_200.csv	199	0	NULL	NULL
 199	2020.0	769
+ontime_200.parquet	199	0	NULL	NULL
 199	2020.0	769
+/runner/_work/databend/databend/tests/data/ontime_200.ndjson	199	0	NULL	NULL
 199	2020.0	769
+ontime_200.parquet	199	0	NULL	NULL
 199	2020.0000	769.00

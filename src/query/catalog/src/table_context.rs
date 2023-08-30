@@ -35,7 +35,9 @@ use common_meta_app::principal::UserInfo;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
+use common_storage::CopyStatus;
 use common_storage::DataOperator;
+use common_storage::FileStatus;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use dashmap::DashMap;
@@ -197,4 +199,8 @@ pub trait TableContext: Send + Sync {
     fn add_segment_location(&self, segment_loc: Location) -> Result<()>;
 
     fn get_segment_locations(&self) -> Result<Vec<Location>>;
+
+    fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
+
+    fn get_copy_status(&self) -> Arc<CopyStatus>;
 }

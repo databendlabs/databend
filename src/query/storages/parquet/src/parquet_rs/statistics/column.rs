@@ -99,7 +99,7 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
             Statistics::Double(s) => (Scalar::from(*s.max()), Scalar::from(*s.min())),
             Statistics::ByteArray(s) => (
                 Scalar::String(s.max().as_bytes().to_vec()),
-                Scalar::String(s.max().as_bytes().to_vec()),
+                Scalar::String(s.min().as_bytes().to_vec()),
             ),
             Statistics::FixedLenByteArray(s) => {
                 let (max, min) = (s.max(), s.min());
