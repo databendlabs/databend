@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -41,6 +42,7 @@ use super::v1::HttpQueryContext;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
 use crate::servers::http::metrics::metrics_incr_http_request_count;
+use crate::servers::http::metrics::metrics_incr_http_response_panics_count;
 use crate::servers::http::metrics::metrics_incr_http_slow_request_count;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
@@ -312,5 +314,23 @@ impl<E: Endpoint> Endpoint for MetricsMiddlewareEndpoint<E> {
             metrics_incr_http_slow_request_count(method, self.api.clone(), status_code);
         }
         Ok(resp)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct PanicHandler {}
+
+impl PanicHandler {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl poem::middleware::PanicHandler for PanicHandler {
+    type Response = (StatusCode, &'static str);
+
+    fn get_response(&self, _err: Box<dyn Any + Send + 'static>) -> Self::Response {
+        metrics_incr_http_response_panics_count();
+        (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
     }
 }

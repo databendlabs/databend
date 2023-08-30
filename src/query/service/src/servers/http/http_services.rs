@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
@@ -33,13 +32,12 @@ use poem::middleware::TrailingSlash;
 use poem::put;
 use poem::Endpoint;
 use poem::EndpointExt;
-use poem::IntoResponse;
 use poem::Route;
 
 use super::v1::upload_to_stage;
 use crate::auth::AuthMgr;
-use crate::servers::http::metrics::metrics_incr_http_response_panics_count;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
+use crate::servers::http::middleware::PanicHandler;
 use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::list_suggestions;
 use crate::servers::http::v1::query_route;
@@ -125,7 +123,7 @@ impl HttpHandler {
                 .nest("/health", ep_health),
         };
         ep.with(NormalizePath::new(TrailingSlash::Trim))
-            .with(CatchPanic::new().with_handler(panic_handler))
+            .with(CatchPanic::new().with_handler(PanicHandler::new()))
             .boxed()
     }
 
@@ -203,11 +201,4 @@ impl Server for HttpHandler {
             }
         })
     }
-}
-
-#[poem::handler]
-#[async_backtrace::framed]
-pub(crate) async fn panic_handler(_err: Box<dyn Any + Send + 'static>) -> impl IntoResponse {
-    metrics_incr_http_response_panics_count();
-    (500, "internal server error")
 }

@@ -30,6 +30,5 @@ pub fn metrics_incr_http_response_errors_count(err: String, code: u16) {
 }
 
 pub fn metrics_incr_http_response_panics_count() {
-    let labels = [];
-    counter!("query_http_response_panics_count", 1, &labels);
+    counter!("query_http_response_panics_count", 1);
 }
