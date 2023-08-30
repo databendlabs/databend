@@ -1,0 +1,23 @@
+[package]
+name = "databend_sqlsmith"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+tokio = { workspace = true }
+clap = { workspace = true }
+rand = "0.8.5"
+databend-driver = "0.6.3"
+
+common-ast = { path = "../../query/ast" }
+common-expression = { path = "../../query/expression" }
+common-exception = { path = "../../common/exception" }
+common-sql = { path = "../../query/sql" }
+
+[[bin]]
+name = "sqlsmith"
+path = "src/bin/main.rs"
+

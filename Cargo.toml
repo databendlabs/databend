@@ -99,6 +99,8 @@ members = [
     "tests/sqllogictests",
 
     "src/bendpy",
+    # sqlsmith
+    "src/tests/sqlsmith",
 ]
 
 [workspace.dependencies]
