@@ -16,10 +16,11 @@ use std::any::Any;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_base::base::ProgressValues;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::pipe::PipeItem;
@@ -48,14 +49,14 @@ pub struct MergeIntoNotMatchedProcessor {
     ops: Vec<InsertDataBlockMutation>,
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
-    func_ctx: FunctionContext,
+    ctx: Arc<dyn TableContext>,
 }
 
 impl MergeIntoNotMatchedProcessor {
     pub fn create(
         unmatched: UnMatchedExprs,
         input_schema: DataSchemaRef,
-        func_ctx: FunctionContext,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<Self> {
         let mut ops = Vec::<InsertDataBlockMutation>::with_capacity(unmatched.len());
         for item in &unmatched {
@@ -73,7 +74,7 @@ impl MergeIntoNotMatchedProcessor {
                 },
                 split_mutator: {
                     let filter = item.1.as_ref().map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS));
-                    SplitByExprMutator::create(filter, func_ctx.clone())
+                    SplitByExprMutator::create(filter, ctx.get_function_context()?)
                 },
             });
         }
@@ -84,7 +85,7 @@ impl MergeIntoNotMatchedProcessor {
             ops,
             input_data: None,
             output_data: None,
-            func_ctx,
+            ctx,
         })
     }
 
@@ -156,10 +157,14 @@ impl Processor for MergeIntoNotMatchedProcessor {
                     if output_block.is_some() {
                         output_block = Some(DataBlock::concat(&[
                             output_block.unwrap(),
-                            op.op.execute(&self.func_ctx, satisfied_block)?,
+                            op.op
+                                .execute(&self.ctx.get_function_context()?, satisfied_block)?,
                         ])?);
                     } else {
-                        output_block = Some(op.op.execute(&self.func_ctx, satisfied_block)?)
+                        output_block = Some(
+                            op.op
+                                .execute(&self.ctx.get_function_context()?, satisfied_block)?,
+                        )
                     }
                 }
 
@@ -169,11 +174,17 @@ impl Processor for MergeIntoNotMatchedProcessor {
                     current_block = unsatisfied_block
                 }
             }
+
             // todo:(JackTan25) fill format data block
             if output_block.is_some() {
-                metrics_inc_merge_into_append_blocks_counter(
-                    output_block.as_ref().unwrap().num_rows() as u32,
-                );
+                let block = output_block.as_ref().unwrap();
+                let affetcted_rows = block.num_rows();
+                metrics_inc_merge_into_append_blocks_counter(affetcted_rows as u32);
+                let progress_values = ProgressValues {
+                    rows: affetcted_rows,
+                    bytes: block.memory_size(),
+                };
+                self.ctx.get_write_progress().incr(&progress_values);
                 self.output_data = output_block
             }
         }

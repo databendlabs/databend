@@ -443,7 +443,7 @@ impl PipelineBuilder {
         let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
             unmatched.clone(),
             input.output_schema()?,
-            self.ctx.get_function_context()?,
+            self.ctx.clone(),
         )?;
 
         let table = FuseTable::try_from_table(tbl.as_ref())?;

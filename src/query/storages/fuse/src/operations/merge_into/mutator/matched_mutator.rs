@@ -21,6 +21,7 @@ use ahash::AHashMap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_base::base::tokio::sync::Semaphore;
+use common_base::base::ProgressValues;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_catalog::plan::split_prefix;
@@ -34,7 +35,6 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
-use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
@@ -81,7 +81,7 @@ struct DeleteDataBlockMutation {
 struct AggregationContext {
     row_id_idx: usize,
     ops: Vec<MutationKind>,
-    func_ctx: FunctionContext,
+    ctx: Arc<dyn TableContext>,
     data_accessor: Operator,
     write_settings: WriteSettings,
     read_settings: ReadSettings,
@@ -194,7 +194,7 @@ impl MatchedAggregator {
             aggregation_ctx: Arc::new(AggregationContext {
                 row_id_idx,
                 ops,
-                func_ctx: ctx.get_function_context()?,
+                ctx,
                 write_settings,
                 read_settings,
                 data_accessor,
@@ -225,9 +225,10 @@ impl MatchedAggregator {
                     if !satisfied_block.is_empty() {
                         let row_ids =
                             get_row_id(&satisfied_block, self.aggregation_ctx.row_id_idx)?;
-                        let updated_block = update_mutation
-                            .op
-                            .execute(&self.aggregation_ctx.func_ctx, satisfied_block)?;
+                        let updated_block = update_mutation.op.execute(
+                            &self.aggregation_ctx.ctx.get_function_context()?.clone(),
+                            satisfied_block,
+                        )?;
                         // record the modified block offsets
                         for (idx, row_id) in row_ids.iter().enumerate() {
                             let (prefix, offset) = split_row_id(*row_id);
@@ -309,6 +310,15 @@ impl MatchedAggregator {
     pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
         // 1.get modified segments
         let mut segment_infos = HashMap::<SegmentIndex, SegmentInfo>::new();
+        let progress_values = ProgressValues {
+            rows: self.block_mutation_row_offset.len(),
+            bytes: 0,
+        };
+        self.aggregation_ctx
+            .ctx
+            .get_write_progress()
+            .incr(&progress_values);
+
         for prefix in self.block_mutation_row_offset.keys() {
             let (segment_idx, _) = split_prefix(*prefix);
             let segment_idx = segment_idx as usize;
@@ -427,8 +437,10 @@ impl AggregationContext {
                 let block_operator = BlockOperator::Project {
                     projection: remain.clone(),
                 };
-                let remain_block = block_operator
-                    .execute(&self.func_ctx, get_block(&origin_data_block, &offsets)?)?;
+                let remain_block = block_operator.execute(
+                    &self.ctx.get_function_context()?,
+                    get_block(&origin_data_block, &offsets)?,
+                )?;
                 for col in remain_block.columns() {
                     updated_block.add_column(col.clone());
                 }
@@ -437,7 +449,8 @@ impl AggregationContext {
                 let mut projection = (0..collected.len()).collect::<Vec<_>>();
                 projection.sort_by_key(|&i| collected[i]);
                 let sort_operator = BlockOperator::Project { projection };
-                let res_block = sort_operator.execute(&self.func_ctx, updated_block)?;
+                let res_block =
+                    sort_operator.execute(&self.ctx.get_function_context()?, updated_block)?;
                 if !res_block.is_empty() {
                     res_blocks.push(res_block);
                 }
