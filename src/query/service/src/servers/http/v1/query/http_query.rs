@@ -325,7 +325,6 @@ impl HttpQuery {
         let state_clone = state.clone();
         let ctx_clone = ctx.clone();
         let sql = request.sql.clone();
-        let query_id = query_id.clone();
         let query_id_clone = query_id.clone();
 
         let (plan, plan_extras) = ExecuteState::plan_sql(&sql, ctx.clone()).await?;
@@ -355,7 +354,7 @@ impl HttpQuery {
                     };
                     info!(
                         "http query {}, change state to Stopped, fail to start {:?}",
-                        &query_id, e
+                        &query_id_clone, e
                     );
                     Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state)))
                         .await;
@@ -365,7 +364,7 @@ impl HttpQuery {
 
         let format_settings = ctx.get_format_settings()?;
         let data = Arc::new(TokioMutex::new(PageManager::new(
-            query_id_clone,
+            query_id.clone(),
             request.pagination.max_rows_per_page,
             block_receiver,
             schema,

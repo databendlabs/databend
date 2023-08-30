@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::time::Duration;
@@ -43,6 +44,7 @@ use databend_query::sessions::QueryAffect;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestGlobalServices;
 use headers::Header;
+use http::HeaderMap;
 use jwt_simple::algorithms::RS256KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
 use jwt_simple::claims::JWTClaims;
@@ -226,6 +228,21 @@ async fn test_return_when_finish() -> Result<()> {
             msg()
         );
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_client_query_id() -> Result<()> {
+    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
+
+    let wait_time_secs = 5;
+    let sql = "select * from numbers(1)";
+    let ep = create_endpoint().await?;
+    let mut headers = HeaderMap::new();
+    headers.insert("x-databend-query-id", "test-query-id".parse().unwrap());
+    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs).await?;
+    assert_eq!(status, StatusCode::OK, "{}", msg());
+    assert_eq!(result.id, "test-query-id");
     Ok(())
 }
 
@@ -700,33 +717,36 @@ async fn post_sql_to_endpoint(
     sql: &str,
     wait_time_secs: u64,
 ) -> Result<(StatusCode, QueryResponse)> {
-    post_sql_to_endpoint_new_session(ep, sql, wait_time_secs).await
+    post_sql_to_endpoint_new_session(ep, sql, wait_time_secs, HeaderMap::default()).await
 }
 
 async fn post_sql_to_endpoint_new_session(
     ep: &EndpointType,
     sql: &str,
     wait_time_secs: u64,
+    headers: HeaderMap,
 ) -> Result<(StatusCode, QueryResponse)> {
     let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {}}});
-    post_json_to_endpoint(ep, &json).await
+    post_json_to_endpoint(ep, &json, headers).await
 }
 
 async fn post_json_to_endpoint(
     ep: &EndpointType,
     json: &serde_json::Value,
+    headers: HeaderMap,
 ) -> Result<(StatusCode, QueryResponse)> {
     let uri = "/v1/query";
     let content_type = "application/json";
     let body = serde_json::to_vec(&json)?;
     let basic = headers::Authorization::basic("root", "");
 
-    let req = Request::builder()
+    let mut req = Request::builder()
         .uri(uri.parse().unwrap())
         .method(Method::POST)
         .header(header::CONTENT_TYPE, content_type)
         .typed_header(basic)
         .body(body);
+    req.headers_mut().extend(headers.into_iter());
     let response = ep
         .call(req)
         .await
