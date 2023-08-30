@@ -251,8 +251,7 @@ impl SMV002 {
     ///
     /// It is an internal API and does not examine the expiration time.
     pub(crate) async fn get_kv_ref(&self, key: &str) -> &dyn SeqValue {
-        let got = MapApi::<String>::get(&self.top, key).await;
-        got
+        MapApi::<String>::get(&self.top, key).await
     }
 
     // TODO(1): when get an applier, pass in a now_ms to ensure all expired are cleaned.
