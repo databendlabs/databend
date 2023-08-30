@@ -511,7 +511,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.17.4"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=076ceee#076ceee9dec15834943c574cb4343f0237a51447"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=f609d0c#f609d0c0cc138f00f297f05e8fe23f6bf195938c"
 dependencies = [
  "ahash 0.8.3",
  "arrow-array",
@@ -532,7 +532,7 @@ dependencies = [
  "futures",
  "getrandom 0.2.8",
  "hash_hasher",
- "hashbrown 0.13.2",
+ "hashbrown 0.14.0",
  "indexmap 1.9.2",
  "itertools 0.10.5",
  "json-deserializer",
@@ -543,7 +543,7 @@ dependencies = [
  "parquet2",
  "rand 0.8.5",
  "regex",
- "regex-syntax 0.6.28",
+ "regex-syntax 0.7.4",
  "rustc_version",
  "serde",
  "serde_derive",
@@ -4053,9 +4053,9 @@ dependencies = [
 
 [[package]]
 name = "either"
-version = "1.8.1"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
+checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
 
 [[package]]
 name = "elliptic-curve"
