@@ -49,7 +49,11 @@ impl Binder {
     }
 
     pub(super) fn bind_limit(child: SExpr, limit: Option<usize>, offset: usize) -> SExpr {
-        let limit_plan = Limit { limit, offset };
+        let limit_plan = Limit {
+            before_exchange: false,
+            limit,
+            offset,
+        };
         SExpr::create_unary(Arc::new(limit_plan.into()), Arc::new(child))
     }
 

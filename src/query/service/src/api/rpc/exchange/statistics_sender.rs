@@ -82,6 +82,10 @@ impl StatisticsSender {
                     }
                 }
 
+                if let Err(error) = Self::send_copy_status(&ctx, &tx).await {
+                    warn!("CopyStatus send has error, cause: {:?}.", error);
+                }
+
                 if let Err(error) = Self::send_statistics(&ctx, &tx).await {
                     warn!("Statistics send has error, cause: {:?}.", error);
                 }
@@ -121,6 +125,16 @@ impl StatisticsSender {
         let data_packet = DataPacket::SerializeProgress(progress);
 
         flight_sender.send(data_packet).await
+    }
+
+    #[async_backtrace::framed]
+    async fn send_copy_status(ctx: &Arc<QueryContext>, flight_sender: &FlightSender) -> Result<()> {
+        let copy_status = ctx.get_copy_status();
+        if !copy_status.files.is_empty() {
+            let data_packet = DataPacket::CopyStatus(copy_status.as_ref().to_owned());
+            flight_sender.send(data_packet).await?;
+        }
+        Ok(())
     }
 
     fn fetch_progress(ctx: &Arc<QueryContext>) -> Result<Vec<ProgressInfo>> {

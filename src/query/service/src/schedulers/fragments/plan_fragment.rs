@@ -16,7 +16,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartInfo;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_settings::ReplaceIntoShuffleStrategy;
@@ -26,6 +28,7 @@ use common_sql::executor::Deduplicate;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::QuerySource;
 use common_sql::executor::ReplaceInto;
+use common_storages_fuse::operations::Mutation;
 use common_storages_fuse::TableContext;
 use storages_common_table_meta::meta::BlockSlotDescription;
 use storages_common_table_meta::meta::Location;
@@ -193,16 +196,61 @@ impl PlanFragment {
             PhysicalPlan::DeletePartial(plan) => plan,
             _ => unreachable!("logic error"),
         };
-        let partitions = &plan.parts;
-        let executors = Fragmenter::get_executors(ctx);
+        let partitions: &Partitions = &plan.parts;
+        let executors = Fragmenter::get_executors(ctx.clone());
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
-        let partition_reshuffle = partitions.reshuffle(executors)?;
 
-        for (executor, parts) in partition_reshuffle.iter() {
+        // collect partitions by segment index
+        // finally, these code will be removed, after the pruning is refactored
+        let mut deleted_segments: Vec<Arc<Box<dyn PartInfo>>> = vec![];
+        let mut blocks_group_by_segment_index: HashMap<usize, Vec<Arc<Box<dyn PartInfo>>>> =
+            HashMap::new();
+        for part in &partitions.partitions {
+            // safe to unwrap because we know the type of plan is DeletePartial
+            let part_downcast: &Mutation = part.as_ref().as_ref().as_any().downcast_ref().unwrap();
+            match part_downcast {
+                Mutation::MutationDeletedSegment(_) => {
+                    deleted_segments.push(part.clone());
+                }
+                Mutation::MutationPartInfo(part_info) => {
+                    let segment_index: usize = part_info.index.segment_idx;
+                    let blocks = blocks_group_by_segment_index
+                        .entry(segment_index)
+                        .or_insert_with(Vec::new);
+                    blocks.push(part.clone());
+                }
+            }
+        }
+        let segments_reshuffle = Self::reshuffle(
+            executors,
+            blocks_group_by_segment_index
+                .into_iter()
+                .map(|x| x.1)
+                .collect(),
+        )?;
+        let mut partition_reshuffle = segments_reshuffle
+            .into_iter()
+            .map(|(k, v)| {
+                let mut parts = vec![];
+                for mut segment_parts in v {
+                    parts.append(&mut segment_parts);
+                }
+                (k, parts)
+            })
+            .collect::<HashMap<_, _>>();
+        partition_reshuffle
+            .entry(Fragmenter::get_local_executor(ctx))
+            .or_insert_with(Vec::new)
+            .append(&mut deleted_segments);
+        for (executor, parts) in partition_reshuffle.into_iter() {
             let mut plan = self.plan.clone();
 
             let mut replace_delete_partial = ReplaceDeletePartial {
-                partitions: parts.clone(),
+                partitions: Partitions {
+                    kind: PartitionsShuffleKind::Mod,
+                    partitions: parts,
+                    is_lazy: false,
+                },
             };
             plan = replace_delete_partial.replace(&plan)?;
 

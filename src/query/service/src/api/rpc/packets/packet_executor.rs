@@ -30,6 +30,7 @@ use crate::api::FlightAction;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct QueryFragmentsPlanPacket {
     pub query_id: String,
+    pub query_kind: String,
     pub executor: String,
     pub request_executor: String,
     pub fragments: Vec<FragmentPlanPacket>,
@@ -41,8 +42,10 @@ pub struct QueryFragmentsPlanPacket {
 }
 
 impl QueryFragmentsPlanPacket {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         query_id: String,
+        query_kind: String,
         executor: String,
         fragments: Vec<FragmentPlanPacket>,
         executors_info: HashMap<String, Arc<NodeInfo>>,
@@ -52,6 +55,7 @@ impl QueryFragmentsPlanPacket {
     ) -> QueryFragmentsPlanPacket {
         QueryFragmentsPlanPacket {
             query_id,
+            query_kind,
             executor,
             fragments,
             executors_info,

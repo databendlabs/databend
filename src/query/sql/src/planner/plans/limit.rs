@@ -29,6 +29,7 @@ use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Limit {
+    pub before_exchange: bool,
     pub limit: Option<usize>,
     pub offset: usize,
 }

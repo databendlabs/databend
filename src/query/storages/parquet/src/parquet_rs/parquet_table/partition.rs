@@ -25,6 +25,8 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storage::CopyStatus;
+use common_storage::FileStatus;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::RowSelector;
 use parquet::arrow::async_reader::AsyncFileReader;
@@ -63,35 +65,38 @@ impl ParquetRSTable {
         };
 
         let settings = ctx.get_settings();
-
-        let parquet_metas = read_parquet_metas_in_parallel(
-            self.operator.clone(),
-            file_locations,
-            self.schema_descr.clone(),
-            self.schema_from.clone(),
-            settings.get_max_threads()? as usize,
-            64,
-            settings.get_max_memory_usage()?,
-        )
-        .await?;
-
-        let pruner = ParquetRSPruner::try_create(
+        let pruner = Arc::new(ParquetRSPruner::try_create(
             ctx.get_function_context()?,
             self.schema(),
             &push_down,
             self.read_options,
-        )?;
+        )?);
 
         // TODO(parquet):
         // The second field of `file_locations` is size of the file.
         // It will be used for judging if we need to read small parquet files at once to reduce IO.
 
-        prune_and_generate_partitions(pruner, parquet_metas)
+        let copy_status = if ctx.get_query_kind().eq_ignore_ascii_case("copy") {
+            Some(ctx.get_copy_status())
+        } else {
+            None
+        };
+        read_and_prune_metas_in_parallel(
+            self.operator.clone(),
+            file_locations,
+            pruner,
+            self.schema_descr.clone(),
+            self.schema_from.clone(),
+            settings.get_max_threads()? as usize,
+            settings.get_max_memory_usage()?,
+            copy_status,
+        )
+        .await
     }
 }
 
 fn prune_and_generate_partitions(
-    pruner: ParquetRSPruner,
+    pruner: &ParquetRSPruner,
     parquet_metas: Vec<(String, Arc<ParquetMetaData>)>,
 ) -> Result<(PartStatistics, Partitions)> {
     let mut parts = vec![];
@@ -185,10 +190,17 @@ async fn read_parquet_metas_batch(
     expect: SchemaDescPtr,
     schema_from: String,
     max_memory_usage: u64,
+    copy_status: Option<Arc<CopyStatus>>,
 ) -> Result<Vec<(String, Arc<ParquetMetaData>)>> {
     let mut metas = Vec::with_capacity(file_infos.len());
     for (path, _size) in file_infos {
         let meta = load_and_check_parquet_meta(&path, op.clone(), &expect, &schema_from).await?;
+        if let Some(copy_status) = &copy_status {
+            copy_status.add_chunk(&path, FileStatus {
+                num_rows_loaded: meta.file_metadata().num_rows() as usize,
+                error: None,
+            });
+        }
         metas.push((path, meta));
     }
     let used = GLOBAL_MEM_STAT.get_memory_usage();
@@ -203,55 +215,66 @@ async fn read_parquet_metas_batch(
 }
 
 #[async_backtrace::framed]
-pub async fn read_parquet_metas_in_parallel(
+#[allow(clippy::too_many_arguments)]
+pub async fn read_and_prune_metas_in_parallel(
     op: Operator,
     file_infos: Vec<(String, u64)>,
+    pruner: Arc<ParquetRSPruner>,
     expect: SchemaDescPtr,
     schema_from: String,
-    thread_nums: usize,
-    permit_nums: usize,
+    num_threads: usize,
     max_memory_usage: u64,
-) -> Result<Vec<(String, Arc<ParquetMetaData>)>> {
-    let batch_size = 100;
-    if file_infos.len() <= batch_size {
-        read_parquet_metas_batch(
-            file_infos,
-            op.clone(),
-            expect,
-            schema_from,
-            max_memory_usage,
-        )
-        .await
-    } else {
-        let mut chunks = file_infos.chunks(batch_size);
+    copy_status: Option<Arc<CopyStatus>>,
+) -> Result<(PartStatistics, Partitions)> {
+    let num_files = file_infos.len();
+    let mut tasks = Vec::with_capacity(num_threads);
 
-        let tasks = std::iter::from_fn(move || {
-            let expect = expect.clone();
-            let schema_from = schema_from.clone();
-            chunks.next().map(|location| {
-                read_parquet_metas_batch(
-                    location.to_vec(),
-                    op.clone(),
-                    expect.clone(),
-                    schema_from.clone(),
-                    max_memory_usage,
-                )
-            })
+    // Equally distribute the tasks
+    for i in 0..num_threads {
+        let begin = num_files * i / num_threads;
+        let end = num_files * (i + 1) / num_threads;
+        if begin == end {
+            continue;
+        }
+        let file_infos = file_infos[begin..end].to_vec();
+        let pruner = pruner.clone();
+        let op = op.clone();
+        let expect = expect.clone();
+        let schema_from = schema_from.clone();
+        let copy_status = copy_status.clone();
+        tasks.push(async move {
+            let metas = read_parquet_metas_batch(
+                file_infos,
+                op,
+                expect,
+                schema_from,
+                max_memory_usage,
+                copy_status,
+            )
+            .await?;
+            prune_and_generate_partitions(&pruner, metas)
         });
-
-        let result = execute_futures_in_parallel(
-            tasks,
-            thread_nums,
-            permit_nums,
-            "read-parquet-metas-worker".to_owned(),
-        )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<Vec<_>>>>()?
-        .into_iter()
-        .flatten()
-        .collect();
-
-        Ok(result)
     }
+
+    let result = execute_futures_in_parallel(
+        tasks,
+        num_threads,
+        num_threads * 2,
+        "read-and-prune-parquet-metas-worker".to_owned(),
+    )
+    .await?
+    .into_iter()
+    .collect::<Result<Vec<_>>>()?
+    .into_iter()
+    .reduce(|(mut stats_acc, mut parts_acc), (stats, parts)| {
+        stats_acc.merge(&stats);
+        parts_acc.partitions.extend(parts.partitions);
+        (stats_acc, parts_acc)
+    })
+    .unwrap_or((
+        PartStatistics::default_exact(),
+        Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]),
+    ));
+
+    Ok(result)
 }

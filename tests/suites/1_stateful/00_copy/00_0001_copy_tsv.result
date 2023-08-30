@@ -1,4 +1,5 @@
 ---1
+/admin/data/escape.tsv	10	0	NULL	NULL
 "a	1	2
 "a"	2	3
 "a	3	2
@@ -10,6 +11,7 @@
 \\i	9	2
 'a" b'	10	6
 ---test tsv field with whitespace
+/runner/_work/databend/databend/tests/data/field_white_space.tsv	3	0	NULL	NULL
 33	 береж	11
 44	name	4
 66	! hektdf gjcgjhn conster	24

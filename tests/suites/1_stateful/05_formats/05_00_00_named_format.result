@@ -1,8 +1,10 @@
 ---copy into table, use format csv from stage
+sample.csv	6	0	NULL	NULL
 6
 ---copy into table, use format csv from copy stmt
 6
 ---copy into table, use format my_parquet from copy stmt
+tuple.parquet	3	0	NULL	NULL
 3
 ---copy into table, use format parquet from copy stmt
 3

@@ -142,7 +142,7 @@ impl SyncSource for ReadParquetDataSource<true> {
 
                 let source = self.block_reader.sync_read_columns_data_by_merge_io(
                     &ReadSettings::from_ctx(&self.partitions.ctx)?,
-                    part.clone(),
+                    &part,
                     ignore_column_ids,
                 )?;
 

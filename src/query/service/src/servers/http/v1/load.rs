@@ -162,6 +162,7 @@ pub async fn streaming_load(
                     .map_err(InternalServerError)?;
                 let input_context = Arc::new(
                     InputContext::try_create_from_insert_file_format(
+                        context.clone(),
                         rx,
                         context.get_settings(),
                         format.clone(),

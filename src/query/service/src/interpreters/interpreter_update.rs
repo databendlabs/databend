@@ -156,6 +156,7 @@ impl Interpreter for UpdateInterpreter {
             self.ctx.clone(),
             tbl.schema().into(),
             col_indices.clone(),
+            true,
         )?;
 
         let computed_list = self
