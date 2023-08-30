@@ -28,3 +28,8 @@ pub fn metrics_incr_http_response_failed_count(err: String, code: u16) {
     let labels = [("err", err), ("code", code.to_string())];
     counter!("query_http_response_failed_count", 1, &labels);
 }
+
+pub fn metrics_incr_http_response_panics_count() {
+    let labels = [];
+    counter!("query_http_response_panic_count", 1, &labels);
+}
