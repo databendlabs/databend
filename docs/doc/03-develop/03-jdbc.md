@@ -18,7 +18,7 @@ To download the Databend JDBC driver:
 To verify the version of Databend JDBC driver, for example, *databend-jdbc-0.1.1.jar*, run the following command in the terminal:
 
 ```bash
-java -jar databend-jdbc-0.0.8.jar --version
+java -jar databend-jdbc-0.1.1.jar --version
 ```
 
 The Databend JDBC driver is provided as a JAR file and can be integrated directly into your Java-based projects. Alternatively, you can declare a Maven dependency in your project's pom.xml file, like so:
