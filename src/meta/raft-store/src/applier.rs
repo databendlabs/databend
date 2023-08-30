@@ -45,6 +45,7 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
 use common_meta_types::With;
+use futures_util::StreamExt;
 use log::as_debug;
 use log::as_display;
 use log::debug;
@@ -74,13 +75,13 @@ impl<'a> Applier<'a> {
     ///
     /// And publish kv change events to subscriber.
     #[minitrace::trace]
-    pub fn apply(&mut self, entry: &Entry) -> AppliedState {
+    pub async fn apply(&mut self, entry: &Entry) -> AppliedState {
         info!("apply: entry: {}", entry,);
 
         let log_id = &entry.log_id;
         let log_time_ms = Self::get_log_time(entry);
 
-        self.clean_expired_kvs(log_time_ms);
+        self.clean_expired_kvs(log_time_ms).await;
 
         // TODO: it could persist the last_applied log id so that when starting up,
         //       it could re-apply the logs without waiting for the `committed` message from a leader.
@@ -96,7 +97,7 @@ impl<'a> Applier<'a> {
                 info!("apply: normal: {}", data);
                 assert!(data.txid.is_none(), "txid is disabled");
 
-                self.apply_cmd(&data.cmd)
+                self.apply_cmd(&data.cmd).await
             }
             EntryPayload::Membership(ref mem) => {
                 info!("apply: membership: {:?}", mem);
@@ -122,7 +123,7 @@ impl<'a> Applier<'a> {
     /// This is the only entry to modify state machine.
     /// The `cmd` is always committed by raft before applying.
     #[minitrace::trace]
-    pub fn apply_cmd(&mut self, cmd: &Cmd) -> AppliedState {
+    pub async fn apply_cmd(&mut self, cmd: &Cmd) -> AppliedState {
         info!("apply_cmd: {}", cmd);
 
         let res = match cmd {
@@ -134,9 +135,9 @@ impl<'a> Applier<'a> {
 
             Cmd::RemoveNode { ref node_id } => self.apply_remove_node(node_id),
 
-            Cmd::UpsertKV(ref upsert_kv) => self.apply_upsert_kv(upsert_kv),
+            Cmd::UpsertKV(ref upsert_kv) => self.apply_upsert_kv(upsert_kv).await,
 
-            Cmd::Transaction(txn) => self.apply_txn(txn),
+            Cmd::Transaction(txn) => self.apply_txn(txn).await,
         };
 
         info!("apply_result: cmd: {}; res: {}", cmd, res);
@@ -181,19 +182,19 @@ impl<'a> Applier<'a> {
     /// Thus upsert a kv entry is done in two steps:
     /// update the primary index and optionally update the secondary index.
     #[minitrace::trace]
-    fn apply_upsert_kv(&mut self, upsert_kv: &UpsertKV) -> AppliedState {
+    async fn apply_upsert_kv(&mut self, upsert_kv: &UpsertKV) -> AppliedState {
         debug!(upsert_kv = as_debug!(upsert_kv); "apply_update_kv_cmd");
 
-        let (prev, result) = self.upsert_kv(upsert_kv);
+        let (prev, result) = self.upsert_kv(upsert_kv).await;
 
         Change::new(prev, result).into()
     }
 
     #[minitrace::trace]
-    fn upsert_kv(&mut self, upsert_kv: &UpsertKV) -> (Option<SeqV>, Option<SeqV>) {
+    async fn upsert_kv(&mut self, upsert_kv: &UpsertKV) -> (Option<SeqV>, Option<SeqV>) {
         debug!(upsert_kv = as_debug!(upsert_kv); "upsert_kv");
 
-        let (prev, result) = self.sm.upsert_kv(upsert_kv.clone());
+        let (prev, result) = self.sm.upsert_kv(upsert_kv.clone()).await;
 
         debug!(
             "applied UpsertKV: {:?}; prev: {:?}; result: {:?}",
@@ -208,10 +209,10 @@ impl<'a> Applier<'a> {
 
     #[minitrace::trace]
 
-    fn apply_txn(&mut self, req: &TxnRequest) -> AppliedState {
+    async fn apply_txn(&mut self, req: &TxnRequest) -> AppliedState {
         debug!(txn = as_display!(req); "apply txn cmd");
 
-        let success = self.eval_txn_conditions(&req.condition);
+        let success = self.eval_txn_conditions(&req.condition).await;
 
         let ops = if success {
             &req.if_then
@@ -226,18 +227,18 @@ impl<'a> Applier<'a> {
         };
 
         for op in ops {
-            self.txn_execute_operation(op, &mut resp);
+            self.txn_execute_operation(op, &mut resp).await;
         }
 
         AppliedState::TxnReply(resp)
     }
 
     #[minitrace::trace]
-    fn eval_txn_conditions(&mut self, condition: &Vec<TxnCondition>) -> bool {
+    async fn eval_txn_conditions(&mut self, condition: &Vec<TxnCondition>) -> bool {
         for cond in condition {
             debug!(condition = as_display!(cond); "txn_execute_condition");
 
-            if !self.eval_one_condition(cond) {
+            if !self.eval_one_condition(cond).await {
                 return false;
             }
         }
@@ -246,11 +247,11 @@ impl<'a> Applier<'a> {
     }
 
     #[minitrace::trace]
-    fn eval_one_condition(&self, cond: &TxnCondition) -> bool {
+    async fn eval_one_condition(&self, cond: &TxnCondition) -> bool {
         debug!(cond = as_display!(cond); "txn_execute_one_condition");
 
         let key = &cond.key;
-        let seqv = self.sm.get_kv_ref(key);
+        let seqv = self.sm.get_kv_ref(key).await;
 
         debug!(
             "txn_execute_one_condition: key: {} curr: seq:{} value:{:?}",
@@ -304,27 +305,28 @@ impl<'a> Applier<'a> {
     }
 
     #[minitrace::trace]
-    fn txn_execute_operation(&mut self, op: &TxnOp, resp: &mut TxnReply) {
+    async fn txn_execute_operation(&mut self, op: &TxnOp, resp: &mut TxnReply) {
         debug!(op = as_display!(op); "txn execute TxnOp");
         match &op.request {
             Some(txn_op::Request::Get(get)) => {
-                self.txn_execute_get(get, resp);
+                self.txn_execute_get(get, resp).await;
             }
             Some(txn_op::Request::Put(put)) => {
-                self.txn_execute_put(put, resp);
+                self.txn_execute_put(put, resp).await;
             }
             Some(txn_op::Request::Delete(delete)) => {
-                self.txn_execute_delete(delete, resp);
+                self.txn_execute_delete(delete, resp).await;
             }
             Some(txn_op::Request::DeleteByPrefix(delete_by_prefix)) => {
-                self.txn_execute_delete_by_prefix(delete_by_prefix, resp);
+                self.txn_execute_delete_by_prefix(delete_by_prefix, resp)
+                    .await;
             }
             None => {}
         }
     }
 
-    fn txn_execute_get(&self, get: &TxnGetRequest, resp: &mut TxnReply) {
-        let sv = self.sm.get_kv(&get.key);
+    async fn txn_execute_get(&self, get: &TxnGetRequest, resp: &mut TxnReply) {
+        let sv = self.sm.get_kv(&get.key).await;
         let value = sv.map(Self::into_pb_seq_v);
         let get_resp = TxnGetResponse {
             key: get.key.clone(),
@@ -336,12 +338,12 @@ impl<'a> Applier<'a> {
         });
     }
 
-    fn txn_execute_put(&mut self, put: &TxnPutRequest, resp: &mut TxnReply) {
+    async fn txn_execute_put(&mut self, put: &TxnPutRequest, resp: &mut TxnReply) {
         let upsert = UpsertKV::update(&put.key, &put.value).with(KVMeta {
             expire_at: put.expire_at,
         });
 
-        let (prev, _result) = self.upsert_kv(&upsert);
+        let (prev, _result) = self.upsert_kv(&upsert).await;
 
         let put_resp = TxnPutResponse {
             key: put.key.clone(),
@@ -357,7 +359,7 @@ impl<'a> Applier<'a> {
         });
     }
 
-    fn txn_execute_delete(&mut self, delete: &TxnDeleteRequest, resp: &mut TxnReply) {
+    async fn txn_execute_delete(&mut self, delete: &TxnDeleteRequest, resp: &mut TxnReply) {
         let upsert = UpsertKV::delete(&delete.key);
 
         // If `delete.match_seq` is `Some`, only delete the entry with the exact `seq`.
@@ -367,7 +369,7 @@ impl<'a> Applier<'a> {
             upsert
         };
 
-        let (prev, result) = self.upsert_kv(&upsert);
+        let (prev, result) = self.upsert_kv(&upsert).await;
         let is_deleted = prev.is_some() && result.is_none();
 
         let del_resp = TxnDeleteResponse {
@@ -385,16 +387,16 @@ impl<'a> Applier<'a> {
         });
     }
 
-    fn txn_execute_delete_by_prefix(
+    async fn txn_execute_delete_by_prefix(
         &mut self,
         delete_by_prefix: &TxnDeleteByPrefixRequest,
         resp: &mut TxnReply,
     ) {
-        let kvs = self.sm.prefix_list_kv(&delete_by_prefix.prefix);
+        let kvs = self.sm.prefix_list_kv(&delete_by_prefix.prefix).await;
         let count = kvs.len() as u32;
 
         for (key, _seq_v) in kvs {
-            let (prev, res) = self.upsert_kv(&UpsertKV::delete(&key));
+            let (prev, res) = self.upsert_kv(&UpsertKV::delete(&key)).await;
             self.push_change(key, prev, res);
         }
 
@@ -413,7 +415,7 @@ impl<'a> Applier<'a> {
     /// All expired keys will be removed before applying a log.
     /// This is different from the sled based implementation.
     #[minitrace::trace]
-    fn clean_expired_kvs(&mut self, log_time_ms: u64) {
+    async fn clean_expired_kvs(&mut self, log_time_ms: u64) {
         if log_time_ms == 0 {
             return;
         }
@@ -421,25 +423,28 @@ impl<'a> Applier<'a> {
         info!("to clean expired kvs, log_time_ts: {}", log_time_ms);
 
         let mut to_clean = vec![];
-        let it = self.sm.list_expire_index();
+        let mut strm = self.sm.list_expire_index().await;
 
-        for (expire_key, expire_value) in it {
-            // dbg!("check expired", &expire_key, &expire_value);
-            // dbg!(expire_key.is_expired(log_time_ms));
+        {
+            let mut strm = std::pin::pin!(strm);
+            while let Some((expire_key, expire_value)) = strm.next().await {
+                // dbg!("check expired", &expire_key, &expire_value);
+                // dbg!(expire_key.is_expired(log_time_ms));
 
-            if !expire_key.is_expired(log_time_ms) {
-                break;
+                if !expire_key.is_expired(log_time_ms) {
+                    break;
+                }
+                to_clean.push((expire_key.clone(), expire_value.clone()));
             }
-            to_clean.push((expire_key.clone(), expire_value.clone()));
         }
 
         for (expire_key, key) in to_clean {
-            let curr = self.sm.get_kv(&key);
+            let curr = self.sm.get_kv(&key).await;
             if let Some(seq_v) = &curr {
                 assert_eq!(expire_key.seq, seq_v.seq);
                 info!("clean expired: {}, {}", key, expire_key);
 
-                self.sm.upsert_kv(UpsertKV::delete(key.clone()));
+                self.sm.upsert_kv(UpsertKV::delete(key.clone())).await;
                 // dbg!("clean_expired", &key, &curr);
                 self.push_change(key, curr, None);
             } else {
