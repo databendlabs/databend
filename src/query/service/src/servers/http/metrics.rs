@@ -23,3 +23,8 @@ pub fn metrics_incr_http_slow_request_count(method: String, api: String, status:
     let labels = [("method", method), ("api", api), ("status", status)];
     counter!("query_http_slow_requests_count", 1, &labels);
 }
+
+pub fn metrics_incr_http_response_failed_count(err: String, code: u16) {
+    let labels = [("err", err), ("code", code.to_string())];
+    counter!("query_http_response_failed_count", 1, &labels);
+}
