@@ -44,7 +44,13 @@ pub struct AggregatingIndexRewriter {
 
 #[derive(Debug, Clone, Default)]
 pub struct AggregatingIndexChecker {
-    pub not_support: bool,
+    not_support: bool,
+}
+
+impl AggregatingIndexChecker {
+    pub fn is_supported(&self) -> bool {
+        !self.not_support
+    }
 }
 
 impl VisitorMut for AggregatingIndexRewriter {

@@ -66,7 +66,7 @@ impl Binder {
         {
             let mut agg_index_checker = AggregatingIndexChecker::default();
             agg_index_checker.visit_query(query);
-            if agg_index_checker.not_support {
+            if !agg_index_checker.is_supported() {
                 return Err(ErrorCode::UnsupportedIndex(format!(
                     "Currently create aggregating index just support simple query, like: {}, \
                 and these aggregate funcs: {}, \
