@@ -66,6 +66,7 @@ async-backtrace = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 comfy-table = "6.1.3"
+futures = { workspace = true }
 limits-rs = "0.2.0"
 log = { workspace = true }
 minitrace = { workspace = true }
