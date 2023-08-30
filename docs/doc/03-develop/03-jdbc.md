@@ -13,9 +13,9 @@ To download the Databend JDBC driver:
 
 1. Go to the Maven Central Repository at https://repo1.maven.org/maven2/com/databend/databend-jdbc/
 2. Click on the directory of the latest version.
-3. Download the jar file, for example, *databend-jdbc-0.0.8.jar*.
+3. Download the jar file, for example, *databend-jdbc-0.1.1.jar*.
 
-To verify the version of Databend JDBC driver, for example, *databend-jdbc-0.0.7.jar*, run the following command in the terminal:
+To verify the version of Databend JDBC driver, for example, *databend-jdbc-0.1.1.jar*, run the following command in the terminal:
 
 ```bash
 java -jar databend-jdbc-0.0.8.jar --version
@@ -27,7 +27,7 @@ The Databend JDBC driver is provided as a JAR file and can be integrated directl
 <dependency>
     <groupId>com.databend</groupId>
     <artifactId>databend-jdbc</artifactId>
-    <version>0.0.8</version>
+    <version>0.1.1</version>
 </dependency>
 ```
 
