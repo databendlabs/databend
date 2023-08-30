@@ -1,6 +1,9 @@
 ---
 title: Query Configurations
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="Introduced or updated: v1.2.87"/>
 
 The configuration file `databend-query.toml` contains settings for configuring the Databend query server. Additionally, you can configure more settings for the query server with the script `databend-query`. To find out the available settings with the script, refer to the script's help information:
 
@@ -32,6 +35,10 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
   * format: Log format. Defaults to `text`.
     - `text`: Databend outputs plain text logs.
     - `json`: Databend outputs logs in JSON format.
+
+### log.query
+
+  * on: Enables logging query execution details to the **query-details** folder in the log directory. Defaults to `on`. Consider disabling when storage space is limited.
 
 ## 2. Meta Service Config
 
