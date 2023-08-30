@@ -52,7 +52,7 @@ use common_expression::vectorize_with_builder_2_arg;
 use common_expression::with_float_mapped_type;
 use common_expression::with_integer_mapped_type;
 use common_expression::with_number_mapped_type;
-use common_expression::with_number_mapped_type_without_int64;
+use common_expression::with_number_mapped_type_without_int;
 use common_expression::with_unsigned_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
@@ -484,7 +484,7 @@ fn register_unary_arithmetic(registry: &mut FunctionRegistry) {
 
 fn register_unary_minus(registry: &mut FunctionRegistry) {
     for num_ty in ALL_NUMBER_CLASSES {
-        with_number_mapped_type_without_int64!(|NUM_TYPE| match num_ty {
+        with_number_mapped_type_without_int!(|NUM_TYPE| match num_ty {
             NumberClass::NUM_TYPE => {
                 type T = <NUM_TYPE as ResultTypeOfUnary>::Negate;
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<T>, _, _>(
@@ -514,6 +514,84 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
                             })
                         },
                         vectorize_with_builder_1_arg::<NumberType<i64>, NumberType<i64>>(
+                            |a, output, ctx| match a.checked_neg() {
+                                Some(a) => output.push(a),
+                                None => {
+                                    ctx.set_error(output.len(), "number overflowed");
+                                    output.push(0);
+                                }
+                            },
+                        ),
+                    );
+            }
+            NumberClass::Int32 => {
+                registry
+                    .register_passthrough_nullable_1_arg::<NumberType<i32>, NumberType<i32>, _, _>(
+                        "minus",
+                        |_, val| {
+                            let min = val.max.checked_neg();
+                            let max = val.min.checked_neg();
+                            if min.is_none() || max.is_none() {
+                                return FunctionDomain::MayThrow;
+                            }
+                            FunctionDomain::Domain(SimpleDomain::<i32> {
+                                min: min.unwrap(),
+                                max: max.unwrap(),
+                            })
+                        },
+                        vectorize_with_builder_1_arg::<NumberType<i32>, NumberType<i32>>(
+                            |a, output, ctx| match a.checked_neg() {
+                                Some(a) => output.push(a),
+                                None => {
+                                    ctx.set_error(output.len(), "number overflowed");
+                                    output.push(0);
+                                }
+                            },
+                        ),
+                    );
+            }
+            NumberClass::Int16 => {
+                registry
+                    .register_passthrough_nullable_1_arg::<NumberType<i16>, NumberType<i16>, _, _>(
+                        "minus",
+                        |_, val| {
+                            let min = val.max.checked_neg();
+                            let max = val.min.checked_neg();
+                            if min.is_none() || max.is_none() {
+                                return FunctionDomain::MayThrow;
+                            }
+                            FunctionDomain::Domain(SimpleDomain::<i16> {
+                                min: min.unwrap(),
+                                max: max.unwrap(),
+                            })
+                        },
+                        vectorize_with_builder_1_arg::<NumberType<i16>, NumberType<i16>>(
+                            |a, output, ctx| match a.checked_neg() {
+                                Some(a) => output.push(a),
+                                None => {
+                                    ctx.set_error(output.len(), "number overflowed");
+                                    output.push(0);
+                                }
+                            },
+                        ),
+                    );
+            }
+            NumberClass::Int8 => {
+                registry
+                    .register_passthrough_nullable_1_arg::<NumberType<i8>, NumberType<i8>, _, _>(
+                        "minus",
+                        |_, val| {
+                            let min = val.max.checked_neg();
+                            let max = val.min.checked_neg();
+                            if min.is_none() || max.is_none() {
+                                return FunctionDomain::MayThrow;
+                            }
+                            FunctionDomain::Domain(SimpleDomain::<i8> {
+                                min: min.unwrap(),
+                                max: max.unwrap(),
+                            })
+                        },
+                        vectorize_with_builder_1_arg::<NumberType<i8>, NumberType<i8>>(
                             |a, output, ctx| match a.checked_neg() {
                                 Some(a) => output.push(a),
                                 None => {
