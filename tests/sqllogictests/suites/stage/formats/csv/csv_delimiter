@@ -34,3 +34,25 @@ create table it(a int, b string)
 query IT
 copy into it from @data/csv/header_only.csv file_format = (type = CSV skip_header=1)
 ----
+
+query TIITI
+copy into it from @data/csv/whitespace_number.csv file_format = (type = CSV) on_error=continue
+----
+csv/whitespace_number.csv 0 2 fail to decode column 0 (a Int32): number is not exist, [column_data]=[" 123"] 1
+
+statement ok
+drop table if exists tt
+
+statement ok
+create table tt(a string, b string)
+
+query TIITI
+copy into tt from @data/csv/whitespace_quote.csv file_format = (type = CSV) on_error=continue
+----
+csv/whitespace_quote.csv 2 0 NULL NULL
+
+query TT
+select * from tt;
+----
+ abc  xyz
+ "abc"  xyz
