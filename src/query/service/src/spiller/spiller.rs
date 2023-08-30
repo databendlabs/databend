@@ -24,7 +24,7 @@ use opendal::Operator;
 use parking_lot::RwLock;
 
 /// Spiller type, currently only supports HashJoin
-enum SpillerType {
+pub enum SpillerType {
     HashJoin, /* Todo: Add more spiller type
                * OrderBy
                * Aggregation */
@@ -32,7 +32,7 @@ enum SpillerType {
 
 /// Spiller configuration
 pub struct SpillerConfig {
-    location_prefix: String,
+    pub location_prefix: String,
 }
 
 impl SpillerConfig {
@@ -40,9 +40,6 @@ impl SpillerConfig {
         Self { location_prefix }
     }
 }
-
-/// Spiller state
-pub struct SpillerState {}
 
 /// Spiller is a unified framework for operators which need to spill data from memory.
 /// It provides the following features:
@@ -54,31 +51,28 @@ pub struct Spiller {
     operator: Operator,
     config: SpillerConfig,
     spiller_type: SpillerType,
-    spiller_state: SpillerState,
     /// DataBlocks need to be spilled for the processor
-    pub(crate) input_data: Vec<DataBlock>,
+    pub input_data: Vec<DataBlock>,
     /// Partition set, which records there are how many partitions.
-    pub(crate) partition_set: Vec<u8>,
+    pub partition_set: Vec<u8>,
     /// Spilled partition set, after one partition is spilled, it will be added to this set.
-    pub(crate) spilled_partition_set: HashSet<u8>,
+    pub spilled_partition_set: HashSet<u8>,
     /// Key is partition id, value is rows which have same partition id
-    pub(crate) partitions: Vec<(u8, DataBlock)>,
+    pub partitions: Vec<(u8, DataBlock)>,
     /// Record the location of the spilled partitions
     /// 1 partition -> N partition files
-    pub(crate) partition_location: HashMap<u8, Vec<String>>,
+    pub partition_location: HashMap<u8, Vec<String>>,
     /// Record columns layout for spilled data, will be used when read data from disk
-    pub(crate) columns_layout: Vec<usize>,
+    pub columns_layout: Vec<usize>,
 }
 
 impl Spiller {
     /// Create a new spiller
-    pub fn create(operator: Operator, config: SpillerConfig) -> Self {
-        let spiller_type = SpillerType::HashJoin;
+    pub fn create(operator: Operator, config: SpillerConfig, spiller_type: SpillerType) -> Self {
         Self {
             operator,
             config,
             spiller_type,
-            spiller_state: SpillerState {},
             input_data: Default::default(),
             partition_set: vec![],
             spilled_partition_set: Default::default(),

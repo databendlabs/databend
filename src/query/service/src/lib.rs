@@ -51,9 +51,9 @@ pub mod sessions;
 pub mod stream;
 pub mod table_functions;
 pub mod test_kits;
+pub mod spiller;
 
 mod global_services;
-mod spiller;
 
 pub use common_sql as sql;
 pub use common_storages_factory as storages;

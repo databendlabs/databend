@@ -29,7 +29,7 @@ use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::sessions::QueryContext;
-use crate::spiller::Spiller;
+use crate::spiller::{Spiller, SpillerType};
 use crate::spiller::SpillerConfig;
 
 /// Define some states for hash join build spilling
@@ -50,9 +50,9 @@ impl BuildSpillState {
         spill_coordinator: Arc<BuildSpillCoordinator>,
         build_state: Arc<HashJoinBuildState>,
     ) -> Self {
-        let spill_config = SpillerConfig::create("hash_join_build_spill".to_string());
+        let spill_config = SpillerConfig::create("_hash_join_build_spill".to_string());
         let operator = DataOperator::instance().operator();
-        let spiller = Spiller::create(operator, spill_config);
+        let spiller = Spiller::create(operator, spill_config, SpillerType::HashJoin);
         Self {
             build_state,
             spill_memory_threshold: 1024,
