@@ -14,9 +14,12 @@
 
 use std::sync::Arc;
 
+use common_config::GlobalConfig;
 use common_exception::Result;
 use common_sql::plans::TruncateTablePlan;
 
+use crate::api::Packet;
+use crate::api::TruncateTablePacket;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -24,12 +27,35 @@ use crate::sessions::TableContext;
 
 pub struct TruncateTableInterpreter {
     ctx: Arc<QueryContext>,
-    plan: TruncateTablePlan,
+    purge: bool,
+    table_name: String,
+    catalog_name: String,
+    database_name: String,
+
+    proxy_to_cluster: bool,
 }
 
 impl TruncateTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: TruncateTablePlan) -> Result<Self> {
-        Ok(TruncateTableInterpreter { ctx, plan })
+        Ok(TruncateTableInterpreter {
+            ctx,
+            purge: plan.purge,
+            table_name: plan.table.clone(),
+            catalog_name: plan.catalog.clone(),
+            database_name: plan.database.clone(),
+            proxy_to_cluster: true,
+        })
+    }
+
+    pub fn from_flight(ctx: Arc<QueryContext>, packet: TruncateTablePacket) -> Result<Self> {
+        Ok(TruncateTableInterpreter {
+            ctx,
+            purge: packet.purge,
+            table_name: packet.table_name.clone(),
+            catalog_name: packet.catalog_name.clone(),
+            database_name: packet.database_name.clone(),
+            proxy_to_cluster: false,
+        })
     }
 }
 
@@ -41,12 +67,31 @@ impl Interpreter for TruncateTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-        let tbl_name = self.plan.table.as_str();
+        let table = self
+            .ctx
+            .get_table(&self.catalog_name, &self.database_name, &self.table_name)
+            .await?;
 
-        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        tbl.truncate(self.ctx.clone(), self.plan.purge).await?;
+        if self.proxy_to_cluster && table.broadcast_truncate_to_cluster() {
+            let settings = self.ctx.get_settings();
+            let timeout = settings.get_flight_client_timeout()?;
+            let conf = GlobalConfig::instance();
+            let cluster = self.ctx.get_cluster();
+            for node_info in &cluster.nodes {
+                if node_info.id != cluster.local_id {
+                    let truncate_packet = TruncateTablePacket::create(
+                        node_info.clone(),
+                        self.table_name.clone(),
+                        self.catalog_name.clone(),
+                        self.database_name.clone(),
+                        self.purge,
+                    );
+                    truncate_packet.commit(conf.as_ref(), timeout).await?;
+                }
+            }
+        }
+
+        table.truncate(self.ctx.clone(), self.purge).await?;
         Ok(PipelineBuildResult::create())
     }
 }
