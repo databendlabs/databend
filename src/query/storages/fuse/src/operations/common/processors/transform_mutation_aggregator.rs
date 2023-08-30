@@ -265,7 +265,10 @@ impl TableMutationAggregator {
             }
         };
 
-        let meta = CommitMeta::new(conflict_resolve_context, self.abort_operation.clone());
+        let meta = CommitMeta::new(
+            conflict_resolve_context,
+            std::mem::take(&mut self.abort_operation),
+        );
         Ok(meta)
     }
 
