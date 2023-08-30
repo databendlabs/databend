@@ -663,8 +663,12 @@ pub async fn do_update(
     } else {
         (None, vec![])
     };
-    let update_list =
-        plan.generate_update_list(ctx.clone(), table.schema().into(), col_indices.clone())?;
+    let update_list = plan.generate_update_list(
+        ctx.clone(),
+        table.schema().into(),
+        col_indices.clone(),
+        true,
+    )?;
     let computed_list =
         plan.generate_stored_computed_list(ctx.clone(), Arc::new(table.schema().into()))?;
 

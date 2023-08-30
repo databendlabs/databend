@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -60,7 +61,7 @@ pub trait SnapshotGenerator {
     ) -> Result<TableSnapshot>;
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Default)]
 pub struct SnapshotChanges {
     pub appended_segments: Vec<Location>,
     pub replaced_segments: HashMap<usize, Location>,
@@ -68,6 +69,37 @@ pub struct SnapshotChanges {
 
     pub merged_statistics: Statistics,
     pub removed_statistics: Statistics,
+}
+
+impl SnapshotChanges {
+    pub fn check_intersect(&self, other: &SnapshotChanges) -> bool {
+        if Self::is_slice_intersect(&self.appended_segments, &other.appended_segments) {
+            return true;
+        }
+        for o in &other.replaced_segments {
+            if self.replaced_segments.contains_key(o.0) {
+                return true;
+            }
+        }
+        if Self::is_slice_intersect(
+            &self.removed_segment_indexes,
+            &other.removed_segment_indexes,
+        ) {
+            return true;
+        }
+        false
+    }
+
+    fn is_slice_intersect<T: Eq + std::hash::Hash>(l: &[T], r: &[T]) -> bool {
+        let (l, r) = if l.len() > r.len() { (l, r) } else { (r, l) };
+        let l = l.iter().collect::<HashSet<_>>();
+        for x in r {
+            if l.contains(x) {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]

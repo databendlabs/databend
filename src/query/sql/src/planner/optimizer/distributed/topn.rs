@@ -17,66 +17,112 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use crate::optimizer::SExpr;
+use crate::plans::Limit;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::Sort;
 
 pub(super) struct TopNPushDownOptimizer {
-    pattern: SExpr,
+    topn_pattern: SExpr,
+    limit_pattern: SExpr,
 }
 
 impl TopNPushDownOptimizer {
     pub fn create() -> Self {
         Self {
-            // Input:
-            // Limit
-            //  \
-            //   Sort
-            //    \
-            //     Exchange
-            //      \
-            //       *
-            // Output:
-            // Limit
-            //  \
-            //   Sort (after_exchange = true)
-            //    \
-            //     Exchange
-            //      \
-            //       Sort (after_exchange = false)
-            //        \
-            //         *
-            pattern: SExpr::create_unary(
+            topn_pattern: Self::topn_pattern(),
+            limit_pattern: Self::limit_pattern(),
+        }
+    }
+
+    fn topn_pattern() -> SExpr {
+        // Input:
+        // Limit
+        //  \
+        //   Sort
+        //    \
+        //     Exchange
+        //      \
+        //       *
+        // Output:
+        // Limit
+        //  \
+        //   Sort (after_exchange = true)
+        //    \
+        //     Exchange
+        //      \
+        //       Sort (after_exchange = false)
+        //        \
+        //         *
+        SExpr::create_unary(
+            Arc::new(
+                PatternPlan {
+                    plan_type: RelOp::Limit,
+                }
+                .into(),
+            ),
+            Arc::new(SExpr::create_unary(
                 Arc::new(
                     PatternPlan {
-                        plan_type: RelOp::Limit,
+                        plan_type: RelOp::Sort,
                     }
                     .into(),
                 ),
                 Arc::new(SExpr::create_unary(
                     Arc::new(
                         PatternPlan {
-                            plan_type: RelOp::Sort,
+                            plan_type: RelOp::Exchange,
                         }
                         .into(),
                     ),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Exchange,
-                            }
-                            .into(),
-                        ),
-                        Arc::new(SExpr::create_leaf(Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Pattern,
-                            }
-                            .into(),
-                        ))),
-                    )),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                    ))),
                 )),
+            )),
+        )
+    }
+
+    fn limit_pattern() -> SExpr {
+        // Input:
+        // Limit
+        //  \
+        //   Exchange
+        //    \
+        //     *
+        // Output:
+        // Limit
+        //  \
+        //   Exchange
+        //    \
+        //     Limit
+        //      \
+        //       *
+        SExpr::create_unary(
+            Arc::new(
+                PatternPlan {
+                    plan_type: RelOp::Limit,
+                }
+                .into(),
             ),
-        }
+            Arc::new(SExpr::create_unary(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Exchange,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_leaf(Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Pattern,
+                    }
+                    .into(),
+                ))),
+            )),
+        )
     }
 
     pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
@@ -86,11 +132,12 @@ impl TopNPushDownOptimizer {
             replaced_children.push(Arc::new(new_child));
         }
         let new_sexpr = s_expr.replace_children(replaced_children);
-        self.apply(&new_sexpr)
+        let apply_topn_res = self.apply_topn(&new_sexpr)?;
+        self.apply_limit(&apply_topn_res)
     }
 
-    fn apply(&self, s_expr: &SExpr) -> Result<SExpr> {
-        if !s_expr.match_pattern(&self.pattern) {
+    fn apply_topn(&self, s_expr: &SExpr) -> Result<SExpr> {
+        if !s_expr.match_pattern(&self.topn_pattern) {
             return Ok(s_expr.clone());
         }
 
@@ -114,5 +161,34 @@ impl TopNPushDownOptimizer {
         let new_sort = SExpr::create_unary(Arc::new(sort.into()), Arc::new(new_exchange));
         let new_plan = s_expr.replace_children(vec![Arc::new(new_sort)]);
         Ok(new_plan)
+    }
+
+    fn apply_limit(&self, s_expr: &SExpr) -> Result<SExpr> {
+        if !s_expr.match_pattern(&self.limit_pattern) {
+            return Ok(s_expr.clone());
+        }
+
+        let exchange_sexpr = s_expr.child(0)?;
+        let mut limit: Limit = s_expr.plan().clone().try_into()?;
+
+        if limit.limit.is_none() {
+            if limit.offset != 0 {
+                // Only offset: SELECT number from numbers(1000) offset 100;
+                return Ok(s_expr.clone());
+            }
+
+            // Dummy limit: remove limit.
+            return Ok(s_expr.child(0)?.clone());
+        }
+
+        limit.limit = limit.limit.map(|v| v + limit.offset);
+        limit.offset = 0;
+        limit.before_exchange = true;
+
+        debug_assert!(exchange_sexpr.children.len() == 1);
+        let child = exchange_sexpr.child(0)?.clone();
+        let new_child = SExpr::create_unary(Arc::new(limit.into()), Arc::new(child));
+        let new_exchange = exchange_sexpr.replace_children(vec![Arc::new(new_child)]);
+        Ok(s_expr.replace_children(vec![Arc::new(new_exchange)]))
     }
 }

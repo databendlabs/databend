@@ -32,6 +32,7 @@ mod kill;
 mod lambda;
 mod limit;
 mod location;
+mod merge_into;
 mod presign;
 mod project;
 mod project_set;
@@ -49,7 +50,6 @@ mod table_args;
 mod update;
 mod values;
 mod window;
-
 pub use aggregate::AggregateInfo;
 pub use bind_context::*;
 pub use binder::Binder;
