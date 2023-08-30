@@ -287,7 +287,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
         }
 
         let mut sm = self.state_machine.write().await;
-        let res = sm.apply_entries(entries);
+        let res = sm.apply_entries(entries).await;
 
         Ok(res)
     }
