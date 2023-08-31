@@ -83,11 +83,7 @@ impl SyncSystemTable for MetricsTable {
     }
 
     fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
-        let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
-            ErrorCode::InitPrometheusFailure("Prometheus recorder is not initialized yet.")
-        })?;
-
-        reset_metrics(prometheus_handle)?;
+        reset_metrics()?;
         Ok(())
     }
 }

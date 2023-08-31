@@ -13,19 +13,14 @@
 // limitations under the License.
 
 use common_exception::Result;
-use metrics::gauge;
-use metrics_exporter_prometheus::PrometheusHandle;
 
-use crate::dump_metric_samples;
-use crate::MetricValue;
+use crate::recorder::try_get_record;
 
 /// Reset gauge metrics to 0.
-pub fn reset_metrics(handle: PrometheusHandle) -> Result<()> {
-    let samples = dump_metric_samples(handle)?;
-    for sample in samples {
-        if let MetricValue::Gauge(_) = sample.value {
-            gauge!(sample.name, 0_f64);
-        }
+pub fn reset_metrics() -> Result<()> {
+    if let Some(recorder) = try_get_record() {
+        recorder.clear();
     }
+
     Ok(())
 }
