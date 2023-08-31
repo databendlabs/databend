@@ -18,16 +18,25 @@ use std::sync::Arc;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_storage::CopyStatus;
+use common_storage::FileStatus;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 
 use super::parquet_reader::ParquetRSReader;
 use crate::ParquetPart;
+
+enum State {
+    Init,
+    ReadRowGroup(ParquetRecordBatchReader),
+    ReadFiles(Vec<(String, Vec<u8>)>),
+}
 
 pub struct ParquetSource {
     // Source processor related fields.
@@ -41,7 +50,13 @@ pub struct ParquetSource {
 
     // Used to read parquet.
     reader: Arc<ParquetRSReader>,
-    batch_reader: Option<ParquetRecordBatchReader>,
+
+    state: State,
+    // If the source is used for a copy pipeline,
+    // we should update copy status when reading small parquet files.
+    // (Because we cannot collect copy status of small parquet files during `read_partition`).
+    is_copy: bool,
+    copy_status: Arc<CopyStatus>,
 }
 
 impl ParquetSource {
@@ -51,14 +66,18 @@ impl ParquetSource {
         reader: Arc<ParquetRSReader>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
+        let is_copy = ctx.get_query_kind().eq_ignore_ascii_case("copy");
+        let copy_status = ctx.get_copy_status();
         Ok(ProcessorPtr::create(Box::new(Self {
             output,
             scan_progress,
             ctx,
             reader,
-            batch_reader: None,
             generated_data: None,
             is_finished: false,
+            state: State::Init,
+            is_copy,
+            copy_status,
         })))
     }
 }
@@ -88,7 +107,11 @@ impl Processor for ParquetSource {
         }
 
         match self.generated_data.take() {
-            None => Ok(Event::Async),
+            None => match &self.state {
+                State::Init => Ok(Event::Async),
+                State::ReadFiles(_) => Ok(Event::Sync),
+                State::ReadRowGroup(_) => Ok(Event::Sync),
+            },
             Some(data_block) => {
                 let progress_values = ProgressValues {
                     rows: data_block.num_rows(),
@@ -101,26 +124,77 @@ impl Processor for ParquetSource {
         }
     }
 
+    fn process(&mut self) -> Result<()> {
+        match std::mem::replace(&mut self.state, State::Init) {
+            State::ReadRowGroup(mut reader) => {
+                if let Some(block) = self.reader.read_block(&mut reader)? {
+                    self.generated_data = Some(block);
+                    self.state = State::ReadRowGroup(reader);
+                }
+                // Else: The reader is finished. We should try to build another reader.
+            }
+            State::ReadFiles(buffers) => {
+                let mut blocks = Vec::with_capacity(buffers.len());
+                // Write `if` outside to reduce branches.
+                if self.is_copy {
+                    for (path, buffer) in buffers {
+                        let bs = self.reader.read_blocks_from_binary(buffer)?;
+                        let num_rows = bs.iter().map(|b| b.num_rows()).sum();
+                        self.copy_status.add_chunk(path.as_str(), FileStatus {
+                            num_rows_loaded: num_rows,
+                            error: None,
+                        });
+                        blocks.extend(bs);
+                    }
+                } else {
+                    for (_, buffer) in buffers {
+                        blocks.extend(self.reader.read_blocks_from_binary(buffer)?);
+                    }
+                }
+
+                if !blocks.is_empty() {
+                    self.generated_data = Some(DataBlock::concat(&blocks)?);
+                }
+                // Else: no output data is generated.
+            }
+            _ => unreachable!(),
+        }
+        Ok(())
+    }
+
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        if let Some(mut reader) = self.batch_reader.take() {
-            if let Some(block) = self.reader.read_block(&mut reader).await? {
-                self.generated_data = Some(block);
-                self.batch_reader = Some(reader);
-            }
-            // else:
-            // If `read_block` returns `None`, it means the stream is finished.
-            // And we should try to build another stream (in next event loop).
-        } else if let Some(part) = self.ctx.get_partition() {
-            match ParquetPart::from_part(&part)? {
-                ParquetPart::ParquetRSRowGroup(part) => {
-                    let reader = self.reader.prepare_row_group_reader(part).await?;
-                    self.batch_reader = reader;
+        match std::mem::replace(&mut self.state, State::Init) {
+            State::Init => {
+                if let Some(part) = self.ctx.get_partition() {
+                    match ParquetPart::from_part(&part)? {
+                        ParquetPart::ParquetRSRowGroup(part) => {
+                            if let Some(reader) = self.reader.prepare_row_group_reader(part).await?
+                            {
+                                self.state = State::ReadRowGroup(reader);
+                            }
+                            // Else: keep in init state.
+                        }
+                        ParquetPart::ParquetFiles(parts) => {
+                            let mut handlers = Vec::with_capacity(parts.files.len());
+                            for (path, _) in parts.files.iter() {
+                                let op = self.reader.operator();
+                                let path = path.clone();
+                                handlers.push(async move {
+                                    let data = op.read(&path).await?;
+                                    Ok::<_, ErrorCode>((path, data))
+                                });
+                            }
+                            let buffers = futures::future::try_join_all(handlers).await?;
+                            self.state = State::ReadFiles(buffers);
+                        }
+                        _ => unreachable!(),
+                    }
+                } else {
+                    self.is_finished = true;
                 }
-                _ => unreachable!(),
             }
-        } else {
-            self.is_finished = true;
+            _ => unreachable!(),
         }
 
         Ok(())
