@@ -27,13 +27,21 @@
 use std::time::Instant;
 
 use common_metrics::counter;
+use prometheus_client::registry::Registry;
+use lazy_static::lazy_static;
 use prometheus_client::encoding::text::encode as prometheus_encode;
+use std::sync::Mutex;
+
+lazy_static! {
+    pub static ref REGISTRY: Mutex<Registry> = Mutex::new(Registry::default());
+}
 
 pub mod server_metrics {
     use common_meta_types::NodeId;
     use lazy_static::lazy_static;
     use prometheus_client::metrics::counter::Counter;
     use prometheus_client::metrics::gauge::Gauge;
+    use prometheus_client::registry::Registry;
 
     macro_rules! key {
         ($key: literal) => {
@@ -42,15 +50,15 @@ pub mod server_metrics {
     }
 
     struct ServerMetrics {
-        current_leader: Gauge,
+        current_leader_id: Gauge,
         is_leader: Gauge,
         node_is_health: Gauge,
         leader_changes: Counter,
         applying_snapshot: Gauge,
-        proposal_applied: Gauge,
         last_log_index: Gauge,
         last_seq: Gauge,
         current_term: Gauge,
+        proposals_applied: Gauge,
         proposals_pending: Gauge,
         proposals_failed: Counter,
         read_failed: Counter,
@@ -60,26 +68,26 @@ pub mod server_metrics {
     impl ServerMetrics {
         fn init() -> Self {
             let metrics = Self {
-                current_leader: Gauge::default(),
+                current_leader_id: Gauge::default(),
                 is_leader: Gauge::default(),
                 node_is_health: Gauge::default(),
                 leader_changes: Counter::default(),
                 applying_snapshot: Gauge::default(),
-                proposal_applied: Gauge::default(),
                 last_log_index: Gauge::default(),
                 last_seq: Gauge::default(),
                 current_term: Gauge::default(),
+                proposals_applied: Gauge::default(),
                 proposals_pending: Gauge::default(),
                 proposals_failed: Counter::default(),
                 read_failed: Counter::default(),
                 watchers: Gauge::default(),
             };
 
-            let mut registry = prometheus_client::registry::Registry::default();
+            let mut registry = crate::metrics::REGISTRY.lock().unwrap();
             registry.register(
-                key!("current_leader"),
+                key!("current_leader_id"),
                 "current leader",
-                metrics.current_leader.clone(),
+                metrics.current_leader_id.clone(),
             );
             registry.register(key!("is_leader"), "is leader", metrics.is_leader.clone());
             registry.register(
@@ -98,9 +106,9 @@ pub mod server_metrics {
                 metrics.applying_snapshot.clone(),
             );
             registry.register(
-                key!("proposal_applied"),
-                "proposal applied",
-                metrics.proposal_applied.clone(),
+                key!("proposals_applied"),
+                "proposals applied",
+                metrics.proposals_applied.clone(),
             );
             registry.register(
                 key!("last_log_index"),
@@ -138,7 +146,7 @@ pub mod server_metrics {
     }
 
     pub fn set_current_leader(current_leader: NodeId) {
-        SERVER_METRICS.current_leader.set(current_leader as i64);
+        SERVER_METRICS.current_leader_id.set(current_leader as i64);
     }
 
     pub fn set_is_leader(is_leader: bool) {
@@ -160,7 +168,7 @@ pub mod server_metrics {
 
     pub fn set_proposals_applied(proposals_applied: u64) {
         SERVER_METRICS
-            .proposal_applied
+            .proposals_applied
             .set(proposals_applied as i64);
     }
 
@@ -204,6 +212,7 @@ pub mod raft_metrics {
         use prometheus_client::metrics::gauge::Gauge;
         use prometheus_client::metrics::histogram::exponential_buckets;
         use prometheus_client::metrics::histogram::Histogram;
+        use prometheus_client::registry::Registry;
 
         macro_rules! key {
             ($key: literal) => {
@@ -265,7 +274,7 @@ pub mod raft_metrics {
                     snapshot_recv_failures: Family::default(),
                 };
 
-                let mut registry = prometheus_client::registry::Registry::default();
+                let mut registry = super::super::REGISTRY.lock().unwrap();
                 registry.register(
                     key!("active_peers"),
                     "active peers",
@@ -466,7 +475,7 @@ pub mod raft_metrics {
                     raft_store_read_failed: Family::default(),
                 };
 
-                let mut registry = prometheus_client::registry::Registry::default();
+                let mut registry = crate::metrics::REGISTRY.lock().unwrap();
                 registry.register(
                     key!("raft_store_write_failed"),
                     "raft store write failed",
@@ -544,7 +553,7 @@ pub mod network_metrics {
                 req_failed: Counter::default(),
             };
 
-            let mut registry = prometheus_client::registry::Registry::default();
+            let mut registry = crate::metrics::REGISTRY.lock().unwrap();
             registry.register(
                 key!("rpc_delay_seconds"),
                 "rpc delay seconds",
@@ -630,7 +639,7 @@ impl counter::Count for ProposalPending {
 
 /// Encode metrics as prometheus format string
 pub fn meta_metrics_to_prometheus_string() -> String {
-    let registry = prometheus_client::registry::Registry::default();
+    let registry = crate::metrics::REGISTRY.lock().unwrap();
 
     let mut text = String::new();
     prometheus_encode(&mut text, &registry).unwrap();
