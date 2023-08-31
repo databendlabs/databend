@@ -447,6 +447,30 @@ error:
 
 
 ---------- Input ----------
+select * from aa.bb limit 10,2 offset 2;
+---------- Output ---------
+error: 
+  --> SQL:1:32
+  |
+1 | select * from aa.bb limit 10,2 offset 2;
+  | ------                         ^^^^^^ LIMIT n,m should not appear OFFSET
+  | |                               
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb limit 10,2,3;
+---------- Output ---------
+error: 
+  --> SQL:1:21
+  |
+1 | select * from aa.bb limit 10,2,3;
+  | ------              ^^^^^ [LIMIT n OFFSET m] or [LIMIT n,m]
+  | |                    
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
 with a as (select 1) with b as (select 2) select * from aa.bb;
 ---------- Output ---------
 error: 
