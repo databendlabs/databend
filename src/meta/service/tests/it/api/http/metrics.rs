@@ -14,9 +14,9 @@
 
 use common_metrics::init_default_metrics_recorder;
 use databend_meta::api::http::v1::metrics::metrics_handler;
-use databend_meta::metrics::server_metrics;
 use databend_meta::metrics::network_metrics;
 use databend_meta::metrics::raft_metrics;
+use databend_meta::metrics::server_metrics;
 use log::info;
 use maplit::btreeset;
 use poem::get;
@@ -91,7 +91,7 @@ async fn test_metrics() -> anyhow::Result<()> {
 
     let b = response.take_body();
     let txt = b.into_string().await?;
-    println!("metrics response text: {}", txt);
+    info!("metrics response text: {}", txt);
 
     let metric_keys = {
         let lines = txt.split('\n');

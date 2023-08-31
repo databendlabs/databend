@@ -13,11 +13,11 @@
 // limitations under the License.
 
 mod meta_metrics;
+mod registry;
 
 pub use meta_metrics::meta_metrics_to_prometheus_string;
 pub use meta_metrics::network_metrics;
 pub use meta_metrics::raft_metrics;
 pub use meta_metrics::server_metrics;
-pub(crate) use meta_metrics::REGISTRY;
 pub(crate) use meta_metrics::ProposalPending;
 pub(crate) use meta_metrics::RequestInFlight;

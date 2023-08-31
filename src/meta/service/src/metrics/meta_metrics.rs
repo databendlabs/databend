@@ -27,21 +27,15 @@
 use std::time::Instant;
 
 use common_metrics::counter;
-use prometheus_client::registry::Registry;
-use lazy_static::lazy_static;
 use prometheus_client::encoding::text::encode as prometheus_encode;
-use std::sync::Mutex;
-
-lazy_static! {
-    pub static ref REGISTRY: Mutex<Registry> = Mutex::new(Registry::default());
-}
 
 pub mod server_metrics {
     use common_meta_types::NodeId;
     use lazy_static::lazy_static;
     use prometheus_client::metrics::counter::Counter;
     use prometheus_client::metrics::gauge::Gauge;
-    use prometheus_client::registry::Registry;
+
+    use crate::metrics::registry::load_global_registry;
 
     macro_rules! key {
         ($key: literal) => {
@@ -83,7 +77,7 @@ pub mod server_metrics {
                 watchers: Gauge::default(),
             };
 
-            let mut registry = crate::metrics::REGISTRY.lock().unwrap();
+            let mut registry = load_global_registry();
             registry.register(
                 key!("current_leader_id"),
                 "current leader",
@@ -212,7 +206,6 @@ pub mod raft_metrics {
         use prometheus_client::metrics::gauge::Gauge;
         use prometheus_client::metrics::histogram::exponential_buckets;
         use prometheus_client::metrics::histogram::Histogram;
-        use prometheus_client::registry::Registry;
 
         macro_rules! key {
             ($key: literal) => {
@@ -274,7 +267,7 @@ pub mod raft_metrics {
                     snapshot_recv_failures: Family::default(),
                 };
 
-                let mut registry = super::super::REGISTRY.lock().unwrap();
+                let mut registry = crate::metrics::registry::load_global_registry();
                 registry.register(
                     key!("active_peers"),
                     "active peers",
@@ -452,6 +445,8 @@ pub mod raft_metrics {
         use prometheus_client::metrics::counter::Counter;
         use prometheus_client::metrics::family::Family;
 
+        use crate::metrics::registry::load_global_registry;
+
         macro_rules! key {
             ($key: literal) => {
                 concat!("metasrv_raft_storage_", $key)
@@ -475,7 +470,7 @@ pub mod raft_metrics {
                     raft_store_read_failed: Family::default(),
                 };
 
-                let mut registry = crate::metrics::REGISTRY.lock().unwrap();
+                let mut registry = load_global_registry();
                 registry.register(
                     key!("raft_store_write_failed"),
                     "raft store write failed",
@@ -521,6 +516,8 @@ pub mod network_metrics {
     use prometheus_client::metrics::gauge::Gauge;
     use prometheus_client::metrics::histogram::Histogram;
 
+    use crate::metrics::registry::load_global_registry;
+
     macro_rules! key {
         ($key: literal) => {
             concat!("metasrv_meta_network_", $key)
@@ -553,7 +550,7 @@ pub mod network_metrics {
                 req_failed: Counter::default(),
             };
 
-            let mut registry = crate::metrics::REGISTRY.lock().unwrap();
+            let mut registry = load_global_registry();
             registry.register(
                 key!("rpc_delay_seconds"),
                 "rpc delay seconds",
@@ -639,7 +636,7 @@ impl counter::Count for ProposalPending {
 
 /// Encode metrics as prometheus format string
 pub fn meta_metrics_to_prometheus_string() -> String {
-    let registry = crate::metrics::REGISTRY.lock().unwrap();
+    let registry = crate::metrics::registry::load_global_registry();
 
     let mut text = String::new();
     prometheus_encode(&mut text, &registry).unwrap();
