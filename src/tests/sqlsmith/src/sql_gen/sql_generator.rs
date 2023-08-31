@@ -12,15 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use common_expression::TableSchemaRef;
+use rand::Rng;
 
-use crate::recorder::try_get_record;
+#[derive(Clone, Debug)]
+pub(crate) struct Table {
+    pub name: String,
+    pub schema: TableSchemaRef,
+}
 
-/// Reset gauge metrics to 0.
-pub fn reset_metrics() -> Result<()> {
-    if let Some(recorder) = try_get_record() {
-        recorder.clear();
+impl Table {
+    pub fn new(name: String, schema: TableSchemaRef) -> Self {
+        Self { name, schema }
     }
+}
 
-    Ok(())
+pub(crate) struct SqlGenerator<'a, R: Rng> {
+    pub(crate) tables: Vec<Table>,
+    pub(crate) rng: &'a mut R,
+}
+
+impl<'a, R: Rng> SqlGenerator<'a, R> {
+    pub(crate) fn new(rng: &'a mut R, tables: Vec<Table>) -> Self {
+        SqlGenerator { tables, rng }
+    }
 }

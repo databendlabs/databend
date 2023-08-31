@@ -12,15 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+mod runner;
+mod sql_gen;
 
-use crate::recorder::try_get_record;
-
-/// Reset gauge metrics to 0.
-pub fn reset_metrics() -> Result<()> {
-    if let Some(recorder) = try_get_record() {
-        recorder.clear();
-    }
-
-    Ok(())
-}
+pub use runner::Runner;

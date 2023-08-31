@@ -201,7 +201,6 @@ impl Display for AttachTableStmt {
     }
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum CreateTableSource {
     Columns(Vec<ColumnDefinition>),
