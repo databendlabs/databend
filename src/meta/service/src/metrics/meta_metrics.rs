@@ -162,9 +162,13 @@ pub mod server_metrics {
 pub mod raft_metrics {
     pub mod network {
         use common_meta_types::NodeId;
-        use metrics::counter;
-        use metrics::histogram;
-        use metrics::increment_gauge;
+        use lazy_static::lazy_static;
+        use prometheus::register_counter_vec;
+        use prometheus::register_gauge_vec;
+        use prometheus::register_histogram_vec;
+        use prometheus::CounterVec;
+        use prometheus::GaugeVec;
+        use prometheus::HistogramVec;
 
         macro_rules! key {
             ($key: literal) => {
@@ -172,69 +176,196 @@ pub mod raft_metrics {
             };
         }
 
+        struct RaftMetrics {
+            active_peers: GaugeVec,
+            fail_connect_to_peer: GaugeVec,
+            sent_bytes: CounterVec,
+            recv_bytes: CounterVec,
+            sent_failures: CounterVec,
+            snapshot_send_success: CounterVec,
+            snapshot_send_failure: CounterVec,
+            snapshot_send_inflights: GaugeVec,
+            snapshot_recv_inflights: GaugeVec,
+            snapshot_sent_seconds: HistogramVec,
+            snapshot_recv_seconds: HistogramVec,
+            snapshot_recv_success: CounterVec,
+            snapshot_recv_failures: CounterVec,
+        }
+
+        impl RaftMetrics {
+            fn init() -> Self {
+                Self {
+                    active_peers: register_gauge_vec!(key!("active_peers"), "active peers", &[
+                        "id", "address"
+                    ])
+                    .unwrap(),
+                    fail_connect_to_peer: register_gauge_vec!(
+                        key!("fail_connect_to_peer"),
+                        "fail connect to peer",
+                        &["id", "address"]
+                    )
+                    .unwrap(),
+                    sent_bytes: register_counter_vec!(key!("sent_bytes"), "sent bytes", &["to"])
+                        .unwrap(),
+                    recv_bytes: register_counter_vec!(key!("recv_bytes"), "recv bytes", &["from"])
+                        .unwrap(),
+                    sent_failures: register_counter_vec!(
+                        key!("sent_failures"),
+                        "sent failures",
+                        &["to"]
+                    )
+                    .unwrap(),
+                    snapshot_send_success: register_counter_vec!(
+                        key!("snapshot_send_success"),
+                        "snapshot send success",
+                        &["to"]
+                    )
+                    .unwrap(),
+                    snapshot_send_failure: register_counter_vec!(
+                        key!("snapshot_send_failure"),
+                        "snapshot send failure",
+                        &["to"]
+                    )
+                    .unwrap(),
+                    snapshot_send_inflights: register_gauge_vec!(
+                        key!("snapshot_send_inflights"),
+                        "snapshot send inflights",
+                        &["to"]
+                    )
+                    .unwrap(),
+                    snapshot_recv_inflights: register_gauge_vec!(
+                        key!("snapshot_recv_inflights"),
+                        "snapshot recv inflights",
+                        &["from"]
+                    )
+                    .unwrap(),
+                    snapshot_sent_seconds: register_histogram_vec!(
+                        key!("snapshot_sent_seconds"),
+                        "snapshot sent seconds",
+                        &["to"]
+                    )
+                    .unwrap(),
+                    snapshot_recv_seconds: register_histogram_vec!(
+                        key!("snapshot_recv_seconds"),
+                        "snapshot recv seconds",
+                        &["from"]
+                    )
+                    .unwrap(),
+                    snapshot_recv_success: register_counter_vec!(
+                        key!("snapshot_recv_success"),
+                        "snapshot recv success",
+                        &["from"]
+                    )
+                    .unwrap(),
+                    snapshot_recv_failures: register_counter_vec!(
+                        key!("snapshot_recv_failures"),
+                        "snapshot recv failures",
+                        &["from"]
+                    )
+                    .unwrap(),
+                }
+            }
+        }
+
+        lazy_static! {
+            static ref RAFT_METRICS: RaftMetrics = RaftMetrics::init();
+        }
+
         pub fn incr_active_peers(id: &NodeId, addr: &str, cnt: i64) {
-            let labels = [("id", id.to_string()), ("address", addr.to_owned())];
-            increment_gauge!(key!("active_peers"), cnt as f64, &labels);
+            let id = id.to_string();
+            RAFT_METRICS
+                .active_peers
+                .with_label_values(&[&id, addr])
+                .add(cnt as f64);
         }
 
         pub fn incr_fail_connections_to_peer(id: &NodeId, addr: &str) {
-            let labels = [("id", id.to_string()), ("address", addr.to_owned())];
-            counter!(key!("fail_connect_to_peer"), 1, &labels);
+            let id = id.to_string();
+            RAFT_METRICS
+                .fail_connect_to_peer
+                .with_label_values(&[&id, addr])
+                .inc();
         }
 
         pub fn incr_sent_bytes_to_peer(id: &NodeId, bytes: u64) {
-            let labels = [("to", id.to_string())];
-            counter!(key!("sent_bytes"), bytes, &labels);
+            let to = id.to_string();
+            RAFT_METRICS
+                .sent_bytes
+                .with_label_values(&[&to])
+                .inc_by(bytes as f64);
         }
 
         pub fn incr_recv_bytes_from_peer(addr: String, bytes: u64) {
-            let labels = [("from", addr)];
-            counter!(key!("recv_bytes"), bytes, &labels);
+            RAFT_METRICS
+                .recv_bytes
+                .with_label_values(&[&addr])
+                .inc_by(bytes as f64);
         }
 
         pub fn incr_sent_failure_to_peer(id: &NodeId) {
-            let labels = [("to", id.to_string())];
-            counter!(key!("sent_failures"), 1, &labels);
+            let to = id.to_string();
+            RAFT_METRICS.sent_failures.with_label_values(&[&to]).inc();
         }
 
         pub fn incr_snapshot_send_success_to_peer(id: &NodeId) {
-            let labels = [("to", id.to_string())];
-            counter!(key!("snapshot_send_success"), 1, &labels);
+            let to = id.to_string();
+            RAFT_METRICS
+                .snapshot_send_success
+                .with_label_values(&[&to])
+                .inc();
         }
 
         pub fn incr_snapshot_send_failures_to_peer(id: &NodeId) {
-            let labels = [("to", id.to_string())];
-            counter!(key!("snapshot_send_failures"), 1, &labels);
+            let to = id.to_string();
+            RAFT_METRICS
+                .snapshot_send_failure
+                .with_label_values(&[&to])
+                .inc();
         }
 
         pub fn incr_snapshot_send_inflights_to_peer(id: &NodeId, cnt: i64) {
-            let labels = [("to", id.to_string())];
-            increment_gauge!(key!("snapshot_send_inflights"), cnt as f64, &labels);
+            let to = id.to_string();
+            RAFT_METRICS
+                .snapshot_send_inflights
+                .with_label_values(&[&to])
+                .inc_by(cnt as f64);
         }
 
         pub fn incr_snapshot_recv_inflights_from_peer(addr: String, cnt: i64) {
-            let labels = [("to", addr)];
-            increment_gauge!(key!("snapshot_recv_inflights"), cnt as f64, &labels);
+            let from = addr.to_string();
+            RAFT_METRICS
+                .snapshot_recv_inflights
+                .with_label_values(&[&from])
+                .inc_by(cnt as f64);
         }
 
         pub fn sample_snapshot_sent(id: &NodeId, v: f64) {
-            let labels = [("to", id.to_string())];
-            histogram!(key!("snapshot_sent_seconds"), v, &labels);
+            let to = id.to_string();
+            RAFT_METRICS
+                .snapshot_sent_seconds
+                .with_label_values(&[&to])
+                .observe(v);
         }
 
         pub fn sample_snapshot_recv(addr: String, v: f64) {
-            let labels = [("from", addr)];
-            histogram!(key!("snapshot_recv_seconds"), v, &labels);
+            RAFT_METRICS
+                .snapshot_recv_seconds
+                .with_label_values(&[&addr])
+                .observe(v);
         }
 
         pub fn incr_snapshot_recv_failure_from_peer(addr: String) {
-            let labels = [("from", addr)];
-            counter!(key!("snapshot_recv_failures"), 1, &labels);
+            RAFT_METRICS
+                .snapshot_recv_failures
+                .with_label_values(&[&addr])
+                .inc();
         }
 
         pub fn incr_snapshot_recv_success_from_peer(addr: String) {
-            let labels = [("from", addr)];
-            counter!(key!("snapshot_recv_success"), 1, &labels);
+            RAFT_METRICS
+                .snapshot_recv_success
+                .with_label_values(&[&addr])
+                .inc();
         }
     }
 
