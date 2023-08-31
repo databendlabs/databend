@@ -102,3 +102,9 @@ select * from numbers(2) limit 0,1,dummy;
 
 statement error 1005
 select * from numbers(2) limit 0,1 offset 2;
+
+query I
+select * from numbers(2) offset 0;
+----
+0
+1
