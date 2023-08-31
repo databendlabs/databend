@@ -305,9 +305,6 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 query.limit = limit;
             }
             SetOperationElement::Offset { offset } => {
-                if query.limit.is_empty() {
-                    return Err("LIMIT must appear before OFFSET");
-                }
                 if query.limit.len() == 2 {
                     return Err("LIMIT n,m should not appear OFFSET");
                 }
