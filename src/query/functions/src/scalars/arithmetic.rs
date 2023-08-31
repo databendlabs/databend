@@ -554,6 +554,7 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
                         ),
                     );
             }
+
             NumberClass::Decimal128 => {
                 register_decimal_minus(registry)
             }

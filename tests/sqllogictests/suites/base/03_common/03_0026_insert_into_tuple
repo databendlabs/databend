@@ -88,5 +88,40 @@ desc t4
 ----
 a TUPLE(1 INT32, 2 INT32) NO (0, 0) (empty)
 
+# decimal precision <=9, <=18, other are serialize to different underlying types.
+# decimal precision <=38 to Decimal128, >38 to Decimal256
+statement ok
+CREATE TABLE IF NOT EXISTS t5(id Int, t Tuple(a Tuple(m Int64, n Decimal(9, 7)), b Tuple(w Decimal(9, 7), x Decimal(18, 7), y Decimal(34, 7), z Decimal(55, 7)))) Engine = Fuse
+
+statement ok
+INSERT INTO t5 (id, t) VALUES(1, ((10, 11.888), (20.777, 21.666, 22.555, 23.444))), (2, ((20, 21.888), (30.777, 31.666, 32.555, 33.444)))
+
+query IT
+select * from t5
+----
+1 ((10,11.8880000),(20.7770000,21.6660000,22.5550000,23.4440000))
+2 ((20,21.8880000),(30.7770000,31.6660000,32.5550000,33.4440000))
+
+query IITIIIIT
+select t:a:m, t:a:n, t:a, t:b:w, t:b:x, t:b:y, t:b:z, t:b from t5
+----
+10 11.8880000 (10,11.8880000) 20.7770000 21.6660000 22.5550000 23.4440000 (20.7770000,21.6660000,22.5550000,23.4440000)
+20 21.8880000 (20,21.8880000) 30.7770000 31.6660000 32.5550000 33.4440000 (30.7770000,31.6660000,32.5550000,33.4440000)
+
+statement ok
+CREATE VIEW v5 AS SELECT * FROM t5;
+
+query IT
+select * from v5
+----
+1 ((10,11.8880000),(20.7770000,21.6660000,22.5550000,23.4440000))
+2 ((20,21.8880000),(30.7770000,31.6660000,32.5550000,33.4440000))
+
+query IITIIIIT
+select t:a:m, t:a:n, t:a, t:b:w, t:b:x, t:b:y, t:b:z, t:b from v5
+----
+10 11.8880000 (10,11.8880000) 20.7770000 21.6660000 22.5550000 23.4440000 (20.7770000,21.6660000,22.5550000,23.4440000)
+20 21.8880000 (20,21.8880000) 30.7770000 31.6660000 32.5550000 33.4440000 (30.7770000,31.6660000,32.5550000,33.4440000)
+
 statement ok
 DROP DATABASE db1

@@ -942,31 +942,6 @@ impl ResultTypeOfUnary for u64 {
 }
 
 impl ResultTypeOfUnary for i8 {
-    type Negate = i8;
-    type Sum = i64;
-
-    fn checked_add(self, rhs: Self) -> Option<Self> {
-        self.checked_add(rhs)
-    }
-
-    fn checked_sub(self, rhs: Self) -> Option<Self> {
-        self.checked_sub(rhs)
-    }
-
-    fn checked_mul(self, rhs: Self) -> Option<Self> {
-        self.checked_mul(rhs)
-    }
-
-    fn checked_div(self, rhs: Self) -> Option<Self> {
-        self.checked_div(rhs)
-    }
-
-    fn checked_rem(self, rhs: Self) -> Option<Self> {
-        self.checked_rem(rhs)
-    }
-}
-
-impl ResultTypeOfUnary for i16 {
     type Negate = i16;
     type Sum = i64;
 
@@ -991,8 +966,33 @@ impl ResultTypeOfUnary for i16 {
     }
 }
 
-impl ResultTypeOfUnary for i32 {
+impl ResultTypeOfUnary for i16 {
     type Negate = i32;
+    type Sum = i64;
+
+    fn checked_add(self, rhs: Self) -> Option<Self> {
+        self.checked_add(rhs)
+    }
+
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
+        self.checked_sub(rhs)
+    }
+
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
+        self.checked_mul(rhs)
+    }
+
+    fn checked_div(self, rhs: Self) -> Option<Self> {
+        self.checked_div(rhs)
+    }
+
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
+        self.checked_rem(rhs)
+    }
+}
+
+impl ResultTypeOfUnary for i32 {
+    type Negate = i64;
     type Sum = i64;
 
     fn checked_add(self, rhs: Self) -> Option<Self> {

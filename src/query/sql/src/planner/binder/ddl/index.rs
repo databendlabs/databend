@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_ast::ast::CreateIndexStmt;
 use common_ast::ast::DropIndexStmt;
-use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
 use common_ast::ast::Query;
 use common_ast::ast::RefreshIndexStmt;
@@ -25,12 +24,11 @@ use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
-use common_ast::walk_query;
 use common_ast::walk_statement_mut;
 use common_ast::Dialect;
+use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::aggregates::AggregateFunctionFactory;
 use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
@@ -65,11 +63,19 @@ impl Binder {
         } = stmt;
 
         // check if query support index
-        let mut agg_index_checker = AggregatingIndexChecker::default();
-        walk_query(&mut agg_index_checker, query);
-        // todo(ariesdevil): do all check using `AggregatingIndexChecker`
-        Self::check_index_support(query, agg_index_checker.has_no_deterministic_func)?;
-
+        {
+            let mut agg_index_checker = AggregatingIndexChecker::default();
+            agg_index_checker.visit_query(query);
+            if !agg_index_checker.is_supported() {
+                return Err(ErrorCode::UnsupportedIndex(format!(
+                    "Currently create aggregating index just support simple query, like: {}, \
+                and these aggregate funcs: {}, \
+                and non-deterministic functions are not support like: NOW()",
+                    "SELECT ... FROM ... WHERE ... GROUP BY ...",
+                    SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.join(",")
+                )));
+            }
+        }
         let index_name = self.normalize_object_identifier(index_name);
 
         bind_context.planning_agg_index = true;
@@ -224,57 +230,6 @@ impl Binder {
         };
 
         Ok(plan)
-    }
-
-    fn check_index_support(query: &Query, has_no_deterministic_func: bool) -> Result<()> {
-        let err = Err(ErrorCode::UnsupportedIndex(format!(
-            "Currently create aggregating index just support simple query, like: {},\
-             and non-deterministic functions are not support like: NOW()",
-            "SELECT ... FROM ... WHERE ... GROUP BY ...",
-        )));
-
-        if has_no_deterministic_func {
-            return err;
-        }
-
-        if query.with.is_some() || !query.order_by.is_empty() || !query.limit.is_empty() {
-            return err;
-        }
-
-        if let SetExpr::Select(stmt) = &query.body {
-            if stmt.having.is_some() || stmt.window_list.is_some() {
-                return err;
-            }
-            match &stmt.group_by {
-                None => {}
-                Some(group_by) => match group_by {
-                    GroupBy::Normal(_) => {}
-                    _ => {
-                        return err;
-                    }
-                },
-            }
-            for target in &stmt.select_list {
-                if target.has_window() {
-                    return err;
-                }
-                if let Some(fn_name) = target.function_call_name() {
-                    if !AggregateFunctionFactory::instance().contains(&fn_name) {
-                        continue;
-                    }
-                    if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&&*fn_name) {
-                        return Err(ErrorCode::UnsupportedIndex(format!(
-                            "Currently create aggregating index just support these aggregate functions: {}",
-                            SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.join(", ")
-                        )));
-                    }
-                }
-            }
-        } else {
-            return err;
-        }
-
-        Ok(())
     }
 
     fn rewrite_query_with_database(query: &mut Query, name: &str) {

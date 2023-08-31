@@ -21,6 +21,8 @@ use common_meta_types::LogId;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::StoredMembership;
+use futures_util::stream::BoxStream;
+use futures_util::StreamExt;
 use log::debug;
 
 use crate::sm_v002::leveled_store::map_api::MapApi;
@@ -134,18 +136,19 @@ impl LevelData {
     }
 }
 
+#[async_trait::async_trait]
 impl MapApi<String> for LevelData {
     type V = Vec<u8>;
 
-    fn get<Q>(&self, key: &Q) -> &Marked<Self::V>
+    async fn get<Q>(&self, key: &Q) -> &Marked<Self::V>
     where
         String: Borrow<Q>,
-        Q: Ord + ?Sized,
+        Q: Ord + Send + Sync + ?Sized,
     {
         self.kv.get(key).unwrap_or(&KV_EMPTY)
     }
 
-    fn set(
+    async fn set(
         &mut self,
         key: String,
         value: Option<(Self::V, Option<KVMeta>)>,
@@ -164,37 +167,35 @@ impl MapApi<String> for LevelData {
             Marked::new_tomb_stone(seq)
         };
 
-        let prev = MapApi::<String>::get(self, key.as_str()).clone();
+        let prev = MapApi::<String>::get(self, key.as_str()).await.clone();
         self.kv.insert(key, marked.clone());
         (prev, marked)
     }
 
-    fn range<'a, T: ?Sized, R>(
-        &'a self,
-        range: R,
-    ) -> Box<dyn Iterator<Item = (&'a String, &'a Marked)> + 'a>
+    async fn range<'a, T, R>(&'a self, range: R) -> BoxStream<'a, (&'a String, &'a Marked)>
     where
         String: 'a,
         String: Borrow<T>,
-        T: Ord,
-        R: RangeBounds<T>,
+        T: Ord + ?Sized,
+        R: RangeBounds<T> + Send,
     {
-        Box::new(self.kv.range(range))
+        futures::stream::iter(self.kv.range(range)).boxed()
     }
 }
 
+#[async_trait::async_trait]
 impl MapApi<ExpireKey> for LevelData {
     type V = String;
 
-    fn get<Q>(&self, key: &Q) -> &Marked<Self::V>
+    async fn get<Q>(&self, key: &Q) -> &Marked<Self::V>
     where
         ExpireKey: Borrow<Q>,
-        Q: Ord + ?Sized,
+        Q: Ord + Send + Sync + ?Sized,
     {
         self.expire.get(key).unwrap_or(&EXPIRE_EMPTY)
     }
 
-    fn set(
+    async fn set(
         &mut self,
         key: ExpireKey,
         value: Option<(Self::V, Option<KVMeta>)>,
@@ -209,21 +210,21 @@ impl MapApi<ExpireKey> for LevelData {
             Marked::TombStone { internal_seq: seq }
         };
 
-        let prev = MapApi::<ExpireKey>::get(self, &key).clone();
+        let prev = MapApi::<ExpireKey>::get(self, &key).await.clone();
         self.expire.insert(key, marked.clone());
         (prev, marked)
     }
 
-    fn range<'a, T: ?Sized, R>(
+    async fn range<'a, T: ?Sized, R>(
         &'a self,
         range: R,
-    ) -> Box<dyn Iterator<Item = (&'a ExpireKey, &'a Marked<String>)> + 'a>
+    ) -> BoxStream<'a, (&'a ExpireKey, &'a Marked<String>)>
     where
         ExpireKey: 'a,
         ExpireKey: Borrow<T>,
         T: Ord,
-        R: RangeBounds<T>,
+        R: RangeBounds<T> + Send,
     {
-        Box::new(self.expire.range(range))
+        futures::stream::iter(self.expire.range(range)).boxed()
     }
 }

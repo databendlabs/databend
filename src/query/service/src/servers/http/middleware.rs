@@ -48,6 +48,7 @@ use crate::sessions::SessionType;
 
 const DEDUPLICATE_LABEL: &str = "X-DATABEND-DEDUPLICATE-LABEL";
 const USER_AGENT: &str = "User-Agent";
+const QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
@@ -191,8 +192,14 @@ impl<E> HTTPSessionEndpoint<E> {
             .get(USER_AGENT)
             .map(|id| id.to_str().unwrap().to_string());
 
+        let query_id = req
+            .headers()
+            .get(QUERY_ID)
+            .map(|id| id.to_str().unwrap().to_string());
+
         Ok(HttpQueryContext::new(
             session,
+            query_id,
             deduplicate_label,
             user_agent,
         ))
