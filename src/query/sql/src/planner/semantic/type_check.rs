@@ -348,8 +348,7 @@ impl<'a> TypeChecker<'a> {
                 ..
             } => {
                 let get_max_inlist_to_or = self.ctx.get_settings().get_max_inlist_to_or()? as usize;
-                if list.len() > get_max_inlist_to_or && list.iter().all(|e| satisfy_contain_func(e))
-                {
+                if list.len() > get_max_inlist_to_or && list.iter().all(satisfy_contain_func) {
                     let array_expr = Expr::Array {
                         span: *span,
                         exprs: list.clone(),
@@ -3412,9 +3411,9 @@ fn satisfy_contain_func(expr: &Expr) -> bool {
         Expr::Literal { lit, .. } => !matches!(lit, Literal::Null),
         Expr::Tuple { exprs, .. } => {
             // For each expr in `exprs`, check if it satisfies the conditions
-            exprs.iter().all(|expr| satisfy_contain_func(expr))
+            exprs.iter().all(satisfy_contain_func)
         }
-        Expr::Array { exprs, .. } => exprs.iter().all(|expr| satisfy_contain_func(expr)),
+        Expr::Array { exprs, .. } => exprs.iter().all(satisfy_contain_func),
         // FIXME: others expr won't exist in `InList` expr
         _ => false,
     }
