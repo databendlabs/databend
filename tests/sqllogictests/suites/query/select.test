@@ -98,4 +98,10 @@ values (1, 'one'), (2, 'two'), (3, 'three') order by col0 desc limit 2
 2 two
 
 statement error 1005
-select * from numbers(2) limit 0,1,safe;
+select * from numbers(2) limit 0,1,dummy;
+
+statement error 1005
+select * from numbers(2) offset 2;
+
+statement error 1005
+select * from numbers(2) limit 0,1 offset 2;

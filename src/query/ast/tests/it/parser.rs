@@ -511,11 +511,14 @@ fn test_statement_error() {
         r#"SELECT * FROM t GROUP BY GROUPING SETS a, b"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS ()"#,
         r#"select * from aa.bb limit 10 order by bb;"#,
-        r#"select * from aa.bb offset 10 order by bb;"#,
+        r#"select * from aa.bb limit 2 offset 10 order by bb;"#,
         r#"select * from aa.bb offset 10 limit 1;"#,
         r#"select * from aa.bb order by a order by b;"#,
-        r#"select * from aa.bb offset 10 offset 20;"#,
+        r#"select * from aa.bb limit 1 offset 10 offset 20;"#,
         r#"select * from aa.bb limit 10 limit 20;"#,
+        r#"select * from aa.bb limit 10,2 offset 2;"#,
+        r#"select * from aa.bb limit 10,2,3;"#,
+        r#"select * from aa.bb offset 10;"#,
         r#"with a as (select 1) with b as (select 2) select * from aa.bb;"#,
     ];
 

@@ -32,7 +32,6 @@ use crate::parser::statement::hint;
 use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
-use crate::ErrorKind;
 
 pub fn query(i: Input) -> IResult<Query> {
     context(
@@ -145,17 +144,11 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
         },
         |(_, _, order_by)| SetOperationElement::OrderBy { order_by },
     );
-    let limit = map_res(
+    let limit = map(
         rule! {
             LIMIT ~ ^#comma_separated_list1(expr)
         },
-        |(_, limit)| {
-            if limit.len() > 2 {
-                Err(ErrorKind::Other("limit too large"))
-            } else {
-                Ok(SetOperationElement::Limit { limit })
-            }
-        },
+        |(_, limit)| SetOperationElement::Limit { limit },
     );
     let offset = map(
         rule! {
@@ -300,6 +293,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 query.order_by = order_by;
             }
             SetOperationElement::Limit { limit } => {
+                if query.limit.is_empty() && limit.len() > 2 {
+                    return Err("[LIMIT n OFFSET m] or [LIMIT n,m]");
+                }
                 if !query.limit.is_empty() {
                     return Err("duplicated LIMIT clause");
                 }
@@ -309,6 +305,12 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 query.limit = limit;
             }
             SetOperationElement::Offset { offset } => {
+                if query.limit.is_empty() {
+                    return Err("LIMIT must appear before OFFSET");
+                }
+                if query.limit.len() == 2 {
+                    return Err("LIMIT n,m should not appear OFFSET");
+                }
                 if query.offset.is_some() {
                     return Err("duplicated OFFSET clause");
                 }

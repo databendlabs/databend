@@ -387,14 +387,14 @@ error:
 
 
 ---------- Input ----------
-select * from aa.bb offset 10 order by bb;
+select * from aa.bb limit 2 offset 10 order by bb;
 ---------- Output ---------
 error: 
-  --> SQL:1:31
+  --> SQL:1:39
   |
-1 | select * from aa.bb offset 10 order by bb;
-  | ------                        ^^^^^ ORDER BY must appear before OFFSET
-  | |                              
+1 | select * from aa.bb limit 2 offset 10 order by bb;
+  | ------                                ^^^^^ ORDER BY must appear before LIMIT
+  | |                                      
   | while parsing `SELECT ...`
 
 
@@ -423,14 +423,14 @@ error:
 
 
 ---------- Input ----------
-select * from aa.bb offset 10 offset 20;
+select * from aa.bb limit 1 offset 10 offset 20;
 ---------- Output ---------
 error: 
-  --> SQL:1:31
+  --> SQL:1:39
   |
-1 | select * from aa.bb offset 10 offset 20;
-  | ------                        ^^^^^^ duplicated OFFSET clause
-  | |                              
+1 | select * from aa.bb limit 1 offset 10 offset 20;
+  | ------                                ^^^^^^ duplicated OFFSET clause
+  | |                                      
   | while parsing `SELECT ...`
 
 
@@ -443,6 +443,42 @@ error:
 1 | select * from aa.bb limit 10 limit 20;
   | ------                       ^^^^^ duplicated LIMIT clause
   | |                             
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb limit 10,2 offset 2;
+---------- Output ---------
+error: 
+  --> SQL:1:32
+  |
+1 | select * from aa.bb limit 10,2 offset 2;
+  | ------                         ^^^^^^ LIMIT n,m should not appear OFFSET
+  | |                               
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb limit 10,2,3;
+---------- Output ---------
+error: 
+  --> SQL:1:21
+  |
+1 | select * from aa.bb limit 10,2,3;
+  | ------              ^^^^^ [LIMIT n OFFSET m] or [LIMIT n,m]
+  | |                    
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb offset 10;
+---------- Output ---------
+error: 
+  --> SQL:1:21
+  |
+1 | select * from aa.bb offset 10;
+  | ------              ^^^^^^ LIMIT must appear before OFFSET
+  | |                    
   | while parsing `SELECT ...`
 
 
