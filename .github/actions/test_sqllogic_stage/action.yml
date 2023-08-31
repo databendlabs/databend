@@ -52,4 +52,5 @@ runs:
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
         TEST_STAGE_STORAGE: ${{ inputs.storage }}
+        STORAGE_ALLOW_INSECURE: true
       run: bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}
