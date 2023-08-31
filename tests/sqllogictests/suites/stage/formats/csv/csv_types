@@ -1,0 +1,8 @@
+statement ok
+drop table if exists dt
+
+statement ok
+create table dt(a datetime, b string)
+
+query error 1046
+copy into dt from @data/csv/bad_datetime.csv file_format = (type = CSV)

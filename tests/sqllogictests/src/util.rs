@@ -137,45 +137,38 @@ pub fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
 
 static PREPARE_TPCH: std::sync::Once = std::sync::Once::new();
 static PREPARE_TPCDS: std::sync::Once = std::sync::Once::new();
+static PREPARE_STAGE: std::sync::Once = std::sync::Once::new();
 
 pub fn lazy_prepare_data(file_path: &Path) -> Result<()> {
     let file_path = file_path.to_str().unwrap_or_default();
     if file_path.contains("tpch/") {
         PREPARE_TPCH.call_once(|| {
-            prepare_tpch_data().unwrap();
+            run_script("prepare_tpch_data.sh").unwrap();
         });
     } else if file_path.contains("tpcds/") {
         PREPARE_TPCDS.call_once(|| {
-            prepare_tpcds_data().unwrap();
+            run_script("prepare_tpcds_data.sh").unwrap();
+        });
+    } else if file_path.contains("stage/") {
+        PREPARE_STAGE.call_once(|| {
+            run_script("prepare_stage.sh").unwrap();
         });
     }
     Ok(())
 }
 
-// Execute `scripts/prepare_tpch_data.sh` to prepare tpch data
-fn prepare_tpch_data() -> Result<()> {
+fn run_script(name: &str) -> Result<()> {
+    let path = format!("tests/sqllogictests/scripts/{}", name);
     let output = std::process::Command::new("bash")
-        .arg("tests/sqllogictests/scripts/prepare_tpch_data.sh")
+        .arg(path)
         .output()
         .expect("failed to execute process");
     if !output.status.success() {
-        return Err(DSqlLogicTestError::SelfError(
-            "Failed to prepare tpch data".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-// Execute `scripts/prepare_tpcds_data.sh` to prepare tpcds data
-fn prepare_tpcds_data() -> Result<()> {
-    let output = std::process::Command::new("bash")
-        .arg("tests/sqllogictests/scripts/prepare_tpcds_data.sh")
-        .output()
-        .expect("failed to execute process");
-    if !output.status.success() {
-        return Err(DSqlLogicTestError::SelfError(
-            "Failed to prepare tpcds data".to_string(),
-        ));
+        return Err(DSqlLogicTestError::SelfError(format!(
+            "Failed to run {}: {}",
+            name,
+            String::from_utf8(output.stderr).unwrap()
+        )));
     }
     Ok(())
 }
