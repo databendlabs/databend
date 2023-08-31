@@ -18,12 +18,15 @@ use std::sync::Arc;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_storage::CopyStatus;
+use common_storage::FileStatus;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 
 use super::parquet_reader::ParquetRSReader;
@@ -32,7 +35,7 @@ use crate::ParquetPart;
 enum State {
     Init,
     ReadRowGroup(ParquetRecordBatchReader),
-    ReadFiles(Vec<Vec<u8>>),
+    ReadFiles(Vec<(String, Vec<u8>)>),
 }
 
 pub struct ParquetSource {
@@ -49,6 +52,11 @@ pub struct ParquetSource {
     reader: Arc<ParquetRSReader>,
 
     state: State,
+    // If the source is used for a copy pipeline,
+    // we should update copy status when reading small parquet files.
+    // (Because we cannot collect copy status of small parquet files during `read_partition`).
+    is_copy: bool,
+    copy_status: Arc<CopyStatus>,
 }
 
 impl ParquetSource {
@@ -58,6 +66,8 @@ impl ParquetSource {
         reader: Arc<ParquetRSReader>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
+        let is_copy = ctx.get_query_kind().eq_ignore_ascii_case("copy");
+        let copy_status = ctx.get_copy_status();
         Ok(ProcessorPtr::create(Box::new(Self {
             output,
             scan_progress,
@@ -66,6 +76,8 @@ impl ParquetSource {
             generated_data: None,
             is_finished: false,
             state: State::Init,
+            is_copy,
+            copy_status,
         })))
     }
 }
@@ -123,9 +135,23 @@ impl Processor for ParquetSource {
             }
             State::ReadFiles(buffers) => {
                 let mut blocks = Vec::with_capacity(buffers.len());
-                for buffer in buffers {
-                    blocks.extend(self.reader.read_blocks_from_binary(buffer)?);
+                // Write `if` outside to reduce branches.
+                if self.is_copy {
+                    for (path, buffer) in buffers {
+                        let bs = self.reader.read_blocks_from_binary(buffer)?;
+                        let num_rows = bs.iter().map(|b| b.num_rows()).sum();
+                        self.copy_status.add_chunk(path.as_str(), FileStatus {
+                            num_rows_loaded: num_rows,
+                            error: None,
+                        });
+                        blocks.extend(bs);
+                    }
+                } else {
+                    for (_, buffer) in buffers {
+                        blocks.extend(self.reader.read_blocks_from_binary(buffer)?);
+                    }
                 }
+
                 if !blocks.is_empty() {
                     self.generated_data = Some(DataBlock::concat(&blocks)?);
                 }
@@ -154,7 +180,10 @@ impl Processor for ParquetSource {
                             for (path, _) in parts.files.iter() {
                                 let op = self.reader.operator();
                                 let path = path.clone();
-                                handlers.push(async move { op.read(path.as_str()).await });
+                                handlers.push(async move {
+                                    let data = op.read(&path).await?;
+                                    Ok::<_, ErrorCode>((path, data))
+                                });
                             }
                             let buffers = futures::future::try_join_all(handlers).await?;
                             self.state = State::ReadFiles(buffers);
