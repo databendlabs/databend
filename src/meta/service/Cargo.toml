@@ -52,7 +52,7 @@ clap = { workspace = true }
 derive_more = { workspace = true }
 futures = "0.3.24"
 itertools = { workspace = true }
-lazy_static = "1.4.0"
+lazy_static = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 maplit = "1.0.2"
