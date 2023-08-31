@@ -1,0 +1,58 @@
+statement ok
+drop table if exists tit
+
+statement ok
+create table tit(a string, b int, c string)
+
+query TIITI
+copy into tit from @data/csv/x01_field_x02_record.csv file_format = (type = CSV skip_header = 0 field_delimiter = '\x01' record_delimiter = '\x02')
+----
+csv/x01_field_x02_record.csv 4 0 NULL NULL
+
+query TIT
+select * from tit
+----
+Donald John Trump 80 president
+马斯克 43 特斯拉
+测试 39 TT
+测试 39 test
+
+
+# no newline in at file end
+query II
+select $1, $2 from @data/csv/no_newline.csv (file_format=>'csv')  order by $1
+----
+1 2
+3 4
+
+statement ok
+drop table if exists it
+
+statement ok
+create table it(a int, b string)
+
+query IT
+copy into it from @data/csv/header_only.csv file_format = (type = CSV skip_header=1)
+----
+
+query TIITI
+copy into it from @data/csv/whitespace_number.csv file_format = (type = CSV) on_error=continue
+----
+csv/whitespace_number.csv 0 2 fail to decode column 0 (a Int32): number is not exist, [column_data]=[" 123"] 1
+
+statement ok
+drop table if exists tt
+
+statement ok
+create table tt(a string, b string)
+
+query TIITI
+copy into tt from @data/csv/whitespace_quote.csv file_format = (type = CSV) on_error=continue
+----
+csv/whitespace_quote.csv 2 0 NULL NULL
+
+query TT
+select * from tt;
+----
+ abc  xyz
+ "abc"  xyz
