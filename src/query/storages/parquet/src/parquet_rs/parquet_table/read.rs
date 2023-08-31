@@ -33,8 +33,6 @@ impl ParquetRSTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let parts_len = plan.parts.len();
-
         let table_schema: TableSchemaRef = self.table_info.schema();
         let reader = Arc::new(ParquetRSReader::create_with_parquet_schema(
             ctx.clone(),
