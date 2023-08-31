@@ -1,0 +1,22 @@
+[package]
+name = "databend_sqlsmith"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+clap = { workspace = true }
+databend-driver = { git = "https://github.com/datafuselabs/bendsql", rev = "cfe42be" }
+rand = "0.8.5"
+tokio = { workspace = true }
+
+common-ast = { path = "../../query/ast" }
+common-exception = { path = "../../common/exception" }
+common-expression = { path = "../../query/expression" }
+common-sql = { path = "../../query/sql" }
+
+[[bin]]
+name = "sqlsmith"
+path = "src/bin/main.rs"
