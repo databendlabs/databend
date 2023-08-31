@@ -23,7 +23,6 @@ use common_expression::HashMethodKind;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_storage::DataOperator;
 
-
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
@@ -36,13 +35,13 @@ use crate::spiller::SpillerType;
 /// Define some states for hash join build spilling
 pub struct BuildSpillState {
     /// Hash join build state
-    pub(crate) build_state: Arc<HashJoinBuildState>,
+    pub build_state: Arc<HashJoinBuildState>,
     /// Spilling memory threshold
-    pub(crate) spill_memory_threshold: usize,
+    pub spill_memory_threshold: usize,
     /// Hash join build spilling coordinator
-    pub(crate) spill_coordinator: Arc<BuildSpillCoordinator>,
+    pub spill_coordinator: Arc<BuildSpillCoordinator>,
     /// Spiller, responsible for specific spill work
-    pub(crate) spiller: Spiller,
+    pub spiller: Spiller,
 }
 
 impl BuildSpillState {
@@ -176,8 +175,8 @@ impl BuildSpillState {
     }
 
     // Check if need to spill.
-    // Notes: even if input can fit into memory, but there exists one processor need to spill, then it needs to wait spill.
-    pub(crate) fn check_need_spill(&self, input: &DataBlock) -> Result<bool> {
+    // Notes: even if the method returns false, but there exists one processor need to spill, then it needs to wait spill.
+    pub(crate) fn check_need_spill(&self) -> Result<bool> {
         let settings = self.build_state.ctx.get_settings();
         let enable_spill = settings.get_enable_join_spill()?;
         let spill_threshold = settings.get_join_spilling_threshold()?;
@@ -191,20 +190,32 @@ impl BuildSpillState {
 
         let mut total_bytes = input.memory_size();
 
-        for block in self
-            .build_state
-            .hash_join_state
-            .row_space
-            .buffer
-            .read()
-            .iter()
         {
-            total_bytes += block.memory_size();
-        }
+            let _ = self
+                .build_state
+                .hash_join_state
+                .row_space
+                .write_lock
+                .write();
+            for block in self
+                .build_state
+                .hash_join_state
+                .row_space
+                .buffer
+                .read()
+                .iter()
+            {
+                total_bytes += block.memory_size();
+            }
 
-        let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
-        for block in chunks.iter() {
-            total_bytes += block.memory_size();
+            let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
+            for block in chunks.iter() {
+                total_bytes += block.memory_size();
+            }
+
+            if total_bytes > spill_threshold {
+                return Ok(true);
+            }
         }
 
         if total_bytes > spill_threshold {

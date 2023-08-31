@@ -151,8 +151,9 @@ impl Processor for TransformHashJoinBuild {
                 if let Some(data_block) = self.input_data.take() {
                     if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.is_any_spilled(){
                         // Check if need to spill
-                        let need_spill = spill_state.check_need_spill(&data_block)?;
+                        let need_spill = spill_state.check_need_spill()?;
                         if need_spill {
+                            self.input_data = Some(data_block);
                             self.step = HashJoinBuildStep::WaitSpill;
                             spill_state.spill_coordinator.need_spill()?;
                         } else {
@@ -161,11 +162,20 @@ impl Processor for TransformHashJoinBuild {
                                 // then it needs to wait spill.
                                 let wait = spill_state.spill_coordinator.wait_spill()?;
                                 if wait {
-                                    spill_state.buffer_data(data_block);
+                                    // Put data to `self.input_data` for next round process
+                                    self.input_data = Some(data_block);
                                     self.step = HashJoinBuildStep::WaitSpill;
                                 } else {
                                     // Make `need_spill` to false for `SpillCoordinator`
                                     spill_state.spill_coordinator.no_need_spill();
+                                    // Before notify all processors to spill, we need to collect all buffered data in `RowSpace` and `Chunks`
+                                    // Partition all rows and stat how many partitions and rows in each partition.
+                                    // Then choose the largest partitions(which contain rows that can avoid oom exactly) to spill.
+                                    // For each partition, we should equally divide the rows into each processor.
+                                    // Then all processors will spill same partitions.
+                                    
+                                    spill_state.spill_coordinator.notify_spill();
+                                    // The processor is last, start the first round spill
                                     self.step = HashJoinBuildStep::FirstSpill;
                                 }
                             } else {

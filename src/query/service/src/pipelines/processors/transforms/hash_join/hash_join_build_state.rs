@@ -51,14 +51,12 @@ use itertools::Itertools;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-
 use crate::pipelines::processors::transforms::hash_join::common::set_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::SingleStringHashJoinHashTable;
-
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 

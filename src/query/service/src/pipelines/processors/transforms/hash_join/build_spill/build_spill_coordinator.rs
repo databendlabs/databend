@@ -20,8 +20,6 @@ use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
 use parking_lot::RwLock;
 
-
-
 /// Coordinate all hash join build processors to spill.
 /// It's shared by all hash join build processors.
 /// When hash join build needs to spill, all processor will stop executing and prepare to spill.
@@ -61,14 +59,11 @@ impl BuildSpillCoordinator {
 
     // If current waiting spilling builder is the last one, then spill all builders.
     pub(crate) fn wait_spill(&self) -> Result<bool> {
-        {
-            let mut waiting_spill_count = self.waiting_spill_count.write();
-            *waiting_spill_count += 1;
-            if *waiting_spill_count == *self.total_builder_count.read() {
-                self.notify_spill();
-                // No need to wait spill, the processor is the last one
-                return Ok(false);
-            }
+        let mut waiting_spill_count = self.waiting_spill_count.write();
+        *waiting_spill_count += 1;
+        if *waiting_spill_count == *self.total_builder_count.read() {
+            // No need to wait spill, the processor is the last one
+            return Ok(false);
         }
         Ok(true)
     }

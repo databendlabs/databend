@@ -22,7 +22,6 @@ use common_expression::arrow::serialize_column;
 use common_expression::DataBlock;
 use opendal::Operator;
 
-
 /// Spiller type, currently only supports HashJoin
 pub enum SpillerType {
     HashJoin, /* Todo: Add more spiller type
