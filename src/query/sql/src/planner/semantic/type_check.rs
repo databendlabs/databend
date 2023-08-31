@@ -348,10 +348,7 @@ impl<'a> TypeChecker<'a> {
                 ..
             } => {
                 let get_max_inlist_to_or = self.ctx.get_settings().get_max_inlist_to_or()? as usize;
-                if list.len() > get_max_inlist_to_or
-                    && list
-                        .iter()
-                        .all(|e| matches!(e, Expr::Literal { lit, .. } if lit != &Literal::Null))
+                if list.len() > get_max_inlist_to_or && list.iter().all(|e| satisfy_contain_func(e))
                 {
                     let array_expr = Expr::Array {
                         span: *span,
@@ -3406,4 +3403,19 @@ fn check_prefix(like_str: &str) -> bool {
         }
     }
     true
+}
+
+// If `InList` expr satisfies the following conditions, it can be converted to `contain` function
+// Note: the method mainly checks if list contains NULL literal, because `contain` can't handle NULL.
+fn satisfy_contain_func(expr: &Expr) -> bool {
+    match expr {
+        Expr::Literal { lit, .. } => !matches!(lit, Literal::Null),
+        Expr::Tuple { exprs, .. } => {
+            // For each expr in `exprs`, check if it satisfies the conditions
+            exprs.iter().all(|expr| satisfy_contain_func(expr))
+        }
+        Expr::Array { exprs, .. } => exprs.iter().all(|expr| satisfy_contain_func(expr)),
+        // FIXME: others expr won't exist in `InList` expr
+        _ => false,
+    }
 }
