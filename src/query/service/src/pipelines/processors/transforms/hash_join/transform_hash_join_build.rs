@@ -173,7 +173,7 @@ impl Processor for TransformHashJoinBuild {
                                     // Then choose the largest partitions(which contain rows that can avoid oom exactly) to spill.
                                     // For each partition, we should equally divide the rows into each processor.
                                     // Then all processors will spill same partitions.
-                                    
+                                    spill_state.split_spill_tasks()?;
                                     spill_state.spill_coordinator.notify_spill();
                                     // The processor is last, start the first round spill
                                     self.step = HashJoinBuildStep::FirstSpill;

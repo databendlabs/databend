@@ -65,45 +65,13 @@ impl BuildSpillState {
 /// Define some spill-related APIs for hash join build
 impl BuildSpillState {
     #[async_backtrace::framed]
-    // Start to spill `input_data`.
-    // Todo: add unit tests for the method.
+    // Start to spill, get the processor's spill task from `BuildSpillCoordinator`
     pub(crate) async fn spill(&mut self) -> Result<()> {
-        let mut rows_size = 0;
-        self.spiller.input_data.iter().for_each(|block| {
-            rows_size += block.num_rows();
-        });
-        // Hash values for all rows in input data.
-        let mut hashes = Vec::with_capacity(rows_size);
-        let block = DataBlock::concat(&self.spiller.input_data)?;
-        self.get_hashes(&block, &mut hashes)?;
-        // Ensure which partition each row belongs to. Currently we limit the maximum number of partitions to 8.
-        // We read the first 3 bits of the hash value as the partition id.
-
-        // partition_id -> row indexes
-        let mut partition_map = HashMap::with_capacity(8);
-        for (row_idx, hash) in hashes.iter().enumerate() {
-            let partition_id = *hash as u8 & 0b0000_0111;
-            partition_map
-                .entry(partition_id)
-                .and_modify(|v: &mut Vec<usize>| v.push(row_idx))
-                .or_insert(vec![row_idx]);
-        }
-
-        // Take row indexes from block and put them to Spiller `partitions`
-        for (partition_id, row_indexes) in partition_map.iter() {
-            self.spiller.partition_set.push(*partition_id);
-            let block_row_indexes = row_indexes
-                .iter()
-                .map(|idx| (0 as u32, *idx as u32, 1 as usize))
-                .collect::<Vec<_>>();
-            let partition_block =
-                DataBlock::take_blocks(&[block.clone()], &block_row_indexes, row_indexes.len());
-            self.spiller
-                .partitions
-                .push((*partition_id, partition_block));
-        }
-
-        self.spiller.spill().await
+        let spill_partitions = {
+            let mut spill_tasks = self.spill_coordinator.spill_tasks.write();
+            spill_tasks.pop_back().unwrap()
+        };
+        self.spiller.spill(&spill_partitions).await
     }
 
     // Get all hashes for input data.
@@ -184,11 +152,9 @@ impl BuildSpillState {
             return Ok(false);
         }
 
-        if self.spiller.input_data.is_empty() {
-            return Ok(false);
-        }
+        // Todo: if this is the first batch data, directly return false.
 
-        let mut total_bytes = input.memory_size();
+        let mut total_bytes = 0;
 
         {
             let _ = self
@@ -274,10 +240,104 @@ impl BuildSpillState {
         ))
     }
 
-    // Buffer the input data for the join build processor
-    // It will be spilled when the memory usage exceeds threshold.
-    // If data isn't in partition set, it'll be used to build hash table.
-    pub(crate) fn buffer_data(&mut self, input: DataBlock) {
-        self.spiller.input_data.push(input);
+    // Collect all buffered data in `RowSpace` and `Chunks`
+    // The method will be executed by only one processor.
+    fn collect_rows(&self) -> Result<Vec<DataBlock>> {
+        let mut blocks = vec![];
+        // Collect rows in `RowSpace`'s buffer
+        let mut row_space_buffer = self.build_state.hash_join_state.row_space.buffer.write();
+        blocks.extend(row_space_buffer.drain(..));
+        let mut buffer_row_size = self
+            .build_state
+            .hash_join_state
+            .row_space
+            .buffer_row_size
+            .write();
+        *buffer_row_size = 0;
+
+        // Collect rows in `Chunks`
+        let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
+        blocks.extend(chunks.drain(..));
+        Ok(blocks)
+    }
+
+    // Partition input blocks to different partitions.
+    // Output is <partition_id, blocks>
+    fn partition_input_blocks(
+        &self,
+        input_blocks: &[DataBlock],
+    ) -> Result<HashMap<u8, Vec<DataBlock>>> {
+        let mut partition_blocks = HashMap::new();
+        let mut partition_map = HashMap::with_capacity(8);
+        for block in input_blocks.iter() {
+            let mut hashes = Vec::with_capacity(block.num_rows());
+            self.get_hashes(block, &mut hashes)?;
+            for (row_idx, hash) in hashes.iter().enumerate() {
+                let partition_id = *hash as u8 & 0b0000_0111;
+                partition_map
+                    .entry(partition_id)
+                    .and_modify(|v: &mut Vec<usize>| v.push(row_idx))
+                    .or_insert(vec![row_idx]);
+            }
+            for (partition_id, row_indexes) in partition_map.iter() {
+                let block_row_indexes = row_indexes
+                    .iter()
+                    .map(|idx| (0 as u32, *idx as u32, 1 as usize))
+                    .collect::<Vec<_>>();
+                let block =
+                    DataBlock::take_blocks(&[block.clone()], &block_row_indexes, row_indexes.len());
+                partition_blocks
+                    .entry(*partition_id)
+                    .and_modify(|v: &mut Vec<DataBlock>| v.push(block.clone()))
+                    .or_insert(vec![block]);
+            }
+        }
+        Ok(partition_blocks)
+    }
+
+    // Split all spill tasks equally to all processors
+    // Tasks will be sent to `BuildSpillCoordinator`.
+    pub(crate) fn split_spill_tasks(&self) -> Result<()> {
+        let processors_num = self.spill_coordinator.total_builder_count.read();
+        let mut spill_tasks = self.spill_coordinator.spill_tasks.write();
+        let blocks = self.collect_rows()?;
+        let partition_blocks = self.partition_input_blocks(&blocks)?;
+        let mut partition_tasks = HashMap::with_capacity(partition_blocks.len());
+        // Stat how many rows in each partition, then split it equally.
+        for (partition_id, blocks) in partition_blocks.iter() {
+            let merged_block = DataBlock::concat(blocks)?;
+            let total_rows = merged_block.num_rows();
+            // Equally split blocks to `processors_num` parts
+            let mut start_row;
+            let mut end_row = 0;
+            for i in 0..*processors_num {
+                start_row = end_row;
+                end_row = start_row + total_rows / *processors_num;
+                if i == *processors_num - 1 {
+                    end_row = total_rows;
+                }
+                let sub_block = merged_block.slice(start_row..end_row);
+                partition_tasks
+                    .entry(*partition_id)
+                    .and_modify(|v: &mut Vec<DataBlock>| v.push(sub_block.clone()))
+                    .or_insert(vec![sub_block]);
+            }
+        }
+
+        // Todo: we don't need to spill all partitions.
+        let mut task_id: usize = 0;
+        while task_id < *processors_num {
+            let mut task = Vec::with_capacity(partition_tasks.len());
+            for partition_id in partition_tasks.keys() {
+                task.push((
+                    *partition_id,
+                    partition_tasks.get(partition_id).unwrap()[task_id as usize].clone(),
+                ))
+            }
+            spill_tasks.push_back(task);
+            task_id += 1;
+        }
+
+        Ok(())
     }
 }

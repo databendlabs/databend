@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
+use common_expression::DataBlock;
 use parking_lot::RwLock;
 
 /// Coordinate all hash join build processors to spill.
@@ -33,6 +35,8 @@ pub struct BuildSpillCoordinator {
     pub(crate) total_builder_count: RwLock<usize>,
     /// Notify all waiting spilling processors to start spill.
     pub(crate) notify_spill: Arc<Notify>,
+    /// Spill tasks, the size is the same as the total processor count.
+    pub(crate) spill_tasks: RwLock<VecDeque<Vec<(u8, DataBlock)>>>,
 }
 
 impl BuildSpillCoordinator {
@@ -42,6 +46,7 @@ impl BuildSpillCoordinator {
             waiting_spill_count: RwLock::new(0),
             total_builder_count: RwLock::new(0),
             notify_spill: Arc::new(Default::default()),
+            spill_tasks: Default::default(),
         })
     }
 

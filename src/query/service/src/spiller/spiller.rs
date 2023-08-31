@@ -50,8 +50,6 @@ pub struct Spiller {
     operator: Operator,
     config: SpillerConfig,
     spiller_type: SpillerType,
-    /// DataBlocks need to be spilled for the processor
-    pub input_data: Vec<DataBlock>,
     /// Partition set, which records there are how many partitions.
     pub partition_set: Vec<u8>,
     /// Spilled partition set, after one partition is spilled, it will be added to this set.
@@ -72,7 +70,6 @@ impl Spiller {
             operator,
             config,
             spiller_type,
-            input_data: Default::default(),
             partition_set: vec![],
             spilled_partition_set: Default::default(),
             partitions: vec![],
@@ -83,8 +80,7 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Spill partition set
-    pub async fn spill(&mut self) -> Result<()> {
-        let partitions = self.partitions.clone();
+    pub async fn spill(&mut self, partitions: &[(u8, DataBlock)]) -> Result<()> {
         for (partition_id, partition) in partitions.iter() {
             self.spilled_partition_set.insert(*partition_id);
             self.spill_with_partition(partition_id, partition).await?;
