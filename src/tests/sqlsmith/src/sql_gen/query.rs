@@ -27,6 +27,8 @@ use crate::sql_gen::SqlGenerator;
 impl<'a, R: Rng> SqlGenerator<'a, R> {
     pub(crate) fn gen_query(&mut self) -> Query {
         let body = self.gen_set_expr();
+        let limit = self.gen_limit();
+        let offset = self.gen_offset(limit.len());
         Query {
             span: None,
             // TODO
@@ -34,9 +36,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             body,
             // TODO
             order_by: vec![],
-            limit: self.gen_limit(),
-            // TODO
-            offset: None,
+            limit,
+            offset,
             ignore_result: false,
         }
     }
@@ -73,6 +74,16 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             }
         }
         res
+    }
+
+    fn gen_offset(&mut self, limit_len: usize) -> Option<Expr> {
+        if self.flip_coin() && limit_len != 2 {
+            return Some(Expr::Literal {
+                span: None,
+                lit: Literal::UInt64(self.rng.gen_range(0..=10)),
+            });
+        }
+        None
     }
 
     fn gen_select(&mut self) -> SelectStmt {
