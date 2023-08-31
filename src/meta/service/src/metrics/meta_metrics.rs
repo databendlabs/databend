@@ -36,13 +36,8 @@ fn f64_of(b: bool) -> f64 {
 pub mod server_metrics {
     use common_meta_types::NodeId;
     use lazy_static::lazy_static;
-    use prometheus;
-    use prometheus::register_gauge;
-    use prometheus::register_int_counter;
-    use prometheus::Gauge;
-    use prometheus::IntCounter;
-
-    use crate::metrics::meta_metrics::f64_of;
+    use prometheus_client::metrics::gauge::Gauge;
+    use prometheus_client::metrics::counter::Counter;
 
     macro_rules! key {
         ($key: literal) => {
@@ -54,48 +49,51 @@ pub mod server_metrics {
         current_leader: Gauge,
         is_leader: Gauge,
         node_is_health: Gauge,
-        leader_changes: IntCounter,
+        leader_changes: Counter,
         applying_snapshot: Gauge,
         proposal_applied: Gauge,
         last_log_index: Gauge,
         last_seq: Gauge,
         current_term: Gauge,
         proposals_pending: Gauge,
-        proposals_failed: IntCounter,
-        read_failed: IntCounter,
+        proposals_failed: Counter,
+        read_failed: Counter,
         watchers: Gauge,
     }
 
     impl ServerMetrics {
         fn init() -> Self {
-            Self {
-                current_leader: register_gauge!(key!("current_leader"), "current leader of raft")
-                    .unwrap(),
-                is_leader: register_gauge!(key!("is_leader"), "whether is leader of raft").unwrap(),
-                node_is_health: register_gauge!(key!("node_is_health"), "whether node is health")
-                    .unwrap(),
-                leader_changes: register_int_counter!(key!("leader_changes"), "leader changes")
-                    .unwrap(),
-                applying_snapshot: register_gauge!(
-                    key!("applying_snapshot"),
-                    "whether applying snapshot"
-                )
-                .unwrap(),
-                proposal_applied: register_gauge!(key!("proposal_applied"), "proposal applied")
-                    .unwrap(),
-                last_log_index: register_gauge!(key!("last_log_index"), "last log index").unwrap(),
-                last_seq: register_gauge!(key!("last_seq"), "last seq").unwrap(),
-                current_term: register_gauge!(key!("current_term"), "current term").unwrap(),
-                proposals_pending: register_gauge!(key!("proposals_pending"), "proposals pending")
-                    .unwrap(),
-                proposals_failed: register_int_counter!(
-                    key!("proposals_failed"),
-                    "proposals failed"
-                )
-                .unwrap(),
-                read_failed: register_int_counter!(key!("read_failed"), "read failed").unwrap(),
-                watchers: register_gauge!(key!("watchers"), "number of watchers").unwrap(),
-            }
+            let metrics = Self {
+                current_leader: Gauge::default(),
+                is_leader: Gauge::default(),
+                node_is_health: Gauge::default(),
+                leader_changes: Counter::default(),
+                applying_snapshot: Gauge::default(),
+                proposal_applied: Gauge::default(),
+                last_log_index: Gauge::default(),
+                last_seq: Gauge::default(),
+                current_term: Gauge::default(),
+                proposals_pending: Gauge::default(),
+                proposals_failed: Counter::default(),
+                read_failed: Counter::default(),
+                watchers: Gauge::default(),
+            };
+
+            let mut registry = prometheus_client::registry::Registry::default();
+            registry.register(key!("current_leader"), "current leader", metrics.current_leader.clone());
+            registry.register(key!("is_leader"), "is leader", metrics.is_leader.clone());
+            registry.register(key!("node_is_health"), "node is health", metrics.node_is_health.clone());
+            registry.register(key!("leader_changes"), "leader changes", metrics.leader_changes.clone());
+            registry.register(key!("applying_snapshot"), "applying snapshot", metrics.applying_snapshot.clone());
+            registry.register(key!("proposal_applied"), "proposal applied", metrics.proposal_applied.clone());
+            registry.register(key!("last_log_index"), "last log index", metrics.last_log_index.clone());
+            registry.register(key!("last_seq"), "last seq", metrics.last_seq.clone());
+            registry.register(key!("current_term"), "current term", metrics.current_term.clone());
+            registry.register(key!("proposals_pending"), "proposals pending", metrics.proposals_pending.clone());
+            registry.register(key!("proposals_failed"), "proposals failed", metrics.proposals_failed.clone());
+            registry.register(key!("read_failed"), "read failed", metrics.read_failed.clone());
+            registry.register(key!("watchers"), "watchers", metrics.watchers.clone());
+            metrics
         }
     }
 
@@ -104,15 +102,15 @@ pub mod server_metrics {
     }
 
     pub fn set_current_leader(current_leader: NodeId) {
-        SERVER_METRICS.current_leader.set(current_leader as f64);
+        SERVER_METRICS.current_leader.set(current_leader as i64);
     }
 
     pub fn set_is_leader(is_leader: bool) {
-        SERVER_METRICS.is_leader.set(f64_of(is_leader));
+        SERVER_METRICS.is_leader.set(is_leader as i64);
     }
 
     pub fn set_node_is_health(is_health: bool) {
-        SERVER_METRICS.node_is_health.set(f64_of(is_health));
+        SERVER_METRICS.node_is_health.set(is_health as i64);
     }
 
     pub fn incr_leader_change() {
@@ -121,29 +119,29 @@ pub mod server_metrics {
 
     /// Whether or not state-machine is applying snapshot.
     pub fn incr_applying_snapshot(cnt: i64) {
-        SERVER_METRICS.applying_snapshot.add(cnt as f64);
+        SERVER_METRICS.applying_snapshot.inc_by(cnt);
     }
 
     pub fn set_proposals_applied(proposals_applied: u64) {
         SERVER_METRICS
             .proposal_applied
-            .set(proposals_applied as f64);
+            .set(proposals_applied as i64);
     }
 
     pub fn set_last_log_index(last_log_index: u64) {
-        SERVER_METRICS.last_log_index.set(last_log_index as f64);
+        SERVER_METRICS.last_log_index.set(last_log_index as i64);
     }
 
     pub fn set_last_seq(last_seq: u64) {
-        SERVER_METRICS.last_seq.set(last_seq as f64);
+        SERVER_METRICS.last_seq.set(last_seq as i64);
     }
 
     pub fn set_current_term(current_term: u64) {
-        SERVER_METRICS.current_term.set(current_term as f64);
+        SERVER_METRICS.current_term.set(current_term as i64);
     }
 
     pub fn incr_proposals_pending(cnt: i64) {
-        SERVER_METRICS.proposals_pending.add(cnt as f64);
+        SERVER_METRICS.proposals_pending.inc_by(cnt as i64);
     }
 
     pub fn incr_proposals_failed() {
@@ -155,7 +153,7 @@ pub mod server_metrics {
     }
 
     pub fn incr_watchers(cnt: i64) {
-        SERVER_METRICS.watchers.add(cnt as f64);
+        SERVER_METRICS.watchers.inc_by(cnt as i64);
     }
 }
 
@@ -163,12 +161,13 @@ pub mod raft_metrics {
     pub mod network {
         use common_meta_types::NodeId;
         use lazy_static::lazy_static;
-        use prometheus::register_counter_vec;
-        use prometheus::register_gauge_vec;
-        use prometheus::register_histogram_vec;
-        use prometheus::CounterVec;
-        use prometheus::GaugeVec;
-        use prometheus::HistogramVec;
+        use prometheus_client;
+        use prometheus_client::metrics::counter::Counter;
+        use prometheus_client::metrics::gauge::Gauge;
+        use prometheus_client::metrics::histogram::Histogram;
+        use prometheus_client::metrics::histogram::exponential_buckets;
+        use prometheus_client::metrics::family::Family;
+        use prometheus_client::encoding::EncodeLabelSet;
 
         macro_rules! key {
             ($key: literal) => {
@@ -176,94 +175,71 @@ pub mod raft_metrics {
             };
         }
 
+        #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+        pub struct ToLabels {
+            pub to: String,
+        }
+
+        #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+        pub struct FromLabels {
+            pub from: String,
+        }
+
+        #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+        pub struct PeerLabels {
+            pub id: String,
+            pub addr: String,
+        }
+
         struct RaftMetrics {
-            active_peers: GaugeVec,
-            fail_connect_to_peer: GaugeVec,
-            sent_bytes: CounterVec,
-            recv_bytes: CounterVec,
-            sent_failures: CounterVec,
-            snapshot_send_success: CounterVec,
-            snapshot_send_failure: CounterVec,
-            snapshot_send_inflights: GaugeVec,
-            snapshot_recv_inflights: GaugeVec,
-            snapshot_sent_seconds: HistogramVec,
-            snapshot_recv_seconds: HistogramVec,
-            snapshot_recv_success: CounterVec,
-            snapshot_recv_failures: CounterVec,
+            active_peers: Family<PeerLabels, Gauge>,
+            fail_connect_to_peer: Family<PeerLabels, Gauge>,
+            sent_bytes: Family<ToLabels, Counter>,
+            recv_bytes: Family<FromLabels, Counter>,
+            sent_failures: Family<ToLabels, Counter>,
+            snapshot_send_success: Family<ToLabels, Counter>,
+            snapshot_send_failure: Family<ToLabels, Counter>,
+            snapshot_send_inflights: Family<ToLabels, Gauge>,
+            snapshot_recv_inflights: Family<FromLabels, Gauge>,
+            snapshot_sent_seconds: Family<ToLabels, Histogram>,
+            snapshot_recv_seconds: Family<FromLabels, Histogram>,
+            snapshot_recv_success: Family<FromLabels, Counter>,
+            snapshot_recv_failures: Family<FromLabels, Counter>,
         }
 
         impl RaftMetrics {
             fn init() -> Self {
-                Self {
-                    active_peers: register_gauge_vec!(key!("active_peers"), "active peers", &[
-                        "id", "address"
-                    ])
-                    .unwrap(),
-                    fail_connect_to_peer: register_gauge_vec!(
-                        key!("fail_connect_to_peer"),
-                        "fail connect to peer",
-                        &["id", "address"]
-                    )
-                    .unwrap(),
-                    sent_bytes: register_counter_vec!(key!("sent_bytes"), "sent bytes", &["to"])
-                        .unwrap(),
-                    recv_bytes: register_counter_vec!(key!("recv_bytes"), "recv bytes", &["from"])
-                        .unwrap(),
-                    sent_failures: register_counter_vec!(
-                        key!("sent_failures"),
-                        "sent failures",
-                        &["to"]
-                    )
-                    .unwrap(),
-                    snapshot_send_success: register_counter_vec!(
-                        key!("snapshot_send_success"),
-                        "snapshot send success",
-                        &["to"]
-                    )
-                    .unwrap(),
-                    snapshot_send_failure: register_counter_vec!(
-                        key!("snapshot_send_failure"),
-                        "snapshot send failure",
-                        &["to"]
-                    )
-                    .unwrap(),
-                    snapshot_send_inflights: register_gauge_vec!(
-                        key!("snapshot_send_inflights"),
-                        "snapshot send inflights",
-                        &["to"]
-                    )
-                    .unwrap(),
-                    snapshot_recv_inflights: register_gauge_vec!(
-                        key!("snapshot_recv_inflights"),
-                        "snapshot recv inflights",
-                        &["from"]
-                    )
-                    .unwrap(),
-                    snapshot_sent_seconds: register_histogram_vec!(
-                        key!("snapshot_sent_seconds"),
-                        "snapshot sent seconds",
-                        &["to"]
-                    )
-                    .unwrap(),
-                    snapshot_recv_seconds: register_histogram_vec!(
-                        key!("snapshot_recv_seconds"),
-                        "snapshot recv seconds",
-                        &["from"]
-                    )
-                    .unwrap(),
-                    snapshot_recv_success: register_counter_vec!(
-                        key!("snapshot_recv_success"),
-                        "snapshot recv success",
-                        &["from"]
-                    )
-                    .unwrap(),
-                    snapshot_recv_failures: register_counter_vec!(
-                        key!("snapshot_recv_failures"),
-                        "snapshot recv failures",
-                        &["from"]
-                    )
-                    .unwrap(),
-                }
+                let metrics = Self {
+                    active_peers: Family::default(),
+                    fail_connect_to_peer: Family::default(),
+                    sent_bytes: Family::default(),
+                    recv_bytes: Family::default(),
+                    sent_failures: Family::default(),
+                    snapshot_send_success: Family::default(),
+                    snapshot_send_failure: Family::default(),
+                    snapshot_send_inflights: Family::default(),
+                    snapshot_recv_inflights: Family::default(),
+                    snapshot_sent_seconds: Family::new_with_constructor(|| Histogram::new(exponential_buckets(1f64, 2f64, 10)) ), // 1s ~ 1024s
+                    snapshot_recv_seconds: Family::new_with_constructor(|| Histogram::new(exponential_buckets(1f64, 2f64, 10)) ), // 1s ~ 1024s
+                    snapshot_recv_success: Family::default(),
+                    snapshot_recv_failures: Family::default(),
+                };
+
+                let mut registry = prometheus_client::registry::Registry::default();
+                registry.register(key!("active_peers"), "active peers", metrics.active_peers.clone());
+                registry.register(key!("fail_connect_to_peer"), "fail connect to peer", metrics.fail_connect_to_peer.clone());
+                registry.register(key!("sent_bytes"), "sent bytes", metrics.sent_bytes.clone());
+                registry.register(key!("recv_bytes"), "recv bytes", metrics.recv_bytes.clone());
+                registry.register(key!("sent_failures"), "sent failures", metrics.sent_failures.clone());
+                registry.register(key!("snapshot_send_success"), "snapshot send success", metrics.snapshot_send_success.clone());
+                registry.register(key!("snapshot_send_failure"), "snapshot send failure", metrics.snapshot_send_failure.clone());
+                registry.register(key!("snapshot_send_inflights"), "snapshot send inflights", metrics.snapshot_send_inflights.clone());
+                registry.register(key!("snapshot_recv_inflights"), "snapshot recv inflights", metrics.snapshot_recv_inflights.clone());
+                registry.register(key!("snapshot_sent_seconds"), "snapshot sent seconds", metrics.snapshot_sent_seconds.clone());
+                registry.register(key!("snapshot_recv_seconds"), "snapshot recv seconds", metrics.snapshot_recv_seconds.clone());
+                registry.register(key!("snapshot_recv_success"), "snapshot recv success", metrics.snapshot_recv_success.clone());
+                registry.register(key!("snapshot_recv_failures"), "snapshot recv failures", metrics.snapshot_recv_failures.clone());
+                metrics
             }
         }
 
@@ -275,15 +251,15 @@ pub mod raft_metrics {
             let id = id.to_string();
             RAFT_METRICS
                 .active_peers
-                .with_label_values(&[&id, addr])
-                .add(cnt as f64);
+                .get_or_create(&PeerLabels{ id, addr: addr.to_string() })
+                .inc_by(cnt);
         }
 
         pub fn incr_fail_connections_to_peer(id: &NodeId, addr: &str) {
             let id = id.to_string();
             RAFT_METRICS
                 .fail_connect_to_peer
-                .with_label_values(&[&id, addr])
+                .get_or_create(&PeerLabels{ id, addr: addr.to_string() })
                 .inc();
         }
 
@@ -291,27 +267,27 @@ pub mod raft_metrics {
             let to = id.to_string();
             RAFT_METRICS
                 .sent_bytes
-                .with_label_values(&[&to])
-                .inc_by(bytes as f64);
+                .get_or_create(&ToLabels{ to })
+                .inc_by(bytes as u64);
         }
 
         pub fn incr_recv_bytes_from_peer(addr: String, bytes: u64) {
             RAFT_METRICS
                 .recv_bytes
-                .with_label_values(&[&addr])
-                .inc_by(bytes as f64);
+                .get_or_create(&FromLabels{ from: addr })
+                .inc_by(bytes as u64);
         }
 
         pub fn incr_sent_failure_to_peer(id: &NodeId) {
             let to = id.to_string();
-            RAFT_METRICS.sent_failures.with_label_values(&[&to]).inc();
+            RAFT_METRICS.sent_failures.get_or_create(&ToLabels { to }).inc();
         }
 
         pub fn incr_snapshot_send_success_to_peer(id: &NodeId) {
             let to = id.to_string();
             RAFT_METRICS
                 .snapshot_send_success
-                .with_label_values(&[&to])
+                .get_or_create(&ToLabels { to })
                 .inc();
         }
 
@@ -319,7 +295,7 @@ pub mod raft_metrics {
             let to = id.to_string();
             RAFT_METRICS
                 .snapshot_send_failure
-                .with_label_values(&[&to])
+                .get_or_create(&ToLabels{ to })
                 .inc();
         }
 
@@ -327,44 +303,44 @@ pub mod raft_metrics {
             let to = id.to_string();
             RAFT_METRICS
                 .snapshot_send_inflights
-                .with_label_values(&[&to])
-                .inc_by(cnt as f64);
+                .get_or_create(&ToLabels{ to })
+                .inc_by(cnt as i64);
         }
 
         pub fn incr_snapshot_recv_inflights_from_peer(addr: String, cnt: i64) {
             let from = addr.to_string();
             RAFT_METRICS
                 .snapshot_recv_inflights
-                .with_label_values(&[&from])
-                .inc_by(cnt as f64);
+                .get_or_create(&FromLabels{ from })
+                .inc_by(cnt as i64);
         }
 
         pub fn sample_snapshot_sent(id: &NodeId, v: f64) {
             let to = id.to_string();
             RAFT_METRICS
                 .snapshot_sent_seconds
-                .with_label_values(&[&to])
+                .get_or_create(&ToLabels{ to })
                 .observe(v);
         }
 
         pub fn sample_snapshot_recv(addr: String, v: f64) {
             RAFT_METRICS
                 .snapshot_recv_seconds
-                .with_label_values(&[&addr])
+                .get_or_create(&FromLabels{ from: addr.to_string() })
                 .observe(v);
         }
 
         pub fn incr_snapshot_recv_failure_from_peer(addr: String) {
             RAFT_METRICS
                 .snapshot_recv_failures
-                .with_label_values(&[&addr])
+                .get_or_create(&FromLabels{ from: addr.to_string() })
                 .inc();
         }
 
         pub fn incr_snapshot_recv_success_from_peer(addr: String) {
             RAFT_METRICS
                 .snapshot_recv_success
-                .with_label_values(&[&addr])
+                .get_or_create(&FromLabels{ from: addr.to_string() })
                 .inc();
         }
     }
