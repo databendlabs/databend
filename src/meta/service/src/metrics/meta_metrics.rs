@@ -35,9 +35,12 @@ fn f64_of(b: bool) -> f64 {
 
 pub mod server_metrics {
     use common_meta_types::NodeId;
-    use metrics::counter;
-    use metrics::gauge;
-    use metrics::increment_gauge;
+    use lazy_static::lazy_static;
+    use prometheus;
+    use prometheus::register_gauge;
+    use prometheus::register_int_counter;
+    use prometheus::Gauge;
+    use prometheus::IntCounter;
 
     use crate::metrics::meta_metrics::f64_of;
 
@@ -47,57 +50,112 @@ pub mod server_metrics {
         };
     }
 
+    struct ServerMetrics {
+        current_leader: Gauge,
+        is_leader: Gauge,
+        node_is_health: Gauge,
+        leader_changes: IntCounter,
+        applying_snapshot: Gauge,
+        proposal_applied: Gauge,
+        last_log_index: Gauge,
+        last_seq: Gauge,
+        current_term: Gauge,
+        proposals_pending: Gauge,
+        proposals_failed: IntCounter,
+        read_failed: IntCounter,
+        watchers: Gauge,
+    }
+
+    impl ServerMetrics {
+        fn init() -> Self {
+            Self {
+                current_leader: register_gauge!(key!("current_leader"), "current leader of raft")
+                    .unwrap(),
+                is_leader: register_gauge!(key!("is_leader"), "whether is leader of raft").unwrap(),
+                node_is_health: register_gauge!(key!("node_is_health"), "whether node is health")
+                    .unwrap(),
+                leader_changes: register_int_counter!(key!("leader_changes"), "leader changes")
+                    .unwrap(),
+                applying_snapshot: register_gauge!(
+                    key!("applying_snapshot"),
+                    "whether applying snapshot"
+                )
+                .unwrap(),
+                proposal_applied: register_gauge!(key!("proposal_applied"), "proposal applied")
+                    .unwrap(),
+                last_log_index: register_gauge!(key!("last_log_index"), "last log index").unwrap(),
+                last_seq: register_gauge!(key!("last_seq"), "last seq").unwrap(),
+                current_term: register_gauge!(key!("current_term"), "current term").unwrap(),
+                proposals_pending: register_gauge!(key!("proposals_pending"), "proposals pending")
+                    .unwrap(),
+                proposals_failed: register_int_counter!(
+                    key!("proposals_failed"),
+                    "proposals failed"
+                )
+                .unwrap(),
+                read_failed: register_int_counter!(key!("read_failed"), "read failed").unwrap(),
+                watchers: register_gauge!(key!("watchers"), "number of watchers").unwrap(),
+            }
+        }
+    }
+
+    lazy_static! {
+        static ref SERVER_METRICS: ServerMetrics = ServerMetrics::init();
+    }
+
     pub fn set_current_leader(current_leader: NodeId) {
-        gauge!(key!("current_leader_id"), current_leader as f64);
+        SERVER_METRICS.current_leader.set(current_leader as f64);
     }
 
     pub fn set_is_leader(is_leader: bool) {
-        gauge!(key!("is_leader"), f64_of(is_leader));
+        SERVER_METRICS.is_leader.set(f64_of(is_leader));
     }
 
     pub fn set_node_is_health(is_health: bool) {
-        gauge!(key!("node_is_health"), f64_of(is_health));
+        SERVER_METRICS.node_is_health.set(f64_of(is_health));
     }
 
     pub fn incr_leader_change() {
-        counter!(key!("leader_changes"), 1);
+        SERVER_METRICS.leader_changes.inc();
     }
 
     /// Whether or not state-machine is applying snapshot.
     pub fn incr_applying_snapshot(cnt: i64) {
-        increment_gauge!(key!("applying_snapshot"), cnt as f64);
+        SERVER_METRICS.applying_snapshot.add(cnt as f64);
     }
 
     pub fn set_proposals_applied(proposals_applied: u64) {
-        gauge!(key!("proposals_applied"), proposals_applied as f64);
+        SERVER_METRICS
+            .proposal_applied
+            .set(proposals_applied as f64);
     }
 
     pub fn set_last_log_index(last_log_index: u64) {
-        gauge!(key!("last_log_index"), last_log_index as f64);
+        SERVER_METRICS.last_log_index.set(last_log_index as f64);
     }
 
     pub fn set_last_seq(last_seq: u64) {
-        gauge!(key!("last_seq"), last_seq as f64);
+        SERVER_METRICS.last_seq.set(last_seq as f64);
     }
 
     pub fn set_current_term(current_term: u64) {
-        gauge!(key!("current_term"), current_term as f64);
+        SERVER_METRICS.current_term.set(current_term as f64);
     }
 
     pub fn incr_proposals_pending(cnt: i64) {
-        increment_gauge!(key!("proposals_pending"), cnt as f64);
+        SERVER_METRICS.proposals_pending.add(cnt as f64);
     }
 
     pub fn incr_proposals_failed() {
-        counter!(key!("proposals_failed"), 1);
+        SERVER_METRICS.proposals_failed.inc();
     }
 
     pub fn incr_read_failed() {
-        counter!(key!("read_failed"), 1);
+        SERVER_METRICS.read_failed.inc();
     }
 
     pub fn incr_watchers(cnt: i64) {
-        increment_gauge!(key!("watchers"), cnt as f64);
+        SERVER_METRICS.watchers.add(cnt as f64);
     }
 }
 
