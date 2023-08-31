@@ -263,9 +263,7 @@ impl ParquetRSReader {
         let bytes = Bytes::from(raw);
         let mut builder = ParquetRecordBatchReaderBuilder::try_new_with_options(
             bytes,
-            ArrowReaderOptions::new()
-                .with_page_index(self.need_page_index)
-                .with_skip_arrow_metadata(true),
+            ArrowReaderOptions::new().with_skip_arrow_metadata(true),
         )?
         .with_projection(self.projection.clone())
         .with_batch_size(self.batch_size);
