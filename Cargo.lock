@@ -3668,7 +3668,6 @@ dependencies = [
  "log",
  "logcall",
  "maplit",
- "metrics",
  "minitrace",
  "once_cell",
  "poem",

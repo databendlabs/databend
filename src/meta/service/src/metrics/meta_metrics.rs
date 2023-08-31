@@ -27,11 +27,8 @@
 use std::time::Instant;
 
 use common_metrics::counter;
+use prometheus_client::encoding::text::encode as prometheus_encode;
 use log::error;
-
-fn f64_of(b: bool) -> f64 {
-    if b { 1_f64 } else { 0_f64 }
-}
 
 pub mod server_metrics {
     use common_meta_types::NodeId;
@@ -346,19 +343,53 @@ pub mod raft_metrics {
     }
 
     pub mod storage {
-        use metrics::counter;
+        use lazy_static::lazy_static;
+        use prometheus_client::metrics::counter::Counter;
+        use prometheus_client::metrics::family::Family;
+        use prometheus_client::encoding::EncodeLabelSet;
 
         macro_rules! key {
             ($key: literal) => {
                 concat!("metasrv_raft_storage_", $key)
             };
         }
+
+        #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+        pub struct FuncLabels {
+            pub func: String,
+        }
+
+        struct StorageMetrics {
+            raft_store_write_failed: Family<FuncLabels, Counter>,
+            raft_store_read_failed: Family<FuncLabels, Counter>,
+        }
+
+        impl StorageMetrics {
+            fn init() -> Self {
+                let metrics = Self {
+                    raft_store_write_failed: Family::default(),
+                    raft_store_read_failed: Family::default(),
+                };
+
+                let mut registry = prometheus_client::registry::Registry::default();
+                registry.register(key!("raft_store_write_failed"), "raft store write failed", metrics.raft_store_write_failed.clone());
+                registry.register(key!("raft_store_read_failed"), "raft store read failed", metrics.raft_store_read_failed.clone());
+                metrics
+            }
+        }
+
+        lazy_static! {
+            static ref STORAGE_METRICS: StorageMetrics = StorageMetrics::init();
+        }
+
         pub fn incr_raft_storage_fail(func: &str, write: bool) {
-            let labels = [("func", func.to_string())];
+            let labels = FuncLabels {
+                func: func.to_string(),
+            };
             if write {
-                counter!(key!("raft_store_write_failed"), 1, &labels);
+                STORAGE_METRICS.raft_store_write_failed.get_or_create(&labels).inc();
             } else {
-                counter!(key!("raft_store_read_failed"), 1, &labels);
+                STORAGE_METRICS.raft_store_read_failed.get_or_create(&labels).inc();
             }
         }
     }
@@ -367,9 +398,11 @@ pub mod raft_metrics {
 pub mod network_metrics {
     use std::time::Duration;
 
-    use metrics::counter;
-    use metrics::histogram;
-    use metrics::increment_gauge;
+    use prometheus_client::metrics::histogram::Histogram;
+    use prometheus_client::metrics::counter::Counter;
+    use prometheus_client::metrics::gauge::Gauge;
+    use prometheus_client::metrics::histogram::exponential_buckets;
+    use lazy_static::lazy_static;
 
     macro_rules! key {
         ($key: literal) => {
@@ -377,27 +410,64 @@ pub mod network_metrics {
         };
     }
 
+    #[derive(Debug)]
+    struct NetworkMetrics {
+        rpc_delay_seconds: Histogram,
+        sent_bytes: Counter,
+        recv_bytes: Counter,
+        req_inflights: Gauge,
+        req_success: Counter,
+        req_failed: Counter,
+    }
+
+    impl NetworkMetrics {
+        pub fn init() -> Self {
+            let metrics =  Self {
+                rpc_delay_seconds: Histogram::new(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 20.0, 30.0, 60.0].into_iter()),
+                sent_bytes: Counter::default(),
+                recv_bytes: Counter::default(),
+                req_inflights: Gauge::default(),
+                req_success: Counter::default(),
+                req_failed: Counter::default(),
+            };
+
+            let mut registry = prometheus_client::registry::Registry::default();
+            registry.register(key!("rpc_delay_seconds"), "rpc delay seconds", metrics.rpc_delay_seconds.clone());
+            registry.register(key!("sent_bytes"), "sent bytes", metrics.sent_bytes.clone());
+            registry.register(key!("recv_bytes"), "recv bytes", metrics.recv_bytes.clone());
+            registry.register(key!("req_inflights"), "req inflights", metrics.req_inflights.clone());
+            registry.register(key!("req_success"), "req success", metrics.req_success.clone());
+            registry.register(key!("req_failed"), "req failed", metrics.req_failed.clone());
+
+            metrics
+        }
+    }
+
+    lazy_static! {
+        static ref NETWORK_METRICS: NetworkMetrics = NetworkMetrics::init();
+    }
+
     pub fn sample_rpc_delay_seconds(d: Duration) {
-        histogram!(key!("rpc_delay_seconds"), d);
+        NETWORK_METRICS.rpc_delay_seconds.observe(d.as_secs_f64());
     }
 
     pub fn incr_sent_bytes(bytes: u64) {
-        counter!(key!("sent_bytes"), bytes);
+        NETWORK_METRICS.sent_bytes.inc_by(bytes);
     }
 
     pub fn incr_recv_bytes(bytes: u64) {
-        counter!(key!("recv_bytes"), bytes);
+        NETWORK_METRICS.recv_bytes.inc_by(bytes);
     }
 
     pub fn incr_request_inflights(cnt: i64) {
-        increment_gauge!(key!("req_inflights"), cnt as f64);
+        NETWORK_METRICS.req_inflights.inc_by(cnt);
     }
 
     pub fn incr_request_result(success: bool) {
         if success {
-            counter!(key!("req_success"), 1);
+            NETWORK_METRICS.req_success.inc();
         } else {
-            counter!(key!("req_failed"), 1);
+            NETWORK_METRICS.req_failed.inc();
         }
     }
 }
@@ -435,11 +505,9 @@ impl counter::Count for ProposalPending {
 
 /// Encode metrics as prometheus format string
 pub fn meta_metrics_to_prometheus_string() -> String {
-    let prometheus_handle = common_metrics::try_handle()
-        .ok_or_else(|| {
-            error!("could not get prometheus_handle");
-        })
-        .unwrap();
+    let registry = prometheus_client::registry::Registry::default();
 
-    prometheus_handle.render()
+    let mut text = String::new();
+    prometheus_encode(&mut text, &registry).unwrap();
+    text
 }
