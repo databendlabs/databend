@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
+use common_ast::ast::Literal;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
@@ -25,6 +27,8 @@ use crate::sql_gen::SqlGenerator;
 impl<'a, R: Rng> SqlGenerator<'a, R> {
     pub(crate) fn gen_query(&mut self) -> Query {
         let body = self.gen_set_expr();
+        let limit = self.gen_limit();
+        let offset = self.gen_offset(limit.len());
         Query {
             span: None,
             // TODO
@@ -32,10 +36,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             body,
             // TODO
             order_by: vec![],
-            // TODO
-            limit: vec![],
-            // TODO
-            offset: None,
+            limit,
+            offset,
             ignore_result: false,
         }
     }
@@ -49,6 +51,39 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             // TODO
             _ => unreachable!(),
         }
+    }
+
+    fn flip_coin(&mut self) -> bool {
+        self.rng.gen_bool(0.5)
+    }
+
+    fn gen_limit(&mut self) -> Vec<Expr> {
+        let mut res = Vec::new();
+        if self.flip_coin() {
+            let limit = Expr::Literal {
+                span: None,
+                lit: Literal::UInt64(self.rng.gen_range(0..=100)),
+            };
+            res.push(limit);
+            if self.flip_coin() {
+                let offset = Expr::Literal {
+                    span: None,
+                    lit: Literal::UInt64(self.rng.gen_range(5..=10)),
+                };
+                res.push(offset);
+            }
+        }
+        res
+    }
+
+    fn gen_offset(&mut self, limit_len: usize) -> Option<Expr> {
+        if self.flip_coin() && limit_len != 2 {
+            return Some(Expr::Literal {
+                span: None,
+                lit: Literal::UInt64(self.rng.gen_range(0..=10)),
+            });
+        }
+        None
     }
 
     fn gen_select(&mut self) -> SelectStmt {
