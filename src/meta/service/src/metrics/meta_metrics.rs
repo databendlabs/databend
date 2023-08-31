@@ -27,14 +27,14 @@
 use std::time::Instant;
 
 use common_metrics::counter;
-use prometheus_client::encoding::text::encode as prometheus_encode;
 use log::error;
+use prometheus_client::encoding::text::encode as prometheus_encode;
 
 pub mod server_metrics {
     use common_meta_types::NodeId;
     use lazy_static::lazy_static;
-    use prometheus_client::metrics::gauge::Gauge;
     use prometheus_client::metrics::counter::Counter;
+    use prometheus_client::metrics::gauge::Gauge;
 
     macro_rules! key {
         ($key: literal) => {
@@ -77,18 +77,58 @@ pub mod server_metrics {
             };
 
             let mut registry = prometheus_client::registry::Registry::default();
-            registry.register(key!("current_leader"), "current leader", metrics.current_leader.clone());
+            registry.register(
+                key!("current_leader"),
+                "current leader",
+                metrics.current_leader.clone(),
+            );
             registry.register(key!("is_leader"), "is leader", metrics.is_leader.clone());
-            registry.register(key!("node_is_health"), "node is health", metrics.node_is_health.clone());
-            registry.register(key!("leader_changes"), "leader changes", metrics.leader_changes.clone());
-            registry.register(key!("applying_snapshot"), "applying snapshot", metrics.applying_snapshot.clone());
-            registry.register(key!("proposal_applied"), "proposal applied", metrics.proposal_applied.clone());
-            registry.register(key!("last_log_index"), "last log index", metrics.last_log_index.clone());
+            registry.register(
+                key!("node_is_health"),
+                "node is health",
+                metrics.node_is_health.clone(),
+            );
+            registry.register(
+                key!("leader_changes"),
+                "leader changes",
+                metrics.leader_changes.clone(),
+            );
+            registry.register(
+                key!("applying_snapshot"),
+                "applying snapshot",
+                metrics.applying_snapshot.clone(),
+            );
+            registry.register(
+                key!("proposal_applied"),
+                "proposal applied",
+                metrics.proposal_applied.clone(),
+            );
+            registry.register(
+                key!("last_log_index"),
+                "last log index",
+                metrics.last_log_index.clone(),
+            );
             registry.register(key!("last_seq"), "last seq", metrics.last_seq.clone());
-            registry.register(key!("current_term"), "current term", metrics.current_term.clone());
-            registry.register(key!("proposals_pending"), "proposals pending", metrics.proposals_pending.clone());
-            registry.register(key!("proposals_failed"), "proposals failed", metrics.proposals_failed.clone());
-            registry.register(key!("read_failed"), "read failed", metrics.read_failed.clone());
+            registry.register(
+                key!("current_term"),
+                "current term",
+                metrics.current_term.clone(),
+            );
+            registry.register(
+                key!("proposals_pending"),
+                "proposals pending",
+                metrics.proposals_pending.clone(),
+            );
+            registry.register(
+                key!("proposals_failed"),
+                "proposals failed",
+                metrics.proposals_failed.clone(),
+            );
+            registry.register(
+                key!("read_failed"),
+                "read failed",
+                metrics.read_failed.clone(),
+            );
             registry.register(key!("watchers"), "watchers", metrics.watchers.clone());
             metrics
         }
@@ -159,12 +199,12 @@ pub mod raft_metrics {
         use common_meta_types::NodeId;
         use lazy_static::lazy_static;
         use prometheus_client;
-        use prometheus_client::metrics::counter::Counter;
-        use prometheus_client::metrics::gauge::Gauge;
-        use prometheus_client::metrics::histogram::Histogram;
-        use prometheus_client::metrics::histogram::exponential_buckets;
-        use prometheus_client::metrics::family::Family;
         use prometheus_client::encoding::EncodeLabelSet;
+        use prometheus_client::metrics::counter::Counter;
+        use prometheus_client::metrics::family::Family;
+        use prometheus_client::metrics::gauge::Gauge;
+        use prometheus_client::metrics::histogram::exponential_buckets;
+        use prometheus_client::metrics::histogram::Histogram;
 
         macro_rules! key {
             ($key: literal) => {
@@ -216,26 +256,74 @@ pub mod raft_metrics {
                     snapshot_send_failure: Family::default(),
                     snapshot_send_inflights: Family::default(),
                     snapshot_recv_inflights: Family::default(),
-                    snapshot_sent_seconds: Family::new_with_constructor(|| Histogram::new(exponential_buckets(1f64, 2f64, 10)) ), // 1s ~ 1024s
-                    snapshot_recv_seconds: Family::new_with_constructor(|| Histogram::new(exponential_buckets(1f64, 2f64, 10)) ), // 1s ~ 1024s
+                    snapshot_sent_seconds: Family::new_with_constructor(|| {
+                        Histogram::new(exponential_buckets(1f64, 2f64, 10))
+                    }), // 1s ~ 1024s
+                    snapshot_recv_seconds: Family::new_with_constructor(|| {
+                        Histogram::new(exponential_buckets(1f64, 2f64, 10))
+                    }), // 1s ~ 1024s
                     snapshot_recv_success: Family::default(),
                     snapshot_recv_failures: Family::default(),
                 };
 
                 let mut registry = prometheus_client::registry::Registry::default();
-                registry.register(key!("active_peers"), "active peers", metrics.active_peers.clone());
-                registry.register(key!("fail_connect_to_peer"), "fail connect to peer", metrics.fail_connect_to_peer.clone());
+                registry.register(
+                    key!("active_peers"),
+                    "active peers",
+                    metrics.active_peers.clone(),
+                );
+                registry.register(
+                    key!("fail_connect_to_peer"),
+                    "fail connect to peer",
+                    metrics.fail_connect_to_peer.clone(),
+                );
                 registry.register(key!("sent_bytes"), "sent bytes", metrics.sent_bytes.clone());
                 registry.register(key!("recv_bytes"), "recv bytes", metrics.recv_bytes.clone());
-                registry.register(key!("sent_failures"), "sent failures", metrics.sent_failures.clone());
-                registry.register(key!("snapshot_send_success"), "snapshot send success", metrics.snapshot_send_success.clone());
-                registry.register(key!("snapshot_send_failure"), "snapshot send failure", metrics.snapshot_send_failure.clone());
-                registry.register(key!("snapshot_send_inflights"), "snapshot send inflights", metrics.snapshot_send_inflights.clone());
-                registry.register(key!("snapshot_recv_inflights"), "snapshot recv inflights", metrics.snapshot_recv_inflights.clone());
-                registry.register(key!("snapshot_sent_seconds"), "snapshot sent seconds", metrics.snapshot_sent_seconds.clone());
-                registry.register(key!("snapshot_recv_seconds"), "snapshot recv seconds", metrics.snapshot_recv_seconds.clone());
-                registry.register(key!("snapshot_recv_success"), "snapshot recv success", metrics.snapshot_recv_success.clone());
-                registry.register(key!("snapshot_recv_failures"), "snapshot recv failures", metrics.snapshot_recv_failures.clone());
+                registry.register(
+                    key!("sent_failures"),
+                    "sent failures",
+                    metrics.sent_failures.clone(),
+                );
+                registry.register(
+                    key!("snapshot_send_success"),
+                    "snapshot send success",
+                    metrics.snapshot_send_success.clone(),
+                );
+                registry.register(
+                    key!("snapshot_send_failure"),
+                    "snapshot send failure",
+                    metrics.snapshot_send_failure.clone(),
+                );
+                registry.register(
+                    key!("snapshot_send_inflights"),
+                    "snapshot send inflights",
+                    metrics.snapshot_send_inflights.clone(),
+                );
+                registry.register(
+                    key!("snapshot_recv_inflights"),
+                    "snapshot recv inflights",
+                    metrics.snapshot_recv_inflights.clone(),
+                );
+                registry.register(
+                    key!("snapshot_sent_seconds"),
+                    "snapshot sent seconds",
+                    metrics.snapshot_sent_seconds.clone(),
+                );
+                registry.register(
+                    key!("snapshot_recv_seconds"),
+                    "snapshot recv seconds",
+                    metrics.snapshot_recv_seconds.clone(),
+                );
+                registry.register(
+                    key!("snapshot_recv_success"),
+                    "snapshot recv success",
+                    metrics.snapshot_recv_success.clone(),
+                );
+                registry.register(
+                    key!("snapshot_recv_failures"),
+                    "snapshot recv failures",
+                    metrics.snapshot_recv_failures.clone(),
+                );
                 metrics
             }
         }
@@ -248,7 +336,10 @@ pub mod raft_metrics {
             let id = id.to_string();
             RAFT_METRICS
                 .active_peers
-                .get_or_create(&PeerLabels{ id, addr: addr.to_string() })
+                .get_or_create(&PeerLabels {
+                    id,
+                    addr: addr.to_string(),
+                })
                 .inc_by(cnt);
         }
 
@@ -256,7 +347,10 @@ pub mod raft_metrics {
             let id = id.to_string();
             RAFT_METRICS
                 .fail_connect_to_peer
-                .get_or_create(&PeerLabels{ id, addr: addr.to_string() })
+                .get_or_create(&PeerLabels {
+                    id,
+                    addr: addr.to_string(),
+                })
                 .inc();
         }
 
@@ -264,20 +358,23 @@ pub mod raft_metrics {
             let to = id.to_string();
             RAFT_METRICS
                 .sent_bytes
-                .get_or_create(&ToLabels{ to })
+                .get_or_create(&ToLabels { to })
                 .inc_by(bytes as u64);
         }
 
         pub fn incr_recv_bytes_from_peer(addr: String, bytes: u64) {
             RAFT_METRICS
                 .recv_bytes
-                .get_or_create(&FromLabels{ from: addr })
+                .get_or_create(&FromLabels { from: addr })
                 .inc_by(bytes as u64);
         }
 
         pub fn incr_sent_failure_to_peer(id: &NodeId) {
             let to = id.to_string();
-            RAFT_METRICS.sent_failures.get_or_create(&ToLabels { to }).inc();
+            RAFT_METRICS
+                .sent_failures
+                .get_or_create(&ToLabels { to })
+                .inc();
         }
 
         pub fn incr_snapshot_send_success_to_peer(id: &NodeId) {
@@ -292,7 +389,7 @@ pub mod raft_metrics {
             let to = id.to_string();
             RAFT_METRICS
                 .snapshot_send_failure
-                .get_or_create(&ToLabels{ to })
+                .get_or_create(&ToLabels { to })
                 .inc();
         }
 
@@ -300,7 +397,7 @@ pub mod raft_metrics {
             let to = id.to_string();
             RAFT_METRICS
                 .snapshot_send_inflights
-                .get_or_create(&ToLabels{ to })
+                .get_or_create(&ToLabels { to })
                 .inc_by(cnt as i64);
         }
 
@@ -308,7 +405,7 @@ pub mod raft_metrics {
             let from = addr.to_string();
             RAFT_METRICS
                 .snapshot_recv_inflights
-                .get_or_create(&FromLabels{ from })
+                .get_or_create(&FromLabels { from })
                 .inc_by(cnt as i64);
         }
 
@@ -316,37 +413,43 @@ pub mod raft_metrics {
             let to = id.to_string();
             RAFT_METRICS
                 .snapshot_sent_seconds
-                .get_or_create(&ToLabels{ to })
+                .get_or_create(&ToLabels { to })
                 .observe(v);
         }
 
         pub fn sample_snapshot_recv(addr: String, v: f64) {
             RAFT_METRICS
                 .snapshot_recv_seconds
-                .get_or_create(&FromLabels{ from: addr.to_string() })
+                .get_or_create(&FromLabels {
+                    from: addr.to_string(),
+                })
                 .observe(v);
         }
 
         pub fn incr_snapshot_recv_failure_from_peer(addr: String) {
             RAFT_METRICS
                 .snapshot_recv_failures
-                .get_or_create(&FromLabels{ from: addr.to_string() })
+                .get_or_create(&FromLabels {
+                    from: addr.to_string(),
+                })
                 .inc();
         }
 
         pub fn incr_snapshot_recv_success_from_peer(addr: String) {
             RAFT_METRICS
                 .snapshot_recv_success
-                .get_or_create(&FromLabels{ from: addr.to_string() })
+                .get_or_create(&FromLabels {
+                    from: addr.to_string(),
+                })
                 .inc();
         }
     }
 
     pub mod storage {
         use lazy_static::lazy_static;
+        use prometheus_client::encoding::EncodeLabelSet;
         use prometheus_client::metrics::counter::Counter;
         use prometheus_client::metrics::family::Family;
-        use prometheus_client::encoding::EncodeLabelSet;
 
         macro_rules! key {
             ($key: literal) => {
@@ -372,8 +475,16 @@ pub mod raft_metrics {
                 };
 
                 let mut registry = prometheus_client::registry::Registry::default();
-                registry.register(key!("raft_store_write_failed"), "raft store write failed", metrics.raft_store_write_failed.clone());
-                registry.register(key!("raft_store_read_failed"), "raft store read failed", metrics.raft_store_read_failed.clone());
+                registry.register(
+                    key!("raft_store_write_failed"),
+                    "raft store write failed",
+                    metrics.raft_store_write_failed.clone(),
+                );
+                registry.register(
+                    key!("raft_store_read_failed"),
+                    "raft store read failed",
+                    metrics.raft_store_read_failed.clone(),
+                );
                 metrics
             }
         }
@@ -387,9 +498,15 @@ pub mod raft_metrics {
                 func: func.to_string(),
             };
             if write {
-                STORAGE_METRICS.raft_store_write_failed.get_or_create(&labels).inc();
+                STORAGE_METRICS
+                    .raft_store_write_failed
+                    .get_or_create(&labels)
+                    .inc();
             } else {
-                STORAGE_METRICS.raft_store_read_failed.get_or_create(&labels).inc();
+                STORAGE_METRICS
+                    .raft_store_read_failed
+                    .get_or_create(&labels)
+                    .inc();
             }
         }
     }
@@ -398,11 +515,11 @@ pub mod raft_metrics {
 pub mod network_metrics {
     use std::time::Duration;
 
-    use prometheus_client::metrics::histogram::Histogram;
+    use lazy_static::lazy_static;
     use prometheus_client::metrics::counter::Counter;
     use prometheus_client::metrics::gauge::Gauge;
     use prometheus_client::metrics::histogram::exponential_buckets;
-    use lazy_static::lazy_static;
+    use prometheus_client::metrics::histogram::Histogram;
 
     macro_rules! key {
         ($key: literal) => {
@@ -422,8 +539,13 @@ pub mod network_metrics {
 
     impl NetworkMetrics {
         pub fn init() -> Self {
-            let metrics =  Self {
-                rpc_delay_seconds: Histogram::new(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 20.0, 30.0, 60.0].into_iter()),
+            let metrics = Self {
+                rpc_delay_seconds: Histogram::new(
+                    vec![
+                        1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 20.0, 30.0, 60.0,
+                    ]
+                    .into_iter(),
+                ),
                 sent_bytes: Counter::default(),
                 recv_bytes: Counter::default(),
                 req_inflights: Gauge::default(),
@@ -432,11 +554,23 @@ pub mod network_metrics {
             };
 
             let mut registry = prometheus_client::registry::Registry::default();
-            registry.register(key!("rpc_delay_seconds"), "rpc delay seconds", metrics.rpc_delay_seconds.clone());
+            registry.register(
+                key!("rpc_delay_seconds"),
+                "rpc delay seconds",
+                metrics.rpc_delay_seconds.clone(),
+            );
             registry.register(key!("sent_bytes"), "sent bytes", metrics.sent_bytes.clone());
             registry.register(key!("recv_bytes"), "recv bytes", metrics.recv_bytes.clone());
-            registry.register(key!("req_inflights"), "req inflights", metrics.req_inflights.clone());
-            registry.register(key!("req_success"), "req success", metrics.req_success.clone());
+            registry.register(
+                key!("req_inflights"),
+                "req inflights",
+                metrics.req_inflights.clone(),
+            );
+            registry.register(
+                key!("req_success"),
+                "req success",
+                metrics.req_success.clone(),
+            );
             registry.register(key!("req_failed"), "req failed", metrics.req_failed.clone());
 
             metrics
