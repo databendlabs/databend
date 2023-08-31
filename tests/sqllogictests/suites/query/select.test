@@ -96,3 +96,6 @@ values (1, 'one'), (2, 'two'), (3, 'three') order by col0 desc limit 2
 ----
 3 three
 2 two
+
+statement error 1005
+select * from numbers(2) limit 0,1,safe;

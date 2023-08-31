@@ -32,6 +32,7 @@ use crate::parser::statement::hint;
 use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
+use crate::ErrorKind;
 
 pub fn query(i: Input) -> IResult<Query> {
     context(
@@ -144,11 +145,17 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
         },
         |(_, _, order_by)| SetOperationElement::OrderBy { order_by },
     );
-    let limit = map(
+    let limit = map_res(
         rule! {
             LIMIT ~ ^#comma_separated_list1(expr)
         },
-        |(_, limit)| SetOperationElement::Limit { limit },
+        |(_, limit)| {
+            if limit.len() > 2 {
+                Err(ErrorKind::Other("limit too large"))
+            } else {
+                Ok(SetOperationElement::Limit { limit })
+            }
+        },
     );
     let offset = map(
         rule! {
