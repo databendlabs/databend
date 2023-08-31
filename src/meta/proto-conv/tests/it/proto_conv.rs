@@ -141,6 +141,10 @@ fn new_share_account_meta() -> share::ShareAccountMeta {
     }
 }
 
+fn new_lvt() -> mt::LeastVisibleTime {
+    mt::LeastVisibleTime { time: 10267 }
+}
+
 fn new_table_meta() -> mt::TableMeta {
     mt::TableMeta {
         schema: Arc::new(ce::TableSchema::new_from(
@@ -338,6 +342,11 @@ fn test_pb_from_to() -> anyhow::Result<()> {
     let got = common_meta_app::data_mask::DatamaskMeta::from_pb(p)?;
     assert_eq!(data_mask_meta, got);
 
+    let lvt = new_lvt();
+    let p = lvt.to_pb()?;
+    let got = mt::LeastVisibleTime::from_pb(p)?;
+    assert_eq!(lvt, got);
+
     Ok(())
 }
 
@@ -493,6 +502,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("catalog catalog_meta:{:?}", buf);
+    }
+
+    // lvt
+    {
+        let lvt = new_lvt();
+        let p = lvt.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("lvt:{:?}", buf);
     }
 
     Ok(())

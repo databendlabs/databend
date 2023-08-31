@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::assert_ne;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -78,6 +79,7 @@ use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetLVTReq;
 use common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableCopiedFileInfo;
@@ -310,6 +312,7 @@ impl SchemaApiTestSuite {
             .virtual_column_create_list_drop(&b.build().await)
             .await?;
         suite.catalog_create_get_list_drop(&b.build().await).await?;
+        suite.table_least_visible_time(&b.build().await).await?;
 
         Ok(())
     }
@@ -1382,6 +1385,130 @@ impl SchemaApiTestSuite {
 
         let got = mt.list_catalogs(ListCatalogReq::new("tenant1")).await?;
         assert_eq!(got.len(), 0);
+
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn table_least_visible_time<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb1";
+        let name_ident = TableNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+            table_name: tbl_name.to_string(),
+        };
+        let schema = || {
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]))
+        };
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        info!("--- test without db");
+        {
+            let req = SetLVTReq {
+                name_ident: name_ident.clone(),
+                time: 1024,
+            };
+
+            let unknown_database_code = ErrorCode::UnknownDatabase("").code();
+            let res = mt.set_table_lvt(req).await;
+            debug!("set_table_lvt on unknown db res: {:?}", res);
+
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            let err = ErrorCode::from(err);
+
+            assert_eq!(unknown_database_code, err.code());
+        }
+
+        info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            mt.create_database(plan).await?;
+        }
+
+        info!("--- test without table");
+        {
+            let req = SetLVTReq {
+                name_ident: name_ident.clone(),
+                time: 1024,
+            };
+
+            let unknown_table_code = ErrorCode::UnknownTable("").code();
+            let res = mt.set_table_lvt(req).await;
+            debug!("set_table_lvt on unknown db res: {:?}", res);
+
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            let err = ErrorCode::from(err);
+
+            assert_eq!(unknown_table_code, err.code());
+        }
+
+        info!("--- create table");
+        {
+            let table_meta = |created_on| TableMeta {
+                schema: schema(),
+                engine: "JSON".to_string(),
+                options: options(),
+                updated_on: created_on,
+                created_on,
+                ..TableMeta::default()
+            };
+            let created_on = Utc::now();
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: name_ident.clone(),
+                table_meta: table_meta(created_on),
+            };
+            mt.create_table(req.clone()).await?;
+        }
+
+        info!("--- test lvt");
+        {
+            let time = 1024;
+            let req = SetLVTReq {
+                name_ident: name_ident.clone(),
+                time,
+            };
+
+            let res = mt.set_table_lvt(req).await?;
+            assert_eq!(res.time, 1024);
+
+            // test lvt never fall back
+            let time = 102;
+            let req = SetLVTReq {
+                name_ident: name_ident.clone(),
+                time,
+            };
+
+            let res = mt.set_table_lvt(req).await?;
+            assert_eq!(res.time, 1024);
+
+            let time = 1025;
+            let req = SetLVTReq {
+                name_ident: name_ident.clone(),
+                time,
+            };
+
+            let res = mt.set_table_lvt(req).await?;
+            assert_eq!(res.time, 1025);
+        }
 
         Ok(())
     }
