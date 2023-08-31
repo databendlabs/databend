@@ -1,10 +1,23 @@
 ---
-title: Configuring with Environment Variables
+title: Setting Environment Variables
 ---
 
-Databend provides the option to configure your Meta and Query nodes using environment variables in addition to configuration files. This method proves useful for making adjustments without directly modifying configuration files, and it's particularly effective for enabling dynamic changes, containerized deployments, and secure handling of sensitive data.
+Databend offers you the flexibility to configure your Meta and Query nodes in two ways: using environment variables or configuration files. Moreover, you have the option to utilize environment variables to point to custom configuration files. This capability empowers you to make modifications without disrupting the default setups. This is especially advantageous when you require swift adjustments, are working with containers, or need to safeguard sensitive data.
 
-It's important to note that there is a mapping relationship between the parameters set in environment variables and those specified in configuration files. In cases where a configuration parameter is defined both via an environment variable and in a configuration file, Databend will prioritize the value provided by the environment variable.
+:::note
+- A mapping relationship exists between the parameters set through environment variables and those specified in configuration files. In cases where a configuration parameter is defined both via an environment variable and in a configuration file, Databend will prioritize the value provided by the environment variable.
+
+- Not all configurations can be managed solely through environment variables. In some cases, adjustments might necessitate modifications within the configuration files rather than relying on environment variables.
+:::
+
+## Setting Configuration File Paths
+
+METASRV_CONFIG_FILE and CONFIG_FILE are environment variables used to designate the locations of your configuration files, [databend-meta.toml](https://github.com/datafuselabs/databend/blob/main/scripts/distribution/configs/databend-meta.toml) and [databend-query.toml](https://github.com/datafuselabs/databend/blob/main/scripts/distribution/configs/databend-query.toml). They provide a way to tailor the paths of configuration files in Databend. If you'd like to depart from the default setup and opt for custom configuration file locations, these variables empower you to specify the exact paths for your files.
+
+```sql title='Example'
+export METASRV_CONFIG_FILE='/etc/databend/databend-meta.toml'
+export CONFIG_FILE='/etc/databend/databend-query.toml'
+```
 
 ## Meta Environment Variables
 
