@@ -22,83 +22,173 @@ use crate::plans::FunctionCall;
 use crate::ColumnSet;
 use crate::ScalarExpr;
 
+pub struct ExtractedPredicates {
+    pub(crate) remaining: Option<ScalarExpr>,
+    pub(crate) extracted: Option<Vec<Option<ScalarExpr>>>,
+}
+
 pub fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<ScalarExpr>> {
-    let filter: Filter = s_expr.plan().clone().try_into()?;
+    let mut filter: Filter = s_expr.plan().clone().try_into()?;
     let join = s_expr.child(0)?;
     let mut new_predicates = Vec::new();
-    let mut origin_predicates = filter.predicates.clone();
-    for predicate in filter.predicates.iter() {
+    let mut required_columns = Vec::new();
+    for join_child in join.children().iter() {
+        let rel_expr = RelExpr::with_s_expr(join_child);
+        let prop = rel_expr.derive_relational_prop()?;
+        required_columns.push(prop.used_columns.clone());
+    }
+    for predicate in filter.predicates.iter_mut() {
         match predicate {
             ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
-                for join_child in join.children().iter() {
-                    let rel_expr = RelExpr::with_s_expr(join_child);
-                    let prop = rel_expr.derive_relational_prop()?;
-                    if let Some(predicate) =
-                        extract_or_predicate(&func.arguments, &prop.used_columns)?
-                    {
-                        new_predicates.push(predicate)
+                let extracted_predicate = extract_or_predicate(&func.arguments, &required_columns)?;
+                match (extracted_predicate.remaining, extracted_predicate.extracted) {
+                    (Some(remaining), Some(extracted)) => {
+                        new_predicates.push(remaining);
+                        for sub_scalar in extracted.into_iter().flatten() {
+                            new_predicates.push(sub_scalar);
+                        }
+                    }
+                    (Some(remaining), None) => {
+                        new_predicates.push(remaining);
+                    }
+                    (None, Some(extracted)) => {
+                        for sub_scalar in extracted.into_iter().flatten() {
+                            new_predicates.push(sub_scalar);
+                        }
+                    }
+                    (None, None) => {
+                        unreachable!()
                     }
                 }
             }
-            _ => (),
+            _ => new_predicates.push(predicate.clone()),
         }
     }
-    origin_predicates.extend(new_predicates);
     // Deduplicate predicates here to prevent handled by `EliminateFilter` rule later,
     // which may cause infinite loop.
-    origin_predicates = origin_predicates.into_iter().unique().collect();
-    Ok(origin_predicates)
+    new_predicates = new_predicates.into_iter().unique().collect();
+    Ok(new_predicates)
 }
 
 // Only need to be executed once
 fn extract_or_predicate(
     or_args: &[ScalarExpr],
-    required_columns: &ColumnSet,
-) -> Result<Option<ScalarExpr>> {
-    let flatten_or_args = flatten_ors(or_args);
-    let mut extracted_scalars = Vec::new();
-    for or_arg in flatten_or_args.iter() {
-        let mut sub_scalars = Vec::new();
+    required_columns: &[ColumnSet],
+) -> Result<ExtractedPredicates> {
+    let mut flatten_or_args = flatten_ors(or_args);
+    let mut remaining_scalars = Vec::new();
+    let mut extracted_scalars = vec![Vec::new(); required_columns.len()];
+    let mut has_extracted = false;
+    for or_arg in flatten_or_args.iter_mut() {
+        let mut remaining_scalar = Vec::new();
+        let mut extracted_scalar = vec![Vec::new(); required_columns.len()];
         match or_arg {
             ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
                 let and_args = flatten_ands(&func.arguments);
                 for and_arg in and_args.iter() {
                     match and_arg {
                         ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
-                            if let Some(scalar) =
-                                extract_or_predicate(&func.arguments, required_columns)?
-                            {
-                                sub_scalars.push(scalar);
+                            let extracted_predicate =
+                                extract_or_predicate(&func.arguments, required_columns)?;
+                            match (extracted_predicate.remaining, extracted_predicate.extracted) {
+                                (Some(remaining), Some(extracted)) => {
+                                    remaining_scalar.push(remaining);
+                                    for (index, sub_scalar) in extracted.into_iter().enumerate() {
+                                        if let Some(scalar) = sub_scalar {
+                                            extracted_scalar[index].push(scalar);
+                                        }
+                                    }
+                                }
+                                (Some(remaining), None) => {
+                                    remaining_scalar.push(remaining);
+                                }
+                                (None, Some(extracted)) => {
+                                    for (index, sub_scalar) in extracted.into_iter().enumerate() {
+                                        if let Some(scalar) = sub_scalar {
+                                            extracted_scalar[index].push(scalar);
+                                        }
+                                    }
+                                }
+                                (None, None) => {
+                                    unreachable!()
+                                }
                             }
                         }
                         _ => {
+                            let mut find = false;
                             let used_columns = and_arg.used_columns();
-                            if used_columns.is_subset(required_columns) {
-                                sub_scalars.push(and_arg.clone());
+                            for (index, required) in required_columns.iter().enumerate() {
+                                if used_columns.is_subset(required) {
+                                    extracted_scalar[index].push(and_arg.clone());
+                                    find = true;
+                                    break;
+                                }
+                            }
+                            if !find {
+                                remaining_scalar.push(and_arg.clone());
                             }
                         }
                     }
                 }
             }
             _ => {
+                let mut find = false;
                 let used_columns = or_arg.used_columns();
-                if used_columns.is_subset(required_columns) {
-                    sub_scalars.push(or_arg.clone());
+                for (index, required) in required_columns.iter().enumerate() {
+                    if used_columns.is_subset(required) {
+                        extracted_scalar[index].push(or_arg.clone());
+                        find = true;
+                        break;
+                    }
+                }
+                if !find {
+                    remaining_scalar.push(or_arg.clone());
                 }
             }
         }
-        if sub_scalars.is_empty() {
-            return Ok(None);
+        let mut has_extracted_scalars = false;
+        for (index, scalars) in extracted_scalar.into_iter().enumerate() {
+            if !scalars.is_empty() {
+                has_extracted_scalars = true;
+                has_extracted = true;
+                extracted_scalars[index].push(make_and_expr(&scalars));
+            }
         }
-
-        extracted_scalars.push(make_and_expr(&sub_scalars));
+        if !has_extracted_scalars {
+            return Ok(ExtractedPredicates {
+                remaining: Some(make_or_expr(&flatten_or_args)),
+                extracted: None,
+            });
+        }
+        if !remaining_scalar.is_empty() {
+            remaining_scalars.push(make_and_expr(&remaining_scalar));
+        }
     }
 
-    if !extracted_scalars.is_empty() {
-        return Ok(Some(make_or_expr(&extracted_scalars)));
+    let mut extracted = vec![None; required_columns.len()];
+    if has_extracted {
+        for (index, scalars) in extracted_scalars.into_iter().enumerate() {
+            if !scalars.is_empty() {
+                extracted[index] = Some(make_or_expr(&scalars));
+            }
+        }
+        if !remaining_scalars.is_empty() {
+            return Ok(ExtractedPredicates {
+                remaining: Some(make_or_expr(&remaining_scalars)),
+                extracted: Some(extracted),
+            });
+        } else {
+            return Ok(ExtractedPredicates {
+                remaining: None,
+                extracted: Some(extracted),
+            });
+        }
     }
 
-    Ok(None)
+    Ok(ExtractedPredicates {
+        remaining: Some(make_or_expr(&flatten_or_args)),
+        extracted: None,
+    })
 }
 
 // Flatten nested ORs, such as `a=1 or b=1 or c=1`
