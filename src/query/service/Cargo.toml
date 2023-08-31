@@ -123,6 +123,7 @@ ethnum = { workspace = true }
 futures = "0.3.24"
 futures-util = { workspace = true }
 
+common-meta-embedded = { path = "../../meta/embedded" }
 h2 = "0.3.17"
 headers = "0.3.8"
 http = "0.2.8"
@@ -149,6 +150,7 @@ regex = "1.8.1"
 reqwest = { workspace = true }
 rustls = "0.21.6"
 rustls-pemfile = "1.0.2"
+rustyline = "11.0.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_urlencoded = "0.7.1"
@@ -165,13 +167,13 @@ walkdir = "2.3.2"
 
 [dev-dependencies]
 arrow-cast = { version = "45.0.0", features = ["prettyprint"] }
-common-meta-embedded = { path = "../../meta/embedded" }
 ordered-float = { workspace = true }
 
 base64 = "0.21.0"
 criterion = "0.4"
 goldenfile = "1.4"
 hex = "0.4.3"
+indicatif = "0.17.5"
 jwt-simple = "0.11.0"
 maplit = "1.0.2"
 mysql_async = { workspace = true }

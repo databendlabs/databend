@@ -52,9 +52,6 @@ pub struct InnerConfig {
     // Storage backend config.
     pub storage: StorageConfig,
 
-    // Local query config.
-    pub local: LocalConfig,
-
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
@@ -131,7 +128,6 @@ impl Debug for InnerConfig {
             .field("log", &self.log)
             .field("meta", &self.meta)
             .field("storage", &self.storage)
-            .field("local", &self.local)
             .field("catalogs", &self.catalogs)
             .field("cache", &self.cache)
             .field("background", &self.background)

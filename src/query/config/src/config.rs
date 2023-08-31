@@ -115,10 +115,6 @@ pub struct Config {
     #[clap(flatten)]
     pub catalog: HiveCatalogConfig,
 
-    // Local query config.
-    #[clap(flatten)]
-    pub local: LocalConfig,
-
     // cache configs
     #[clap(flatten)]
     pub cache: CacheConfig,
@@ -2342,7 +2338,6 @@ mod cache_config_converters {
                 meta: inner.meta.into(),
                 storage: inner.storage.into(),
                 catalog: HiveCatalogConfig::default(),
-                local: inner.local.into(),
 
                 catalogs: inner
                     .catalogs
@@ -2380,7 +2375,6 @@ mod cache_config_converters {
                 log: self.log.try_into()?,
                 meta: self.meta.try_into()?,
                 storage: self.storage.try_into()?,
-                local: self.local.try_into()?,
                 catalogs,
                 cache: self.cache.try_into()?,
                 background: self.background.try_into()?,

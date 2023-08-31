@@ -29,6 +29,7 @@ use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
 use databend_query::clusters::ClusterDiscovery;
+use databend_query::local;
 use databend_query::metrics::MetricService;
 use databend_query::servers::FlightSQLServer;
 use databend_query::servers::HttpHandler;
@@ -40,8 +41,6 @@ use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
 use log::info;
 
-use crate::local;
-
 pub async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
     if conf.cmd.is_empty() {
         return Ok(false);
@@ -52,10 +51,7 @@ pub async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
             println!("version: {}", *QUERY_SEMVER);
             println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
         }
-        "local" => {
-            println!("exec local query: {}", conf.local.sql);
-            local::query_local(conf).await?
-        }
+        "local" => local::query_local().await?,
         _ => {
             eprintln!("Invalid cmd: {}", conf.cmd);
             eprintln!("Available cmds:");
