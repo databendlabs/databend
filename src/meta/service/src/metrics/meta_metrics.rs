@@ -27,7 +27,6 @@
 use std::time::Instant;
 
 use common_metrics::counter;
-use log::error;
 use prometheus_client::encoding::text::encode as prometheus_encode;
 
 pub mod server_metrics {
@@ -178,7 +177,7 @@ pub mod server_metrics {
     }
 
     pub fn incr_proposals_pending(cnt: i64) {
-        SERVER_METRICS.proposals_pending.inc_by(cnt as i64);
+        SERVER_METRICS.proposals_pending.inc_by(cnt);
     }
 
     pub fn incr_proposals_failed() {
@@ -190,7 +189,7 @@ pub mod server_metrics {
     }
 
     pub fn incr_watchers(cnt: i64) {
-        SERVER_METRICS.watchers.inc_by(cnt as i64);
+        SERVER_METRICS.watchers.inc_by(cnt);
     }
 }
 
@@ -359,14 +358,14 @@ pub mod raft_metrics {
             RAFT_METRICS
                 .sent_bytes
                 .get_or_create(&ToLabels { to })
-                .inc_by(bytes as u64);
+                .inc_by(bytes);
         }
 
         pub fn incr_recv_bytes_from_peer(addr: String, bytes: u64) {
             RAFT_METRICS
                 .recv_bytes
                 .get_or_create(&FromLabels { from: addr })
-                .inc_by(bytes as u64);
+                .inc_by(bytes);
         }
 
         pub fn incr_sent_failure_to_peer(id: &NodeId) {
@@ -398,15 +397,14 @@ pub mod raft_metrics {
             RAFT_METRICS
                 .snapshot_send_inflights
                 .get_or_create(&ToLabels { to })
-                .inc_by(cnt as i64);
+                .inc_by(cnt);
         }
 
         pub fn incr_snapshot_recv_inflights_from_peer(addr: String, cnt: i64) {
-            let from = addr.to_string();
             RAFT_METRICS
                 .snapshot_recv_inflights
-                .get_or_create(&FromLabels { from })
-                .inc_by(cnt as i64);
+                .get_or_create(&FromLabels { from: addr })
+                .inc_by(cnt);
         }
 
         pub fn sample_snapshot_sent(id: &NodeId, v: f64) {
@@ -420,27 +418,21 @@ pub mod raft_metrics {
         pub fn sample_snapshot_recv(addr: String, v: f64) {
             RAFT_METRICS
                 .snapshot_recv_seconds
-                .get_or_create(&FromLabels {
-                    from: addr.to_string(),
-                })
+                .get_or_create(&FromLabels { from: addr })
                 .observe(v);
         }
 
         pub fn incr_snapshot_recv_failure_from_peer(addr: String) {
             RAFT_METRICS
                 .snapshot_recv_failures
-                .get_or_create(&FromLabels {
-                    from: addr.to_string(),
-                })
+                .get_or_create(&FromLabels { from: addr })
                 .inc();
         }
 
         pub fn incr_snapshot_recv_success_from_peer(addr: String) {
             RAFT_METRICS
                 .snapshot_recv_success
-                .get_or_create(&FromLabels {
-                    from: addr.to_string(),
-                })
+                .get_or_create(&FromLabels { from: addr })
                 .inc();
         }
     }
@@ -518,7 +510,6 @@ pub mod network_metrics {
     use lazy_static::lazy_static;
     use prometheus_client::metrics::counter::Counter;
     use prometheus_client::metrics::gauge::Gauge;
-    use prometheus_client::metrics::histogram::exponential_buckets;
     use prometheus_client::metrics::histogram::Histogram;
 
     macro_rules! key {
