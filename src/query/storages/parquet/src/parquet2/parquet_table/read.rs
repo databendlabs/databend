@@ -162,8 +162,6 @@ impl Parquet2Table {
             )?;
         };
 
-        pipeline.try_resize(num_deserializer)?;
-
         pipeline.add_transform(|input, output| {
             Parquet2DeserializeTransform::create(
                 ctx.clone(),

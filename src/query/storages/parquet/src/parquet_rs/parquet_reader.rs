@@ -18,6 +18,7 @@ use arrow_array::RecordBatch;
 use arrow_array::StructArray;
 use arrow_schema::ArrowError;
 use arrow_schema::FieldRef;
+use bytes::Bytes;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::Projection;
@@ -37,6 +38,7 @@ use opendal::Reader;
 use parquet::arrow::arrow_reader::ArrowPredicateFn;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::arrow::arrow_reader::RowFilter;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::arrow_reader::RowSelector;
@@ -81,6 +83,10 @@ pub struct ParquetRSReader {
 }
 
 impl ParquetRSReader {
+    pub fn operator(&self) -> Operator {
+        self.op.clone()
+    }
+
     pub fn create(
         ctx: Arc<dyn TableContext>,
         op: Operator,
@@ -236,10 +242,7 @@ impl ParquetRSReader {
     }
 
     /// Read a [`DataBlock`] from parquet file using native apache arrow-rs reader API.
-    pub async fn read_block(
-        &self,
-        reader: &mut ParquetRecordBatchReader,
-    ) -> Result<Option<DataBlock>> {
+    pub fn read_block(&self, reader: &mut ParquetRecordBatchReader) -> Result<Option<DataBlock>> {
         let record_batch = reader.next().transpose()?;
 
         if let Some(batch) = record_batch {
@@ -252,6 +255,65 @@ impl ParquetRSReader {
             Ok(Some(blocks))
         } else {
             Ok(None)
+        }
+    }
+
+    /// Read a [`DataBlock`] from bytes.
+    pub fn read_blocks_from_binary(&self, raw: Vec<u8>) -> Result<Vec<DataBlock>> {
+        let bytes = Bytes::from(raw);
+        let mut builder = ParquetRecordBatchReaderBuilder::try_new_with_options(
+            bytes,
+            ArrowReaderOptions::new()
+                .with_page_index(self.need_page_index)
+                .with_skip_arrow_metadata(true),
+        )?
+        .with_projection(self.projection.clone())
+        .with_batch_size(self.batch_size);
+
+        // Prune row groups.
+        let file_meta = builder.metadata();
+
+        if let Some(pruner) = &self.pruner {
+            let selected_row_groups = pruner.prune_row_groups(file_meta)?;
+            let row_selection = pruner.prune_pages(file_meta, &selected_row_groups)?;
+
+            builder = builder.with_row_groups(selected_row_groups);
+            if let Some(row_selection) = row_selection {
+                builder = builder.with_row_selection(row_selection);
+            }
+        }
+
+        if let Some(predicate) = self.predicate.as_ref() {
+            let projection = predicate.projection().clone();
+            let predicate = predicate.clone();
+            let predicate_fn = move |batch| {
+                predicate
+                    .evaluate(&batch)
+                    .map_err(|e| ArrowError::from_external_error(Box::new(e)))
+            };
+            builder = builder.with_row_filter(RowFilter::new(vec![Box::new(
+                ArrowPredicateFn::new(projection, predicate_fn),
+            )]));
+        }
+
+        let reader = builder.build()?;
+        // Write `if` outside iteration to reduce branches.
+        if self.is_inner_project {
+            reader
+                .into_iter()
+                .map(|batch| {
+                    let batch = batch?;
+                    transform_record_batch(&batch, &self.field_paths)
+                })
+                .collect()
+        } else {
+            reader
+                .into_iter()
+                .map(|batch| {
+                    let batch = batch?;
+                    Ok(DataBlock::from_record_batch(&batch)?.0)
+                })
+                .collect()
         }
     }
 
