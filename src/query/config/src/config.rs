@@ -86,7 +86,7 @@ const CATALOG_HIVE: &str = "hive";
 pub struct Config {
     /// Run a command and quit
     #[command(subcommand)]
-    pub cmd: Commands,
+    pub cmd: Option<Commands>,
 
     #[clap(long, short = 'c', default_value_t)]
     pub config_file: String,
@@ -136,17 +136,11 @@ pub struct Config {
     pub catalogs: HashMap<String, CatalogConfig>,
 }
 
-#[derive(Subcommand, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Subcommand, Default, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Commands {
-    None,
     Version,
+    #[default]
     Local,
-}
-
-impl Default for Commands {
-    fn default() -> Self {
-        Commands::None
-    }
 }
 
 impl Default for Config {

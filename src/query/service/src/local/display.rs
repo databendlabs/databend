@@ -14,12 +14,13 @@
 
 use std::fmt::Write;
 use std::str::FromStr;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_ast::ast::Statement;
 use common_base::base::tokio;
 use common_base::base::tokio::io::AsyncWriteExt;
-use common_base::base::tokio::select;
 use common_base::base::ProgressValues;
 use common_exception::Result;
 use common_expression::block_debug::box_render;
@@ -29,6 +30,7 @@ use common_expression::SendableDataBlockStream;
 use common_formats::FileFormatOptionsExt;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
+use common_sql::plans::Plan;
 use common_storages_fuse::TableContext;
 use futures::StreamExt;
 use indicatif::HumanBytes;
@@ -56,13 +58,12 @@ pub struct FormatDisplay<'a> {
     // whether replace '\n' with '\\n',
     // disable in explain/show create stmts or user config setting false
     replace_newline: bool,
+    plan: Plan,
     schema: DataSchemaRef,
     stream: SendableDataBlockStream,
 
     rows: usize,
-    progress: Option<ProgressBar>,
     start: Instant,
-    stats: Option<QueryProgress>,
 }
 
 impl<'a> FormatDisplay<'a> {
@@ -71,7 +72,7 @@ impl<'a> FormatDisplay<'a> {
         settings: &'a Settings,
         stmt: Statement,
         start: Instant,
-        schema: DataSchemaRef,
+        plan: Plan,
         stream: SendableDataBlockStream,
     ) -> Self {
         let replace_newline = !if settings.replace_newline {
@@ -80,27 +81,25 @@ impl<'a> FormatDisplay<'a> {
             replace_newline_in_box_display(&stmt)
         };
 
+        let schema = plan.schema();
         Self {
             settings,
             stmt,
+            plan,
             schema,
             stream,
             replace_newline,
             rows: 0,
-            progress: None,
             start,
-            stats: None,
             ctx,
         }
     }
 }
 
 impl<'a> FormatDisplay<'a> {
-    async fn display_progress(&mut self, pg: &QueryProgress) {
-        if self.settings.show_progress {
-            let pgo = self.progress.take();
-            self.progress = Some(display_read_progress(pgo, pg));
-        }
+    async fn display_progress(progress_bar: &mut Option<ProgressBar>, pg: &QueryProgress) {
+        let pgo = progress_bar.take();
+        *progress_bar = Some(display_read_progress(pgo, pg));
     }
 
     async fn display_table(&mut self) -> Result<()> {
@@ -113,54 +112,100 @@ impl<'a> FormatDisplay<'a> {
         let mut error = None;
 
         const TICK_MS: usize = 20;
-
-        let duration = std::time::Duration::from_millis(TICK_MS as u64);
-        let mut blocks = Vec::new();
+        const MAX_WAIT_MS: usize = 500;
+        const MIN_PERCENT_PROGRESS: usize = 3;
 
         let total_scan_value = self.ctx.get_total_scan_value();
 
-        async fn get_display_progress<'a>(
-            display: &mut FormatDisplay<'a>,
+        async fn get_display_progress(
+            is_final: bool,
+            current_scan_value: &mut ProgressValues,
+            wait_times: &mut usize,
+            ctx: &Arc<QueryContext>,
+            bar: &mut Option<ProgressBar>,
             total_scan_value: &ProgressValues,
-        ) {
-            let current_scan_value = display.ctx.get_scan_progress_value();
+        ) -> Option<QueryProgress> {
+            let progress = ctx.get_scan_progress_value();
 
-            let progress = QueryProgress {
+            if !is_final
+                && progress.bytes - current_scan_value.bytes
+                    < total_scan_value.bytes * MIN_PERCENT_PROGRESS / 100
+                && *wait_times < MAX_WAIT_MS / TICK_MS
+            {
+                *wait_times += 1;
+                return None;
+            }
+
+            let pg = QueryProgress {
                 total_rows: total_scan_value.rows,
                 total_bytes: total_scan_value.bytes,
 
-                read_rows: current_scan_value.rows,
-                read_bytes: current_scan_value.bytes,
+                read_rows: progress.rows,
+                read_bytes: progress.bytes,
                 write_rows: 0,
                 write_bytes: 0,
             };
-            display.display_progress(&progress).await;
+            FormatDisplay::display_progress(bar, &pg).await;
+            Some(pg)
         }
 
         let mut rows = 0;
-        loop {
-            select! {
-                item = self.stream.next() => {
-                    match item {
-                        Some(Ok(datablock)) => {
-                            rows += datablock.num_rows();
-                            blocks.push(datablock);
-                        }
-                        None => break,
-                        Some(Err(err)) => {
-                            error = Some(err);
-                            break;
-                        },
-                    }
+        let is_finished = Arc::new(AtomicBool::new(false));
+        let is_finished_clone = is_finished.clone();
+
+        let ctx = self.ctx.clone();
+
+        let handle = tokio::spawn(async move {
+            let mut wait_times = 0;
+            let mut current_scan_value = ctx.get_scan_progress_value();
+
+            let mut interval =
+                tokio::time::interval(tokio::time::Duration::from_millis(TICK_MS as u64));
+
+            let mut bar = None;
+            while !is_finished.load(Ordering::SeqCst) {
+                interval.tick().await;
+                let _ = get_display_progress(
+                    false,
+                    &mut current_scan_value,
+                    &mut wait_times,
+                    &ctx,
+                    &mut bar,
+                    &total_scan_value,
+                )
+                .await;
+            }
+            let stats = get_display_progress(
+                true,
+                &mut current_scan_value,
+                &mut wait_times,
+                &ctx,
+                &mut bar,
+                &total_scan_value,
+            )
+            .await;
+
+            (stats, bar)
+        });
+
+        let mut blocks = Vec::new();
+        while let Some(item) = self.stream.next().await {
+            match item {
+                Ok(datablock) => {
+                    rows += datablock.num_rows();
+                    blocks.push(datablock);
                 }
-                _ = tokio::time::sleep(duration) => {
-                    get_display_progress(self, &total_scan_value).await;
+                Err(err) => {
+                    error = Some(err);
+                    break;
                 }
             }
         }
-        get_display_progress(self, &total_scan_value).await;
 
-        if let Some(pb) = self.progress.take() {
+        is_finished_clone.store(true, Ordering::SeqCst);
+
+        let (stats, mut bar) = handle.await.unwrap();
+        if let Some(pb) = bar.take() {
             pb.finish_and_clear();
         }
 
@@ -181,18 +226,20 @@ impl<'a> FormatDisplay<'a> {
         if let Some(err) = error {
             eprintln!("error happens after fetched {} rows: {}", rows, err);
         }
+
+        self.display_stats(stats).await;
         Ok(())
     }
 
-    async fn display_stats(&mut self) {
+    async fn display_stats(&mut self, mut stats: Option<QueryProgress>) {
         if !self.settings.show_stats {
             return;
         }
 
-        if let Some(ref mut stats) = self.stats {
+        if let Some(ref mut stats) = stats {
             stats.normalize();
 
-            let (rows, kind) = if matches!(self.stmt, Statement::Update(_)) {
+            let (rows, kind) = if !self.plan.has_result_set() {
                 (stats.write_rows, "written")
             } else {
                 (self.rows, "result")
@@ -246,7 +293,6 @@ impl<'a> ChunkDisplay for FormatDisplay<'a> {
             OutputFormat::Null => {}
             OutputFormat::Table => {
                 self.display_table().await?;
-                self.display_stats().await;
             }
             _ => self.display_common_formats().await?,
         }

@@ -25,11 +25,11 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::StringType;
 use common_expression::types::ValueType;
-use common_expression::DataSchemaRef;
 use common_expression::SendableDataBlockStream;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeSet;
+use common_sql::plans::Plan;
 use common_sql::Planner;
 use futures_util::StreamExt;
 use rustyline::config::Builder;
@@ -122,12 +122,7 @@ impl SessionExecutor {
     async fn query(
         session: &Arc<Session>,
         sql: &str,
-    ) -> Result<(
-        SendableDataBlockStream,
-        Arc<QueryContext>,
-        DataSchemaRef,
-        Statement,
-    )> {
+    ) -> Result<(SendableDataBlockStream, Arc<QueryContext>, Plan, Statement)> {
         let context = session.create_query_context().await?;
         let mut planner = Planner::new(context.clone());
         let (plan, extras) = planner.plan_sql(sql).await?;
@@ -137,7 +132,7 @@ impl SessionExecutor {
         Ok((
             interpreter.execute(context).await?,
             ctx,
-            plan.schema(),
+            plan,
             extras.statement,
         ))
     }
@@ -299,9 +294,9 @@ impl SessionExecutor {
 
         let start = Instant::now();
 
-        let (stream, ctx, schema, stmt) = Self::query(&self.session, query).await?;
+        let (stream, ctx, plan, stmt) = Self::query(&self.session, query).await?;
 
-        let mut displayer = FormatDisplay::new(ctx, &self.settings, stmt, start, schema, stream);
+        let mut displayer = FormatDisplay::new(ctx, &self.settings, stmt, start, plan, stream);
         displayer.display().await?;
 
         Ok(false)
