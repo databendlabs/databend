@@ -66,17 +66,13 @@ impl UploadToStageArgs {
 
     // read_arg parses the http request to retrieve the arguments. In the before, we use
     // argument like `stage_name` in the header, but having underscore in the header is
-    // not a good practice. So we change the argument to `stage-name` and `x-databend-stage-name`
-    // in the header, but we still need to support the old argument for backward compatibility.
+    // not a good practice. So we change the argument to `x-databend-stage-name` in the
+    // header, but we still need to support the old argument for backward compatibility.
     fn read_arg<'a>(req: &'a Request, name: &str) -> Option<&'a str> {
-        let mut arg = req.headers().get(name);
-        // if "stage-name" is not found, try "stage_name", which is for backward compatibility
+        let mut arg = req.headers().get(format!("x-databend-{}", name).as_str());
+        // if "x-databend-stage-name" is not found, try "stage_name", which is for backward compatibility
         if arg.is_none() {
             arg = req.headers().get(name.replace('-', "_").as_str());
-        }
-        // if both "stage-name" and "stage_name" are not found, try "X-Databend-Stage-Name"
-        if arg.is_none() {
-            arg = req.headers().get(format!("x-databend-{}", name).as_str());
         }
         arg.and_then(|v| v.to_str().ok())
     }

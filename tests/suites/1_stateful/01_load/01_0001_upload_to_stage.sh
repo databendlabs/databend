@@ -8,7 +8,7 @@ echo "drop stage if exists s2;" | $MYSQL_CLIENT_CONNECT
 echo "CREATE STAGE if not exists s2;" | $MYSQL_CLIENT_CONNECT
 echo "list @s2" | $MYSQL_CLIENT_CONNECT
 
-# both stage_name and stage-name is allowed
+# both stage_name and x-databend-stage-name is allowed
 curl -u root: -XPUT -H "stage_name:s2" -F "upload=@${CURDIR}/books.csv" "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/upload_to_stage" > /dev/null 2>&1
 curl -u root: -XPUT -H "x-databend-stage-name:s2" -H "relative_path:test" -F "upload=@${CURDIR}/books.csv" "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/upload_to_stage" > /dev/null 2>&1
 
