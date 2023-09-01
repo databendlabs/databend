@@ -121,16 +121,15 @@ dependencies = [
 
 [[package]]
 name = "anstream"
-version = "0.3.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ca84f3628370c59db74ee214b3263d58f9aadd9b4fe7e711fd87dc452b7f163"
+checksum = "b1f58811cfac344940f1a400b6e6231ce35171f614f26439e80f8c1465c5cc0c"
 dependencies = [
  "anstyle",
  "anstyle-parse",
  "anstyle-query",
  "anstyle-wincon",
  "colorchoice",
- "is-terminal",
  "utf8parse",
 ]
 
@@ -160,9 +159,9 @@ dependencies = [
 
 [[package]]
 name = "anstyle-wincon"
-version = "1.0.1"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "180abfa45703aebe0093f79badacc01b8fd4ea2e35118747e5811127f926e188"
+checksum = "58f54d10c6dfa51283a066ceab3ec1ab78d13fae00aa49243a45e4571fb79dfd"
 dependencies = [
  "anstyle",
  "windows-sys 0.48.0",
@@ -1524,25 +1523,23 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.2.7"
+version = "4.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34d21f9bf1b425d2968943631ec91202fe5e837264063503708b83013f8fc938"
+checksum = "6a13b88d2c62ff462f88e4a121f17a82c1af05693a2f192b5c38d14de73c19f6"
 dependencies = [
  "clap_builder",
- "clap_derive 4.2.0",
- "once_cell",
+ "clap_derive 4.4.2",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.2.7"
+version = "4.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "914c8c79fb560f238ef6429439a30023c862f7a28e688c58f7203f12b29970bd"
+checksum = "2bb9faaa7c2ef94b2743a21f5a29e6f0010dff4caa69ac8e9d6cf8b6fa74da08"
 dependencies = [
  "anstream",
  "anstyle",
- "bitflags 1.3.2",
- "clap_lex 0.4.1",
+ "clap_lex 0.5.1",
  "strsim",
 ]
 
@@ -1561,9 +1558,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.2.0"
+version = "4.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f9644cd56d6b87dbe899ef8b053e331c0637664e9e21a33dfcdc36093f5c5c4"
+checksum = "0862016ff20d69b84ef8247369fabf5c008a7417002411897d40ee1f4532b873"
 dependencies = [
  "heck 0.4.1",
  "proc-macro2",
@@ -1582,9 +1579,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.4.1"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a2dd5a6fe8c6e3502f568a6353e5273bbb15193ad9a89e457b9970798efbea1"
+checksum = "cd7cc57abe963c6d3b9d8be5b06ba7c8957a930305ca90304f24ef040aa6f961"
 
 [[package]]
 name = "clipboard-win"
@@ -1852,7 +1849,7 @@ name = "common-config"
 version = "0.1.0"
 dependencies = [
  "chrono-tz",
- "clap 3.2.23",
+ "clap 4.4.2",
  "common-base",
  "common-building",
  "common-exception",
@@ -2257,7 +2254,7 @@ name = "common-meta-process"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 3.2.23",
+ "clap 4.4.2",
  "common-meta-app",
  "common-meta-kvapi",
  "common-meta-raft-store",
@@ -3610,7 +3607,7 @@ dependencies = [
  "async-backtrace",
  "background-service",
  "chrono",
- "clap 3.2.23",
+ "clap 4.4.2",
  "comfy-table 6.1.4",
  "common-base",
  "common-config",
@@ -3658,7 +3655,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backon",
- "clap 3.2.23",
+ "clap 4.4.2",
  "common-arrow",
  "common-base",
  "common-building",
@@ -3851,7 +3848,7 @@ name = "databend-sqllogictests"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "clap 4.2.7",
+ "clap 4.4.2",
  "common-exception",
  "env_logger",
  "futures-util",
@@ -6762,7 +6759,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7b603516767d1ab23d0de09d023e62966c3322f7148297c35cf3d97aa8b37fa"
 dependencies = [
- "clap 4.2.7",
+ "clap 4.4.2",
  "termcolor",
  "threadpool",
 ]
@@ -7711,7 +7708,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "byte-unit",
- "clap 4.2.7",
+ "clap 4.4.2",
  "derive_more",
  "futures",
  "macros",
@@ -9977,7 +9974,7 @@ dependencies = [
  "async-backtrace",
  "base64 0.21.0",
  "chrono",
- "clap 3.2.23",
+ "clap 4.4.2",
  "common-base",
  "common-config",
  "common-exception",

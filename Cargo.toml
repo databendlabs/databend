@@ -142,7 +142,7 @@ thiserror = { version = "1" }
 semver = "1.0.14"
 
 # CLI
-clap = { version = "3.2.22", features = ["derive", "env"] }
+clap = { version = "4.4.2", features = ["derive", "env"] }
 
 # server
 tonic = { version = "0.9.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }

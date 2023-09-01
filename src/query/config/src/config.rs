@@ -21,6 +21,7 @@ use std::str::FromStr;
 
 use clap::Args;
 use clap::Parser;
+use clap::Subcommand;
 use clap::ValueEnum;
 use common_base::base::mask_string;
 use common_exception::ErrorCode;
@@ -84,8 +85,8 @@ const CATALOG_HIVE: &str = "hive";
 #[serde(default)]
 pub struct Config {
     /// Run a command and quit
-    #[clap(long, default_value_t)]
-    pub cmd: String,
+    #[command(subcommand)]
+    pub cmd: Commands,
 
     #[clap(long, short = 'c', default_value_t)]
     pub config_file: String,
@@ -133,6 +134,19 @@ pub struct Config {
     /// when converted from inner config, all catalog configurations will store in `catalogs`
     #[clap(skip)]
     pub catalogs: HashMap<String, CatalogConfig>,
+}
+
+#[derive(Subcommand, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+pub enum Commands {
+    None,
+    Version,
+    Local,
+}
+
+impl Default for Commands {
+    fn default() -> Self {
+        Commands::None
+    }
 }
 
 impl Default for Config {
@@ -1280,7 +1294,7 @@ pub struct QueryConfig {
     #[clap(long, default_value = "0")]
     pub max_server_memory_usage: u64,
 
-    #[clap(long, parse(try_from_str), default_value = "false")]
+    #[clap(long, value_parser = clap::value_parser!(bool), default_value = "false")]
     pub max_memory_limit_enabled: bool,
 
     #[deprecated(note = "clickhouse tcp support is deprecated")]
@@ -1364,7 +1378,7 @@ pub struct QueryConfig {
     pub rpc_client_timeout_secs: u64,
 
     /// Table engine memory enabled
-    #[clap(long, parse(try_from_str), default_value = "true")]
+    #[clap(long, value_parser = clap::value_parser!(bool), default_value = "true")]
     pub table_engine_memory_enabled: bool,
 
     #[clap(long, default_value = "5000")]

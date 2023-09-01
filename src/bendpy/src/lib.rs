@@ -29,6 +29,7 @@ use common_license::license_manager::OssLicenseManager;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_embedded::MetaEmbedded;
+use databend_query::clusters::ClusterDiscovery;
 use databend_query::GlobalServices;
 use pyo3::prelude::*;
 use utils::RUNTIME;
@@ -47,11 +48,14 @@ fn databend(_py: Python, m: &PyModule) -> PyResult<()> {
         MetaEmbedded::init_global_meta_store(".databend/_meta".to_string())
             .await
             .unwrap();
-        GlobalServices::init(conf).await.unwrap();
-    });
+        GlobalServices::init(conf.clone()).await.unwrap();
 
-    // init oss license manager
-    OssLicenseManager::init().unwrap();
+        // init oss license manager
+        OssLicenseManager::init().unwrap();
+        ClusterDiscovery::instance()
+            .register_to_metastore(&conf)
+            .await?;
+    });
 
     m.add_class::<context::PySessionContext>()?;
     Ok(())

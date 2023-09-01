@@ -12,29 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod config;
+mod display;
 mod executor;
 pub(crate) mod helper;
 
 use std::env;
-use std::time::Instant;
 
 use common_config::Config;
 use common_config::InnerConfig;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_license::license_manager::LicenseManager;
 use common_license::license_manager::OssLicenseManager;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_embedded::MetaEmbedded;
-use tokio_stream::StreamExt;
 
-use crate::interpreters::InterpreterFactory;
-use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
-use crate::sql::Planner;
+use crate::clusters::ClusterDiscovery;
 use crate::GlobalServices;
 
 pub async fn query_local() -> Result<()> {
@@ -51,13 +45,16 @@ pub async fn query_local() -> Result<()> {
         .await
         .unwrap();
 
-    GlobalServices::init(conf).await?;
+    GlobalServices::init(conf.clone()).await?;
     // init oss license manager
     OssLicenseManager::init().unwrap();
 
-    let now = Instant::now();
+    // Cluster register.
+    ClusterDiscovery::instance()
+        .register_to_metastore(&conf)
+        .await?;
 
     let mut executor = executor::SessionExecutor::try_new(true).await?;
-    executor.handle_repl().await;
+    executor.handle().await;
     Ok(())
 }

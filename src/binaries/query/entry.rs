@@ -18,6 +18,7 @@ use background_service::get_background_service_handler;
 use common_base::mem_allocator::GlobalAllocator;
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_base::set_alloc_error_hook;
+use common_config::Commands;
 use common_config::InnerConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
@@ -42,22 +43,17 @@ use databend_query::GlobalServices;
 use log::info;
 
 pub async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
-    if conf.cmd.is_empty() {
+    if matches!(conf.cmd, Commands::None) {
         return Ok(false);
     }
 
-    match conf.cmd.as_str() {
-        "ver" => {
+    match conf.cmd {
+        Commands::None => return Ok(false),
+        Commands::Version => {
             println!("version: {}", *QUERY_SEMVER);
             println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
         }
-        "local" => local::query_local().await?,
-        _ => {
-            eprintln!("Invalid cmd: {}", conf.cmd);
-            eprintln!("Available cmds:");
-            eprintln!("  --cmd ver");
-            eprintln!("    Print version and the min compatible databend-meta version");
-        }
+        Commands::Local => local::query_local().await?,
     }
 
     Ok(true)

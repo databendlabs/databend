@@ -12,34 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::fmt::Write;
 use std::sync::Arc;
 
-use anyhow::Result;
-use comfy_table::Cell;
-use comfy_table::CellAlignment;
-use comfy_table::Table;
-use common_base::base::ProgressValues;
+use common_ast::ast::Statement;
 use common_base::base::tokio;
+use common_base::base::tokio::select;
+use common_base::base::ProgressValues;
+use common_exception::Result;
+use common_expression::block_debug::box_render;
 use common_expression::DataSchemaRef;
 use common_expression::SendableDataBlockStream;
-use databend_driver::SchemaRef;
+use common_storages_fuse::TableContext;
 use futures::StreamExt;
 use indicatif::HumanBytes;
 use indicatif::ProgressBar;
 use indicatif::ProgressState;
 use indicatif::ProgressStyle;
 use rustyline::highlight::Highlighter;
-use terminal_size::terminal_size;
-use terminal_size::Width;
 use tokio::time::Instant;
-use unicode_segmentation::UnicodeSegmentation;
 
-use super::config::OutputFormat;
 use super::config::Settings;
-use super::executor::QueryKind;
-use super::helper::CliHelper;
+use crate::local::helper::CliHelper;
 use crate::sessions::QueryContext;
 
 #[async_trait::async_trait]
@@ -49,42 +43,47 @@ pub trait ChunkDisplay {
 }
 
 pub struct FormatDisplay<'a> {
+    ctx: Arc<QueryContext>,
     settings: &'a Settings,
-    query: &'a str,
-    kind: QueryKind,
+    stmt: Statement,
     // whether replace '\n' with '\\n',
     // disable in explain/show create stmts or user config setting false
     replace_newline: bool,
     schema: DataSchemaRef,
-    ctx: Arc<QueryContext>,
-    data: SendableDataBlockStream,
+    stream: SendableDataBlockStream,
 
     rows: usize,
     progress: Option<ProgressBar>,
     start: Instant,
-    stats: Option<ProgressValues>,
+    stats: Option<QueryProgress>,
 }
 
 impl<'a> FormatDisplay<'a> {
     pub fn new(
+        ctx: Arc<QueryContext>,
         settings: &'a Settings,
-        query: &'a str,
-        replace_newline: bool,
+        stmt: Statement,
         start: Instant,
-        schema: SchemaRef,
-        data: RowProgressIterator,
+        schema: DataSchemaRef,
+        stream: SendableDataBlockStream,
     ) -> Self {
+        let replace_newline = !if settings.replace_newline {
+            false
+        } else {
+            replace_newline_in_box_display(&stmt)
+        };
+
         Self {
             settings,
-            query,
-            kind: QueryKind::from(query),
-            replace_newline,
+            stmt,
             schema,
-            data,
+            stream,
+            replace_newline,
             rows: 0,
             progress: None,
             start,
             stats: None,
+            ctx,
         }
     }
 }
@@ -98,65 +97,113 @@ impl<'a> FormatDisplay<'a> {
     }
 
     async fn display_table(&mut self) -> Result<()> {
-        let mut rows = Vec::new();
+        if self.settings.display_pretty_sql {
+            let format_sql = self.stmt.to_string();
+            let format_sql = CliHelper::new().highlight(&format_sql, format_sql.len());
+            println!("\n{}\n", format_sql);
+        }
+
         let mut error = None;
 
         const TICK_MS: usize = 20;
-        const MAX_WAIT_MS: usize = 500;
-        const MIN_PERCENT_PROGRESS: usize = 3;
 
-        let mut interval = std::time::Duration::from_millis(TICK_MS as u64));
+        let duration = std::time::Duration::from_millis(TICK_MS as u64);
+        let mut blocks = Vec::new();
 
-	let mut blocks = Vec::new();
+        let total_scan_value = self.ctx.get_total_scan_value();
+
+        async fn get_display_progress<'a>(
+            display: &mut FormatDisplay<'a>,
+            total_scan_value: &ProgressValues,
+        ) {
+            let current_scan_value = display.ctx.get_scan_progress_value();
+
+            let progress = QueryProgress {
+                total_rows: total_scan_value.rows,
+                total_bytes: total_scan_value.bytes,
+
+                read_rows: current_scan_value.rows,
+                read_bytes: current_scan_value.bytes,
+                write_rows: 0,
+                write_bytes: 0,
+            };
+            display.display_progress(&progress).await;
+        }
+
+        let mut rows = 0;
         loop {
             select! {
-                item = self.data.next() => {
-			blocks.push(item);
+                item = self.stream.next() => {
+                    match item {
+                        Some(Ok(datablock)) => {
+                            rows += datablock.num_rows();
+                            blocks.push(datablock);
+                        }
+                        None => break,
+                        Some(Err(err)) => {
+                            error = Some(err);
+                            break;
+                        },
+                    }
                 }
-                _ = tokio::time::sleep(interval) => {
-
-                }
-            }
-        }
-
-        while let Some(datablock) = self.data.next().await {
-            match line {
-                Ok(RowWithProgress::Row(row)) => {
-                    self.rows += 1;
-                    rows.push(row);
-                }
-                Ok(RowWithProgress::Progress(pg)) => {
-                    self.display_progress(&pg).await;
-                    self.stats = Some(pg);
-                }
-                Err(err) => {
-                    error = Some(err);
-                    break;
+                _ = tokio::time::sleep(duration) => {
+                    get_display_progress(self, &total_scan_value).await;
                 }
             }
         }
+        get_display_progress(self, &total_scan_value).await;
+
         if let Some(pb) = self.progress.take() {
             pb.finish_and_clear();
         }
 
-        if !rows.is_empty() {
+        if !blocks.is_empty() {
             println!(
                 "{}",
-                create_table(
-                    self.schema.clone(),
-                    &rows,
-                    self.replace_newline,
+                box_render(
+                    &self.schema,
+                    &blocks,
                     self.settings.max_display_rows,
                     self.settings.max_width,
-                    self.settings.max_col_width
+                    self.settings.max_col_width,
+                    self.replace_newline,
                 )?
             );
         }
 
         if let Some(err) = error {
-            eprintln!("error happens after fetched {} rows: {}", rows.len(), err);
+            eprintln!("error happens after fetched {} rows: {}", rows, err);
         }
         Ok(())
+    }
+
+    async fn display_stats(&mut self) {
+        if !self.settings.show_stats {
+            return;
+        }
+
+        if let Some(ref mut stats) = self.stats {
+            stats.normalize();
+
+            let (rows, kind) = if matches!(self.stmt, Statement::Update(_)) {
+                (stats.write_rows, "written")
+            } else {
+                (self.rows, "result")
+            };
+
+            let rows_str = if rows > 1 { "rows" } else { "row" };
+            eprintln!(
+                "{} {} {kind} in {:.3} sec. Processed {} rows, {} ({} rows/s, {}/s)",
+                rows,
+                rows_str,
+                self.start.elapsed().as_secs_f64(),
+                humanize_count(stats.total_rows as f64),
+                HumanBytes(stats.total_rows as u64),
+                humanize_count(stats.total_rows as f64 / self.start.elapsed().as_secs_f64()),
+                HumanBytes((stats.total_bytes as f64 / self.start.elapsed().as_secs_f64()) as u64),
+            );
+            eprintln!();
+        }
     }
 }
 
@@ -185,16 +232,6 @@ fn format_read_progress(progress: &QueryProgress, elapsed: f64) -> String {
     )
 }
 
-pub fn format_write_progress(progress: &QueryProgress, elapsed: f64) -> String {
-    format!(
-        "Written {} ({} rows/s), {} ({}/s)",
-        humanize_count(progress.write_rows as f64),
-        humanize_count(progress.write_rows as f64 / elapsed),
-        HumanBytes(progress.write_bytes as u64),
-        HumanBytes((progress.write_bytes as f64 / elapsed) as u64)
-    )
-}
-
 fn display_read_progress(pb: Option<ProgressBar>, current: &QueryProgress) -> ProgressBar {
     let pb = pb.unwrap_or_else(|| {
         let pbn = ProgressBar::new(current.total_bytes as u64);
@@ -214,365 +251,6 @@ fn display_read_progress(pb: Option<ProgressBar>, current: &QueryProgress) -> Pr
     pb.set_position(current.read_bytes as u64);
     pb.set_message(format_read_progress(current, pb.elapsed().as_secs_f64()));
     pb
-}
-
-// compute render widths
-fn compute_render_widths(
-    schema: &SchemaRef,
-    max_width: usize,
-    max_col_width: usize,
-    results: &Vec<Vec<String>>,
-) -> (Vec<usize>, Vec<i32>) {
-    let column_count = schema.fields().len();
-    let mut widths = Vec::with_capacity(column_count);
-    let mut total_length = 1;
-
-    for field in schema.fields() {
-        // head_name = field_name + "\n" + field_data_type
-        let col_length = field.name.len().max(field.data_type.to_string().len());
-        widths.push(col_length + 3);
-    }
-
-    for values in results {
-        for (idx, value) in values.iter().enumerate() {
-            widths[idx] = widths[idx].max(value.len() + 3);
-        }
-    }
-
-    for width in &widths {
-        // each column has a space at the beginning, and a space plus a pipe (|) at the end
-        // hence + 3
-        total_length += width;
-    }
-
-    let mut pruned_columns = HashSet::new();
-    if total_length > max_width {
-        for w in &mut widths {
-            if *w > max_col_width {
-                let max_diff = *w - max_col_width;
-                if total_length - max_diff <= max_width {
-                    *w -= total_length - max_width;
-
-                    total_length = max_width;
-                    break;
-                } else {
-                    *w = max_col_width;
-                    total_length -= max_diff;
-                }
-            }
-        }
-        if total_length > max_width {
-            // the total length is still too large
-            // we need to remove columns!
-            // first, we add 6 characters to the total length
-            // this is what we need to add the "..." in the middle
-            total_length += 6;
-            // now select columns to prune
-            // we select columns in zig-zag order starting from the middle
-            // e.g. if we have 10 columns, we remove #5, then #4, then #6, then #3, then #7, etc
-            let mut offset: i32 = 0;
-            while total_length > max_width {
-                let c = column_count as i32 / 2 + offset;
-                if c < 0 {
-                    // c < 0 means no column can display
-                    return ([3].to_vec(), [-1].to_vec());
-                }
-                total_length -= widths[c as usize];
-                pruned_columns.insert(c);
-                if offset >= 0 {
-                    offset = -offset - 1;
-                } else {
-                    offset = -offset;
-                }
-            }
-        }
-    }
-    let mut added_split_column = false;
-    let mut new_widths = vec![];
-    let mut column_map = vec![];
-    for (c, item) in widths.iter().enumerate().take(column_count) {
-        if !pruned_columns.contains(&(c as i32)) {
-            column_map.push((c).try_into().unwrap());
-            new_widths.push(*item);
-        } else if !added_split_column {
-            // "..."
-            column_map.push(-1);
-            new_widths.push(3);
-            added_split_column = true;
-        }
-    }
-
-    (new_widths, column_map)
-}
-
-/// Convert a series of rows into a table
-fn create_table(
-    schema: SchemaRef,
-    results: &[Row],
-    replace_newline: bool,
-    max_rows: usize,
-    mut max_width: usize,
-    max_col_width: usize,
-) -> Result<Table> {
-    let mut table = Table::new();
-    table.load_preset("││──├─┼┤│    ──┌┐└┘");
-    if results.is_empty() {
-        return Ok(table);
-    }
-
-    let mut widths = vec![];
-    let mut column_map = vec![];
-
-    if max_width == 0 {
-        let size = terminal_size();
-        if let Some((Width(w), _)) = size {
-            max_width = w as usize;
-        }
-    }
-
-    let row_count: usize = results.len();
-    let mut rows_to_render = row_count.min(max_rows);
-    if !replace_newline {
-        max_width = usize::MAX;
-        rows_to_render = row_count;
-    } else if row_count <= max_rows + 3 {
-        // hiding rows adds 3 extra rows
-        // so hiding rows makes no sense if we are only slightly over the limit
-        // if we are 1 row over the limit hiding rows will actually increase the number of lines we display!
-        // in this case render all the rows
-        // 	rows_to_render = row_count;
-        rows_to_render = row_count;
-    }
-
-    let (top_rows, bottom_rows) = if rows_to_render == row_count {
-        (row_count, 0usize)
-    } else {
-        let top_rows = rows_to_render / 2 + (rows_to_render % 2 != 0) as usize;
-        (top_rows, rows_to_render - top_rows)
-    };
-
-    let mut res_vec: Vec<Vec<String>> = vec![];
-    for row in results.iter().take(top_rows) {
-        let values = row.values();
-        let mut v = vec![];
-        for value in values {
-            if replace_newline {
-                v.push(value.to_string().replace('\n', "\\n"));
-            } else {
-                v.push(value.to_string());
-            }
-        }
-        res_vec.push(v);
-    }
-
-    if bottom_rows != 0 {
-        for row in results.iter().skip(row_count - bottom_rows) {
-            let values = row.values();
-            let mut v = vec![];
-            for value in values {
-                if replace_newline {
-                    v.push(value.to_string().replace('\n', "\\n"));
-                } else {
-                    v.push(value.to_string());
-                }
-            }
-            res_vec.push(v);
-        }
-    }
-
-    // "..." take up three lengths
-    if max_width > 0 {
-        (widths, column_map) =
-            compute_render_widths(&schema, max_width, max_col_width + 3, &res_vec);
-    }
-
-    let column_count = schema.fields().len();
-    let mut header = Vec::with_capacity(column_count);
-    let mut aligns = Vec::with_capacity(column_count);
-
-    render_head(
-        schema,
-        &mut widths,
-        &mut column_map,
-        &mut header,
-        &mut aligns,
-    );
-    table.set_header(header);
-
-    // render the top rows
-    if column_map.is_empty() {
-        for values in res_vec.iter().take(top_rows) {
-            let mut cells = Vec::new();
-            for (idx, align) in aligns.iter().enumerate() {
-                let cell = Cell::new(&values[idx]).set_alignment(*align);
-                cells.push(cell);
-            }
-            table.add_row(cells);
-        }
-    } else {
-        for values in res_vec.iter().take(top_rows) {
-            let mut cells = Vec::new();
-            for (idx, col_index) in column_map.iter().enumerate() {
-                if *col_index == -1 {
-                    let cell = Cell::new("...").set_alignment(CellAlignment::Center);
-                    cells.push(cell);
-                } else {
-                    let mut value = values[*col_index as usize].clone();
-                    if value.len() + 3 > widths[idx] {
-                        let element_size = if widths[idx] >= 6 { widths[idx] - 6 } else { 0 };
-                        value = String::from_utf8(
-                            value
-                                .graphemes(true)
-                                .take(element_size)
-                                .flat_map(|g| g.as_bytes().iter())
-                                .copied() // copied converts &u8 into u8
-                                .chain(b"...".iter().copied())
-                                .collect::<Vec<u8>>(),
-                        )
-                        .unwrap();
-                    }
-                    let cell = Cell::new(value).set_alignment(aligns[idx]);
-                    cells.push(cell);
-                }
-            }
-
-            table.add_row(cells);
-        }
-    }
-
-    // render the bottom rows
-    if bottom_rows != 0 {
-        // first render the divider
-        let mut cells: Vec<Cell> = Vec::new();
-        let display_res_len = res_vec.len();
-        for align in aligns.iter() {
-            let cell = Cell::new("·").set_alignment(*align);
-            cells.push(cell);
-        }
-
-        for _ in 0..3 {
-            table.add_row(cells.clone());
-        }
-        if column_map.is_empty() {
-            for values in res_vec.iter().skip(display_res_len - bottom_rows) {
-                let mut cells = Vec::new();
-                for (idx, align) in aligns.iter().enumerate() {
-                    let cell = Cell::new(&values[idx]).set_alignment(*align);
-                    cells.push(cell);
-                }
-                table.add_row(cells);
-            }
-        } else {
-            for values in res_vec.iter().skip(display_res_len - bottom_rows) {
-                let mut cells = Vec::new();
-                for (idx, col_index) in column_map.iter().enumerate() {
-                    if *col_index == -1 {
-                        let cell = Cell::new("...").set_alignment(CellAlignment::Center);
-                        cells.push(cell);
-                    } else {
-                        let mut value = values[*col_index as usize].clone();
-                        if value.len() + 3 > widths[idx] {
-                            let element_size = if widths[idx] >= 6 { widths[idx] - 6 } else { 0 };
-                            value = String::from_utf8(
-                                value
-                                    .graphemes(true)
-                                    .take(element_size)
-                                    .flat_map(|g| g.as_bytes().iter())
-                                    .copied() // copied converts &u8 into u8
-                                    .chain(b"...".iter().copied())
-                                    .collect::<Vec<u8>>(),
-                            )
-                            .unwrap();
-                        }
-                        let cell = Cell::new(value).set_alignment(aligns[idx]);
-                        cells.push(cell);
-                    }
-                }
-                table.add_row(cells);
-            }
-        }
-
-        let row_count_str = format!("{} rows", row_count);
-        let show_count_str = format!("({} shown)", top_rows + bottom_rows);
-        table.add_row(vec![Cell::new(row_count_str).set_alignment(aligns[0])]);
-        table.add_row(vec![Cell::new(show_count_str).set_alignment(aligns[0])]);
-    }
-
-    Ok(table)
-}
-
-fn render_head(
-    schema: SchemaRef,
-    widths: &mut [usize],
-    column_map: &mut Vec<i32>,
-    header: &mut Vec<Cell>,
-    aligns: &mut Vec<CellAlignment>,
-) {
-    if column_map.is_empty() {
-        for field in schema.fields() {
-            let cell = Cell::new(format!("{}\n{}", field.name, field.data_type))
-                .set_alignment(CellAlignment::Center);
-
-            header.push(cell);
-
-            if field.data_type.is_numeric() {
-                aligns.push(CellAlignment::Right);
-            } else {
-                aligns.push(CellAlignment::Left);
-            }
-        }
-    } else {
-        let fields = schema.fields();
-        for (idx, col_index) in column_map.iter().enumerate() {
-            if *col_index == -1 {
-                let cell = Cell::new("···").set_alignment(CellAlignment::Center);
-                header.push(cell);
-                aligns.push(CellAlignment::Center);
-            } else {
-                let field = &fields[*col_index as usize];
-                let width = widths[idx];
-                let mut field_name = field.name.to_string();
-                let mut field_data_type = field.data_type.to_string();
-                let element_size = if width >= 6 { width - 6 } else { 0 };
-
-                if field_name.len() + 3 > width {
-                    field_name = String::from_utf8(
-                        field_name
-                            .graphemes(true)
-                            .take(element_size)
-                            .flat_map(|g| g.as_bytes().iter())
-                            .copied() // copied converts &u8 into u8
-                            .chain(b"...".iter().copied())
-                            .collect::<Vec<u8>>(),
-                    )
-                    .unwrap();
-                }
-                if field_data_type.len() + 3 > width {
-                    field_data_type = String::from_utf8(
-                        field_name
-                            .graphemes(true)
-                            .take(element_size)
-                            .flat_map(|g| g.as_bytes().iter())
-                            .copied() // copied converts &u8 into u8
-                            .chain(b"...".iter().copied())
-                            .collect::<Vec<u8>>(),
-                    )
-                    .unwrap();
-                }
-
-                let head_name = format!("{}\n{}", field_name, field_data_type);
-                let cell = Cell::new(head_name).set_alignment(CellAlignment::Center);
-
-                header.push(cell);
-
-                if field.data_type.is_numeric() {
-                    aligns.push(CellAlignment::Right);
-                } else {
-                    aligns.push(CellAlignment::Left);
-                }
-            }
-        }
-    }
 }
 
 pub fn humanize_count(num: f64) -> String {
@@ -605,4 +283,37 @@ pub fn humanize_count(num: f64) -> String {
         * 1_f64;
     let unit = units[exponent as usize];
     format!("{}{}{}", negative, pretty_bytes, unit)
+}
+
+fn replace_newline_in_box_display(stmt: &Statement) -> bool {
+    !matches!(
+        stmt,
+        Statement::Explain { .. }
+            | Statement::ShowCreateCatalog(_)
+            | Statement::ShowCreateDatabase(_)
+            | Statement::ShowCreateTable(_)
+    )
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct QueryProgress {
+    pub total_rows: usize,
+    pub total_bytes: usize,
+
+    pub read_rows: usize,
+    pub read_bytes: usize,
+
+    pub write_rows: usize,
+    pub write_bytes: usize,
+}
+
+impl QueryProgress {
+    pub fn normalize(&mut self) {
+        if self.total_rows == 0 {
+            self.total_rows = self.read_rows;
+        }
+        if self.total_bytes == 0 {
+            self.total_bytes = self.read_bytes;
+        }
+    }
 }

@@ -13,15 +13,19 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Instant;
 
+use common_ast::ast::Statement;
 use common_ast::parser::token::TokenKind;
 use common_ast::parser::token::Tokenizer;
+use common_base::base::tokio;
+use common_base::base::tokio::time::Instant;
 use common_config::DATABEND_COMMIT_VERSION;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::StringType;
 use common_expression::types::ValueType;
+use common_expression::DataSchemaRef;
 use common_expression::SendableDataBlockStream;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::UserInfo;
@@ -35,8 +39,14 @@ use rustyline::history::DefaultHistory;
 use rustyline::CompletionType;
 use rustyline::Editor;
 
+use super::config::Config;
+use super::config::OutputFormat;
+use super::config::Settings;
+use super::display::ChunkDisplay;
+use super::display::FormatDisplay;
 use super::helper::CliHelper;
 use crate::interpreters::InterpreterFactory;
+use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -46,9 +56,8 @@ pub(crate) struct SessionExecutor {
     session: Arc<Session>,
     is_repl: bool,
 
+    settings: Settings,
     query: String,
-    in_comment_block: bool,
-
     keywords: Arc<Vec<String>>,
 }
 
@@ -57,7 +66,6 @@ static PROMPT_SQL: &str = "select name from system.tables union all select name 
 impl SessionExecutor {
     pub async fn try_new(is_repl: bool) -> Result<Self> {
         let mut keywords = Vec::with_capacity(1024);
-
         let session = SessionManager::instance()
             .create_session(SessionType::Local)
             .await
@@ -68,15 +76,26 @@ impl SessionExecutor {
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
         );
-
         session.set_authed_user(user, None).await.unwrap();
+
+        let config = Config::load();
+        let mut settings = Settings::default();
+        if is_repl {
+            settings.display_pretty_sql = true;
+            settings.show_progress = true;
+            settings.show_stats = true;
+            settings.output_format = OutputFormat::Table;
+        } else {
+            settings.output_format = OutputFormat::TSV;
+        }
+        settings.merge_config(config.settings);
 
         if is_repl {
             println!("Welcome to Databend, version {}.", *DATABEND_COMMIT_VERSION);
             println!();
 
             let rows = Self::query(&session, PROMPT_SQL).await;
-            if let Ok(mut rows) = rows {
+            if let Ok((mut rows, _, _, _)) = rows {
                 while let Some(row) = rows.next().await {
                     if let Ok(row) = row {
                         let num_rows = row.num_rows();
@@ -95,32 +114,41 @@ impl SessionExecutor {
         Ok(Self {
             session,
             is_repl,
+            settings,
             query: String::new(),
-            in_comment_block: false,
             keywords: Arc::new(keywords),
         })
     }
 
-    async fn query(session: &Arc<Session>, sql: &str) -> Result<SendableDataBlockStream> {
+    async fn query(
+        session: &Arc<Session>,
+        sql: &str,
+    ) -> Result<(
+        SendableDataBlockStream,
+        Arc<QueryContext>,
+        DataSchemaRef,
+        Statement,
+    )> {
         let context = session.create_query_context().await?;
         let mut planner = Planner::new(context.clone());
         let (plan, extras) = planner.plan_sql(sql).await?;
 
         let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
-        let has_result_set = plan.has_result_set();
-        interpreter.execute(context).await
+        let ctx = context.clone();
+        Ok((
+            interpreter.execute(context).await?,
+            ctx,
+            plan.schema(),
+            extras.statement,
+        ))
     }
 
-    async fn update(session: &Arc<Session>, sql: &str) -> Result<usize> {
-        let context = session.create_query_context().await?;
-        let mut planner = Planner::new(context.clone());
-        let (plan, extras) = planner.plan_sql(sql).await?;
-
-        let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
-        let mut stream = interpreter.execute(context.clone()).await?;
-        while let Some(_) = stream.next().await {}
-
-        Ok(context.get_write_progress_value().rows)
+    pub async fn handle(&mut self) {
+        if self.is_repl {
+            self.handle_repl().await;
+        } else {
+            self.handle_reader(tokio::io::stdin()).await;
+        }
     }
 
     pub async fn handle_repl(&mut self) {
@@ -171,6 +199,34 @@ impl SessionExecutor {
         let _ = rl.save_history(&get_history_path());
     }
 
+    pub async fn handle_reader(&mut self, r: tokio::io::Stdin) {
+        let start = Instant::now();
+
+        use tokio::io::AsyncBufReadExt;
+        let mut lines = tokio::io::BufReader::new(r).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let queries = self.append_query(&line);
+            for query in queries {
+                if let Err(e) = self.handle_query(false, &query).await {
+                    eprintln!("{}", e);
+                    return;
+                }
+            }
+        }
+
+        // if the last query is not finished with `;`, we need to execute it.
+        let query = self.query.trim().to_owned();
+        if !query.is_empty() {
+            self.query.clear();
+            if let Err(e) = self.handle_query(false, &query).await {
+                eprintln!("{}", e);
+            }
+        }
+        if self.settings.time {
+            println!("{:.3}", start.elapsed().as_secs_f64());
+        }
+    }
+
     pub fn append_query(&mut self, line: &str) -> Vec<String> {
         let line = line.trim();
         if line.is_empty() {
@@ -187,12 +243,11 @@ impl SessionExecutor {
         let mut tokenizer = Tokenizer::new(line);
         let mut in_comment = false;
         let mut start = 0;
-        let mut comment_block_start = 0;
 
         while let Some(Ok(token)) = tokenizer.next() {
             match token.kind {
                 TokenKind::SemiColon => {
-                    if in_comment || self.in_comment_block {
+                    if in_comment {
                         continue;
                     } else {
                         let mut sql = self.query.trim().to_owned();
@@ -212,7 +267,7 @@ impl SessionExecutor {
                     in_comment = false;
                 }
                 _ => {
-                    if !in_comment && !self.in_comment_block {
+                    if !in_comment {
                         self.query.push_str(&line[start..token.span.end]);
                     }
                 }
@@ -220,9 +275,6 @@ impl SessionExecutor {
             start = token.span.end;
         }
 
-        if self.in_comment_block {
-            self.query.push_str(&line[comment_block_start..]);
-        }
         queries
     }
 
@@ -232,37 +284,38 @@ impl SessionExecutor {
             return Ok(true);
         }
 
-        let start = Instant::now();
-        let kind = QueryKind::from(query);
-        match (kind, is_repl) {
-            (QueryKind::Update, false) => {
-                let affected = Self::update(&self.session, query).await?;
-                if is_repl {
-                    if affected > 0 {
-                        eprintln!(
-                            "{} rows affected in ({:.3} sec)",
-                            affected,
-                            start.elapsed().as_secs_f64()
-                        );
-                    } else {
-                        eprintln!("Processed in ({:.3} sec)", start.elapsed().as_secs_f64());
-                    }
-                    eprintln!();
-                }
-                Ok(false)
+        if is_repl && query.starts_with('.') {
+            let query = query
+                .trim_start_matches('.')
+                .split_whitespace()
+                .collect::<Vec<_>>();
+            if query.len() != 2 {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Control command error, must be syntax of `.cmd_name cmd_value`."
+                )));
             }
-            other => {
-                let replace_newline = replace_newline_in_box_display(query);
-                let mut stream = Self::query(&self.session, query).await?;
-
-                println!("execute {:?}", query);
-                Ok(false)
-            }
+            self.settings.inject_ctrl_cmd(query[0], query[1])?;
+            return Ok(false);
         }
+
+        let start = Instant::now();
+
+        let (stream, ctx, schema, stmt) = Self::query(&self.session, query).await?;
+
+        let mut displayer = FormatDisplay::new(ctx, &self.settings, stmt, start, schema, stream);
+        displayer.display().await?;
+
+        Ok(false)
     }
 
     async fn prompt(&self) -> String {
-        "databend-local:) ".to_owned()
+        if !self.query.is_empty() {
+            "databend-local:) ".to_owned()
+        } else {
+            let mut prompt = self.settings.prompt.clone();
+            prompt = prompt.replace("{database}", &self.session.get_current_database());
+            format!("{} ", prompt.trim_end())
+        }
     }
 }
 
@@ -271,44 +324,4 @@ fn get_history_path() -> String {
         "{}/.databend_history",
         std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
     )
-}
-
-#[derive(PartialEq, Eq, Debug)]
-pub enum QueryKind {
-    Query,
-    Update,
-    Explain,
-}
-
-impl From<&str> for QueryKind {
-    fn from(query: &str) -> Self {
-        let mut tz = Tokenizer::new(query);
-        match tz.next() {
-            Some(Ok(t)) => match t.kind {
-                TokenKind::EXPLAIN => QueryKind::Explain,
-                TokenKind::ALTER
-                | TokenKind::DELETE
-                | TokenKind::UPDATE
-                | TokenKind::INSERT
-                | TokenKind::CREATE
-                | TokenKind::DROP
-                | TokenKind::OPTIMIZE
-                | TokenKind::COPY => QueryKind::Update,
-                _ => QueryKind::Query,
-            },
-            _ => QueryKind::Query,
-        }
-    }
-}
-
-fn replace_newline_in_box_display(query: &str) -> bool {
-    let mut tz = Tokenizer::new(query);
-    match tz.next() {
-        Some(Ok(t)) => match t.kind {
-            TokenKind::EXPLAIN => false,
-            TokenKind::SHOW => !matches!(tz.next(), Some(Ok(t)) if t.kind == TokenKind::CREATE),
-            _ => true,
-        },
-        _ => true,
-    }
 }
