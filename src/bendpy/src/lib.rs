@@ -54,7 +54,8 @@ fn databend(_py: Python, m: &PyModule) -> PyResult<()> {
         OssLicenseManager::init().unwrap();
         ClusterDiscovery::instance()
             .register_to_metastore(&conf)
-            .await?;
+            .await
+            .unwrap();
     });
 
     m.add_class::<context::PySessionContext>()?;

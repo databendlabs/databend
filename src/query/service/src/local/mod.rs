@@ -18,6 +18,8 @@ mod executor;
 pub(crate) mod helper;
 
 use std::env;
+use std::io::stdin;
+use std::io::IsTerminal;
 
 use common_config::Config;
 use common_config::InnerConfig;
@@ -54,7 +56,9 @@ pub async fn query_local() -> Result<()> {
         .register_to_metastore(&conf)
         .await?;
 
-    let mut executor = executor::SessionExecutor::try_new(true).await?;
+    let is_terminal = stdin().is_terminal();
+    let is_repl = is_terminal;
+    let mut executor = executor::SessionExecutor::try_new(is_repl).await?;
     executor.handle().await;
     Ok(())
 }

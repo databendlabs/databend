@@ -69,11 +69,13 @@ pub struct Settings {
     pub replace_newline: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, Copy, PartialEq, Deserialize)]
 pub enum OutputFormat {
     Table,
     CSV,
     TSV,
+    JSON,
+    NDJSON,
     Null,
 }
 
@@ -111,6 +113,8 @@ impl Settings {
                     "table" => OutputFormat::Table,
                     "csv" => OutputFormat::CSV,
                     "tsv" => OutputFormat::TSV,
+                    "json" => OutputFormat::JSON,
+                    "ndjson" => OutputFormat::NDJSON,
                     "null" => OutputFormat::Null,
                     _ => {
                         return Err(ErrorCode::BadArguments(format!(

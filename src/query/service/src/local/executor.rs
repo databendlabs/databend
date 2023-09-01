@@ -31,7 +31,6 @@ use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeSet;
 use common_sql::Planner;
-use common_storages_fuse::TableContext;
 use futures_util::StreamExt;
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;

@@ -13,16 +13,22 @@
 // limitations under the License.
 
 use std::fmt::Write;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use common_ast::ast::Statement;
 use common_base::base::tokio;
+use common_base::base::tokio::io::AsyncWriteExt;
 use common_base::base::tokio::select;
 use common_base::base::ProgressValues;
 use common_exception::Result;
 use common_expression::block_debug::box_render;
+use common_expression::infer_table_schema;
 use common_expression::DataSchemaRef;
 use common_expression::SendableDataBlockStream;
+use common_formats::FileFormatOptionsExt;
+use common_meta_app::principal::FileFormatParams;
+use common_meta_app::principal::StageFileFormatType;
 use common_storages_fuse::TableContext;
 use futures::StreamExt;
 use indicatif::HumanBytes;
@@ -32,6 +38,7 @@ use indicatif::ProgressStyle;
 use rustyline::highlight::Highlighter;
 use tokio::time::Instant;
 
+use super::config::OutputFormat;
 use super::config::Settings;
 use crate::local::helper::CliHelper;
 use crate::sessions::QueryContext;
@@ -205,13 +212,45 @@ impl<'a> FormatDisplay<'a> {
             eprintln!();
         }
     }
+
+    async fn display_common_formats(&mut self) -> Result<()> {
+        let name = format!("{:?}", self.settings.output_format);
+        let mut options_ext =
+            FileFormatOptionsExt::create_from_settings(&self.ctx.get_settings(), true)?;
+
+        let table_schema = infer_table_schema(&self.schema)?;
+        let stage_type = StageFileFormatType::from_str(&name)?;
+        let params = FileFormatParams::default_by_type(stage_type)?;
+
+        let mut output_format = options_ext.get_output_format(table_schema, params)?;
+
+        let mut stdout = tokio::io::stdout();
+        let prefix = output_format.serialize_prefix()?;
+        stdout.write_all(&prefix).await?;
+
+        while let Some(Ok(block)) = self.stream.next().await {
+            let data = output_format.serialize_block(&block)?;
+            stdout.write_all(&data).await?;
+        }
+        let f = output_format.finalize()?;
+        stdout.write_all(&f).await?;
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
 impl<'a> ChunkDisplay for FormatDisplay<'a> {
     async fn display(&mut self) -> Result<()> {
-        self.display_table().await?;
-        self.display_stats().await;
+        match self.settings.output_format {
+            OutputFormat::Null => {}
+            OutputFormat::Table => {
+                self.display_table().await?;
+                self.display_stats().await;
+            }
+            _ => self.display_common_formats().await?,
+        }
+
         Ok(())
     }
 
