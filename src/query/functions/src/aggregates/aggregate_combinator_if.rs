@@ -174,8 +174,13 @@ impl AggregateFunction for AggregateIfCombinator {
     }
 
     fn get_if_condition(&self, columns: &[Column]) -> Option<Bitmap> {
-        let predicate: Bitmap =
-            BooleanType::try_downcast_column(&columns[self.argument_len - 1]).unwrap();
+        let condition_col = &columns[self.argument_len - 1];
+        let predicate: Bitmap = if let DataType::Nullable(_) = condition_col.data_type() {
+            let not_null_condition_col = condition_col.remove_nullable();
+            BooleanType::try_downcast_column(&not_null_condition_col).unwrap()
+        } else {
+            BooleanType::try_downcast_column(condition_col).unwrap()
+        };
         Some(predicate)
     }
 }

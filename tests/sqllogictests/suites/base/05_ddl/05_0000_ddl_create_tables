@@ -93,7 +93,7 @@ SELECT a+b FROM db2.test2
 query TTTTT
 DESCRIBE db2.test2
 ----
-a INT NO 0 (empty)
+a INT YES NULL (empty)
 b INT YES NULL (empty)
 
 statement ok
@@ -153,9 +153,9 @@ create table db2.test6(id Int8, a Int8 DEFAULT 1 + 2, created timestamp DEFAULT 
 query TTTTT
 desc db2.test6
 ----
-id TINYINT NO 0 (empty)
-a TINYINT NO 3 (empty)
-created TIMESTAMP NO now() (empty)
+id TINYINT YES NULL (empty)
+a TINYINT YES 3 (empty)
+created TIMESTAMP YES TRY_CAST(now() AS Timestamp NULL) (empty)
 
 statement ok
 INSERT INTO db2.test6 (id) VALUES (1)
@@ -174,25 +174,25 @@ create table db2.test7(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SM
 query TTTTT
 desc db2.test7
 ----
-tiny TINYINT NO 0 (empty)
-tiny_unsigned TINYINT UNSIGNED NO 0 (empty)
-smallint SMALLINT NO 0 (empty)
-smallint_unsigned SMALLINT UNSIGNED NO 0 (empty)
-int INT NO 0 (empty)
-int_unsigned INT UNSIGNED NO 0 (empty)
-bigint BIGINT NO 0 (empty)
-bigint_unsigned BIGINT UNSIGNED NO 0 (empty)
-float FLOAT NO 0 (empty)
-double DOUBLE NO 0 (empty)
-date DATE NO '1970-01-01' (empty)
-datetime TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
-ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
-str VARCHAR NO '3' (empty)
-bool BOOLEAN NO false (empty)
-arr ARRAY(INT32) NO [] (empty)
-tup TUPLE(1 INT32, 2 BOOLEAN) NO (0, false) (empty)
-map MAP(INT32, STRING) NO {} (empty)
-variant VARIANT NO (empty) (empty)
+tiny TINYINT YES NULL (empty)
+tiny_unsigned TINYINT UNSIGNED YES NULL (empty)
+smallint SMALLINT YES NULL (empty)
+smallint_unsigned SMALLINT UNSIGNED YES NULL (empty)
+int INT YES NULL (empty)
+int_unsigned INT UNSIGNED YES NULL (empty)
+bigint BIGINT YES NULL (empty)
+bigint_unsigned BIGINT UNSIGNED YES NULL (empty)
+float FLOAT YES NULL (empty)
+double DOUBLE YES NULL (empty)
+date DATE YES NULL (empty)
+datetime TIMESTAMP YES NULL (empty)
+ts TIMESTAMP YES NULL (empty)
+str VARCHAR YES '3' (empty)
+bool BOOLEAN YES NULL (empty)
+arr ARRAY(INT32) YES NULL (empty)
+tup TUPLE(1 INT32, 2 BOOLEAN) YES NULL (empty)
+map MAP(INT32, STRING) YES NULL (empty)
+variant VARIANT YES NULL (empty)
 
 statement ok
 create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY(VARCHAR), tup TUPLE(DOUBLE, INT), map MAP(STRING, Date), variant VARIANT)
@@ -200,25 +200,25 @@ create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, s
 query TTTTT
 desc db2.test8
 ----
-tiny TINYINT NO 0 (empty)
-tiny_unsigned TINYINT UNSIGNED NO 0 (empty)
-smallint SMALLINT NO 0 (empty)
-smallint_unsigned SMALLINT UNSIGNED NO 0 (empty)
-int INT NO 0 (empty)
-int_unsigned INT UNSIGNED NO 0 (empty)
-bigint BIGINT NO 0 (empty)
-bigint_unsigned BIGINT UNSIGNED NO 0 (empty)
-float FLOAT NO 0 (empty)
-double DOUBLE NO 0 (empty)
-date DATE NO '1970-01-01' (empty)
-datetime TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
-ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
-str VARCHAR NO '3' (empty)
-bool BOOLEAN NO false (empty)
-arr ARRAY(STRING) NO [] (empty)
-tup TUPLE(1 FLOAT64, 2 INT32) NO (0, 0) (empty)
-map MAP(STRING, DATE) NO {} (empty)
-variant VARIANT NO (empty) (empty)
+tiny TINYINT YES NULL (empty)
+tiny_unsigned TINYINT UNSIGNED YES NULL (empty)
+smallint SMALLINT YES NULL (empty)
+smallint_unsigned SMALLINT UNSIGNED YES NULL (empty)
+int INT YES NULL (empty)
+int_unsigned INT UNSIGNED YES NULL (empty)
+bigint BIGINT YES NULL (empty)
+bigint_unsigned BIGINT UNSIGNED YES NULL (empty)
+float FLOAT YES NULL (empty)
+double DOUBLE YES NULL (empty)
+date DATE YES NULL (empty)
+datetime TIMESTAMP YES NULL (empty)
+ts TIMESTAMP YES NULL (empty)
+str VARCHAR YES '3' (empty)
+bool BOOLEAN YES NULL (empty)
+arr ARRAY(STRING) YES NULL (empty)
+tup TUPLE(1 FLOAT64, 2 INT32) YES NULL (empty)
+map MAP(STRING, DATE) YES NULL (empty)
+variant VARIANT YES NULL (empty)
 
 
 statement ok
