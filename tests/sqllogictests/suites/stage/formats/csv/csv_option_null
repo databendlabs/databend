@@ -1,0 +1,29 @@
+statement ok
+drop table if exists ii
+
+statement ok
+create table ii(a int null, b int null)
+
+query TIITI
+copy into ii from @data/csv/null_default.csv file_format = (type = CSV)
+----
+csv/null_default.csv 1 0 NULL NULL
+
+query II
+select * from ii
+----
+NULL 1
+
+statement ok
+truncate table ii
+
+query TIITI
+copy into ii from @data/csv/null_null.csv file_format = (type = CSV null_display = 'null')
+----
+csv/null_null.csv 1 0 NULL NULL
+
+
+query II
+select * from ii
+----
+NULL 2

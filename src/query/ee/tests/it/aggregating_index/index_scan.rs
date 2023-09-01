@@ -668,18 +668,25 @@ fn is_index_scan_sexpr(s_expr: &SExpr) -> bool {
 }
 
 struct FuzzParams {
-    num_index_blocks: usize,
     query_sql: String,
     index_sql: String,
     is_index_scan: bool,
+    num_blocks: usize,
+    num_rows_per_block: usize,
+    index_block_ratio: f64,
 }
 
 impl Display for FuzzParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Query: {}\nIndex: {}\nIsIndexScan: {}\numIndexBlocks: {}\n",
-            self.query_sql, self.index_sql, self.is_index_scan, self.num_index_blocks,
+            "Query: {}\nIndex: {}\nIsIndexScan: {}\nNumBlocks: {}\nNumRowsPerBlock: {}\nIndexBlockRatio: {}\n",
+            self.query_sql,
+            self.index_sql,
+            self.is_index_scan,
+            self.num_blocks,
+            self.num_rows_per_block,
+            self.index_block_ratio,
         )
     }
 }
@@ -687,11 +694,14 @@ impl Display for FuzzParams {
 async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     let fuzz_info = params.to_string();
     let FuzzParams {
-        num_index_blocks,
         query_sql,
         index_sql,
         is_index_scan,
+        num_blocks,
+        index_block_ratio,
+        ..
     } = params;
+    let num_index_blocks = (num_blocks as f64 * index_block_ratio) as usize;
 
     // Create agg index
     execute_sql(
@@ -1066,13 +1076,14 @@ async fn test_fuzz_impl(format: &str) -> Result<()> {
 
             // Run fuzz tests with different index block ratios.
             for index_block_ratio in [0.2, 0.5, 0.8, 1.0] {
-                let num_index_blocks = (num_blocks as f64 * index_block_ratio) as usize;
                 for suite in test_suites.iter() {
                     fuzz(fixture.ctx(), FuzzParams {
-                        num_index_blocks,
                         query_sql: suite.query.to_string(),
                         index_sql: suite.index.to_string(),
                         is_index_scan: suite.is_index_scan,
+                        num_blocks,
+                        num_rows_per_block,
+                        index_block_ratio,
                     })
                     .await?;
                 }

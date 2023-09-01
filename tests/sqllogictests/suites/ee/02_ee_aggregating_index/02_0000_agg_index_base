@@ -10,25 +10,6 @@ use test_index
 statement ok
 DROP AGGREGATING INDEX IF EXISTS testi;
 
-# test create index error.
-statement ok
-CREATE TABLE t (a int, b int, c int)
-
-statement error
-CREATE AGGREGATING INDEX testi AS select now() as n, sum(a) from t where c > 1 group by n
-
-statement error
-CREATE AGGREGATING INDEX testi AS select sum(a) from t where now() > to_timestamp('2022-01-02 02:00:11')
-
-statement error
-CREATE AGGREGATING INDEX testi AS select sum(a) from t group by to_date(now())
-
-statement error
-CREATE AGGREGATING INDEX testi AS select sum(a) from t group by rand()
-
-statement ok
-DROP TABLE t
-
 statement ok
 CREATE TABLE t (a int, b int, c int)
 

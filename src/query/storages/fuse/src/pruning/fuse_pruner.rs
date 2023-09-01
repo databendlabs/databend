@@ -70,54 +70,10 @@ pub struct PruningContext {
 
     pub pruning_stats: Arc<FusePruningStatistics>,
 }
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
-pub struct DeletedSegmentInfo {
-    // segment index.
-    pub index: usize,
-    // deleted segment location and summary.
-    // location is used for hash
-    pub segment_info: (Location, Statistics),
-}
 
-impl DeletedSegmentInfo {
-    pub fn hash(&self) -> u64 {
-        let mut s = DefaultHasher::new();
-        self.segment_info.0.hash(&mut s);
-        s.finish()
-    }
-}
-
-pub struct FusePruner {
-    max_concurrency: usize,
-    pub table_schema: TableSchemaRef,
-    pub pruning_ctx: Arc<PruningContext>,
-    pub push_down: Option<PushDownInfo>,
-    pub inverse_range_index: Option<RangeIndex>,
-    pub deleted_segments: Vec<DeletedSegmentInfo>,
-}
-
-impl FusePruner {
-    // Create normal fuse pruner.
-    pub fn create(
-        ctx: &Arc<dyn TableContext>,
-        dal: Operator,
-        table_schema: TableSchemaRef,
-        push_down: &Option<PushDownInfo>,
-        bloom_index_cols: BloomIndexColumns,
-    ) -> Result<Self> {
-        Self::create_with_pages(
-            ctx,
-            dal,
-            table_schema,
-            push_down,
-            None,
-            vec![],
-            bloom_index_cols,
-        )
-    }
-
-    // Create fuse pruner with pages.
-    pub fn create_with_pages(
+impl PruningContext {
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_create(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         table_schema: TableSchemaRef,
@@ -125,7 +81,8 @@ impl FusePruner {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
-    ) -> Result<Self> {
+        max_concurrency: usize,
+    ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
 
         let filter_expr = push_down
@@ -191,18 +148,6 @@ impl FusePruner {
 
         // Constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let max_concurrency = {
-            let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-            // Prevent us from miss-configured max_storage_io_requests setting, e.g. 0
-            let v = std::cmp::max(max_io_requests, 10);
-            if v > max_io_requests {
-                warn!(
-                    "max_storage_io_requests setting is too low {}, increased to {}",
-                    max_io_requests, v
-                )
-            }
-            v
-        };
 
         // Pruning runtime.
         let pruning_runtime = Arc::new(Runtime::with_worker_threads(
@@ -224,6 +169,89 @@ impl FusePruner {
             internal_column_pruner,
             pruning_stats,
         });
+        Ok(pruning_ctx)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
+pub struct DeletedSegmentInfo {
+    // segment index.
+    pub index: usize,
+    // deleted segment location and summary.
+    // location is used for hash
+    pub segment_info: (Location, Statistics),
+}
+
+impl DeletedSegmentInfo {
+    pub fn hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.segment_info.0.hash(&mut s);
+        s.finish()
+    }
+}
+
+pub struct FusePruner {
+    max_concurrency: usize,
+    pub table_schema: TableSchemaRef,
+    pub pruning_ctx: Arc<PruningContext>,
+    pub push_down: Option<PushDownInfo>,
+    pub inverse_range_index: Option<RangeIndex>,
+    pub deleted_segments: Vec<DeletedSegmentInfo>,
+}
+
+impl FusePruner {
+    // Create normal fuse pruner.
+    pub fn create(
+        ctx: &Arc<dyn TableContext>,
+        dal: Operator,
+        table_schema: TableSchemaRef,
+        push_down: &Option<PushDownInfo>,
+        bloom_index_cols: BloomIndexColumns,
+    ) -> Result<Self> {
+        Self::create_with_pages(
+            ctx,
+            dal,
+            table_schema,
+            push_down,
+            None,
+            vec![],
+            bloom_index_cols,
+        )
+    }
+
+    // Create fuse pruner with pages.
+    pub fn create_with_pages(
+        ctx: &Arc<dyn TableContext>,
+        dal: Operator,
+        table_schema: TableSchemaRef,
+        push_down: &Option<PushDownInfo>,
+        cluster_key_meta: Option<ClusterKey>,
+        cluster_keys: Vec<RemoteExpr<String>>,
+        bloom_index_cols: BloomIndexColumns,
+    ) -> Result<Self> {
+        let max_concurrency = {
+            let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+            // Prevent us from miss-configured max_storage_io_requests setting, e.g. 0
+            let v = std::cmp::max(max_io_requests, 10);
+            if v > max_io_requests {
+                warn!(
+                    "max_storage_io_requests setting is too low {}, increased to {}",
+                    max_io_requests, v
+                )
+            }
+            v
+        };
+
+        let pruning_ctx = PruningContext::try_create(
+            ctx,
+            dal,
+            table_schema.clone(),
+            push_down,
+            cluster_key_meta,
+            cluster_keys,
+            bloom_index_cols,
+            max_concurrency,
+        )?;
 
         Ok(FusePruner {
             max_concurrency,

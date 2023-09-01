@@ -20,6 +20,7 @@ use common_meta_types::Membership;
 use common_meta_types::Node;
 use common_meta_types::StoredMembership;
 use common_meta_types::UpsertKV;
+use futures_util::StreamExt;
 use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
@@ -32,13 +33,13 @@ use crate::sm_v002::sm_v002::SMV002;
 use crate::sm_v002::SnapshotViewV002;
 use crate::state_machine::ExpireKey;
 
-#[test]
-fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
-    let l = build_3_levels();
+#[tokio::test]
+async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
+    let l = build_3_levels().await;
 
     let mut snapshot = SnapshotViewV002::new(Arc::new(l));
 
-    snapshot.compact();
+    snapshot.compact().await;
 
     let top_level = snapshot.top();
 
@@ -55,7 +56,10 @@ fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
-    let got = MapApi::<String>::range::<String, _>(d, ..).collect::<Vec<_>>();
+    let got = MapApi::<String>::range::<String, _>(d, ..)
+        .await
+        .collect::<Vec<_>>()
+        .await;
     assert_eq!(got, vec![
         //
         (&s("a"), &Marked::new_normal(1, b("a0"), None)),
@@ -63,25 +67,31 @@ fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         (&s("e"), &Marked::new_normal(6, b("e1"), None)),
     ]);
 
-    let got = MapApi::<ExpireKey>::range(d, ..).collect::<Vec<_>>();
+    let got = MapApi::<ExpireKey>::range(d, ..)
+        .await
+        .collect::<Vec<_>>()
+        .await;
     assert_eq!(got, vec![]);
 
     Ok(())
 }
 
-#[test]
-fn test_compact_expire_index() -> anyhow::Result<()> {
-    let mut sm = build_sm_with_expire();
+#[tokio::test]
+async fn test_compact_expire_index() -> anyhow::Result<()> {
+    let mut sm = build_sm_with_expire().await;
 
     let mut snapshot = sm.full_snapshot_view();
 
-    snapshot.compact();
+    snapshot.compact().await;
 
     let top_level = snapshot.top();
 
     let d = top_level.data_ref();
 
-    let got = MapApi::<String>::range::<String, _>(d, ..).collect::<Vec<_>>();
+    let got = MapApi::<String>::range::<String, _>(d, ..)
+        .await
+        .collect::<Vec<_>>()
+        .await;
     assert_eq!(got, vec![
         //
         (
@@ -110,7 +120,10 @@ fn test_compact_expire_index() -> anyhow::Result<()> {
         ),
     ]);
 
-    let got = MapApi::<ExpireKey>::range(d, ..).collect::<Vec<_>>();
+    let got = MapApi::<ExpireKey>::range(d, ..)
+        .await
+        .collect::<Vec<_>>()
+        .await;
     assert_eq!(got, vec![
         //
         (
@@ -130,15 +143,17 @@ fn test_compact_expire_index() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_export_3_level() -> anyhow::Result<()> {
-    let l = build_3_levels();
+#[tokio::test]
+async fn test_export_3_level() -> anyhow::Result<()> {
+    let l = build_3_levels().await;
 
     let snapshot = SnapshotViewV002::new(Arc::new(l));
     let got = snapshot
         .export()
+        .await
         .map(|x| serde_json::to_string(&x).unwrap())
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>()
+        .await;
 
     // TODO(1): add tree name: ["state_machine/0",{"Sequences":{"key":"generic-kv","value":159}}]
 
@@ -156,16 +171,18 @@ fn test_export_3_level() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_export_2_level_with_meta() -> anyhow::Result<()> {
-    let mut sm = build_sm_with_expire();
+#[tokio::test]
+async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
+    let mut sm = build_sm_with_expire().await;
 
     let snapshot = sm.full_snapshot_view();
 
     let got = snapshot
         .export()
+        .await
         .map(|x| serde_json::to_string(&x).unwrap())
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>()
+        .await;
 
     assert_eq!(got, vec![
         r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
@@ -182,8 +199,8 @@ fn test_export_2_level_with_meta() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_import() -> anyhow::Result<()> {
+#[tokio::test]
+async fn test_import() -> anyhow::Result<()> {
     let exported = vec![
         r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
         r#"{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":3,"node_id":3},"index":3}}}}"#,
@@ -207,8 +224,10 @@ fn test_import() -> anyhow::Result<()> {
 
     let got = snapshot
         .export()
+        .await
         .map(|x| serde_json::to_string(&x).unwrap())
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>()
+        .await;
 
     assert_eq!(got, exported);
 
@@ -220,7 +239,7 @@ fn test_import() -> anyhow::Result<()> {
 /// l2 |         c(D) d
 /// l1 |    b(D) c        e
 /// l0 | a  b    c    d
-fn build_3_levels() -> Level {
+async fn build_3_levels() -> Level {
     let mut l = Level::default();
 
     *l.data_mut().last_membership_mut() =
@@ -229,10 +248,10 @@ fn build_3_levels() -> Level {
     *l.data_mut().nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
 
     // internal_seq: 0
-    MapApi::<String>::set(&mut l, s("a"), Some((b("a0"), None)));
-    MapApi::<String>::set(&mut l, s("b"), Some((b("b0"), None)));
-    MapApi::<String>::set(&mut l, s("c"), Some((b("c0"), None)));
-    MapApi::<String>::set(&mut l, s("d"), Some((b("d0"), None)));
+    MapApi::<String>::set(&mut l, s("a"), Some((b("a0"), None))).await;
+    MapApi::<String>::set(&mut l, s("b"), Some((b("b0"), None))).await;
+    MapApi::<String>::set(&mut l, s("c"), Some((b("c0"), None))).await;
+    MapApi::<String>::set(&mut l, s("d"), Some((b("d0"), None))).await;
 
     l.new_level();
 
@@ -242,9 +261,9 @@ fn build_3_levels() -> Level {
     *l.data_mut().nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
 
     // internal_seq: 4
-    MapApi::<String>::set(&mut l, s("b"), None);
-    MapApi::<String>::set(&mut l, s("c"), Some((b("c1"), None)));
-    MapApi::<String>::set(&mut l, s("e"), Some((b("e1"), None)));
+    MapApi::<String>::set(&mut l, s("b"), None).await;
+    MapApi::<String>::set(&mut l, s("c"), Some((b("c1"), None))).await;
+    MapApi::<String>::set(&mut l, s("e"), Some((b("e1"), None))).await;
 
     l.new_level();
 
@@ -254,8 +273,8 @@ fn build_3_levels() -> Level {
     *l.data_mut().nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
 
     // internal_seq: 6
-    MapApi::<String>::set(&mut l, s("c"), None);
-    MapApi::<String>::set(&mut l, s("d"), Some((b("d2"), None)));
+    MapApi::<String>::set(&mut l, s("c"), None).await;
+    MapApi::<String>::set(&mut l, s("d"), Some((b("d2"), None))).await;
 
     l
 }
@@ -267,16 +286,20 @@ fn build_3_levels() -> Level {
 /// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c          
 /// ------------------------------------------------------------
 /// l0 | a₁  b₂         |  5,2₂ -> b    10,1₁ -> a
-fn build_sm_with_expire() -> SMV002 {
+async fn build_sm_with_expire() -> SMV002 {
     let mut sm = SMV002::default();
 
-    sm.upsert_kv(UpsertKV::update("a", b"a0").with_expire_sec(10));
-    sm.upsert_kv(UpsertKV::update("b", b"b0").with_expire_sec(5));
+    sm.upsert_kv(UpsertKV::update("a", b"a0").with_expire_sec(10))
+        .await;
+    sm.upsert_kv(UpsertKV::update("b", b"b0").with_expire_sec(5))
+        .await;
 
     sm.top.new_level();
 
-    sm.upsert_kv(UpsertKV::update("c", b"c0").with_expire_sec(20));
-    sm.upsert_kv(UpsertKV::update("a", b"a1").with_expire_sec(15));
+    sm.upsert_kv(UpsertKV::update("c", b"c0").with_expire_sec(20))
+        .await;
+    sm.upsert_kv(UpsertKV::update("a", b"a1").with_expire_sec(15))
+        .await;
 
     sm
 }

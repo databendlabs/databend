@@ -118,9 +118,19 @@ impl Projection {
         }
     }
 
-    pub fn to_arrow_projection(&self, schema: &SchemaDescriptor) -> ProjectionMask {
+    /// Convert [`Projection`] to [`ProjectionMask`] and the underlying leaf indices.
+    pub fn to_arrow_projection(
+        &self,
+        schema: &SchemaDescriptor,
+    ) -> (ProjectionMask, Vec<FieldIndex>) {
         match self {
-            Projection::Columns(indices) => ProjectionMask::roots(schema, indices.clone()),
+            Projection::Columns(indices) => {
+                let mask = ProjectionMask::roots(schema, indices.clone());
+                let leaves = (0..schema.num_columns())
+                    .filter(|i| mask.leaf_included(*i))
+                    .collect();
+                (mask, leaves)
+            }
             Projection::InnerColumns(path_indices) => {
                 let mut leave_id = 0;
                 let tree = build_parquet_schema_tree(schema.root_schema(), &mut leave_id);
@@ -130,7 +140,7 @@ impl Projection {
                 for path in paths {
                     traverse_parquet_schema_tree(&tree, path, &mut leaves);
                 }
-                ProjectionMask::leaves(schema, leaves)
+                (ProjectionMask::leaves(schema, leaves.clone()), leaves)
             }
         }
     }
