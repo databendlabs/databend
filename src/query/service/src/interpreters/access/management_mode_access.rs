@@ -75,6 +75,8 @@ impl AccessChecker for ManagementModeAccess {
                 // Table.
                 | Plan::CreateTable(_)
                 | Plan::DropTable(_)
+                | Plan::DropView(_)
+                | Plan::CreateView(_)
 
                 // User.
                 | Plan::AlterUser(_)
