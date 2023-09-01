@@ -3,7 +3,7 @@ title: JSON_TYPEOF
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced or updated: v1.2.90"/>
+<FunctionDescription description="Introduced or updated: v1.2.91"/>
 
 Returns the type of the main-level of a JSON structure.
 
