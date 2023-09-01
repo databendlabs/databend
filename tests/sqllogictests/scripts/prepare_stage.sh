@@ -23,4 +23,10 @@ echo "drop table if exists ontime" | $MYSQL_CLIENT_CONNECT
 # todo: move ontime.sql to upper dir
 cat tests/suites/1_stateful/ddl/ontime.sql | $MYSQL_CLIENT_CONNECT
 
-echo "set global use_parquet2=${TEST_STAGE_USE_PARQUET2:-1};" | $MYSQL_CLIENT_CONNECT
+if [ "$TEST_STAGE_PARQUET_LIB" == "parquet2" ] 
+then 
+	echo "set global use_parquet2=1;" | $MYSQL_CLIENT_CONNECT
+else 
+	echo "set global use_parquet2=0;" | $MYSQL_CLIENT_CONNECT
+fi
+
