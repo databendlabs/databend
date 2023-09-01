@@ -8,7 +8,7 @@ statement ok
 USE ss
 
 statement ok
-CREATE TABLE t1(a INT)
+CREATE TABLE t1(a INT not null)
 
 query TTTTT
 SHOW FIELDS FROM t1

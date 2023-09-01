@@ -13,7 +13,7 @@ echo "create user 'test-user' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $MYSQL_CLIE
 echo 'create role `test-role1`' | $MYSQL_CLIENT_CONNECT
 echo 'create role `test-role2`' | $MYSQL_CLIENT_CONNECT
 ## create table
-echo "create table t20_0012(c int)" | $MYSQL_CLIENT_CONNECT
+echo "create table t20_0012(c int not null)" | $MYSQL_CLIENT_CONNECT
 
 ## show tables
 echo "show databases" | $TEST_USER_CONNECT
@@ -67,10 +67,10 @@ echo "REVOKE SELECT ON system.fuse_snapshot FROM 'test-user'" | $MYSQL_CLIENT_CO
 ## select data
 echo "select 'test -- select'" | $TEST_USER_CONNECT
 ## Init tables
-echo "CREATE TABLE default.t20_0012_a(c int) CLUSTER BY(c)" | $MYSQL_CLIENT_CONNECT
+echo "CREATE TABLE default.t20_0012_a(c int not null) CLUSTER BY(c)" | $MYSQL_CLIENT_CONNECT
 echo "GRANT INSERT ON default.t20_0012_a TO 'test-user'" | $MYSQL_CLIENT_CONNECT
 echo "INSERT INTO default.t20_0012_a values(1)" | $TEST_USER_CONNECT
-echo "CREATE TABLE default.t20_0012_b(c int)" | $MYSQL_CLIENT_CONNECT
+echo "CREATE TABLE default.t20_0012_b(c int not null)" | $MYSQL_CLIENT_CONNECT
 echo "GRANT INSERT ON default.t20_0012_b TO 'test-user'" | $MYSQL_CLIENT_CONNECT
 echo "INSERT INTO default.t20_0012_b values(1)" | $TEST_USER_CONNECT
 ## Init privilege
@@ -135,13 +135,13 @@ echo "create user a identified by '$TEST_USER_PASSWORD'" |  $MYSQL_CLIENT_CONNEC
 echo "drop database if exists nogrant" |  $MYSQL_CLIENT_CONNECT
 echo "drop database if exists grant_db" |  $MYSQL_CLIENT_CONNECT
 echo "create database grant_db" |  $MYSQL_CLIENT_CONNECT
-echo "create table grant_db.t(c1 int)" |  $MYSQL_CLIENT_CONNECT
+echo "create table grant_db.t(c1 int not null)" |  $MYSQL_CLIENT_CONNECT
 echo "create database nogrant" |  $MYSQL_CLIENT_CONNECT
-echo "create table nogrant.t(id int)" | $MYSQL_CLIENT_CONNECT
+echo "create table nogrant.t(id int not null)" | $MYSQL_CLIENT_CONNECT
 echo "grant select on default.* to a" |  $MYSQL_CLIENT_CONNECT
 echo "grant select on grant_db.t to a" |  $MYSQL_CLIENT_CONNECT
 echo "drop table if exists default.test_t" |  $MYSQL_CLIENT_CONNECT
-echo "create table default.test_t(id int)" |  $MYSQL_CLIENT_CONNECT
+echo "create table default.test_t(id int not null)" |  $MYSQL_CLIENT_CONNECT
 echo "show grants for a" |  $MYSQL_CLIENT_CONNECT
 echo "show databases" | $USER_A_CONNECT
 echo "show tables" | $USER_A_CONNECT

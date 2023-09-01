@@ -8,7 +8,7 @@ statement ok
 USE db20_13;
 
 statement ok
-CREATE TABLE IF NOT EXISTS t1 (a INT);
+CREATE TABLE IF NOT EXISTS t1 (a INT not null);
 
 statement ok
 INSERT INTO t1 VALUES (1), (2), (3);
@@ -21,7 +21,7 @@ SELECT * FROM t1 ORDER BY a;
 3
 
 statement ok
-CREATE TABLE IF NOT EXISTS t2 (b VARCHAR);
+CREATE TABLE IF NOT EXISTS t2 (b VARCHAR not null);
 
 statement ok
 INSERT INTO t2 VALUES ('a'), ('b'), ('c');

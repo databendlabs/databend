@@ -2,7 +2,7 @@ statement ok
 drop table if exists tbl_01_0007 all
 
 statement ok
-create table tbl_01_0007(a int) cluster by(a)
+create table tbl_01_0007(a int not null) cluster by(a)
 
 statement ok
 insert into  tbl_01_0007 values(1), (3)

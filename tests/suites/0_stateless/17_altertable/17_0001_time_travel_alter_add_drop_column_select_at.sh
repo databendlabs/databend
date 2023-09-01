@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 
 ## Create table t12_0005
-echo "create table t12_0005(c int)" | $MYSQL_CLIENT_CONNECT
+echo "create table t12_0005(c int not null)" | $MYSQL_CLIENT_CONNECT
 echo "two insertions"
 echo "insert into t12_0005 values(1),(2)" | $MYSQL_CLIENT_CONNECT
 

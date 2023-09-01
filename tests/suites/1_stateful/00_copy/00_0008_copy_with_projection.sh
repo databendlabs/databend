@@ -20,8 +20,8 @@ prepare=(
   "drop table if exists test_copy_p3"
   "drop stage if exists s_copy_p"
 
-  "create table test_copy_p2(b int, c int);"
-  "create table test_copy_p3(a int, b int, c int);"
+  "create table test_copy_p2(b int not null, c int not null);"
+  "create table test_copy_p3(a int not null, b int not null, c int not null);"
 
   # gen parquet
   "copy into test_copy_p2 from 'fs://${CSV_PATH}' FILE_FORMAT = (type = CSV)"
