@@ -37,11 +37,13 @@ use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::statistics::BasicColumnStatistics;
+use common_catalog::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_function::TableFunction;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -918,7 +920,13 @@ impl Binder {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let table = self.metadata.read().table(table_index).clone();
-        let statistics_provider = table.table().column_statistics_provider().await?;
+        // Check. Desc view will plan VIEW_SQL, for fuse engine table will generate statistics.
+        // But there is no need to generate statistics info if conf is management mode
+        let statistics_provider = if GlobalConfig::instance().query.management_mode {
+            Box::new(DummyColumnStatisticsProvider)
+        } else {
+            table.table().column_statistics_provider().await?
+        };
         let mut col_stats: HashMap<IndexType, Option<BasicColumnStatistics>> = HashMap::new();
         for column in columns.iter() {
             match column {
