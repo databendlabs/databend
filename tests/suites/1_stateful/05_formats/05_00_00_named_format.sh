@@ -22,7 +22,7 @@ rm -rf ${DATADIR_PATH}
 mkdir ${DATADIR_PATH}
 DATADIR="fs://$DATADIR_PATH/"
 cp "$CURDIR"/../../../data/sample.csv ${DATADIR_PATH}/
-cp "$CURDIR"/../../../data/tuple.parquet ${DATADIR_PATH}/
+cp "$CURDIR"/../../../data/parquet/tuple.parquet ${DATADIR_PATH}/
 
 # test create stage
 ## default format is csv, so we can check args in select_stage and infer_schema really work
