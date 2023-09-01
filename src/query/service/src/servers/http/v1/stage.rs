@@ -72,7 +72,7 @@ impl UploadToStageArgs {
         let mut arg = req.headers().get(name);
         // if "stage-name" is not found, try "stage_name", which is for backward compatibility
         if arg.is_none() {
-            arg = req.headers().get(name.replace("-", "_").as_str());
+            arg = req.headers().get(name.replace('-', "_").as_str());
         }
         // if both "stage-name" and "stage_name" are not found, try "X-Databend-Stage-Name"
         if arg.is_none() {
