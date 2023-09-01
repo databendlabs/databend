@@ -3563,10 +3563,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
         let table_id = req.table_id;
+        let ctx = &func_name!();
+        let mut trials = txn_trials(None, ctx);
 
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        loop {
+            trials.next().unwrap()?;
 
             let lvt_key = LeastVisibleTimeKey { table_id };
             let (lvt_seq, lvt_opt): (_, Option<LeastVisibleTime>) =
@@ -3602,10 +3603,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 return Ok(SetLVTReply { time: new_time });
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("set_table_lvt", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     fn name(&self) -> String {
