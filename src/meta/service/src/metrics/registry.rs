@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta_metrics;
-mod registry;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
 
-pub use meta_metrics::meta_metrics_to_prometheus_string;
-pub use meta_metrics::network_metrics;
-pub use meta_metrics::raft_metrics;
-pub use meta_metrics::server_metrics;
-pub(crate) use meta_metrics::ProposalPending;
-pub(crate) use meta_metrics::RequestInFlight;
+use lazy_static::lazy_static;
+use prometheus_client::registry::Registry;
+
+lazy_static! {
+    pub static ref REGISTRY: Mutex<Registry> = Mutex::new(Registry::default());
+}
+
+pub fn load_global_registry() -> MutexGuard<'static, Registry> {
+    REGISTRY.lock().unwrap()
+}
