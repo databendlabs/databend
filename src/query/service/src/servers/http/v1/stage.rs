@@ -36,6 +36,50 @@ pub struct UploadToStageResponse {
     pub files: Vec<String>,
 }
 
+#[derive(Debug)]
+struct UploadToStageArgs {
+    stage_name: String,
+    relative_path: String,
+}
+
+impl UploadToStageArgs {
+    pub fn parse(req: &Request) -> PoemResult<UploadToStageArgs> {
+        let stage_name = Self::read_header(req, "stage-name")
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| {
+                poem::Error::from_string(
+                    "Parse stage_name error, please check your arguments".to_string(),
+                    StatusCode::BAD_REQUEST,
+                )
+            })?
+            .to_string();
+
+        let relative_path = Self::read_header(req, "relative-path")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .trim_matches('/')
+            .to_string();
+
+        Ok(UploadToStageArgs {
+            stage_name,
+            relative_path,
+        })
+    }
+
+    fn read_header<'a>(req: &'a Request, name: &str) -> Option<&'a str> {
+        let mut arg = req.headers().get(name);
+        // if "stage-name" is not found, try "stage_name", which is for backward compatibility
+        if arg.is_none() {
+            arg = req.headers().get(name.replace("-", "_").as_str());
+        }
+        // if both "stage-name" and "stage_name" are not found, try "X-Databend-Stage-Name"
+        if arg.is_none() {
+            arg = req.headers().get(format!("x-databend-{}", name).as_str());
+        }
+        arg.and_then(|v| v.to_str().ok())
+    }
+}
+
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn upload_to_stage(
@@ -48,19 +92,9 @@ pub async fn upload_to_stage(
         .create_query_context()
         .await
         .map_err(InternalServerError)?;
+    let args = UploadToStageArgs::parse(req)?;
 
-    let stage_name = req
-        .headers()
-        .get("stage_name")
-        .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| {
-            poem::Error::from_string(
-                "Parse stage_name error, not found".to_string(),
-                StatusCode::BAD_REQUEST,
-            )
-        })?;
-
-    let stage = if stage_name == "~" {
+    let stage = if args.stage_name == "~" {
         StageInfo::new_user_stage(
             context
                 .get_current_user()
@@ -70,20 +104,12 @@ pub async fn upload_to_stage(
         )
     } else {
         UserApiProvider::instance()
-            .get_stage(context.get_tenant().as_str(), stage_name)
+            .get_stage(context.get_tenant().as_str(), &args.stage_name)
             .await
             .map_err(InternalServerError)?
     };
 
     let op = StageTable::get_op(&stage).map_err(InternalServerError)?;
-
-    let relative_path = req
-        .headers()
-        .get("relative_path")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .trim_matches('/')
-        .to_string();
 
     let mut files = vec![];
     while let Ok(Some(field)) = multipart.next_field().await {
@@ -92,7 +118,7 @@ pub async fn upload_to_stage(
             None => uuid::Uuid::new_v4().to_string(),
         };
         let bytes = field.bytes().await.map_err(InternalServerError)?;
-        let file_path = format!("{relative_path}/{name}")
+        let file_path = format!("{}/{}", args.relative_path, name)
             .trim_start_matches('/')
             .to_string();
         let _ = op
@@ -106,7 +132,7 @@ pub async fn upload_to_stage(
     let mut id = uuid::Uuid::new_v4().to_string();
     Ok(Json(UploadToStageResponse {
         id,
-        stage_name: stage_name.to_string(),
+        stage_name: args.stage_name,
         state: "SUCCESS".to_string(),
         files,
     }))
