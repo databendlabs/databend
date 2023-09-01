@@ -103,7 +103,7 @@ CREATE STAGE s1 FILE_FORMAT = (TYPE = CSV);
 ```
 
 ```shell
-curl -u root: -H "stage-name:s1" -F "upload=@sample_3_replace.csv" -XPUT "http://localhost:8000/v1/upload_to_stage"
+curl -u root: -H "x-databend-stage-name:s1" -F "upload=@sample_3_replace.csv" -XPUT "http://localhost:8000/v1/upload_to_stage"
 
 {"id":"b8305187-c816-4bb5-8350-c441b85baaf9","stage_name":"s1","state":"SUCCESS","files":["sample_3_replace.csv"]}   
 ```

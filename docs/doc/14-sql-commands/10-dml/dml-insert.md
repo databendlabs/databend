@@ -152,7 +152,7 @@ Upload `values.csv` to a stage:
 ```
 
 ```shell title='Request /v1/upload_to_stage' API
-curl -H "stage-name:my_int_stage" -F "upload=@./values.csv" -XPUT http://root:@localhost:8000/v1/upload_to_stage
+curl -H "x-databend-stage-name:my_int_stage" -F "upload=@./values.csv" -XPUT http://root:@localhost:8000/v1/upload_to_stage
 ```
 
 Insert with the uploaded file:

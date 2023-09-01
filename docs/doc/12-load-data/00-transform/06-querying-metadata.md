@@ -37,7 +37,7 @@ CREATE STAGE my_internal_stage;
 2. Use cURL to make a request to the File Upload API:
 
 ```shell title='Put books.parquet to stage'
-curl -u root: -H "stage-name:my_internal_stage" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
+curl -u root: -H "x-databend-stage-name:my_internal_stage" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
 ```
 
 3. Query the column definitions from the staged sample file:
