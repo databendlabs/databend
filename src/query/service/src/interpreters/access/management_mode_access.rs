@@ -12,11 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::access::AccessChecker;
+use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
 pub struct ManagementModeAccess {}
@@ -31,7 +36,7 @@ impl ManagementModeAccess {
 impl AccessChecker for ManagementModeAccess {
     // Check what we can do if in management mode.
     #[async_backtrace::framed]
-    async fn check(&self, plan: &Plan) -> Result<()> {
+    async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
         // Allows for management-mode.
         if GlobalConfig::instance().query.management_mode {
             let ok = match plan {
@@ -68,9 +73,10 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::DropDatabase(_)
 
                 // Table.
-                | Plan::DescribeTable(_)
                 | Plan::CreateTable(_)
                 | Plan::DropTable(_)
+                | Plan::DropView(_)
+                | Plan::CreateView(_)
 
                 // User.
                 | Plan::AlterUser(_)
@@ -100,6 +106,13 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::AlterUDF(_)
                 | Plan::DropUDF(_)
                 | Plan::UseDatabase(_) => true,
+                Plan::DescribeTable(plan) => {
+                    let catalog = &plan.catalog;
+                    let database = &plan.database;
+                    let table = &plan.table;
+                    let table = ctx.get_table(catalog, database, table).await?;
+                    table.get_table_info().engine() != VIEW_ENGINE
+                },
                 _ => false,
             };
 
