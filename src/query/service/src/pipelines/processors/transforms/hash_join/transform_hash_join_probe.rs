@@ -216,7 +216,7 @@ impl Processor for TransformHashJoinProbe {
                 Ok(Event::Finished)
             }
             HashJoinProbeStep::Running => {
-                if self.need_spill {
+                if !self.join_probe_state.probe_partition_set.read().is_empty() {
                     self.run_with_spilled_data()
                 } else {
                     self.run()
@@ -244,6 +244,12 @@ impl Processor for TransformHashJoinProbe {
                 match self.outer_scan_finished {
                     false => Ok(Event::Sync),
                     true => {
+                        if !self.join_probe_state.hash_join_state.spill_partition.read().is_empty() {
+                            self.step = HashJoinProbeStep::WaitBuild;
+                            // If build side has spilled data, we need to wait build side to next round.
+                            self.join_probe_state.hash_join_state.probe_spill_done.notify_waiters();
+                            return Ok(Event::Async);
+                        }
                         self.output_port.finish();
                         Ok(Event::Finished)
                     }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -75,6 +75,8 @@ pub struct HashJoinProbeState {
     /// Final scan tasks
     pub(crate) final_scan_tasks: Arc<RwLock<VecDeque<usize>>>,
     pub(crate) mark_scan_map_lock: Mutex<bool>,
+    /// Probe side data partition set, initialized as empty.
+    pub(crate) probe_partition_set: Arc<RwLock<HashSet<u8>>>,
 }
 
 impl HashJoinProbeState {
@@ -103,6 +105,7 @@ impl HashJoinProbeState {
             probe_projections: Arc::new(probe_projections.clone()),
             final_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
             mark_scan_map_lock: Mutex::new(false),
+            probe_partition_set: Arc::new(Default::default()),
         }
     }
 
@@ -265,7 +268,6 @@ impl HashJoinProbeState {
             *spill_done = true;
             // Set partition id to `HashJoinState`
             let mut partition_id = self.hash_join_state.partition_id.write();
-            // Pick the max partition id
             let mut spill_partition = self.hash_join_state.spill_partition.write();
             if let Some(id) = spill_partition.iter().next().cloned() {
                 spill_partition.remove(&id);

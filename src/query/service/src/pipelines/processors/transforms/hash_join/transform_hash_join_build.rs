@@ -270,6 +270,9 @@ impl Processor for TransformHashJoinBuild {
                     .spiller
                     .read_spilled_data(&partition_id)
                     .await?;
+                debug!(
+                    "processor: {}, finish reading spilled data",
+                    self.processor_id);
                 self.input_data = Some(DataBlock::concat(&spilled_data)?);
                 self.reset()?;
             }
