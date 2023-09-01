@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta_metrics;
-mod registry;
+syntax = "proto3";
 
-pub use meta_metrics::meta_metrics_to_prometheus_string;
-pub use meta_metrics::network_metrics;
-pub use meta_metrics::raft_metrics;
-pub use meta_metrics::server_metrics;
-pub(crate) use meta_metrics::ProposalPending;
-pub(crate) use meta_metrics::RequestInFlight;
+package databend_proto;
+
+message LeastVisibleTime {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  uint64 time = 1;
+}

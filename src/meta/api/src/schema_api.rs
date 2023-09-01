@@ -65,6 +65,8 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetLVTReply;
+use common_meta_app::schema::SetLVTReq;
 use common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableId;
@@ -256,6 +258,9 @@ pub trait SchemaApi: Send + Sync {
 
     async fn list_catalogs(&self, req: ListCatalogReq)
     -> Result<Vec<Arc<CatalogInfo>>, KVAppError>;
+
+    // least visible time
+    async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply, KVAppError>;
 
     fn name(&self) -> String;
 }
