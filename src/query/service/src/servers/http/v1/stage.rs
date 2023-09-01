@@ -44,8 +44,7 @@ struct UploadToStageArgs {
 
 impl UploadToStageArgs {
     pub fn parse(req: &Request) -> PoemResult<UploadToStageArgs> {
-        let stage_name = Self::read_header(req, "stage-name")
-            .and_then(|v| v.to_str().ok())
+        let stage_name = Self::read_arg(req, "stage-name")
             .ok_or_else(|| {
                 poem::Error::from_string(
                     "Parse stage_name error, please check your arguments".to_string(),
@@ -54,8 +53,7 @@ impl UploadToStageArgs {
             })?
             .to_string();
 
-        let relative_path = Self::read_header(req, "relative-path")
-            .and_then(|v| v.to_str().ok())
+        let relative_path = Self::read_arg(req, "relative-path")
             .unwrap_or("")
             .trim_matches('/')
             .to_string();
@@ -66,7 +64,11 @@ impl UploadToStageArgs {
         })
     }
 
-    fn read_header<'a>(req: &'a Request, name: &str) -> Option<&'a str> {
+    // read_arg parses the http request to retrieve the arguments. In the before, we use
+    // argument like `stage_name` in the header, but having underscore in the header is
+    // not a good practice. So we change the argument to `stage-name` and `x-databend-stage-name`
+    // in the header, but we still need to support the old argument for backward compatibility.
+    fn read_arg<'a>(req: &'a Request, name: &str) -> Option<&'a str> {
         let mut arg = req.headers().get(name);
         // if "stage-name" is not found, try "stage_name", which is for backward compatibility
         if arg.is_none() {
