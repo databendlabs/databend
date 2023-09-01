@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-python3 -m pip install --quiet mysql-connector-python
-
 . tests/shell_env.sh
 
 # create stage "data" which is readonly and map to tests/data.
@@ -24,3 +22,5 @@ fi
 echo "drop table if exists ontime" | $MYSQL_CLIENT_CONNECT
 # todo: move ontime.sql to upper dir
 cat tests/suites/1_stateful/ddl/ontime.sql | $MYSQL_CLIENT_CONNECT
+
+echo "set global use_parquet2=${TEST_STAGE_USE_PARQUET2:-1};" | $MYSQL_CLIENT_CONNECT
