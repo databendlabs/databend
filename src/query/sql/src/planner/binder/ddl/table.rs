@@ -1196,7 +1196,8 @@ impl Binder {
         table_schema: TableSchemaRef,
     ) -> Result<(TableField, String)> {
         let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-        let data_type = resolve_type_name(&column.data_type)?;
+        let column_not_null = !self.ctx.get_settings().get_create_column_type_nullable()?;
+        let data_type = resolve_type_name(&column.data_type, column.not_null | column_not_null)?;
         let mut field = TableField::new(&name, data_type);
         if let Some(expr) = &column.expr {
             match expr {
@@ -1234,9 +1235,11 @@ impl Binder {
         let mut has_computed = false;
         let mut fields = Vec::with_capacity(columns.len());
         let mut fields_comments = Vec::with_capacity(columns.len());
+        let column_not_null = !self.ctx.get_settings().get_create_column_type_nullable()?;
         for column in columns.iter() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-            let schema_data_type = resolve_type_name(&column.data_type)?;
+            let schema_data_type =
+                resolve_type_name(&column.data_type, column.not_null | column_not_null)?;
             fields_comments.push(column.comment.clone().unwrap_or_default());
 
             let mut field = TableField::new(&name, schema_data_type.clone());

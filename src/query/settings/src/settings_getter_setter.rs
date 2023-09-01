@@ -473,4 +473,12 @@ impl Settings {
             u64::from(val),
         )
     }
+
+    pub fn get_create_column_type_nullable(&self) -> Result<bool> {
+        Ok(self.try_get_u64("create_column_type_nullable")? == 1)
+    }
+
+    pub fn set_create_column_type_nullable(&self, val: bool) -> Result<()> {
+        self.try_set_u64("create_column_type_nullable", u64::from(val))
+    }
 }

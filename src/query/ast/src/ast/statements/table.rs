@@ -717,13 +717,14 @@ pub struct ColumnDefinition {
     pub data_type: TypeName,
     pub expr: Option<ColumnExpr>,
     pub comment: Option<String>,
+    pub not_null: bool,
 }
 
 impl Display for ColumnDefinition {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{} {}", self.name, self.data_type)?;
 
-        if !matches!(self.data_type, TypeName::Nullable(_)) {
+        if self.not_null {
             write!(f, " NOT NULL")?;
         }
 

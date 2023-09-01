@@ -1800,12 +1800,15 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 data_type,
                 expr: None,
                 comment,
+                not_null: false,
             };
             for constraint in constraints {
                 match constraint {
                     ColumnConstraint::Nullable(nullable) => {
                         if nullable {
                             def.data_type = def.data_type.wrap_nullable();
+                        } else {
+                            def.not_null = true;
                         }
                     }
                     ColumnConstraint::DefaultExpr(default_expr) => {
