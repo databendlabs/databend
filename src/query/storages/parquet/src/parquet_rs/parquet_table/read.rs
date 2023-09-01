@@ -22,6 +22,8 @@ use common_pipeline_core::Pipeline;
 
 use super::ParquetRSTable;
 use crate::parquet_rs::source::ParquetSource;
+use crate::utils::calc_parallelism;
+use crate::ParquetPart;
 use crate::ParquetRSReader;
 
 impl ParquetRSTable {
@@ -32,27 +34,34 @@ impl ParquetRSTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let parts_len = plan.parts.len();
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let max_threads = std::cmp::min(parts_len, max_threads);
-
         let table_schema: TableSchemaRef = self.table_info.schema();
+        // If there is a `ParquetFilesPart`, we should create pruner for it.
+        // `ParquetFilesPart`s are always staying at the end of `parts`.
+        let need_pruner = matches!(
+            plan.parts
+                .partitions
+                .last()
+                .map(|p| p.as_any().downcast_ref::<ParquetPart>().unwrap()),
+            Some(ParquetPart::ParquetFiles(_)),
+        );
+
         let reader = Arc::new(ParquetRSReader::create_with_parquet_schema(
             ctx.clone(),
             self.operator.clone(),
             table_schema,
             &self.schema_descr,
             plan,
-            self.read_options,
-            false,
+            self.read_options.with_prune_pages(false), /* TODO(parquet): there is a bug in arrow-rs when reading page indexes. */
+            need_pruner,
         )?);
+
+        let num_threads = calc_parallelism(&ctx, plan)?;
 
         // TODO(parquet):
         // - introduce Top-K optimization.
-        // - adjust parallelism by data sizes.
         pipeline.add_source(
             |output| ParquetSource::create(ctx.clone(), output, reader.clone()),
-            max_threads.max(1),
+            num_threads,
         )
     }
 }
