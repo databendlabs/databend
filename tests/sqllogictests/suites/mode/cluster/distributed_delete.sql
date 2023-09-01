@@ -6,7 +6,7 @@ drop table if exists t_origin;
 
 # make sure there will be multiple blocks there, by shrink the `row_per_block`
 statement ok
-create table t (id int, c1 int, c2 int) row_per_block=10;
+create table t (id int not null, c1 int not null, c2 int not null) row_per_block=10;
 
 # generate test data
 statement ok
@@ -100,13 +100,13 @@ statement ok
 drop table if exists del_id;
 
 statement ok
-create table t (id int, c1 int, c2 int) row_per_block=3;
+create table t (id int not null, c1 int not null, c2 int not null) row_per_block=3;
 
 statement ok
 insert into t select number, number * 5, number * 7 from numbers(50);
 
 statement ok
-create table del_id (id int) as select cast(FLOOR(0 + RAND(number) * 50), int) from numbers(10);
+create table del_id (id int not null) as select cast(FLOOR(0 + RAND(number) * 50), int) from numbers(10);
 
 statement ok
 delete from t where id in (select id from del_id);

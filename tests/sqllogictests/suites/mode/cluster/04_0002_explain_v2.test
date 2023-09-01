@@ -8,10 +8,10 @@ statement ok
 drop table if exists t2 all;
 
 statement ok
-create table t1(a int, b int);
+create table t1(a int not null, b int not null);
 
 statement ok
-create table t2(a int, b int);
+create table t2(a int not null, b int not null);
 
 query T
 explain select t1.a from t1 where a > 0;
