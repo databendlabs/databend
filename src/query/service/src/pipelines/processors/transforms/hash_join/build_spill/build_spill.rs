@@ -71,6 +71,7 @@ impl BuildSpillState {
             let mut spill_tasks = self.spill_coordinator.spill_tasks.write();
             spill_tasks.pop_back().unwrap()
         };
+        dbg!(&spill_partitions);
         self.spiller.spill(&spill_partitions).await
     }
 

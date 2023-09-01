@@ -51,6 +51,7 @@ pub struct TransformHashJoinBuild {
     spill_state: Option<Box<BuildSpillState>>,
     spill_data: Option<DataBlock>,
     finalize_finished: bool,
+    processor_id: usize,
 }
 
 impl TransformHashJoinBuild {
@@ -63,7 +64,7 @@ impl TransformHashJoinBuild {
             let mut count = ss.spill_coordinator.total_builder_count.write();
             *count += 1;
         }
-        build_state.build_attach()?;
+        let processor_id = build_state.build_attach()?;
         Ok(Box::new(TransformHashJoinBuild {
             input_port,
             input_data: None,
@@ -72,6 +73,7 @@ impl TransformHashJoinBuild {
             spill_state,
             spill_data: None,
             finalize_finished: false,
+            processor_id,
         }))
     }
 
@@ -121,7 +123,7 @@ impl Processor for TransformHashJoinBuild {
                 true => {
                     // If join spill is enabled, we should wait probe to spill.
                     // Then restore data from disk and build hash table, util all spilled data are processed.
-                    if let Some(spill_state) = &mut self.spill_state {
+                    if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.partitions.is_empty() {
                         // Send spilled partition to `HashJoinState`, used by probe spill.
                         self.build_state
                             .hash_join_state
@@ -149,10 +151,12 @@ impl Processor for TransformHashJoinBuild {
         match self.step {
             HashJoinBuildStep::Running => {
                 if let Some(data_block) = self.input_data.take() {
-                    if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.is_any_spilled(){
+                    if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.is_all_spilled(){
                         // Check if need to spill
                         let need_spill = spill_state.check_need_spill()?;
+                        dbg!(need_spill);
                         if need_spill {
+                            dbg!("Processor {} needs to spill", self.processor_id);
                             self.input_data = Some(data_block);
                             self.step = HashJoinBuildStep::WaitSpill;
                             spill_state.spill_coordinator.need_spill()?;
@@ -163,9 +167,11 @@ impl Processor for TransformHashJoinBuild {
                                 let wait = spill_state.spill_coordinator.wait_spill()?;
                                 if wait {
                                     // Put data to `self.input_data` for next round process
+                                    dbg!("Processor {} needs to wait spill", self.processor_id);
                                     self.input_data = Some(data_block);
                                     self.step = HashJoinBuildStep::WaitSpill;
                                 } else {
+                                    dbg!("Processor {} is the last processor, it will split spill tasks and notify all processors to spill", self.processor_id);
                                     // Make `need_spill` to false for `SpillCoordinator`
                                     spill_state.spill_coordinator.no_need_spill();
                                     // Before notify all processors to spill, we need to collect all buffered data in `RowSpace` and `Chunks`

@@ -199,6 +199,7 @@ impl HashJoinState {
         *spill_partition = partitions.clone();
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn wait_probe_spill(&self) {
         self.probe_spill_done.notified().await;
     }

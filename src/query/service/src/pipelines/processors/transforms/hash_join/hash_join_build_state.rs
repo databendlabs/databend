@@ -191,13 +191,13 @@ impl HashJoinBuildState {
     }
 
     /// Attach to state: `row_space_builders` and `hash_table_builders`.
-    pub fn build_attach(&self) -> Result<()> {
+    pub fn build_attach(&self) -> Result<usize> {
         let mut count = self.row_space_builders.lock();
         *count += 1;
         let mut count = self.hash_join_state.hash_table_builders.lock();
         *count += 1;
         self.build_worker_num.fetch_add(1, Ordering::Relaxed);
-        Ok(())
+        Ok(*count)
     }
 
     /// Detach to state: `row_space_builders`,

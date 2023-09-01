@@ -84,6 +84,7 @@ impl BuildSpillCoordinator {
     }
 
     // Wait for notify to spill
+    #[async_backtrace::framed]
     pub async fn wait_spill_notify(&self) {
         self.notify_spill.notified().await
     }

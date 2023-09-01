@@ -70,7 +70,8 @@ impl Spiller {
             operator,
             config,
             _spiller_type: spiller_type,
-            partition_set: vec![],
+            // Todo: init partition set elegantly
+            partition_set: vec![0, 1, 2, 3, 4, 5, 6, 7],
             spilled_partition_set: Default::default(),
             partitions: vec![],
             partition_location: Default::default(),
