@@ -1,10 +1,4 @@
 query 
-select * from infer_schema(location => '@data/parquet/')
-----
-id INT 0 0
-t TUPLE(A INT32, B STRING) 0 1
-
-query 
 select * from infer_schema(location => '@data/parquet/tuple.parquet')
 ----
 id INT 0 0
@@ -52,7 +46,7 @@ a INT 0 0
 b VARIANT 0 1
 
 query 
-select * from infer_schema(location => '@data/', FILE_FORMAT => 'PARQUET',  pattern => '.*parquet')
+select * from infer_schema(location => '@data/parquet/', FILE_FORMAT => 'PARQUET',  pattern => 'tuple.*')
 ----
-col_arr ARRAY(INT64) 1 0
-col_int BIGINT 1 1
+id INT 0 0
+t TUPLE(A INT32, B STRING) 0 1
