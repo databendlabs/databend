@@ -51,6 +51,7 @@ impl ParquetRSPruner {
         push_down: &Option<PushDownInfo>,
         options: ParquetReadOptions,
     ) -> Result<Self> {
+        // Build `RangePruner` by `filter`.
         let filter = push_down
             .as_ref()
             .and_then(|p| p.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));

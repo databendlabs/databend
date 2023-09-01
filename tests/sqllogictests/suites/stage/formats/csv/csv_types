@@ -6,3 +6,34 @@ create table dt(a datetime, b string)
 
 query error 1046
 copy into dt from @data/csv/bad_datetime.csv file_format = (type = CSV)
+
+
+statement ok
+drop table if exists iv
+
+statement ok
+create table iv(a int, b variant)
+
+query TIITI
+copy into iv from @data/csv/invalid_variant.csv FILE_FORMAT = (field_delimiter = '\t' record_delimiter = '\n' type = CSV) disable_variant_check = false ON_ERROR = CONTINUE
+----
+csv/invalid_variant.csv 1 1 fail to decode column 1 (b Variant): Invalid JSON value: "invalidvariant", [column_data]=["invalidvariant"] 1
+
+query IT
+select * from iv
+----
+2 {"k":"v"}
+
+statement ok
+truncate table iv
+
+query TIITI
+copy into iv from @data/csv/invalid_variant.csv FILE_FORMAT = (field_delimiter = '\t' record_delimiter = '\n' type = CSV) disable_variant_check = true ON_ERROR = CONTINUE
+----
+csv/invalid_variant.csv 2 0 NULL NULL
+
+query IT
+select * from iv
+----
+1 invalidvariant
+2 {"k":"v"}

@@ -14,16 +14,19 @@ echo "create stage data_fs url = '${DATADIR}' FILE_FORMAT = (type = PARQUET);"  
 echo "create table small_parquets(col_arr array(int), col_int int);" | $MYSQL_CLIENT_CONNECT
 
 ## all_large, mixed, all_small
-for threshold in "0" "3000" "10000"; do
-	for stage in "data_fs" "data_s3"; do
-		echo "--- copy, threshold=${threshold} stage=${stage}"
-		echo "set parquet_fast_read_bytes=${threshold}; copy into small_parquets from @${stage} PATTERN='.*parquet' force=true;" | $MYSQL_CLIENT_CONNECT
-		echo "select count(*) from small_parquets" | $MYSQL_CLIENT_CONNECT
-		echo "truncate table small_parquets" | $MYSQL_CLIENT_CONNECT
+for parquet in "0" "1"; do
+	echo "use_parquet2=${parquet}"
+	for threshold in "0" "3000" "10000"; do
+		for stage in "data_fs" "data_s3"; do
+			echo "--- copy, threshold=${threshold} stage=${stage}"
+			echo "set use_parquet2=${parquet}; set parquet_fast_read_bytes=${threshold}; copy into small_parquets from @${stage} PATTERN='.*parquet' force=true;" | $MYSQL_CLIENT_CONNECT
+			echo "select count(*) from small_parquets" | $MYSQL_CLIENT_CONNECT
+			echo "truncate table small_parquets" | $MYSQL_CLIENT_CONNECT
 
-		echo "--- copy from select, threshold=${threshold} stage=${stage}"
-		echo "set parquet_fast_read_bytes=${threshold}; copy into small_parquets from (select * from @${stage} t) PATTERN='.*parquet' force = true;" | $MYSQL_CLIENT_CONNECT
-		echo "select count(*) from small_parquets" | $MYSQL_CLIENT_CONNECT
-		echo "truncate table small_parquets" | $MYSQL_CLIENT_CONNECT
+			echo "--- copy from select, threshold=${threshold} stage=${stage}"
+			echo "set use_parquet2=${parquet}; set parquet_fast_read_bytes=${threshold}; copy into small_parquets from (select * from @${stage} t) PATTERN='.*parquet' force = true;" | $MYSQL_CLIENT_CONNECT
+			echo "select count(*) from small_parquets" | $MYSQL_CLIENT_CONNECT
+			echo "truncate table small_parquets" | $MYSQL_CLIENT_CONNECT
+		done
 	done
 done

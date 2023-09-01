@@ -26,6 +26,23 @@ select $1, $2 from @data/csv/no_newline.csv (file_format=>'csv')  order by $1
 3 4
 
 statement ok
+drop table if exists ii
+
+statement ok
+create table ii(a int null, b int null)
+
+query II
+copy into ii from @data/csv/win_newline.csv file_format = (type = CSV record_delimiter = '\r\n' skip_header = 1)
+----
+csv/win_newline.csv 2 0 NULL NULL
+
+query II
+select * from ii order by a
+----
+10 NULL
+NULL 1
+
+statement ok
 drop table if exists it
 
 statement ok
