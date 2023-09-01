@@ -17,10 +17,10 @@ statement ok
 create stage s3 FILE_FORMAT = (TYPE = CSV);
 
 statement ok
-create table products (id int, name string, description string);
+create table products (id int not null, name string not null, description string not null);
 
 statement ok
-create table table_random(a int,b string,c string) ENGINE = Random;
+create table table_random(a int not null,b string not null,c string not null) ENGINE = Random;
 
 statement ok
 copy into @s3 from (select a,b,c from table_random limit 10);

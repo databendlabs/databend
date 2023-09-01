@@ -9,7 +9,7 @@ explain select a from t_where_optimizer where a = 1
 ----
 Filter
 ├── output columns: [t_where_optimizer.a (#0)]
-├── filters: [t_where_optimizer.a (#0) = 1]
+├── filters: [is_true(t_where_optimizer.a (#0) = 1)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_where_optimizer
@@ -18,7 +18,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [t_where_optimizer.a (#0) = 1], limit: NONE]
+    ├── push downs: [filters: [is_true(t_where_optimizer.a (#0) = 1)], limit: NONE]
     └── estimated rows: 0.00
 
 query T
@@ -26,7 +26,7 @@ explain select * from t_where_optimizer where a = b
 ----
 Filter
 ├── output columns: [t_where_optimizer.a (#0), t_where_optimizer.b (#1)]
-├── filters: [t_where_optimizer.a (#0) = t_where_optimizer.b (#1)]
+├── filters: [is_true(t_where_optimizer.a (#0) = t_where_optimizer.b (#1))]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_where_optimizer
@@ -35,7 +35,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [t_where_optimizer.a (#0) = t_where_optimizer.b (#1)], limit: NONE]
+    ├── push downs: [filters: [is_true(t_where_optimizer.a (#0) = t_where_optimizer.b (#1))], limit: NONE]
     └── estimated rows: 0.00
 
 query T
@@ -43,7 +43,7 @@ explain select * from t_where_optimizer where a = 1 or b > 2
 ----
 Filter
 ├── output columns: [t_where_optimizer.a (#0), t_where_optimizer.b (#1)]
-├── filters: [t_where_optimizer.a (#0) = 1 OR t_where_optimizer.b (#1) > 2]
+├── filters: [is_true(t_where_optimizer.a (#0) = 1 OR t_where_optimizer.b (#1) > 2)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_where_optimizer
@@ -52,7 +52,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [t_where_optimizer.a (#0) = 1 OR t_where_optimizer.b (#1) > 2], limit: NONE]
+    ├── push downs: [filters: [is_true(t_where_optimizer.a (#0) = 1 OR t_where_optimizer.b (#1) > 2)], limit: NONE]
     └── estimated rows: 0.00
 
 query T
@@ -60,7 +60,7 @@ explain select * from t_where_optimizer where a = 1 and b > 2
 ----
 Filter
 ├── output columns: [t_where_optimizer.a (#0), t_where_optimizer.b (#1)]
-├── filters: [t_where_optimizer.a (#0) = 1, t_where_optimizer.b (#1) > 2]
+├── filters: [is_true(t_where_optimizer.a (#0) = 1), is_true(t_where_optimizer.b (#1) > 2)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_where_optimizer
@@ -69,7 +69,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(CAST(t_where_optimizer.a (#0) = 1 AS Boolean NULL), CAST(t_where_optimizer.b (#1) > 2 AS Boolean NULL))], limit: NONE]
+    ├── push downs: [filters: [and_filters(t_where_optimizer.a (#0) = 1, t_where_optimizer.b (#1) > 2)], limit: NONE]
     └── estimated rows: 0.00
 
 query T
@@ -77,7 +77,7 @@ explain select * from t_where_optimizer where b = 1
 ----
 Filter
 ├── output columns: [t_where_optimizer.a (#0), t_where_optimizer.b (#1)]
-├── filters: [t_where_optimizer.b (#1) = 1]
+├── filters: [is_true(t_where_optimizer.b (#1) = 1)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_where_optimizer
@@ -86,7 +86,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [t_where_optimizer.b (#1) = 1], limit: NONE]
+    ├── push downs: [filters: [is_true(t_where_optimizer.b (#1) = 1)], limit: NONE]
     └── estimated rows: 0.00
 
 query T
@@ -94,7 +94,7 @@ explain select a from t_where_optimizer where b = 1
 ----
 Filter
 ├── output columns: [t_where_optimizer.a (#0)]
-├── filters: [t_where_optimizer.b (#1) = 1]
+├── filters: [is_true(t_where_optimizer.b (#1) = 1)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_where_optimizer
@@ -103,7 +103,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [t_where_optimizer.b (#1) = 1], limit: NONE]
+    ├── push downs: [filters: [is_true(t_where_optimizer.b (#1) = 1)], limit: NONE]
     └── estimated rows: 0.00
 
 statement ok
@@ -117,16 +117,16 @@ explain select * from t_where_optimizer where s:a > 0
 ----
 Filter
 ├── output columns: [t_where_optimizer.id (#0), t_where_optimizer.s (#1)]
-├── filters: [t_where_optimizer.s:a (#2) > 0]
+├── filters: [is_true(get(1)(CAST(t_where_optimizer.s (#1) AS Tuple(Int32 NULL, Int32 NULL) NULL)) > 0)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_where_optimizer
-    ├── output columns: [id (#0), s (#1), s:a (#2)]
+    ├── output columns: [id (#0), s (#1)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [t_where_optimizer.s:a (#2) > 0], limit: NONE]
+    ├── push downs: [filters: [is_true(get(1)(CAST(t_where_optimizer.s (#1) AS Tuple(Int32 NULL, Int32 NULL) NULL)) > 0)], limit: NONE]
     └── estimated rows: 0.00
 
 statement ok

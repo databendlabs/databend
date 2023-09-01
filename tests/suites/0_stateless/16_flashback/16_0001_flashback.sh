@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 
-echo "create table t16(c int)" | $MYSQL_CLIENT_CONNECT
+echo "create table t16(c int not null)" | $MYSQL_CLIENT_CONNECT
 # the first snapshot contains 2 rows
 echo "insert into t16 values(1),(2)" | $MYSQL_CLIENT_CONNECT
 
