@@ -149,7 +149,7 @@ pub fn lazy_prepare_data(file_path: &Path) -> Result<()> {
         PREPARE_TPCDS.call_once(|| {
             run_script("prepare_tpcds_data.sh").unwrap();
         });
-    } else if file_path.contains("stage") {
+    } else if file_path.contains("stage/") || file_path.contains("stage_parquet/") {
         PREPARE_STAGE.call_once(|| {
             run_script("prepare_stage.sh").unwrap();
         });
