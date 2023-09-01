@@ -17,11 +17,15 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
+use common_expression::HashMethod;
 use common_expression::HashMethodKind;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_storage::DataOperator;
+use log::debug;
 
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -60,6 +64,142 @@ impl BuildSpillState {
             spiller,
         }
     }
+
+    // Get all hashes for input data.
+    fn get_hashes(&self, block: &DataBlock, hashes: &mut Vec<u64>) -> Result<()> {
+        let func_ctx = self.build_state.ctx.get_function_context()?;
+        let evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
+        // Use the first column as the key column to generate hash
+        let columns: Vec<(Column, DataType)> = self
+            .build_state
+            .hash_join_state
+            .hash_join_desc
+            .build_keys
+            .iter()
+            .map(|expr| {
+                let return_type = expr.data_type();
+                Ok((
+                    evaluator
+                        .run(expr)?
+                        .convert_to_full_column(return_type, block.num_rows()),
+                    return_type.clone(),
+                ))
+            })
+            .collect::<Result<_>>()?;
+        // Todo: simplify the following code
+        match &*self.build_state.method {
+            HashMethodKind::Serializer(method) => {
+                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
+                for row in method.build_keys_iter(&rows_state)? {
+                    hashes.push(method.get_hash(row));
+                }
+            }
+            HashMethodKind::DictionarySerializer(method) => {
+                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
+                for row in method.build_keys_iter(&rows_state)? {
+                    hashes.push(method.get_hash(row));
+                }
+            }
+            HashMethodKind::SingleString(method) => {
+                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
+                for row in method.build_keys_iter(&rows_state)? {
+                    hashes.push(method.get_hash(row));
+                }
+            }
+            HashMethodKind::KeysU8(method) => {
+                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
+                for row in method.build_keys_iter(&rows_state)? {
+                    hashes.push(method.get_hash(row));
+                }
+            }
+            HashMethodKind::KeysU16(method) => {
+                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
+                for row in method.build_keys_iter(&rows_state)? {
+                    hashes.push(method.get_hash(row));
+                }
+            }
+            HashMethodKind::KeysU32(method) => {
+                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
+                for row in method.build_keys_iter(&rows_state)? {
+                    hashes.push(method.get_hash(row));
+                }
+            }
+            HashMethodKind::KeysU64(method) => {
+                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
+                for row in method.build_keys_iter(&rows_state)? {
+                    hashes.push(method.get_hash(row));
+                }
+            }
+            HashMethodKind::KeysU128(method) => {
+                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
+                for row in method.build_keys_iter(&rows_state)? {
+                    hashes.push(method.get_hash(row));
+                }
+            }
+            HashMethodKind::KeysU256(method) => {
+                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
+                for row in method.build_keys_iter(&rows_state)? {
+                    hashes.push(method.get_hash(row));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    // Collect all buffered data in `RowSpace` and `Chunks`
+    // The method will be executed by only one processor.
+    fn collect_rows(&self) -> Result<Vec<DataBlock>> {
+        let mut blocks = vec![];
+        // Collect rows in `RowSpace`'s buffer
+        let mut row_space_buffer = self.build_state.hash_join_state.row_space.buffer.write();
+        blocks.extend(row_space_buffer.drain(..));
+        let mut buffer_row_size = self
+            .build_state
+            .hash_join_state
+            .row_space
+            .buffer_row_size
+            .write();
+        *buffer_row_size = 0;
+
+        // Collect rows in `Chunks`
+        let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
+        blocks.extend(chunks.drain(..));
+        Ok(blocks)
+    }
+
+    // Partition input blocks to different partitions.
+    // Output is <partition_id, blocks>
+    fn partition_input_blocks(
+        &self,
+        input_blocks: &[DataBlock],
+    ) -> Result<HashMap<u8, Vec<DataBlock>>> {
+        let mut partition_blocks = HashMap::new();
+        let mut partition_map = HashMap::with_capacity(8);
+        for block in input_blocks.iter() {
+            let mut hashes = Vec::with_capacity(block.num_rows());
+            self.get_hashes(block, &mut hashes)?;
+            for (row_idx, hash) in hashes.iter().enumerate() {
+                let partition_id = *hash as u8 & 0b0000_0111;
+                partition_map
+                    .entry(partition_id)
+                    .and_modify(|v: &mut Vec<usize>| v.push(row_idx))
+                    .or_insert(vec![row_idx]);
+            }
+            for (partition_id, row_indexes) in partition_map.iter() {
+                let block_row_indexes = row_indexes
+                    .iter()
+                    .map(|idx| (0 as u32, *idx as u32, 1 as usize))
+                    .collect::<Vec<_>>();
+                let block =
+                    DataBlock::take_blocks(&[block.clone()], &block_row_indexes, row_indexes.len());
+                partition_blocks
+                    .entry(*partition_id)
+                    .and_modify(|v: &mut Vec<DataBlock>| v.push(block.clone()))
+                    .or_insert(vec![block]);
+            }
+        }
+        Ok(partition_blocks)
+    }
 }
 
 /// Define some spill-related APIs for hash join build
@@ -71,76 +211,7 @@ impl BuildSpillState {
             let mut spill_tasks = self.spill_coordinator.spill_tasks.write();
             spill_tasks.pop_back().unwrap()
         };
-        dbg!(&spill_partitions);
         self.spiller.spill(&spill_partitions).await
-    }
-
-    // Get all hashes for input data.
-    fn get_hashes(&self, block: &DataBlock, hashes: &mut Vec<u64>) -> Result<()> {
-        let func_ctx = self.build_state.ctx.get_function_context()?;
-        let evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
-        // Use the first column as the key column to generate hash
-        let first_build_key = &self.build_state.hash_join_state.hash_join_desc.build_keys[0];
-        let build_key_column = evaluator.run(first_build_key)?;
-        let build_key_column = build_key_column.as_column().unwrap();
-        // Todo: simplify the following code
-        match &*self.build_state.method {
-            HashMethodKind::Serializer(method) => {
-                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
-                for row in rows_iter.iter() {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::DictionarySerializer(method) => {
-                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
-                for row in rows_iter.iter() {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::SingleString(method) => {
-                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
-                for row in rows_iter.iter() {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::KeysU8(method) => {
-                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
-                for row in rows_iter.iter() {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::KeysU16(method) => {
-                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
-                for row in rows_iter.iter() {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::KeysU32(method) => {
-                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
-                for row in rows_iter.iter() {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::KeysU64(method) => {
-                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
-                for row in rows_iter.iter() {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::KeysU128(method) => {
-                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
-                for row in rows_iter.iter() {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::KeysU256(method) => {
-                let rows_iter = method.keys_iter_from_column(&build_key_column)?;
-                for row in rows_iter.iter() {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-        }
-        Ok(())
     }
 
     // Check if need to spill.
@@ -239,61 +310,6 @@ impl BuildSpillState {
             &unspilled_block_row_indexes,
             unspilled_row_index.len(),
         ))
-    }
-
-    // Collect all buffered data in `RowSpace` and `Chunks`
-    // The method will be executed by only one processor.
-    fn collect_rows(&self) -> Result<Vec<DataBlock>> {
-        let mut blocks = vec![];
-        // Collect rows in `RowSpace`'s buffer
-        let mut row_space_buffer = self.build_state.hash_join_state.row_space.buffer.write();
-        blocks.extend(row_space_buffer.drain(..));
-        let mut buffer_row_size = self
-            .build_state
-            .hash_join_state
-            .row_space
-            .buffer_row_size
-            .write();
-        *buffer_row_size = 0;
-
-        // Collect rows in `Chunks`
-        let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
-        blocks.extend(chunks.drain(..));
-        Ok(blocks)
-    }
-
-    // Partition input blocks to different partitions.
-    // Output is <partition_id, blocks>
-    fn partition_input_blocks(
-        &self,
-        input_blocks: &[DataBlock],
-    ) -> Result<HashMap<u8, Vec<DataBlock>>> {
-        let mut partition_blocks = HashMap::new();
-        let mut partition_map = HashMap::with_capacity(8);
-        for block in input_blocks.iter() {
-            let mut hashes = Vec::with_capacity(block.num_rows());
-            self.get_hashes(block, &mut hashes)?;
-            for (row_idx, hash) in hashes.iter().enumerate() {
-                let partition_id = *hash as u8 & 0b0000_0111;
-                partition_map
-                    .entry(partition_id)
-                    .and_modify(|v: &mut Vec<usize>| v.push(row_idx))
-                    .or_insert(vec![row_idx]);
-            }
-            for (partition_id, row_indexes) in partition_map.iter() {
-                let block_row_indexes = row_indexes
-                    .iter()
-                    .map(|idx| (0 as u32, *idx as u32, 1 as usize))
-                    .collect::<Vec<_>>();
-                let block =
-                    DataBlock::take_blocks(&[block.clone()], &block_row_indexes, row_indexes.len());
-                partition_blocks
-                    .entry(*partition_id)
-                    .and_modify(|v: &mut Vec<DataBlock>| v.push(block.clone()))
-                    .or_insert(vec![block]);
-            }
-        }
-        Ok(partition_blocks)
     }
 
     // Split all spill tasks equally to all processors

@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use log::debug;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
@@ -75,6 +76,32 @@ impl TransformHashJoinBuild {
             finalize_finished: false,
             processor_id,
         }))
+    }
+
+    fn wait_spill(&mut self, data_block: DataBlock) -> Result<()> {
+        let spill_state = self.spill_state.as_ref().unwrap();
+        let wait = spill_state.spill_coordinator.wait_spill()?;
+        self.input_data = Some(data_block);
+        if wait {
+            debug!("Processor {} needs to wait spill", self.processor_id);
+            self.step = HashJoinBuildStep::WaitSpill;
+        } else {
+            debug!(
+                "Processor {} is the last processor, it will split spill tasks and notify all processors to spill",
+                self.processor_id
+            );
+            // Make `need_spill` to false for `SpillCoordinator`
+            spill_state.spill_coordinator.no_need_spill();
+            // Before notify all processors to spill, we need to collect all buffered data in `RowSpace` and `Chunks`
+            // Partition all rows and stat how many partitions and rows in each partition.
+            // Then choose the largest partitions(which contain rows that can avoid oom exactly) to spill.
+            // For each partition, we should equally divide the rows into each processor.
+            // Then all processors will spill same partitions.
+            spill_state.split_spill_tasks()?;
+            spill_state.spill_coordinator.notify_spill();
+            self.step = HashJoinBuildStep::FirstSpill;
+        }
+        Ok(())
     }
 
     fn reset(&mut self) -> Result<()> {
@@ -154,36 +181,14 @@ impl Processor for TransformHashJoinBuild {
                     if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.is_all_spilled(){
                         // Check if need to spill
                         let need_spill = spill_state.check_need_spill()?;
-                        dbg!(need_spill);
                         if need_spill {
-                            dbg!("Processor {} needs to spill", self.processor_id);
-                            self.input_data = Some(data_block);
-                            self.step = HashJoinBuildStep::WaitSpill;
                             spill_state.spill_coordinator.need_spill()?;
+                            self.wait_spill(data_block)?;
                         } else {
                             if spill_state.spill_coordinator.get_need_spill() {
                                 // even if input can fit into memory, but there exists one processor need to spill,
                                 // then it needs to wait spill.
-                                let wait = spill_state.spill_coordinator.wait_spill()?;
-                                if wait {
-                                    // Put data to `self.input_data` for next round process
-                                    dbg!("Processor {} needs to wait spill", self.processor_id);
-                                    self.input_data = Some(data_block);
-                                    self.step = HashJoinBuildStep::WaitSpill;
-                                } else {
-                                    dbg!("Processor {} is the last processor, it will split spill tasks and notify all processors to spill", self.processor_id);
-                                    // Make `need_spill` to false for `SpillCoordinator`
-                                    spill_state.spill_coordinator.no_need_spill();
-                                    // Before notify all processors to spill, we need to collect all buffered data in `RowSpace` and `Chunks`
-                                    // Partition all rows and stat how many partitions and rows in each partition.
-                                    // Then choose the largest partitions(which contain rows that can avoid oom exactly) to spill.
-                                    // For each partition, we should equally divide the rows into each processor.
-                                    // Then all processors will spill same partitions.
-                                    spill_state.split_spill_tasks()?;
-                                    spill_state.spill_coordinator.notify_spill();
-                                    // The processor is last, start the first round spill
-                                    self.step = HashJoinBuildStep::FirstSpill;
-                                }
+                                self.wait_spill(data_block)?;
                             } else {
                                 // If the processor had spilled data, we should continue to spill
                                 if spill_state.spiller.is_any_spilled() {

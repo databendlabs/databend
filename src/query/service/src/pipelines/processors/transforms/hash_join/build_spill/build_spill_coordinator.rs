@@ -67,6 +67,8 @@ impl BuildSpillCoordinator {
         let mut waiting_spill_count = self.waiting_spill_count.write();
         *waiting_spill_count += 1;
         if *waiting_spill_count == *self.total_builder_count.read() {
+            // Reset waiting_spill_count
+            *waiting_spill_count = 0;
             // No need to wait spill, the processor is the last one
             return Ok(false);
         }
