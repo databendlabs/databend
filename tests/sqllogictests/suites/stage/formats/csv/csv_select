@@ -12,10 +12,8 @@ select a.$1 from @data/csv (files=>('select.csv'), file_format=>'csv') a order b
 2
 3
 
-# SemanticError. Code: 1065, Text = select columns from csv file must in the form of $<column_position>.
-query error 1065
+query error select columns from csv file must in the form of
 select * from @data/csv (files=>('select.csv'), file_format=>'csv')
 
-# SemanticError. Code: 1065, Text = can not select * from csv/ndjson file.
-query error 1065
+query error can not select *
 select *, $1 from @data/csv (files=>('select.csv'), file_format=>'csv')
