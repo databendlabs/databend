@@ -29,6 +29,7 @@ use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::read_metadata_with_size;
 use common_arrow::parquet::read::read_pages_locations;
+use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
@@ -261,37 +262,38 @@ impl PartitionPruner {
                 max_compression_ratio = max_compression_ratio
                     .max(p.uncompressed_size() as f64 / p.compressed_size() as f64);
                 max_compressed_size = max_compressed_size.max(p.compressed_size());
-                partitions.push(ParquetPart::Parquet2RowGroup(p));
+                partitions.push(Arc::new(
+                    Box::new(ParquetPart::Parquet2RowGroup(p)) as Box<dyn PartInfo>
+                ));
             }
-            stats.partitions_total += sub_stats.partitions_total;
-            stats.partitions_scanned += sub_stats.partitions_scanned;
-            stats.read_bytes += sub_stats.read_bytes;
-            stats.read_rows += sub_stats.read_rows;
+            stats.merge(&sub_stats);
         }
 
         let num_large_partitions = partitions.len();
+        let mut partitions = Partitions::create_nolazy(PartitionsShuffleKind::Mod, partitions);
 
-        collect_small_file_parts(
-            small_files,
-            max_compression_ratio,
-            max_compressed_size,
-            &mut partitions,
-            &mut stats,
-            self.columns_to_read.len(),
-        );
+        // If there are only row group parts, the `stats` is exact.
+        // It will be changed to `false` if there are small files parts.
+        if small_files.is_empty() {
+            stats.is_exact = true;
+        } else {
+            stats.is_exact = false;
+            collect_small_file_parts(
+                small_files,
+                max_compression_ratio,
+                max_compressed_size,
+                &mut partitions,
+                &mut stats,
+                self.columns_to_read.len(),
+            );
+        }
 
         info!(
             "copy {num_large_partitions} large partitions and {} small partitions.",
             partitions.len() - num_large_partitions
         );
 
-        let partition_kind = PartitionsShuffleKind::Mod;
-        let partitions = partitions
-            .into_iter()
-            .map(|p| p.convert_to_part_info())
-            .collect();
-
-        Ok((stats, Partitions::create_nolazy(partition_kind, partitions)))
+        Ok((stats, partitions))
     }
 }
 

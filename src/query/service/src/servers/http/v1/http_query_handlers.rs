@@ -33,6 +33,7 @@ use serde_json::Value as JsonValue;
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
+use crate::servers::http::metrics::metrics_incr_http_response_errors_count;
 use crate::servers::http::middleware::MetricsMiddleware;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
@@ -156,6 +157,10 @@ impl QueryResponse {
             }
         };
 
+        if let Some(err) = &r.state.error {
+            metrics_incr_http_response_errors_count(err.name(), err.code());
+        }
+
         let schema = data.schema().clone();
         let session_id = r.session_id.clone();
         let stats = QueryStats {
@@ -163,6 +168,7 @@ impl QueryResponse {
             running_time_ms: state.running_time_ms,
         };
         let rows = data.data.len();
+
         Json(QueryResponse {
             data: data.into(),
             state: state.state,
@@ -184,6 +190,7 @@ impl QueryResponse {
     }
 
     pub(crate) fn fail_to_start_sql(err: &ErrorCode) -> impl IntoResponse {
+        metrics_incr_http_response_errors_count(err.name(), err.code());
         Json(QueryResponse {
             id: "".to_string(),
             stats: QueryStats::default(),

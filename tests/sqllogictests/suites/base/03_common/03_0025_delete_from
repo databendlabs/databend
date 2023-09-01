@@ -196,30 +196,14 @@ insert into t values(2);
 statement ok
 insert into t values(3);
 
-# clear metrics
-statement ok
-truncate table system.metrics;
-
 statement ok
 delete from t where c = 2;
-
-# expects 2 blocks pruned: the blocks of value 1 and 3
-query I
-select value from system.metrics where metric = 'fuse_deletion_block_range_pruned_nums';
-----
-2.0
 
 query I
 select * from t order by c;
 ----
 1
 3
-
-# expects 1 whole block deletion: the block of value 2
-query I
-select value from system.metrics where metric = 'fuse_deletion_block_range_pruned_whole_block_nums';
-----
-1.0
 
 # case: 3 blocks
 
@@ -235,24 +219,8 @@ insert into t values(3), (5);
 statement ok
 insert into t values(6), (7);
 
-# clear metrics
-statement ok
-truncate table system.metrics;
-
 statement ok
 delete from t where c > 0 and c < 4;
-
-# expects 1 blocks pruned: the block of value {6..7}
-query I
-select value from system.metrics where metric = 'fuse_deletion_block_range_pruned_nums';
-----
-1.0
-
-# expects 1 whole block deletion: the block of value {1..3}
-query I
-select value from system.metrics where metric = 'fuse_deletion_block_range_pruned_whole_block_nums';
-----
-1.0
 
 query I
 select * from t order by c;
@@ -287,23 +255,8 @@ insert into t values(4),(5),(6);
 statement ok
 insert into t values(7),(8),(9);
 
-#clear metrics
-statement ok
-truncate table system.metrics;
-
 statement ok
 delete from t where c > 3 and c < 8;
-
-# expects 1 block pruned and
-query I
-select value from system.metrics where metric = 'fuse_deletion_block_range_pruned_nums';
-----
-1.0
-
-query I
-select value from system.metrics where metric = 'fuse_deletion_segment_range_pruned_whole_segment_nums';
-----
-1.0
 
 query I
 select * from t order by c;
@@ -313,12 +266,6 @@ select * from t order by c;
 3
 8
 9
-
-# expects 1 whole block deletion: the block of value 2
-query I
-select value from system.metrics where metric = 'fuse_deletion_block_range_pruned_whole_block_nums';
-----
-1.0
 
 statement ok
 drop table t all

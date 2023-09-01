@@ -304,6 +304,33 @@ jobs:
         with:
           name: test-sqllogic-cluster-${{ matrix.handlers }}-${{ matrix.dirs }}
 
+  sqllogic_stage:
+    name: sqllogic_stage_${{ matrix.storage }}
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [build, check]
+    strategy:
+      matrix:
+        dirs:
+          - "stage"
+        handlers:
+          - "mysql,http,clickhouse"
+        storage:
+          - "s3"
+          - "fs"
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_sqllogic_stage
+        timeout-minutes: 15
+        with:
+          storage: ${{ matrix.storage }}
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handlers }}
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.handlers }}-${{ matrix.dirs }}
+
   test_stateless_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]

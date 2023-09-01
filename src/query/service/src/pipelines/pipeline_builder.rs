@@ -1766,20 +1766,24 @@ impl PipelineBuilder {
     fn build_limit(&mut self, limit: &Limit) -> Result<()> {
         self.build_pipeline(&limit.input)?;
 
-        self.main_pipeline.try_resize(1)?;
-        self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformLimit::try_create(limit.limit, limit.offset, input, output)?;
+        if limit.limit.is_some() || limit.offset != 0 {
+            self.main_pipeline.try_resize(1)?;
+            return self.main_pipeline.add_transform(|input, output| {
+                let transform =
+                    TransformLimit::try_create(limit.limit, limit.offset, input, output)?;
 
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                    transform,
-                    limit.plan_id,
-                    self.proc_profs.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
-        })
+                if self.enable_profiling {
+                    Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
+                        transform,
+                        limit.plan_id,
+                        self.proc_profs.clone(),
+                    )))
+                } else {
+                    Ok(ProcessorPtr::create(transform))
+                }
+            });
+        }
+        Ok(())
     }
 
     fn build_row_fetch(&mut self, row_fetch: &RowFetch) -> Result<()> {
