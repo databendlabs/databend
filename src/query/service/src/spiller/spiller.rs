@@ -49,7 +49,7 @@ impl SpillerConfig {
 pub struct Spiller {
     operator: Operator,
     config: SpillerConfig,
-    spiller_type: SpillerType,
+    _spiller_type: SpillerType,
     /// Partition set, which records there are how many partitions.
     pub partition_set: Vec<u8>,
     /// Spilled partition set, after one partition is spilled, it will be added to this set.
@@ -69,7 +69,7 @@ impl Spiller {
         Self {
             operator,
             config,
-            spiller_type,
+            _spiller_type: spiller_type,
             partition_set: vec![],
             spilled_partition_set: Default::default(),
             partitions: vec![],

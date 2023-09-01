@@ -146,8 +146,8 @@ impl BuildSpillState {
     // Notes: even if the method returns false, but there exists one processor need to spill, then it needs to wait spill.
     pub(crate) fn check_need_spill(&self) -> Result<bool> {
         let settings = self.build_state.ctx.get_settings();
-        let enable_spill = settings.get_enable_join_spill()?;
         let spill_threshold = settings.get_join_spilling_threshold()?;
+        let enable_spill = settings.get_enable_join_spill()? && spill_threshold != 0;
         if !enable_spill || self.spiller.is_all_spilled() {
             return Ok(false);
         }

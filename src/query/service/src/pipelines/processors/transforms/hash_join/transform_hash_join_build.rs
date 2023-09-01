@@ -251,7 +251,6 @@ impl Processor for TransformHashJoinBuild {
                 // Currently, each processor will read its own partition
                 // Note: we assume that the partition files will fit into memory
                 // later, will introduce multiple level spill or other way to handle this.
-                // Todo: we should shuffle partitions files and distribute them to each processor and make processors load balanced.
                 let partition_id = *self.build_state.hash_join_state.partition_id.read();
                 let spilled_data = self
                     .spill_state
