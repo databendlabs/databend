@@ -3562,40 +3562,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply, KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
-        let tenant_dbname = req.name_ident.db_name_ident();
-        let tenant_dbname_tbname = &req.name_ident;
+        let table_id = req.table_id;
 
         let mut retry = 0;
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
-
-            let (_, db_id, _db_meta_seq, db_meta) =
-                get_db_or_err(self, &tenant_dbname, "set_table_lvt").await?;
-
-            // cannot operate on shared database
-            if let Some(from_share) = db_meta.from_share {
-                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
-                )));
-            }
-
-            // Get table by tenant,db_id, table_name to assert presence.
-
-            let dbid_tbname = DBIdTableName {
-                db_id,
-                table_name: req.name_ident.table_name.clone(),
-            };
-
-            // If table id already exists, return error.
-            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-            if tb_id_seq == 0 {
-                return Err(KVAppError::AppError(AppError::UnknownTable(
-                    UnknownTable::new(
-                        &req.name_ident.table_name,
-                        format!("{}: {}", "set_table_lvt", tenant_dbname_tbname),
-                    ),
-                )));
-            }
 
             let lvt_key = LeastVisibleTimeKey { table_id };
             let (lvt_seq, lvt_opt): (_, Option<LeastVisibleTime>) =
@@ -3614,10 +3585,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let new_lvt = LeastVisibleTime { time: new_time };
 
             let txn_req = TxnRequest {
-                condition: vec![
-                    txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
-                    txn_cond_seq(&lvt_key, Eq, lvt_seq),
-                ],
+                condition: vec![txn_cond_seq(&lvt_key, Eq, lvt_seq)],
                 if_then: vec![txn_op_put(&lvt_key, serialize_struct(&new_lvt)?)],
                 else_then: vec![],
             };
@@ -3625,7 +3593,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                name = as_debug!(req.name_ident),
+                name = as_debug!(req.table_id),
                 succ = succ;
                 "set_table_lvt"
             );

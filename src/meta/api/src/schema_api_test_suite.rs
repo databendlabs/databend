@@ -1407,24 +1407,6 @@ impl SchemaApiTestSuite {
         };
         let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
-        info!("--- test without db");
-        {
-            let req = SetLVTReq {
-                name_ident: name_ident.clone(),
-                time: 1024,
-            };
-
-            let unknown_database_code = ErrorCode::UnknownDatabase("").code();
-            let res = mt.set_table_lvt(req).await;
-            debug!("set_table_lvt on unknown db res: {:?}", res);
-
-            assert!(res.is_err());
-            let err = res.unwrap_err();
-            let err = ErrorCode::from(err);
-
-            assert_eq!(unknown_database_code, err.code());
-        }
-
         info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
@@ -1442,24 +1424,7 @@ impl SchemaApiTestSuite {
             mt.create_database(plan).await?;
         }
 
-        info!("--- test without table");
-        {
-            let req = SetLVTReq {
-                name_ident: name_ident.clone(),
-                time: 1024,
-            };
-
-            let unknown_table_code = ErrorCode::UnknownTable("").code();
-            let res = mt.set_table_lvt(req).await;
-            debug!("set_table_lvt on unknown db res: {:?}", res);
-
-            assert!(res.is_err());
-            let err = res.unwrap_err();
-            let err = ErrorCode::from(err);
-
-            assert_eq!(unknown_table_code, err.code());
-        }
-
+        let table_id;
         info!("--- create table");
         {
             let table_meta = |created_on| TableMeta {
@@ -1476,35 +1441,27 @@ impl SchemaApiTestSuite {
                 name_ident: name_ident.clone(),
                 table_meta: table_meta(created_on),
             };
-            mt.create_table(req.clone()).await?;
+            let res = mt.create_table(req.clone()).await?;
+            table_id = res.table_id;
         }
 
         info!("--- test lvt");
         {
             let time = 1024;
-            let req = SetLVTReq {
-                name_ident: name_ident.clone(),
-                time,
-            };
+            let req = SetLVTReq { table_id, time };
 
             let res = mt.set_table_lvt(req).await?;
             assert_eq!(res.time, 1024);
 
             // test lvt never fall back
             let time = 102;
-            let req = SetLVTReq {
-                name_ident: name_ident.clone(),
-                time,
-            };
+            let req = SetLVTReq { table_id, time };
 
             let res = mt.set_table_lvt(req).await?;
             assert_eq!(res.time, 1024);
 
             let time = 1025;
-            let req = SetLVTReq {
-                name_ident: name_ident.clone(),
-                time,
-            };
+            let req = SetLVTReq { table_id, time };
 
             let res = mt.set_table_lvt(req).await?;
             assert_eq!(res.time, 1025);

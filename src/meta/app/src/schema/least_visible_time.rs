@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::TableNameIdent;
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct LeastVisibleTime {
     pub time: u64,
@@ -21,7 +19,7 @@ pub struct LeastVisibleTime {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SetLVTReq {
-    pub name_ident: TableNameIdent,
+    pub table_id: u64,
     pub time: u64,
 }
 
