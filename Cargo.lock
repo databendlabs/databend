@@ -3579,11 +3579,9 @@ dependencies = [
  "background-service",
  "chrono",
  "clap 4.4.2",
- "comfy-table 6.1.4",
  "common-base",
  "common-config",
  "common-exception",
- "common-expression",
  "common-grpc",
  "common-license",
  "common-meta-api",
@@ -3911,7 +3909,7 @@ dependencies = [
 name = "databend_sqlsmith"
 version = "0.1.0"
 dependencies = [
- "clap 3.2.23",
+ "clap 4.4.2",
  "common-ast",
  "common-exception",
  "common-expression",
@@ -8346,7 +8344,7 @@ checksum = "440f724eba9f6996b75d63681b0a92b06947f1457076d503a4d2e2c8f56442b8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.27",
+ "syn 2.0.29",
 ]
 
 [[package]]

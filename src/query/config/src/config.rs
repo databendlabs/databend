@@ -138,9 +138,12 @@ pub struct Config {
 
 #[derive(Subcommand, Default, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Commands {
-    Version,
     #[default]
-    Local,
+    Version,
+    Local {
+        #[clap(long, short = 'q', default_value_t)]
+        query: String,
+    },
 }
 
 impl Default for Config {

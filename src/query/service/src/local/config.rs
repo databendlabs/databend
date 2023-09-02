@@ -72,10 +72,10 @@ pub struct Settings {
 #[derive(Clone, Debug, Copy, PartialEq, Deserialize)]
 pub enum OutputFormat {
     Table,
-    CSV,
-    TSV,
-    JSON,
-    NDJSON,
+    Csv,
+    Tsv,
+    Json,
+    NdJson,
     Null,
 }
 
@@ -111,10 +111,10 @@ impl Settings {
             "output_format" => {
                 self.output_format = match cmd_value.to_ascii_lowercase().as_str() {
                     "table" => OutputFormat::Table,
-                    "csv" => OutputFormat::CSV,
-                    "tsv" => OutputFormat::TSV,
-                    "json" => OutputFormat::JSON,
-                    "ndjson" => OutputFormat::NDJSON,
+                    "csv" => OutputFormat::Csv,
+                    "tsv" => OutputFormat::Tsv,
+                    "json" => OutputFormat::Json,
+                    "ndjson" => OutputFormat::NdJson,
                     "null" => OutputFormat::Null,
                     _ => {
                         return Err(ErrorCode::BadArguments(format!(

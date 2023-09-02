@@ -63,7 +63,7 @@ pub(crate) struct SessionExecutor {
 static PROMPT_SQL: &str = "select name from system.tables union all select name from system.columns union all select name from system.databases union all select name from system.functions";
 
 impl SessionExecutor {
-    pub async fn try_new(is_repl: bool) -> Result<Self> {
+    pub async fn try_new(is_repl: bool, query: &String) -> Result<Self> {
         let mut keywords = Vec::with_capacity(1024);
         let session = SessionManager::instance()
             .create_session(SessionType::Local)
@@ -85,7 +85,7 @@ impl SessionExecutor {
             settings.show_stats = true;
             settings.output_format = OutputFormat::Table;
         } else {
-            settings.output_format = OutputFormat::TSV;
+            settings.output_format = OutputFormat::Tsv;
         }
         settings.merge_config(config.settings);
 
@@ -114,7 +114,7 @@ impl SessionExecutor {
             session,
             is_repl,
             settings,
-            query: String::new(),
+            query: query.to_owned(),
             keywords: Arc::new(keywords),
         })
     }
@@ -141,7 +141,15 @@ impl SessionExecutor {
         if self.is_repl {
             self.handle_repl().await;
         } else {
-            self.handle_reader(tokio::io::stdin()).await;
+            if self.query.is_empty() {
+                self.handle_reader(tokio::io::stdin()).await;
+            } else {
+                let query = self.query.clone();
+                self.query.clear();
+                if let Err(e) = self.handle_query(false, &query).await {
+                    eprintln!("{}", e);
+                }
+            }
         }
     }
 
@@ -284,9 +292,9 @@ impl SessionExecutor {
                 .split_whitespace()
                 .collect::<Vec<_>>();
             if query.len() != 2 {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Control command error, must be syntax of `.cmd_name cmd_value`."
-                )));
+                return Err(ErrorCode::BadArguments(
+                    "Control command error, must be syntax of `.cmd_name cmd_value`.".to_string(),
+                ));
             }
             self.settings.inject_ctrl_cmd(query[0], query[1])?;
             return Ok(false);

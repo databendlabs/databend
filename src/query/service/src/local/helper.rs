@@ -63,15 +63,9 @@ impl Highlighter for CliHelper {
                     || TokenKind::is_reserved_ident(&token.kind, false)
                     || TokenKind::is_reserved_function_name(&token.kind)
                 {
-                    line.replace_range(
-                        token.span.clone(),
-                        &format!("\x1b[1;32m{}\x1b[0m", token.text()),
-                    );
+                    line.replace_range(token.span, &format!("\x1b[1;32m{}\x1b[0m", token.text()));
                 } else if token.kind.is_literal() {
-                    line.replace_range(
-                        token.span.clone(),
-                        &format!("\x1b[1;33m{}\x1b[0m", token.text()),
-                    );
+                    line.replace_range(token.span, &format!("\x1b[1;33m{}\x1b[0m", token.text()));
                 }
             }
         }

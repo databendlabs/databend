@@ -43,13 +43,13 @@ use databend_query::GlobalServices;
 use log::info;
 
 pub async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
-    match conf.cmd {
+    match &conf.cmd {
         None => return Ok(false),
         Some(Commands::Version) => {
             println!("version: {}", *QUERY_SEMVER);
             println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
         }
-        Some(Commands::Local) => local::query_local().await?,
+        Some(Commands::Local { query }) => local::query_local(query).await?,
     }
 
     Ok(true)
