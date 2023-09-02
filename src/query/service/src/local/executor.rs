@@ -140,15 +140,13 @@ impl SessionExecutor {
     pub async fn handle(&mut self) {
         if self.is_repl {
             self.handle_repl().await;
+        } else if self.query.is_empty() {
+            self.handle_reader(tokio::io::stdin()).await;
         } else {
-            if self.query.is_empty() {
-                self.handle_reader(tokio::io::stdin()).await;
-            } else {
-                let query = self.query.clone();
-                self.query.clear();
-                if let Err(e) = self.handle_query(false, &query).await {
-                    eprintln!("{}", e);
-                }
+            let query = self.query.clone();
+            self.query.clear();
+            if let Err(e) = self.handle_query(false, &query).await {
+                eprintln!("{}", e);
             }
         }
     }

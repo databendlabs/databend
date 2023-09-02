@@ -86,6 +86,7 @@ const CATALOG_HIVE: &str = "hive";
 pub struct Config {
     /// Run a command and quit
     #[command(subcommand)]
+    #[serde(skip)]
     pub cmd: Option<Commands>,
 
     #[clap(long, short = 'c', default_value_t)]
@@ -170,6 +171,10 @@ impl Config {
 
         if with_args {
             arg_conf = Self::parse();
+        }
+
+        if arg_conf.cmd.is_some() {
+            return Ok(arg_conf);
         }
 
         let mut builder: serfig::Builder<Self> = serfig::Builder::default();

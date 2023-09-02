@@ -208,6 +208,9 @@ impl StageFilesInfo {
                 EntryMode::FILE => return Ok(vec![StageFileInfo::new(path.to_string(), &meta)]),
                 EntryMode::DIR => {}
                 EntryMode::Unknown => {
+                    if path == STDIN_FD {
+                        return Ok(vec![stdin_stage_info()?]);
+                    }
                     return Err(ErrorCode::BadArguments("object mode is unknown"));
                 }
             },
@@ -263,7 +266,12 @@ fn blocking_list_files_with_pattern(
         Ok(meta) => match meta.mode() {
             EntryMode::FILE => return Ok(vec![StageFileInfo::new(path.to_string(), &meta)]),
             EntryMode::DIR => {}
-            EntryMode::Unknown => return Err(ErrorCode::BadArguments("object mode is unknown")),
+            EntryMode::Unknown => {
+                if path == STDIN_FD {
+                    return Ok(vec![stdin_stage_info()?]);
+                }
+                return Err(ErrorCode::BadArguments("object mode is unknown"));
+            }
         },
         Err(e) => {
             if e.kind() == opendal::ErrorKind::NotFound {
@@ -319,4 +327,18 @@ pub async fn stat_file(op: Operator, de: Entry) -> Result<Option<StageFileInfo>>
     }
 
     Ok(Some(StageFileInfo::new(de.path().to_string(), &meta)))
+}
+
+const STDIN_FD: &'static str = "/dev/fd/0";
+
+fn stdin_stage_info() -> Result<StageFileInfo> {
+    Ok(StageFileInfo {
+        path: STDIN_FD.to_string(),
+        size: u64::MAX,
+        md5: None,
+        last_modified: Utc::now(),
+        etag: None,
+        status: StageFileStatus::NeedCopy,
+        creator: None,
+    })
 }
