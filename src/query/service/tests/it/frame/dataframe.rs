@@ -428,7 +428,7 @@ async fn test_box_display() {
         )
         .unwrap();
         for a in blocks.iter() {
-            let a = box_render(&schema, &[a.clone().unwrap()], 40, 33, 13).unwrap();
+            let a = box_render(&schema, &[a.clone().unwrap()], 40, 33, 13, false).unwrap();
             write!(file, "{}", a).unwrap();
         }
 
@@ -440,7 +440,7 @@ async fn test_box_display() {
         )
         .unwrap();
         for a in blocks.iter() {
-            let a = box_render(&schema, &[a.clone().unwrap()], 40, 40, 13).unwrap();
+            let a = box_render(&schema, &[a.clone().unwrap()], 40, 40, 13, false).unwrap();
             write!(file, "{}", a).unwrap();
         }
         write!(file, "\n\n").unwrap();
