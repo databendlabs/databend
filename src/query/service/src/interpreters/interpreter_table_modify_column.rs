@@ -191,7 +191,7 @@ impl ModifyTableColumnInterpreter {
         &self,
         table: &Arc<dyn Table>,
         modify_table_schema: &TableSchemaRef,
-        field_comments: &Vec<String>,
+        field_comments: &[String],
     ) -> Result<PipelineBuildResult> {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
@@ -216,7 +216,6 @@ impl ModifyTableColumnInterpreter {
                 )));
             }
         }
-
         // Add table lock heartbeat.
         let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
         let mut heartbeat = handler
@@ -244,7 +243,7 @@ impl ModifyTableColumnInterpreter {
             let column = &field.name.to_string();
             let data_type = &field.data_type;
             let comment = &field_comments[idx];
-            if let Ok(i) = schema.index_of(&column) {
+            if let Ok(i) = schema.index_of(column) {
                 if data_type != &new_schema.fields[i].data_type {
                     // Check if this column is referenced by computed columns.
                     let mut data_schema: DataSchema = table_info.schema().into();
@@ -252,13 +251,13 @@ impl ModifyTableColumnInterpreter {
                     check_referenced_computed_columns(
                         self.ctx.clone(),
                         Arc::new(data_schema),
-                        &column,
+                        column,
                     )?;
 
                     // If the column is defined in bloom index columns,
                     // check whether the data type is supported for bloom index.
                     if bloom_index_cols.iter().any(|v| v.as_str() == column)
-                        && !BloomIndex::supported_type(&data_type)
+                        && !BloomIndex::supported_type(data_type)
                     {
                         return Err(ErrorCode::TableOptionInvalid(format!(
                             "Unsupported data type '{}' for bloom index",
