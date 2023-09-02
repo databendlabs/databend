@@ -87,7 +87,12 @@ pub struct Config {
     /// Run a command and quit
     #[command(subcommand)]
     #[serde(skip)]
-    pub cmd: Option<Commands>,
+    pub subcommand: Option<Commands>,
+
+    // To be compatible with the old version, we keep the `cmd` arg
+    // We should always use `databend-query ver` instead `databend-query --cmd ver` in latest version
+    #[clap(long)]
+    pub cmd: Option<String>,
 
     #[clap(long, short = 'c', default_value_t)]
     pub config_file: String,
@@ -140,7 +145,7 @@ pub struct Config {
 #[derive(Subcommand, Default, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Commands {
     #[default]
-    Version,
+    Ver,
     Local {
         #[clap(long, short = 'q', default_value_t)]
         query: String,
@@ -175,7 +180,11 @@ impl Config {
             arg_conf = Self::parse();
         }
 
-        if arg_conf.cmd.is_some() {
+        if arg_conf.cmd == Some("ver".to_string()) {
+            arg_conf.subcommand = Some(Commands::Ver);
+        }
+
+        if arg_conf.subcommand.is_some() {
             return Ok(arg_conf);
         }
 
@@ -2349,7 +2358,8 @@ mod cache_config_converters {
     impl From<InnerConfig> for Config {
         fn from(inner: InnerConfig) -> Self {
             Self {
-                cmd: inner.cmd,
+                subcommand: inner.subcommand,
+                cmd: None,
                 config_file: inner.config_file,
                 query: inner.query.into(),
                 log: inner.log.into(),
@@ -2387,7 +2397,7 @@ mod cache_config_converters {
             }
 
             Ok(InnerConfig {
-                cmd: self.cmd,
+                subcommand: self.subcommand,
                 config_file: self.config_file,
                 query: self.query.try_into()?,
                 log: self.log.try_into()?,

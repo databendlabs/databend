@@ -39,7 +39,7 @@ use crate::background_config::InnerBackgroundConfig;
 /// All function should implement based on this Config.
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct InnerConfig {
-    pub cmd: Option<Commands>,
+    pub subcommand: Option<Commands>,
     pub config_file: String,
 
     // Query engine config.
@@ -73,7 +73,7 @@ impl InnerConfig {
         let cfg: Self = Config::load(true)?.try_into()?;
 
         // Only check meta config when cmd is empty.
-        if cfg.cmd.is_none() {
+        if cfg.subcommand.is_none() {
             cfg.meta.check_valid()?;
         }
         Ok(cfg)
@@ -123,7 +123,7 @@ impl InnerConfig {
 impl Debug for InnerConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("InnerConfig")
-            .field("cmd", &self.cmd)
+            .field("subcommand", &self.subcommand)
             .field("config_file", &self.config_file)
             .field("query", &self.query.sanitize())
             .field("log", &self.log)
