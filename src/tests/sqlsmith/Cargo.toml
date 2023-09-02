@@ -7,7 +7,6 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-chrono = { workspace = true }
 chrono-tz = { workspace = true }
 clap = { workspace = true }
 databend-driver = { git = "https://github.com/datafuselabs/bendsql", rev = "cfe42be" }

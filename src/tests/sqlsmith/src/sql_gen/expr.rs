@@ -25,8 +25,8 @@ use crate::sql_gen::SqlGenerator;
 impl<'a, R: Rng> SqlGenerator<'a, R> {
     pub(crate) fn gen_expr(&mut self) -> Expr {
         match self.rng.gen_range(0..=9) {
-            0..=5 => self.gen_column(),
-            6..=8 => self.gen_literal(),
+            0..=4 => self.gen_column(),
+            5..=8 => self.gen_literal(),
             9 => self.gen_binary_op(),
             // TODO other exprs
             _ => unreachable!(),
@@ -88,13 +88,16 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     fn gen_binary_op(&mut self) -> Expr {
         let left = self.gen_expr();
         let right = self.gen_expr();
-        let op = match self.rng.gen_range(0..=5) {
+        let op = match self.rng.gen_range(0..=8) {
             0 => BinaryOperator::Gt,
             1 => BinaryOperator::Lt,
             2 => BinaryOperator::Gte,
             3 => BinaryOperator::Lte,
             4 => BinaryOperator::Eq,
             5 => BinaryOperator::NotEq,
+            6 => BinaryOperator::And,
+            7 => BinaryOperator::Or,
+            8 => BinaryOperator::Xor,
             // TODO other binary operators
             _ => unreachable!(),
         };

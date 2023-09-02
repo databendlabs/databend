@@ -151,7 +151,10 @@ impl Runner {
             let query_sql = query.to_string();
             tracing::info!("query_sql: {}", query_sql);
             // TODO check query result
-            conn.exec(&query_sql).await.unwrap();
+            if let Err(e) = conn.exec(&query_sql).await {
+                let err = format!("error: {}", e);
+                tracing::error!(err);
+            }
         }
     }
 }
