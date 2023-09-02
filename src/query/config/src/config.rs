@@ -144,6 +144,8 @@ pub enum Commands {
     Local {
         #[clap(long, short = 'q', default_value_t)]
         query: String,
+        #[clap(long, default_value_t)]
+        output_format: String,
     },
 }
 

@@ -329,7 +329,7 @@ pub async fn stat_file(op: Operator, de: Entry) -> Result<Option<StageFileInfo>>
     Ok(Some(StageFileInfo::new(de.path().to_string(), &meta)))
 }
 
-const STDIN_FD: &'static str = "/dev/fd/0";
+const STDIN_FD: &str = "/dev/fd/0";
 
 fn stdin_stage_info() -> Result<StageFileInfo> {
     Ok(StageFileInfo {

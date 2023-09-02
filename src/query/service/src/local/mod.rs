@@ -33,7 +33,7 @@ use common_meta_embedded::MetaEmbedded;
 use crate::clusters::ClusterDiscovery;
 use crate::GlobalServices;
 
-pub async fn query_local(query_sql: &String) -> Result<()> {
+pub async fn query_local(query_sql: &String, output_format: &String) -> Result<()> {
     let temp_dir = tempfile::tempdir()?;
     env::set_var("META_EMBEDDED_DIR", temp_dir.path().join("_meta"));
     let mut conf: InnerConfig = Config::load(true).unwrap().try_into().unwrap();
@@ -58,7 +58,8 @@ pub async fn query_local(query_sql: &String) -> Result<()> {
 
     let is_terminal = stdin().is_terminal();
     let is_repl = is_terminal && query_sql.is_empty();
-    let mut executor = executor::SessionExecutor::try_new(is_repl, query_sql).await?;
+    let mut executor =
+        executor::SessionExecutor::try_new(is_repl, query_sql, output_format).await?;
     executor.handle().await;
     Ok(())
 }

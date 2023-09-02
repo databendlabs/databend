@@ -76,6 +76,7 @@ pub enum OutputFormat {
     Tsv,
     Json,
     NdJson,
+    Parquet,
     Null,
 }
 
@@ -115,6 +116,7 @@ impl Settings {
                     "tsv" => OutputFormat::Tsv,
                     "json" => OutputFormat::Json,
                     "ndjson" => OutputFormat::NdJson,
+                    "parquet" => OutputFormat::Parquet,
                     "null" => OutputFormat::Null,
                     _ => {
                         return Err(ErrorCode::BadArguments(format!(

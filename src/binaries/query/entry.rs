@@ -49,7 +49,10 @@ pub async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
             println!("version: {}", *QUERY_SEMVER);
             println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
         }
-        Some(Commands::Local { query }) => local::query_local(query).await?,
+        Some(Commands::Local {
+            query,
+            output_format,
+        }) => local::query_local(query, output_format).await?,
     }
 
     Ok(true)

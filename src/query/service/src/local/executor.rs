@@ -63,7 +63,7 @@ pub(crate) struct SessionExecutor {
 static PROMPT_SQL: &str = "select name from system.tables union all select name from system.columns union all select name from system.databases union all select name from system.functions";
 
 impl SessionExecutor {
-    pub async fn try_new(is_repl: bool, query: &String) -> Result<Self> {
+    pub async fn try_new(is_repl: bool, query: &String, output_format: &String) -> Result<Self> {
         let mut keywords = Vec::with_capacity(1024);
         let session = SessionManager::instance()
             .create_session(SessionType::Local)
@@ -87,6 +87,11 @@ impl SessionExecutor {
         } else {
             settings.output_format = OutputFormat::Tsv;
         }
+
+        if !output_format.is_empty() {
+            settings.inject_ctrl_cmd("output_format", &output_format)?;
+        }
+
         settings.merge_config(config.settings);
 
         if is_repl {
