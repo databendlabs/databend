@@ -33,7 +33,7 @@ use common_meta_embedded::MetaEmbedded;
 use crate::clusters::ClusterDiscovery;
 use crate::GlobalServices;
 
-pub async fn query_local(query_sql: &String, output_format: &String) -> Result<()> {
+pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
     let temp_dir = tempfile::tempdir()?;
     env::set_var("META_EMBEDDED_DIR", temp_dir.path().join("_meta"));
     let mut conf: InnerConfig = Config::load(true).unwrap().try_into().unwrap();
