@@ -106,7 +106,7 @@ impl<'a> FormatDisplay<'a> {
     }
 
     async fn display_table(&mut self) -> Result<()> {
-        if self.settings.display_pretty_sql {
+        if self.settings.display_pretty_sql && !self.is_repl {
             let format_sql = self.stmt.to_string();
             let format_sql = CliHelper::new().highlight(&format_sql, format_sql.len());
             println!("\n{}\n", format_sql);
