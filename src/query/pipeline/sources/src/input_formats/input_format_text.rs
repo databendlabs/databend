@@ -385,6 +385,7 @@ impl<T: InputFormatTextBase> InputFormat for T {
         _settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
+
         for info in file_infos {
             let size = info.size as usize;
             let path = info.path.clone();

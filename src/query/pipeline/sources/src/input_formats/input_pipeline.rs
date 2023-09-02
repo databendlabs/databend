@@ -245,6 +245,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         let offset = split_info.offset as u64;
         let size = split_info.size;
         let mut batch_size = ctx.read_batch_size.min(size);
+
         let mut reader = operator
             .range_reader(&split_info.file.path, offset..offset + size as u64)
             .await?;

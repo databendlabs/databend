@@ -89,7 +89,7 @@ impl SessionExecutor {
         }
 
         if !output_format.is_empty() {
-            settings.inject_ctrl_cmd("output_format", &output_format)?;
+            settings.inject_ctrl_cmd("output_format", output_format)?;
         }
 
         settings.merge_config(config.settings);
@@ -115,11 +115,12 @@ impl SessionExecutor {
             }
         }
 
+        let query = query.replace("$STDIN", "'fs:///dev/fd/0'");
         Ok(Self {
             session,
             is_repl,
             settings,
-            query: query.to_owned(),
+            query,
             keywords: Arc::new(keywords),
         })
     }
@@ -307,7 +308,8 @@ impl SessionExecutor {
 
         let (stream, ctx, plan, stmt) = Self::query(&self.session, query).await?;
 
-        let mut displayer = FormatDisplay::new(ctx, &self.settings, stmt, start, plan, stream);
+        let mut displayer =
+            FormatDisplay::new(ctx, self.is_repl, &self.settings, stmt, start, plan, stream);
         displayer.display().await?;
 
         Ok(false)

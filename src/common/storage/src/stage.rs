@@ -110,6 +110,10 @@ impl StageFilesInfo {
         first_only: bool,
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
+        if self.path == STDIN_FD {
+            return Ok(vec![stdin_stage_info()?]);
+        }
+
         let max_files = max_files.unwrap_or(usize::MAX);
         if let Some(files) = &self.files {
             let mut res = Vec::new();
@@ -329,7 +333,7 @@ pub async fn stat_file(op: Operator, de: Entry) -> Result<Option<StageFileInfo>>
     Ok(Some(StageFileInfo::new(de.path().to_string(), &meta)))
 }
 
-const STDIN_FD: &str = "/dev/fd/0";
+pub const STDIN_FD: &str = "/dev/fd/0";
 
 fn stdin_stage_info() -> Result<StageFileInfo> {
     Ok(StageFileInfo {

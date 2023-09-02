@@ -53,6 +53,7 @@ pub trait ChunkDisplay {
 
 pub struct FormatDisplay<'a> {
     ctx: Arc<QueryContext>,
+    is_repl: bool,
     settings: &'a Settings,
     stmt: Statement,
     // whether replace '\n' with '\\n',
@@ -69,6 +70,7 @@ pub struct FormatDisplay<'a> {
 impl<'a> FormatDisplay<'a> {
     pub fn new(
         ctx: Arc<QueryContext>,
+        is_repl: bool,
         settings: &'a Settings,
         stmt: Statement,
         start: Instant,
@@ -84,6 +86,7 @@ impl<'a> FormatDisplay<'a> {
         let schema = plan.schema();
         Self {
             settings,
+            is_repl,
             stmt,
             plan,
             schema,
@@ -155,7 +158,12 @@ impl<'a> FormatDisplay<'a> {
 
         let ctx = self.ctx.clone();
 
+        let is_repl = self.is_repl;
+
         let handle = tokio::spawn(async move {
+            if !is_repl {
+                return (None, None);
+            }
             let mut wait_times = 0;
             let mut current_scan_value = ctx.get_scan_progress_value();
 
@@ -232,7 +240,7 @@ impl<'a> FormatDisplay<'a> {
     }
 
     async fn display_stats(&mut self, mut stats: Option<QueryProgress>) {
-        if !self.settings.show_stats {
+        if !self.settings.show_stats || !self.is_repl {
             return;
         }
 
