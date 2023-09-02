@@ -33,6 +33,7 @@ use common_ast::ast::ExistsTableStmt;
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
+use common_ast::ast::ModifyColumnAction;
 use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::OptimizeTableStmt;
 use common_ast::ast::RenameTableStmt;
@@ -101,6 +102,7 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::ExistsTablePlan;
+use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
@@ -702,7 +704,6 @@ impl Binder {
         })))
     }
 
-    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_alter_table(
         &mut self,
         bind_context: &mut BindContext,
@@ -792,11 +793,31 @@ impl Binder {
                 })))
             }
             AlterTableAction::ModifyColumn { action } => {
+                let action_in_plan = match action {
+                    ModifyColumnAction::SetMaskingPolicy(column, name) => {
+                        ModifyColumnActionInPlan::SetMaskingPolicy(
+                            column.to_string(),
+                            name.to_string(),
+                        )
+                    }
+                    ModifyColumnAction::UnsetMaskingPolicy(column) => {
+                        ModifyColumnActionInPlan::UnsetMaskingPolicy(column.to_string())
+                    }
+                    ModifyColumnAction::ConvertStoredComputedColumn(column) => {
+                        ModifyColumnActionInPlan::ConvertStoredComputedColumn(column.to_string())
+                    }
+                    ModifyColumnAction::SetDataType(column_def_vec) => {
+                        let (schema, field_comments) = self
+                            .analyze_create_table_schema_by_columns(column_def_vec)
+                            .await?;
+                        ModifyColumnActionInPlan::SetDataType((schema, field_comments))
+                    }
+                };
                 Ok(Plan::ModifyTableColumn(Box::new(ModifyTableColumnPlan {
                     catalog,
                     database,
                     table,
-                    action: action.clone(),
+                    action: action_in_plan,
                 })))
             }
             AlterTableAction::DropColumn { column } => {

@@ -2049,21 +2049,6 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     )(i)
 }
 
-fn column_type(i: Input) -> IResult<(Identifier, TypeName, Option<Expr>)> {
-    map(
-        rule! {
-            #ident ~ #type_name ~ (DEFAULT ~ ^#subexpr(NOT_PREC))?
-        },
-        |(column, type_name, default_expr_opt)| {
-            (
-                column,
-                type_name,
-                default_expr_opt.map(|default_expr| default_expr.1),
-            )
-        },
-    )(i)
-}
-
 pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
     let set_mask_policy = map(
         rule! {
@@ -2090,14 +2075,14 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
 
     let modify_column_type = map(
         rule! {
-            #column_type ~ ("," ~ COLUMN ~ #column_type)*
+            #column_def ~ ("," ~ COLUMN ~ #column_def)*
         },
-        |(column_type, column_type_vec)| {
-            let mut column_types = vec![column_type];
-            column_type_vec
+        |(column_def, column_def_vec)| {
+            let mut column_defs = vec![column_def];
+            column_def_vec
                 .iter()
-                .for_each(|(_, _, column_type)| column_types.push(column_type.clone()));
-            ModifyColumnAction::SetDataType(column_types)
+                .for_each(|(_, _, column_def)| column_defs.push(column_def.clone()));
+            ModifyColumnAction::SetDataType(column_defs)
         },
     );
 
