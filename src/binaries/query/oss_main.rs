@@ -16,7 +16,6 @@
 #![feature(try_blocks)]
 
 mod entry;
-mod local;
 
 use common_base::mem_allocator::GlobalAllocator;
 use common_base::runtime::Runtime;
