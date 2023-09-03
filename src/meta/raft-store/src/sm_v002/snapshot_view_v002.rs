@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_meta_types::SeqNum;
 use common_meta_types::SeqV;
 use common_meta_types::SnapshotMeta;
+use futures::Stream;
+use futures_util::StreamExt;
 
 use crate::key_spaces::RaftStoreEntry;
 use crate::ondisk::Header;
@@ -81,28 +83,42 @@ impl SnapshotViewV002 {
     }
 
     /// Compact into one level and remove all tombstone record.
-    pub fn compact(&mut self) {
+    pub async fn compact(&mut self) {
         // TODO: use a explicit method to return a compaction base
         let mut data = self.top.data_ref().new_level();
 
         // `range()` will compact tombstone internally
-        let it = MapApi::<String>::range::<String, _>(self.top.as_ref(), ..)
-            .filter(|(_k, v)| !v.is_tomb_stone());
+        let strm = MapApi::<String>::range::<String, _>(self.top.as_ref(), ..)
+            .await
+            .filter(|(_k, v)| {
+                let x = !v.is_tomb_stone();
+                async move { x }
+            })
+            .map(|(k, v)| (k.clone(), v.clone()));
 
-        data.replace_kv(it.map(|(k, v)| (k.clone(), v.clone())).collect());
+        let btreemap = strm.collect().await;
+
+        data.replace_kv(btreemap);
 
         // `range()` will compact tombstone internally
-        let it =
-            MapApi::<ExpireKey>::range(self.top.as_ref(), ..).filter(|(_k, v)| !v.is_tomb_stone());
+        let strm = MapApi::<ExpireKey>::range(self.top.as_ref(), ..)
+            .await
+            .filter(|(_k, v)| {
+                let x = !v.is_tomb_stone();
+                async move { x }
+            })
+            .map(|(k, v)| (k.clone(), v.clone()));
 
-        data.replace_expire(it.map(|(k, v)| (k.clone(), v.clone())).collect());
+        let btreemap = strm.collect().await;
+
+        data.replace_expire(btreemap);
 
         let l = Level::new(data, None);
         self.top = Arc::new(l);
     }
 
     /// Export all its data in RaftStoreEntry format.
-    pub fn export(&self) -> impl Iterator<Item = RaftStoreEntry> + '_ {
+    pub async fn export(&self) -> impl Stream<Item = RaftStoreEntry> + '_ {
         let d = self.top.data_ref();
 
         let mut sm_meta = vec![];
@@ -153,8 +169,9 @@ impl SnapshotViewV002 {
 
         // kv
 
-        let kv_iter =
-            MapApi::<String>::range::<String, _>(self.top.as_ref(), ..).filter_map(|(k, v)| {
+        let kv_iter = MapApi::<String>::range::<String, _>(self.top.as_ref(), ..)
+            .await
+            .filter_map(|(k, v)| async move {
                 if let Marked::Normal {
                     internal_seq,
                     value,
@@ -173,25 +190,29 @@ impl SnapshotViewV002 {
 
         // expire index
 
-        let expire_iter = MapApi::<ExpireKey>::range(self.top.as_ref(), ..).filter_map(|(k, v)| {
-            if let Marked::Normal {
-                internal_seq,
-                value,
-                meta: _,
-            } = v
-            {
-                let ev = ExpireValue::new(value, *internal_seq);
+        let expire_iter = MapApi::<ExpireKey>::range(self.top.as_ref(), ..)
+            .await
+            .filter_map(|(k, v)| async move {
+                if let Marked::Normal {
+                    internal_seq,
+                    value,
+                    meta: _,
+                } = v
+                {
+                    let ev = ExpireValue::new(value, *internal_seq);
 
-                Some(RaftStoreEntry::Expire {
-                    key: k.clone(),
-                    value: ev,
-                })
-            } else {
-                None
-            }
-        });
+                    Some(RaftStoreEntry::Expire {
+                        key: k.clone(),
+                        value: ev,
+                    })
+                } else {
+                    None
+                }
+            });
 
-        sm_meta.into_iter().chain(kv_iter).chain(expire_iter)
+        futures::stream::iter(sm_meta)
+            .chain(kv_iter)
+            .chain(expire_iter)
     }
 }
 

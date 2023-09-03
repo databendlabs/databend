@@ -16,6 +16,7 @@ mod compact;
 mod mutation_meta;
 mod mutation_part;
 mod mutation_source;
+mod recluster_aggregator;
 mod recluster_mutator;
 
 pub use compact::BlockCompactMutator;
@@ -32,6 +33,7 @@ pub use mutation_part::MutationDeletedSegment;
 pub use mutation_part::MutationPartInfo;
 pub use mutation_source::MutationAction;
 pub use mutation_source::MutationSource;
+pub use recluster_aggregator::ReclusterAggregator;
 pub use recluster_mutator::ReclusterMutator;
 
 pub static MAX_BLOCK_COUNT: usize = 1000_1000;

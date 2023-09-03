@@ -66,7 +66,7 @@ pub struct Config {
     pub db: String,
 
     /// initial_cluster format: node_id=endpoint,grpc_api_addr
-    #[clap(long, multiple_occurrences = true, multiple_values = true)]
+    #[clap(long)]
     pub initial_cluster: Vec<String>,
 
     #[clap(flatten)]

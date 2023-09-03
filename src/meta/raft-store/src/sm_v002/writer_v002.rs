@@ -19,6 +19,8 @@ use std::io::Seek;
 use std::io::Write;
 
 use common_meta_types::LogId;
+use futures::Stream;
+use futures_util::StreamExt;
 use log::as_debug;
 use log::debug;
 use log::info;
@@ -81,29 +83,32 @@ impl<'a> WriterV002<'a> {
     /// Write entries to the snapshot, without flushing.
     ///
     /// Returns the count of entries
-    pub fn write_entries<E>(
+    pub async fn write_entries<E>(
         &mut self,
-        entries: impl IntoIterator<Item = RaftStoreEntry>,
+        entries: impl Stream<Item = RaftStoreEntry>,
     ) -> Result<usize, E>
     where
         E: std::error::Error + From<io::Error> + 'static,
     {
-        self.write_entry_results(entries.into_iter().map(Ok))
+        self.write_entry_results(entries.map(Ok)).await
     }
 
     /// Write `Result` of entries to the snapshot, without flushing.
     ///
     /// Returns the count of entries
-    pub fn write_entry_results<E>(
+    pub async fn write_entry_results<E>(
         &mut self,
-        entry_results: impl IntoIterator<Item = Result<RaftStoreEntry, E>>,
+        entry_results: impl Stream<Item = Result<RaftStoreEntry, E>>,
     ) -> Result<usize, E>
     where
         E: std::error::Error + From<io::Error> + 'static,
     {
         let mut cnt = 0;
         let data_version = self.snapshot_store.data_version();
-        for ent in entry_results {
+
+        let mut entry_results = std::pin::pin!(entry_results);
+
+        while let Some(ent) = entry_results.next().await {
             let ent = ent?;
 
             debug!(entry = as_debug!(&ent); "write {} entry", data_version);

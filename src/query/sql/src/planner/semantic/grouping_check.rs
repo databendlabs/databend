@@ -160,14 +160,13 @@ impl<'a> GroupingChecker<'a> {
                         Visibility::Visible,
                     )
                     .build();
-                    Ok(BoundColumnRef {
+                    return Ok(BoundColumnRef {
                         span: None,
                         column: column_binding,
                     }
-                    .into())
-                } else {
-                    Err(ErrorCode::Internal("Group Check: Invalid window function"))
+                    .into());
                 }
+                Err(ErrorCode::Internal("Group Check: Invalid window function"))
             }
 
             ScalarExpr::AggregateFunction(agg) => {
