@@ -808,10 +808,18 @@ impl Binder {
                         ModifyColumnActionInPlan::ConvertStoredComputedColumn(column.to_string())
                     }
                     ModifyColumnAction::SetDataType(column_def_vec) => {
-                        let (schema, field_comments) = self
-                            .analyze_create_table_schema_by_columns(column_def_vec)
-                            .await?;
-                        ModifyColumnActionInPlan::SetDataType((schema, field_comments))
+                        let mut field_and_comment = Vec::with_capacity(column_def_vec.len());
+                        let schema = self
+                            .ctx
+                            .get_table(&catalog, &database, &table)
+                            .await?
+                            .schema();
+                        for column in column_def_vec {
+                            let (field, comment) =
+                                self.analyze_add_column(column, schema.clone()).await?;
+                            field_and_comment.push((field, comment));
+                        }
+                        ModifyColumnActionInPlan::SetDataType(field_and_comment)
                     }
                 };
                 Ok(Plan::ModifyTableColumn(Box::new(ModifyTableColumnPlan {

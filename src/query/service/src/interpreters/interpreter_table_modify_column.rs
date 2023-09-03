@@ -21,8 +21,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ComputedExpr;
 use common_expression::DataSchema;
+use common_expression::TableField;
 use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license::Feature::DataMask;
 use common_license::license_manager::get_license_manager;
@@ -190,22 +190,20 @@ impl ModifyTableColumnInterpreter {
     async fn do_set_data_type(
         &self,
         table: &Arc<dyn Table>,
-        modify_table_schema: &TableSchemaRef,
-        field_comments: &[String],
+        field_and_comments: &[(TableField, String)],
     ) -> Result<PipelineBuildResult> {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
 
         // first check default expr before lock table
-        for field in modify_table_schema.fields() {
-            let column = &field.name;
-            let default_expr_opt = &field.default_expr;
+        for (field, _comment) in field_and_comments {
+            let column = &field.name.to_string();
             let data_type = &field.data_type;
             if let Ok(i) = schema.index_of(column) {
-                if let Some(default_expr) = default_expr_opt {
-                    new_schema.fields[i].data_type = data_type.clone();
+                if let Some(default_expr) = &field.default_expr {
                     let default_expr = default_expr.to_string();
+                    new_schema.fields[i].data_type = data_type.clone();
                     new_schema.fields[i].default_expr = Some(default_expr);
                     let _ = field_default_value(self.ctx.clone(), &new_schema.fields[i])?;
                 }
@@ -216,6 +214,7 @@ impl ModifyTableColumnInterpreter {
                 )));
             }
         }
+
         // Add table lock heartbeat.
         let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
         let mut heartbeat = handler
@@ -239,10 +238,9 @@ impl ModifyTableColumnInterpreter {
         }
 
         let mut table_info = table.get_table_info().clone();
-        for (idx, field) in modify_table_schema.fields().iter().enumerate() {
+        for (field, comment) in field_and_comments {
             let column = &field.name.to_string();
             let data_type = &field.data_type;
-            let comment = &field_comments[idx];
             if let Ok(i) = schema.index_of(column) {
                 if data_type != &new_schema.fields[i].data_type {
                     // Check if this column is referenced by computed columns.
@@ -486,8 +484,8 @@ impl Interpreter for ModifyTableColumnInterpreter {
                 self.do_unset_data_mask_policy(catalog, table, column.to_string())
                     .await
             }
-            ModifyColumnAction::SetDataType((schema, field_comments)) => {
-                self.do_set_data_type(table, schema, field_comments).await
+            ModifyColumnAction::SetDataType(field_and_comment) => {
+                self.do_set_data_type(table, field_and_comment).await
             }
             ModifyColumnAction::ConvertStoredComputedColumn(column) => {
                 self.do_convert_stored_computed_column(
