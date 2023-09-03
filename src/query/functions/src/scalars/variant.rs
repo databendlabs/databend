@@ -60,6 +60,7 @@ use jsonb::as_bool;
 use jsonb::as_f64;
 use jsonb::as_i64;
 use jsonb::as_str;
+use jsonb::build_array;
 use jsonb::build_object;
 use jsonb::get_by_index;
 use jsonb::get_by_name;
@@ -984,6 +985,45 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         }))
     });
+
+    registry.register_function_factory("json_array", |_, args_type| {
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "json_array".to_string(),
+                args_type: (0..args_type.len()).map(DataType::Generic).collect(),
+                return_type: DataType::Variant,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(json_array_fn),
+            },
+        }))
+    });
+}
+
+fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let (columns, len) = prepare_args_columns(args, ctx);
+    let cap = len.unwrap_or(1);
+    let mut builder = StringColumnBuilder::with_capacity(cap, cap * 50);
+    let mut items = Vec::with_capacity(columns.len());
+
+    for idx in 0..cap {
+        items.clear();
+        for column in &columns {
+            let v = unsafe { column.index_unchecked(idx) };
+            let mut val = vec![];
+            cast_scalar_to_variant(v, ctx.func_ctx.tz, &mut val);
+            items.push(val);
+        }
+        if let Err(err) = build_array(items.iter().map(|b| &b[..]), &mut builder.data) {
+            ctx.set_error(builder.len(), err.to_string());
+        };
+        builder.commit_row();
+    }
+    match len {
+        Some(_) => Value::Column(Column::Variant(builder.build())),
+        None => Value::Scalar(Scalar::Variant(builder.build_scalar())),
+    }
 }
 
 fn json_object_fn(
@@ -991,33 +1031,17 @@ fn json_object_fn(
     ctx: &mut EvalContext,
     keep_null: bool,
 ) -> Value<AnyType> {
-    let len = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
-        _ => None,
-    });
-
-    let mut columns = Vec::with_capacity(args.len());
-    for (i, arg) in args.iter().enumerate() {
-        let column = match arg {
-            ValueRef::Column(column) => column.clone(),
-            ValueRef::Scalar(s) => {
-                let column_builder = ColumnBuilder::repeat(s, 1, &ctx.generics[i]);
-                column_builder.build()
-            }
-        };
-        columns.push(column);
-    }
-
+    let (columns, len) = prepare_args_columns(args, ctx);
     let cap = len.unwrap_or(1);
     let mut builder = StringColumnBuilder::with_capacity(cap, cap * 50);
     if columns.len() % 2 != 0 {
         ctx.set_error(0, "The number of keys and values must be equal");
-        for _ in 0..(len.unwrap_or(1)) {
+        for _ in 0..cap {
             builder.commit_row();
         }
     } else {
         let mut set = HashSet::new();
-        for idx in 0..(len.unwrap_or(1)) {
+        for idx in 0..cap {
             set.clear();
             let mut kvs = Vec::with_capacity(columns.len() / 2);
             for i in (0..columns.len()).step_by(2) {
@@ -1056,4 +1080,26 @@ fn json_object_fn(
         Some(_) => Value::Column(Column::Variant(builder.build())),
         None => Value::Scalar(Scalar::Variant(builder.build_scalar())),
     }
+}
+
+fn prepare_args_columns(
+    args: &[ValueRef<AnyType>],
+    ctx: &EvalContext,
+) -> (Vec<Column>, Option<usize>) {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+    let mut columns = Vec::with_capacity(args.len());
+    for (i, arg) in args.iter().enumerate() {
+        let column = match arg {
+            ValueRef::Column(column) => column.clone(),
+            ValueRef::Scalar(s) => {
+                let column_builder = ColumnBuilder::repeat(s, 1, &ctx.generics[i]);
+                column_builder.build()
+            }
+        };
+        columns.push(column);
+    }
+    (columns, len)
 }
