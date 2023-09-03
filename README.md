@@ -31,7 +31,7 @@
 </div>
 
 <h4 align="center">
-<img src="https://github.com/datafuselabs/databend/assets/172204/0db97eea-7f25-48a6-b038-6d153378a6d4" width="700" alt="databend" />
+<img src="https://github.com/datafuselabs/databend/assets/172204/0db97eea-7f25-48a6-b038-6d153378a6d4" width="600" alt="databend" />
 </h4>
 
 ## What is Databend?
