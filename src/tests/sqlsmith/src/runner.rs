@@ -56,7 +56,7 @@ impl Runner {
     }
 
     fn gen_drop_base_table_sql() -> String {
-        "DROP TABLE t1".to_string()
+        "DROP TABLE IF EXISTS t1".to_string()
     }
 
     fn gen_create_base_table_sql() -> String {

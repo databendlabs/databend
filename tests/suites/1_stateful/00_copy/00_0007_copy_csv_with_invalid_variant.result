@@ -1,7 +1,0 @@
----test csv field check invalid variant
-/runner/_work/databend/databend/tests/data/invalid_variant.csv	1	1	fail to decode column 1 (b Variant): Invalid JSON value: "invalidvariant", [column_data]=["invalidvariant"]	1
-2	{"k":"v"}
----test csv field disable check invalid variant
-/runner/_work/databend/databend/tests/data/invalid_variant.csv	2	0	NULL	NULL
-1	invalidvariant
-2	{"k":"v"}

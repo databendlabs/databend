@@ -2586,11 +2586,11 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         map(rule! { FORCE ~ "=" ~ #literal_bool }, |(_, _, force)| {
             CopyOption::Force(force)
         }),
-        map(rule! {ON_ERROR ~ "=" ~ #ident}, |(_, _, on_error)| {
+        map(rule! { ON_ERROR ~ "=" ~ #ident }, |(_, _, on_error)| {
             CopyOption::OnError(on_error.to_string())
         }),
         map(
-            rule! {DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool},
+            rule! { DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool },
             |(_, _, disable_variant_check)| CopyOption::DisableVariantCheck(disable_variant_check),
         ),
     ))(i)
