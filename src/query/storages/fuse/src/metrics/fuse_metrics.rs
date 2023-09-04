@@ -14,11 +14,81 @@
 
 use metrics::counter;
 use metrics::increment_gauge;
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::gauge::Gauge;
+use prometheus_client::metrics::histogram::Histogram;
 
 macro_rules! key {
     ($key: literal) => {
         concat!("fuse_", $key)
     };
+}
+
+struct FuseMetrics {
+    commit_mutation_unresolvable_conflict: Counter,
+    commit_mutation_latest_snapshot_append_only: Counter,
+    commit_mutation_modified_segment_exists_in_latest: Counter,
+    commit_mutation_retry: Counter,
+    commit_mutation_success: Counter,
+    commit_copied_files: Counter,
+    commit_milliseconds: Histogram,
+    commit_aborts: Counter,
+    remote_io_seeks: Counter,
+    remote_io_seeks_after_merged: Counter,
+    remote_io_read_bytes: Counter,
+    remote_io_read_bytes_after_merged: Counter,
+    remote_io_read_parts: Counter,
+    remote_io_read_milliseconds: Histogram,
+    remote_io_deserialize_milliseconds: Histogram,
+    block_write_nums: Counter,
+    block_write_bytes: Counter,
+    block_write_milliseconds: Histogram,
+    block_index_write_nums: Counter,
+    block_index_write_bytes: Counter,
+    block_index_write_milliseconds: Histogram,
+    block_index_read_bytes: Counter,
+    compact_block_read_nums: Counter,
+    compact_block_read_bytes: Counter,
+    compact_block_read_milliseconds: Histogram,
+    segments_range_pruning_before: Counter,
+    segments_range_pruning_after: Counter,
+    bytes_segment_range_pruning_before: Counter,
+    bytes_segment_range_pruning_after: Counter,
+    blocks_range_pruning_before: Counter,
+    blocks_range_pruning_after: Counter,
+    bytes_block_range_pruning_before: Counter,
+    bytes_block_range_pruning_after: Counter,
+    blocks_bloom_pruning_before: Counter,
+    blocks_bloom_pruning_after: Counter,
+    bytes_block_bloom_pruning_before: Counter,
+    bytes_block_bloom_pruning_after: Counter,
+    pruning_prewhere_nums: Gauge,
+    pruning_milliseconds: Histogram,
+    deletion_block_range_pruned_nums: Counter,
+    deletion_segment_range_pruned_whole_segment_nums: Counter,
+    deletion_block_range_pruned_whole_block_nums: Counter,
+    replace_into_block_number_after_pruning: Gauge,
+    replace_into_segment_number_after_pruning: Counter,
+    replace_into_block_number_totally_loaded: Counter,
+    replace_into_row_number_write: Counter,
+    replace_into_row_number_totally_loaded: Counter,
+    replace_into_block_number_whole_block_deletion: Counter,
+    replace_into_block_number_zero_row_deleted: Counter,
+    replace_into_row_number_source_block: Counter,
+    replace_into_row_number_after_table_level_pruning: Gauge,
+    replace_into_partition_number: Counter,
+    replace_into_time_process_input_block_ms: Histogram,
+    replace_into_number_apply_deletion: Counter,
+    replace_into_time_accumulated_merge_action_ms: Histogram,
+    replace_into_time_apply_deletion_ms: Histogram,
+    replace_into_block_number_bloom_pruned: Counter,
+    replace_into_block_number_source: Counter,
+}
+
+impl FuseMetrics {
+    fn init() -> Self {
+        todo!()
+    }
 }
 
 pub fn metrics_inc_commit_mutation_unresolvable_conflict() {
