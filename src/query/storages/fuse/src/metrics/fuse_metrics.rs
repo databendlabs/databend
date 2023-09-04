@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_metrics::histogram::Histogram;
 use metrics::counter;
 use metrics::increment_gauge;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::gauge::Gauge;
-use prometheus_client::metrics::histogram::Histogram;
 
 macro_rules! key {
     ($key: literal) => {
@@ -24,6 +24,7 @@ macro_rules! key {
     };
 }
 
+#[derive(Debug, Default)]
 struct FuseMetrics {
     commit_mutation_unresolvable_conflict: Counter,
     commit_mutation_latest_snapshot_append_only: Counter,
@@ -87,7 +88,7 @@ struct FuseMetrics {
 
 impl FuseMetrics {
     fn init() -> Self {
-        todo!()
+        let metrics = Self::default();
     }
 }
 

@@ -18,6 +18,7 @@ pub mod counter;
 mod dump;
 mod recorder;
 mod reset;
+pub mod histogram;
 
 pub use dump::dump_metric_samples;
 pub use dump::HistogramCount;
