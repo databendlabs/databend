@@ -211,7 +211,7 @@ pub enum TokenKind {
     #[token(",")]
     Comma,
     #[token(".")]
-    Period,
+    Dot,
     #[token(":")]
     Colon,
     #[token("::")]
@@ -1044,7 +1044,7 @@ impl TokenKind {
                 | LParen
                 | RParen
                 | Comma
-                | Period
+                | Dot
                 | Colon
                 | DoubleColon
                 | SemiColon

@@ -186,10 +186,10 @@ impl Binder {
                     MapAccessor::Bracket {
                         key: box Expr::Literal { lit, .. },
                     } => lit.clone(),
-                    MapAccessor::Period { key } | MapAccessor::Colon { key } => {
+                    MapAccessor::Dot { key } | MapAccessor::Colon { key } => {
                         Literal::String(key.name.clone())
                     }
-                    MapAccessor::PeriodNumber { key } => Literal::UInt64(*key),
+                    MapAccessor::DotNumber { key } => Literal::UInt64(*key),
                     _ => {
                         return Err(ErrorCode::SemanticError(format!(
                             "Unsupported accessor: {:?}",

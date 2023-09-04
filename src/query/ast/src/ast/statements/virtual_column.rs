@@ -16,7 +16,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 
@@ -34,7 +34,7 @@ impl Display for CreateVirtualColumnStmt {
         write!(f, "CREATE VIRTUAL COLUMN (")?;
         write_comma_separated_list(f, &self.virtual_columns)?;
         write!(f, ") FOR ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -59,7 +59,7 @@ impl Display for AlterVirtualColumnStmt {
         write!(f, "ALTER VIRTUAL COLUMN (")?;
         write_comma_separated_list(f, &self.virtual_columns)?;
         write!(f, ") FOR ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -80,7 +80,7 @@ pub struct DropVirtualColumnStmt {
 impl Display for DropVirtualColumnStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DROP VIRTUAL COLUMN FOR ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -101,7 +101,7 @@ pub struct RefreshVirtualColumnStmt {
 impl Display for RefreshVirtualColumnStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "REFRESH VIRTUAL COLUMN FOR ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
