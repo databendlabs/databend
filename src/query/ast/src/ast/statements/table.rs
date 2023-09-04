@@ -743,8 +743,8 @@ pub enum ModifyColumnAction {
     SetMaskingPolicy(Identifier, String),
     // column name id
     UnsetMaskingPolicy(Identifier),
-    // vec<(column name id, type name, default expr)>
-    SetDataType(Vec<(Identifier, TypeName, Option<Expr>)>),
+    // vec<ColumnDefinition>
+    SetDataType(Vec<ColumnDefinition>),
     // column name id
     ConvertStoredComputedColumn(Identifier),
 }
@@ -758,23 +758,34 @@ impl Display for ModifyColumnAction {
             ModifyColumnAction::UnsetMaskingPolicy(column) => {
                 write!(f, "{} UNSET MASKING POLICY", column)?
             }
-            ModifyColumnAction::SetDataType(column_type_name_vec) => {
-                let ret = column_type_name_vec
+            ModifyColumnAction::SetDataType(column_def_vec) => {
+                let ret = column_def_vec
                     .iter()
                     .enumerate()
-                    .map(|(i, (column, type_name, default_expr_opt))| {
-                        let default_expr_str = match default_expr_opt {
-                            Some(default_expr) => format!(" DEFAULT {}", default_expr),
+                    .map(|(i, column_def)| {
+                        let default_expr_str = match &column_def.expr {
+                            Some(default_expr) => default_expr.to_string(),
+                            None => "".to_string(),
+                        };
+                        let comment = match &column_def.comment {
+                            Some(comment) => format!(" COMMENT {}", comment),
                             None => "".to_string(),
                         };
                         if i > 0 {
-                            format!(" COLUMN {} {}{}", column, type_name, default_expr_str)
+                            format!(
+                                " COLUMN {} {}{}{}",
+                                column_def.name, column_def.data_type, default_expr_str, comment
+                            )
                         } else {
-                            format!("{} {}{}", column, type_name, default_expr_str)
+                            format!(
+                                "{} {}{}{}",
+                                column_def.name, column_def.data_type, default_expr_str, comment
+                            )
                         }
                     })
                     .collect::<Vec<_>>()
                     .join(",");
+
                 write!(f, "{}", ret)?
             }
             ModifyColumnAction::ConvertStoredComputedColumn(column) => {

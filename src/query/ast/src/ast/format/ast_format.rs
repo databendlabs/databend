@@ -1383,21 +1383,12 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                         format!("Action ModifyColumn column {}", column),
                         "Action UnsetMaskingPolicy".to_string(),
                     ),
-                    ModifyColumnAction::SetDataType(column_type_name_vec) => {
+                    ModifyColumnAction::SetDataType(column_def_vec) => {
                         let action_name = "Action ModifyColumn".to_string();
 
-                        let child_action = column_type_name_vec
+                        let child_action = column_def_vec
                             .iter()
-                            .map(|(column, type_name, expr_opt)| {
-                                if let Some(expr) = expr_opt {
-                                    format!(
-                                        "Set Column {} DataType {} Default {}",
-                                        column, type_name, expr
-                                    )
-                                } else {
-                                    format!("Set Column {} DataType {}", column, type_name)
-                                }
-                            })
+                            .map(|column_def| format!("Set Column {:?}", column_def))
                             .collect::<Vec<_>>()
                             .join(",");
 
