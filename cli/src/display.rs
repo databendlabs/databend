@@ -21,9 +21,9 @@ use comfy_table::{Cell, CellAlignment, Table};
 use terminal_size::{terminal_size, Width};
 
 use databend_driver::{QueryProgress, Row, RowProgressIterator, RowWithProgress, SchemaRef};
-use futures::StreamExt;
 use rustyline::highlight::Highlighter;
 use tokio::time::Instant;
+use tokio_stream::StreamExt;
 
 use indicatif::{HumanBytes, ProgressBar, ProgressState, ProgressStyle};
 

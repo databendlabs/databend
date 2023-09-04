@@ -36,8 +36,7 @@ use crate::{
 
 static VERSION: Lazy<String> = Lazy::new(|| {
     let version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
-    let sha = option_env!("VERGEN_GIT_SHA").unwrap_or("dev");
-    format!("{}-{}", version, sha)
+    version.to_string()
 });
 
 pub struct PresignedResponse {

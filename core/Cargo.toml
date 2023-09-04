@@ -33,8 +33,5 @@ tower = { version = "0.4", default-features = false }
 tower-http = { version = "0.4", default-features = false }
 url = { version = "2.4", default-features = false }
 
-[build-dependencies]
-vergen = { version = "8.2", features = ["build", "git", "gitcl"] }
-
 [dev-dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock"] }

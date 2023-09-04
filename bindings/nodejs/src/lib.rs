@@ -16,8 +16,8 @@
 extern crate napi_derive;
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
-use futures::StreamExt;
 use napi::bindgen_prelude::*;
+use tokio_stream::StreamExt;
 
 #[napi]
 pub struct Client(databend_driver::Client);

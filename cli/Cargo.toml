@@ -19,7 +19,6 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 clap = { version = "4.3", features = ["derive", "env"] }
 comfy-table = "7.0"
 csv = "1.2"
-futures = { version = "0.3", default-features = false, features = ["alloc"] }
 humantime-serde = "1.1"
 indicatif = "0.17"
 itertools = "0.11"
@@ -40,12 +39,13 @@ tokio = { version = "1.28", features = [
     "sync",
     "parking_lot",
 ] }
+tokio-stream = "0.1"
 toml = "0.7"
 unicode-segmentation = "1.10"
 url = { version = "2.4", default-features = false }
 
 [build-dependencies]
-vergen = { version = "8.2", features = ["build", "git", "gitcl"] }
+vergen = { version = "8.2", features = ["build", "git", "gix"] }
 
 [[bin]]
 name = "bendsql"

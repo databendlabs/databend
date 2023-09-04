@@ -21,7 +21,6 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use anyhow::Result;
 use databend_driver::{Client, Connection};
-use futures::StreamExt;
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
@@ -29,6 +28,7 @@ use rustyline::{CompletionType, Editor};
 use tokio::fs::{remove_file, File};
 use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
+use tokio_stream::StreamExt;
 
 use crate::ast::{TokenKind, Tokenizer};
 use crate::config::Settings;
