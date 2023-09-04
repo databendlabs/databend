@@ -181,6 +181,7 @@ async-backtrace = "0.2.2"
 logcall = "0.1.5"
 log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
 minitrace = "0.5.1"
+prometheus-client = "0.21.2"
 
 # test
 mysql_async = { version = "0.32", default-features = false, features = ["rustls-tls"] }
