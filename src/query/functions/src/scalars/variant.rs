@@ -1086,20 +1086,21 @@ fn prepare_args_columns(
     args: &[ValueRef<AnyType>],
     ctx: &EvalContext,
 ) -> (Vec<Column>, Option<usize>) {
-    let len = args.iter().find_map(|arg| match arg {
+    let len_opt = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
     });
+    let len = len_opt.unwrap_or(1);
     let mut columns = Vec::with_capacity(args.len());
     for (i, arg) in args.iter().enumerate() {
         let column = match arg {
             ValueRef::Column(column) => column.clone(),
             ValueRef::Scalar(s) => {
-                let column_builder = ColumnBuilder::repeat(s, 1, &ctx.generics[i]);
+                let column_builder = ColumnBuilder::repeat(s, len, &ctx.generics[i]);
                 column_builder.build()
             }
         };
         columns.push(column);
     }
-    (columns, len)
+    (columns, len_opt)
 }
