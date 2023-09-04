@@ -4,9 +4,13 @@ title: Staging Files
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Databend recommends using the [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md) method to upload files to a stage. This method provides a secure and efficient way to transfer data by generating a time-limited URL with a signature. By generating a Presigned URL, the client can directly upload the file to the designated stage without the need to route the traffic through Databend servers. This helps in offloading network traffic from the Databend infrastructure and can lead to improved performance and scalability. It also reduces the latency for file uploads, as the data can be transferred directly between the client and the storage destination without intermediaries.
+Databend recommends two file upload methods for stages: [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md) and PUT/GET commands. These methods enable direct data transfer between the client and your storage, eliminating intermediaries and resulting in cost savings by reducing traffic between Databend and your storage.
 
-If you're using [BendSQL](../../13-sql-clients/01-bendsql.md) to manage files in a stage, you can upload files with the PUT command and download files using the GET command. Please note the following when doing so:
+![Alt text](../../../public/img/load/staging-file.png)
+
+The PRESIGN method generates a time-limited URL with a signature, which clients can use to securely initiate file uploads. This URL grants temporary access to the designated stage, allowing clients to directly transfer data without relying on Databend servers for the entire process, enhancing both security and efficiency.
+
+If you're using [BendSQL](../../13-sql-clients/01-bendsql.md) to manage files in a stage, you can use the PUT command for uploading files and the GET command for downloading files.
 
 - The GET command currently can only download all files in a stage, not individual ones.
 - These commands are exclusive to BendSQL and do not function when Databend uses the file system as the storage backend.
