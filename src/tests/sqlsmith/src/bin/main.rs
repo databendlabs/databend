@@ -45,6 +45,8 @@ pub struct Args {
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 5)]
 async fn main() {
+    tracing_subscriber::fmt::init();
+
     let args = Args::parse();
 
     let dsn = format!(
