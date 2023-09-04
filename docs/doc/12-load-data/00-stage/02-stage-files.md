@@ -4,9 +4,12 @@ title: Staging Files
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Databend recommends using the Presigned URL method to upload files to the stage. This method provides a secure and efficient way to transfer data by generating a time-limited URL with a signature. By generating a Presigned URL, the client can directly upload the file to the designated stage without the need to route the traffic through Databend servers. This helps in offloading network traffic from the Databend infrastructure and can lead to improved performance and scalability. It also reduces the latency for file uploads, as the data can be transferred directly between the client and the storage destination without intermediaries.
+Databend recommends using the [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md) method to upload files to a stage. This method provides a secure and efficient way to transfer data by generating a time-limited URL with a signature. By generating a Presigned URL, the client can directly upload the file to the designated stage without the need to route the traffic through Databend servers. This helps in offloading network traffic from the Databend infrastructure and can lead to improved performance and scalability. It also reduces the latency for file uploads, as the data can be transferred directly between the client and the storage destination without intermediaries.
 
-See also: [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md)
+If you're using [BendSQL](../../13-sql-clients/01-bendsql.md) to manage files in a stage, you can upload files with the PUT command and download files using the GET command. Please note the following when doing so:
+
+- The GET command currently can only download all files in a stage, not individual ones.
+- These commands are exclusive to BendSQL and do not function when Databend uses the file system as the storage backend.
 
 ## Examples
 
@@ -98,6 +101,219 @@ LIST @my_external_stage;
 name         |size|md5                               |last_modified                |creator|
 -------------+----+----------------------------------+-----------------------------+-------+
 books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-06-28 04:13:15.178 +0000|       |
+```
+</TabItem>
+</Tabs>
+
+### Uploading with PUT Command
+
+The following examples demonstrate how to use BendSQL to upload a sample file ([books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet)) to the user stage, an internal stage, and an external stage with the PUT command.
+
+<Tabs groupId="PUT">
+
+<TabItem value="user" label="Upload to User Stage">
+
+```sql
+root@localhost:8000/default> PUT fs:///Users/eric/Documents/books.parquet @~
+
+PUT fs:///Users/eric/Documents/books.parquet @~
+
+┌───────────────────────────────────────────────┐
+│                 file                │  status │
+│                String               │  String │
+├─────────────────────────────────────┼─────────┤
+│ /Users/eric/Documents/books.parquet │ SUCCESS │
+└───────────────────────────────────────────────┘
+```
+
+Check the staged file:
+
+```sql
+root@localhost:8000/default> LIST @~;
+
+LIST @ ~
+
+┌────────────────────────────────────────────────────────────────────────┐
+│      name     │  size  │ ··· │     last_modified    │      creator     │
+│     String    │ UInt64 │     │        String        │ Nullable(String) │
+├───────────────┼────────┼─────┼──────────────────────┼──────────────────┤
+│ books.parquet │    998 │ ... │ 2023-09-04 03:27:... │ NULL             │
+└────────────────────────────────────────────────────────────────────────┘
+1 row result in 0.287 sec. Processed 1 rows, 1 B (3.49 rows/s, 523 B/s)
+```
+
+</TabItem>
+
+<TabItem value="internal" label="Upload to Internal Stage">
+
+```sql
+root@localhost:8000/default> CREATE STAGE my_internal_stage;
+
+CREATE STAGE my_internal_stage
+
+0 row written in 0.049 sec. Processed 0 rows, 0 B (0 rows/s, 0 B/s)
+
+root@localhost:8000/default> PUT fs:///Users/eric/Documents/books.parquet @my_internal_stage
+
+PUT fs:///Users/eric/Documents/books.parquet @my_internal_stage
+
+┌───────────────────────────────────────────────┐
+│                 file                │  status │
+│                String               │  String │
+├─────────────────────────────────────┼─────────┤
+│ /Users/eric/Documents/books.parquet │ SUCCESS │
+└───────────────────────────────────────────────┘
+```
+
+Check the staged file:
+
+```sql
+root@localhost:8000/default> LIST @my_internal_stage;
+
+LIST @my_internal_stage
+
+┌────────────────────────────────────────────────────────────────────────┐
+│      name     │  size  │ ··· │     last_modified    │      creator     │
+│     String    │ UInt64 │     │        String        │ Nullable(String) │
+├───────────────┼────────┼─────┼──────────────────────┼──────────────────┤
+│ books.parquet │    998 │ ... │ 2023-09-04 03:32:... │ NULL             │
+└────────────────────────────────────────────────────────────────────────┘
+1 row result in 0.273 sec. Processed 1 rows, 1 B (3.67 rows/s, 550 B/s)
+```
+
+</TabItem>
+<TabItem value="external" label="Upload to External Stage">
+
+```sql
+root@localhost:8000/default> CREATE STAGE my_external_stage url = 's3://databend' CONNECTION =(ENDPOINT_URL= 'http://127.0.0.1:9000' aws_key_id='ROOTUSER' aws_secret_key='CHANGEME123');
+
+CREATE STAGE my_external_stage url = 's3://databend' CONNECTION =(
+  ENDPOINT_URL = 'http://127.0.0.1:9000' aws_key_id = 'ROOTUSER' aws_secret_key = 'CHANGEME123'
+)
+
+0 row written in 0.024 sec. Processed 0 rows, 0 B (0 rows/s, 0 B/s)
+
+root@localhost:8000/default> PUT fs:///Users/eric/Documents/books.parquet @my_external_stage
+
+PUT fs:///Users/eric/Documents/books.parquet @my_external_stage
+
+┌───────────────────────────────────────────────┐
+│                 file                │  status │
+│                String               │  String │
+├─────────────────────────────────────┼─────────┤
+│ /Users/eric/Documents/books.parquet │ SUCCESS │
+└───────────────────────────────────────────────┘
+```
+
+Check the staged file:
+
+```sql
+root@localhost:8000/default> LIST @my_external_stage;
+
+LIST @my_external_stage
+
+┌──────────────────────────────────────────────────────────────────────┐
+│         name         │ ··· │     last_modified    │      creator     │
+│        String        │     │        String        │ Nullable(String) │
+├──────────────────────┼─────┼──────────────────────┼──────────────────┤
+│ books.parquet        │ ... │ 2023-09-04 03:37:... │ NULL             │
+└──────────────────────────────────────────────────────────────────────┘
+3 rows result in 0.272 sec. Processed 3 rows, 3 B (11.05 rows/s, 1.55 KiB/s)
+```
+
+</TabItem>
+</Tabs>
+
+### Downloading with GET Command
+
+The following examples demonstrate how to use BendSQL to download a sample file ([books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet)) from the user stage, an internal stage, and an external stage with the GET command.
+
+
+
+<Tabs groupId="GET">
+
+<TabItem value="user" label="Download from User Stage">
+
+```sql
+root@localhost:8000/default> LIST @~;
+
+LIST @ ~
+
+┌────────────────────────────────────────────────────────────────────────┐
+│      name     │  size  │ ··· │     last_modified    │      creator     │
+│     String    │ UInt64 │     │        String        │ Nullable(String) │
+├───────────────┼────────┼─────┼──────────────────────┼──────────────────┤
+│ books.parquet │    998 │ ... │ 2023-09-04 03:27:... │ NULL             │
+└────────────────────────────────────────────────────────────────────────┘
+1 row result in 0.287 sec. Processed 1 rows, 1 B (3.49 rows/s, 523 B/s)
+
+root@localhost:8000/default> GET @~/ fs:///Users/eric/Downloads/fromStage/;
+
+GET @~/ fs:///Users/eric/Downloads/fromStage/
+
+┌─────────────────────────────────────────────────────────┐
+│                      file                     │  status │
+│                     String                    │  String │
+├───────────────────────────────────────────────┼─────────┤
+│ /Users/eric/Downloads/fromStage/books.parquet │ SUCCESS │
+└─────────────────────────────────────────────────────────┘
+```
+</TabItem>
+
+<TabItem value="internal" label="Download from Internal Stage">
+
+```sql
+root@localhost:8000/default> LIST @my_internal_stage;
+
+LIST @my_internal_stage
+
+┌────────────────────────────────────────────────────────────────────────┐
+│      name     │  size  │ ··· │     last_modified    │      creator     │
+│     String    │ UInt64 │     │        String        │ Nullable(String) │
+├───────────────┼────────┼─────┼──────────────────────┼──────────────────┤
+│ books.parquet │    998 │ ... │ 2023-09-04 03:32:... │ NULL             │
+└────────────────────────────────────────────────────────────────────────┘
+1 row result in 0.273 sec. Processed 1 rows, 1 B (3.67 rows/s, 550 B/s)
+
+root@localhost:8000/default> GET @my_internal_stage/ fs:///Users/eric/Downloads/fromStage/;
+
+
+GET @my_internal_stage/ fs:///Users/eric/Downloads/fromStage/
+
+┌─────────────────────────────────────────────────────────┐
+│                      file                     │  status │
+│                     String                    │  String │
+├───────────────────────────────────────────────┼─────────┤
+│ /Users/eric/Downloads/fromStage/books.parquet │ SUCCESS │
+└─────────────────────────────────────────────────────────┘
+```
+</TabItem>
+<TabItem value="external" label="Download from External Stage">
+
+```sql
+root@localhost:8000/default> LIST @my_external_stage;
+
+LIST @my_external_stage
+
+┌──────────────────────────────────────────────────────────────────────┐
+│         name         │ ··· │     last_modified    │      creator     │
+│        String        │     │        String        │ Nullable(String) │
+├──────────────────────┼─────┼──────────────────────┼──────────────────┤
+│ books.parquet        │ ... │ 2023-09-04 03:37:... │ NULL             │
+└──────────────────────────────────────────────────────────────────────┘
+3 rows result in 0.272 sec. Processed 3 rows, 3 B (11.05 rows/s, 1.55 KiB/s)
+
+root@localhost:8000/default> GET @my_external_stage/ fs:///Users/eric/Downloads/fromStage/;
+
+
+GET @my_external_stage/ fs:///Users/eric/Downloads/fromStage/
+
+┌─────────────────────────────────────────────────────────┐
+│                      file                     │  status │
+│                     String                    │  String │
+├───────────────────────────────────────────────┼─────────┤
+│ /Users/eric/Downloads/fromStage/books.parquet │ SUCCESS │
+└─────────────────────────────────────────────────────────┘
 ```
 </TabItem>
 </Tabs>
