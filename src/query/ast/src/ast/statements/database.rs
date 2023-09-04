@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use common_meta_app::share::ShareNameIdent;
 
 use crate::ast::statements::show::ShowLimit;
-use crate::ast::write_period_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq)] // Databases
@@ -55,7 +55,7 @@ pub struct ShowCreateDatabaseStmt {
 impl Display for ShowCreateDatabaseStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "SHOW CREATE DATABASE ")?;
-        write_period_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
+        write_dot_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
 
         Ok(())
     }
@@ -77,7 +77,7 @@ impl Display for CreateDatabaseStmt {
         if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
         }
-        write_period_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
+        write_dot_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;
         }
@@ -106,7 +106,7 @@ impl Display for DropDatabaseStmt {
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
         }
-        write_period_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
+        write_dot_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
 
         Ok(())
     }
@@ -121,7 +121,7 @@ pub struct UndropDatabaseStmt {
 impl Display for UndropDatabaseStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "UNDROP DATABASE ")?;
-        write_period_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
+        write_dot_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
         Ok(())
     }
 }
@@ -140,7 +140,7 @@ impl Display for AlterDatabaseStmt {
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
         }
-        write_period_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
+        write_dot_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
         match &self.action {
             AlterDatabaseAction::RenameDatabase { new_db } => {
                 write!(f, " RENAME TO {new_db}")?;
