@@ -9,7 +9,7 @@ Databend recommends using the [PRESIGN](/14-sql-commands/00-ddl/80-presign/presi
 If you're using [BendSQL](../../13-sql-clients/01-bendsql.md) to manage files in a stage, you can upload files with the PUT command and download files using the GET command. Please note the following when doing so:
 
 - The GET command currently can only download all files in a stage, not individual ones.
-- These commands only work when Databend is connected to storage services like S3 or S3-like services such as MinIO.
+- These commands are exclusive to BendSQL and do not function when Databend uses the file system as the storage backend.
 
 ## Examples
 
@@ -142,20 +142,6 @@ LIST @ ~
 1 row result in 0.287 sec. Processed 1 rows, 1 B (3.49 rows/s, 523 B/s)
 ```
 
-To download all the files from the user stage to a local folder, use the GET command:
-
-```sql
-root@localhost:8000/default> GET @~/ fs:///Users/eric/Downloads/fromStage/;
-
-GET @~/ fs:///Users/eric/Downloads/fromStage/
-
-┌─────────────────────────────────────────────────────────┐
-│                      file                     │  status │
-│                     String                    │  String │
-├───────────────────────────────────────────────┼─────────┤
-│ /Users/eric/Downloads/fromStage/books.parquet │ SUCCESS │
-└─────────────────────────────────────────────────────────┘
-```
 </TabItem>
 
 <TabItem value="internal" label="Upload to Internal Stage">
@@ -195,21 +181,6 @@ LIST @my_internal_stage
 1 row result in 0.273 sec. Processed 1 rows, 1 B (3.67 rows/s, 550 B/s)
 ```
 
-To download all the files from the internal stage to a local folder, use the GET command:
-
-```sql
-root@localhost:8000/default> GET @my_internal_stage/ fs:///Users/eric/Downloads/fromStage/;
-
-
-GET @my_internal_stage/ fs:///Users/eric/Downloads/fromStage/
-
-┌─────────────────────────────────────────────────────────┐
-│                      file                     │  status │
-│                     String                    │  String │
-├───────────────────────────────────────────────┼─────────┤
-│ /Users/eric/Downloads/fromStage/books.parquet │ SUCCESS │
-└─────────────────────────────────────────────────────────┘
-```
 </TabItem>
 <TabItem value="external" label="Upload to External Stage">
 
@@ -250,9 +221,88 @@ LIST @my_external_stage
 3 rows result in 0.272 sec. Processed 3 rows, 3 B (11.05 rows/s, 1.55 KiB/s)
 ```
 
-To download all the files from the external stage to a local folder, use the GET command:
+</TabItem>
+</Tabs>
+
+### Downloading with GET Command
+
+The following examples demonstrate how to use BendSQL to download a sample file ([books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet)) from the user stage, an internal stage, and an external stage with the GET command.
+
+
+
+<Tabs groupId="GET">
+
+<TabItem value="user" label="Download from User Stage">
 
 ```sql
+root@localhost:8000/default> LIST @~;
+
+LIST @ ~
+
+┌────────────────────────────────────────────────────────────────────────┐
+│      name     │  size  │ ··· │     last_modified    │      creator     │
+│     String    │ UInt64 │     │        String        │ Nullable(String) │
+├───────────────┼────────┼─────┼──────────────────────┼──────────────────┤
+│ books.parquet │    998 │ ... │ 2023-09-04 03:27:... │ NULL             │
+└────────────────────────────────────────────────────────────────────────┘
+1 row result in 0.287 sec. Processed 1 rows, 1 B (3.49 rows/s, 523 B/s)
+
+root@localhost:8000/default> GET @~/ fs:///Users/eric/Downloads/fromStage/;
+
+GET @~/ fs:///Users/eric/Downloads/fromStage/
+
+┌─────────────────────────────────────────────────────────┐
+│                      file                     │  status │
+│                     String                    │  String │
+├───────────────────────────────────────────────┼─────────┤
+│ /Users/eric/Downloads/fromStage/books.parquet │ SUCCESS │
+└─────────────────────────────────────────────────────────┘
+```
+</TabItem>
+
+<TabItem value="internal" label="Download from Internal Stage">
+
+```sql
+root@localhost:8000/default> LIST @my_internal_stage;
+
+LIST @my_internal_stage
+
+┌────────────────────────────────────────────────────────────────────────┐
+│      name     │  size  │ ··· │     last_modified    │      creator     │
+│     String    │ UInt64 │     │        String        │ Nullable(String) │
+├───────────────┼────────┼─────┼──────────────────────┼──────────────────┤
+│ books.parquet │    998 │ ... │ 2023-09-04 03:32:... │ NULL             │
+└────────────────────────────────────────────────────────────────────────┘
+1 row result in 0.273 sec. Processed 1 rows, 1 B (3.67 rows/s, 550 B/s)
+
+root@localhost:8000/default> GET @my_internal_stage/ fs:///Users/eric/Downloads/fromStage/;
+
+
+GET @my_internal_stage/ fs:///Users/eric/Downloads/fromStage/
+
+┌─────────────────────────────────────────────────────────┐
+│                      file                     │  status │
+│                     String                    │  String │
+├───────────────────────────────────────────────┼─────────┤
+│ /Users/eric/Downloads/fromStage/books.parquet │ SUCCESS │
+└─────────────────────────────────────────────────────────┘
+```
+</TabItem>
+<TabItem value="external" label="Download from External Stage">
+
+```sql
+root@localhost:8000/default> LIST @my_external_stage;
+
+LIST @my_external_stage
+
+┌──────────────────────────────────────────────────────────────────────┐
+│         name         │ ··· │     last_modified    │      creator     │
+│        String        │     │        String        │ Nullable(String) │
+├──────────────────────┼─────┼──────────────────────┼──────────────────┤
+│ books.parquet        │ ... │ 2023-09-04 03:37:... │ NULL             │
+└──────────────────────────────────────────────────────────────────────┘
+3 rows result in 0.272 sec. Processed 3 rows, 3 B (11.05 rows/s, 1.55 KiB/s)
+
 root@localhost:8000/default> GET @my_external_stage/ fs:///Users/eric/Downloads/fromStage/;
 
 
