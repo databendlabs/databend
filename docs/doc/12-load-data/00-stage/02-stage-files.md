@@ -4,14 +4,12 @@ title: Staging Files
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Databend recommends using the Presigned URL method to upload files to a stage. This method provides a secure and efficient way to transfer data by generating a time-limited URL with a signature. By generating a Presigned URL, the client can directly upload the file to the designated stage without the need to route the traffic through Databend servers. This helps in offloading network traffic from the Databend infrastructure and can lead to improved performance and scalability. It also reduces the latency for file uploads, as the data can be transferred directly between the client and the storage destination without intermediaries.
+Databend recommends using the [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md) method to upload files to a stage. This method provides a secure and efficient way to transfer data by generating a time-limited URL with a signature. By generating a Presigned URL, the client can directly upload the file to the designated stage without the need to route the traffic through Databend servers. This helps in offloading network traffic from the Databend infrastructure and can lead to improved performance and scalability. It also reduces the latency for file uploads, as the data can be transferred directly between the client and the storage destination without intermediaries.
 
 If you're using [BendSQL](../../13-sql-clients/01-bendsql.md) to manage files in a stage, you can upload files with the PUT command and download files using the GET command. Please note the following when doing so:
 
 - The GET command currently can only download all files in a stage, not individual ones.
 - These commands only work when Databend is connected to storage services like S3 or S3-like services such as MinIO.
-
-See also: [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md)
 
 ## Examples
 
