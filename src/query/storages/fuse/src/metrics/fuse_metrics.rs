@@ -1,6 +1,6 @@
 // Copyright 2021 Datafuse Labs
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License"));
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -28,101 +28,105 @@ macro_rules! key {
 
 lazy_static! {
     static ref COMMIT_MUTATION_UNRESOLVABLE_CONFLICT: Counter =
-        register_counter("commit_mutation_unresolvable_conflict");
+        register_counter(key!(key!("commit_mutation_unresolvable_conflict")));
     static ref COMMIT_MUTATION_LATEST_SNAPSHOT_APPEND_ONLY: Counter =
-        register_counter("commit_mutation_latest_snapshot_append_only");
+        register_counter(key!(key!("commit_mutation_latest_snapshot_append_only")));
     static ref COMMIT_MUTATION_MODIFIED_SEGMENT_EXISTS_IN_LATEST: Counter =
-        register_counter("commit_mutation_modified_segment_exists_in_latest");
-    static ref COMMIT_MUTATION_RETRY: Counter = register_counter("commit_mutation_retry");
-    static ref COMMIT_MUTATION_SUCCESS: Counter = register_counter("commit_mutation_success");
-    static ref COMMIT_COPIED_FILES: Counter = register_counter("commit_copied_files");
-    static ref COMMIT_MILLISECONDS: Counter = register_counter("commit_milliseconds");
-    static ref COMMIT_ABORTS: Counter = register_counter("commit_aborts");
-    static ref REMOTE_IO_SEEKS: Counter = register_counter("remote_io_seeks");
+        register_counter(key!("commit_mutation_modified_segment_exists_in_latest"));
+    static ref COMMIT_MUTATION_RETRY: Counter = register_counter(key!("commit_mutation_retry"));
+    static ref COMMIT_MUTATION_SUCCESS: Counter = register_counter(key!("commit_mutation_success"));
+    static ref COMMIT_COPIED_FILES: Counter = register_counter(key!("commit_copied_files"));
+    static ref COMMIT_MILLISECONDS: Counter = register_counter(key!("commit_milliseconds"));
+    static ref COMMIT_ABORTS: Counter = register_counter(key!("commit_aborts"));
+    static ref REMOTE_IO_SEEKS: Counter = register_counter(key!("remote_io_seeks"));
     static ref REMOTE_IO_SEEKS_AFTER_MERGED: Counter =
-        register_counter("remote_io_seeks_after_merged");
-    static ref REMOTE_IO_READ_BYTES: Counter = register_counter("remote_io_read_bytes");
+        register_counter(key!("remote_io_seeks_after_merged"));
+    static ref REMOTE_IO_READ_BYTES: Counter = register_counter(key!("remote_io_read_bytes"));
     static ref REMOTE_IO_READ_BYTES_AFTER_MERGED: Counter =
-        register_counter("remote_io_read_bytes_after_merged");
-    static ref REMOTE_IO_READ_PARTS: Counter = register_counter("remote_io_read_parts");
+        register_counter(key!("remote_io_read_bytes_after_merged"));
+    static ref REMOTE_IO_READ_PARTS: Counter = register_counter(key!("remote_io_read_parts"));
     static ref REMOTE_IO_READ_MILLISECONDS: Histogram =
-        register_histogram("remote_io_read_milliseconds");
+        register_histogram(key!("remote_io_read_milliseconds"));
     static ref REMOTE_IO_DESERIALIZE_MILLISECONDS: Histogram =
-        register_histogram("remote_io_deserialize_milliseconds");
-    static ref BLOCK_WRITE_NUMS: Counter = register_counter("block_write_nums");
-    static ref BLOCK_WRITE_BYTES: Counter = register_counter("block_write_bytes");
-    static ref BLOCK_WRITE_MILLISECONDS: Histogram = register_histogram("block_write_milliseconds");
-    static ref BLOCK_INDEX_WRITE_NUMS: Counter = register_counter("block_index_write_nums");
-    static ref BLOCK_INDEX_WRITE_BYTES: Counter = register_counter("block_index_write_bytes");
+        register_histogram(key!("remote_io_deserialize_milliseconds"));
+    static ref BLOCK_WRITE_NUMS: Counter = register_counter(key!("block_write_nums"));
+    static ref BLOCK_WRITE_BYTES: Counter = register_counter(key!("block_write_bytes"));
+    static ref BLOCK_WRITE_MILLISECONDS: Histogram =
+        register_histogram(key!("block_write_milliseconds"));
+    static ref BLOCK_INDEX_WRITE_NUMS: Counter = register_counter(key!("block_index_write_nums"));
+    static ref BLOCK_INDEX_WRITE_BYTES: Counter = register_counter(key!("block_index_write_bytes"));
     static ref BLOCK_INDEX_WRITE_MILLISECONDS: Histogram =
-        register_histogram("block_index_write_milliseconds");
-    static ref BLOCK_INDEX_READ_BYTES: Counter = register_counter("block_index_read_bytes");
-    static ref COMPACT_BLOCK_READ_NUMS: Counter = register_counter("compact_block_read_nums");
-    static ref COMPACT_BLOCK_READ_BYTES: Counter = register_counter("compact_block_read_bytes");
+        register_histogram(key!("block_index_write_milliseconds"));
+    static ref BLOCK_INDEX_READ_BYTES: Counter = register_counter(key!("block_index_read_bytes"));
+    static ref COMPACT_BLOCK_READ_NUMS: Counter = register_counter(key!("compact_block_read_nums"));
+    static ref COMPACT_BLOCK_READ_BYTES: Counter =
+        register_counter(key!("compact_block_read_bytes"));
     static ref COMPACT_BLOCK_READ_MILLISECONDS: Histogram =
-        register_histogram("compact_block_read_milliseconds");
+        register_histogram(key!("compact_block_read_milliseconds"));
     static ref SEGMENTS_RANGE_PRUNING_BEFORE: Counter =
-        register_counter("segments_range_pruning_before");
+        register_counter(key!("segments_range_pruning_before"));
     static ref SEGMENTS_RANGE_PRUNING_AFTER: Counter =
-        register_counter("segments_range_pruning_after");
+        register_counter(key!("segments_range_pruning_after"));
     static ref BYTES_SEGMENT_RANGE_PRUNING_BEFORE: Counter =
-        register_counter("bytes_segment_range_pruning_before");
+        register_counter(key!("bytes_segment_range_pruning_before"));
     static ref BYTES_SEGMENT_RANGE_PRUNING_AFTER: Counter =
-        register_counter("bytes_segment_range_pruning_after");
+        register_counter(key!("bytes_segment_range_pruning_after"));
     static ref BLOCKS_RANGE_PRUNING_BEFORE: Counter =
-        register_counter("blocks_range_pruning_before");
-    static ref BLOCKS_RANGE_PRUNING_AFTER: Counter = register_counter("blocks_range_pruning_after");
+        register_counter(key!("blocks_range_pruning_before"));
+    static ref BLOCKS_RANGE_PRUNING_AFTER: Counter =
+        register_counter(key!("blocks_range_pruning_after"));
     static ref BYTES_BLOCK_RANGE_PRUNING_BEFORE: Counter =
-        register_counter("bytes_block_range_pruning_before");
+        register_counter(key!("bytes_block_range_pruning_before"));
     static ref BYTES_BLOCK_RANGE_PRUNING_AFTER: Counter =
-        register_counter("bytes_block_range_pruning_after");
+        register_counter(key!("bytes_block_range_pruning_after"));
     static ref BLOCKS_BLOOM_PRUNING_BEFORE: Counter =
-        register_counter("blocks_bloom_pruning_before");
-    static ref BLOCKS_BLOOM_PRUNING_AFTER: Counter = register_counter("blocks_bloom_pruning_after");
+        register_counter(key!("blocks_bloom_pruning_before"));
+    static ref BLOCKS_BLOOM_PRUNING_AFTER: Counter =
+        register_counter(key!("blocks_bloom_pruning_after"));
     static ref BYTES_BLOCK_BLOOM_PRUNING_BEFORE: Counter =
-        register_counter("bytes_block_bloom_pruning_before");
+        register_counter(key!("bytes_block_bloom_pruning_before"));
     static ref BYTES_BLOCK_BLOOM_PRUNING_AFTER: Counter =
-        register_counter("bytes_block_bloom_pruning_after");
-    static ref PRUNING_PREWHERE_NUMS: Counter = register_counter("pruning_prewhere_nums");
-    static ref PRUNING_MILLISECONDS: Histogram = register_histogram("pruning_milliseconds");
+        register_counter(key!("bytes_block_bloom_pruning_after"));
+    static ref PRUNING_PREWHERE_NUMS: Counter = register_counter(key!("pruning_prewhere_nums"));
+    static ref PRUNING_MILLISECONDS: Histogram = register_histogram(key!("pruning_milliseconds"));
     static ref DELETION_BLOCK_RANGE_PRUNED_NUMS: Counter =
-        register_counter("deletion_block_range_pruned_nums");
+        register_counter(key!("deletion_block_range_pruned_nums"));
     static ref DELETION_SEGMENT_RANGE_PRUNED_WHOLE_SEGMENT_NUMS: Counter =
-        register_counter("deletion_segment_range_pruned_whole_segment_nums");
+        register_counter(key!("deletion_segment_range_pruned_whole_segment_nums"));
     static ref DELETION_BLOCK_RANGE_PRUNED_WHOLE_BLOCK_NUMS: Counter =
-        register_counter("deletion_block_range_pruned_whole_block_nums");
+        register_counter(key!("deletion_block_range_pruned_whole_block_nums"));
     static ref REPLACE_INTO_BLOCK_NUMBER_AFTER_PRUNING: Counter =
-        register_counter("replace_into_block_number_after_pruning");
+        register_counter(key!("replace_into_block_number_after_pruning"));
     static ref REPLACE_INTO_SEGMENT_NUMBER_AFTER_PRUNING: Counter =
-        register_counter("replace_into_segment_number_after_pruning");
+        register_counter(key!("replace_into_segment_number_after_pruning"));
     static ref REPLACE_INTO_BLOCK_NUMBER_TOTALLY_LOADED: Counter =
-        register_counter("replace_into_block_number_totally_loaded");
+        register_counter(key!("replace_into_block_number_totally_loaded"));
     static ref REPLACE_INTO_ROW_NUMBER_WRITE: Counter =
-        register_counter("replace_into_row_number_write");
+        register_counter(key!("replace_into_row_number_write"));
     static ref REPLACE_INTO_ROW_NUMBER_TOTALLY_LOADED: Counter =
-        register_counter("replace_into_row_number_totally_loaded");
+        register_counter(key!("replace_into_row_number_totally_loaded"));
     static ref REPLACE_INTO_BLOCK_NUMBER_WHOLE_BLOCK_DELETION: Counter =
-        register_counter("replace_into_block_number_whole_block_deletion");
+        register_counter(key!("replace_into_block_number_whole_block_deletion"));
     static ref REPLACE_INTO_BLOCK_NUMBER_ZERO_ROW_DELETED: Counter =
-        register_counter("replace_into_block_number_zero_row_deleted");
+        register_counter(key!("replace_into_block_number_zero_row_deleted"));
     static ref REPLACE_INTO_ROW_NUMBER_SOURCE_BLOCK: Counter =
-        register_counter("replace_into_row_number_source_block");
+        register_counter(key!("replace_into_row_number_source_block"));
     static ref REPLACE_INTO_ROW_NUMBER_AFTER_TABLE_LEVEL_PRUNING: Counter =
-        register_counter("replace_into_row_number_after_table_level_pruning");
+        register_counter(key!("replace_into_row_number_after_table_level_pruning"));
     static ref REPLACE_INTO_PARTITION_NUMBER: Counter =
-        register_counter("replace_into_partition_number");
+        register_counter(key!("replace_into_partition_number"));
     static ref REPLACE_INTO_TIME_PROCESS_INPUT_BLOCK_MS: Histogram =
-        register_histogram("replace_into_time_process_input_block_ms");
+        register_histogram(key!("replace_into_time_process_input_block_ms"));
     static ref REPLACE_INTO_NUMBER_APPLY_DELETION: Counter =
-        register_counter("replace_into_number_apply_deletion");
+        register_counter(key!("replace_into_number_apply_deletion"));
     static ref REPLACE_INTO_TIME_ACCUMULATED_MERGE_ACTION_MS: Histogram =
-        register_histogram("replace_into_time_accumulated_merge_action_ms");
+        register_histogram(key!("replace_into_time_accumulated_merge_action_ms"));
     static ref REPLACE_INTO_TIME_APPLY_DELETION_MS: Histogram =
-        register_histogram("replace_into_time_apply_deletion_ms");
+        register_histogram(key!("replace_into_time_apply_deletion_ms"));
     static ref REPLACE_INTO_BLOCK_NUMBER_BLOOM_PRUNED: Counter =
-        register_counter("replace_into_block_number_bloom_pruned");
+        register_counter(key!("replace_into_block_number_bloom_pruned"));
     static ref REPLACE_INTO_BLOCK_NUMBER_SOURCE: Counter =
-        register_counter("replace_into_block_number_source");
+        register_counter(key!("replace_into_block_number_source"));
 }
 
 pub fn metrics_inc_commit_mutation_unresolvable_conflict() {
@@ -137,34 +141,42 @@ pub fn metrics_inc_commit_mutation_latest_snapshot_append_only() {
 
 pub fn metrics_inc_commit_mutation_modified_segment_exists_in_latest() {
     counter!(key!("modified_segment_exists_in_latest"), 1);
+    COMMIT_MUTATION_MODIFIED_SEGMENT_EXISTS_IN_LATEST.inc();
 }
 
 pub fn metrics_inc_commit_mutation_retry() {
     counter!(key!("commit_mutation_retry"), 1);
+    COMMIT_MUTATION_RETRY.inc();
 }
 
 pub fn metrics_inc_commit_mutation_success() {
     counter!(key!("commit_mutation_success"), 1);
+    COMMIT_MUTATION_SUCCESS.inc();
 }
 
 pub fn metrics_inc_commit_copied_files(n: u64) {
     counter!(key!("commit_copied_files"), n);
+    COMMIT_COPIED_FILES.inc_by(n as f64);
 }
 
 pub fn metrics_inc_commit_milliseconds(c: u128) {
     increment_gauge!(key!("commit_milliseconds"), c as f64);
+    COMMIT_MILLISECONDS.inc_by(c as f64);
 }
 
 pub fn metrics_inc_commit_aborts() {
     counter!(key!("commit_aborts"), 1);
+    COMMIT_ABORTS.inc()
 }
 
 pub fn metrics_inc_remote_io_seeks(c: u64) {
     increment_gauge!(key!("remote_io_seeks"), c as f64);
+    REMOTE_IO_SEEKS.inc_by(c as f64);
 }
 
 pub fn metrics_inc_remote_io_seeks_after_merged(c: u64) {
     increment_gauge!(key!("remote_io_seeks_after_merged"), c as f64);
+    REMOTE_IO_SEEKS_AFTER_MERGED.inc_by(c as f64);
 }
 
 pub fn metrics_inc_remote_io_read_bytes(c: u64) {
