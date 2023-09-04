@@ -3330,7 +3330,7 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
             },
             fields_type: fields_type
                 .iter()
-                .map(|t| resolve_type_name_inner(t))
+                .map(resolve_type_name_inner)
                 .collect::<Result<Vec<_>>>()?,
         },
         TypeName::Nullable(inner_type @ box TypeName::Nullable(_)) => {
