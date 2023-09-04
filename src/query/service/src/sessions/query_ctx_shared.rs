@@ -33,6 +33,7 @@ use common_meta_app::principal::UserInfo;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
+use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
 use dashmap::DashMap;
@@ -79,6 +80,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) on_error_map:
         Arc<RwLock<Option<Arc<DashMap<String, HashMap<u16, InputError>>>>>>,
     pub(in crate::sessions) on_error_mode: Arc<RwLock<Option<OnErrorMode>>>,
+    pub(in crate::sessions) copy_status: Arc<CopyStatus>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
@@ -119,6 +121,7 @@ impl QueryContextShared {
             created_time: SystemTime::now(),
             on_error_map: Arc::new(RwLock::new(None)),
             on_error_mode: Arc::new(RwLock::new(None)),
+            copy_status: Arc::new(Default::default()),
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
@@ -237,6 +240,15 @@ impl QueryContextShared {
 
     pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
         self.session.apply_changed_settings(changes)
+    }
+
+    pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
+        let mut tables_refs = self.tables_refs.lock();
+        let table_meta_key = (catalog.to_string(), database.to_string(), name.to_string());
+
+        if let Entry::Vacant(v) = tables_refs.entry(table_meta_key) {
+            v.insert(table);
+        };
     }
 
     #[async_backtrace::framed]

@@ -354,6 +354,7 @@ impl SubqueryRewriter {
                 let limit = Limit {
                     limit: Some(1),
                     offset: 0,
+                    before_exchange: false,
                 };
                 subquery_expr =
                     SExpr::create_unary(Arc::new(limit.into()), Arc::new(subquery_expr.clone()));
@@ -600,6 +601,7 @@ impl SubqueryRewriter {
                 Limit {
                     limit: Some(1),
                     offset: 0,
+                    before_exchange: false,
                 }
                 .into(),
             ),

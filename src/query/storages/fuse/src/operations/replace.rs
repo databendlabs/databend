@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_expression::FieldIndex;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_transforms::processors::transforms::AccumulatingTransformer;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
@@ -30,6 +31,7 @@ use storages_common_table_meta::meta::BlockSlotDescription;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 
+use super::common::TransformMergeCommitMeta;
 use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
 use crate::operations::common::CommitSink;
@@ -153,17 +155,15 @@ impl FuseTable {
         chunks
     }
 
-    pub fn chain_mutation_pipes(
+    pub fn chain_mutation_aggregator(
         &self,
         ctx: &Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         base_snapshot: Arc<TableSnapshot>,
         mutation_kind: MutationKind,
     ) -> Result<()> {
-        // resize
         pipeline.try_resize(1)?;
 
-        // a) append TableMutationAggregator
         pipeline.add_transform(|input, output| {
             let base_segments = base_snapshot.segments.clone();
             let mutation_aggregator =
@@ -173,9 +173,15 @@ impl FuseTable {
                 output,
                 mutation_aggregator,
             )))
-        })?;
+        })
+    }
 
-        // b) append  CommitSink
+    pub fn chain_commit_sink(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        base_snapshot: Arc<TableSnapshot>,
+    ) -> Result<()> {
         let snapshot_gen = MutationGenerator::new(base_snapshot);
         pipeline.add_sink(|input| {
             CommitSink::try_create(
@@ -188,8 +194,32 @@ impl FuseTable {
                 false,
                 None,
             )
-        })?;
-        Ok(())
+        })
+    }
+
+    pub fn chain_mutation_pipes(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        base_snapshot: Arc<TableSnapshot>,
+        mutation_kind: MutationKind,
+    ) -> Result<()> {
+        self.chain_mutation_aggregator(ctx, pipeline, base_snapshot.clone(), mutation_kind)?;
+        self.chain_commit_sink(ctx, pipeline, base_snapshot)
+    }
+
+    pub fn chain_commit_meta_merger(
+        &self,
+        pipeline: &mut Pipeline,
+        default_cluster_key_id: Option<u32>,
+    ) -> Result<()> {
+        pipeline.try_resize(1)?;
+        pipeline.add_transform(|input, output| {
+            let merger = TransformMergeCommitMeta::create(default_cluster_key_id);
+            Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                input, output, merger,
+            )))
+        })
     }
 
     // choose the bloom filter columns (from on-conflict fields).

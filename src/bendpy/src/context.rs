@@ -15,7 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::principal::UserPrivilegeSet;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
@@ -51,7 +53,12 @@ impl PySessionContext {
                 session.set_current_tenant(uuid::Uuid::new_v4().to_string());
             }
 
-            let user = UserInfo::new_no_auth("root", "%");
+            let mut user = UserInfo::new_no_auth("root", "%");
+            user.grants.grant_privileges(
+                &GrantObject::Global,
+                UserPrivilegeSet::available_privileges_on_global(),
+            );
+
             session.set_authed_user(user, None).await.unwrap();
             session
         });

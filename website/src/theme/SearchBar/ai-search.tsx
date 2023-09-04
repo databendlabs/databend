@@ -70,7 +70,7 @@ const AISearch: FC<IProps> = ({ onReturn, initialQuery}): ReactElement=> {
             value={value} 
             autoComplete='off'
             onKeyDown={askOnKeyDown} 
-            placeholder={isGetting ? 'Waiting on an answer...' : 'Ask Databend AI a question...' }
+            placeholder={isGetting ? 'Hang on a moment...' : 'Ask Databend AI a question...' }
             className={styles.aiInput} />
             <div onClick={()=> getResult(value)} className={styles.send}>Ask</div>
         </div>

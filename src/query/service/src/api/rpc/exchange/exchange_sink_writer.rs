@@ -27,6 +27,8 @@ use common_pipeline_sinks::AsyncSinker;
 use common_pipeline_sinks::Sink;
 use common_pipeline_sinks::Sinker;
 
+use crate::api::rpc::exchange::metrics::metrics_inc_exchange_write_bytes;
+use crate::api::rpc::exchange::metrics::metrics_inc_exchange_write_count;
 use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
 use crate::api::rpc::flight_client::FlightSender;
 
@@ -64,7 +66,10 @@ impl AsyncSink for ExchangeWriterSink {
             ),
         }?;
 
+        let mut bytes = 0;
+        let count = serialize_meta.packet.len();
         for packet in serialize_meta.packet {
+            bytes += packet.bytes_size();
             if let Err(error) = self.flight_sender.send(packet).await {
                 if error.code() == ErrorCode::ABORTED_QUERY {
                     return Ok(true);
@@ -72,6 +77,11 @@ impl AsyncSink for ExchangeWriterSink {
 
                 return Err(error);
             }
+        }
+
+        {
+            metrics_inc_exchange_write_count(count);
+            metrics_inc_exchange_write_bytes(bytes);
         }
 
         Ok(false)

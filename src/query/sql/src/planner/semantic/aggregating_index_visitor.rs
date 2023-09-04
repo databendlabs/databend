@@ -18,16 +18,20 @@ use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
 use common_ast::ast::Lambda;
 use common_ast::ast::Literal;
+use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
+use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
 use common_ast::ast::Window;
 use common_ast::walk_expr;
+use common_ast::walk_select_target;
 use common_ast::walk_select_target_mut;
 use common_ast::Visitor;
 use common_ast::VisitorMut;
 use common_exception::Span;
 use common_expression::BLOCK_NAME_COL_NAME;
+use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
@@ -40,7 +44,13 @@ pub struct AggregatingIndexRewriter {
 
 #[derive(Debug, Clone, Default)]
 pub struct AggregatingIndexChecker {
-    pub has_no_deterministic_func: bool,
+    not_support: bool,
+}
+
+impl AggregatingIndexChecker {
+    pub fn is_supported(&self) -> bool {
+        !self.not_support
+    }
 }
 
 impl VisitorMut for AggregatingIndexRewriter {
@@ -161,17 +171,80 @@ impl<'ast> Visitor<'ast> for AggregatingIndexChecker {
         _over: &'ast Option<Window>,
         _lambda: &'ast Option<Lambda>,
     ) {
-        if self.has_no_deterministic_func {
+        if self.not_support {
             return;
         }
 
-        self.has_no_deterministic_func = BUILTIN_FUNCTIONS
+        // is agg func but not support now.
+        if AggregateFunctionFactory::instance().contains(&name.name)
+            && !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&&*name.name.to_lowercase())
+        {
+            self.not_support = true;
+            return;
+        }
+
+        self.not_support = BUILTIN_FUNCTIONS
             .get_property(&name.name)
             .map(|p| p.non_deterministic)
             .unwrap_or(false);
 
         for arg in args {
             walk_expr(self, arg);
+        }
+    }
+
+    fn visit_select_stmt(&mut self, stmt: &'ast SelectStmt) {
+        if self.not_support {
+            return;
+        }
+        if stmt.having.is_some() || stmt.window_list.is_some() {
+            self.not_support = true;
+            return;
+        }
+        if let Some(selection) = &stmt.selection {
+            walk_expr(self, selection);
+        }
+        match &stmt.group_by {
+            None => {}
+            Some(group_by) => match group_by {
+                GroupBy::Normal(exprs) => {
+                    for expr in exprs {
+                        walk_expr(self, expr);
+                    }
+                }
+                _ => {
+                    self.not_support = true;
+                    return;
+                }
+            },
+        }
+        for target in &stmt.select_list {
+            if target.has_window() {
+                self.not_support = true;
+                return;
+            }
+            walk_select_target(self, target);
+        }
+    }
+
+    fn visit_query(&mut self, query: &'ast Query) {
+        if self.not_support {
+            return;
+        }
+        if query.with.is_some() || !query.order_by.is_empty() || !query.limit.is_empty() {
+            self.not_support = true;
+            return;
+        }
+
+        if !matches!(&query.body, SetExpr::Select(_)) {
+            self.not_support = true;
+            return;
+        }
+
+        self.visit_set_expr(&query.body);
+
+        for order_by in &query.order_by {
+            self.visit_order_by(order_by);
         }
     }
 }

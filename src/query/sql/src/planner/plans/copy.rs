@@ -15,12 +15,18 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Instant;
 
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::CatalogInfo;
@@ -83,6 +89,7 @@ pub struct CopyIntoTablePlan {
     pub catalog_info: CatalogInfo,
     pub database_name: String,
     pub table_name: String,
+    pub from_attachment: bool,
 
     pub required_values_schema: DataSchemaRef, // ... into table(<columns>) ..  -> <columns>
     pub values_consts: Vec<Scalar>,            // (1, ?, 'a', ?) -> (1, 'a')
@@ -223,6 +230,32 @@ pub enum CopyPlan {
         validation_mode: ValidationMode,
         from: Box<Plan>,
     },
+}
+
+impl CopyPlan {
+    fn copy_into_table_schema() -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("File", DataType::String),
+            DataField::new("Rows_loaded", DataType::Number(NumberDataType::Int32)),
+            DataField::new("Errors_seen", DataType::Number(NumberDataType::Int32)),
+            DataField::new(
+                "First_error",
+                DataType::Nullable(Box::new(DataType::String)),
+            ),
+            DataField::new(
+                "First_error_line",
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+            ),
+        ])
+    }
+
+    pub fn schema(&self) -> DataSchemaRef {
+        match self {
+            CopyPlan::NoFileToCopy => Self::copy_into_table_schema(),
+            CopyPlan::IntoTable(p) if !p.from_attachment => Self::copy_into_table_schema(),
+            _ => Arc::new(DataSchema::empty()),
+        }
+    }
 }
 
 impl Debug for CopyPlan {

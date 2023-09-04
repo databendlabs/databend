@@ -151,6 +151,36 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let merge = map(
+        rule! {
+            MERGE ~ #hint? ~ INTO ~ #period_separated_idents_1_to_3  ~ #table_alias? ~ USING
+            ~ #merge_source  ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
+        },
+        |(
+            _,
+            opt_hints,
+            _,
+            (catalog, database, table),
+            alias_target,
+            _,
+            source,
+            _,
+            join_expr,
+            merge_options,
+        )| {
+            Statement::MergeInto(MergeIntoStmt {
+                hints: opt_hints,
+                catalog,
+                database,
+                table_ident: table,
+                source,
+                alias_target,
+                join_expr,
+                merge_options,
+            })
+        },
+    );
+
     let delete = map(
         rule! {
             DELETE ~ #hint? ~ FROM ~ #table_reference_only
@@ -1460,6 +1490,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #replace : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
         ),
         rule!(
             #set_variable : "`SET <variable> = <value>`"
@@ -1629,6 +1660,28 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         #streaming
         | #streaming_v2
         | #values
+        | #query
+    )(i)
+}
+
+pub fn merge_source(i: Input) -> IResult<MergeSource> {
+    let streaming_v2 = map(
+        rule! {
+           #file_format_clause  ~ ( ON_ERROR ~ "=" ~ #ident)? ~  #rest_str
+        },
+        |(options, on_error_opt, (_, start))| MergeSource::StreamingV2 {
+            settings: options,
+            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
+            start,
+        },
+    );
+
+    let query = map(query, |query| MergeSource::Select {
+        query: Box::new(query),
+    });
+
+    rule!(
+          #streaming_v2
         | #query
     )(i)
 }
@@ -2148,6 +2201,67 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     )(i)
 }
 
+pub fn match_clause(i: Input) -> IResult<MergeOption> {
+    map(
+        rule! {
+            WHEN ~ MATCHED ~ (AND ~ #expr)? ~ THEN ~ #match_operation
+        },
+        |(_, _, expr_op, _, match_operation)| match expr_op {
+            Some(expr) => MergeOption::Match(MatchedClause {
+                selection: Some(expr.1),
+                operation: match_operation,
+            }),
+            None => MergeOption::Match(MatchedClause {
+                selection: None,
+                operation: match_operation,
+            }),
+        },
+    )(i)
+}
+
+fn match_operation(i: Input) -> IResult<MatchOperation> {
+    alt((
+        value(MatchOperation::Delete, rule! {DELETE}),
+        map(
+            rule! {
+                UPDATE ~ SET ~ ^#comma_separated_list1(merge_update_expr)
+            },
+            |(_, _, update_list)| MatchOperation::Update { update_list },
+        ),
+    ))(i)
+}
+
+pub fn unmatch_clause(i: Input) -> IResult<MergeOption> {
+    map(
+        rule! {
+            WHEN ~ NOT ~ MATCHED ~ (AND ~ #expr)?  ~ THEN ~ INSERT ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ VALUES ~ ^#row_values
+        },
+        |(_, _, _, expr_op, _, _, columns_op, _, values)| {
+            let selection = match expr_op {
+                Some(e) => Some(e.1),
+                None => None,
+            };
+            match columns_op {
+                Some(columns) => MergeOption::Unmatch(UnmatchedClause {
+                    insert_operation: InsertOperation {
+                        columns: Some(columns.1),
+                        values,
+                    },
+                    selection,
+                }),
+                None => MergeOption::Unmatch(UnmatchedClause {
+                    insert_operation: InsertOperation {
+                        columns: None,
+                        values,
+                    },
+                    selection,
+                }),
+            }
+        },
+    )(i)
+}
+
 pub fn add_column_option(i: Input) -> IResult<AddColumnOption> {
     alt((
         value(AddColumnOption::First, rule! { FIRST }),
@@ -2472,11 +2586,11 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         map(rule! { FORCE ~ "=" ~ #literal_bool }, |(_, _, force)| {
             CopyOption::Force(force)
         }),
-        map(rule! {ON_ERROR ~ "=" ~ #ident}, |(_, _, on_error)| {
+        map(rule! { ON_ERROR ~ "=" ~ #ident }, |(_, _, on_error)| {
             CopyOption::OnError(on_error.to_string())
         }),
         map(
-            rule! {DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool},
+            rule! { DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool },
             |(_, _, disable_variant_check)| CopyOption::DisableVariantCheck(disable_variant_check),
         ),
     ))(i)
@@ -2532,4 +2646,16 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
     map(rule! { ( #ident ~ "=" ~ ^#expr ) }, |(name, _, expr)| {
         UpdateExpr { name, expr }
     })(i)
+}
+
+pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
+    map(
+        rule! { ( #period_separated_idents_1_to_3 ~ "=" ~ ^#expr ) },
+        |((catalog, table, name), _, expr)| MergeUpdateExpr {
+            catalog,
+            table,
+            name,
+            expr,
+        },
+    )(i)
 }

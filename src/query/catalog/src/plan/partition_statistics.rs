@@ -99,4 +99,12 @@ impl PartStatistics {
             format!("(Read from {} table)", table_desc)
         }
     }
+
+    pub fn merge(&mut self, other: &Self) {
+        self.read_rows += other.read_rows;
+        self.read_bytes += other.read_bytes;
+        self.partitions_scanned += other.partitions_scanned;
+        self.partitions_total += other.partitions_total;
+        self.pruning_stats.merge(&other.pruning_stats);
+    }
 }

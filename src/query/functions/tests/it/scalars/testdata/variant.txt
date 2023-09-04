@@ -2435,3 +2435,102 @@ output         : '{
 }'
 
 
+ast            : json_strip_nulls(parse_json('true'))
+raw expr       : json_strip_nulls(parse_json('true'))
+checked expr   : json_strip_nulls<Variant>(parse_json<String>("true"))
+optimized expr : 0x2000000040000000
+output type    : Variant
+output domain  : Undefined
+output         : true
+
+
+ast            : json_strip_nulls(parse_json('null'))
+raw expr       : json_strip_nulls(parse_json('null'))
+checked expr   : json_strip_nulls<Variant>(parse_json<String>("null"))
+optimized expr : 0x2000000000000000
+output type    : Variant
+output domain  : Undefined
+output         : null
+
+
+ast            : json_strip_nulls(parse_json('[1, 2, 3, null]'))
+raw expr       : json_strip_nulls(parse_json('[1, 2, 3, null]'))
+checked expr   : json_strip_nulls<Variant>(parse_json<String>("[1, 2, 3, null]"))
+optimized expr : 0x8000000420000002200000022000000200000000500150025003
+output type    : Variant
+output domain  : Undefined
+output         : [1,2,3,null]
+
+
+ast            : json_strip_nulls(parse_json('{"a":null, "b": {"c": 1, "d": null}, "c": [{"a": 1, "b": null}]}'))
+raw expr       : json_strip_nulls(parse_json('{"a":null, "b": {"c": 1, "d": null}, "c": [{"a": 1, "b": null}]}'))
+checked expr   : json_strip_nulls<Variant>(parse_json<String>("{\"a\":null, \"b\": {\"c\": 1, \"d\": null}, \"c\": [{\"a\": 1, \"b\": null}]}"))
+optimized expr : 0x4000000210000001100000015000000f500000176263400000011000000120000002635001800000015000000f400000011000000120000002615001
+output type    : Variant
+output domain  : Undefined
+output         : {"b":{"c":1},"c":[{"a":1}]}
+
+
+ast            : json_typeof(NULL)
+raw expr       : json_typeof(NULL)
+checked expr   : json_typeof<Variant NULL>(CAST(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : json_typeof(parse_json('null'))
+raw expr       : json_typeof(parse_json('null'))
+checked expr   : json_typeof<Variant>(parse_json<String>("null"))
+optimized expr : "null"
+output type    : String
+output domain  : {"null"..="null"}
+output         : 'null'
+
+
+ast            : json_typeof(parse_json('true'))
+raw expr       : json_typeof(parse_json('true'))
+checked expr   : json_typeof<Variant>(parse_json<String>("true"))
+optimized expr : "boolean"
+output type    : String
+output domain  : {"boolean"..="boolean"}
+output         : 'boolean'
+
+
+ast            : json_typeof(parse_json('"test"'))
+raw expr       : json_typeof(parse_json('"test"'))
+checked expr   : json_typeof<Variant>(parse_json<String>("\"test\""))
+optimized expr : "string"
+output type    : String
+output domain  : {"string"..="string"}
+output         : 'string'
+
+
+ast            : json_typeof(parse_json('-1.12'))
+raw expr       : json_typeof(parse_json('-1.12'))
+checked expr   : json_typeof<Variant>(parse_json<String>("-1.12"))
+optimized expr : "number"
+output type    : String
+output domain  : {"number"..="number"}
+output         : 'number'
+
+
+ast            : json_typeof(parse_json('[1,2,3]'))
+raw expr       : json_typeof(parse_json('[1,2,3]'))
+checked expr   : json_typeof<Variant>(parse_json<String>("[1,2,3]"))
+optimized expr : "array"
+output type    : String
+output domain  : {"array"..="array"}
+output         : 'array'
+
+
+ast            : json_typeof(parse_json('{"a":1,"b":2}'))
+raw expr       : json_typeof(parse_json('{"a":1,"b":2}'))
+checked expr   : json_typeof<Variant>(parse_json<String>("{\"a\":1,\"b\":2}"))
+optimized expr : "object"
+output type    : String
+output domain  : {"object"..="object"}
+output         : 'object'
+
+

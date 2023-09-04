@@ -1,7 +1,7 @@
 1,'Beijing',100
-2,'Shanghai',80,100
-3,'Guangzhou',b0
+2,'Shanghai',80
+3,'Guangzhou',0
 4,'Fuzhou',b1
-5,'Shenzhen',70
+5,'Shenzhen',70,100
 6,'Shenzhen'
 7,'Beijing',99

@@ -357,10 +357,13 @@ impl OnDisk {
                 continue;
             }
 
-            writer.write_entries::<io::Error>([kv_entry]).map_err(|e| {
-                let ae = AnyError::new(&e).add_context(|| "write snapshot entry");
-                MetaStorageError::SnapshotError(ae)
-            })?;
+            writer
+                .write_entries::<io::Error>(futures::stream::iter([kv_entry]))
+                .await
+                .map_err(|e| {
+                    let ae = AnyError::new(&e).add_context(|| "write snapshot entry");
+                    MetaStorageError::SnapshotError(ae)
+                })?;
 
             cnt += 1;
         }

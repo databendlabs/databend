@@ -28,6 +28,7 @@ pub use physical_join::physical_join;
 pub use physical_join::range_join;
 pub use physical_join::PhysicalJoinType;
 pub use physical_plan::Exchange;
+pub use physical_plan::MutationKind;
 pub use physical_plan::*;
 pub use physical_plan_builder::PhysicalPlanBuilder;
 pub use physical_plan_builder::RangeJoinCondition;

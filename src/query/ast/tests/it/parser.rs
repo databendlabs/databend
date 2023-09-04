@@ -516,6 +516,8 @@ fn test_statement_error() {
         r#"select * from aa.bb order by a order by b;"#,
         r#"select * from aa.bb offset 10 offset 20;"#,
         r#"select * from aa.bb limit 10 limit 20;"#,
+        r#"select * from aa.bb limit 10,2 offset 2;"#,
+        r#"select * from aa.bb limit 10,2,3;"#,
         r#"with a as (select 1) with b as (select 2) select * from aa.bb;"#,
     ];
 

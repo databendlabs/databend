@@ -4,13 +4,17 @@ description:
   Generates the pre-signed URL for a staged file.
 ---
 
-Generate the pre-signed URL for a staged file by the stage name and file path you provide. The pre-signed URL enables you to access the file through a web browser or an API request.
+Generates the pre-signed URL for a staged file by the stage name and file path you provide. The pre-signed URL enables you to access the file through a web browser or an API request.
 
 :::tip
 This command currently works with files stored at Amazon S3 only.
 :::
 
-See also: [Presign](https://databend.rs/doc/contributing/rfcs/presign)
+See also: 
+
+- [Presign RFC](https://databend.rs/doc/contributing/rfcs/presign)
+- [LIST STAGE FILES](../40-stage/04-ddl-list-stage.md): Lists files in a stage.
+- [REMOVE STAGE FILES](../40-stage/05-ddl-remove-stage.md): Removes files from a stage.
 
 ## Syntax
 

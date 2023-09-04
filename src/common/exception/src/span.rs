@@ -15,11 +15,23 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::ops::Bound;
+use std::ops::RangeBounds;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct Range {
     pub start: usize,
     pub end: usize,
+}
+
+impl RangeBounds<usize> for Range {
+    fn start_bound(&self) -> Bound<&usize> {
+        Bound::Included(&self.start)
+    }
+
+    fn end_bound(&self) -> Bound<&usize> {
+        Bound::Excluded(&self.end)
+    }
 }
 
 pub type Span = Option<Range>;

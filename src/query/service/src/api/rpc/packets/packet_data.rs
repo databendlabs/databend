@@ -22,6 +22,7 @@ use byteorder::WriteBytesExt;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storage::CopyStatus;
 use log::error;
 
 use crate::api::rpc::packets::ProgressInfo;
@@ -53,6 +54,24 @@ pub enum DataPacket {
     FragmentData(FragmentData),
     FetchProgress,
     SerializeProgress(Vec<ProgressInfo>),
+    CopyStatus(CopyStatus),
+}
+
+fn calc_size(flight_data: &FlightData) -> usize {
+    flight_data.data_body.len() + flight_data.data_header.len() + flight_data.app_metadata.len()
+}
+
+impl DataPacket {
+    pub fn bytes_size(&self) -> usize {
+        match self {
+            DataPacket::ErrorCode(_) => 0,
+            DataPacket::FetchProgress => 0,
+            DataPacket::CopyStatus(_) => 0,
+            DataPacket::SerializeProgress(_) => 0,
+            DataPacket::Dictionary(v) => calc_size(v),
+            DataPacket::FragmentData(v) => calc_size(&v.data) + v.meta.len(),
+        }
+    }
 }
 
 impl TryFrom<DataPacket> for FlightData {
@@ -91,6 +110,12 @@ impl TryFrom<DataPacket> for FlightData {
                 flight_data.app_metadata.push(0x05);
                 flight_data
             }
+            DataPacket::CopyStatus(status) => FlightData {
+                app_metadata: vec![0x06],
+                data_body: serde_json::to_vec(&status)?,
+                data_header: vec![],
+                flight_descriptor: None,
+            },
         })
     }
 }
@@ -134,6 +159,10 @@ impl TryFrom<FlightData> for DataPacket {
                 Ok(DataPacket::SerializeProgress(progress_info))
             }
             0x05 => Ok(DataPacket::Dictionary(flight_data)),
+            0x06 => {
+                let status = serde_json::from_slice::<CopyStatus>(&flight_data.data_body)?;
+                Ok(DataPacket::CopyStatus(status))
+            }
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
     }

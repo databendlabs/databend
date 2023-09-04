@@ -41,7 +41,7 @@ impl PrivilegeAccess {
 #[async_trait::async_trait]
 impl AccessChecker for PrivilegeAccess {
     #[async_backtrace::framed]
-    async fn check(&self, plan: &Plan) -> Result<()> {
+    async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
         let session = self.ctx.get_current_session();
         let user = self.ctx.get_current_user()?;
         let (identity, grant_set) = (user.identity().to_string(), user.grants);
@@ -101,7 +101,9 @@ impl AccessChecker for PrivilegeAccess {
                         .await?
                 }
             }
-            Plan::ExplainAnalyze { plan } | Plan::Explain { plan, .. } => self.check(plan).await?,
+            Plan::ExplainAnalyze { plan } | Plan::Explain { plan, .. } => {
+                self.check(ctx, plan).await?
+            }
 
             // Database.
             Plan::ShowCreateDatabase(plan) => {
@@ -430,6 +432,18 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Replace(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete],
+                    )
+                    .await?;
+            }
+            Plan::MergeInto(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(

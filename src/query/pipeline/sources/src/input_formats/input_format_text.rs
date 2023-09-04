@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
@@ -29,11 +28,12 @@ use common_expression::DataBlock;
 use common_formats::FieldDecoder;
 use common_formats::FileFormatOptionsExt;
 use common_meta_app::principal::FileFormatParams;
+use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
-use common_pipeline_core::InputError;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
+use common_storage::FileStatus;
 use common_storage::StageFileInfo;
 use log::debug;
 use log::warn;
@@ -347,10 +347,7 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
         options: &FileFormatOptionsExt,
     ) -> Arc<dyn FieldDecoder>;
 
-    fn deserialize(
-        builder: &mut BlockBuilder<Self>,
-        batch: RowBatch,
-    ) -> Result<HashMap<u16, InputError>>;
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()>;
 }
 
 pub struct InputFormatTextPipe<T> {
@@ -388,6 +385,7 @@ impl<T: InputFormatTextBase> InputFormat for T {
         _settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
+
         for info in file_infos {
             let size = info.size as usize;
             let path = info.path.clone();
@@ -397,7 +395,11 @@ impl<T: InputFormatTextBase> InputFormat for T {
                 &path,
             )?;
             let split_size = stage_info.copy_options.split_size;
-            if compress_alg.is_none() && T::is_splittable() && split_size > 0 {
+            if compress_alg.is_none()
+                && T::is_splittable()
+                && split_size > 0
+                && stage_info.copy_options.on_error == OnErrorMode::AbortNum(1)
+            {
                 let split_offsets = split_by_size(size, split_size);
                 let num_file_splits = split_offsets.len();
                 debug!(
@@ -556,6 +558,7 @@ pub struct BlockBuilder<T> {
     pub mutable_columns: Vec<ColumnBuilder>,
     pub num_rows: usize,
     pub projection: Option<Vec<usize>>,
+    pub file_status: FileStatus,
     phantom: PhantomData<T>,
 }
 
@@ -585,6 +588,7 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
             field_decoder,
             phantom: PhantomData,
             projection,
+            file_status: Default::default(),
         }
     }
 
@@ -633,19 +637,6 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
     fn memory_size(&self) -> usize {
         self.mutable_columns.iter().map(|x| x.memory_size()).sum()
     }
-
-    fn merge_map(&self, error_map: HashMap<u16, InputError>, file_name: String) {
-        if let Some(ref on_error_map) = self.ctx.on_error_map {
-            on_error_map
-                .entry(file_name)
-                .and_modify(|x| {
-                    for (k, v) in error_map.clone() {
-                        x.entry(k).and_modify(|y| y.num += v.num).or_insert(v);
-                    }
-                })
-                .or_insert(error_map);
-        }
-    }
 }
 
 impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
@@ -654,8 +645,11 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
     fn deserialize(&mut self, batch: Option<RowBatch>) -> Result<Vec<DataBlock>> {
         if let Some(b) = batch {
             let file_name = b.split_info.file.path.clone();
-            let r = T::deserialize(self, b)?;
-            self.merge_map(r, file_name);
+            T::deserialize(self, b)?;
+            let file_status = mem::take(&mut self.file_status);
+            self.ctx
+                .table_context
+                .add_file_status(&file_name, file_status)?;
             let mem = self.memory_size();
             debug!(
                 "chunk builder added new batch: row {} size {}",

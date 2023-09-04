@@ -32,8 +32,9 @@ async-trait = "0.1.57"
 byteorder = "1.4.3"
 chrono = { workspace = true }
 derive_more = { workspace = true }
+futures = { workspace = true }
+futures-util = { workspace = true }
 hostname = "0.3.1"
-itertools = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 maplit = "1.0.2"
@@ -43,6 +44,7 @@ once_cell = "1.15.0"
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+stream-more = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 

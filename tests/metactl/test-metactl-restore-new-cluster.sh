@@ -56,10 +56,10 @@ echo " ==="
 echo " === 3. Import old meta node data to new cluster"
 echo " ==="
 
-./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir ./.databend/new_meta1 --id=4 --db meta.db --initial-cluster 4=localhost:29103,127.0.0.1:19191 5=localhost:29203,127.0.0.1:29191 6=localhost:29303,127.0.0.1:39191
-./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir ./.databend/new_meta2 --id=5 --db meta.db --initial-cluster 4=localhost:29103,127.0.0.1:19191 5=localhost:29203,127.0.0.1:29191 6=localhost:29303,127.0.0.1:39191
+./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir ./.databend/new_meta1 --id=4 --db meta.db --initial-cluster 4=localhost:29103,127.0.0.1:19191 --initial-cluster 5=localhost:29203,127.0.0.1:29191 --initial-cluster 6=localhost:29303,127.0.0.1:39191
+./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir ./.databend/new_meta2 --id=5 --db meta.db --initial-cluster 4=localhost:29103,127.0.0.1:19191 --initial-cluster 5=localhost:29203,127.0.0.1:29191 --initial-cluster 6=localhost:29303,127.0.0.1:39191
 # test cluster config without grpc address
-./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir ./.databend/new_meta3 --id=6 --db meta.db --initial-cluster 4=localhost:29103 5=localhost:29203 6=localhost:29303
+./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir ./.databend/new_meta3 --id=6 --db meta.db --initial-cluster 4=localhost:29103 --initial-cluster 5=localhost:29203 --initial-cluster 6=localhost:29303
 
 
 echo " === Export meta-1 start"

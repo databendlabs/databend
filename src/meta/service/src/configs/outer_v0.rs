@@ -61,7 +61,7 @@ pub struct Config {
     pub cmd: String,
 
     /// The key sent to databend-meta server and is only used when running with `--cmd kvapi::*`
-    #[clap(long, default_value = "", multiple = true)]
+    #[clap(long, default_value = "")]
     pub key: Vec<String>,
 
     /// The value sent to databend-meta server and is only used when running with `--cmd kvapi::upsert`
@@ -468,7 +468,7 @@ pub struct RaftConfig {
     /// If on-disk data is already initialized, this argument has no effect.
     ///
     /// The value is one or more addresses of a node in the cluster, to which this node sends a `join` request.
-    #[clap(long, multiple_occurrences = true, multiple_values = true)]
+    #[clap(long)]
     pub join: Vec<String>,
 
     /// Do not run databend-meta, but just remove a node from its cluster via the provided endpoints.

@@ -20,9 +20,7 @@ use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::BlockThresholds;
-use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::SegmentsIO;
-use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::operations::BlockCompactMutator;
 use common_storages_fuse::operations::CompactOptions;
 use common_storages_fuse::operations::CompactPartInfo;
@@ -32,7 +30,6 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::test_kits::block_writer::BlockWriter;
 use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::expects_ok;
@@ -144,11 +141,7 @@ async fn test_safety() -> Result<()> {
         max_bytes_per_block: 1024,
     };
 
-    let data_accessor = operator.clone();
-    let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
-    let block_writer = BlockWriter::new(&data_accessor, &location_gen);
     let schema = TestFixture::default_table_schema();
-    let segment_writer = SegmentWriter::new(&data_accessor, &location_gen);
     let mut rand = thread_rng();
 
     // for r in 1..100 { // <- use this at home
@@ -181,12 +174,12 @@ async fn test_safety() -> Result<()> {
         };
 
         let (locations, _, segment_infos) = CompactSegmentTestFixture::gen_segments(
-            &block_writer,
-            &segment_writer,
-            &block_number_of_segments,
-            &rows_per_blocks,
+            ctx.clone(),
+            block_number_of_segments,
+            rows_per_blocks,
             threshold,
             cluster_key_id,
+            5,
         )
         .await?;
 
