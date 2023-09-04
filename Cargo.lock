@@ -2695,6 +2695,7 @@ dependencies = [
  "indexmap 2.0.0",
  "itertools 0.10.5",
  "jsonb",
+ "lazy_static",
  "log",
  "metrics",
  "minitrace",

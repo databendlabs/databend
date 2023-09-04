@@ -18,7 +18,7 @@ pub mod counter;
 mod dump;
 pub mod histogram;
 mod recorder;
-mod registry;
+pub mod registry;
 mod reset;
 
 pub use dump::dump_metric_samples;
@@ -42,5 +42,5 @@ pub use recorder::label_increment_gauge_with_val_and_labels;
 pub use recorder::try_handle;
 pub use recorder::LABEL_KEY_CLUSTER;
 pub use recorder::LABEL_KEY_TENANT;
-pub use registry::load_global_registry;
+pub use registry::load_global_prometheus_registry;
 pub use reset::reset_metrics;

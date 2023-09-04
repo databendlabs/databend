@@ -24,15 +24,11 @@ use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
 
 #[derive(Clone, Debug)]
-struct Histogram {
+pub struct Histogram {
     inner: HistogramInner,
 }
 
 impl Histogram {
-    const DEFAULT_BUCKETS: Vec<f64> = vec![
-        0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 30.0, 60.0, 300.0, 600.0, 1800.0,
-    ];
-
     pub fn new(buckets: impl Iterator<Item = f64>) -> Self {
         Self {
             inner: HistogramInner::new(buckets),
@@ -50,7 +46,10 @@ impl Histogram {
 
 impl Default for Histogram {
     fn default() -> Self {
-        let inner = HistogramInner::new(Self::DEFAULT_BUCKETS.into_iter());
+        let default_buckets = [
+            0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 30.0, 60.0, 300.0, 600.0, 1800.0,
+        ];
+        let inner = HistogramInner::new(default_buckets.into_iter());
         Self { inner }
     }
 }
@@ -60,7 +59,7 @@ impl TypedMetric for Histogram {
 }
 
 impl EncodeMetric for Histogram {
-    fn encode(&self, mut encoder: MetricEncoder) -> Result<(), std::fmt::Error> {
+    fn encode(&self, encoder: MetricEncoder) -> Result<(), std::fmt::Error> {
         self.inner().encode(encoder)
     }
 

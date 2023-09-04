@@ -16,7 +16,11 @@ use std::sync::Mutex;
 use std::sync::MutexGuard;
 
 use lazy_static::lazy_static;
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::registry::Registry;
+
+use crate::histogram::Histogram;
 
 lazy_static! {
     pub static ref REGISTRY: Mutex<Registry> = Mutex::new(Registry::default());
@@ -24,4 +28,25 @@ lazy_static! {
 
 pub fn load_global_prometheus_registry() -> MutexGuard<'static, Registry> {
     REGISTRY.lock().unwrap()
+}
+
+pub fn register_counter(name: &str) -> Counter {
+    let counter = Counter::default();
+    let mut registry = load_global_prometheus_registry();
+    registry.register(name, "", counter.clone());
+    counter
+}
+
+pub fn register_gauge(name: &str) -> Gauge {
+    let gauge = Gauge::default();
+    let mut registry = load_global_prometheus_registry();
+    registry.register(name, "", gauge.clone());
+    gauge
+}
+
+pub fn register_histogram(name: &str) -> Histogram {
+    let histogram = Histogram::default();
+    let mut registry = load_global_prometheus_registry();
+    registry.register(name, "", histogram.clone());
+    histogram
 }

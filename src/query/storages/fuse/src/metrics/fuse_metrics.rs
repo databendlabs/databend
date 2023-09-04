@@ -13,11 +13,12 @@
 // limitations under the License.
 
 use common_metrics::histogram::Histogram;
-use common_metrics::load_global_prometheus_registry;
+use common_metrics::registry::register_counter;
+use common_metrics::registry::register_histogram;
+use lazy_static::lazy_static;
 use metrics::counter;
 use metrics::increment_gauge;
 use prometheus_client::metrics::counter::Counter;
-use prometheus_client::metrics::gauge::Gauge;
 
 macro_rules! key {
     ($key: literal) => {
@@ -25,90 +26,113 @@ macro_rules! key {
     };
 }
 
-#[derive(Debug, Default)]
-struct FuseMetrics {
-    commit_mutation_unresolvable_conflict: Counter,
-    commit_mutation_latest_snapshot_append_only: Counter,
-    commit_mutation_modified_segment_exists_in_latest: Counter,
-    commit_mutation_retry: Counter,
-    commit_mutation_success: Counter,
-    commit_copied_files: Counter,
-    commit_milliseconds: Histogram,
-    commit_aborts: Counter,
-    remote_io_seeks: Counter,
-    remote_io_seeks_after_merged: Counter,
-    remote_io_read_bytes: Counter,
-    remote_io_read_bytes_after_merged: Counter,
-    remote_io_read_parts: Counter,
-    remote_io_read_milliseconds: Histogram,
-    remote_io_deserialize_milliseconds: Histogram,
-    block_write_nums: Counter,
-    block_write_bytes: Counter,
-    block_write_milliseconds: Histogram,
-    block_index_write_nums: Counter,
-    block_index_write_bytes: Counter,
-    block_index_write_milliseconds: Histogram,
-    block_index_read_bytes: Counter,
-    compact_block_read_nums: Counter,
-    compact_block_read_bytes: Counter,
-    compact_block_read_milliseconds: Histogram,
-    segments_range_pruning_before: Counter,
-    segments_range_pruning_after: Counter,
-    bytes_segment_range_pruning_before: Counter,
-    bytes_segment_range_pruning_after: Counter,
-    blocks_range_pruning_before: Counter,
-    blocks_range_pruning_after: Counter,
-    bytes_block_range_pruning_before: Counter,
-    bytes_block_range_pruning_after: Counter,
-    blocks_bloom_pruning_before: Counter,
-    blocks_bloom_pruning_after: Counter,
-    bytes_block_bloom_pruning_before: Counter,
-    bytes_block_bloom_pruning_after: Counter,
-    pruning_prewhere_nums: Gauge,
-    pruning_milliseconds: Histogram,
-    deletion_block_range_pruned_nums: Counter,
-    deletion_segment_range_pruned_whole_segment_nums: Counter,
-    deletion_block_range_pruned_whole_block_nums: Counter,
-    replace_into_block_number_after_pruning: Gauge,
-    replace_into_segment_number_after_pruning: Counter,
-    replace_into_block_number_totally_loaded: Counter,
-    replace_into_row_number_write: Counter,
-    replace_into_row_number_totally_loaded: Counter,
-    replace_into_block_number_whole_block_deletion: Counter,
-    replace_into_block_number_zero_row_deleted: Counter,
-    replace_into_row_number_source_block: Counter,
-    replace_into_row_number_after_table_level_pruning: Gauge,
-    replace_into_partition_number: Counter,
-    replace_into_time_process_input_block_ms: Histogram,
-    replace_into_number_apply_deletion: Counter,
-    replace_into_time_accumulated_merge_action_ms: Histogram,
-    replace_into_time_apply_deletion_ms: Histogram,
-    replace_into_block_number_bloom_pruned: Counter,
-    replace_into_block_number_source: Counter,
-}
-
-impl FuseMetrics {
-    fn init() -> Self {
-        let metrics = Self::default();
-        let mut registry = load_global_prometheus_registry();
-        metrics
-    }
-}
-
 lazy_static! {
-    static ref FUSE_METRICS: FuseMetrics = FuseMetrics::init();
+    static ref COMMIT_MUTATION_UNRESOLVABLE_CONFLICT: Counter =
+        register_counter("commit_mutation_unresolvable_conflict");
+    static ref COMMIT_MUTATION_LATEST_SNAPSHOT_APPEND_ONLY: Counter =
+        register_counter("commit_mutation_latest_snapshot_append_only");
+    static ref COMMIT_MUTATION_MODIFIED_SEGMENT_EXISTS_IN_LATEST: Counter =
+        register_counter("commit_mutation_modified_segment_exists_in_latest");
+    static ref COMMIT_MUTATION_RETRY: Counter = register_counter("commit_mutation_retry");
+    static ref COMMIT_MUTATION_SUCCESS: Counter = register_counter("commit_mutation_success");
+    static ref COMMIT_COPIED_FILES: Counter = register_counter("commit_copied_files");
+    static ref COMMIT_MILLISECONDS: Counter = register_counter("commit_milliseconds");
+    static ref COMMIT_ABORTS: Counter = register_counter("commit_aborts");
+    static ref REMOTE_IO_SEEKS: Counter = register_counter("remote_io_seeks");
+    static ref REMOTE_IO_SEEKS_AFTER_MERGED: Counter =
+        register_counter("remote_io_seeks_after_merged");
+    static ref REMOTE_IO_READ_BYTES: Counter = register_counter("remote_io_read_bytes");
+    static ref REMOTE_IO_READ_BYTES_AFTER_MERGED: Counter =
+        register_counter("remote_io_read_bytes_after_merged");
+    static ref REMOTE_IO_READ_PARTS: Counter = register_counter("remote_io_read_parts");
+    static ref REMOTE_IO_READ_MILLISECONDS: Histogram =
+        register_histogram("remote_io_read_milliseconds");
+    static ref REMOTE_IO_DESERIALIZE_MILLISECONDS: Histogram =
+        register_histogram("remote_io_deserialize_milliseconds");
+    static ref BLOCK_WRITE_NUMS: Counter = register_counter("block_write_nums");
+    static ref BLOCK_WRITE_BYTES: Counter = register_counter("block_write_bytes");
+    static ref BLOCK_WRITE_MILLISECONDS: Histogram = register_histogram("block_write_milliseconds");
+    static ref BLOCK_INDEX_WRITE_NUMS: Counter = register_counter("block_index_write_nums");
+    static ref BLOCK_INDEX_WRITE_BYTES: Counter = register_counter("block_index_write_bytes");
+    static ref BLOCK_INDEX_WRITE_MILLISECONDS: Histogram =
+        register_histogram("block_index_write_milliseconds");
+    static ref BLOCK_INDEX_READ_BYTES: Counter = register_counter("block_index_read_bytes");
+    static ref COMPACT_BLOCK_READ_NUMS: Counter = register_counter("compact_block_read_nums");
+    static ref COMPACT_BLOCK_READ_BYTES: Counter = register_counter("compact_block_read_bytes");
+    static ref COMPACT_BLOCK_READ_MILLISECONDS: Histogram =
+        register_histogram("compact_block_read_milliseconds");
+    static ref SEGMENTS_RANGE_PRUNING_BEFORE: Counter =
+        register_counter("segments_range_pruning_before");
+    static ref SEGMENTS_RANGE_PRUNING_AFTER: Counter =
+        register_counter("segments_range_pruning_after");
+    static ref BYTES_SEGMENT_RANGE_PRUNING_BEFORE: Counter =
+        register_counter("bytes_segment_range_pruning_before");
+    static ref BYTES_SEGMENT_RANGE_PRUNING_AFTER: Counter =
+        register_counter("bytes_segment_range_pruning_after");
+    static ref BLOCKS_RANGE_PRUNING_BEFORE: Counter =
+        register_counter("blocks_range_pruning_before");
+    static ref BLOCKS_RANGE_PRUNING_AFTER: Counter = register_counter("blocks_range_pruning_after");
+    static ref BYTES_BLOCK_RANGE_PRUNING_BEFORE: Counter =
+        register_counter("bytes_block_range_pruning_before");
+    static ref BYTES_BLOCK_RANGE_PRUNING_AFTER: Counter =
+        register_counter("bytes_block_range_pruning_after");
+    static ref BLOCKS_BLOOM_PRUNING_BEFORE: Counter =
+        register_counter("blocks_bloom_pruning_before");
+    static ref BLOCKS_BLOOM_PRUNING_AFTER: Counter = register_counter("blocks_bloom_pruning_after");
+    static ref BYTES_BLOCK_BLOOM_PRUNING_BEFORE: Counter =
+        register_counter("bytes_block_bloom_pruning_before");
+    static ref BYTES_BLOCK_BLOOM_PRUNING_AFTER: Counter =
+        register_counter("bytes_block_bloom_pruning_after");
+    static ref PRUNING_PREWHERE_NUMS: Counter = register_counter("pruning_prewhere_nums");
+    static ref PRUNING_MILLISECONDS: Histogram = register_histogram("pruning_milliseconds");
+    static ref DELETION_BLOCK_RANGE_PRUNED_NUMS: Counter =
+        register_counter("deletion_block_range_pruned_nums");
+    static ref DELETION_SEGMENT_RANGE_PRUNED_WHOLE_SEGMENT_NUMS: Counter =
+        register_counter("deletion_segment_range_pruned_whole_segment_nums");
+    static ref DELETION_BLOCK_RANGE_PRUNED_WHOLE_BLOCK_NUMS: Counter =
+        register_counter("deletion_block_range_pruned_whole_block_nums");
+    static ref REPLACE_INTO_BLOCK_NUMBER_AFTER_PRUNING: Counter =
+        register_counter("replace_into_block_number_after_pruning");
+    static ref REPLACE_INTO_SEGMENT_NUMBER_AFTER_PRUNING: Counter =
+        register_counter("replace_into_segment_number_after_pruning");
+    static ref REPLACE_INTO_BLOCK_NUMBER_TOTALLY_LOADED: Counter =
+        register_counter("replace_into_block_number_totally_loaded");
+    static ref REPLACE_INTO_ROW_NUMBER_WRITE: Counter =
+        register_counter("replace_into_row_number_write");
+    static ref REPLACE_INTO_ROW_NUMBER_TOTALLY_LOADED: Counter =
+        register_counter("replace_into_row_number_totally_loaded");
+    static ref REPLACE_INTO_BLOCK_NUMBER_WHOLE_BLOCK_DELETION: Counter =
+        register_counter("replace_into_block_number_whole_block_deletion");
+    static ref REPLACE_INTO_BLOCK_NUMBER_ZERO_ROW_DELETED: Counter =
+        register_counter("replace_into_block_number_zero_row_deleted");
+    static ref REPLACE_INTO_ROW_NUMBER_SOURCE_BLOCK: Counter =
+        register_counter("replace_into_row_number_source_block");
+    static ref REPLACE_INTO_ROW_NUMBER_AFTER_TABLE_LEVEL_PRUNING: Counter =
+        register_counter("replace_into_row_number_after_table_level_pruning");
+    static ref REPLACE_INTO_PARTITION_NUMBER: Counter =
+        register_counter("replace_into_partition_number");
+    static ref REPLACE_INTO_TIME_PROCESS_INPUT_BLOCK_MS: Histogram =
+        register_histogram("replace_into_time_process_input_block_ms");
+    static ref REPLACE_INTO_NUMBER_APPLY_DELETION: Counter =
+        register_counter("replace_into_number_apply_deletion");
+    static ref REPLACE_INTO_TIME_ACCUMULATED_MERGE_ACTION_MS: Histogram =
+        register_histogram("replace_into_time_accumulated_merge_action_ms");
+    static ref REPLACE_INTO_TIME_APPLY_DELETION_MS: Histogram =
+        register_histogram("replace_into_time_apply_deletion_ms");
+    static ref REPLACE_INTO_BLOCK_NUMBER_BLOOM_PRUNED: Counter =
+        register_counter("replace_into_block_number_bloom_pruned");
+    static ref REPLACE_INTO_BLOCK_NUMBER_SOURCE: Counter =
+        register_counter("replace_into_block_number_source");
 }
 
 pub fn metrics_inc_commit_mutation_unresolvable_conflict() {
     counter!(key!("commit_mutation_unresolvable_conflict"), 1);
-    FUSE_METRICS.commit_mutation_unresolvable_conflict.inc();
+    COMMIT_MUTATION_UNRESOLVABLE_CONFLICT.inc();
 }
 
 pub fn metrics_inc_commit_mutation_latest_snapshot_append_only() {
     counter!(key!("commit_mutation_latest_snapshot_append_only"), 1);
-    FUSE_METRICS
-        .commit_mutation_latest_snapshot_append_only
-        .inc();
+    COMMIT_MUTATION_LATEST_SNAPSHOT_APPEND_ONLY.inc();
 }
 
 pub fn metrics_inc_commit_mutation_modified_segment_exists_in_latest() {
