@@ -2370,6 +2370,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-exception",
+ "lazy_static",
  "log",
  "metrics",
  "metrics-exporter-prometheus",

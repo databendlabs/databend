@@ -26,6 +26,7 @@ parking_lot = "0.12.1"
 prometheus-parse = "0.2.3"
 serde = { workspace = true }
 prometheus-client = { workspace = true }
+lazy_static = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = "0.15.1"
